@@ -46,7 +46,7 @@ const extractByHeading = (
 ): ExtractionResult => {
   const headings = scanHeadings(markdownText);
   const match = headings.find(
-    (h) => h.text.toLowerCase() === target.toLowerCase(),
+    (h) => h.text === target,
   );
 
   if (!match) {

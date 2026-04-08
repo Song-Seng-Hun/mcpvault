@@ -60,8 +60,17 @@ describe('extractFragment', () => {
       expect(result.content).not.toContain('Step 2 content.')
     })
 
-    it('is case-insensitive for heading matching', () => {
+    it('is case-sensitive for heading matching (matches Obsidian behavior)', () => {
       const result = extractFragment(FIXTURE, 'how code works')
+      expect(result.found).toBe(false)
+      if (result.found) return
+      expect(result.error).toBe('fragment_not_found')
+      expect(result.fragment).toBe('how code works')
+      expect(result.availableHeadings.some((h) => h.text === 'How Code Works')).toBe(true)
+    })
+
+    it('matches exact case', () => {
+      const result = extractFragment(FIXTURE, 'How Code Works')
       expect(result.found).toBe(true)
       if (!result.found) return
       expect(result.heading).toBe('How Code Works')

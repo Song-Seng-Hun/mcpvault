@@ -237,9 +237,9 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           inputSchema: {
             type: "object",
             properties: {
-              ref: {
+              document: {
                 type: "string",
-                description: "Obsidian basename — what goes inside [[ ]]. e.g. 'My-Document'. Brackets and display text (|...) are stripped if present. The .md extension is always appended (never include it)."
+                description: "The document name — what goes inside [[ ]]. e.g. 'My-Document'. Brackets and display text (|...) are stripped if present. The .md extension is always appended (never include it)."
               },
               fragment: {
                 type: "string",
@@ -251,7 +251,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
                 default: false
               }
             },
-            required: ["ref"]
+            required: ["document"]
           }
         }
       ]
@@ -433,7 +433,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "wiki_link": {
-          const parsed = parseWikiLink(trimmedArgs.ref || '');
+          const parsed = parseWikiLink(trimmedArgs.document);
           const fragment = trimmedArgs.fragment || parsed.fragment;
           const resolvedPath = await fileSystem.findPathForWikiLink(parsed.document);
           const note = await fileSystem.readNote(resolvedPath);
