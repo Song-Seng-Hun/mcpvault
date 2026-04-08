@@ -954,6 +954,55 @@ export class FileSystemService {
     return this.vaultPath;
   }
 
+  /**
+   * Resolve an Obsidian wiki link name to its vault-relative path.
+   * Scans the vault for an exact filename match (name + .md).
+   * Throws if zero or multiple matches are found.
+   */
+  async findPathForWikiLink(wikiLinkName: string): Promise<string> {
+    const normalizedName = `${wikiLinkName}.md`;
+    const matches: string[] = [];
+
+    const scan = async (dirPath: string, relativePath: string = ''): Promise<void> => {
+      const entries = await readdir(dirPath, { withFileTypes: true });
+
+      for (const entry of entries) {
+        const entryRelativePath = relativePath
+          ? `${relativePath}/${entry.name}`
+          : entry.name;
+
+        if (!this.pathFilter.isAllowed(entryRelativePath)) {
+          continue;
+        }
+
+        if (entry.isDirectory()) {
+          if (!this.pathFilter.isAllowed(`${entryRelativePath}/test.md`)) {
+            continue;
+          }
+          await scan(join(dirPath, entry.name), entryRelativePath);
+        } else if (entry.isFile() && entry.name === normalizedName) {
+          matches.push(entryRelativePath);
+        }
+      }
+    };
+
+    await scan(this.vaultPath);
+
+    if (matches.length === 0) {
+      throw new Error(
+        `No file found matching wiki link for [[${wikiLinkName}]]. Use search_notes or list_directory to find the correct name.`,
+      );
+    }
+
+    if (matches.length > 1) {
+      throw new Error(
+        `Ambiguous wiki link [[${wikiLinkName}]] — found ${matches.length} files: ${matches.join(', ')}. Provide the full path instead.`,
+      );
+    }
+
+    return matches[0] as string;
+  }
+
   async getVaultStats(recentCount: number = 5): Promise<VaultStats> {
     let totalNotes = 0;
     let totalFolders = 0;
