@@ -128,6 +128,99 @@ describe('extractFragment', () => {
     })
   })
 
+  describe('complex headings (real-world Obsidian patterns)', () => {
+    const COMPLEX_FIXTURE = `# Analysis Plan
+
+## Current State (2026-02-26)
+
+Some status info.
+
+### What Works
+
+Things that work.
+
+### Open Questions — RESOLVED (2026-02-26)
+
+All resolved.
+
+#### Q1: Regex Matcher Flavor — RESOLVED
+
+ECMAScript regex confirmed.
+
+## Decisions
+
+### D1: Matcher Strategy — DECIDED: Option A
+
+Using single grouped regex.
+
+### D2: Hook Reload — DECIDED: Option B
+
+Manual reload for now.
+
+## Files
+
+- hook.sh
+- settings.json
+
+## Status: COMPLETE (2026-02-26)
+
+Done.
+
+### Remaining Nice-to-Have
+
+Some ideas. ^niceToHaveBlock
+`
+
+    it('matches heading with em-dash and colon', () => {
+      const result = extractFragment(COMPLEX_FIXTURE, 'D1: Matcher Strategy — DECIDED: Option A')
+      expect(result.found).toBe(true)
+      if (!result.found) return
+      expect(result.heading).toBe('D1: Matcher Strategy — DECIDED: Option A')
+      expect(result.content).toContain('Using single grouped regex.')
+      expect(result.content).not.toContain('Manual reload')
+    })
+
+    it('matches heading with parenthesized date', () => {
+      const result = extractFragment(COMPLEX_FIXTURE, 'Current State (2026-02-26)')
+      expect(result.found).toBe(true)
+      if (!result.found) return
+      expect(result.level).toBe(2)
+      expect(result.content).toContain('What Works')
+      expect(result.content).toContain('Open Questions')
+      expect(result.content).not.toContain('## Decisions')
+    })
+
+    it('matches heading with em-dash and parenthesized date', () => {
+      const result = extractFragment(COMPLEX_FIXTURE, 'Open Questions — RESOLVED (2026-02-26)')
+      expect(result.found).toBe(true)
+      if (!result.found) return
+      expect(result.content).toContain('Q1: Regex Matcher Flavor')
+    })
+
+    it('matches heading with colon prefix pattern', () => {
+      const result = extractFragment(COMPLEX_FIXTURE, 'Status: COMPLETE (2026-02-26)')
+      expect(result.found).toBe(true)
+      if (!result.found) return
+      expect(result.content).toContain('Remaining Nice-to-Have')
+    })
+
+    it('case mismatch fails with available headings showing correct form', () => {
+      const result = extractFragment(COMPLEX_FIXTURE, 'files')
+      expect(result.found).toBe(false)
+      if (result.found) return
+      expect(result.error).toBe('fragment_not_found')
+      expect(result.fragment).toBe('files')
+      expect(result.availableHeadings.some((h) => h.text === 'Files')).toBe(true)
+    })
+
+    it('extracts block-id within a complex heading structure', () => {
+      const result = extractFragment(COMPLEX_FIXTURE, '^niceToHaveBlock')
+      expect(result.found).toBe(true)
+      if (!result.found) return
+      expect(result.content).toContain('Some ideas.')
+    })
+  })
+
   describe('content is bare', () => {
     it('returns raw text with no wrappers or metadata markers', () => {
       const result = extractFragment(FIXTURE, 'Step 1')
