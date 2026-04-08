@@ -7,6 +7,7 @@ import { FileSystemService } from "./filesystem.js";
 import { FrontmatterHandler, parseFrontmatter } from "./frontmatter.js";
 import { PathFilter } from "./pathfilter.js";
 import { SearchService } from "./search.js";
+import { parseWikiLink, resolveWikiLink } from "./wikilink/index.js";
 import { resolve } from "path";
 
 export interface CreateServerOptions {
@@ -229,6 +230,29 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
               prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
             }
           }
+        },
+        {
+          name: "wiki_link",
+          description: "Read an Obsidian wiki link. Accepts the same syntax as Obsidian: [[Document Name]], [[Document Name#Heading]], [[Document Name#^block-id]], [[Document Name|Display Text]]. Searches the vault for an exact basename match. With a fragment, returns only the matching section. Content is returned bare — ready for direct use in context.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              ref: {
+                type: "string",
+                description: "Obsidian basename — what goes inside [[ ]]. e.g. 'My-Document'. Brackets and display text (|...) are stripped if present. The .md extension is always appended (never include it)."
+              },
+              fragment: {
+                type: "string",
+                description: "Optional fragment: heading text (e.g. 'Summary') or block-id (e.g. '^blockId'). Leading # is optional. Returns only that section instead of the full document."
+              },
+              prettyPrint: {
+                type: "boolean",
+                description: "Format JSON response with indentation (default: false)",
+                default: false
+              }
+            },
+            required: ["ref"]
+          }
         }
       ]
     };
@@ -405,6 +429,58 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           const indent = trimmedArgs.prettyPrint ? 2 : undefined;
           return {
             content: [{ type: "text", text: JSON.stringify(tags, null, indent) }]
+          };
+        }
+
+        case "wiki_link": {
+          const parsed = parseWikiLink(trimmedArgs.ref || '');
+          const fragment = trimmedArgs.fragment || parsed.fragment;
+          const resolvedPath = await fileSystem.findPathForWikiLink(parsed.document);
+          const note = await fileSystem.readNote(resolvedPath);
+          const indent = trimmedArgs.prettyPrint ? 2 : undefined;
+
+          const resolution = resolveWikiLink(note.content, fragment);
+
+          if (resolution.type === 'full') {
+            return {
+              content: [{
+                type: "text",
+                text: JSON.stringify({
+                  path: resolvedPath,
+                  fm: note.frontmatter,
+                  content: resolution.content,
+                }, null, indent)
+              }]
+            };
+          }
+
+          const { extraction } = resolution;
+
+          if (!extraction.found) {
+            return {
+              content: [{
+                type: "text",
+                text: JSON.stringify({ path: resolvedPath, ...extraction }, null, indent)
+              }],
+              isError: true
+            };
+          }
+
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                path: resolvedPath,
+                fm: note.frontmatter,
+                content: extraction.content,
+                section: {
+                  heading: extraction.heading,
+                  level: extraction.level,
+                  startLine: extraction.startLine,
+                  endLine: extraction.endLine,
+                },
+              }, null, indent)
+            }]
           };
         }
 
