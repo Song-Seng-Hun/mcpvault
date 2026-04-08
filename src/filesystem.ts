@@ -960,6 +960,9 @@ export class FileSystemService {
    * Throws if zero or multiple matches are found.
    */
   async findPathForWikiLink(wikiLinkName: string): Promise<string> {
+    if (!wikiLinkName.trim()) {
+      throw new Error('Empty wiki link — provide a document name inside [[ ]].');
+    }
     const normalizedName = `${wikiLinkName}.md`;
     const matches: string[] = [];
 
