@@ -851,6 +851,46 @@ export class FileSystemService {
     getVaultPath() {
         return this.vaultPath;
     }
+    /**
+     * Resolve an Obsidian wiki link name to its vault-relative path.
+     * Scans the vault for an exact filename match (name + .md).
+     * Throws if zero or multiple matches are found.
+     */
+    async findPathForWikiLink(wikiLinkName) {
+        if (!wikiLinkName.trim()) {
+            throw new Error('Empty wiki link — provide a document name inside [[ ]].');
+        }
+        const normalizedName = `${wikiLinkName}.md`;
+        const matches = [];
+        const scan = async (dirPath, relativePath = '') => {
+            const entries = await readdir(dirPath, { withFileTypes: true });
+            for (const entry of entries) {
+                const entryRelativePath = relativePath
+                    ? `${relativePath}/${entry.name}`
+                    : entry.name;
+                if (!this.pathFilter.isAllowed(entryRelativePath)) {
+                    continue;
+                }
+                if (entry.isDirectory()) {
+                    if (!this.pathFilter.isAllowed(`${entryRelativePath}/test.md`)) {
+                        continue;
+                    }
+                    await scan(join(dirPath, entry.name), entryRelativePath);
+                }
+                else if (entry.isFile() && entry.name === normalizedName) {
+                    matches.push(entryRelativePath);
+                }
+            }
+        };
+        await scan(this.vaultPath);
+        if (matches.length === 0) {
+            throw new Error(`No file found matching wiki link for [[${wikiLinkName}]]. Use search_notes or list_directory to find the correct name.`);
+        }
+        if (matches.length > 1) {
+            throw new Error(`Ambiguous wiki link [[${wikiLinkName}]] — found ${matches.length} files: ${matches.join(', ')}. Provide the full path instead.`);
+        }
+        return matches[0];
+    }
     async getVaultStats(recentCount = 5) {
         let totalNotes = 0;
         let totalFolders = 0;
