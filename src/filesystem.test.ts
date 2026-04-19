@@ -1455,3 +1455,43 @@ describe("classifyWriteError (#109)", () => {
     );
   });
 });
+
+// ============================================================================
+// FIND PATH FOR WIKI LINK TESTS
+// ============================================================================
+
+describe("findPathForWikiLink (#101)", () => {
+  test("findPathForWikiLink returns empty array on zero match", async () => {
+    await writeFile(join(testVaultPath, "Other.md"), "# Other");
+    const matches = await fileSystem.findPathForWikiLink("Missing");
+    expect(matches).toEqual([]);
+  });
+
+  test("findPathForWikiLink returns single match as one-element array", async () => {
+    await writeFile(join(testVaultPath, "Note.md"), "# Note");
+    const matches = await fileSystem.findPathForWikiLink("Note");
+    expect(matches).toEqual(["Note.md"]);
+  });
+
+  test("findPathForWikiLink sorts root before nested", async () => {
+    await writeFile(join(testVaultPath, "Note.md"), "# root");
+    await mkdir(join(testVaultPath, "deep/nested"), { recursive: true });
+    await writeFile(join(testVaultPath, "deep/nested/Note.md"), "# nested");
+    const matches = await fileSystem.findPathForWikiLink("Note");
+    expect(matches).toEqual(["Note.md", "deep/nested/Note.md"]);
+  });
+
+  test("findPathForWikiLink alphabetical tiebreak at equal depth", async () => {
+    await mkdir(join(testVaultPath, "zeta"), { recursive: true });
+    await mkdir(join(testVaultPath, "alpha"), { recursive: true });
+    await writeFile(join(testVaultPath, "zeta/Note.md"), "# zeta");
+    await writeFile(join(testVaultPath, "alpha/Note.md"), "# alpha");
+    const matches = await fileSystem.findPathForWikiLink("Note");
+    expect(matches).toEqual(["alpha/Note.md", "zeta/Note.md"]);
+  });
+
+  test("findPathForWikiLink throws on empty name (caller misuse)", async () => {
+    await expect(fileSystem.findPathForWikiLink("")).rejects.toThrow(/Empty wiki link/);
+    await expect(fileSystem.findPathForWikiLink("   ")).rejects.toThrow(/Empty wiki link/);
+  });
+});
