@@ -71,6 +71,35 @@ describe('parseWikiLink', () => {
       fragment: undefined,
     })
   })
+
+  it('unescapes \\| inside brackets (table-authored link)', () => {
+    expect(parseWikiLink('[[My Document\\|Displayed]]')).toEqual({
+      document: 'My Document',
+      fragment: undefined,
+    })
+  })
+
+  it('unescapes \\| with fragment and display', () => {
+    expect(parseWikiLink('[[My Document#Heading\\|Display]]')).toEqual({
+      document: 'My Document',
+      fragment: 'Heading',
+    })
+  })
+
+  it('first-pipe-wins after unescape with multiple escaped pipes', () => {
+    expect(parseWikiLink('[[A\\|B\\|C]]')).toEqual({
+      document: 'A',
+      fragment: undefined,
+    })
+  })
+
+  it('rejects pathological double-backslash-pipe as invalid', () => {
+    expect(() => parseWikiLink('[[Foo\\\\|Bar]]')).toThrow(/Invalid wiki-link syntax/)
+  })
+
+  it('rejects bare input with backslash in parsed document', () => {
+    expect(() => parseWikiLink('Foo\\|Bar')).toThrow(/Invalid wiki-link syntax/)
+  })
 })
 
 describe('resolveWikiLink', () => {

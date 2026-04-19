@@ -42,10 +42,16 @@ export type WikiLinkResolution =
  * - `[[Document Name#^block-id]]`
  * - `[[Document Name|Display Text]]`
  * - `[[Document Name#Heading|Display Text]]`
- * - Bare names without brackets
+ * - `[[Document Name\|Display]]` — table-authored escape; `\|` unescapes to `|`
+ * - Bare names without brackets (backslashes preserved as-is)
+ *
+ * Throws on malformed input: if the parsed `document` or `fragment` still
+ * contains a literal `\` after processing, the input is rejected rather than
+ * heuristically interpreted.
  *
  * @param wikiLinkText - The raw wiki link string, with or without brackets
  * @returns The parsed basename and optional fragment
+ * @throws Error when parsed components contain an unexpected backslash
  *
  * @see {@link ParsedWikiLink}
  */
@@ -54,12 +60,18 @@ export const parseWikiLink = (
 ): ParsedWikiLink => {
   let text = wikiLinkText.trim();
 
-  // Strip [[ ]] brackets if present
-  if (text.startsWith('[[')) {
+  const wasBracketed = text.startsWith('[[');
+  if (wasBracketed) {
     text = text.slice(2);
   }
   if (text.endsWith(']]')) {
     text = text.slice(0, -2);
+  }
+
+  // Inside [[ ]] only: unescape Obsidian's table-authoring artifact `\|` → `|`.
+  // Pipe is a reserved grammar character, so `\|` is unambiguous there.
+  if (wasBracketed) {
+    text = text.replace(/\\\|/g, '|');
   }
 
   // Strip |display text if present
@@ -68,19 +80,25 @@ export const parseWikiLink = (
     text = text.slice(0, pipeIndex);
   }
 
-  // Split on first # to separate basename from fragment
+  let document: string;
+  let fragment: string | undefined;
+
   const hashIndex = text.indexOf('#');
   if (hashIndex !== -1) {
-    return {
-      document: text.slice(0, hashIndex).trim(),
-      fragment: text.slice(hashIndex + 1).trim() || undefined,
-    };
+    document = text.slice(0, hashIndex).trim();
+    fragment = text.slice(hashIndex + 1).trim() || undefined;
+  } else {
+    document = text.trim();
+    fragment = undefined;
   }
 
-  return {
-    document: text.trim(),
-    fragment: undefined,
-  };
+  if (document.includes('\\') || (fragment !== undefined && fragment.includes('\\'))) {
+    throw new Error(
+      `Invalid wiki-link syntax: unexpected backslash in [[${wikiLinkText}]]. Only \\| inside [[ ]] is a recognized escape.`,
+    );
+  }
+
+  return { document, fragment };
 };
 
 /**
