@@ -41,10 +41,16 @@ export type WikiLinkResolution = {
  * - `[[Document Name#^block-id]]`
  * - `[[Document Name|Display Text]]`
  * - `[[Document Name#Heading|Display Text]]`
- * - Bare names without brackets
+ * - `[[Document Name\|Display]]` — table-authored escape; `\|` unescapes to `|`
+ * - Bare names without brackets (backslashes preserved as-is)
+ *
+ * Throws on malformed input: if the parsed `document` or `fragment` still
+ * contains a literal `\` after processing, the input is rejected rather than
+ * heuristically interpreted.
  *
  * @param wikiLinkText - The raw wiki link string, with or without brackets
  * @returns The parsed basename and optional fragment
+ * @throws Error when parsed components contain an unexpected backslash
  *
  * @see {@link ParsedWikiLink}
  */

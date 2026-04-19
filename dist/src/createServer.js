@@ -214,7 +214,7 @@ export function createServer(vaultPath, options = {}) {
                 },
                 {
                     name: "wiki_link",
-                    description: "Read an Obsidian wiki link. Accepts the same syntax as Obsidian: [[Document Name]], [[Document Name#Heading]], [[Document Name#^block-id]], [[Document Name|Display Text]]. Searches the vault for an exact basename match. With a fragment, returns only the matching section. Content is returned bare — ready for direct use in context.",
+                    description: "Read an Obsidian wiki link. Accepts the same syntax as Obsidian: [[Document Name]], [[Document Name#Heading]], [[Document Name#^block-id]], [[Document Name|Display Text]], including table-authored escapes like [[Document Name\\|Display]]. Searches the vault for an exact basename match. When multiple files share the basename, the response returns the first pick (root-first by path depth, then alphabetical) and lists all candidates in structuredContent.matches (index 0 is the pick); structuredContent.ambiguous signals whether a choice had to be made. With a fragment, returns only the matching section. Content is returned bare — ready for direct use in context.",
                     inputSchema: {
                         type: "object",
                         properties: {
@@ -397,12 +397,47 @@ export function createServer(vaultPath, options = {}) {
                     };
                 }
                 case "wiki_link": {
-                    const parsed = parseWikiLink(trimmedArgs.document);
-                    const fragment = trimmedArgs.fragment || parsed.fragment;
-                    const resolvedPath = await fileSystem.findPathForWikiLink(parsed.document);
-                    const note = await fileSystem.readNote(resolvedPath);
                     const indent = trimmedArgs.prettyPrint ? 2 : undefined;
+                    let parsed;
+                    try {
+                        parsed = parseWikiLink(trimmedArgs.document);
+                    }
+                    catch (err) {
+                        const message = err instanceof Error ? err.message : 'Invalid wiki-link syntax';
+                        return {
+                            content: [{ type: "text", text: message }],
+                            structuredContent: { rawInput: trimmedArgs.document },
+                            isError: true,
+                        };
+                    }
+                    const fragment = trimmedArgs.fragment || parsed.fragment;
+                    const paths = await fileSystem.findPathForWikiLink(parsed.document);
+                    if (paths.length === 0) {
+                        const fragmentNote = fragment ? ` (fragment: ${fragment})` : '';
+                        return {
+                            content: [{
+                                    type: "text",
+                                    text: `No file found for [[${parsed.document}]]${fragmentNote}. Use search_notes or list_directory to find the correct name.`,
+                                }],
+                            structuredContent: {
+                                document: parsed.document,
+                                ...(fragment !== undefined && { fragment }),
+                            },
+                            isError: true,
+                        };
+                    }
+                    const resolvedPath = paths[0];
+                    const ambiguous = paths.length > 1;
+                    const matches = paths.map((p) => ({ path: p }));
+                    const note = await fileSystem.readNote(resolvedPath);
                     const resolution = resolveWikiLink(note.content, fragment);
+                    const baseStructured = {
+                        document: parsed.document,
+                        ...(fragment !== undefined && { fragment }),
+                        path: resolvedPath,
+                        matches,
+                        ambiguous,
+                    };
                     if (resolution.type === 'full') {
                         return {
                             content: [{
@@ -411,8 +446,9 @@ export function createServer(vaultPath, options = {}) {
                                         path: resolvedPath,
                                         fm: note.frontmatter,
                                         content: resolution.content,
-                                    }, null, indent)
-                                }]
+                                    }, null, indent),
+                                }],
+                            structuredContent: baseStructured,
                         };
                     }
                     const { extraction } = resolution;
@@ -420,9 +456,10 @@ export function createServer(vaultPath, options = {}) {
                         return {
                             content: [{
                                     type: "text",
-                                    text: JSON.stringify({ path: resolvedPath, ...extraction }, null, indent)
+                                    text: JSON.stringify({ path: resolvedPath, ...extraction }, null, indent),
                                 }],
-                            isError: true
+                            structuredContent: baseStructured,
+                            isError: true,
                         };
                     }
                     return {
@@ -438,8 +475,9 @@ export function createServer(vaultPath, options = {}) {
                                         startLine: extraction.startLine,
                                         endLine: extraction.endLine,
                                     },
-                                }, null, indent)
-                            }]
+                                }, null, indent),
+                            }],
+                        structuredContent: baseStructured,
                     };
                 }
                 default:

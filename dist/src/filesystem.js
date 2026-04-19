@@ -852,9 +852,15 @@ export class FileSystemService {
         return this.vaultPath;
     }
     /**
-     * Resolve an Obsidian wiki link name to its vault-relative path.
-     * Scans the vault for an exact filename match (name + .md).
-     * Throws if zero or multiple matches are found.
+     * Resolve an Obsidian wiki link name to its vault-relative paths.
+     * Scans the vault for exact filename matches (name + .md).
+     *
+     * Returns all matches sorted root-first (by path depth ascending), with
+     * alphabetical tiebreak at equal depth. Empty array on zero matches.
+     * The caller decides how to handle zero/single/multi — this function does
+     * not throw on lookup outcomes.
+     *
+     * Throws only on caller misuse (empty name).
      */
     async findPathForWikiLink(wikiLinkName) {
         if (!wikiLinkName.trim()) {
@@ -883,13 +889,14 @@ export class FileSystemService {
             }
         };
         await scan(this.vaultPath);
-        if (matches.length === 0) {
-            throw new Error(`No file found matching wiki link for [[${wikiLinkName}]]. Use search_notes or list_directory to find the correct name.`);
-        }
-        if (matches.length > 1) {
-            throw new Error(`Ambiguous wiki link [[${wikiLinkName}]] — found ${matches.length} files: ${matches.join(', ')}. Provide the full path instead.`);
-        }
-        return matches[0];
+        // Depth-ascending (root-first), alphabetical tiebreak at equal depth.
+        // No current-folder context exists for a standalone MCP tool.
+        matches.sort((a, b) => {
+            const da = a.split('/').length;
+            const db = b.split('/').length;
+            return da !== db ? da - db : a.localeCompare(b);
+        });
+        return matches;
     }
     async getVaultStats(recentCount = 5) {
         let totalNotes = 0;
