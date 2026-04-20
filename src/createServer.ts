@@ -7,7 +7,7 @@ import { FileSystemService } from "./filesystem.js";
 import { FrontmatterHandler, parseFrontmatter } from "./frontmatter.js";
 import { PathFilter } from "./pathfilter.js";
 import { SearchService } from "./search.js";
-import { parseWikiLink, resolveWikiLink } from "./wikilink/index.js";
+import { handleWikiLinkTool } from "./wikilink/index.js";
 import { resolve } from "path";
 
 export interface CreateServerOptions {
@@ -432,99 +432,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           };
         }
 
-        case "wiki_link": {
-          const indent = trimmedArgs.prettyPrint ? 2 : undefined;
-
-          let parsed: ReturnType<typeof parseWikiLink>;
-          try {
-            parsed = parseWikiLink(trimmedArgs.document);
-          } catch (err) {
-            const message = err instanceof Error ? err.message : 'Invalid wiki-link syntax';
-            return {
-              content: [{ type: "text", text: message }],
-              structuredContent: { rawInput: trimmedArgs.document },
-              isError: true,
-            };
-          }
-
-          const fragment = trimmedArgs.fragment || parsed.fragment;
-          const paths = await fileSystem.findPathForWikiLink(parsed.document);
-
-          if (paths.length === 0) {
-            const fragmentNote = fragment ? ` (fragment: ${fragment})` : '';
-            return {
-              content: [{
-                type: "text",
-                text: `No file found for [[${parsed.document}]]${fragmentNote}. Use search_notes or list_directory to find the correct name.`,
-              }],
-              structuredContent: {
-                document: parsed.document,
-                ...(fragment !== undefined && { fragment }),
-              },
-              isError: true,
-            };
-          }
-
-          const resolvedPath = paths[0] as string;
-          const ambiguous = paths.length > 1;
-          const matches = paths.map((p) => ({ path: p }));
-          const note = await fileSystem.readNote(resolvedPath);
-
-          const resolution = resolveWikiLink(note.content, fragment);
-
-          const baseStructured = {
-            document: parsed.document,
-            ...(fragment !== undefined && { fragment }),
-            path: resolvedPath,
-            matches,
-            ambiguous,
-          };
-
-          if (resolution.type === 'full') {
-            return {
-              content: [{
-                type: "text",
-                text: JSON.stringify({
-                  path: resolvedPath,
-                  fm: note.frontmatter,
-                  content: resolution.content,
-                }, null, indent),
-              }],
-              structuredContent: baseStructured,
-            };
-          }
-
-          const { extraction } = resolution;
-
-          if (!extraction.found) {
-            return {
-              content: [{
-                type: "text",
-                text: JSON.stringify({ path: resolvedPath, ...extraction }, null, indent),
-              }],
-              structuredContent: baseStructured,
-              isError: true,
-            };
-          }
-
-          return {
-            content: [{
-              type: "text",
-              text: JSON.stringify({
-                path: resolvedPath,
-                fm: note.frontmatter,
-                content: extraction.content,
-                section: {
-                  heading: extraction.heading,
-                  level: extraction.level,
-                  startLine: extraction.startLine,
-                  endLine: extraction.endLine,
-                },
-              }, null, indent),
-            }],
-            structuredContent: baseStructured,
-          };
-        }
+        case "wiki_link":
+          return await handleWikiLinkTool(fileSystem, trimmedArgs);
 
         default:
           throw new Error(`Unknown tool: ${toolName}`);
