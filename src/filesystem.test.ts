@@ -106,6 +106,88 @@ test("patch note fails when string not found", async () => {
   expect(result.message).toContain("String not found");
 });
 
+// ============================================================================
+// GET NOTE OUTLINE TESTS
+// ============================================================================
+
+describe("getNoteOutline", () => {
+  test("returns headings with level, text, and line number", async () => {
+    const testPath = "outline-test.md";
+    const content = "# Heading 1\n\nSome text.\n\n## Heading 2\n\nMore text.\n\n### Heading 3\n";
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(3);
+    expect(headings[0]).toEqual({ level: 1, text: "Heading 1", line: 1 });
+    expect(headings[1]).toEqual({ level: 2, text: "Heading 2", line: 5 });
+    expect(headings[2]).toEqual({ level: 3, text: "Heading 3", line: 9 });
+  });
+
+  test("returns empty array for note with no headings", async () => {
+    const testPath = "no-headings.md";
+    await writeFile(join(testVaultPath, testPath), "Just some plain text.\n\nNo headings here.");
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(0);
+  });
+
+  test("ignores heading markers inside code blocks and inline text", async () => {
+    const testPath = "mixed.md";
+    const content = "# Real Heading\n\nText with # not a heading\n\n## Another Real Heading\n";
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(2);
+    expect(headings[0]?.text).toBe("Real Heading");
+    expect(headings[1]?.text).toBe("Another Real Heading");
+  });
+
+  test("throws on path outside vault", async () => {
+    await expect(fileSystem.getNoteOutline("../outside.md")).rejects.toThrow();
+  });
+});
+
+// ============================================================================
+// READ NOTE LINES TESTS
+// ============================================================================
+
+describe("readNoteLines", () => {
+  test("reads a specific line range", async () => {
+    const testPath = "lines-test.md";
+    const content = "line 1\nline 2\nline 3\nline 4\nline 5";
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const result = await fileSystem.readNoteLines({ path: testPath, startLine: 2, endLine: 4 });
+
+    expect(result).toBe("line 2\nline 3\nline 4");
+  });
+
+  test("reads a single line", async () => {
+    const testPath = "single-line.md";
+    await writeFile(join(testVaultPath, testPath), "line 1\nline 2\nline 3");
+
+    const result = await fileSystem.readNoteLines({ path: testPath, startLine: 2, endLine: 2 });
+
+    expect(result).toBe("line 2");
+  });
+
+  test("reads from line 1", async () => {
+    const testPath = "from-start.md";
+    await writeFile(join(testVaultPath, testPath), "first\nsecond\nthird");
+
+    const result = await fileSystem.readNoteLines({ path: testPath, startLine: 1, endLine: 2 });
+
+    expect(result).toBe("first\nsecond");
+  });
+
+  test("throws on path outside vault", async () => {
+    await expect(fileSystem.readNoteLines({ path: "../outside.md", startLine: 1, endLine: 1 })).rejects.toThrow();
+  });
+});
+
 test("patch note with multiline replacement", async () => {
   const testPath = "test-note.md";
   const content = "# Test\n\n## Section A\nOld content\nOld lines\n\n## Section B\nOther content";
