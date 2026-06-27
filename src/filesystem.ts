@@ -6,7 +6,7 @@ import trash from 'trash';
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
 import { generateObsidianUri } from './uri.js';
-import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, MoveNoteParams, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, VaultStats } from './types.js';
+import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, MoveNoteParams, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, VaultStats, NoteHeading, ReadNoteLinesParams } from './types.js';
 
 /**
  * Map a filesystem write failure to a clear, accurate Error.
@@ -1052,6 +1052,35 @@ export class FileSystemService {
     });
 
     return matches;
+  }
+
+  async getNoteOutline(path: string): Promise<NoteHeading[]> {
+    if (!this.pathFilter.isAllowed(path)) {
+      throw new Error(`Access denied: ${path}.`);
+    }
+    const fullPath = this.resolvePath(path);
+    const raw = await readFile(fullPath, 'utf-8');
+    const lines = raw.split('\n');
+    const headings: NoteHeading[] = [];
+    const headingRegex = /^(#{1,6})\s+(.+)/;
+    for (let i = 0; i < lines.length; i++) {
+      const match = headingRegex.exec(lines[i]!);
+      if (match) {
+        headings.push({ level: match[1]!.length, text: match[2]!.trim(), line: i + 1 });
+      }
+    }
+    return headings;
+  }
+
+  async readNoteLines(params: ReadNoteLinesParams): Promise<string> {
+    const { path, startLine, endLine } = params;
+    if (!this.pathFilter.isAllowed(path)) {
+      throw new Error(`Access denied: ${path}.`);
+    }
+    const fullPath = this.resolvePath(path);
+    const raw = await readFile(fullPath, 'utf-8');
+    const lines = raw.split('\n');
+    return lines.slice(startLine - 1, endLine).join('\n');
   }
 
   async getVaultStats(recentCount: number = 5): Promise<VaultStats> {
