@@ -561,8 +561,9 @@ test("delete note with local trash mode", async () => {
   const originalExists = await fileSystem.exists(testPath);
   expect(originalExists).toBe(false);
 
-  const trashedExists = await fileSystem.exists(".trash/trash-test.md");
-  expect(trashedExists).toBe(true);
+  // .trash/ is filtered from vault visibility; verify via raw fs
+  const trashedContent = await readFile(join(testVaultPath, ".trash/trash-test.md"), "utf-8");
+  expect(trashedContent).toBe(content);
 });
 
 test("delete note with system trash mode", async () => {

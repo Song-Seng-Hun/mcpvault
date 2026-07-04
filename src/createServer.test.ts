@@ -129,22 +129,21 @@ test("wiki_link returns isError on zero match with document echo", async () => {
     await writeFile(join(testVaultPath, "Other.md"), "# Other");
     const result = await client.callTool({
       name: "wiki_link",
-      arguments: { document: "Missing", fragment: "Intro" },
+      arguments: { document: "Missing" },
     });
     expect(result.isError).toBe(true);
     const text = (result.content as any)[0].text as string;
     expect(text).toContain("Missing");
-    expect(text).toContain("Intro");
+    expect(text).toContain("search_notes");
     const sc = result.structuredContent as any;
     expect(sc.document).toBe("Missing");
-    expect(sc.fragment).toBe("Intro");
   } finally {
     await client.close();
     await server.close();
   }
 });
 
-test("wiki_link single match returns matches with one entry and ambiguous false", async () => {
+test("wiki_link single match omits alternatives", async () => {
   const { server, client } = await connectClient();
   try {
     await writeFile(join(testVaultPath, "Note.md"), "# Note\n\nbody");
@@ -156,16 +155,16 @@ test("wiki_link single match returns matches with one entry and ambiguous false"
     const sc = result.structuredContent as any;
     expect(sc.document).toBe("Note");
     expect(sc.path).toBe("Note.md");
-    expect(sc.ambiguous).toBe(false);
-    expect(sc.matches).toEqual([{ path: "Note.md" }]);
-    expect(sc.fragment).toBeUndefined();
+    expect("alternatives" in sc).toBe(false);
+    expect(sc.ambiguous).toBeUndefined();
+    expect(sc.matches).toBeUndefined();
   } finally {
     await client.close();
     await server.close();
   }
 });
 
-test("wiki_link multi match returns ambiguous true with winner at matches[0]", async () => {
+test("wiki_link multi match resolves first sorted path and lists alternatives", async () => {
   const { server, client } = await connectClient();
   try {
     await writeFile(join(testVaultPath, "Note.md"), "# Root Note");
@@ -177,10 +176,10 @@ test("wiki_link multi match returns ambiguous true with winner at matches[0]", a
     });
     expect(result.isError).toBeFalsy();
     const sc = result.structuredContent as any;
-    expect(sc.ambiguous).toBe(true);
-    expect(sc.matches).toEqual([{ path: "Note.md" }, { path: "deep/Note.md" }]);
     expect(sc.path).toBe("Note.md");
-    expect(sc.matches[0].path).toBe(sc.path);
+    expect(sc.alternatives).toEqual(["deep/Note.md"]);
+    expect(sc.ambiguous).toBeUndefined();
+    expect(sc.matches).toBeUndefined();
   } finally {
     await client.close();
     await server.close();
