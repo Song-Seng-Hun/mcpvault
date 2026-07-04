@@ -1,16 +1,16 @@
-import { parseWikiLink, resolveWikiLink } from './resolveWikiLink.js';
+import { parseWikiLink } from './resolveWikiLink.js';
 /**
  * Handle the `wiki_link` MCP tool call.
  *
  * Resolves an Obsidian wiki-link reference against the vault and returns the
- * matching note (or a fragment of it). Designed to keep the MCP server
- * request handler slim — all wiki-link specific concerns live here.
+ * matching note. Designed to keep the MCP server request handler slim — all
+ * wiki-link specific concerns live here.
  *
  * Response channels per MCP spec 2025-11-25:
  * - Invalid syntax or no match → `isError: true` with an actionable message.
  * - One or more matches → success; `structuredContent` carries `document`,
- *   optional `fragment`, `path`, `matches` (winner at index 0), and
- *   `ambiguous` (true iff multiple files share the basename).
+ *   `path` (the resolved pick), and `alternatives` (the other matched paths,
+ *   present only when more than one file shares the basename).
  */
 export async function handleWikiLinkTool(fileSystem, args) {
     const indent = args.prettyPrint ? 2 : undefined;
@@ -26,73 +26,35 @@ export async function handleWikiLinkTool(fileSystem, args) {
             isError: true,
         };
     }
-    const fragment = args.fragment || parsed.fragment;
     const paths = await fileSystem.findPathForWikiLink(parsed.document);
     if (paths.length === 0) {
-        const fragmentNote = fragment ? ` (fragment: ${fragment})` : '';
         return {
             content: [{
                     type: 'text',
-                    text: `No file found for [[${parsed.document}]]${fragmentNote}. Use search_notes or list_directory to find the correct name.`,
+                    text: `No file found for [[${parsed.document}]]. Use search_notes or list_directory to find the correct name.`,
                 }],
             structuredContent: {
                 document: parsed.document,
-                ...(fragment !== undefined && { fragment }),
             },
             isError: true,
         };
     }
     const resolvedPath = paths[0];
-    const ambiguous = paths.length > 1;
-    const matches = paths.map((p) => ({ path: p }));
+    const alternatives = paths.slice(1);
     const note = await fileSystem.readNote(resolvedPath);
-    const resolution = resolveWikiLink(note.content, fragment);
-    const baseStructured = {
-        document: parsed.document,
-        ...(fragment !== undefined && { fragment }),
-        path: resolvedPath,
-        matches,
-        ambiguous,
-    };
-    if (resolution.type === 'full') {
-        return {
-            content: [{
-                    type: 'text',
-                    text: JSON.stringify({
-                        path: resolvedPath,
-                        fm: note.frontmatter,
-                        content: resolution.content,
-                    }, null, indent),
-                }],
-            structuredContent: baseStructured,
-        };
-    }
-    const { extraction } = resolution;
-    if (!extraction.found) {
-        return {
-            content: [{
-                    type: 'text',
-                    text: JSON.stringify({ path: resolvedPath, ...extraction }, null, indent),
-                }],
-            structuredContent: baseStructured,
-            isError: true,
-        };
-    }
     return {
         content: [{
                 type: 'text',
                 text: JSON.stringify({
                     path: resolvedPath,
                     fm: note.frontmatter,
-                    content: extraction.content,
-                    section: {
-                        heading: extraction.heading,
-                        level: extraction.level,
-                        startLine: extraction.startLine,
-                        endLine: extraction.endLine,
-                    },
+                    content: note.content,
                 }, null, indent),
             }],
-        structuredContent: baseStructured,
+        structuredContent: {
+            document: parsed.document,
+            path: resolvedPath,
+            ...(alternatives.length > 0 && { alternatives }),
+        },
     };
 }

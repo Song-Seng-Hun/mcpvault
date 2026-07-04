@@ -214,17 +214,13 @@ export function createServer(vaultPath, options = {}) {
                 },
                 {
                     name: "wiki_link",
-                    description: "Read an Obsidian wiki link. Accepts the same syntax as Obsidian: [[Document Name]], [[Document Name#Heading]], [[Document Name#^block-id]], [[Document Name|Display Text]], including table-authored escapes like [[Document Name\\|Display]]. Searches the vault for an exact basename match. When multiple files share the basename, the response returns the first pick (root-first by path depth, then alphabetical) and lists all candidates in structuredContent.matches (index 0 is the pick); structuredContent.ambiguous signals whether a choice had to be made. With a fragment, returns only the matching section. Content is returned bare — ready for direct use in context.",
+                    description: "Read an Obsidian wiki link. Accepts the same syntax as Obsidian: [[Document Name]] or [[Document Name|Display Text]], including table-authored escapes like [[Document Name\\|Display]]. A #fragment suffix in the input is ignored. Searches the vault for an exact basename match and returns the file's content. When multiple files share the basename, picks the first (vault root first, then alphabetical by path) and lists the other paths in structuredContent.alternatives. Content is returned bare — ready for direct use in context.",
                     inputSchema: {
                         type: "object",
                         properties: {
                             document: {
                                 type: "string",
                                 description: "The document name — what goes inside [[ ]]. e.g. 'My-Document'. Brackets and display text (|...) are stripped if present. The .md extension is always appended (never include it)."
-                            },
-                            fragment: {
-                                type: "string",
-                                description: "Optional fragment: heading text (e.g. 'Summary') or block-id (e.g. '^blockId'). Leading # is optional. Returns only that section instead of the full document."
                             },
                             prettyPrint: {
                                 type: "boolean",
