@@ -338,6 +338,106 @@ test("patch note handles regex special characters literally", async () => {
   expect(updatedNote.content).not.toContain("$10.50");
 });
 
+test("patch note inserts newString containing $' literally without duplicating tail", async () => {
+  const testPath = "test-note.md";
+  const content = "# Test\n\nOld line here.\n\nTail content that must not be duplicated.";
+
+  await writeFile(join(testVaultPath, testPath), content);
+
+  const result = await fileSystem.patchNote({
+    path: testPath,
+    oldString: "Old line here.",
+    newString: "It's a bash snippet: echo $'hello'",
+    replaceAll: false
+  });
+
+  expect(result.success).toBe(true);
+
+  const updatedNote = await fileSystem.readNote(testPath);
+  expect(updatedNote.originalContent).toContain("It's a bash snippet: echo $'hello'");
+  expect(updatedNote.originalContent.match(/Tail content that must not be duplicated\./g)?.length).toBe(1);
+});
+
+test("patch note inserts newString containing $& literally", async () => {
+  const testPath = "test-note.md";
+  const content = "# Test\n\nOld line here.";
+
+  await writeFile(join(testVaultPath, testPath), content);
+
+  const result = await fileSystem.patchNote({
+    path: testPath,
+    oldString: "Old line here.",
+    newString: "Matched with $& pattern",
+    replaceAll: false
+  });
+
+  expect(result.success).toBe(true);
+
+  const updatedNote = await fileSystem.readNote(testPath);
+  expect(updatedNote.originalContent).toContain("Matched with $& pattern");
+  expect(updatedNote.originalContent).not.toContain("Old line here.");
+});
+
+test("patch note inserts newString containing $` literally", async () => {
+  const testPath = "test-note.md";
+  const content = "# Test\n\nOld line here.\n\nAfter text.";
+
+  await writeFile(join(testVaultPath, testPath), content);
+
+  const result = await fileSystem.patchNote({
+    path: testPath,
+    oldString: "Old line here.",
+    newString: "Backtick pattern $` stays literal",
+    replaceAll: false
+  });
+
+  expect(result.success).toBe(true);
+
+  const updatedNote = await fileSystem.readNote(testPath);
+  expect(updatedNote.originalContent).toContain("Backtick pattern $` stays literal");
+  expect(updatedNote.originalContent.match(/# Test/g)?.length).toBe(1);
+});
+
+test("patch note inserts newString containing $$ literally", async () => {
+  const testPath = "test-note.md";
+  const content = "# Test\n\nPrice: TBD";
+
+  await writeFile(join(testVaultPath, testPath), content);
+
+  const result = await fileSystem.patchNote({
+    path: testPath,
+    oldString: "Price: TBD",
+    newString: "Price: $$100",
+    replaceAll: false
+  });
+
+  expect(result.success).toBe(true);
+
+  const updatedNote = await fileSystem.readNote(testPath);
+  expect(updatedNote.originalContent).toContain("Price: $$100");
+});
+
+test("patch note with replaceAll inserts $ patterns literally", async () => {
+  const testPath = "test-note.md";
+  const content = "# Test\n\nTODO item\nTODO item\n\nTail content.";
+
+  await writeFile(join(testVaultPath, testPath), content);
+
+  const result = await fileSystem.patchNote({
+    path: testPath,
+    oldString: "TODO item",
+    newString: "Costs $' and $& and $$",
+    replaceAll: true
+  });
+
+  expect(result.success).toBe(true);
+  expect(result.matchCount).toBe(2);
+
+  const updatedNote = await fileSystem.readNote(testPath);
+  expect(updatedNote.originalContent.match(/Costs \$' and \$& and \$\$/g)?.length).toBe(2);
+  expect(updatedNote.originalContent.match(/Tail content\./g)?.length).toBe(1);
+});
+
 test("patch note works with fenced code blocks", async () => {
   const testPath = "code-fence-test.md";
   const content = "# Example\n\n```rust\nfn main() {\n    println!(\"hello\");\n}\n```\n";
