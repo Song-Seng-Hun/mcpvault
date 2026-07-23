@@ -37,6 +37,18 @@ export declare class FileSystemService {
     getNotesInfo(paths: string[]): Promise<NoteInfo[]>;
     manageTags(params: TagManagementParams): Promise<TagManagementResult>;
     getVaultPath(): string;
+    /**
+     * Resolve an Obsidian wiki link name to its vault-relative paths.
+     * Scans the vault for exact filename matches (name + .md).
+     *
+     * Returns all matches sorted root-first (by path depth ascending), with
+     * alphabetical tiebreak at equal depth. Empty array on zero matches.
+     * The caller decides how to handle zero/single/multi — this function does
+     * not throw on lookup outcomes.
+     *
+     * Throws only on caller misuse (empty name).
+     */
+    findPathForWikiLink(wikiLinkName: string): Promise<string[]>;
     getVaultStats(recentCount?: number): Promise<VaultStats>;
     listAllTags(): Promise<Array<{
         tag: string;

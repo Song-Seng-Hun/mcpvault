@@ -891,6 +891,53 @@ export class FileSystemService {
     getVaultPath() {
         return this.vaultPath;
     }
+    /**
+     * Resolve an Obsidian wiki link name to its vault-relative paths.
+     * Scans the vault for exact filename matches (name + .md).
+     *
+     * Returns all matches sorted root-first (by path depth ascending), with
+     * alphabetical tiebreak at equal depth. Empty array on zero matches.
+     * The caller decides how to handle zero/single/multi — this function does
+     * not throw on lookup outcomes.
+     *
+     * Throws only on caller misuse (empty name).
+     */
+    async findPathForWikiLink(wikiLinkName) {
+        if (!wikiLinkName.trim()) {
+            throw new Error('Empty wiki link — provide a document name inside [[ ]].');
+        }
+        const normalizedName = `${wikiLinkName}.md`;
+        const matches = [];
+        const scan = async (dirPath, relativePath = '') => {
+            const entries = await readdir(dirPath, { withFileTypes: true });
+            for (const entry of entries) {
+                const entryRelativePath = relativePath
+                    ? `${relativePath}/${entry.name}`
+                    : entry.name;
+                if (!this.pathFilter.isAllowed(entryRelativePath)) {
+                    continue;
+                }
+                if (entry.isDirectory()) {
+                    if (!this.pathFilter.isAllowed(`${entryRelativePath}/test.md`)) {
+                        continue;
+                    }
+                    await scan(join(dirPath, entry.name), entryRelativePath);
+                }
+                else if (entry.isFile() && entry.name === normalizedName) {
+                    matches.push(entryRelativePath);
+                }
+            }
+        };
+        await scan(this.vaultPath);
+        // Depth-ascending (root-first), alphabetical tiebreak at equal depth.
+        // No current-folder context exists for a standalone MCP tool.
+        matches.sort((a, b) => {
+            const da = a.split('/').length;
+            const db = b.split('/').length;
+            return da !== db ? da - db : a.localeCompare(b);
+        });
+        return matches;
+    }
     async getVaultStats(recentCount = 5) {
         let totalNotes = 0;
         let totalFolders = 0;
