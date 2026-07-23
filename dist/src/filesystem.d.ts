@@ -16,6 +16,12 @@ export declare class FileSystemService {
     private frontmatterHandler;
     private pathFilter;
     constructor(vaultPath: string, pathFilter?: PathFilter, frontmatterHandler?: FrontmatterHandler);
+    /**
+     * Normalize an incoming path to be vault-relative. Strips leading slashes
+     * and the vault path prefix when a caller accidentally passes an absolute path
+     * (e.g. "/Users/me/vault/wiki/note.md" instead of "wiki/note.md").
+     */
+    private normalizePath;
     private resolvePath;
     readNote(path: string): Promise<ParsedNote>;
     writeNote(params: NoteWriteParams): Promise<void>;
