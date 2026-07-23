@@ -41,6 +41,10 @@ export declare class FileSystemService {
      * Resolve an Obsidian wiki link name to its vault-relative paths.
      * Scans the vault for exact filename matches (name + .md).
      *
+     * A name containing `/` is path-qualified (Obsidian emits these when a
+     * basename is ambiguous, e.g. [[folder/Note]]): it must match the full
+     * vault-relative path instead of just the basename.
+     *
      * Returns all matches sorted root-first (by path depth ascending), with
      * alphabetical tiebreak at equal depth. Empty array on zero matches.
      * The caller decides how to handle zero/single/multi — this function does

@@ -895,6 +895,10 @@ export class FileSystemService {
      * Resolve an Obsidian wiki link name to its vault-relative paths.
      * Scans the vault for exact filename matches (name + .md).
      *
+     * A name containing `/` is path-qualified (Obsidian emits these when a
+     * basename is ambiguous, e.g. [[folder/Note]]): it must match the full
+     * vault-relative path instead of just the basename.
+     *
      * Returns all matches sorted root-first (by path depth ascending), with
      * alphabetical tiebreak at equal depth. Empty array on zero matches.
      * The caller decides how to handle zero/single/multi — this function does
@@ -907,6 +911,7 @@ export class FileSystemService {
             throw new Error('Empty wiki link — provide a document name inside [[ ]].');
         }
         const normalizedName = `${wikiLinkName}.md`;
+        const isPathQualified = wikiLinkName.includes('/');
         const matches = [];
         const scan = async (dirPath, relativePath = '') => {
             const entries = await readdir(dirPath, { withFileTypes: true });
@@ -923,7 +928,10 @@ export class FileSystemService {
                     }
                     await scan(join(dirPath, entry.name), entryRelativePath);
                 }
-                else if (entry.isFile() && entry.name === normalizedName) {
+                else if (entry.isFile() &&
+                    (isPathQualified
+                        ? entryRelativePath === normalizedName
+                        : entry.name === normalizedName)) {
                     matches.push(entryRelativePath);
                 }
             }

@@ -1646,4 +1646,25 @@ describe("findPathForWikiLink (#101)", () => {
     await expect(fileSystem.findPathForWikiLink("")).rejects.toThrow(/Empty wiki link/);
     await expect(fileSystem.findPathForWikiLink("   ")).rejects.toThrow(/Empty wiki link/);
   });
+
+  test("findPathForWikiLink resolves path-qualified name to exact path", async () => {
+    await writeFile(join(testVaultPath, "Note.md"), "# root");
+    await mkdir(join(testVaultPath, "deep"), { recursive: true });
+    await writeFile(join(testVaultPath, "deep/Note.md"), "# deep");
+    const matches = await fileSystem.findPathForWikiLink("deep/Note");
+    expect(matches).toEqual(["deep/Note.md"]);
+  });
+
+  test("findPathForWikiLink path-qualified name does not match basename elsewhere", async () => {
+    await writeFile(join(testVaultPath, "Note.md"), "# root");
+    const matches = await fileSystem.findPathForWikiLink("missing/Note");
+    expect(matches).toEqual([]);
+  });
+
+  test("findPathForWikiLink path-qualified name matches nested folders", async () => {
+    await mkdir(join(testVaultPath, "a/b"), { recursive: true });
+    await writeFile(join(testVaultPath, "a/b/Note.md"), "# nested");
+    const matches = await fileSystem.findPathForWikiLink("a/b/Note");
+    expect(matches).toEqual(["a/b/Note.md"]);
+  });
 });

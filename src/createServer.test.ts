@@ -203,3 +203,24 @@ test("wiki_link unescapes table-authored \\| inside brackets", async () => {
     await server.close();
   }
 });
+
+test("wiki_link resolves path-qualified link to the exact file", async () => {
+  const { server, client } = await connectClient();
+  try {
+    await writeFile(join(testVaultPath, "Note.md"), "# Root Note");
+    await mkdir(join(testVaultPath, "deep"), { recursive: true });
+    await writeFile(join(testVaultPath, "deep/Note.md"), "# Deep Note");
+    const result = await client.callTool({
+      name: "wiki_link",
+      arguments: { document: "[[deep/Note]]" },
+    });
+    expect(result.isError).toBeFalsy();
+    const sc = result.structuredContent as any;
+    expect(sc.document).toBe("deep/Note");
+    expect(sc.path).toBe("deep/Note.md");
+    expect("alternatives" in sc).toBe(false);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
