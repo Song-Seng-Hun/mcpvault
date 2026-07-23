@@ -310,9 +310,11 @@ export class FileSystemService {
       }
 
       // Perform the replacement
+      // Use a replacer function so newString is inserted literally,
+      // without $ replacement pattern expansion ($$, $&, $`, $')
       const updatedContent = replaceAll
         ? fullContent.split(oldString).join(newString)
-        : fullContent.replace(oldString, newString);
+        : fullContent.replace(oldString, () => newString);
 
       // Write the updated content
       const fullPath = this.resolvePath(path);
