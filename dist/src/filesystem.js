@@ -946,6 +946,33 @@ export class FileSystemService {
         });
         return matches;
     }
+    async getNoteOutline(path) {
+        if (!this.pathFilter.isAllowed(path)) {
+            throw new Error(`Access denied: ${path}.`);
+        }
+        const fullPath = this.resolvePath(path);
+        const raw = await readFile(fullPath, 'utf-8');
+        const lines = raw.split('\n');
+        const headings = [];
+        const headingRegex = /^(#{1,6})\s+(.+)/;
+        for (let i = 0; i < lines.length; i++) {
+            const match = headingRegex.exec(lines[i]);
+            if (match) {
+                headings.push({ level: match[1].length, text: match[2].trim(), line: i + 1 });
+            }
+        }
+        return headings;
+    }
+    async readNoteLines(params) {
+        const { path, startLine, endLine } = params;
+        if (!this.pathFilter.isAllowed(path)) {
+            throw new Error(`Access denied: ${path}.`);
+        }
+        const fullPath = this.resolvePath(path);
+        const raw = await readFile(fullPath, 'utf-8');
+        const lines = raw.split('\n');
+        return lines.slice(startLine - 1, endLine).join('\n');
+    }
     async getVaultStats(recentCount = 5) {
         let totalNotes = 0;
         let totalFolders = 0;
