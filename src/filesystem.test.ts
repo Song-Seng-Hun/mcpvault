@@ -148,6 +148,53 @@ describe("getNoteOutline", () => {
   test("throws on path outside vault", async () => {
     await expect(fileSystem.getNoteOutline("../outside.md")).rejects.toThrow();
   });
+
+  test("ignores heading markers inside fenced code blocks (backtick and tilde fences)", async () => {
+    const testPath = "fenced.md";
+    const content = [
+      "# Real Heading",
+      "",
+      "```",
+      "# not a heading",
+      "## also not a heading",
+      "```",
+      "",
+      "~~~",
+      "# still not a heading",
+      "~~~",
+      "",
+      "## Another Real Heading"
+    ].join("\n");
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(2);
+    expect(headings[0]?.text).toBe("Real Heading");
+    expect(headings[1]?.text).toBe("Another Real Heading");
+  });
+
+  test("does not misdetect a YAML comment in frontmatter as a heading (LF)", async () => {
+    const testPath = "frontmatter-lf.md";
+    const content = "---\ntitle: Test\n# not a heading, a YAML comment\n---\n\n# Real Heading\n";
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(1);
+    expect(headings[0]?.text).toBe("Real Heading");
+  });
+
+  test("does not misdetect a YAML comment in frontmatter as a heading (CRLF)", async () => {
+    const testPath = "frontmatter-crlf.md";
+    const content = "---\r\ntitle: Test\r\n# not a heading, a YAML comment\r\n---\r\n\r\n# Real Heading\r\n";
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(1);
+    expect(headings[0]?.text).toBe("Real Heading");
+  });
 });
 
 // ============================================================================
@@ -185,6 +232,33 @@ describe("readNoteLines", () => {
 
   test("throws on path outside vault", async () => {
     await expect(fileSystem.readNoteLines({ path: "../outside.md", startLine: 1, endLine: 1 })).rejects.toThrow();
+  });
+
+  test("clamps startLine below 1 up to line 1, instead of wrapping via negative indexing", async () => {
+    const testPath = "clamp-start.md";
+    await writeFile(join(testVaultPath, testPath), "first\nsecond\nthird");
+
+    const result = await fileSystem.readNoteLines({ path: testPath, startLine: 0, endLine: 2 });
+
+    expect(result).toBe("first\nsecond");
+  });
+
+  test("clamps endLine past EOF down to the last line", async () => {
+    const testPath = "clamp-end.md";
+    await writeFile(join(testVaultPath, testPath), "first\nsecond\nthird");
+
+    const result = await fileSystem.readNoteLines({ path: testPath, startLine: 2, endLine: 999 });
+
+    expect(result).toBe("second\nthird");
+  });
+
+  test("clamps endLine below startLine up to startLine, returning a single line", async () => {
+    const testPath = "clamp-inverted.md";
+    await writeFile(join(testVaultPath, testPath), "first\nsecond\nthird");
+
+    const result = await fileSystem.readNoteLines({ path: testPath, startLine: 3, endLine: 1 });
+
+    expect(result).toBe("third");
   });
 });
 

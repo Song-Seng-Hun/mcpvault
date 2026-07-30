@@ -1055,16 +1055,63 @@ export class FileSystemService {
   }
 
   async getNoteOutline(path: string): Promise<NoteHeading[]> {
+    path = this.normalizePath(path);
     if (!this.pathFilter.isAllowed(path)) {
-      throw new Error(`Access denied: ${path}.`);
+      throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
     }
     const fullPath = this.resolvePath(path);
     const raw = await readFile(fullPath, 'utf-8');
     const lines = raw.split('\n');
     const headings: NoteHeading[] = [];
     const headingRegex = /^(#{1,6})\s+(.+)/;
+    // Frontmatter delimiters (---) can themselves look like content but never
+    // contain real headings; skip the block so YAML comments (# ...) inside it
+    // can't be misdetected as headings. Handles both LF and CRLF line endings,
+    // since split('\n') leaves a trailing \r on each line for CRLF files.
+    let inFrontmatter = false;
+    let frontmatterEnded = false;
+    // Fenced code blocks (``` or ~~~) can contain lines that look like
+    // headings (e.g. a shell comment or markdown example) but aren't real
+    // structure; track fence state and skip everything inside one.
+    let inFence = false;
+    let fenceMarker = '';
     for (let i = 0; i < lines.length; i++) {
-      const match = headingRegex.exec(lines[i]!);
+      const line = lines[i]!;
+      const trimmed = line.replace(/\r$/, '');
+
+      if (!frontmatterEnded && i === 0 && trimmed === '---') {
+        inFrontmatter = true;
+        continue;
+      }
+      if (inFrontmatter) {
+        if (trimmed === '---') {
+          inFrontmatter = false;
+          frontmatterEnded = true;
+        }
+        continue;
+      }
+      frontmatterEnded = true;
+
+      const fenceMatch = /^(```+|~~~+)/.exec(trimmed);
+      if (fenceMatch) {
+        if (!inFence) {
+          inFence = true;
+          fenceMarker = fenceMatch[1]!.charAt(0);
+        } else if (trimmed.startsWith(fenceMarker.repeat(3)) || trimmed.startsWith(fenceMarker)) {
+          // A run of the same fence character (of any length >= the one that
+          // opened it) closes the block, per CommonMark's fenced-code rules.
+          if (fenceMatch[1]!.charAt(0) === fenceMarker) {
+            inFence = false;
+            fenceMarker = '';
+          }
+        }
+        continue;
+      }
+      if (inFence) {
+        continue;
+      }
+
+      const match = headingRegex.exec(line);
       if (match) {
         headings.push({ level: match[1]!.length, text: match[2]!.trim(), line: i + 1 });
       }
@@ -1073,14 +1120,20 @@ export class FileSystemService {
   }
 
   async readNoteLines(params: ReadNoteLinesParams): Promise<string> {
-    const { path, startLine, endLine } = params;
+    const path = this.normalizePath(params.path);
     if (!this.pathFilter.isAllowed(path)) {
-      throw new Error(`Access denied: ${path}.`);
+      throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
     }
     const fullPath = this.resolvePath(path);
     const raw = await readFile(fullPath, 'utf-8');
     const lines = raw.split('\n');
-    return lines.slice(startLine - 1, endLine).join('\n');
+    // Both bounds are clamped into [1, lines.length] rather than trusting
+    // caller-supplied indices directly - out-of-range start/end (0, negative,
+    // or past EOF) previously either threw or silently wrapped via
+    // Array.slice's negative-index behavior instead of clamping like end did.
+    const clampedStart = Math.min(Math.max(params.startLine, 1), lines.length);
+    const clampedEnd = Math.min(Math.max(params.endLine, clampedStart), lines.length);
+    return lines.slice(clampedStart - 1, clampedEnd).join('\n');
   }
 
   async getVaultStats(recentCount: number = 5): Promise<VaultStats> {
