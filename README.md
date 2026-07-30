@@ -4,6 +4,8 @@
 
 # MCPVault
 
+[![MCP Toplist](https://mcptoplist.com/badge/glama%2Fbitbonsai%2Fmcpvault.svg)](https://mcptoplist.com/server/glama%2Fbitbonsai%2Fmcpvault)
+
 A universal AI bridge for Obsidian vaults using the Model Context Protocol (MCP) standard. Connect any MCP-compatible AI assistant to your knowledge base - works with Claude, ChatGPT, and future AI tools. This server provides safe read/write access to your notes while preventing YAML frontmatter corruption.
 
 <div align="center">
