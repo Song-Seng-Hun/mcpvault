@@ -965,8 +965,16 @@ export class FileSystemService {
         // Fenced code blocks (``` or ~~~) can contain lines that look like
         // headings (e.g. a shell comment or markdown example) but aren't real
         // structure; track fence state and skip everything inside one.
+        // Per CommonMark: a fence marker may be indented up to 3 spaces; the
+        // opener records both its character and its length, and only a line
+        // with the *same* character, at least as many markers, and nothing but
+        // trailing whitespace after them closes it (mismatched length, a
+        // different character, or trailing content like a language tag on a
+        // would-be closer must NOT end the block).
         let inFence = false;
-        let fenceMarker = '';
+        let fenceChar = '';
+        let fenceLength = 0;
+        const fenceRegex = /^ {0,3}(`{3,}|~{3,})(.*)$/;
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
             const trimmed = line.replace(/\r$/, '');
@@ -982,20 +990,23 @@ export class FileSystemService {
                 continue;
             }
             frontmatterEnded = true;
-            const fenceMatch = /^(```+|~~~+)/.exec(trimmed);
+            const fenceMatch = fenceRegex.exec(trimmed);
             if (fenceMatch) {
+                const markers = fenceMatch[1];
+                const trailing = fenceMatch[2];
+                const char = markers.charAt(0);
                 if (!inFence) {
                     inFence = true;
-                    fenceMarker = fenceMatch[1].charAt(0);
+                    fenceChar = char;
+                    fenceLength = markers.length;
                 }
-                else if (trimmed.startsWith(fenceMarker.repeat(3)) || trimmed.startsWith(fenceMarker)) {
-                    // A run of the same fence character (of any length >= the one that
-                    // opened it) closes the block, per CommonMark's fenced-code rules.
-                    if (fenceMatch[1].charAt(0) === fenceMarker) {
-                        inFence = false;
-                        fenceMarker = '';
-                    }
+                else if (char === fenceChar && markers.length >= fenceLength && trailing.trim() === '') {
+                    inFence = false;
+                    fenceChar = '';
+                    fenceLength = 0;
                 }
+                // Any other fence-like line while inFence (mismatched char, too
+                // short, or has trailing content) is just code-block content.
                 continue;
             }
             if (inFence) {

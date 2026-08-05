@@ -174,6 +174,119 @@ describe("getNoteOutline", () => {
     expect(headings[1]?.text).toBe("Another Real Heading");
   });
 
+  test("a shorter fence run does not close a longer opening fence", async () => {
+    const testPath = "fence-mismatched-length.md";
+    const content = [
+      "# Real Heading",
+      "",
+      "````",
+      "```",
+      "# not a heading (still inside the 4-backtick fence)",
+      "````",
+      "",
+      "## Another Real Heading"
+    ].join("\n");
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(2);
+    expect(headings[0]?.text).toBe("Real Heading");
+    expect(headings[1]?.text).toBe("Another Real Heading");
+  });
+
+  test("a longer fence run closes a shorter opening fence", async () => {
+    const testPath = "fence-longer-closer.md";
+    const content = [
+      "# Real Heading",
+      "```",
+      "# not a heading",
+      "````",
+      "## Another Real Heading"
+    ].join("\n");
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(2);
+    expect(headings[0]?.text).toBe("Real Heading");
+    expect(headings[1]?.text).toBe("Another Real Heading");
+  });
+
+  test("a fence marker followed by trailing text (e.g. a language tag) is not a valid closer", async () => {
+    const testPath = "fence-trailing-text.md";
+    const content = [
+      "# Real Heading",
+      "```",
+      "```json",
+      "# not a heading (still inside, the line above had trailing text)",
+      "```",
+      "## Another Real Heading"
+    ].join("\n");
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(2);
+    expect(headings[0]?.text).toBe("Real Heading");
+    expect(headings[1]?.text).toBe("Another Real Heading");
+  });
+
+  test("a closer with only trailing whitespace after the markers still closes the fence", async () => {
+    const testPath = "fence-trailing-whitespace.md";
+    const content = [
+      "# Real Heading",
+      "```",
+      "# not a heading",
+      "```   ",
+      "## Another Real Heading"
+    ].join("\n");
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(2);
+    expect(headings[0]?.text).toBe("Real Heading");
+    expect(headings[1]?.text).toBe("Another Real Heading");
+  });
+
+  test("ignores heading markers inside a fence indented up to 3 spaces", async () => {
+    const testPath = "fence-indented.md";
+    const content = [
+      "# Real Heading",
+      "  ```",
+      "  # not a heading",
+      "  ```",
+      "## Another Real Heading"
+    ].join("\n");
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(2);
+    expect(headings[0]?.text).toBe("Real Heading");
+    expect(headings[1]?.text).toBe("Another Real Heading");
+  });
+
+  test("a mismatched fence character (backtick vs tilde) does not close the block", async () => {
+    const testPath = "fence-mismatched-char.md";
+    const content = [
+      "# Real Heading",
+      "```",
+      "~~~",
+      "# not a heading (tilde run doesn't close a backtick fence)",
+      "```",
+      "## Another Real Heading"
+    ].join("\n");
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(2);
+    expect(headings[0]?.text).toBe("Real Heading");
+    expect(headings[1]?.text).toBe("Another Real Heading");
+  });
+
   test("does not misdetect a YAML comment in frontmatter as a heading (LF)", async () => {
     const testPath = "frontmatter-lf.md";
     const content = "---\ntitle: Test\n# not a heading, a YAML comment\n---\n\n# Real Heading\n";
