@@ -24,7 +24,7 @@ Each operation maps to exactly one backend. The skill picks the right one automa
 | Read note | yes | — | — | Safe, sandboxed read via MCP |
 | Write / patch note | yes | — | — | Atomic writes with validation |
 | Search vault | yes | — | — | BM25-ranked full-text search |
-| Resolve [[wiki links]] | yes | — | — | wiki_link follows [[Note]] references and returns the note |
+| Resolve [[wiki links]] | yes | — | — | wiki_link picks the shallowest match first, then locale-sorts equal-depth paths; other matches are returned as alternatives |
 | Manage tags / frontmatter | yes | — | — | Safe YAML merge |
 | List all tags with counts | yes | — | — | Filesystem scan, works headless |
 | Move / rename files | yes | yes | — | CLI move rewrites internal links (app running); MCP move works headless |

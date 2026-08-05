@@ -27,7 +27,7 @@ const routes = [
     mcp: true,
     app: false,
     git: false,
-    notes: 'wiki_link follows [[Note]] references and returns the note',
+    notes: 'wiki_link picks the shallowest match first, then locale-sorts equal-depth paths; other matches are returned as alternatives',
   },
   {
     operation: 'Manage tags / frontmatter',
