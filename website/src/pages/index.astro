@@ -1,6 +1,7 @@
 ---
 import Layout from '@layouts/Layout.astro';
 import Nav from '@components/Nav.astro';
+import SpecPreviewCallout from '@components/SpecPreviewCallout.astro';
 import Hero from '@components/Hero.astro';
 import UpdateCallout from '@components/UpdateCallout.astro';
 import NewsletterSignup from '@components/NewsletterSignup.astro';
@@ -12,6 +13,9 @@ import Footer from '@components/Footer.astro';
 
   <!-- Main content -->
   <main id="main-content">
+    <!-- MCP spec preview -->
+    <SpecPreviewCallout />
+
     <!-- Hero Section -->
     <Hero />
 
