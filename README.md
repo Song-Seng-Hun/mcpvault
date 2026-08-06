@@ -1,6 +1,4 @@
-<div align="center">
-  <img width="256" height="256" alt="image" src="https://github.com/user-attachments/assets/1e21d898-811b-42c2-a810-bf921dde0f58" />
-</div>
+<div align="center"> <img width="256" height="256" alt="image" src="https://github.com/user-attachments/assets/1e21d898-811b-42c2-a810-bf921dde0f58" /> </div>
 
 # MCPVault
 
@@ -18,12 +16,7 @@ A universal AI bridge for Obsidian vaults using the Model Context Protocol (MCP)
 
 <div align="center">
 
-[![GitHub Stars](https://img.shields.io/github/stars/bitbonsai/mcpvault?style=flat&logo=github&logoColor=white&color=9065ea&labelColor=262626)](https://github.com/bitbonsai/mcpvault)
-[![npm version](https://img.shields.io/npm/v/%40bitbonsai%2Fmcpvault?style=flat&logo=npm&logoColor=white&color=9065ea&labelColor=262626)](https://www.npmjs.com/package/@bitbonsai/mcpvault)
-[![npm downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fmcpvault.org%2Fapi%2Fdownloads.json&style=flat&logo=npm&logoColor=white&color=9065ea&labelColor=262626)](https://www.npmjs.com/package/@bitbonsai/mcpvault)
-[![GitHub Sponsors](https://img.shields.io/github/sponsors/BitBonsai?style=flat&logo=github&logoColor=white&color=9065ea&labelColor=262626)](https://github.com/sponsors/bitbonsai)
-[![Ko-Fi](https://img.shields.io/badge/Ko--fi-Support%20Me-9065ea?style=flat&logo=ko-fi&logoColor=white&labelColor=262626)](https://ko-fi.com/bitbonsai)
-[![Liberapay](https://img.shields.io/badge/Liberapay-Weekly%20Support-9065ea?style=flat&logo=liberapay&logoColor=white&labelColor=262626)](https://liberapay.com/bitbonsai/)
+[![GitHub Stars](https://img.shields.io/github/stars/bitbonsai/mcpvault?style=flat&logo=github&logoColor=white&color=9065ea&labelColor=262626)](https://github.com/bitbonsai/mcpvault) [![npm version](https://img.shields.io/npm/v/%40bitbonsai%2Fmcpvault?style=flat&logo=npm&logoColor=white&color=9065ea&labelColor=262626)](https://www.npmjs.com/package/@bitbonsai/mcpvault) [![npm downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fmcpvault.org%2Fapi%2Fdownloads.json&style=flat&logo=npm&logoColor=white&color=9065ea&labelColor=262626)](https://www.npmjs.com/package/@bitbonsai/mcpvault) [![GitHub Sponsors](https://img.shields.io/github/sponsors/BitBonsai?style=flat&logo=github&logoColor=white&color=9065ea&labelColor=262626)](https://github.com/sponsors/bitbonsai) [![Ko-Fi](https://img.shields.io/badge/Ko--fi-Support%20Me-9065ea?style=flat&logo=ko-fi&logoColor=white&labelColor=262626)](https://ko-fi.com/bitbonsai) [![Liberapay](https://img.shields.io/badge/Liberapay-Weekly%20Support-9065ea?style=flat&logo=liberapay&logoColor=white&labelColor=262626)](https://liberapay.com/bitbonsai/)
 
 </div>
 
@@ -126,8 +119,9 @@ MCP is an open protocol. You're not tied to any specific vendor or platform. You
 
 - ✅ Safe frontmatter parsing and validation using gray-matter with AST-aware updates that preserve raw formatting for unmodified fields
 - ✅ Path filtering to exclude `.obsidian` directory and other system files
-- ✅ **Complete MCP toolkit**: 16 tools covering all vault operations
+- ✅ **Complete MCP toolkit**: 18 tools covering all vault operations
   - File operations: `read_note`, `write_note`, `patch_note`, `delete_note`, `move_note`, `move_file`
+  - Partial reads: `get_note_outline` (headings without loading the full file), `read_note_lines` (a specific line range)
   - Directory operations: `list_directory`
   - Batch operations: `read_multiple_notes`
   - Search: `search_notes` with multi-word matching and BM25 relevance reranking
@@ -283,8 +277,7 @@ _Note: ChatGPT Desktop's MCP integration is currently limited to enterprise subs
 
 Claude Code uses `.claude.json` configuration file:
 
-**User-scoped (recommended):**
-Edit `~/.claude.json`:
+**User-scoped (recommended):** Edit `~/.claude.json`:
 
 ```json
 {
@@ -298,8 +291,7 @@ Edit `~/.claude.json`:
 }
 ```
 
-**Project-scoped:**
-Edit `.claude.json` in your project or add to the projects section:
+**Project-scoped:** Edit `.claude.json` in your project or add to the projects section:
 
 ```json
 {
