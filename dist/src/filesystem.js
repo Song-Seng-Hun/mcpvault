@@ -33,6 +33,23 @@ export function classifyWriteError(error, path) {
     }
     return new Error(`Failed to write file: ${path} - ${error instanceof Error ? error.message : 'Unknown error'}`);
 }
+/**
+ * Strip an ATX heading's optional closing sequence of #s per CommonMark: it
+ * must be preceded by a space (or the text is nothing but #s, i.e. an empty
+ * heading with a closer and no content) and followed only by trailing spaces
+ * (already removed by the caller's trim). A closer with no preceding space
+ * (e.g. "Heading###") is not a valid closer and stays as literal text.
+ */
+function stripAtxClosingSequence(text) {
+    const withPrecedingSpace = /^(.*[ \t])#+$/.exec(text);
+    if (withPrecedingSpace) {
+        return withPrecedingSpace[1].replace(/[ \t]+$/, '');
+    }
+    if (/^#+$/.test(text)) {
+        return '';
+    }
+    return text;
+}
 export class FileSystemService {
     vaultPath;
     frontmatterHandler;
@@ -955,7 +972,11 @@ export class FileSystemService {
         const raw = await readFile(fullPath, 'utf-8');
         const lines = raw.split('\n');
         const headings = [];
-        const headingRegex = /^(#{1,6})\s+(.+)/;
+        // Per CommonMark ATX headings: up to 3 leading spaces are allowed before
+        // the #s; the heading may have no text at all (bare `#`); and an optional
+        // closing sequence of #s (preceded by a space, followed only by trailing
+        // spaces) is stripped from the returned text rather than kept literally.
+        const headingRegex = /^ {0,3}(#{1,6})(?:[ \t]+(.*))?$/;
         // Frontmatter delimiters (---) can themselves look like content but never
         // contain real headings; skip the block so YAML comments (# ...) inside it
         // can't be misdetected as headings. Handles both LF and CRLF line endings,
@@ -1012,9 +1033,10 @@ export class FileSystemService {
             if (inFence) {
                 continue;
             }
-            const match = headingRegex.exec(line);
+            const match = headingRegex.exec(trimmed);
             if (match) {
-                headings.push({ level: match[1].length, text: match[2].trim(), line: i + 1 });
+                const rawText = (match[2] ?? '').trim();
+                headings.push({ level: match[1].length, text: stripAtxClosingSequence(rawText), line: i + 1 });
             }
         }
         return headings;

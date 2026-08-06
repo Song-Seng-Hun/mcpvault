@@ -308,6 +308,64 @@ describe("getNoteOutline", () => {
     expect(headings).toHaveLength(1);
     expect(headings[0]?.text).toBe("Real Heading");
   });
+
+  test("recognizes a heading indented by up to 3 spaces", async () => {
+    const testPath = "heading-indented.md";
+    const content = "# Real Heading\n   ## Indented Heading\n";
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(2);
+    expect(headings[1]).toMatchObject({ level: 2, text: "Indented Heading" });
+  });
+
+  test("does not recognize a heading indented by 4 or more spaces", async () => {
+    const testPath = "heading-over-indented.md";
+    const content = "# Real Heading\n    ## Not A Heading (4 spaces)\n";
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(1);
+    expect(headings[0]?.text).toBe("Real Heading");
+  });
+
+  test("an empty heading (bare #, no text) is still returned, with empty text", async () => {
+    const testPath = "heading-empty.md";
+    const content = "#\n## Real Heading\n### \n";
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(3);
+    expect(headings[0]).toMatchObject({ level: 1, text: "" });
+    expect(headings[1]).toMatchObject({ level: 2, text: "Real Heading" });
+    expect(headings[2]).toMatchObject({ level: 3, text: "" });
+  });
+
+  test("an optional closing sequence of #s is stripped from the heading text", async () => {
+    const testPath = "heading-closing-sequence.md";
+    const content = "## Heading ##\n### Another #####\n";
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(2);
+    expect(headings[0]?.text).toBe("Heading");
+    expect(headings[1]?.text).toBe("Another");
+  });
+
+  test("a closing-looking # run with no preceding space is kept as literal text", async () => {
+    const testPath = "heading-fake-closer.md";
+    const content = "# Heading###\n";
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(1);
+    expect(headings[0]?.text).toBe("Heading###");
+  });
 });
 
 // ============================================================================
