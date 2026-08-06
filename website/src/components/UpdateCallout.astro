@@ -16,7 +16,7 @@ import { Rocket } from 'lucide-react';
             <h3 class="text-lg font-semibold text-foreground flex items-center gap-2">
               Recent Updates
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-accent/20 text-accent border border-accent/30">
-                v0.12.4
+                v0.12.6
               </span>
             </h3>
             <button
@@ -36,13 +36,21 @@ import { Rocket } from 'lucide-react';
           </div>
           <div class="mb-4">
             <p class="text-muted-foreground leading-relaxed">
-              <span class="font-medium text-foreground">v0.12.4 (July 2026):</span> New <code>wiki_link</code> tool reads Obsidian wiki links — <code>[[Note]]</code>, <code>[[Note|Display]]</code>, and path-qualified <code>[[folder/Note]]</code> — and returns the note ready for context, with alternative paths when a name is ambiguous.
-              (<a href="https://github.com/bitbonsai/mcpvault/pull/101" target="_blank" rel="noopener noreferrer" class="text-accent hover:text-accent-2 transition-colors">#101</a>)
+              <span class="font-medium text-foreground">v0.12.6 (August 2026):</span> Refreshed the MCP SDK and development toolchain, standardized the server package on npm, and removed its stale Bun lockfile. No runtime behavior changed.
+              (<a href="https://github.com/bitbonsai/mcpvault/pull/178" target="_blank" rel="noopener noreferrer" class="text-accent hover:text-accent-2 transition-colors">#178</a>)
             </p>
           </div>
 
           <div id="older-updates" class="older-updates is-collapsed" data-updates-panel>
             <ul class="text-muted-foreground space-y-2">
+              <li>
+                <span class="font-medium text-foreground">v0.12.5 (July 2026):</span> The server now exits cleanly when stdio clients disconnect or terminate, preventing orphaned MCPVault processes
+                (<a href="https://github.com/bitbonsai/mcpvault/issues/159" target="_blank" rel="noopener noreferrer" class="text-accent hover:text-accent-2 transition-colors">#159</a>)
+              </li>
+              <li>
+                <span class="font-medium text-foreground">v0.12.4 (July 2026):</span> New <code>wiki_link</code> tool reads Obsidian wiki links — <code>[[Note]]</code>, <code>[[Note|Display]]</code>, and path-qualified <code>[[folder/Note]]</code> — and returns the note ready for context, with alternative paths when a name is ambiguous
+                (<a href="https://github.com/bitbonsai/mcpvault/pull/101" target="_blank" rel="noopener noreferrer" class="text-accent hover:text-accent-2 transition-colors">#101</a>)
+              </li>
               <li>
                 <span class="font-medium text-foreground">v0.12.3 (July 2026):</span> <code>wiki_link</code> lands
                 (<a href="https://github.com/bitbonsai/mcpvault/pull/101" target="_blank" rel="noopener noreferrer" class="text-accent hover:text-accent-2 transition-colors">#101</a>, thanks @renoirb);
