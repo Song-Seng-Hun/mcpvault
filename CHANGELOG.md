@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.6] - 2026-08-06
+
+### Changed
+- Refreshed the MCP SDK, YAML parser, and development toolchain dependencies; standardized the server package on npm and removed the stale root Bun lockfile ([#178](https://github.com/bitbonsai/mcpvault/pull/178))
+
+## [0.12.5] - 2026-07-30
+
+### Fixed
+- The stdio server now exits cleanly when its client disconnects or sends `SIGTERM`/`SIGINT`, preventing orphaned MCPVault processes ([#159](https://github.com/bitbonsai/mcpvault/issues/159))
+
 ## [0.12.4] - 2026-07-23
 
 ### Fixed
