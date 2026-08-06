@@ -1,5 +1,4 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { CallToolRequestSchema, ListToolsRequestSchema, } from "@modelcontextprotocol/sdk/types.js";
+import { Server } from "@modelcontextprotocol/server";
 import { FileSystemService } from "./filesystem.js";
 import { FrontmatterHandler, parseFrontmatter } from "./frontmatter.js";
 import { PathFilter } from "./pathfilter.js";
@@ -23,7 +22,7 @@ export function createServer(vaultPath, options = {}) {
     const server = new Server({ name, version }, {
         capabilities: { tools: {} },
     });
-    server.setRequestHandler(ListToolsRequestSchema, async () => {
+    server.setRequestHandler("tools/list", async () => {
         const tools = [
             {
                 name: "read_note",
@@ -272,7 +271,7 @@ export function createServer(vaultPath, options = {}) {
                 : tools,
         };
     });
-    server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    server.setRequestHandler("tools/call", async (request) => {
         const { name: toolName, arguments: args } = request.params;
         const trimmedArgs = trimPaths(args);
         if (readOnly && MUTATING_TOOLS.has(toolName)) {
