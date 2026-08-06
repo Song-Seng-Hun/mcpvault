@@ -16,6 +16,9 @@ This MCP server lets Claude, ChatGPT+, and other assistants access your vault. L
 
 ## Recent Updates
 
+- **v0.12.6 (August 2026):** Refreshed the MCP SDK and development toolchain, standardized the server package on npm, and removed its stale Bun lockfile. No runtime behavior changed. ([#178](https://github.com/bitbonsai/mcpvault/pull/178))
+- **v0.12.5 (July 2026):** The server now exits cleanly when stdio clients disconnect or terminate, preventing orphaned MCPVault processes. ([#159](https://github.com/bitbonsai/mcpvault/issues/159))
+- **v0.12.4 (July 2026):** New `wiki_link` tool reads Obsidian wiki links, including `[[Note]]`, `[[Note|Display]]`, and path-qualified `[[folder/Note]]`, and returns the note ready for context with alternative paths when a name is ambiguous. ([#101](https://github.com/bitbonsai/mcpvault/pull/101))
 - **v0.11.2 (April 2026):** `delete_note` now supports soft-delete with `trashMode`: `none` (permanent), `local` (move to `.trash/` inside vault), or `system` (OS trash). ([#91](https://github.com/bitbonsai/mcpvault/issues/91))
 - **v0.11.1 (April 2026):** Frontmatter updates now use AST-aware YAML preservation. Unmodified fields keep their original formatting: plain dates stay as `YYYY-MM-DD`, quoted strings keep their quotes, and `HH:MM` values are no longer misread as sexagesimal integers. ([#75](https://github.com/bitbonsai/mcpvault/issues/75), [#76](https://github.com/bitbonsai/mcpvault/issues/76), [#77](https://github.com/bitbonsai/mcpvault/issues/77))
 - **v0.11.0 (March 2026):** New `list_all_tags` tool: scan all vault notes for tags with occurrence counts. Obsidian skill now routes to CLI for active file, daily notes, backlinks, and open-in-editor. ([#80](https://github.com/bitbonsai/mcpvault/issues/80))
