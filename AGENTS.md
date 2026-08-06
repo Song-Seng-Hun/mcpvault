@@ -137,3 +137,6 @@ When modifying file operations:
 - Claude Code discovers skills only under `.claude/skills/`; repo keeps them in `skills/`. Committed symlink `.claude/skills/triage -> ../../skills/triage` bridges it — same pattern for any new skill.
 - `pathFilter.isAllowed` + `normalizePath` must guard EVERY new tool's path input (PR #146 blocker: `readNoteLines` skipped them = read `.obsidian/` files). Mirror `readNote`'s guard block.
 - Outline/heading parsing must be fence-aware: headings inside code fences do not count. Support backtick and tilde fences with up to three leading spaces, and require closing fences to use the same marker with at least the opening length.
+- Root server uses npm + `package-lock.json`; website uses Bun separately. Root `bun.lock` becomes stale/misleading; do not recreate.
+- MCP SDK v2 uses split `@modelcontextprotocol/server`, `/client`, `/core`, `/node` packages. `@modelcontextprotocol/sdk@latest` remains v1.x.
+- Version bump updates website nav/Hero automatically only. Manually sync `website/src/components/UpdateCallout.astro`, `website/public/index.md`, and `CHANGELOG.md`.
