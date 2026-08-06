@@ -1,0 +1,151 @@
+---
+const branchUrl = 'https://github.com/bitbonsai/mcpvault/tree/feat/mcp-sdk-v2';
+---
+
+<section class="spec-preview" aria-label="MCP 2026-07-28 development preview">
+  <a href={branchUrl} target="_blank" rel="noopener noreferrer" class="spec-preview__link">
+    <span class="spec-preview__pulse" aria-hidden="true"></span>
+    <span class="spec-preview__badge">Preview</span>
+    <span class="spec-preview__message">MCP 2026-07-28 support is in progress</span>
+    <span class="spec-preview__branch">feat/mcp-sdk-v2</span>
+    <span class="spec-preview__status">Not released</span>
+    <svg class="spec-preview__arrow" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M4 10h11m-4-4 4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  </a>
+</section>
+
+<style>
+  .spec-preview {
+    position: relative;
+    z-index: 40;
+    overflow: hidden;
+    padding: 4.35rem 1rem 0.7rem;
+    border-bottom: 1px solid rgba(144, 100, 234, 0.18);
+    background:
+      linear-gradient(90deg, rgba(144, 100, 234, 0.05), rgba(74, 222, 128, 0.035), rgba(144, 100, 234, 0.05)),
+      #0a0a0a;
+  }
+
+  .spec-preview::before {
+    content: '';
+    position: absolute;
+    inset: auto 15% 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(144, 100, 234, 0.8), rgba(74, 222, 128, 0.6), transparent);
+    opacity: 0.7;
+  }
+
+  .spec-preview__link {
+    display: flex;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 0.65rem;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.79rem;
+    line-height: 1.35;
+    text-decoration: none;
+    letter-spacing: 0.01em;
+    transition: color 180ms ease;
+  }
+
+  .spec-preview__link:hover {
+    color: #fff;
+  }
+
+  .spec-preview__pulse {
+    width: 0.42rem;
+    height: 0.42rem;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    background: #4ade80;
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.45);
+    animation: spec-pulse 2.4s ease-out infinite;
+  }
+
+  .spec-preview__badge,
+  .spec-preview__status {
+    flex: 0 0 auto;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    padding: 0.15rem 0.48rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .spec-preview__badge {
+    border-color: rgba(144, 100, 234, 0.38);
+    background: rgba(144, 100, 234, 0.13);
+    color: #c4b5fd;
+  }
+
+  .spec-preview__status {
+    color: rgba(255, 255, 255, 0.48);
+  }
+
+  .spec-preview__message {
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .spec-preview__branch {
+    font-family: 'JetBrains Mono', monospace;
+    color: #a78bfa;
+  }
+
+  .spec-preview__arrow {
+    width: 1rem;
+    height: 1rem;
+    flex: 0 0 auto;
+    color: #a78bfa;
+    transition: transform 180ms ease;
+  }
+
+  .spec-preview__link:hover .spec-preview__arrow {
+    transform: translateX(0.2rem);
+  }
+
+  @keyframes spec-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.42); }
+    65%, 100% { box-shadow: 0 0 0 0.42rem rgba(74, 222, 128, 0); }
+  }
+
+  @media (max-width: 720px) {
+    .spec-preview {
+      padding-top: 4.2rem;
+    }
+
+    .spec-preview__link {
+      width: 100%;
+      flex-wrap: wrap;
+      gap: 0.4rem 0.55rem;
+      text-align: center;
+    }
+
+    .spec-preview__message {
+      flex-basis: auto;
+    }
+
+    .spec-preview__branch {
+      order: 5;
+      width: 100%;
+      font-size: 0.68rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .spec-preview__pulse {
+      animation: none;
+    }
+
+    .spec-preview__arrow {
+      transition: none;
+    }
+  }
+</style>
