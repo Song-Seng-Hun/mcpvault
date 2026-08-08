@@ -16,7 +16,7 @@ import { Rocket } from 'lucide-react';
             <h3 class="text-lg font-semibold text-foreground flex items-center gap-2">
               Recent Updates
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-accent/20 text-accent border border-accent/30">
-                v0.14.0
+                v0.14.1
               </span>
             </h3>
             <button
@@ -36,13 +36,17 @@ import { Rocket } from 'lucide-react';
           </div>
           <div class="mb-4">
             <p class="text-muted-foreground leading-relaxed">
-              <span class="font-medium text-foreground">v0.14.0 (August 2026):</span> Added <code>get_note_outline</code> and <code>read_note_lines</code> for navigating and reading targeted sections of large notes without loading the full file
-              (<a href="https://github.com/bitbonsai/mcpvault/pull/146" target="_blank" rel="noopener noreferrer" class="text-accent hover:text-accent-2 transition-colors">#146</a>, thanks @kartik7704)
+              <span class="font-medium text-foreground">v0.14.1 (August 2026):</span> Security: dotfiles and hidden directories are now denied at any vault depth, closing an extension-filter bypass
+              (<a href="https://github.com/bitbonsai/mcpvault/pull/115" target="_blank" rel="noopener noreferrer" class="text-accent hover:text-accent-2 transition-colors">#115</a>, thanks @sadegh)
             </p>
           </div>
 
           <div id="older-updates" class="older-updates is-collapsed" data-updates-panel>
             <ul class="text-muted-foreground space-y-2">
+              <li>
+                <span class="font-medium text-foreground">v0.14.0 (August 2026):</span> Added <code>get_note_outline</code> and <code>read_note_lines</code> for navigating and reading targeted sections of large notes without loading the full file
+                (<a href="https://github.com/bitbonsai/mcpvault/pull/146" target="_blank" rel="noopener noreferrer" class="text-accent hover:text-accent-2 transition-colors">#146</a>, thanks @kartik7704)
+              </li>
               <li>
                 <span class="font-medium text-foreground">v0.12.6 (August 2026):</span> Refreshed the MCP SDK and development toolchain, standardized the server package on npm, and removed its stale Bun lockfile. No runtime behavior changed
                 (<a href="https://github.com/bitbonsai/mcpvault/pull/178" target="_blank" rel="noopener noreferrer" class="text-accent hover:text-accent-2 transition-colors">#178</a>)
