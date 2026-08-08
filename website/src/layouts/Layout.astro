@@ -116,6 +116,19 @@ const fullTitle = title.includes("MCPVault") ? title : `${title} | MCPVault`;
       #main-content {
         scroll-margin-top: 6rem;
       }
+
+      /* GFM-style inline code without affecting fenced code blocks or terminals. */
+      :where(p, li, td, dd, figcaption) > code {
+        padding: 0.14em 0.42em;
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 0.45rem;
+        background: rgba(148, 163, 184, 0.1);
+        color: rgba(226, 232, 240, 0.96);
+        font-family: 'JetBrains Mono', 'SF Mono', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
+        font-size: 0.88em;
+        box-decoration-break: clone;
+        -webkit-box-decoration-break: clone;
+      }
     </style>
 
     <!-- Terminal Styles -->
