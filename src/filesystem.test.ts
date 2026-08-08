@@ -106,6 +106,333 @@ test("patch note fails when string not found", async () => {
   expect(result.message).toContain("String not found");
 });
 
+// ============================================================================
+// GET NOTE OUTLINE TESTS
+// ============================================================================
+
+describe("getNoteOutline", () => {
+  test("returns headings with level, text, and line number", async () => {
+    const testPath = "outline-test.md";
+    const content = "# Heading 1\n\nSome text.\n\n## Heading 2\n\nMore text.\n\n### Heading 3\n";
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(3);
+    expect(headings[0]).toEqual({ level: 1, text: "Heading 1", line: 1 });
+    expect(headings[1]).toEqual({ level: 2, text: "Heading 2", line: 5 });
+    expect(headings[2]).toEqual({ level: 3, text: "Heading 3", line: 9 });
+  });
+
+  test("returns empty array for note with no headings", async () => {
+    const testPath = "no-headings.md";
+    await writeFile(join(testVaultPath, testPath), "Just some plain text.\n\nNo headings here.");
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(0);
+  });
+
+  test("ignores heading markers inside code blocks and inline text", async () => {
+    const testPath = "mixed.md";
+    const content = "# Real Heading\n\nText with # not a heading\n\n## Another Real Heading\n";
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(2);
+    expect(headings[0]?.text).toBe("Real Heading");
+    expect(headings[1]?.text).toBe("Another Real Heading");
+  });
+
+  test("throws on path outside vault", async () => {
+    await expect(fileSystem.getNoteOutline("../outside.md")).rejects.toThrow();
+  });
+
+  test("ignores heading markers inside fenced code blocks (backtick and tilde fences)", async () => {
+    const testPath = "fenced.md";
+    const content = [
+      "# Real Heading",
+      "",
+      "```",
+      "# not a heading",
+      "## also not a heading",
+      "```",
+      "",
+      "~~~",
+      "# still not a heading",
+      "~~~",
+      "",
+      "## Another Real Heading"
+    ].join("\n");
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(2);
+    expect(headings[0]?.text).toBe("Real Heading");
+    expect(headings[1]?.text).toBe("Another Real Heading");
+  });
+
+  test("a shorter fence run does not close a longer opening fence", async () => {
+    const testPath = "fence-mismatched-length.md";
+    const content = [
+      "# Real Heading",
+      "",
+      "````",
+      "```",
+      "# not a heading (still inside the 4-backtick fence)",
+      "````",
+      "",
+      "## Another Real Heading"
+    ].join("\n");
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(2);
+    expect(headings[0]?.text).toBe("Real Heading");
+    expect(headings[1]?.text).toBe("Another Real Heading");
+  });
+
+  test("a longer fence run closes a shorter opening fence", async () => {
+    const testPath = "fence-longer-closer.md";
+    const content = [
+      "# Real Heading",
+      "```",
+      "# not a heading",
+      "````",
+      "## Another Real Heading"
+    ].join("\n");
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(2);
+    expect(headings[0]?.text).toBe("Real Heading");
+    expect(headings[1]?.text).toBe("Another Real Heading");
+  });
+
+  test("a fence marker followed by trailing text (e.g. a language tag) is not a valid closer", async () => {
+    const testPath = "fence-trailing-text.md";
+    const content = [
+      "# Real Heading",
+      "```",
+      "```json",
+      "# not a heading (still inside, the line above had trailing text)",
+      "```",
+      "## Another Real Heading"
+    ].join("\n");
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(2);
+    expect(headings[0]?.text).toBe("Real Heading");
+    expect(headings[1]?.text).toBe("Another Real Heading");
+  });
+
+  test("a closer with only trailing whitespace after the markers still closes the fence", async () => {
+    const testPath = "fence-trailing-whitespace.md";
+    const content = [
+      "# Real Heading",
+      "```",
+      "# not a heading",
+      "```   ",
+      "## Another Real Heading"
+    ].join("\n");
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(2);
+    expect(headings[0]?.text).toBe("Real Heading");
+    expect(headings[1]?.text).toBe("Another Real Heading");
+  });
+
+  test("ignores heading markers inside a fence indented up to 3 spaces", async () => {
+    const testPath = "fence-indented.md";
+    const content = [
+      "# Real Heading",
+      "  ```",
+      "  # not a heading",
+      "  ```",
+      "## Another Real Heading"
+    ].join("\n");
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(2);
+    expect(headings[0]?.text).toBe("Real Heading");
+    expect(headings[1]?.text).toBe("Another Real Heading");
+  });
+
+  test("a mismatched fence character (backtick vs tilde) does not close the block", async () => {
+    const testPath = "fence-mismatched-char.md";
+    const content = [
+      "# Real Heading",
+      "```",
+      "~~~",
+      "# not a heading (tilde run doesn't close a backtick fence)",
+      "```",
+      "## Another Real Heading"
+    ].join("\n");
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(2);
+    expect(headings[0]?.text).toBe("Real Heading");
+    expect(headings[1]?.text).toBe("Another Real Heading");
+  });
+
+  test("does not misdetect a YAML comment in frontmatter as a heading (LF)", async () => {
+    const testPath = "frontmatter-lf.md";
+    const content = "---\ntitle: Test\n# not a heading, a YAML comment\n---\n\n# Real Heading\n";
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(1);
+    expect(headings[0]?.text).toBe("Real Heading");
+  });
+
+  test("does not misdetect a YAML comment in frontmatter as a heading (CRLF)", async () => {
+    const testPath = "frontmatter-crlf.md";
+    const content = "---\r\ntitle: Test\r\n# not a heading, a YAML comment\r\n---\r\n\r\n# Real Heading\r\n";
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(1);
+    expect(headings[0]?.text).toBe("Real Heading");
+  });
+
+  test("recognizes a heading indented by up to 3 spaces", async () => {
+    const testPath = "heading-indented.md";
+    const content = "# Real Heading\n   ## Indented Heading\n";
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(2);
+    expect(headings[1]).toMatchObject({ level: 2, text: "Indented Heading" });
+  });
+
+  test("does not recognize a heading indented by 4 or more spaces", async () => {
+    const testPath = "heading-over-indented.md";
+    const content = "# Real Heading\n    ## Not A Heading (4 spaces)\n";
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(1);
+    expect(headings[0]?.text).toBe("Real Heading");
+  });
+
+  test("an empty heading (bare #, no text) is still returned, with empty text", async () => {
+    const testPath = "heading-empty.md";
+    const content = "#\n## Real Heading\n### \n";
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(3);
+    expect(headings[0]).toMatchObject({ level: 1, text: "" });
+    expect(headings[1]).toMatchObject({ level: 2, text: "Real Heading" });
+    expect(headings[2]).toMatchObject({ level: 3, text: "" });
+  });
+
+  test("an optional closing sequence of #s is stripped from the heading text", async () => {
+    const testPath = "heading-closing-sequence.md";
+    const content = "## Heading ##\n### Another #####\n";
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(2);
+    expect(headings[0]?.text).toBe("Heading");
+    expect(headings[1]?.text).toBe("Another");
+  });
+
+  test("a closing-looking # run with no preceding space is kept as literal text", async () => {
+    const testPath = "heading-fake-closer.md";
+    const content = "# Heading###\n";
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const headings = await fileSystem.getNoteOutline(testPath);
+
+    expect(headings).toHaveLength(1);
+    expect(headings[0]?.text).toBe("Heading###");
+  });
+});
+
+// ============================================================================
+// READ NOTE LINES TESTS
+// ============================================================================
+
+describe("readNoteLines", () => {
+  test("reads a specific line range", async () => {
+    const testPath = "lines-test.md";
+    const content = "line 1\nline 2\nline 3\nline 4\nline 5";
+    await writeFile(join(testVaultPath, testPath), content);
+
+    const result = await fileSystem.readNoteLines({ path: testPath, startLine: 2, endLine: 4 });
+
+    expect(result).toBe("line 2\nline 3\nline 4");
+  });
+
+  test("reads a single line", async () => {
+    const testPath = "single-line.md";
+    await writeFile(join(testVaultPath, testPath), "line 1\nline 2\nline 3");
+
+    const result = await fileSystem.readNoteLines({ path: testPath, startLine: 2, endLine: 2 });
+
+    expect(result).toBe("line 2");
+  });
+
+  test("reads from line 1", async () => {
+    const testPath = "from-start.md";
+    await writeFile(join(testVaultPath, testPath), "first\nsecond\nthird");
+
+    const result = await fileSystem.readNoteLines({ path: testPath, startLine: 1, endLine: 2 });
+
+    expect(result).toBe("first\nsecond");
+  });
+
+  test("throws on path outside vault", async () => {
+    await expect(fileSystem.readNoteLines({ path: "../outside.md", startLine: 1, endLine: 1 })).rejects.toThrow();
+  });
+
+  test("clamps startLine below 1 up to line 1, instead of wrapping via negative indexing", async () => {
+    const testPath = "clamp-start.md";
+    await writeFile(join(testVaultPath, testPath), "first\nsecond\nthird");
+
+    const result = await fileSystem.readNoteLines({ path: testPath, startLine: 0, endLine: 2 });
+
+    expect(result).toBe("first\nsecond");
+  });
+
+  test("clamps endLine past EOF down to the last line", async () => {
+    const testPath = "clamp-end.md";
+    await writeFile(join(testVaultPath, testPath), "first\nsecond\nthird");
+
+    const result = await fileSystem.readNoteLines({ path: testPath, startLine: 2, endLine: 999 });
+
+    expect(result).toBe("second\nthird");
+  });
+
+  test("clamps endLine below startLine up to startLine, returning a single line", async () => {
+    const testPath = "clamp-inverted.md";
+    await writeFile(join(testVaultPath, testPath), "first\nsecond\nthird");
+
+    const result = await fileSystem.readNoteLines({ path: testPath, startLine: 3, endLine: 1 });
+
+    expect(result).toBe("third");
+  });
+});
+
 test("patch note with multiline replacement", async () => {
   const testPath = "test-note.md";
   const content = "# Test\n\n## Section A\nOld content\nOld lines\n\n## Section B\nOther content";

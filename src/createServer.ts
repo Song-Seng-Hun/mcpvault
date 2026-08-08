@@ -249,6 +249,32 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             },
             required: ["document"]
           }
+        },
+        {
+          name: "get_note_outline",
+          description: "Get the heading structure of a note without reading its full content. Returns headings with level, text, and line number. Use this first to navigate large notes efficiently, then call read_note_lines to read only the section you need.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Path to the note relative to vault root" },
+              prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+            },
+            required: ["path"]
+          }
+        },
+        {
+          name: "read_note_lines",
+          description: "Read a specific line range from a note. Use after get_note_outline to read only the section you need instead of the full file.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Path to the note relative to vault root" },
+              startLine: { type: "number", description: "First line to read (1-indexed, inclusive)" },
+              endLine: { type: "number", description: "Last line to read (1-indexed, inclusive)" },
+              prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+            },
+            required: ["path", "startLine", "endLine"]
+          }
         }
       ]
     };
@@ -430,6 +456,25 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
         case "wiki_link":
           return await handleWikiLinkTool(fileSystem, trimmedArgs);
+
+        case "get_note_outline": {
+          const headings = await fileSystem.getNoteOutline(trimmedArgs.path);
+          const indent = trimmedArgs.prettyPrint ? 2 : undefined;
+          return {
+            content: [{ type: "text", text: JSON.stringify(headings, null, indent) }]
+          };
+        }
+
+        case "read_note_lines": {
+          const text = await fileSystem.readNoteLines({
+            path: trimmedArgs.path,
+            startLine: trimmedArgs.startLine,
+            endLine: trimmedArgs.endLine
+          });
+          return {
+            content: [{ type: "text", text }]
+          };
+        }
 
         default:
           throw new Error(`Unknown tool: ${toolName}`);

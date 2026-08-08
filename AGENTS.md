@@ -48,9 +48,9 @@ website/               # Astro 5 website (separate package, see website/AGENTS.m
 
 ### Core Components
 
-**server.ts** — Entry point. Registers 16 MCP tools, handles CLI args (--help, --version, vault path), initializes services, routes tool calls. Auto-trims whitespace from all path arguments. Exits on stdin EOF / SIGTERM / SIGINT (graceful `server.close()`), otherwise hosts orphan the process (#159).
+**server.ts** — Entry point. Registers 18 MCP tools, handles CLI args (--help, --version, vault path), initializes services, routes tool calls. Auto-trims whitespace from all path arguments. Exits on stdin EOF / SIGTERM / SIGINT (graceful `server.close()`), otherwise hosts orphan the process (#159).
 
-**FileSystemService** (`src/filesystem.ts`) — Orchestrates file ops with security. Path resolution and traversal prevention. Implements: read, write, patch, delete, move, list, batch read, frontmatter update, tag management, vault stats. Uses native `fs/promises`.
+**FileSystemService** (`src/filesystem.ts`) — Orchestrates file ops with security. Path resolution and traversal prevention. Implements: read, write, patch, delete, move, list, batch read, outline and line-range reads, frontmatter update, tag management, vault stats. Uses native `fs/promises`.
 
 **FrontmatterHandler** (`src/frontmatter.ts`) — Parses/stringifies YAML frontmatter via `gray-matter`. Validates structure (blocks functions, symbols, invalid types). Preserves original content.
 
@@ -58,11 +58,13 @@ website/               # Astro 5 website (separate package, see website/AGENTS.m
 
 **SearchService** (`src/search.ts`) — Content and frontmatter search with multi-word matching and BM25 relevance reranking. Returns token-optimized results with minified field names: `{p, t, ex, mc, ln, uri}`. Max 20 results.
 
-### 16 MCP Tools
+### 18 MCP Tools
 
 | Tool | Description |
 |------|-------------|
 | read_note | Read a single note with frontmatter |
+| get_note_outline | Return note headings with levels and line numbers |
+| read_note_lines | Read an inclusive line range from a note |
 | write_note | Create or overwrite (supports overwrite, append, prepend modes) |
 | patch_note | Efficient partial update via find-and-replace |
 | list_directory | List files and folders in the vault |
