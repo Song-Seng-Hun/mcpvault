@@ -6,24 +6,31 @@ const branchUrl = 'https://github.com/bitbonsai/mcpvault/tree/feat/mcp-sdk-v2';
 ---
 
 <section class="spec-preview relative px-4 pb-4 sm:px-6 lg:px-8" aria-label="Latest MCP specification development preview">
-  <div class="mx-auto max-w-6xl">
+  <div class="mx-auto max-w-4xl">
     <div class="spec-preview-card relative overflow-hidden rounded-xl border border-border/60 bg-card/70 px-5 py-4">
-      <div class="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div class="flex items-center gap-3">
+      <div class="relative z-10 flex items-center justify-between gap-3">
+        <div class="flex min-w-0 items-center gap-3">
           <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-accent/30 bg-accent/15">
             <GitBranch className="h-4 w-4 text-accent" aria-hidden="true" />
           </div>
 
           <p class="text-sm leading-relaxed text-muted-foreground">
             <span class="font-semibold text-foreground">
-              The <a href={specUrl} target="_blank" rel="noopener noreferrer" class="spec-link">latest MCP spec</a> is here.
+              The <a href={specUrl} target="_blank" rel="noopener noreferrer" class="spec-link">latest MCP spec</a> is out.
             </span>
-            We’re getting MCPVault ready for it.
+            <span class="sm:hidden"> We’re getting ready for it.</span>
+            <span class="hidden sm:inline"> We’re getting MCPVault ready for it.</span>
           </p>
         </div>
 
-        <a href={branchUrl} target="_blank" rel="noopener noreferrer" class="work-link flex flex-shrink-0 items-center gap-2 text-sm font-semibold text-accent transition-colors">
-          View <span>feat/mcp-sdk-v2</span>
+        <a
+          href={branchUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="View the feat/mcp-sdk-v2 branch"
+          class="work-link inline-flex h-10 w-10 flex-shrink-0 items-center justify-center gap-2 rounded-lg border border-accent/25 bg-accent/10 text-sm font-semibold text-accent transition-colors hover:border-accent/45 hover:bg-accent/20 sm:w-auto sm:px-3"
+        >
+          <span class="hidden sm:inline">View feat/mcp-sdk-v2</span>
           <ArrowRight className="h-4 w-4" aria-hidden="true" />
         </a>
       </div>
@@ -66,9 +73,4 @@ const branchUrl = 'https://github.com/bitbonsai/mcpvault/tree/feat/mcp-sdk-v2';
     outline-offset: 3px;
   }
 
-  @media (max-width: 640px) {
-    .work-link {
-      padding-left: 3rem;
-    }
-  }
 </style>
