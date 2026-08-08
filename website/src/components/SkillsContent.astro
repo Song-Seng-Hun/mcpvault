@@ -37,11 +37,11 @@ const routes = [
     notes: 'Safe YAML merge',
   },
   {
-    operation: 'Move / rename files',
+    operation: 'Move / rename notes',
     mcp: true,
-    app: true,
+    app: false,
     git: false,
-    notes: 'CLI move rewrites internal links (app running); MCP move works headless',
+    notes: 'MCP move followed by explicit backlink search, repair, and verification',
   },
   {
     operation: 'Open note in Obsidian',
@@ -130,7 +130,7 @@ const triggers = [
   { phrase: 'open this note in Obsidian', backend: 'Obsidian CLI' },
   { phrase: 'sync my vault', backend: 'Git CLI' },
   { phrase: 'use git to store my vault', backend: 'Git CLI' },
-  { phrase: 'move this note to...', backend: 'Obsidian CLI, MCP when app is closed' },
+  { phrase: 'move this note to...', backend: 'MCP + backlink repair' },
 ];
 
 const syncFlow = [
@@ -343,10 +343,20 @@ const installCmd = 'npx skills add bitbonsai/mcpvault';
           <div>
             <h4 class="text-lg font-semibold text-foreground mb-3">Routing defaults</h4>
             <ul class="space-y-2 text-sm text-muted-foreground">
-              <li class="flex items-start gap-2"><span class="text-accent/60 mt-0.5">-</span><span><strong class="text-foreground">MCP first</strong> for read/write/search/frontmatter/tags.</span></li>
-              <li class="flex items-start gap-2"><span class="text-accent/60 mt-0.5">-</span><span><strong class="text-foreground">Obsidian context</strong> for app/editor/plugin-specific behavior, and for move/rename while the app is running — the CLI rewrites internal links that a filesystem move would leave stale (MCP is the headless fallback).</span></li>
+              <li class="flex items-start gap-2"><span class="text-accent/60 mt-0.5">-</span><span><strong class="text-foreground">MCP first</strong> for read/write/search/frontmatter/tags and all note moves.</span></li>
+              <li class="flex items-start gap-2"><span class="text-accent/60 mt-0.5">-</span><span><strong class="text-foreground">Obsidian context</strong> for app/editor/plugin-specific behavior and read-only backlink discovery.</span></li>
               <li class="flex items-start gap-2"><span class="text-accent/60 mt-0.5">-</span><span><strong class="text-foreground">Git CLI</strong> for sync, backup, and versioning actions.</span></li>
             </ul>
+          </div>
+          <div>
+            <h4 class="text-lg font-semibold text-foreground mb-3">Safe note rename flow</h4>
+            <ol class="space-y-2 text-sm text-muted-foreground list-decimal pl-5">
+              <li>Search for the old wikilink target by vault-relative path and filename stem.</li>
+              <li>Move the note with MCP <code>move_note</code>, even when Obsidian is running.</li>
+              <li>Patch exact wikilink targets while preserving aliases, embeds, and heading or block fragments.</li>
+              <li>Search again and report stale references. Do not claim exhaustive repair if the 20-result cap is reached or the basename is ambiguous.</li>
+            </ol>
+            <p class="text-xs text-muted-foreground mt-3">The skill does not invoke <code>obsidian move</code> automatically. Delayed stale-offset rewrites can corrupt notes edited while the command is still running (<a href="https://github.com/bitbonsai/mcpvault/issues/176" target="_blank" rel="noopener noreferrer" class="text-accent hover:underline">#176</a>).</p>
           </div>
           <div>
             <h4 class="text-lg font-semibold text-foreground mb-3">Preflight checks before sync</h4>
@@ -389,7 +399,7 @@ git remote -v</code></pre>
         <div class="bg-card/30 backdrop-blur-xl rounded-2xl border border-border/50 p-8">
           <h3 class="text-xl font-semibold text-foreground mb-3">Obsidian CLI</h3>
           <p class="text-muted-foreground">
-            Uses Obsidian's official CLI for operations that need the running desktop app: active file, opening notes in the editor, daily notes with template expansion, backlinks, plugin commands, and link-aware moves that update every reference. The skill tracks the current official CLI — a preflight detects your installed binary at runtime, so nothing is pinned to a version that can go stale.
+            Uses Obsidian's official CLI for operations that need the running desktop app: active file, opening notes in the editor, daily notes with template expansion, read-only backlink discovery, and plugin commands. The skill tracks the current official CLI — a preflight detects your installed binary at runtime, so nothing is pinned to a version that can go stale.
           </p>
         </div>
         <div class="bg-card/30 backdrop-blur-xl rounded-2xl border border-border/50 p-8">
@@ -587,7 +597,7 @@ description: >
   operations across MCP, Obsidian CLI/app
   actions, and git sync with safe defaults.
 metadata:
-  version: "2.0"
+  version: "2.2"
   author: bitbonsai
 ---</code></pre>
           </div>

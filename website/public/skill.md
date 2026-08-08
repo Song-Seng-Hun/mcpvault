@@ -27,7 +27,7 @@ Each operation maps to exactly one backend. The skill picks the right one automa
 | Resolve [[wiki links]] | yes | — | — | wiki_link picks the shallowest match first, then locale-sorts equal-depth paths; other matches are returned as alternatives |
 | Manage tags / frontmatter | yes | — | — | Safe YAML merge |
 | List all tags with counts | yes | — | — | Filesystem scan, works headless |
-| Move / rename files | yes | yes | — | CLI move rewrites internal links (app running); MCP move works headless |
+| Move / rename notes | yes | — | — | MCP move followed by explicit backlink search, repair, and verification |
 | Get active file | — | yes | — | Currently focused file in Obsidian |
 | Open note in Obsidian | — | yes | — | Open by path in editor |
 | Daily notes | — | yes | — | Create/read/append with template expansion |
@@ -44,6 +44,15 @@ The skill routes by intent:
 2. Open-in-editor or app/plugin-context requests route to **Obsidian CLI/App context**.
 3. Sync/backup/store-with-git requests route to **Git CLI**.
 
+### Safe note rename flow
+
+1. Search for the old wikilink target by vault-relative path and filename stem.
+2. Move the note with MCP `move_note`, even when Obsidian is running.
+3. Patch exact wikilink targets in referring notes while preserving aliases, embeds, and heading/block fragments.
+4. Search again and report any stale references. If the 20-result search cap is reached or the basename is ambiguous, do not claim exhaustive repair.
+
+The skill does not invoke `obsidian move` automatically. Delayed link rewrites can use stale byte offsets and corrupt notes edited while the command is still running ([#176](https://github.com/bitbonsai/mcpvault/issues/176)). CLI moves should only be reconsidered after an upstream fix is independently retested.
+
 ### Git sync flow
 
 1. Preflight: verify git, repo, identity, and remote.
@@ -56,7 +65,7 @@ The skill routes by intent:
 ### Routing defaults
 
 - **MCP first** for read/write/search/frontmatter/tags.
-- **Obsidian CLI/App context** for app/editor/plugin-specific behavior, and for move/rename while the app is running — the CLI rewrites internal links that a filesystem move would leave stale (MCP is the headless fallback).
+- **Obsidian CLI/App context** for app/editor/plugin-specific behavior and read-only backlink discovery. All note moves use MCP `move_note` plus explicit backlink repair.
 - **Git CLI** for sync, backup, and versioning actions.
 
 ### Preflight checks before sync
@@ -84,7 +93,7 @@ Skill: Done. Vault synced to origin/main. No force push used.
 
 **MCP Server** — Handles all file I/O: reading, writing, searching, patching, and organizing notes. Enforces path sandboxing, validates inputs, and performs atomic operations. The safe default for any vault mutation.
 
-**Obsidian CLI** — Uses Obsidian's official CLI for operations that need the running desktop app: active file, opening notes in the editor, daily notes with template expansion, backlinks, plugin commands, and link-aware moves that update every reference. The skill tracks the current official CLI — a preflight detects your installed binary at runtime, so nothing is pinned to a version that can go stale.
+**Obsidian CLI** — Uses Obsidian's official CLI for operations that need the running desktop app: active file, opening notes in the editor, daily notes with template expansion, read-only backlink discovery, and plugin commands. The skill tracks the current official CLI — a preflight detects your installed binary at runtime, so nothing is pinned to a version that can go stale.
 
 **Git Sync** — Plain git for vault syncing across devices. No Obsidian Sync subscription required. Works headlessly via cron, launchd, or CI — no app needs to be running.
 
@@ -138,7 +147,7 @@ Recommended .gitignore:
 - "what links to this note?" -> Obsidian CLI
 - "sync my vault" -> Git CLI
 - "use git to store my vault" -> Git CLI
-- "move this note to..." -> Obsidian CLI (app running), MCP when headless
+- "move this note to..." -> MCP `move_note`, then explicit backlink repair and verification
 
 **Not a fit for:**
 - General markdown editing (no vault context)
@@ -199,7 +208,7 @@ description: >
   operations across MCP, Obsidian CLI/app
   actions, and git sync with safe defaults.
 metadata:
-  version: "2.1"
+  version: "2.2"
   author: bitbonsai
 ---
 ```
