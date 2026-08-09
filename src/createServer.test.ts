@@ -1,6 +1,6 @@
 import { test, expect, beforeEach, afterEach } from "vitest";
 import { createServer } from "./createServer.js";
-import { mkdtemp, mkdir, rm, writeFile } from "fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -221,6 +221,64 @@ test("wiki_link resolves path-qualified link to the exact file", async () => {
     expect(sc.document).toBe("deep/Note");
     expect(sc.path).toBe("deep/Note.md");
     expect("alternatives" in sc).toBe(false);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test("read-only mode exposes read tools and rejects every vault mutation", async () => {
+  await writeFile(join(testVaultPath, "existing.md"), "# Existing\n\nSafe content");
+
+  const server = createServer(testVaultPath, {
+    version: "1.0.0",
+    readOnly: true,
+  });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: "read-only-client", version: "1.0.0" });
+  await Promise.all([
+    client.connect(clientTransport),
+    server.connect(serverTransport),
+  ]);
+
+  try {
+    const listedTools = await client.listTools();
+    const toolNames = listedTools.tools.map((tool) => tool.name);
+    expect(toolNames).toHaveLength(11);
+    expect(toolNames).toContain("read_note");
+    expect(toolNames).toContain("search_notes");
+    expect(toolNames).not.toContain("write_note");
+    expect(toolNames).not.toContain("manage_tags");
+
+    const readResult = await client.callTool({
+      name: "read_note",
+      arguments: { path: "existing.md" },
+    });
+    expect(readResult.isError).toBeFalsy();
+    expect((readResult.content as any)[0].text).toContain("Safe content");
+
+    const mutations = [
+      { name: "write_note", arguments: { path: "blocked.md", content: "blocked" } },
+      { name: "patch_note", arguments: { path: "existing.md", oldString: "Safe", newString: "Changed" } },
+      { name: "delete_note", arguments: { path: "existing.md", confirmPath: "existing.md" } },
+      { name: "move_note", arguments: { oldPath: "existing.md", newPath: "moved.md" } },
+      { name: "move_file", arguments: { oldPath: "existing.md", newPath: "moved.md", confirmOldPath: "existing.md", confirmNewPath: "moved.md" } },
+      { name: "update_frontmatter", arguments: { path: "existing.md", frontmatter: { status: "changed" } } },
+      { name: "manage_tags", arguments: { path: "existing.md", operation: "list" } },
+    ];
+
+    for (const mutation of mutations) {
+      const result = await client.callTool(mutation);
+      expect(result.isError, `${mutation.name} should be blocked`).toBe(true);
+      expect((result.content as any)[0].text).toContain("read-only mode");
+    }
+
+    await expect(readFile(join(testVaultPath, "blocked.md"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    expect(await readFile(join(testVaultPath, "existing.md"), "utf8")).toBe(
+      "# Existing\n\nSafe content",
+    );
   } finally {
     await client.close();
     await server.close();

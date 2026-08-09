@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-08-09
+
+### Added
+- New `--read-only` CLI mode exposes only the 11 non-mutating tools and rejects direct calls to all vault mutations. Supports bare, spaced boolean, and `--read-only=true|false` forms for MCP client configuration compatibility ([#112](https://github.com/bitbonsai/mcpvault/issues/112), [#113](https://github.com/bitbonsai/mcpvault/pull/113), thanks @vdhome-dev)
+
 ## [0.14.1] - 2026-08-08
 
 ### Security

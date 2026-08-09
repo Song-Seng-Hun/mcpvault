@@ -15,7 +15,19 @@ export interface CreateServerOptions {
   version?: string;
   pathFilter?: PathFilter;
   frontmatterHandler?: FrontmatterHandler;
+  /** Expose read tools only and reject direct calls to mutating tools. */
+  readOnly?: boolean;
 }
+
+const MUTATING_TOOLS = new Set([
+  "write_note",
+  "patch_note",
+  "delete_note",
+  "move_note",
+  "move_file",
+  "update_frontmatter",
+  "manage_tags",
+]);
 
 export function createServer(vaultPath: string, options: CreateServerOptions = {}): Server {
   const {
@@ -23,6 +35,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     version = "0.0.0",
     pathFilter = new PathFilter(),
     frontmatterHandler = new FrontmatterHandler(),
+    readOnly = false,
   } = options;
 
   const resolvedVaultPath = resolve(vaultPath);
@@ -34,8 +47,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    return {
-      tools: [
+    const tools = [
         {
           name: "read_note",
           description: "Read a note from the Obsidian vault",
@@ -276,13 +288,28 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             required: ["path", "startLine", "endLine"]
           }
         }
-      ]
+      ];
+
+    return {
+      tools: readOnly
+        ? tools.filter((tool) => !MUTATING_TOOLS.has(tool.name))
+        : tools,
     };
   });
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name: toolName, arguments: args } = request.params;
     const trimmedArgs = trimPaths(args);
+
+    if (readOnly && MUTATING_TOOLS.has(toolName)) {
+      return {
+        content: [{
+          type: "text",
+          text: `Error: ${toolName} is disabled because MCPVault is running in read-only mode. Restart without --read-only to enable vault mutations.`,
+        }],
+        isError: true,
+      };
+    }
 
     try {
       switch (toolName) {
