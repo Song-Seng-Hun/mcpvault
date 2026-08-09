@@ -141,6 +141,7 @@ When modifying file operations:
 - Outline/heading parsing must be fence-aware: headings inside code fences do not count. Support backtick and tilde fences with up to three leading spaces, and require closing fences to use the same marker with at least the opening length.
 - Read-only mode is defense-in-depth: mutating tools are both omitted from `tools/list` and rejected in `tools/call`. Every new mutating tool must be added to `MUTATING_TOOLS` in `src/createServer.ts` and covered by the read-only regression.
 - Root server uses npm + `package-lock.json`; website uses Bun separately. Root `bun.lock` becomes stale/misleading; do not recreate.
+- Before merging or publishing ANY website change, deploy a preview, capture screenshots of every affected page, and inspect them for visual regressions. Also smoke-test video playback, posters/static assets, badges/API endpoints, and direct route loads; green build/deployment checks alone are insufficient.
 - MCP SDK v2 uses split `@modelcontextprotocol/server`, `/client`, `/core`, `/node` packages. `@modelcontextprotocol/sdk@latest` remains v1.x.
 - Version bump updates website nav/Hero automatically only. Manually sync `website/src/components/UpdateCallout.astro`, `website/public/index.md`, and `CHANGELOG.md`.
 - Production npm publishing is triggered by a GitHub Release and runs with provenance. Follow `RELEASING.md`; do not manually run `npm publish` for normal production releases, and do not backfill a release for an npm version that already exists.
