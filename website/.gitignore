@@ -1,9 +1,8 @@
 # Dependencies
 node_modules/
 
-# Lock files
+# npm lockfiles are not used here; the website's bun.lock is committed.
 package-lock.json
-bun.lock
 
 # Build outputs
 dist/
