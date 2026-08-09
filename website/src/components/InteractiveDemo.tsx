@@ -287,7 +287,7 @@ export default function InteractiveDemo() {
     <section className="relative py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-background to-card/20">
       <div className="max-w-6xl mx-auto">
         {/* Section header */}
-        <div className="text-center mb-16 fade-in-on-scroll" suppressHydrationWarning>
+        <div className="text-center mb-16 fade-in-on-scroll">
           <h2 className="text-4xl sm:text-5xl font-bold gradient-text mb-6">
             See It In Action
           </h2>
@@ -298,7 +298,7 @@ export default function InteractiveDemo() {
         </div>
 
         {/* Tab navigation */}
-        <div className="flex flex-wrap justify-center gap-2 mb-8 fade-in-on-scroll" suppressHydrationWarning>
+        <div className="flex flex-wrap justify-center gap-2 mb-8 fade-in-on-scroll">
           {examples.map((example) => (
             <button
               key={example.id}
@@ -319,7 +319,7 @@ export default function InteractiveDemo() {
         </div>
 
         {/* Demo content */}
-        <div className="fade-in-on-scroll" suppressHydrationWarning>
+        <div className="fade-in-on-scroll">
           <div className="bg-card/30 backdrop-blur-xl rounded-2xl border border-border/50 overflow-hidden shadow-2xl">
             {/* Chat header */}
             <div className="bg-card/50 border-b border-border/50 p-4">
@@ -431,7 +431,7 @@ export default function InteractiveDemo() {
         </div>
 
         {/* Call to action */}
-        <div className="text-center mt-12 fade-in-on-scroll" suppressHydrationWarning>
+        <div className="text-center mt-12 fade-in-on-scroll">
           <p className="text-muted-foreground mb-6">
             Ready to experience this level of AI-powered note management?
           </p>
