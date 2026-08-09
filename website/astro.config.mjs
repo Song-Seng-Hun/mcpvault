@@ -6,6 +6,7 @@ import tailwindcss from '@tailwindcss/vite';
 // https://astro.build/config
 export default defineConfig({
   adapter: cloudflare(),
+  trailingSlash: 'always',
   integrations: [react()],
   build: {
     inlineStylesheets: 'always' // Inline all CSS to prevent render blocking
