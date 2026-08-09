@@ -1012,6 +1012,8 @@ This MCP server implements several security measures to protect your Obsidian va
 4. Ensure all tests pass: `npm test`
 5. Submit a pull request
 
+Maintainers: production publishing is driven by GitHub Releases. See [RELEASING.md](RELEASING.md).
+
 ## License
 
 MIT
