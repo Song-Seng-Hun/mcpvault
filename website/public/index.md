@@ -16,6 +16,7 @@ This MCP server lets Claude, ChatGPT+, and other assistants access your vault. L
 
 ## Recent Updates
 
+- **v0.15.0 (August 2026):** Added `--read-only` mode, which exposes read tools only and rejects all vault mutations. ([#112](https://github.com/bitbonsai/mcpvault/issues/112), thanks @vdhome-dev)
 - **v0.14.1 (August 2026):** Security: dotfiles and hidden directories are now denied at any vault depth, closing an extension-filter bypass. ([#115](https://github.com/bitbonsai/mcpvault/pull/115), thanks @sadegh)
 - **v0.14.0 (August 2026):** Added `get_note_outline` and `read_note_lines` for navigating and reading targeted sections of large notes without loading the full file. ([#146](https://github.com/bitbonsai/mcpvault/pull/146), thanks @kartik7704)
 - **v0.12.6 (August 2026):** Refreshed the MCP SDK and development toolchain, standardized the server package on npm, and removed its stale Bun lockfile. No runtime behavior changed. ([#178](https://github.com/bitbonsai/mcpvault/pull/178))

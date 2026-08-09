@@ -99,6 +99,16 @@ npx @bitbonsai/mcpvault@latest
 "args": ["@bitbonsai/mcpvault@latest"]
 ```
 
+### Optional read-only mode
+
+Add `--read-only` after the vault path to expose only read tools. Mutating tools are omitted from discovery and rejected if called directly.
+
+```json
+"args": ["@bitbonsai/mcpvault@latest", "/path/to/your/vault", "--read-only"]
+```
+
+The CLI also accepts `--read-only true` and `--read-only=true` for configuration systems that require explicit boolean values. Omit the option, or set it to `false`, for normal read/write access.
+
 Supported note file types: `.md`, `.markdown`, `.txt`, `.base`, `.canvas`.
 
 <details>

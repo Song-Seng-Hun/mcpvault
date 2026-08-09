@@ -253,6 +253,27 @@ Add to your Claude Desktop configuration file:
 }
 ```
 
+**Read-only mode:**
+
+Add `--read-only` after the vault path to expose only read tools. Mutating tools are omitted from discovery and rejected if called directly.
+
+```json
+{
+  "mcpServers": {
+    "obsidian-read-only": {
+      "command": "npx",
+      "args": [
+        "@bitbonsai/mcpvault@latest",
+        "/Users/yourname/Documents/ResearchVault",
+        "--read-only"
+      ]
+    }
+  }
+}
+```
+
+The CLI also accepts `--read-only true` and `--read-only=true` for configuration systems that require explicit values. Omit the option, or set it to `false`, to keep normal read/write access.
+
 **Configuration File Locations:**
 
 - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -961,7 +982,7 @@ This MCP server implements several security measures to protect your Obsidian va
 ### Best Practices
 
 - **Least Privilege:** Server only accesses the specified vault directory
-- **Read-Only by Default:** Consider running with read-only permissions for sensitive vaults
+- **Read-Only Mode:** Run with `--read-only` for sensitive vaults; mutating tools are hidden and rejected
 - **Backup Recommended:** Always backup your vault before using write operations
 - **Network Isolation:** Server uses stdio transport (no network exposure)
 

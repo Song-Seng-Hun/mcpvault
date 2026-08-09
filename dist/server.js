@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createServer } from "./src/createServer.js";
+import { parseCliArgs } from "./src/cli.js";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join, resolve } from "path";
@@ -23,7 +24,7 @@ mcpvault v${VERSION}
 Universal AI bridge for Obsidian vaults - connect any MCP-compatible assistant
 
 Usage:
-  npx @bitbonsai/mcpvault [vault-path]
+  npx @bitbonsai/mcpvault [vault-path] [--read-only[=true|false]]
 
 Arguments:
   [vault-path]    Optional path to your Obsidian vault directory
@@ -32,21 +33,24 @@ Arguments:
 Options:
   --version, -v   Show version number
   --help, -h      Show this help message
+  --read-only     Expose read tools only and reject all vault mutations
+                  May be passed alone, with true/false, or as --read-only=true
 
 Examples:
   npx @bitbonsai/mcpvault
   npx @bitbonsai/mcpvault ~/Documents/MyVault
   npx @bitbonsai/mcpvault ./Vault
+  npx @bitbonsai/mcpvault ./Vault --read-only
   npx @bitbonsai/mcpvault /path/to/obsidian/vault
   npx @bitbonsai/mcpvault "/path/with spaces/Obsidian Vault"
 `);
     process.exit(0);
 }
-// Join trailing args to support vault paths with spaces.
-// When omitted, default to current working directory.
-const vaultPathArg = cliArgs.join(' ').trim();
+// Remove runtime options before joining trailing args, preserving support for
+// unquoted vault paths with spaces. When omitted, use the current directory.
+const { vaultPathArg, readOnly } = parseCliArgs(cliArgs);
 const vaultPath = resolve(vaultPathArg || process.cwd());
-const server = createServer(vaultPath, { version: VERSION });
+const server = createServer(vaultPath, { version: VERSION, readOnly });
 const transport = new StdioServerTransport();
 await server.connect(transport);
 // Exit when the client disconnects (stdin EOF) or the process is asked to

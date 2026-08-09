@@ -452,6 +452,20 @@ args = ["-y", "@bitbonsai/mcpvault@latest", "/path/to/your/vault"]'
           </div>
         </div>
 
+        <div class="mt-3 p-3 bg-card/30 rounded-lg border border-border/50 space-y-2">
+          <p class="text-sm text-muted-foreground flex items-start gap-2">
+            <Lock className="w-4 h-4 text-accent mt-0.5 flex-shrink-0" aria-hidden="true" />
+            <span>
+              <strong class="text-foreground">Read-only mode:</strong>
+              add <code class="bg-background/50 px-1 rounded text-foreground">--read-only</code>
+              after the vault path. Mutating tools are hidden from discovery and rejected if called directly.
+            </span>
+          </p>
+          <code class="block bg-background/50 px-2 py-1 rounded text-foreground text-xs">
+            "args": ["@bitbonsai/mcpvault@latest", "/path/to/vault", "--read-only"]
+          </code>
+        </div>
+
         <div class="mt-3 p-3 bg-card/30 rounded-lg border border-border/50">
           <p class="text-xs text-muted-foreground flex items-start gap-2">
             <FolderOpen className="w-4 h-4 text-accent mt-0.5 flex-shrink-0" aria-hidden="true" />
