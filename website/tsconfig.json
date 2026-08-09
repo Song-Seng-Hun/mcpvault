@@ -11,5 +11,5 @@
     },
     "types": ["astro/client"]
   },
-  "exclude": ["src/emails/**"]
+  "exclude": ["src/emails/**", "dist/**", ".astro/**"]
 }

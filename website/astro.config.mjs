@@ -1,16 +1,17 @@
 import { defineConfig } from 'astro/config';
 import react from '@astrojs/react';
-import tailwind from '@astrojs/tailwind';
 import cloudflare from '@astrojs/cloudflare';
+import tailwindcss from '@tailwindcss/vite';
 
 // https://astro.build/config
 export default defineConfig({
   adapter: cloudflare(),
-  integrations: [react(), tailwind()],
+  integrations: [react()],
   build: {
     inlineStylesheets: 'always' // Inline all CSS to prevent render blocking
   },
   vite: {
+    plugins: [tailwindcss()],
     resolve: {
       alias: {
         '@components': '/src/components',
@@ -20,9 +21,9 @@ export default defineConfig({
     build: {
       rollupOptions: {
         output: {
-          manualChunks: {
-            // Split syntax highlighter into separate chunk
-            'syntax-highlighter': ['react-syntax-highlighter']
+          manualChunks(id) {
+            // Split syntax highlighter into a separate chunk.
+            if (id.includes('react-syntax-highlighter')) return 'syntax-highlighter';
           }
         }
       },

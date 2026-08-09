@@ -1,6 +1,7 @@
 ---
 import pkg from '../../../package.json';
 import { ClientRouter } from 'astro:transitions';
+import '../styles/global.css';
 
 export interface Props {
   title?: string;
@@ -133,6 +134,8 @@ const fullTitle = title.includes("MCPVault") ? title : `${title} | MCPVault`;
 
     <!-- Terminal Styles -->
     <style>
+      @reference "../styles/global.css";
+
       /* Terminal window styling */
       .terminal-window {
         @apply bg-card/50 backdrop-blur-xl rounded-xl border border-border/50;

@@ -28,8 +28,8 @@ The markdown files are simplified representations of the same content shown in t
 
 ## Architecture
 
-- **Framework**: Astro 5.x with React islands for interactive components
-- **Styling**: Tailwind CSS with custom dark theme (`tailwind.config.mjs`)
+- **Framework**: Astro 7.x with React islands for interactive components
+- **Styling**: Tailwind CSS 4 through `@tailwindcss/vite`, with the custom dark theme loaded from `tailwind.config.mjs` by `src/styles/global.css`
 - **View Transitions**: Astro `ClientRouter` for SPA-like page transitions
 - **Nav**: `Nav.astro` uses `transition:persist` to stay mounted across navigations
 - **Layout**: Single `Layout.astro` wraps all pages with shared head, meta tags, background effects
@@ -51,6 +51,8 @@ The demo examples in `InteractiveDemo.tsx` and `HowItWorks.astro` show actual MC
 
 ## Commands
 
-- `npm run dev` — Start dev server (http://localhost:4321)
-- `npm run build` — Type-check with `astro check` then build to `dist/`
+- `bun install --frozen-lockfile` — Install the committed website dependency graph
+- `bun run dev` — Start dev server (http://localhost:4321)
+- `bun run build` — Type-check with `astro check` then build to `dist/`
+- `bun audit` — Check the separate website dependency graph
 - From project root: `npm run website` — Starts the dev server

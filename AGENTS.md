@@ -140,6 +140,6 @@ When modifying file operations:
 - `pathFilter.isAllowed` + `normalizePath` must guard EVERY new tool's path input (PR #146 blocker: `readNoteLines` skipped them = read `.obsidian/` files). Mirror `readNote`'s guard block.
 - Outline/heading parsing must be fence-aware: headings inside code fences do not count. Support backtick and tilde fences with up to three leading spaces, and require closing fences to use the same marker with at least the opening length.
 - Read-only mode is defense-in-depth: mutating tools are both omitted from `tools/list` and rejected in `tools/call`. Every new mutating tool must be added to `MUTATING_TOOLS` in `src/createServer.ts` and covered by the read-only regression.
-- Root server uses npm + `package-lock.json`; website uses Bun separately. Root `bun.lock` becomes stale/misleading; do not recreate.
+- Root server uses npm + `package-lock.json`; website uses Bun separately with committed `website/bun.lock`. Root `bun.lock` becomes stale/misleading; do not recreate.
 - MCP SDK v2 uses split `@modelcontextprotocol/server`, `/client`, `/core`, `/node` packages. `@modelcontextprotocol/sdk@latest` remains v1.x.
 - Version bump updates website nav/Hero automatically only. Manually sync `website/src/components/UpdateCallout.astro`, `website/public/index.md`, and `CHANGELOG.md`.

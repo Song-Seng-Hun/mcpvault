@@ -46,7 +46,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     const normalized = email.trim().toLowerCase();
 
-    const { data, error } = await resend.contacts.create({
+    const { error } = await resend.contacts.create({
       audienceId,
       email: normalized,
     });
