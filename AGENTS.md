@@ -19,8 +19,8 @@ npm test -- -t "test name pattern"
 
 # Publishing
 npm run publish:dry     # Dry run
-npm run publish:beta    # Publish with beta tag
-npm run publish:latest  # Publish as latest
+npm run publish:beta    # Explicit beta publish
+# Production: follow RELEASING.md and create a GitHub Release
 
 # Website
 npm run website         # Start Astro dev server with Bun (http://localhost:4321)
@@ -143,3 +143,4 @@ When modifying file operations:
 - Root server uses npm + `package-lock.json`; website uses Bun separately with committed `website/bun.lock`. Root `bun.lock` becomes stale/misleading; do not recreate.
 - MCP SDK v2 uses split `@modelcontextprotocol/server`, `/client`, `/core`, `/node` packages. `@modelcontextprotocol/sdk@latest` remains v1.x.
 - Version bump updates website nav/Hero automatically only. Manually sync `website/src/components/UpdateCallout.astro`, `website/public/index.md`, and `CHANGELOG.md`.
+- Production npm publishing is triggered by a GitHub Release and runs with provenance. Follow `RELEASING.md`; do not manually run `npm publish` for normal production releases, and do not backfill a release for an npm version that already exists.
