@@ -1,0 +1,144 @@
+{
+  "capturedAt": "2026-08-09T15:48:00Z",
+  "baseUrl": "https://mcpvault.org",
+  "routes": {
+    "/": {
+      "status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "cache_control": "public, max-age=0, must-revalidate"
+    },
+    "/install": {
+      "status": 301,
+      "content_type": "text/plain;charset=UTF-8",
+      "cache_control": null,
+      "location": "/install/"
+    },
+    "/features": {
+      "status": 301,
+      "content_type": "text/plain;charset=UTF-8",
+      "cache_control": null,
+      "location": "/features/"
+    },
+    "/demo": {
+      "status": 301,
+      "content_type": "text/plain;charset=UTF-8",
+      "cache_control": null,
+      "location": "/demo/"
+    },
+    "/how-it-works": {
+      "status": 301,
+      "content_type": "text/plain;charset=UTF-8",
+      "cache_control": null,
+      "location": "/how-it-works/"
+    },
+    "/skill": {
+      "status": 301,
+      "content_type": "text/plain;charset=UTF-8",
+      "cache_control": null,
+      "location": "/skill/"
+    },
+    "/install/": {
+      "status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "cache_control": "public, max-age=0, must-revalidate"
+    },
+    "/features/": {
+      "status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "cache_control": "public, max-age=0, must-revalidate"
+    },
+    "/demo/": {
+      "status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "cache_control": "public, max-age=0, must-revalidate"
+    },
+    "/how-it-works/": {
+      "status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "cache_control": "public, max-age=0, must-revalidate"
+    },
+    "/skill/": {
+      "status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "cache_control": "public, max-age=0, must-revalidate"
+    },
+    "/api/downloads.json": {
+      "status": 200,
+      "content_type": "application/json",
+      "cache_control": "public, s-maxage=900, max-age=900"
+    },
+    "/demo.md": {
+      "status": 200,
+      "content_type": "text/markdown; charset=utf-8",
+      "cache_control": "public, max-age=0, must-revalidate"
+    },
+    "/features.md": {
+      "status": 200,
+      "content_type": "text/markdown; charset=utf-8",
+      "cache_control": "public, max-age=0, must-revalidate"
+    },
+    "/how-it-works.md": {
+      "status": 200,
+      "content_type": "text/markdown; charset=utf-8",
+      "cache_control": "public, max-age=0, must-revalidate"
+    },
+    "/index.md": {
+      "status": 200,
+      "content_type": "text/markdown; charset=utf-8",
+      "cache_control": "public, max-age=0, must-revalidate"
+    },
+    "/install.md": {
+      "status": 200,
+      "content_type": "text/markdown; charset=utf-8",
+      "cache_control": "public, max-age=0, must-revalidate"
+    },
+    "/skill.md": {
+      "status": 200,
+      "content_type": "text/markdown; charset=utf-8",
+      "cache_control": "public, max-age=0, must-revalidate"
+    },
+    "/llm.txt": {
+      "status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "cache_control": "public, max-age=0, must-revalidate"
+    },
+    "/robots.txt": {
+      "status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "cache_control": "public, max-age=14400, must-revalidate"
+    },
+    "/sitemap.xml": {
+      "status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "cache_control": "public, max-age=0, must-revalidate",
+      "note": "SPA fallback served; not actual XML sitemap. robots.txt references this URL as canonical sitemap location."
+    },
+    "/sitemap-0.xml": {
+      "status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "cache_control": "public, max-age=0, must-revalidate",
+      "note": "SPA fallback served; not actual XML sitemap."
+    }
+  },
+  "video": {
+    "url": "/mcp-obsidian-1-min.mp4",
+    "HEAD": {
+      "status": 200,
+      "content_type": "video/mp4",
+      "content_length": 1083904,
+      "accept_ranges": "bytes",
+      "cache_control": "max-age=14400"
+    },
+    "RANGE_bytes=0-1023": {
+      "status": 206,
+      "content_type": "video/mp4",
+      "content_length": 1024,
+      "content_range": "bytes 0-1023/1083904",
+      "cache_control": "max-age=14400"
+    }
+  },
+  "findings": [
+    "sitemap.xml and sitemap-0.xml return HTTP 200 text/html (SPA fallback page), not an XML sitemap. robots.txt advertises Sitemap: https://mcpvault.org/sitemap.xml. Astro's sitemap integration is apparently not producing a served sitemap on this deployment. Phase 2 must build an explicit sitemap.xml route per the plan (line 213) rather than assume parity.",
+    "Non-trailing-slash routes (/install, /features, /demo, /how-it-works, /skill) 301-redirect to trailing-slash variants; trailing-slash and root pages return 200. This redirect behavior must be replicated in Hono middleware per Phase 4 (PRs #187/#188)."
+  ]
+}
