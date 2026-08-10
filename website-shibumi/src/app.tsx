@@ -16,6 +16,8 @@ import { registerHowItWorksRoute } from "./routes/how-it-works";
 import { registerInstallRoute } from "./routes/install";
 import { registerSeoRoutes, SITE_URL } from "./routes/seo";
 import { registerSkillRoute } from "./routes/skill";
+import { registerUnsubscribeRoute } from "./routes/unsubscribe";
+import type { UnsubscribeRouteOptions } from "./routes/unsubscribe";
 import { registerVideoRoutes } from "./routes/video";
 
 export interface AppOptions {
@@ -27,6 +29,8 @@ export interface AppOptions {
   clientDir?: string;
   /** Base URL used to build sitemap.xml/robots.txt. Defaults to production. */
   siteUrl?: string;
+  /** Overrides for `GET /api/unsubscribe`'s Resend client/env; used in tests. */
+  unsubscribe?: UnsubscribeRouteOptions;
 }
 
 const STATIC_CACHE_CONTROL = "public, max-age=3600";
@@ -103,6 +107,11 @@ export function createApp(options: AppOptions = {}): Hono {
 
   // Bundled Alpine client script for the demo page's interactivity.
   registerClientRoute(app, clientDir);
+
+  // GET /api/unsubscribe (Phase 4, ported ahead of schedule): preserves
+  // current production behavior exactly. Signed tokens are a documented
+  // follow-up, not added here.
+  registerUnsubscribeRoute(app, options.unsubscribe ?? {});
 
   // Plain CSS under /styles/*, rooted and traversal-safe, same shape as the
   // generic static handler below but scoped to src/styles (source == the
