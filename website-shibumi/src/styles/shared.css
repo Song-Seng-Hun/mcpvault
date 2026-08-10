@@ -1,0 +1,514 @@
+/*
+ * Global tokens, reset, and the shared page shell (Nav, Footer,
+ * ThemeToggle, background watermark, skip link). Route-specific styles
+ * live in one stylesheet per route (home.css, install.css, ...); this file
+ * is the only stylesheet loaded on every page.
+ *
+ * Convention: every component has a unique `data-component` root, and every
+ * selector for that component is rooted under it, e.g.
+ * `[data-component="nav"] .nav-link`. Page-only selectors are rooted under
+ * a `[data-page="..."]` attribute set on <body> by Layout.
+ */
+
+:root {
+  --color-background: #0a0a0a;
+  --color-foreground: #fafafa;
+  --color-muted: #404040;
+  --color-muted-foreground: #a3a3a3;
+  --color-accent: #7c3aed;
+  --color-accent-2: #06b6d4;
+  --color-card: #171717;
+  --color-border: #262626;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background-color: var(--color-background);
+  font-size: 16px;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  padding-top: 4rem; /* nav is fixed/floating above content */
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+  overflow-x: hidden;
+}
+
+a {
+  color: inherit;
+}
+
+/* GFM-style inline code, scoped away from fenced code blocks and terminals. */
+:where(p, li, td, dd, figcaption) > code {
+  padding: 0.14em 0.42em;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 0.45rem;
+  background: rgba(148, 163, 184, 0.1);
+  color: rgba(226, 232, 240, 0.96);
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* -------------------------------------------------------------------- */
+/* Skip link                                                            */
+/* -------------------------------------------------------------------- */
+
+[data-component="skip-link"] {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 10000;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(10, 10, 10, 0.95);
+  color: #ffffff;
+  text-decoration: none;
+  transform: translateY(-150%);
+  transition: transform 0.2s ease;
+}
+
+[data-component="skip-link"]:focus {
+  transform: translateY(0);
+  outline: 2px solid rgba(139, 92, 246, 0.7);
+  outline-offset: 2px;
+}
+
+#main-content {
+  scroll-margin-top: 6rem;
+}
+
+/* -------------------------------------------------------------------- */
+/* App shell / background watermark                                     */
+/* -------------------------------------------------------------------- */
+
+[data-component="app-shell"] {
+  position: relative;
+  z-index: 10;
+}
+
+[data-component="background-watermark"] {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+[data-component="background-watermark"] .glow {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.15;
+  filter: blur(20px);
+}
+
+[data-component="background-watermark"] .mark {
+  width: 80vh;
+  height: 80vh;
+}
+
+/* -------------------------------------------------------------------- */
+/* Nav                                                                   */
+/* -------------------------------------------------------------------- */
+
+[data-component="nav"] {
+  position: fixed;
+  top: 0;
+  z-index: 9999;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.95);
+}
+
+[data-component="nav"] .nav-inner {
+  width: 100%;
+  padding: 0.75rem 1.5rem;
+}
+
+[data-component="nav"] .nav-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+[data-component="nav"] .logo-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0;
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+[data-component="nav"] .logo-link:hover .logo-text {
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+[data-component="nav"] .logo-icon {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+[data-component="nav"] .logo-text {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-foreground);
+}
+
+[data-component="nav"] .version-badge {
+  display: none;
+  align-items: center;
+  padding: 0.125rem 0.375rem;
+  border-radius: 9999px;
+  font-size: 0.625rem;
+  font-weight: 500;
+  line-height: 1.1;
+  color: #ffffff;
+  background: rgba(124, 58, 237, 0.2);
+  border: 1px solid rgba(124, 58, 237, 0.3);
+}
+
+[data-component="nav"] .nav-links {
+  display: none;
+  align-items: center;
+  gap: 2rem;
+}
+
+[data-component="nav"] .nav-link {
+  position: relative;
+  color: rgba(255, 255, 255, 0.7);
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+[data-component="nav"] .nav-link:hover {
+  color: rgba(255, 255, 255, 1);
+  text-shadow: 0 0 8px rgba(139, 92, 246, 0.6);
+  box-shadow:
+    0 0 20px rgba(139, 92, 246, 0.3),
+    inset 0 0 20px rgba(139, 92, 246, 0.1);
+  background: rgba(139, 92, 246, 0.1);
+  transform: translateY(-1px);
+}
+
+[data-component="nav"] .nav-link-active {
+  color: rgba(255, 255, 255, 1);
+  background: rgba(139, 92, 246, 0.15);
+  text-shadow: 0 0 6px rgba(139, 92, 246, 0.4);
+}
+
+[data-component="nav"] .nav-link-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+[data-component="nav"] .nav-badge-new {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.375rem;
+  border-radius: 9999px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  line-height: 1.1;
+  color: #ffffff;
+  background: var(--color-accent);
+  border: 1px solid rgba(124, 58, 237, 0.5);
+}
+
+[data-component="nav"] .nav-icon-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+[data-component="nav"] .icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+[data-component="nav"] .mobile-menu-button {
+  display: inline-flex;
+  padding: 0.5rem;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+
+[data-component="nav"] .mobile-menu-button .icon {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+[data-component="nav"] .mobile-menu {
+  position: fixed;
+  top: 60px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9998;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+}
+
+[data-component="nav"] .mobile-menu[hidden] {
+  display: none;
+}
+
+[data-component="nav"] .mobile-menu-inner {
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+[data-component="nav"] .mobile-menu .nav-link {
+  display: block;
+  text-align: center;
+  font-size: 1.125rem;
+}
+
+[data-component="nav"] .mobile-menu .nav-icon-link {
+  justify-content: center;
+}
+
+@media (min-width: 640px) {
+  [data-component="nav"] .version-badge {
+    display: inline-flex;
+  }
+}
+
+@media (min-width: 768px) {
+  [data-component="nav"] .nav-links {
+    display: flex;
+  }
+
+  [data-component="nav"] .mobile-menu-button {
+    display: none;
+  }
+}
+
+/* -------------------------------------------------------------------- */
+/* Footer                                                                */
+/* -------------------------------------------------------------------- */
+
+[data-component="footer"] {
+  position: relative;
+  padding: 4rem 1rem;
+  background: linear-gradient(to top, rgba(23, 23, 23, 0.2), var(--color-background));
+  border-top: 1px solid rgba(38, 38, 38, 0.5);
+}
+
+[data-component="footer"] .footer-inner {
+  max-width: 72rem;
+  margin: 0 auto;
+}
+
+[data-component="footer"] .footer-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+
+[data-component="footer"] .footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+[data-component="footer"] .footer-logo-icon {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+[data-component="footer"] .footer-brand-name {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-foreground);
+}
+
+[data-component="footer"] .footer-tagline {
+  max-width: 32rem;
+  margin: 0 0 1.5rem;
+  color: var(--color-muted-foreground);
+}
+
+[data-component="footer"] .footer-links-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+[data-component="footer"] .footer-icon-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-muted-foreground);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+[data-component="footer"] .footer-icon-link:hover {
+  color: var(--color-foreground);
+}
+
+[data-component="footer"] .footer-icon-link .icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+[data-component="footer"] .footer-icon-link .label {
+  font-size: 0.875rem;
+}
+
+[data-component="footer"] h3 {
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-foreground);
+}
+
+[data-component="footer"] .footer-link-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+[data-component="footer"] .footer-link-list a {
+  color: var(--color-muted-foreground);
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 0.2s ease;
+}
+
+[data-component="footer"] .footer-link-list a:hover {
+  color: var(--color-foreground);
+}
+
+[data-component="footer"] .footer-bottom {
+  margin-top: 3rem;
+  padding-top: 2rem;
+  border-top: 1px solid rgba(38, 38, 38, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+[data-component="footer"] .footer-copyright,
+[data-component="footer"] .footer-credit {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-muted-foreground);
+}
+
+@media (min-width: 768px) {
+  [data-component="footer"] .footer-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  [data-component="footer"] .footer-brand-col {
+    grid-column: span 2;
+  }
+
+  [data-component="footer"] .footer-bottom {
+    flex-direction: row;
+  }
+}
+
+/* -------------------------------------------------------------------- */
+/* Theme toggle (markup ported now; Alpine wiring lands in Phase 3)      */
+/* -------------------------------------------------------------------- */
+
+[data-component="theme-toggle"] {
+  position: relative;
+  width: 3.5rem;
+  height: 2rem;
+  padding: 0;
+  border-radius: 9999px;
+  border: 1px solid rgba(38, 38, 38, 0.5);
+  background: rgba(23, 23, 23, 0.5);
+  backdrop-filter: blur(4px);
+  cursor: pointer;
+  transition: border-color 0.3s ease;
+}
+
+[data-component="theme-toggle"]:hover {
+  border-color: rgba(124, 58, 237, 0.5);
+}
+
+[data-component="theme-toggle"]:focus-visible {
+  outline: 2px solid rgba(124, 58, 237, 0.5);
+  outline-offset: 2px;
+}
+
+[data-component="theme-toggle"] .slider {
+  position: absolute;
+  top: 0.25rem;
+  left: 0.25rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 9999px;
+  background: var(--color-foreground);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: left 0.3s ease;
+}
+
+[data-component="theme-toggle"][data-theme="light"] .slider {
+  left: 1.75rem;
+}
+
+[data-component="theme-toggle"] .slider .icon {
+  width: 0.75rem;
+  height: 0.75rem;
+  color: var(--color-background);
+}
+
+[data-component="theme-toggle"] .sr-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
