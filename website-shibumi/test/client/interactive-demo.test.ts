@@ -6,10 +6,13 @@
  * be called directly. `typingDelayMs` is injectable specifically so these
  * tests don't need real 1s timeouts or fake-timer plumbing.
  *
- * `growToContent()` and `selectTab`'s `$root`/`$nextTick` wiring (the height
- * transition, added when the demo panel's height jump was fixed) are
- * covered with a `FakeContainer` standing in for `.demo-window-body`
- * instead of a real DOM -- same reasoning as `fade-in-observer.test.ts`.
+ * `selectTab`'s `$root`/`$nextTick` wiring to the shared height-transition
+ * helper (`../../src/client/height-transition`, also used by
+ * `terminal.test.ts`) is covered here with a `FakeContainer` standing in
+ * for `.demo-window-body` instead of a real DOM -- same reasoning as
+ * `fade-in-observer.test.ts`. `growToContent()`/`transitionHeightAcross()`
+ * themselves are tested directly in `height-transition.test.ts`; this file
+ * only tests that `interactiveDemo()` wires them up correctly.
  * `FakeContainer.offsetHeight` is a getter, not a plain field, deliberately
  * mirroring a real element: it returns the explicit pixel height when
  * `style.height` is set, or `naturalHeight` (the fake's stand-in for
@@ -18,7 +21,8 @@
  * number would pass while hiding the bug it was written to catch.
  */
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_TAB, growToContent, type HeightTransitionContainer, interactiveDemo, TYPING_DELAY_MS } from "../../src/client/interactive-demo";
+import type { HeightTransitionContainer } from "../../src/client/height-transition";
+import { DEFAULT_TAB, interactiveDemo, TYPING_DELAY_MS } from "../../src/client/interactive-demo";
 
 class FakeContainer implements HeightTransitionContainer {
   style = { height: "" };
@@ -172,61 +176,5 @@ describe("interactiveDemo()", () => {
     nextTickCallbacks[0]?.();
 
     expect(container.style.height).toBe("623px");
-  });
-});
-
-describe("growToContent()", () => {
-  test("grows: sets the container's explicit height to its current natural content height", () => {
-    const container = new FakeContainer(340);
-    container.style.height = "120px"; // frozen at the old (smaller) height, as selectTab leaves it
-    growToContent(container);
-    expect(container.style.height).toBe("340px");
-  });
-
-  test("shrinks: measuring via a naive scrollHeight-style read would miss this, since content is now smaller than the frozen box", () => {
-    const container = new FakeContainer(60);
-    container.style.height = "340px"; // frozen at the old (larger) height
-    growToContent(container);
-    expect(container.style.height).toBe("60px");
-  });
-
-  test("re-commits the frozen height before writing the target, so the transition has a value to animate from", () => {
-    const container = new FakeContainer(60);
-    container.style.height = "340px";
-    const heightWrites: string[] = [];
-    let current = "";
-    Object.defineProperty(container.style, "height", {
-      get: () => current,
-      set: (v: string) => {
-        heightWrites.push(v);
-        current = v;
-      },
-    });
-    // Re-apply the frozen value through the instrumented setter (the
-    // constructor/assignment above ran before the spy was installed).
-    heightWrites.length = 0;
-    current = "340px";
-
-    growToContent(container);
-
-    // "auto" (to measure), then the frozen value again (re-committing it
-    // via the forced reflow), then the real target -- in that order.
-    expect(heightWrites).toEqual(["auto", "340px", "60px"]);
-  });
-
-  test("clears the height back to auto once the height transition ends", () => {
-    const container = new FakeContainer(340);
-    container.style.height = "120px";
-    growToContent(container);
-    container.fireTransitionEnd("height");
-    expect(container.style.height).toBe("");
-  });
-
-  test("ignores transitionend events for properties other than height", () => {
-    const container = new FakeContainer(340);
-    container.style.height = "120px";
-    growToContent(container);
-    container.fireTransitionEnd("opacity");
-    expect(container.style.height).toBe("340px");
   });
 });

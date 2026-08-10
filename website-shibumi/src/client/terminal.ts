@@ -35,7 +35,23 @@
  * pure, unit-testable step function; `startTyping()` is the thin
  * interval-driving wrapper around it, with the interval/step delay
  * injectable so tests don't need real timers.
+ *
+ * Height transition: switching config tabs changes `.terminal-body`'s
+ * content height (each platform's config differs in length), which used
+ * to jump instead of grow -- same bug, and same fix, as `interactive-
+ * demo.ts`'s demo-tab switching (see `./height-transition`'s module
+ * comment for the two real bugs `transitionHeightAcross`/`growToContent`
+ * work around: `$root` vs `$el`, and why measuring via `scrollHeight`
+ * alone can't detect a shrink). `.terminal-body` (not a new wrapper)
+ * is the right container: it's the single element `.config-tabs` and
+ * every `.config-content` panel share as a direct parent, same relationship
+ * `.demo-window-body` has to `.demo-panel` in `interactive-demo.ts`.
+ * `selectTab` here only has one mutation (`activeTab`), unlike the demo
+ * tab browser's two (`activeTab` + a delayed `isTyping` flip), so it only
+ * needs a single `transitionHeightAcross` call.
  */
+import { transitionHeightAcross, type HeightTransitionRoot } from "./height-transition";
+
 export interface CopyClipboard {
   writeText(text: string): Promise<void>;
 }
@@ -47,11 +63,17 @@ export interface TerminalData {
   selectTab(this: TerminalData, id: string): void;
   copy(this: TerminalData, text: string | undefined): Promise<void>;
   startTyping(this: TerminalData): void;
+  /** Alpine `$root` magic -- see `./height-transition`'s module comment for why this must be `$root`, not `$el`. */
+  $root?: HeightTransitionRoot;
+  /** Alpine `$nextTick` magic: schedules `callback` after Alpine's next reactive DOM update. Same optional/`?.` treatment as `$root`. */
+  $nextTick?: (callback: () => void) => void;
 }
 
 export const DEFAULT_TAB = "standard";
 export const COPIED_FEEDBACK_MS = 2000;
 export const TYPING_TICK_MS = 25;
+
+const TERMINAL_BODY_SELECTOR = ".terminal-body";
 
 /**
  * Mirrors `Terminal.tsx`'s `INSPECTOR_INSTALL_COPY`/`INSPECTOR_TEST_COPY`
@@ -97,7 +119,10 @@ export function terminal(
     typed: commands.map(() => ""),
     selectTab(id) {
       if (id === this.activeTab) return;
-      this.activeTab = id;
+      const container = this.$root?.querySelector(TERMINAL_BODY_SELECTOR) ?? undefined;
+      transitionHeightAcross(container, this.$nextTick, () => {
+        this.activeTab = id;
+      });
     },
     async copy(text) {
       if (!text) return;

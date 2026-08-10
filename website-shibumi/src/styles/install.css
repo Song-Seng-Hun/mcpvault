@@ -185,6 +185,14 @@
 [data-component="terminal"] .terminal-body {
   padding: 1.5rem;
   position: relative;
+  overflow: hidden;
+  transition: height 300ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-component="terminal"] .terminal-body {
+    transition: none;
+  }
 }
 
 @media (max-width: 768px) {
