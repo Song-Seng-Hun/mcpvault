@@ -13,6 +13,7 @@ import { registerHomeRoute } from "./routes/home";
 import { registerHowItWorksRoute } from "./routes/how-it-works";
 import { registerInstallRoute } from "./routes/install";
 import { registerSeoRoutes, SITE_URL } from "./routes/seo";
+import { registerSkillRoute } from "./routes/skill";
 import { registerVideoRoutes } from "./routes/video";
 
 export interface AppOptions {
@@ -87,6 +88,9 @@ export function createApp(options: AppOptions = {}): Hono {
 
   // How It Works page (Phase 2, group 5).
   registerHowItWorksRoute(app, publicDir);
+
+  // Skill page (Phase 2, group 6).
+  registerSkillRoute(app, publicDir);
 
   // Plain CSS under /styles/*, rooted and traversal-safe, same shape as the
   // generic static handler below but scoped to src/styles (source == the
