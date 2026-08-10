@@ -17,6 +17,7 @@ import { registerHowItWorksRoute } from "./routes/how-it-works";
 import { registerInstallRoute } from "./routes/install";
 import { registerSeoRoutes, SITE_URL } from "./routes/seo";
 import { registerSkillRoute } from "./routes/skill";
+import { registerSubscribeRoute, type SubscribeRouteOptions } from "./routes/subscribe";
 import { registerUnsubscribeRoute } from "./routes/unsubscribe";
 import type { UnsubscribeRouteOptions } from "./routes/unsubscribe";
 import { registerVideoRoutes } from "./routes/video";
@@ -32,6 +33,8 @@ export interface AppOptions {
   siteUrl?: string;
   /** Overrides for `GET /api/unsubscribe`'s Resend client/env; used in tests. */
   unsubscribe?: UnsubscribeRouteOptions;
+  /** Overrides for `POST /api/subscribe`'s Resend client/env/welcome template; used in tests. */
+  subscribe?: SubscribeRouteOptions;
   /** Overrides for `GET /api/downloads.json`'s fetchImpl/timeouts/cache; used in tests. */
   downloads?: DownloadsRouteOptions;
 }
@@ -115,6 +118,10 @@ export function createApp(options: AppOptions = {}): Hono {
   // current production behavior exactly. Signed tokens are a documented
   // follow-up, not added here.
   registerUnsubscribeRoute(app, options.unsubscribe ?? {});
+
+  // POST /api/subscribe (Phase 4, ported ahead of schedule): Zod-validated
+  // body parsing, injectable Resend client, tracked idempotent welcome email.
+  registerSubscribeRoute(app, options.subscribe ?? {});
 
   // GET /api/downloads.json (Phase 4, ported ahead of schedule): Shields
   // endpoint badge JSON for the Hero and footer npm badges.
