@@ -4,10 +4,14 @@
  * Scope for this group (Phase 2, group 1 -- "shared shell"): markup, head
  * metadata, canonical/OG/structured-data, skip link, and the background
  * watermark. Deliberately NOT ported here (later phases):
- *  - Astro's `<ClientRouter />` / native cross-document View Transitions
- *    activation (`@view-transition { navigation: auto; }`) -- Phase 3 item 3.
  *  - The old vanilla theme-init/mobile-menu/scroll-animation `<script>` --
  *    Phase 3 replaces it with named Alpine.data() modules per the plan.
+ *
+ * Native cross-document View Transitions (`@view-transition { navigation:
+ * auto; }`, Phase 3 item 3) are NOT Astro's `<ClientRouter />` / SPA router --
+ * plain multi-page navigation stays, the browser just animates the swap.
+ * Declared once in `shared.css` (loaded on every page) rather than here,
+ * since it's a pure CSS at-rule with no markup/head tag of its own.
  *  - `.terminal-window` styles -- those belong to the Install page/group,
  *    not the shell, even though Layout.astro carried them globally.
  *

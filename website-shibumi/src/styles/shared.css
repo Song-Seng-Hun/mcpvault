@@ -32,6 +32,26 @@
   box-sizing: border-box;
 }
 
+/*
+ * Native cross-document View Transitions (Phase 3 item 3). Every page is a
+ * normal multi-page navigation (no SPA router); this at-rule just asks the
+ * browser to animate the swap between old/new documents automatically. No
+ * `::view-transition-*` pseudo-element overrides are added -- the browser's
+ * default crossfade is enough and keeps this from becoming a redesign.
+ *
+ * Reduced-motion fallback: nested under `@media not (prefers-reduced-motion:
+ * reduce)` so a user who asked for reduced motion never gets `@view-transition`
+ * declared at all, which is the documented way to opt a reduced-motion user
+ * out entirely (not just "instant" -- the browser falls back to its normal,
+ * transition-free navigation). Browsers without View Transitions support
+ * ignore the whole at-rule and navigate normally either way.
+ */
+@media not (prefers-reduced-motion: reduce) {
+  @view-transition {
+    navigation: auto;
+  }
+}
+
 html {
   background-color: var(--color-background);
   font-size: 16px;

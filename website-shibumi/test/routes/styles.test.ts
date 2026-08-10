@@ -59,4 +59,12 @@ describe("shared.css and home.css (shell-review carry-overs)", () => {
     const pageBlock = body.slice(body.indexOf('[data-page="home"] {'));
     expect(pageBlock).toContain("overflow-x: hidden;");
   });
+
+  test("shared.css opts into native cross-document View Transitions, gated behind a reduced-motion fallback", async () => {
+    const body = await (await realApp.request("/styles/shared.css")).text();
+    expect(body).toContain("@media not (prefers-reduced-motion: reduce)");
+    const mediaBlock = body.slice(body.indexOf("@media not (prefers-reduced-motion: reduce)"));
+    expect(mediaBlock).toContain("@view-transition");
+    expect(mediaBlock).toContain("navigation: auto;");
+  });
 });
