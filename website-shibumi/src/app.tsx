@@ -8,6 +8,7 @@ import { Hono } from "hono";
 import type { MiddlewareHandler } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 import { join, normalize, sep } from "node:path";
+import { registerDemoRoute } from "./routes/demo";
 import { registerFeaturesRoute } from "./routes/features";
 import { registerHomeRoute } from "./routes/home";
 import { registerHowItWorksRoute } from "./routes/how-it-works";
@@ -91,6 +92,9 @@ export function createApp(options: AppOptions = {}): Hono {
 
   // Skill page (Phase 2, group 6).
   registerSkillRoute(app, publicDir);
+
+  // Demo page shell (Phase 2, group 7); Alpine interactivity is Phase 3.
+  registerDemoRoute(app, publicDir);
 
   // Plain CSS under /styles/*, rooted and traversal-safe, same shape as the
   // generic static handler below but scoped to src/styles (source == the

@@ -301,3 +301,74 @@ export const CopyIcon: FC<IconProps> = ({ className, title }) => (
     />
   </svg>
 );
+
+/**
+ * Demo-page tab icons (Phase 2, group 7 -- "demo"), matching lucide-react's
+ * rendered output (v1.31.0). `PenSquareIcon` is the `PenSquare` alias of the
+ * `square-pen` icon (identical path data); `FilePenLineIcon`/`LibraryBigIcon`/
+ * `TagsIcon` need no alias.
+ */
+export const PenSquareIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z" />
+  </svg>
+);
+
+export const FilePenLineIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <path d="M14.364 13.634a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506l4.013-4.009a1 1 0 0 0-3.004-3.004z" />
+    <path d="M14.487 7.858A1 1 0 0 1 14 7V2" />
+    <path d="M20 19.645V20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l2.516 2.516" />
+    <path d="M8 18h1" />
+  </svg>
+);
+
+export const LibraryBigIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <rect width="8" height="18" x="3" y="3" rx="1" />
+    <path d="M7 3v18" />
+    <path d="M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z" />
+  </svg>
+);
+
+export const TagsIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <path d="M13.172 2a2 2 0 0 1 1.414.586l6.71 6.71a2.4 2.4 0 0 1 0 3.408l-4.592 4.592a2.4 2.4 0 0 1-3.408 0l-6.71-6.71A2 2 0 0 1 6 9.172V3a1 1 0 0 1 1-1z" />
+    <path d="M2 7v6.172a2 2 0 0 0 .586 1.414l6.71 6.71a2.4 2.4 0 0 0 3.191.193" />
+    <circle cx="10.5" cy="6.5" r=".5" fill="currentColor" />
+  </svg>
+);
+
+/**
+ * Demo-page detail-list and "Technical Details" heading icons. Neither was
+ * a `lucide-react` import in the Astro source -- both were already raw
+ * inline `<svg>` markup in `InteractiveDemo.tsx` -- so they are centralized
+ * here like `CopyIcon`, not matched against a lucide-react package name.
+ */
+export const InfoIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" {...iconA11yProps(title)}>
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+export const CheckCircleFilledIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} fill="currentColor" viewBox="0 0 20 20" {...iconA11yProps(title)}>
+    <path
+      fill-rule="evenodd"
+      clip-rule="evenodd"
+      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+    />
+  </svg>
+);
+
+/**
+ * Demo-page CTA icon ("Get Started Now" link, `demo-cta-link`). Not a
+ * `lucide-react` import in the Astro source -- already raw inline `<svg>`
+ * markup -- centralized here like `CopyIcon`.
+ */
+export const DownloadIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" {...iconA11yProps(title)}>
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+  </svg>
+);
