@@ -67,6 +67,9 @@ export function Footer() {
         <div class="footer-bottom">
           <p class="footer-copyright">© {year} bitbonsai. Released under the MIT License.</p>
           <p class="footer-credit">Made with ❤️ for the Obsidian community</p>
+          <p class="footer-credit">
+            Built with <a href="https://shibumi.site" target="_blank" rel="noopener noreferrer" class="footer-stack-link">Shibumi Stack</a>
+          </p>
         </div>
       </div>
     </footer>

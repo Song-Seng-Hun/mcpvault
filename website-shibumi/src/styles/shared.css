@@ -531,6 +531,16 @@ a {
   color: var(--color-muted-foreground);
 }
 
+[data-component="footer"] .footer-stack-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+[data-component="footer"] .footer-stack-link:hover {
+  color: var(--color-foreground);
+}
+
 @media (min-width: 768px) {
   [data-component="footer"] .footer-grid {
     grid-template-columns: repeat(4, 1fr);
