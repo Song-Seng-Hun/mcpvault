@@ -89,3 +89,112 @@ export const GitBranchIcon: FC<IconProps> = ({ className, title }) => (
     <circle cx="6" cy="18" r="3" />
   </svg>
 );
+
+/**
+ * ComparisonTable/FeatureGrid icons (Phase 2, group 3 -- "features"),
+ * matching lucide-react's rendered output (v1.31.0). `CheckCircle2Icon`,
+ * `AlertTriangleIcon`, `XCircleIcon`, and `FileCode2Icon` are lucide-react
+ * aliases (`check-circle-2` -> `circle-check`, `alert-triangle` ->
+ * `triangle-alert`, `x-circle` -> `circle-x`, `file-code-2` ->
+ * `file-code-corner`); the path data below is the aliased icon's, matching
+ * what lucide-react actually rendered.
+ */
+export const CheckCircle2Icon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="m9 12 2 2 4-4" />
+  </svg>
+);
+
+export const AlertTriangleIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+    <path d="M12 9v4" />
+    <path d="M12 17h.01" />
+  </svg>
+);
+
+export const XCircleIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="m15 9-6 6" />
+    <path d="m9 9 6 6" />
+  </svg>
+);
+
+export const SearchIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <path d="m21 21-4.34-4.34" />
+    <circle cx="11" cy="11" r="8" />
+  </svg>
+);
+
+export const ShieldIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+  </svg>
+);
+
+export const FileTextIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />
+    <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+    <path d="M10 9H8" />
+    <path d="M16 13H8" />
+    <path d="M16 17H8" />
+  </svg>
+);
+
+export const BadgeCheckIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z" />
+    <path d="m9 12 2 2 4-4" />
+  </svg>
+);
+
+export const CoinsIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <path d="M13.744 17.736a6 6 0 1 1-7.48-7.48" />
+    <path d="M15 6h1v4" />
+    <path d="m6.134 14.768.866-.5 2 3.464" />
+    <circle cx="16" cy="8" r="6" />
+  </svg>
+);
+
+export const FileCode2Icon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <path d="M4 12.15V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2h-3.35" />
+    <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+    <path d="m5 16-3 3 3 3" />
+    <path d="m9 22 3-3-3-3" />
+  </svg>
+);
+
+export const HeartIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5" />
+  </svg>
+);
+
+export const WrenchIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z" />
+  </svg>
+);
+
+export const GlobeIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+    <path d="M2 12h20" />
+  </svg>
+);
+
+export const FolderKanbanIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
+    <path d="M8 10v4" />
+    <path d="M12 10v2" />
+    <path d="M16 10v6" />
+  </svg>
+);

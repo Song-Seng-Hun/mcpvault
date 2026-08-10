@@ -8,6 +8,7 @@ import { Hono } from "hono";
 import type { MiddlewareHandler } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 import { join, normalize, sep } from "node:path";
+import { registerFeaturesRoute } from "./routes/features";
 import { registerHomeRoute } from "./routes/home";
 import { registerSeoRoutes, SITE_URL } from "./routes/seo";
 import { registerVideoRoutes } from "./routes/video";
@@ -63,6 +64,9 @@ export function createApp(options: AppOptions = {}): Hono {
   // Home page (Phase 2, group 2). Registered before generic static serving
   // so "/" resolves to the page, not a directory-index lookup.
   registerHomeRoute(app, publicDir);
+
+  // Features page (Phase 2, group 3).
+  registerFeaturesRoute(app, publicDir);
 
   // Plain CSS under /styles/*, rooted and traversal-safe, same shape as the
   // generic static handler below but scoped to src/styles (source == the
