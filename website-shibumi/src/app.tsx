@@ -10,6 +10,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { join, normalize, sep } from "node:path";
 import { registerClientRoute } from "./routes/client";
 import { registerDemoRoute } from "./routes/demo";
+import { registerDownloadsRoute, type DownloadsRouteOptions } from "./routes/downloads";
 import { registerFeaturesRoute } from "./routes/features";
 import { registerHomeRoute } from "./routes/home";
 import { registerHowItWorksRoute } from "./routes/how-it-works";
@@ -31,6 +32,8 @@ export interface AppOptions {
   siteUrl?: string;
   /** Overrides for `GET /api/unsubscribe`'s Resend client/env; used in tests. */
   unsubscribe?: UnsubscribeRouteOptions;
+  /** Overrides for `GET /api/downloads.json`'s fetchImpl/timeouts/cache; used in tests. */
+  downloads?: DownloadsRouteOptions;
 }
 
 const STATIC_CACHE_CONTROL = "public, max-age=3600";
@@ -112,6 +115,10 @@ export function createApp(options: AppOptions = {}): Hono {
   // current production behavior exactly. Signed tokens are a documented
   // follow-up, not added here.
   registerUnsubscribeRoute(app, options.unsubscribe ?? {});
+
+  // GET /api/downloads.json (Phase 4, ported ahead of schedule): Shields
+  // endpoint badge JSON for the Hero and footer npm badges.
+  registerDownloadsRoute(app, options.downloads ?? {});
 
   // Plain CSS under /styles/*, rooted and traversal-safe, same shape as the
   // generic static handler below but scoped to src/styles (source == the
