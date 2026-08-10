@@ -2,7 +2,7 @@
 # Built for rootless Podman; runs as the non-root `bun` user.
 #
 # BUILD CONTEXT IS THE REPO ROOT, not this directory:
-#   podman build -f website-shibumi/Containerfile -t mcpvault-site .
+#   podman build -f website-shibumi/Containerfile -t mcpvault-web .
 # The root package.json must be copied to /package.json because
 # src/lib/version.ts reads the published MCP package version from three
 # directories above /app/src/lib at startup (nav badge + structured data);

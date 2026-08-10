@@ -1,4 +1,4 @@
-name: Website Shibumi
+name: mcpvault-web
 
 # Dedicated CI for the parallel Shibumi-stack website skeleton.
 # Deliberately separate from the existing website deployment; this workflow
