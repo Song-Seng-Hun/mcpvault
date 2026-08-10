@@ -11,6 +11,11 @@
  *  - `.terminal-window` styles -- those belong to the Install page/group,
  *    not the shell, even though Layout.astro carried them globally.
  *
+ * `clientScript` (added Phase 3 step 1) is opt-in per page rather than a
+ * shell-wide `<script>`: only the Demo page has an Alpine module to load so
+ * far, and every other page should keep shipping zero client JS until its
+ * own Phase 3 step lands.
+ *
  * Raw-HTML audit: the only non-escaped output below is the JSON-LD
  * `<script>` body. Hono's JSX renderer HTML-escapes every string child
  * (there is no special case for `<script>`/`<style>` tags), so a plain
@@ -44,6 +49,8 @@ export interface LayoutProps {
   page?: string;
   /** Extra stylesheet for this route, e.g. "/styles/home.css". */
   pageStylesheet?: string;
+  /** Bundled Alpine client script for this route, e.g. "/client/alpine.js". Omitted on pages with no client-side interactivity yet. */
+  clientScript?: string;
   version?: string;
   children?: unknown;
 }
@@ -78,7 +85,7 @@ function structuredData(version: string) {
   };
 }
 
-export function Layout({ title = DEFAULT_TITLE, description = DEFAULT_DESCRIPTION, image = DEFAULT_IMAGE, canonical = SITE_URL, page, pageStylesheet, version = packageVersion, children }: LayoutProps) {
+export function Layout({ title = DEFAULT_TITLE, description = DEFAULT_DESCRIPTION, image = DEFAULT_IMAGE, canonical = SITE_URL, page, pageStylesheet, clientScript, version = packageVersion, children }: LayoutProps) {
   const fullTitle = title.includes("MCPVault") ? title : `${title} | MCPVault`;
   const jsonLd = JSON.stringify(structuredData(version)).replace(/</g, "\\u003c");
 
@@ -156,6 +163,8 @@ export function Layout({ title = DEFAULT_TITLE, description = DEFAULT_DESCRIPTIO
         <BackgroundWatermark />
 
         <div data-component="app-shell">{children}</div>
+
+        {clientScript ? <script type="module" src={clientScript}></script> : null}
 
         <script defer src="https://cdn.counter.dev/script.js" data-id="56795b69-4872-4bfc-a640-4c0a9de06db8" data-utcoffset="1"></script>
       </body>

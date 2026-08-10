@@ -8,6 +8,7 @@ import { Hono } from "hono";
 import type { MiddlewareHandler } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 import { join, normalize, sep } from "node:path";
+import { registerClientRoute } from "./routes/client";
 import { registerDemoRoute } from "./routes/demo";
 import { registerFeaturesRoute } from "./routes/features";
 import { registerHomeRoute } from "./routes/home";
@@ -22,6 +23,8 @@ export interface AppOptions {
   publicDir?: string;
   /** Directory served for plain CSS under /styles/*. Defaults to ./styles. */
   stylesDir?: string;
+  /** Directory holding client TS entry points bundled for the browser. Defaults to ./client. */
+  clientDir?: string;
   /** Base URL used to build sitemap.xml/robots.txt. Defaults to production. */
   siteUrl?: string;
 }
@@ -45,6 +48,7 @@ function requestLogger(): MiddlewareHandler {
 export function createApp(options: AppOptions = {}): Hono {
   const publicDir = options.publicDir ?? join(import.meta.dir, "..", "public");
   const stylesDir = options.stylesDir ?? join(import.meta.dir, "styles");
+  const clientDir = options.clientDir ?? join(import.meta.dir, "client");
   const siteUrl = options.siteUrl ?? SITE_URL;
   const app = new Hono();
 
@@ -93,8 +97,12 @@ export function createApp(options: AppOptions = {}): Hono {
   // Skill page (Phase 2, group 6).
   registerSkillRoute(app, publicDir);
 
-  // Demo page shell (Phase 2, group 7); Alpine interactivity is Phase 3.
+  // Demo page shell (Phase 2, group 7) plus its Alpine interactivity
+  // (Phase 3 step 1: InteractiveDemo/ResponseRenderer).
   registerDemoRoute(app, publicDir);
+
+  // Bundled Alpine client script for the demo page's interactivity.
+  registerClientRoute(app, clientDir);
 
   // Plain CSS under /styles/*, rooted and traversal-safe, same shape as the
   // generic static handler below but scoped to src/styles (source == the

@@ -111,6 +111,63 @@ describe("GET /demo/ (HTML)", () => {
   });
 });
 
+describe("GET /demo/ (Alpine interactivity, Phase 3 step 1)", () => {
+  test("loads the bundled Alpine client script", async () => {
+    const body = await (await app.request("/demo/")).text();
+    expect(body).toContain('<script type="module" src="/client/alpine.js">');
+  });
+
+  test("names the interactiveDemo module on the section root", async () => {
+    const body = await (await app.request("/demo/")).text();
+    expect(body).toContain('x-data="interactiveDemo"');
+  });
+
+  // Hono's JSX renderer HTML-escapes attribute values, so a literal `'`
+  // becomes `&#39;` in the served markup; browsers decode entities in
+  // attribute text before Alpine's CSP evaluator ever sees the string, so
+  // `selectTab(&#39;write&#39;)` and `selectTab('write')` are the same
+  // expression as far as Alpine is concerned.
+  function q(id: string): string {
+    return `&#39;${id}&#39;`;
+  }
+
+  test("every tab button names selectTab and binds its own active class", async () => {
+    const body = await (await app.request("/demo/")).text();
+    for (const id of ["patch", "write", "read_multiple", "frontmatter", "search"]) {
+      expect(body).toContain(`x-on:click="selectTab(${q(id)})"`);
+      expect(body).toContain(`x-bind:class="{ active: activeTab === ${q(id)} }"`);
+    }
+  });
+
+  // Every visibility toggle below binds a class (`x-bind:class`), not
+  // `x-show`: `x-show="true"` clears an inline style override rather than
+  // forcing one, so it can't out-rank a static `.hidden` class already on
+  // the element (this app's no-JS fallback). Class toggling adds/removes
+  // that exact class in both directions -- see ResponseRenderer.tsx and
+  // InteractiveDemo.tsx's Alpine section for the full explanation, and how
+  // this was caught (a real browser, not just the CSP parser's grammar).
+  test("every panel shows only when its tab is active", async () => {
+    const body = await (await app.request("/demo/")).text();
+    for (const id of ["patch", "write", "read_multiple", "frontmatter", "search"]) {
+      expect(body).toContain(`x-bind:class="{ hidden: activeTab !== ${q(id)} }"`);
+    }
+  });
+
+  test("the typing indicator is hidden without JavaScript and toggles on isTyping", async () => {
+    const body = await (await app.request("/demo/")).text();
+    expect(body).toContain("AI is thinking");
+    expect(body).toContain('class="demo-typing hidden" x-bind:class="{ hidden: !isTyping }"');
+  });
+
+  test("every panel's response and technical details hide while typing", async () => {
+    const body = await (await app.request("/demo/")).text();
+    const detailsMatches = body.match(/class="demo-details" x-bind:class="\{ hidden: isTyping \}"/g) ?? [];
+    const responseMatches = body.match(/class="demo-response" x-bind:class="\{ hidden: isTyping \}"/g) ?? [];
+    expect(detailsMatches.length).toBe(5);
+    expect(responseMatches.length).toBe(5);
+  });
+});
+
 describe("GET /demo/ (Markdown negotiation)", () => {
   test("Accept: text/markdown without text/html serves the Markdown counterpart", async () => {
     const res = await app.request("/demo/", { headers: { accept: "text/markdown" } });

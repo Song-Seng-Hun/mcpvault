@@ -2,26 +2,45 @@
  * Demo-page interactive example browser. Ported from `InteractiveDemo.tsx`
  * (React, `client:visible` in demo.astro).
  *
- * Scope for this group (Phase 2, group 7 -- "demo shell and response
- * examples, leaving interactivity for Phase 3"): markup, scoped CSS, and
- * the Markdown counterpart (`public/demo.md`, already ported). Deliberately
- * NOT ported here (Phase 3, per the plan's Alpine section -- "interactive
- * demo and response rendering"):
- *  - tab click handling that swaps the active example
- *  - the "AI is thinking..." typing-delay state
- * Every tab/panel keeps its `data-tab`/`data-content` attribute so Phase 3
- * can hook an `Alpine.data()` module onto this exact markup, same
- * convention as `Terminal.tsx`'s `config-tab`/`config-content`. Only the
- * first example ("patch") is visible by default (`.demo-panel.hidden` on
- * the rest) -- the Astro source's initial `useState(examples[0].id)`.
+ * Markup, scoped CSS, and the Markdown counterpart (`public/demo.md`) were
+ * ported in Phase 2, group 7, deliberately leaving interactivity for Phase
+ * 3: tab click handling that swaps the active example, and the "AI is
+ * thinking..." typing-delay state. This is that Phase 3 step.
+ *
+ * Every tab/panel keeps its `data-tab`/`data-content` attribute (same
+ * convention as `Terminal.tsx`'s `config-tab`/`config-content`) alongside
+ * the new Alpine wiring:
+ *  - the root `<section>` carries `x-data="interactiveDemo"`, naming the
+ *    Alpine.data() module in `../client/interactive-demo.ts`.
+ *  - each tab button adds `x-on:click="selectTab('<id>')"` and
+ *    `x-bind:class="{ active: activeTab === '<id>' }"`.
+ *  - each panel adds `x-bind:class="{ hidden: activeTab !== '<id>' }"`.
+ *  - the AI bubble adds a typing-indicator block
+ *    (`x-bind:class="{ hidden: !isTyping }"`, hidden by default via the
+ *    same static `.hidden` convention as the panels, since a no-JS visitor
+ *    can never trigger it) and passes `hiddenWhen="isTyping"` to
+ *    `ResponseRenderer` so the two states never show at once.
+ *  - the Technical Details block adds `x-bind:class="{ hidden: isTyping }"`.
+ * Every one of those toggles a plain class list (`x-bind:class`), not
+ * `x-show`: `x-show="true"` clears an inline style override rather than
+ * forcing one, so on an element that also carries the static `.hidden`
+ * class (the no-JS fallback), the class alone kept winning and the element
+ * never visually reappeared even once Alpine's state was correct --
+ * confirmed against a real browser (`agent-browser`), not just the CSP
+ * parser's grammar. Class toggling doesn't have that failure mode: Alpine
+ * adds/removes the exact same `hidden` class in both directions.
+ *
+ * Every attribute value above is grammar the `@alpinejs/csp` build's
+ * restricted evaluator accepts (bare identifiers, `===`/`!==`/`!`,
+ * string-literal call arguments, object literals) -- see
+ * `interactive-demo.ts` for the actual `selectTab` logic, which lives in a
+ * plain function, not an inline expression. Only the first example
+ * ("patch") is visible by default (`.demo-panel.hidden` on the rest) --
+ * the Astro source's initial `useState(examples[0].id)`.
  *
  * `lucide-react`'s `PenSquare`, `FilePenLine`, `LibraryBig`, `Search`,
  * `Tags` are replaced with the audited inline SVG helpers in `icons.tsx`
  * (`SearchIcon` already existed from the features group).
- *
- * The "AI is thinking..." bouncing-dots state and its markup are Phase 3
- * scope (pure client-side transient state with no server-rendered
- * equivalent), so they are dropped here rather than ported inert.
  */
 import { CheckCircleFilledIcon, DownloadIcon, FilePenLineIcon, InfoIcon, LibraryBigIcon, PenSquareIcon, SearchIcon, TagsIcon, type IconProps } from "./icons";
 import { ResponseRenderer } from "./ResponseRenderer";
@@ -229,7 +248,7 @@ Done. Found 2 notes with 11 total matches across your vault.`,
 export async function InteractiveDemo() {
   const panels = await Promise.all(
     EXAMPLES.map(async (example, index) => (
-      <div class={`demo-panel${index === 0 ? "" : " hidden"}`} data-content={example.id}>
+      <div class={`demo-panel${index === 0 ? "" : " hidden"}`} data-content={example.id} x-bind:class={`{ hidden: activeTab !== '${example.id}' }`}>
         <div class="demo-messages">
           <div class="demo-message demo-message--user">
             <div class="demo-avatar demo-avatar--user">You</div>
@@ -241,12 +260,20 @@ export async function InteractiveDemo() {
           <div class="demo-message demo-message--ai">
             <div class="demo-avatar demo-avatar--ai">AI</div>
             <div class="demo-bubble demo-bubble--ai">
-              <ResponseRenderer response={example.response} />
+              <div class="demo-typing hidden" x-bind:class="{ hidden: !isTyping }">
+                <div class="demo-typing-dots">
+                  <span class="demo-typing-dot" />
+                  <span class="demo-typing-dot" style="animation-delay: 0.1s" />
+                  <span class="demo-typing-dot" style="animation-delay: 0.2s" />
+                </div>
+                <span>AI is thinking...</span>
+              </div>
+              <ResponseRenderer response={example.response} hiddenWhen="isTyping" />
             </div>
           </div>
         </div>
 
-        <div class="demo-details">
+        <div class="demo-details" x-bind:class="{ hidden: isTyping }">
           <h3 class="demo-details-title">
             <InfoIcon className="demo-details-icon" />
             Technical Details
@@ -265,7 +292,7 @@ export async function InteractiveDemo() {
   );
 
   return (
-    <section data-component="interactive-demo" aria-labelledby="demo-heading">
+    <section data-component="interactive-demo" aria-labelledby="demo-heading" x-data="interactiveDemo">
       <div class="demo-inner">
         <div class="demo-header fade-in-on-scroll">
           <h2 id="demo-heading" class="demo-title">
@@ -276,7 +303,13 @@ export async function InteractiveDemo() {
 
         <div class="demo-tabs fade-in-on-scroll">
           {EXAMPLES.map((example, index) => (
-            <button class={`demo-tab${index === 0 ? " active" : ""}`} data-tab={example.id} aria-label={`Show ${example.title} demo`}>
+            <button
+              class={`demo-tab${index === 0 ? " active" : ""}`}
+              data-tab={example.id}
+              aria-label={`Show ${example.title} demo`}
+              x-on:click={`selectTab('${example.id}')`}
+              x-bind:class={`{ active: activeTab === '${example.id}' }`}
+            >
               <example.icon className="icon" />
               <span class="demo-tab-label">{example.title}</span>
             </button>

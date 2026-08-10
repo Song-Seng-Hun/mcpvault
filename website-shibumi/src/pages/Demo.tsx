@@ -7,6 +7,10 @@
  * JSX renderer awaits async components wherever they appear in the tree, so
  * this component itself stays a plain synchronous function, same precedent
  * as `FeaturesPage`/`FeatureGrid`.
+ *
+ * `clientScript="/client/alpine.js"` (Phase 3 step 1) loads the bundled
+ * `@alpinejs/csp` build plus the `interactiveDemo` module that
+ * `InteractiveDemo.tsx`'s tab buttons/panels name.
  */
 import { Footer } from "../components/Footer";
 import { InteractiveDemo } from "../components/InteractiveDemo";
@@ -26,6 +30,7 @@ export function DemoPage({ currentPath, version }: DemoPageProps) {
       canonical="https://mcpvault.org/demo"
       page="demo"
       pageStylesheet="/styles/demo.css"
+      clientScript="/client/alpine.js"
       version={version}
     >
       <Nav currentPath={currentPath} version={version} />

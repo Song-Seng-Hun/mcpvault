@@ -12,7 +12,10 @@
  * (`InteractiveDemo.tsx`), and only the first (`.demo-panel.hidden` on the
  * rest) is visible without JavaScript -- same `.hidden` convention as
  * `install.css`'s `.config-content.hidden`. Tab-switching and the
- * "AI is thinking..." typing-delay state are Phase 3 (Alpine) scope.
+ * "AI is thinking..." typing-delay state (Phase 3, Alpine) now toggle that
+ * same class reactively via `x-show`; `.demo-typing` (the bouncing-dots
+ * indicator) uses the identical no-JS-safe `.hidden` convention, since a
+ * visitor without JS can never trigger `isTyping` in the first place.
  *
  * The Astro source's `gradient-text` class on the heading is dropped here,
  * same precedent as FeatureGrid/FAQ/ComparisonTable/HowItWorks/SkillsContent.
@@ -294,6 +297,41 @@
 }
 
 /* ---------------------------------------------------------------------- */
+/* Typing indicator (Alpine `isTyping` state, Phase 3)                    */
+/* ---------------------------------------------------------------------- */
+
+[data-component="interactive-demo"] .demo-typing {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-muted-foreground);
+}
+
+[data-component="interactive-demo"] .demo-typing-dots {
+  display: flex;
+  gap: 0.25rem;
+}
+
+[data-component="interactive-demo"] .demo-typing-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: var(--color-accent-2);
+  animation: demo-typing-bounce 1.4s infinite;
+}
+
+@keyframes demo-typing-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-0.25rem);
+  }
+}
+
+/* ---------------------------------------------------------------------- */
 /* Response rendering (ResponseRenderer.tsx)                              */
 /* ---------------------------------------------------------------------- */
 
@@ -446,6 +484,10 @@
   }
 
   [data-component="interactive-demo"] .demo-window-status-dot {
+    animation: none;
+  }
+
+  [data-component="interactive-demo"] .demo-typing-dot {
     animation: none;
   }
 }

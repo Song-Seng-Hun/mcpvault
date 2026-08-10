@@ -9,6 +9,7 @@
     "typecheck": "bunx tsc --noEmit"
   },
   "dependencies": {
+    "@alpinejs/csp": "^3.15.12",
     "hono": "^4.9.0",
     "shiki": "^4.4.3"
   },
