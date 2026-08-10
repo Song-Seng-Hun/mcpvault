@@ -11,6 +11,16 @@
  * "standard" tab is visible by default (`.config-content.hidden` on the
  * rest), matching the Astro source's initial server-rendered state.
  *
+ * Simplification pass (maintainer decision 2026-08-10, recorded in
+ * `.plans/shibumi-website-migration.md` "Approved deviations"): this
+ * terminal is demo-purpose only, so the markup that repeated near-verbatim
+ * across tabs/rows -- the tab buttons, "Usage Examples" tip cards, the
+ * "Configuration Scopes" pill lists, the config-file-location entries, the
+ * inspector command rows, the success badges, and the privacy checklist --
+ * is hoisted into plain typed data arrays below and rendered through one
+ * small helper/`.map()` each, instead of being copy-pasted per tab. Visual
+ * result stays close to the original but is not held to pixel parity.
+ *
  * `lucide-react`'s `Check`, `ChevronDown`, `Compass`, `Globe`, `Lightbulb`,
  * `Lock`, `Pencil`, `Search`, `X`, `Zap`, `FolderOpen`, `Layers` are
  * replaced with the audited inline SVG helpers in `icons.tsx` (`GlobeIcon`
@@ -53,8 +63,10 @@ import {
   SearchIcon,
   XIcon,
   ZapIcon,
+  type IconProps,
 } from "./icons";
 import { highlightCode } from "../lib/highlight";
+import type { FC } from "hono/jsx";
 
 const STANDARD_CONFIG_JSON = `{
   "mcpServers": {
@@ -99,6 +111,155 @@ const CODEX_TOML_HTML = `<span style="color: #cba6f7;">[mcp_servers.obsidian]</s
 <span style="color: #89b4fa;">command</span> <span style="color: #94e2d5;">=</span> <span style="color: #a6e3a1;">"npx"</span>
 <span style="color: #89b4fa;">args</span> <span style="color: #94e2d5;">=</span> <span style="color: #cdd6f4;">[</span><span style="color: #a6e3a1;">"-y"</span><span style="color: #cdd6f4;">,</span> <span style="color: #a6e3a1;">"@bitbonsai/mcpvault@latest"</span><span style="color: #cdd6f4;">,</span> <span style="color: #a6e3a1;">"/path/to/your/vault"</span><span style="color: #cdd6f4;">]</span>`;
 
+interface ConfigTab {
+  id: string;
+  label: string;
+}
+
+const CONFIG_TABS: ConfigTab[] = [
+  { id: "standard", label: "Claude Desktop / ChatGPT+" },
+  { id: "claude-code", label: "Claude Code" },
+  { id: "gemini-cli", label: "Gemini CLI" },
+  { id: "opencode", label: "OpenCode" },
+  { id: "codex", label: "OpenAI Codex" },
+];
+
+interface UsageExamplesData {
+  intro: string;
+  examples: string[];
+}
+
+/** Repeats near-identically across the claude-code, opencode, gemini-cli, and codex tabs. */
+function UsageExamplesCard({ intro, examples }: UsageExamplesData) {
+  return (
+    <div class="info-card info-card--tip">
+      <div class="info-card-row">
+        <LightbulbIcon className="info-card-icon" />
+        <div class="info-card-body">
+          <p class="info-card-title">Usage Examples</p>
+          <p class="info-card-text">{intro}</p>
+          <div class="usage-examples">
+            {examples.map((example) => (
+              <code class="code-chip code-chip--example">{example}</code>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface ScopeListData {
+  intro: string;
+  items: Array<{ pill: string; desc: string }>;
+}
+
+/** Repeats across the claude-code and opencode tabs (pill + description rows). */
+function ScopeListCard({ intro, items }: ScopeListData) {
+  return (
+    <div class="info-card info-card--tip">
+      <div class="info-card-row">
+        <LightbulbIcon className="info-card-icon" />
+        <div class="info-card-body">
+          <p class="info-card-title">Configuration Scopes</p>
+          <p class="info-card-text">{intro}</p>
+          <div class="info-card-list">
+            {items.map((item) => (
+              <div class="info-card-list-row">
+                <code class="code-chip code-chip--pill">{item.pill}</code>
+                <span class="info-card-list-desc">{item.desc}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface ConfigLocation {
+  heading: string;
+  rows: Array<{ label: string; value: string }>;
+  hint?: { prefix: string; code: string; suffix: string };
+}
+
+const CONFIG_LOCATIONS: ConfigLocation[] = [
+  {
+    heading: "Claude Desktop (JSON)",
+    rows: [
+      { label: "macOS", value: "~/Library/Application Support/Claude/claude_desktop_config.json" },
+      { label: "Windows", value: "%APPDATA%\\Claude\\claude_desktop_config.json" },
+    ],
+  },
+  {
+    heading: "Claude Code (CLI)",
+    rows: [{ label: "User scope", value: "~/.claude.json" }],
+    hint: { prefix: "Use", code: "claude mcp add-json --scope user", suffix: "for global access" },
+  },
+  {
+    heading: "ChatGPT+ Desktop (JSON)",
+    rows: [
+      { label: "macOS", value: "~/Library/Application Support/ChatGPT/chatgpt_config.json" },
+      { label: "Windows", value: "%APPDATA%\\ChatGPT\\chatgpt_config.json" },
+    ],
+  },
+  {
+    heading: "Gemini CLI (JSON)",
+    rows: [{ label: "All platforms", value: "~/.gemini/settings.json" }],
+  },
+  {
+    heading: "OpenCode (JSON)",
+    rows: [
+      { label: "Per project", value: "opencode.json" },
+      { label: "Global", value: "~/.config/opencode/opencode.json" },
+    ],
+  },
+  {
+    heading: "OpenAI Codex (TOML)",
+    rows: [
+      { label: "macOS/Linux", value: "~/.codex/config.toml" },
+      { label: "Windows", value: "%USERPROFILE%\\.codex\\config.toml" },
+    ],
+  },
+];
+
+interface InspectorCommand {
+  comment: string;
+  command: string;
+  copy: string;
+  ariaLabel: string;
+}
+
+const INSPECTOR_COMMANDS: InspectorCommand[] = [
+  { comment: "# Install MCP Inspector globally", command: INSPECTOR_INSTALL_COPY, copy: INSPECTOR_INSTALL_COPY, ariaLabel: "Copy npm install command to clipboard" },
+  { comment: "# Test MCPVault server", command: INSPECTOR_TEST_COPY, copy: INSPECTOR_TEST_COPY, ariaLabel: "Copy test command to clipboard" },
+];
+
+interface SuccessBadge {
+  icon: FC<IconProps>;
+  label: string;
+}
+
+const SUCCESS_BADGES: SuccessBadge[] = [
+  { icon: SearchIcon, label: "Search notes" },
+  { icon: PencilIcon, label: "Edit content" },
+  { icon: FolderOpenIcon, label: "Organize files" },
+  { icon: LayersIcon, label: "Batch operations" },
+];
+
+interface PrivacyItem {
+  icon: FC<IconProps>;
+  variant: "success" | "error";
+  text: string;
+}
+
+const PRIVACY_ITEMS: PrivacyItem[] = [
+  { icon: CheckIcon, variant: "success", text: "Your vault files stay on your computer" },
+  { icon: CheckIcon, variant: "success", text: "We never see, store, or transmit your data" },
+  { icon: CheckIcon, variant: "success", text: "Only you and your AI assistant can access your notes" },
+  { icon: XIcon, variant: "error", text: "AI providers (Anthropic, OpenAI) process content you share with them" },
+];
+
 export async function Terminal() {
   const [standardHtml, opencodeHtml, geminiHtml] = await Promise.all([
     highlightCode(STANDARD_CONFIG_JSON, "json"),
@@ -133,21 +294,11 @@ export async function Terminal() {
               </div>
               <div class="terminal-body">
                 <div class="config-tabs">
-                  <button class="config-tab active" data-tab="standard">
-                    Claude Desktop / ChatGPT+
-                  </button>
-                  <button class="config-tab" data-tab="claude-code">
-                    Claude Code
-                  </button>
-                  <button class="config-tab" data-tab="gemini-cli">
-                    Gemini CLI
-                  </button>
-                  <button class="config-tab" data-tab="opencode">
-                    OpenCode
-                  </button>
-                  <button class="config-tab" data-tab="codex">
-                    OpenAI Codex
-                  </button>
+                  {CONFIG_TABS.map((tab) => (
+                    <button class={`config-tab${tab.id === "standard" ? " active" : ""}`} data-tab={tab.id}>
+                      {tab.label}
+                    </button>
+                  ))}
                 </div>
 
                 {/* Standard config (Claude Desktop / ChatGPT+) */}
@@ -177,44 +328,19 @@ export async function Terminal() {
                     </div>
                   </div>
 
-                  <div class="info-card info-card--tip">
-                    <div class="info-card-row">
-                      <LightbulbIcon className="info-card-icon" />
-                      <div class="info-card-body">
-                        <p class="info-card-title">Configuration Scopes</p>
-                        <p class="info-card-text">Claude Code supports three configuration scopes:</p>
-                        <div class="info-card-list">
-                          <div class="info-card-list-row">
-                            <code class="code-chip code-chip--pill">--scope user</code>
-                            <span class="info-card-list-desc">Available across all your projects (recommended)</span>
-                          </div>
-                          <div class="info-card-list-row">
-                            <code class="code-chip code-chip--pill">--scope project</code>
-                            <span class="info-card-list-desc">Team-shared via .mcp.json file</span>
-                          </div>
-                          <div class="info-card-list-row">
-                            <code class="code-chip code-chip--pill">--scope local</code>
-                            <span class="info-card-list-desc">Current project only (private)</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <ScopeListCard
+                    intro="Claude Code supports three configuration scopes:"
+                    items={[
+                      { pill: "--scope user", desc: "Available across all your projects (recommended)" },
+                      { pill: "--scope project", desc: "Team-shared via .mcp.json file" },
+                      { pill: "--scope local", desc: "Current project only (private)" },
+                    ]}
+                  />
 
-                  <div class="info-card info-card--tip">
-                    <div class="info-card-row">
-                      <LightbulbIcon className="info-card-icon" />
-                      <div class="info-card-body">
-                        <p class="info-card-title">Usage Examples</p>
-                        <p class="info-card-text">After configuration, Claude Code can access your vault:</p>
-                        <div class="usage-examples">
-                          <code class="code-chip code-chip--example">Read my meeting notes from yesterday</code>
-                          <code class="code-chip code-chip--example">Search my vault for notes about machine learning</code>
-                          <code class="code-chip code-chip--example">Create a new note summarizing our discussion</code>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <UsageExamplesCard
+                    intro="After configuration, Claude Code can access your vault:"
+                    examples={["Read my meeting notes from yesterday", "Search my vault for notes about machine learning", "Create a new note summarizing our discussion"]}
+                  />
                 </div>
 
                 {/* OpenCode config */}
@@ -244,40 +370,18 @@ export async function Terminal() {
                     <span>Copy code</span>
                   </button>
 
-                  <div class="info-card info-card--tip">
-                    <div class="info-card-row">
-                      <LightbulbIcon className="info-card-icon" />
-                      <div class="info-card-body">
-                        <p class="info-card-title">Configuration Scopes</p>
-                        <p class="info-card-text">OpenCode supports multiple config locations:</p>
-                        <div class="info-card-list">
-                          <div class="info-card-list-row">
-                            <code class="code-chip code-chip--pill">opencode.json</code>
-                            <span class="info-card-list-desc">In your project root for per-project config (recommended)</span>
-                          </div>
-                          <div class="info-card-list-row">
-                            <code class="code-chip code-chip--pill">~/.config/opencode/opencode.json</code>
-                            <span class="info-card-list-desc">Global config for all projects</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <ScopeListCard
+                    intro="OpenCode supports multiple config locations:"
+                    items={[
+                      { pill: "opencode.json", desc: "In your project root for per-project config (recommended)" },
+                      { pill: "~/.config/opencode/opencode.json", desc: "Global config for all projects" },
+                    ]}
+                  />
 
-                  <div class="info-card info-card--tip">
-                    <div class="info-card-row">
-                      <LightbulbIcon className="info-card-icon" />
-                      <div class="info-card-body">
-                        <p class="info-card-title">Usage Examples</p>
-                        <p class="info-card-text">After configuration, OpenCode can access your vault:</p>
-                        <div class="usage-examples">
-                          <code class="code-chip code-chip--example">Read my meeting notes from yesterday</code>
-                          <code class="code-chip code-chip--example">Search my vault for notes about machine learning</code>
-                          <code class="code-chip code-chip--example">Create a new note summarizing our discussion</code>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <UsageExamplesCard
+                    intro="After configuration, OpenCode can access your vault:"
+                    examples={["Read my meeting notes from yesterday", "Search my vault for notes about machine learning", "Create a new note summarizing our discussion"]}
+                  />
                 </div>
 
                 {/* Gemini CLI config */}
@@ -305,20 +409,10 @@ export async function Terminal() {
                     <span>Copy code</span>
                   </button>
 
-                  <div class="info-card info-card--tip">
-                    <div class="info-card-row">
-                      <LightbulbIcon className="info-card-icon" />
-                      <div class="info-card-body">
-                        <p class="info-card-title">Usage Examples</p>
-                        <p class="info-card-text">After configuration, use commands like:</p>
-                        <div class="usage-examples">
-                          <code class="code-chip code-chip--example">Read my daily note from yesterday</code>
-                          <code class="code-chip code-chip--example">Search my vault for meeting notes</code>
-                          <code class="code-chip code-chip--example">Create a new note about project ideas</code>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <UsageExamplesCard
+                    intro="After configuration, use commands like:"
+                    examples={["Read my daily note from yesterday", "Search my vault for meeting notes", "Create a new note about project ideas"]}
+                  />
                 </div>
 
                 {/* OpenAI Codex config (TOML) */}
@@ -331,20 +425,10 @@ export async function Terminal() {
                     <span>Copy code</span>
                   </button>
 
-                  <div class="info-card info-card--tip">
-                    <div class="info-card-row">
-                      <LightbulbIcon className="info-card-icon" />
-                      <div class="info-card-body">
-                        <p class="info-card-title">Usage Examples</p>
-                        <p class="info-card-text">After configuration, interact with your vault naturally:</p>
-                        <div class="usage-examples">
-                          <code class="code-chip code-chip--example">Show me my recent journal entries</code>
-                          <code class="code-chip code-chip--example">Find notes tagged with #project</code>
-                          <code class="code-chip code-chip--example">Update my todo list with new tasks</code>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <UsageExamplesCard
+                    intro="After configuration, interact with your vault naturally:"
+                    examples={["Show me my recent journal entries", "Find notes tagged with #project", "Update my todo list with new tasks"]}
+                  />
                 </div>
               </div>
             </div>
@@ -407,69 +491,23 @@ export async function Terminal() {
                 </summary>
 
                 <div class="collapsible-content config-locations">
-                  <div>
-                    <div class="config-locations-heading">Claude Desktop (JSON)</div>
-                    <div class="config-locations-body">
-                      <div>
-                        macOS: <code class="code-chip code-chip--pill-inline">~/Library/Application Support/Claude/claude_desktop_config.json</code>
-                      </div>
-                      <div>
-                        Windows: <code class="code-chip code-chip--pill-inline">%APPDATA%\Claude\claude_desktop_config.json</code>
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <div class="config-locations-heading">Claude Code (CLI)</div>
-                    <div class="config-locations-body">
-                      <div>
-                        User scope: <code class="code-chip code-chip--pill-inline">~/.claude.json</code>
-                      </div>
-                      <div class="config-locations-hint">
-                        Use <code class="code-chip code-chip--pill-inline">claude mcp add-json --scope user</code> for global access
+                  {CONFIG_LOCATIONS.map((loc) => (
+                    <div>
+                      <div class="config-locations-heading">{loc.heading}</div>
+                      <div class="config-locations-body">
+                        {loc.rows.map((row) => (
+                          <div>
+                            {row.label}: <code class="code-chip code-chip--pill-inline">{row.value}</code>
+                          </div>
+                        ))}
+                        {loc.hint && (
+                          <div class="config-locations-hint">
+                            {loc.hint.prefix} <code class="code-chip code-chip--pill-inline">{loc.hint.code}</code> {loc.hint.suffix}
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </div>
-                  <div>
-                    <div class="config-locations-heading">ChatGPT+ Desktop (JSON)</div>
-                    <div class="config-locations-body">
-                      <div>
-                        macOS: <code class="code-chip code-chip--pill-inline">~/Library/Application Support/ChatGPT/chatgpt_config.json</code>
-                      </div>
-                      <div>
-                        Windows: <code class="code-chip code-chip--pill-inline">%APPDATA%\ChatGPT\chatgpt_config.json</code>
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <div class="config-locations-heading">Gemini CLI (JSON)</div>
-                    <div class="config-locations-body">
-                      <div>
-                        All platforms: <code class="code-chip code-chip--pill-inline">~/.gemini/settings.json</code>
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <div class="config-locations-heading">OpenCode (JSON)</div>
-                    <div class="config-locations-body">
-                      <div>
-                        Per project: <code class="code-chip code-chip--pill-inline">opencode.json</code>
-                      </div>
-                      <div>
-                        Global: <code class="code-chip code-chip--pill-inline">~/.config/opencode/opencode.json</code>
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <div class="config-locations-heading">OpenAI Codex (TOML)</div>
-                    <div class="config-locations-body">
-                      <div>
-                        macOS/Linux: <code class="code-chip code-chip--pill-inline">~/.codex/config.toml</code>
-                      </div>
-                      <div>
-                        Windows: <code class="code-chip code-chip--pill-inline">%USERPROFILE%\.codex\config.toml</code>
-                      </div>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </details>
 
@@ -535,23 +573,18 @@ export async function Terminal() {
               </div>
               <div class="terminal-body">
                 <div class="inspector-commands">
-                  <div class="inspector-comment"># Install MCP Inspector globally</div>
-                  <div class="inspector-command-row">
-                    <span class="inspector-prompt">$</span>
-                    <span class="inspector-command-text">npm install -g @modelcontextprotocol/inspector</span>
-                    <button class="inspector-copy-btn copy-btn" data-copy={INSPECTOR_INSTALL_COPY} title="Copy to clipboard" aria-label="Copy npm install command to clipboard">
-                      <CopyIcon className="icon" />
-                    </button>
-                  </div>
-
-                  <div class="inspector-comment"># Test MCPVault server</div>
-                  <div class="inspector-command-row">
-                    <span class="inspector-prompt">$</span>
-                    <span class="inspector-command-text">mcp-inspector npx @bitbonsai/mcpvault@latest /path/to/vault</span>
-                    <button class="inspector-copy-btn copy-btn" data-copy={INSPECTOR_TEST_COPY} title="Copy to clipboard" aria-label="Copy test command to clipboard">
-                      <CopyIcon className="icon" />
-                    </button>
-                  </div>
+                  {INSPECTOR_COMMANDS.map((cmd) => (
+                    <>
+                      <div class="inspector-comment">{cmd.comment}</div>
+                      <div class="inspector-command-row">
+                        <span class="inspector-prompt">$</span>
+                        <span class="inspector-command-text">{cmd.command}</span>
+                        <button class="inspector-copy-btn copy-btn" data-copy={cmd.copy} title="Copy to clipboard" aria-label={cmd.ariaLabel}>
+                          <CopyIcon className="icon" />
+                        </button>
+                      </div>
+                    </>
+                  ))}
 
                   <div class="inspector-success">
                     <span class="inspector-success-row">
@@ -615,25 +648,12 @@ export async function Terminal() {
               </p>
 
               <div class="privacy-list">
-                <div class="privacy-item">
-                  <CheckIcon className="privacy-icon privacy-icon--success" />
-                  <span>Your vault files stay on your computer</span>
-                </div>
-
-                <div class="privacy-item">
-                  <CheckIcon className="privacy-icon privacy-icon--success" />
-                  <span>We never see, store, or transmit your data</span>
-                </div>
-
-                <div class="privacy-item">
-                  <CheckIcon className="privacy-icon privacy-icon--success" />
-                  <span>Only you and your AI assistant can access your notes</span>
-                </div>
-
-                <div class="privacy-item">
-                  <XIcon className="privacy-icon privacy-icon--error" />
-                  <span>AI providers (Anthropic, OpenAI) process content you share with them</span>
-                </div>
+                {PRIVACY_ITEMS.map((item) => (
+                  <div class="privacy-item">
+                    <item.icon className={`privacy-icon privacy-icon--${item.variant}`} />
+                    <span>{item.text}</span>
+                  </div>
+                ))}
               </div>
 
               <div class="privacy-footer">
@@ -653,22 +673,12 @@ export async function Terminal() {
               </div>
               <p class="success-text">Restart your AI platform and you'll see MCPVault connected. Your AI assistant can now safely read, search, and manage your Obsidian vault.</p>
               <div class="success-badges">
-                <span class="success-badge">
-                  <SearchIcon className="icon" />
-                  Search notes
-                </span>
-                <span class="success-badge">
-                  <PencilIcon className="icon" />
-                  Edit content
-                </span>
-                <span class="success-badge">
-                  <FolderOpenIcon className="icon" />
-                  Organize files
-                </span>
-                <span class="success-badge">
-                  <LayersIcon className="icon" />
-                  Batch operations
-                </span>
+                {SUCCESS_BADGES.map((badge) => (
+                  <span class="success-badge">
+                    <badge.icon className="icon" />
+                    {badge.label}
+                  </span>
+                ))}
               </div>
             </div>
           </div>
