@@ -10,6 +10,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { join, normalize, sep } from "node:path";
 import { registerFeaturesRoute } from "./routes/features";
 import { registerHomeRoute } from "./routes/home";
+import { registerInstallRoute } from "./routes/install";
 import { registerSeoRoutes, SITE_URL } from "./routes/seo";
 import { registerVideoRoutes } from "./routes/video";
 
@@ -67,6 +68,9 @@ export function createApp(options: AppOptions = {}): Hono {
 
   // Features page (Phase 2, group 3).
   registerFeaturesRoute(app, publicDir);
+
+  // Install page (Phase 2, group 4).
+  registerInstallRoute(app, publicDir);
 
   // Plain CSS under /styles/*, rooted and traversal-safe, same shape as the
   // generic static handler below but scoped to src/styles (source == the

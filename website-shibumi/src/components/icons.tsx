@@ -198,3 +198,94 @@ export const FolderKanbanIcon: FC<IconProps> = ({ className, title }) => (
     <path d="M16 10v6" />
   </svg>
 );
+
+/**
+ * Install-page icons (Phase 2, group 4 -- "install"), matching
+ * lucide-react's rendered output (v1.31.0). `CheckIcon` is the plain
+ * `check` glyph (distinct from `CheckCircle2Icon` above); `XIcon` is the
+ * plain `x` glyph (distinct from `XCircleIcon`).
+ */
+export const CheckIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <path d="M20 6 9 17l-5-5" />
+  </svg>
+);
+
+export const XIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <path d="M18 6 6 18" />
+    <path d="m6 6 12 12" />
+  </svg>
+);
+
+export const ChevronDownIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <path d="m6 9 6 6 6-6" />
+  </svg>
+);
+
+export const CompassIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z" />
+  </svg>
+);
+
+export const LightbulbIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
+    <path d="M9 18h6" />
+    <path d="M10 22h4" />
+  </svg>
+);
+
+export const LockIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </svg>
+);
+
+export const PencilIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+    <path d="m15 5 4 4" />
+  </svg>
+);
+
+export const ZapIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <path d="M15.914 4a1.5 1.5 0 0 0-2.474-1.561l-9 9A1.5 1.5 0 0 0 5.5 14h4.002a.5.5 0 0 1 .471.666L8.086 20a1.5 1.5 0 0 0 2.475 1.56l9-9A1.5 1.5 0 0 0 18.5 10h-3.997a.5.5 0 0 1-.472-.667z" />
+  </svg>
+);
+
+export const FolderOpenIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" />
+  </svg>
+);
+
+export const LayersIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z" />
+    <path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" />
+    <path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" />
+  </svg>
+);
+
+/**
+ * Copy-to-clipboard icon used by every `copy-btn`/`copy-code-btn` in
+ * `Terminal.tsx`. Not a lucide-react icon in the Astro source (it was
+ * already raw inline `<svg>` markup there); centralized here purely to
+ * deduplicate the identical markup repeated 8+ times.
+ */
+export const CopyIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" {...iconA11yProps(title)}>
+    <path
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="2"
+      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+    />
+  </svg>
+);
