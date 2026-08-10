@@ -235,7 +235,7 @@ a {
   z-index: 9999;
   width: 100%;
   /* Glass nav (maintainer request): translucent + backdrop blur. */
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
