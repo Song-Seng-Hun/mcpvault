@@ -7,7 +7,7 @@
 import { Hono } from "hono";
 import type { MiddlewareHandler } from "hono";
 import { secureHeaders } from "hono/secure-headers";
-import { join, normalize, sep } from "node:path";
+import { join, normalize, resolve, sep } from "node:path";
 import { contentSecurityPolicy } from "./lib/csp";
 import { registerClientRoute } from "./routes/client";
 import { registerDemoRoute } from "./routes/demo";
@@ -46,6 +46,24 @@ const STATIC_CACHE_CONTROL = "public, max-age=3600";
 // charset and revalidation semantics as their content-negotiated siblings.
 const MARKDOWN_STATIC_CACHE_CONTROL = "public, max-age=0, must-revalidate";
 
+/**
+ * True if `filePath` is `base` itself or a real descendant of it.
+ *
+ * `base` must already be an absolute, resolved directory with any trailing
+ * separator stripped (see `resolve()` calls in `createApp`) — comparing raw,
+ * possibly-relative, possibly-trailing-slash caller input against a
+ * `normalize(join(...))` result lets a sibling directory that merely shares
+ * a name prefix (`public` vs `public-evil`) slip past a naive `startsWith`,
+ * and a trailing separator on `base` breaks the match for every legitimate
+ * path. Resolving both sides once up front and appending exactly one
+ * separator here closes both gaps.
+ */
+function isWithinBase(filePath: string, base: string): boolean {
+  if (filePath === base) return true;
+  const baseWithSep = base.endsWith(sep) ? base : base + sep;
+  return filePath.startsWith(baseWithSep);
+}
+
 /** Minimal request logger; silent under bun test. */
 function requestLogger(): MiddlewareHandler {
   return async (c, next) => {
@@ -61,8 +79,12 @@ function requestLogger(): MiddlewareHandler {
 }
 
 export function createApp(options: AppOptions = {}): Hono {
-  const publicDir = options.publicDir ?? join(import.meta.dir, "..", "public");
-  const stylesDir = options.stylesDir ?? join(import.meta.dir, "styles");
+  // Resolved once, up front: makes both base dirs absolute, strips any
+  // trailing separator, and collapses any ".." a caller-supplied option
+  // might contain, so the prefix checks below compare like with like
+  // regardless of how publicDir/stylesDir were supplied.
+  const publicDir = resolve(options.publicDir ?? join(import.meta.dir, "..", "public"));
+  const stylesDir = resolve(options.stylesDir ?? join(import.meta.dir, "styles"));
   const clientDir = options.clientDir ?? join(import.meta.dir, "client");
   const siteUrl = options.siteUrl ?? SITE_URL;
   const app = new Hono();
@@ -162,7 +184,7 @@ export function createApp(options: AppOptions = {}): Hono {
 
     const relative = pathname.slice("/styles".length);
     const filePath = normalize(join(stylesDir, relative));
-    if (filePath !== stylesDir && !filePath.startsWith(stylesDir + sep)) {
+    if (!isWithinBase(filePath, stylesDir)) {
       return c.notFound();
     }
 
@@ -189,7 +211,7 @@ export function createApp(options: AppOptions = {}): Hono {
     if (pathname.includes("\0")) return c.text("Bad Request", 400);
 
     const filePath = normalize(join(publicDir, pathname));
-    if (filePath !== publicDir && !filePath.startsWith(publicDir + sep)) {
+    if (!isWithinBase(filePath, publicDir)) {
       return c.notFound();
     }
 

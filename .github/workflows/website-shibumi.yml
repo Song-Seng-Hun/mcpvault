@@ -45,3 +45,66 @@ jobs:
 
       - name: Run bun audit
         run: bun audit
+
+  publish-image:
+    name: Publish image to GHCR
+    needs: test
+    # Only push a real, pullable image once the change has landed on main;
+    # PRs still get the full build (below) to catch a broken Containerfile,
+    # they just don't get pushed anywhere.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build context is the repo root (not website-shibumi/) — the
+      # Containerfile also copies the root package.json for the published
+      # MCP package version read at startup; see the Containerfile header.
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: website-shibumi/Containerfile
+          push: true
+          # Commit-SHA tag is the only immutable, deploy-able reference;
+          # the deploy webhook validates against `^[0-9a-f]{7,40}$` and
+          # never trusts a moving tag. `staging`/`prod` are moving tags the
+          # webhook receiver retags on the host after a successful pull,
+          # not pushed from here.
+          tags: ghcr.io/bitbonsai/mcpvault-web:${{ github.sha }}
+          provenance: false
+
+  build-only:
+    name: Build image (no push)
+    needs: test
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: website-shibumi/Containerfile
+          push: false

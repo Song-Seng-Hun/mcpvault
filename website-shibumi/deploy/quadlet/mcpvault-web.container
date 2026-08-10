@@ -1,0 +1,79 @@
+# Rootless Podman Quadlet unit for the Shibumi-stack MCPVault website
+# (Phase 5). No Phase 0 host-audit artifact was committed to the repo at
+# the time this was written, so this follows the migration plan's stated
+# convention (rootless Podman + systemd/Quadlet) rather than a confirmed
+# on-host survey; re-check against the real Hetzner host before first
+# deploy and adjust paths/network below if the audit found something
+# different.
+#
+# Install as a rootless user unit (recommended, matches "rootless Podman"
+# in the plan):
+#   mkdir -p ~/.config/containers/systemd
+#   cp mcpvault-web.container ~/.config/containers/systemd/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now mcpvault-web.service
+#   loginctl enable-linger <user>   # so it survives logout, and starts on boot
+#
+# Or as a system unit under /etc/containers/systemd/ if the host convention
+# is rootless-Podman-as-a-dedicated-system-user instead of a login user;
+# Quadlet generates the matching .service either way.
+#
+# The deploy webhook receiver (see .plans/shibumi-website-migration.md,
+# "Deploy webhook") retags the pulled ghcr.io/bitbonsai/mcpvault-web:<sha>
+# image onto the `staging`/`prod` moving tag this unit tracks, then
+# restarts the unit. `AutoUpdate=registry` plus the podman-auto-update
+# timer is the documented boring fallback if the receiver is down.
+
+[Unit]
+Description=MCPVault website (Shibumi stack, Bun + Hono)
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=ghcr.io/bitbonsai/mcpvault-web:staging
+ContainerName=mcpvault-web
+AutoUpdate=registry
+Label=io.containers.autoupdate=registry
+
+# Bind to loopback only: the existing reverse proxy in front of this host
+# owns TLS and the public listener (per the plan's target architecture,
+# Cloudflare -> Hetzner origin TLS/reverse proxy -> this container). Never
+# publish this port on a public interface directly.
+PublishPort=127.0.0.1:3000:3000
+
+# Secrets stay out of the image; loaded at runtime only.
+EnvironmentFile=/etc/mcpvault-web/env
+
+# --- Hardening (Phase 5) ---
+# The image already runs as USER bun (uid 1000) with no setuid binaries;
+# these are host-side (Podman/systemd) hardening on top of that, not a
+# substitute for it.
+ReadOnly=true
+# The app writes nothing to disk at runtime (stdout-only logging, no
+# cache/tmp files); tmpfs covers the paths a few libc/tooling shims still
+# expect to be writable even when unused.
+Tmpfs=/tmp
+DropCapability=ALL
+NoNewPrivileges=true
+Memory=512M
+# Conservative CPU ceiling; PodmanArgs is the portable way to set this
+# across Podman/Quadlet versions that predate a dedicated CPU key.
+PodmanArgs=--cpus=1
+
+HealthCmd=wget -q -O /dev/null http://127.0.0.1:3000/healthz || exit 1
+HealthInterval=30s
+HealthTimeoutSec=3s
+HealthStartPeriod=5s
+HealthRetries=3
+
+[Service]
+# Matches SHUTDOWN_DRAIN_TIMEOUT_MS's default in server.ts (10s) plus
+# slack for Podman/systemd's own signal-then-SIGKILL sequencing, so a
+# restart/redeploy always gets the graceful drain path a real SIGKILL
+# would otherwise cut short.
+TimeoutStopSec=15
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

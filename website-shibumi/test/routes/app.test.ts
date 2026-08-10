@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 import { createApp } from "../../src/app";
 
 let publicDir: string;
@@ -77,6 +77,22 @@ describe("static serving", () => {
   test("rejects encoded null bytes", async () => {
     const res = await app.request("/llm.txt%00.mp4");
     expect([400, 404]).toContain(res.status);
+  });
+
+  test("still serves publicDir root correctly when the option carries a trailing separator", async () => {
+    const trailingSlashApp = createApp({ publicDir: `${publicDir}${sep}` });
+    const res = await trailingSlashApp.request("/llm.txt");
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("hello from llm.txt\n");
+  });
+
+  test("still serves publicDir root correctly when the option is a relative path", async () => {
+    const relativeApp = createApp({
+      publicDir: relative(process.cwd(), publicDir),
+    });
+    const res = await relativeApp.request("/llm.txt");
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("hello from llm.txt\n");
   });
 });
 
