@@ -27,14 +27,52 @@
  * unnecessary. It still runs either way rather than special-casing the
  * media query twice in two places.
  *
+ * `reveal()`'s `animationend` listener fixes a second, subtler bug than the
+ * one described above: `animation-fill-mode: forwards` never actually
+ * detaches the animation once it finishes -- `el.getAnimations()` still
+ * returns it, permanently, in `playState: "finished"`. Any element with a
+ * `transform`-targeting animation still attached, no matter how long
+ * finished, keeps creating a backdrop-root for compositing purposes --
+ * confirmed against a real browser, not just spec-reading: a `.fade-in-
+ * on-scroll` *wrapper* around a glass card (e.g. features.css's
+ * `.comparison-cta`, wrapping `.comparison-cta-card`'s `backdrop-filter:
+ * blur(24px)`) silently blocked that descendant's blur from ever rendering
+ * -- `getComputedStyle` still reported `blur(24px)` on the card itself
+ * (unaffected), but screenshotting a bright pattern behind the page showed
+ * it passing through completely unblurred. Changing the keyframe's `to`
+ * value from `translateY(0)` to `none` (see `@keyframes fade-in-up` below)
+ * only helps elements where `.fade-in-on-scroll` sits on the *same*
+ * element as the `backdrop-filter` (a transform never blocks its own
+ * element's backdrop-filter, only a live transform on an ancestor does)
+ * -- it does nothing for the wrapper case, because the browser exposes an
+ * animated `transform` as a resolved matrix, not the literal keyword
+ * `none`, for as long as any animation remains attached, regardless of
+ * what value that animation's keyframes declare. `reveal()` adds
+ * `fade-in-done` once `animationend` fires, and `shared.css`'s
+ * `.fade-in-on-scroll.is-visible.fade-in-done` rule sets `animation: none`
+ * -- fully detaching it -- while keeping the settled `opacity: 1; transform:
+ * none;` as a plain, non-animated style, so nothing snaps back to hidden.
+ *
  * The interfaces below are deliberately minimal structural subsets of the
- * real DOM (`classList.add`, `querySelectorAll`, a constructor + `observe`/
- * `unobserve`) rather than the real `Element`/`Document`/`IntersectionObserver`
- * lib.dom types, so tests can pass small hand-written fakes instead of a
- * real DOM.
+ * real DOM (`classList.add`, `addEventListener`, `querySelectorAll`, a
+ * constructor + `observe`/`unobserve`) rather than the real `Element`/
+ * `Document`/`IntersectionObserver` lib.dom types, so tests can pass small
+ * hand-written fakes instead of a real DOM.
  */
 export interface FadeInTarget {
   classList: { add(name: string): void };
+  addEventListener(type: "animationend", listener: () => void, options?: { once?: boolean }): void;
+}
+
+/**
+ * Reveals `el`: adds `is-visible` (starts the `fade-in-up` animation), then
+ * adds `fade-in-done` once that animation's `animationend` fires, fully
+ * detaching it -- see the module comment for why a merely-finished-but-
+ * still-attached animation isn't good enough.
+ */
+export function reveal(el: FadeInTarget): void {
+  el.classList.add("is-visible");
+  el.addEventListener("animationend", () => el.classList.add("fade-in-done"), { once: true });
 }
 
 export interface FadeInObserverDoc {
@@ -78,7 +116,7 @@ export function initFadeInObserver(doc: FadeInObserverDoc, win: FadeInObserverWi
   if (!IO) {
     // No IntersectionObserver support: reveal everything rather than
     // leaving it permanently hidden behind `opacity: 0`.
-    for (const el of targets) el.classList.add("is-visible");
+    for (const el of targets) reveal(el);
     return;
   }
 
@@ -92,7 +130,7 @@ export function initFadeInObserver(doc: FadeInObserverDoc, win: FadeInObserverWi
     }
     if (revealed.length > 0) {
       win.requestAnimationFrame(() => {
-        for (const el of revealed) el.classList.add("is-visible");
+        for (const el of revealed) reveal(el);
       });
     }
   }, getObserverOptions());

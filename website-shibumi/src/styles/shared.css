@@ -136,6 +136,20 @@ a {
  * `.fade-in-on-scroll` and `.is-visible` were never actually wired
  * together anywhere in this app. See `fade-in-observer.ts` for the fuller
  * story, including how production has the same disconnect.
+ *
+ * `.fade-in-done` (added by `fade-in-observer.ts`'s `reveal()` once
+ * `animationend` fires) is the actual fix for a second bug `fade-in-
+ * observer.ts` documents in full: `animation-fill-mode: forwards` never
+ * detaches the animation, so any glass card *nested inside* a `.fade-in-
+ * on-scroll` wrapper (as opposed to carrying `.fade-in-on-scroll` itself)
+ * had its `backdrop-filter` silently blocked forever, even though the
+ * keyframe's `to` value below is `none`, not `translateY(0)` -- confirmed
+ * visually (a bright pattern behind the page rendered crisp, unblurred,
+ * through those cards) after the `translateY(0)`-to-`none` fix alone,
+ * which only ever helped the same-element case. `fade-in-done` fully
+ * detaches the animation via `animation: none` (three-class selector, so
+ * it wins regardless of source order against the two-class `.is-visible`
+ * rule) while keeping the settled state as a plain, non-animated style.
  */
 .fade-in-on-scroll {
   opacity: 0;
@@ -144,6 +158,12 @@ a {
 
 .fade-in-on-scroll.is-visible {
   animation: fade-in-up 0.6s ease-out forwards;
+}
+
+.fade-in-on-scroll.is-visible.fade-in-done {
+  animation: none;
+  opacity: 1;
+  transform: none;
 }
 
 @keyframes fade-in-up {
@@ -156,7 +176,9 @@ a {
     /* Must end at `none`, not translateY(0): `forwards` retains this value,
        and ANY retained transform (identity included) silently disables
        backdrop-filter on every descendant — which would kill the glass-card
-       blur in all fade-in sections the moment they scroll into view. */
+       blur in all fade-in sections the moment they scroll into view. Fixes
+       the same-element case (a card that carries `.fade-in-on-scroll`
+       itself); `.fade-in-done` above fixes the wrapper case. */
     transform: none;
   }
 }
