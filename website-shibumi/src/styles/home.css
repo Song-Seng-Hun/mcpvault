@@ -100,7 +100,15 @@
   border: 1px solid rgba(38, 38, 38, 0.5);
   background: rgba(23, 23, 23, 0.5);
   backdrop-filter: blur(4px);
-  font-size: 0.875rem;
+  /* tailwind.config.js overrides `text-sm` to 1rem/1.5rem for this site
+     (the Tailwind default is 0.875rem/1.25rem) -- Hero.astro's badges use
+     plain `text-sm` with no `leading-*` override, so production renders at
+     the customized size. Using the framework default here made the badge
+     row ~7px shorter than production, which is most of the hero's overall
+     vertical drift since the row's height feeds the flex-centered hero
+     content below it. */
+  font-size: 1rem;
+  line-height: 1.5rem;
   color: var(--color-muted-foreground);
 }
 
@@ -115,7 +123,15 @@
   font-size: 3rem;
   font-weight: 700;
   margin: 0 0 1.5rem;
-  line-height: 1.1;
+  /* Tailwind's `text-5xl`..`text-8xl` scale all bundle `line-height: 1`
+     (unitless) by default, and this project's tailwind.config.js only
+     customizes `xs`/`sm`, not these -- so that's what applies at every
+     desktop/tablet breakpoint of this h1. Hero.astro's own scoped <style>
+     only overrides to 1.1 inside its mobile media queries (see below); a
+     flat 1.1 here made the title ~10% taller than production at the
+     largest (96px) breakpoint, which was most of the hero's residual
+     vertical drift. */
+  line-height: 1;
 }
 
 @media (min-width: 640px) {
@@ -148,8 +164,16 @@
   color: var(--color-accent);
 }
 
+/* This block (tagline) and `.hero-subtext` below were missing an explicit
+   `line-height`, so the browser's default `normal` (~1.15x font-size)
+   applied instead of the bundled line-height each Tailwind `text-*` utility
+   actually carries. At the `lg` breakpoint this happened to be close enough
+   (36px either way) to not show up in the desktop diff, but it drifted
+   visibly at the smaller sizes -- explicit values below match Tailwind's
+   (uncustomized) `xl`/`2xl`/`3xl` and `lg`/`xl` scale exactly. */
 [data-component="hero"] .hero-tagline {
   font-size: 1.25rem;
+  line-height: 1.75rem;
   font-weight: 500;
   color: var(--color-foreground);
   margin: 0 0 1rem;
@@ -158,17 +182,20 @@
 @media (min-width: 640px) {
   [data-component="hero"] .hero-tagline {
     font-size: 1.5rem;
+    line-height: 2rem;
   }
 }
 
 @media (min-width: 1024px) {
   [data-component="hero"] .hero-tagline {
     font-size: 1.875rem;
+    line-height: 2.25rem;
   }
 }
 
 [data-component="hero"] .hero-subtext {
   font-size: 1.125rem;
+  line-height: 1.75rem;
   color: var(--color-muted-foreground);
   margin: 0 auto 2rem;
   max-width: 48rem;
@@ -177,6 +204,7 @@
 @media (min-width: 640px) {
   [data-component="hero"] .hero-subtext {
     font-size: 1.25rem;
+    line-height: 1.75rem;
   }
 }
 
@@ -204,6 +232,9 @@
   border-radius: 0.75rem;
   font-weight: 600;
   font-size: 1.125rem;
+  /* Missing line-height fell back to the browser's `normal`, shrinking
+     the buttons by a few px versus Tailwind's bundled `text-lg` value. */
+  line-height: 1.75rem;
   text-decoration: none;
   transition: all 0.3s ease;
 }
@@ -315,6 +346,10 @@
   [data-component="hero"] .hero-title {
     font-size: 3rem;
     margin-bottom: 1.5rem;
+    /* Matches Hero.astro's own `@media (max-width: 768px) { h1 { ... } }`,
+       which is the one place production overrides the default line-height
+       of 1 back up to 1.1. */
+    line-height: 1.1;
   }
 
   [data-component="hero"] .hero-tagline {
@@ -346,9 +381,11 @@
     font-size: 1.125rem;
   }
 
-  [data-component="hero"] .hero-subtext {
-    font-size: 1rem;
-  }
+  /* Hero.astro's own scoped style only ever reassigns `.text-lg` (the
+     subtext) to 1.125rem at the 768px breakpoint (`!important`, see above)
+     and never touches it again at 640px or 480px -- it stays 1.125rem all
+     the way down. This override shrunk it further to 1rem, which had no
+     counterpart in production. */
 }
 
 @media (max-width: 480px) {
@@ -447,8 +484,18 @@
 }
 
 [data-component="spec-preview-callout"] .callout-text {
-  font-size: 0.875rem;
-  line-height: 1.6;
+  /* Same tailwind.config.js `text-sm` override as `.badge` above: font-size
+     is 1rem here, not the Tailwind default 0.875rem. `leading-relaxed` in
+     the Astro source multiplies that by 1.625 for the line-height. */
+  font-size: 1rem;
+  line-height: 1.625;
+  /* This is a bare `<p>` with no CSS reset in this port (no Preflight
+     equivalent for default UA margins), so it kept the browser's default
+     `1em 0` paragraph margin. That extra ~28px of margin was inflating the
+     callout card's height beyond production's, compounding the vertical
+     drift from the badge row above. Production's Tailwind Preflight zeroes
+     this out; do the same here. */
+  margin: 0;
   color: var(--color-muted-foreground);
 }
 
@@ -458,7 +505,14 @@
 }
 
 [data-component="spec-preview-callout"] .spec-link {
-  color: var(--color-accent);
+  /* Production's scoped style sets `color: var(--color-accent)`, but that
+     custom property is never defined anywhere in the Astro site (only the
+     Tailwind `text-accent` utility class carries the real accent hex) --
+     the declaration is invalid at compute time, so the browser falls back
+     to the inherited color from `.callout-headline` (bold white). Because
+     this port's :root *does* define `--color-accent`, copying that
+     declaration verbatim would actually apply it and render purple,
+     diverging from production. Omit `color` here to inherit instead. */
   text-decoration: underline;
   text-decoration-color: rgba(144, 101, 234, 0.45);
   text-underline-offset: 0.2em;
@@ -506,7 +560,10 @@
   border-radius: 0.5rem;
   border: 1px solid rgba(124, 58, 237, 0.25);
   background: rgba(124, 58, 237, 0.1);
-  font-size: 0.875rem;
+  /* Same `text-sm` override as `.badge`/`.callout-text`: 1rem/1.5rem here,
+     not the Tailwind default 0.875rem. */
+  font-size: 1rem;
+  line-height: 1.5rem;
   font-weight: 600;
   color: var(--color-accent);
   text-decoration: none;
