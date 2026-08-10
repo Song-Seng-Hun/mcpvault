@@ -22,6 +22,8 @@ import { GitHubIcon, MenuIcon } from "./icons";
 export interface NavLink {
   href: string;
   label: string;
+  /** Compact label swapped in at tight desktop widths (CSS-driven). */
+  shortLabel?: string;
   isNew?: boolean;
 }
 
@@ -29,7 +31,7 @@ export const NAV_LINKS: NavLink[] = [
   { href: "/install", label: "Install" },
   { href: "/features", label: "Features" },
   { href: "/demo", label: "Demo" },
-  { href: "/how-it-works", label: "How It Works" },
+  { href: "/how-it-works", label: "How It Works", shortLabel: "How" },
   { href: "/skill", label: "Skill" },
 ];
 
@@ -60,7 +62,14 @@ export function Nav({ currentPath, version }: NavProps) {
             {NAV_LINKS.map((link) => (
               <a href={link.href} class={`nav-link${isActive(currentPath, link.href) ? " nav-link-active" : ""}`}>
                 <span class="nav-link-label">
-                  {link.label}
+                  {link.shortLabel ? (
+                    <>
+                      <span class="nav-label-full">{link.label}</span>
+                      <span class="nav-label-short" aria-hidden="true">{link.shortLabel}</span>
+                    </>
+                  ) : (
+                    link.label
+                  )}
                   {link.isNew ? <span class="nav-badge-new">NEW</span> : null}
                 </span>
               </a>

@@ -311,19 +311,26 @@ a {
   font-weight: 500;
   transition: all 0.3s ease;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  /* Short labels keep their full text at every width... */
   flex-shrink: 0;
   padding: 0.5rem clamp(0.25rem, 1vw, 1rem);
 }
 
-/* ...only the one long label gives way: "How It Works" shrinks and
-   truncates with an ellipsis when the row runs out of room, keeping all
-   items visible. */
-[data-component="nav"] .nav-links .nav-link[href="/how-it-works"] {
-  flex-shrink: 1;
-  min-width: 0;
+/* Responsive label swap: "How It Works" renders both a full and a short
+   ("How") span; between the mobile-menu breakpoint and a comfortable
+   desktop width only the short one shows, so every nav item stays fully
+   visible with no truncation artifacts and nothing ever clips. */
+[data-component="nav"] .nav-label-short {
+  display: none;
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  [data-component="nav"] .nav-links .nav-label-full {
+    display: none;
+  }
+
+  [data-component="nav"] .nav-links .nav-label-short {
+    display: inline;
+  }
 }
 
 [data-component="nav"] .nav-link:hover {
