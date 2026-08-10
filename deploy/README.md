@@ -36,9 +36,10 @@ shibumi-server add <domain> \
 ```
 
 - `<domain>` is the hostname Caddy will serve (staging host first; the
-  production registration at cutover uses `mcpvault.org`). The app id is the
-  domain with dots as dashes, so the webhook path is
-  `/hooks/github/<domain-with-dashes>`.
+  production registration at cutover uses `mcpvault.org`). The app id is
+  derived from the domain: existing dashes double (`-` -> `--`), then dots
+  become dashes, so `mcpvault.org` -> `mcpvault-org` and the webhook path is
+  `/hooks/github/mcpvault-org`.
 - `--ref refs/heads/shibumi` tracks the migration branch for staging. At
   cutover, switch the production app to `refs/heads/main` (edit
   `~/.config/shibumi-server/config.json` and restart the user service).
