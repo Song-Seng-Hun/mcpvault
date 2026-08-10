@@ -10,6 +10,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { join, normalize, sep } from "node:path";
 import { registerFeaturesRoute } from "./routes/features";
 import { registerHomeRoute } from "./routes/home";
+import { registerHowItWorksRoute } from "./routes/how-it-works";
 import { registerInstallRoute } from "./routes/install";
 import { registerSeoRoutes, SITE_URL } from "./routes/seo";
 import { registerVideoRoutes } from "./routes/video";
@@ -51,9 +52,11 @@ export function createApp(options: AppOptions = {}): Hono {
 
   // Production 301s bare page paths to their trailing-slash form (Cloudflare
   // rules from PRs #187/#188); replicated here so behavior survives cutover.
+  // Only the known page routes redirect — anything else must fall through to 404.
+  const trailingSlashPages = new Set(["/install", "/features", "/demo", "/how-it-works", "/skill"]);
   app.use("*", async (c, next) => {
     const { pathname, search } = new URL(c.req.url);
-    if (/^\/[a-z0-9-]+$/.test(pathname) && !pathname.includes(".") && pathname !== "/healthz") {
+    if (trailingSlashPages.has(pathname)) {
       return c.redirect(`${pathname}/${search}`, 301);
     }
     await next();
@@ -81,6 +84,9 @@ export function createApp(options: AppOptions = {}): Hono {
 
   // Install page (Phase 2, group 4).
   registerInstallRoute(app, publicDir);
+
+  // How It Works page (Phase 2, group 5).
+  registerHowItWorksRoute(app, publicDir);
 
   // Plain CSS under /styles/*, rooted and traversal-safe, same shape as the
   // generic static handler below but scoped to src/styles (source == the

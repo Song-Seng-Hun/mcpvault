@@ -274,6 +274,18 @@ export const LayersIcon: FC<IconProps> = ({ className, title }) => (
 );
 
 /**
+ * How-It-Works page icon (Phase 2, group 5 -- "how-it-works"), matching
+ * lucide-react's rendered `target` output (v1.31.0).
+ */
+export const TargetIcon: FC<IconProps> = ({ className, title }) => (
+  <svg class={className} viewBox="0 0 24 24" {...strokeIconProps} {...iconA11yProps(title)}>
+    <circle cx="12" cy="12" r="10" />
+    <circle cx="12" cy="12" r="6" />
+    <circle cx="12" cy="12" r="2" />
+  </svg>
+);
+
+/**
  * Copy-to-clipboard icon used by every `copy-btn`/`copy-code-btn` in
  * `Terminal.tsx`. Not a lucide-react icon in the Astro source (it was
  * already raw inline `<svg>` markup there); centralized here purely to
