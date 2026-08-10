@@ -311,6 +311,19 @@
   color: var(--color-muted-foreground);
 }
 
+/* `.hidden` (`display: none`, defined above under "Chat window") and
+   `.demo-typing` (`display: flex`, this block) are equal-specificity
+   single-class selectors; `.demo-typing` comes later in this file, so its
+   `display: flex` won the cascade whenever Alpine put both classes on the
+   same element (`isTyping` flipping back to `false`) -- the typing
+   indicator stayed visibly on screen, overlapping the just-revealed
+   response, instead of disappearing. This two-class selector is more
+   specific than either single-class rule, so it wins regardless of source
+   order. */
+[data-component="interactive-demo"] .demo-typing.hidden {
+  display: none;
+}
+
 [data-component="interactive-demo"] .demo-typing-dots {
   display: flex;
   gap: 0.25rem;
