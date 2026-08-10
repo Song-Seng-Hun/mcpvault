@@ -20,6 +20,23 @@
  * production behavior this replaces (welcome-email delivery was already
  * best-effort there; the only change here is that failures are tracked
  * and logged instead of swallowed by an un-awaited `.catch()`).
+ *
+ * CSRF posture (documented decision, per the migration plan's security
+ * matrix): this endpoint deliberately ships without a CSRF token. The site
+ * has no session or cookie authentication anywhere, so a cross-site forged
+ * POST carries no ambient credentials and gains an attacker nothing beyond
+ * what a direct anonymous POST already allows: subscribing an email
+ * address, which the recipient can self-service unsubscribe. Abuse is
+ * bounded by the 4 KB body cap below and edge rate limiting.
+ *
+ * Rate limiting (documented decision): the container is stateless, so any
+ * in-memory limiter resets on every restart and is best-effort at most.
+ * Primary rate limiting is a Cloudflare WAF rate rule on the mcpvault.org
+ * zone, configured at the edge (not code in this repo) before cutover:
+ *   match:  http.request.uri.path eq "/api/subscribe" and
+ *           http.request.method eq "POST"
+ *   rate:   5 requests per 60 seconds per client IP
+ *   action: block for 10 minutes
  */
 import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";

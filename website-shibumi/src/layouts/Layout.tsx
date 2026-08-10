@@ -37,6 +37,7 @@
  */
 import { raw } from "hono/html";
 import { BackgroundWatermark } from "../components/BackgroundWatermark";
+import { FONT_LOADER_SCRIPT, structuredDataJson } from "../lib/csp";
 import { packageVersion } from "../lib/version";
 
 const SITE_URL = "https://mcpvault.org";
@@ -60,39 +61,11 @@ export interface LayoutProps {
   children?: unknown;
 }
 
-function structuredData(version: string) {
-  return {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    name: "MCPVault",
-    description: "Universal AI bridge for Obsidian vaults using the Model Context Protocol. Connect any MCP-compatible AI assistant to your knowledge base.",
-    url: SITE_URL,
-    downloadUrl: "https://www.npmjs.com/package/mcpvault",
-    softwareVersion: version,
-    operatingSystem: ["macOS", "Windows", "Linux"],
-    applicationCategory: "DeveloperApplication",
-    offers: {
-      "@type": "Offer",
-      price: "0",
-      priceCurrency: "USD",
-    },
-    author: {
-      "@type": "Organization",
-      name: "bitbonsai",
-      url: "https://github.com/bitbonsai",
-    },
-    maintainer: {
-      "@type": "Organization",
-      name: "bitbonsai",
-      url: "https://github.com/bitbonsai",
-    },
-    codeRepository: "https://github.com/bitbonsai/mcpvault",
-  };
-}
-
 export function Layout({ title = DEFAULT_TITLE, description = DEFAULT_DESCRIPTION, image = DEFAULT_IMAGE, canonical = SITE_URL, page, pageStylesheet, clientScript, version = packageVersion, children }: LayoutProps) {
   const fullTitle = title.includes("MCPVault") ? title : `${title} | MCPVault`;
-  const jsonLd = JSON.stringify(structuredData(version)).replace(/</g, "\\u003c");
+  // Built by lib/csp.ts so the CSP header's belt-and-braces hash is computed
+  // from the exact same serialization this layout renders.
+  const jsonLd = structuredDataJson(version);
 
   return (
     <>
@@ -153,7 +126,7 @@ export function Layout({ title = DEFAULT_TITLE, description = DEFAULT_DESCRIPTIO
           would run as broken JS (`document.getElementById(&#39;...&#39;)`).
           `raw()` is safe here: the string is a fixed literal, not user input.
         */}
-        <script>{raw("document.getElementById('jetbrains-font').media = 'all';")}</script>
+        <script>{raw(FONT_LOADER_SCRIPT)}</script>
 
         <link rel="stylesheet" href="/styles/shared.css" />
         {pageStylesheet ? <link rel="stylesheet" href={pageStylesheet} /> : null}

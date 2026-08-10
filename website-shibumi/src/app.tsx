@@ -8,6 +8,7 @@ import { Hono } from "hono";
 import type { MiddlewareHandler } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 import { join, normalize, sep } from "node:path";
+import { contentSecurityPolicy } from "./lib/csp";
 import { registerClientRoute } from "./routes/client";
 import { registerDemoRoute } from "./routes/demo";
 import { registerDownloadsRoute, type DownloadsRouteOptions } from "./routes/downloads";
@@ -63,8 +64,9 @@ export function createApp(options: AppOptions = {}): Hono {
   const app = new Hono();
 
   app.use(requestLogger());
-  // Defaults only for now; a strict CSP lands with the pages (Alpine CSP build).
-  app.use(secureHeaders());
+  // Non-CSP headers are the secure-headers defaults; the explicit CSP (no
+  // 'unsafe-eval', matching the @alpinejs/csp build) is defined in lib/csp.ts.
+  app.use(secureHeaders({ contentSecurityPolicy }));
 
   // Production 301s bare page paths to their trailing-slash form (Cloudflare
   // rules from PRs #187/#188); replicated here so behavior survives cutover.
