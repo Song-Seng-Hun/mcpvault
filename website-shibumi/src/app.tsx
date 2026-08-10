@@ -49,6 +49,16 @@ export function createApp(options: AppOptions = {}): Hono {
   // Defaults only for now; a strict CSP lands with the pages (Alpine CSP build).
   app.use(secureHeaders());
 
+  // Production 301s bare page paths to their trailing-slash form (Cloudflare
+  // rules from PRs #187/#188); replicated here so behavior survives cutover.
+  app.use("*", async (c, next) => {
+    const { pathname, search } = new URL(c.req.url);
+    if (/^\/[a-z0-9-]+$/.test(pathname) && !pathname.includes(".") && pathname !== "/healthz") {
+      return c.redirect(`${pathname}/${search}`, 301);
+    }
+    await next();
+  });
+
   app.get("/healthz", (c) => {
     c.header("cache-control", "no-store");
     return c.json({ status: "ok" });
