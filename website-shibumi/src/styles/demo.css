@@ -491,3 +491,11 @@
     animation: none;
   }
 }
+
+/* Demo-only: conversation playback changes page height, which makes the
+   scrollbar appear/disappear and shifts the layout. Reserving the gutter
+   keeps viewport width stable. An html rule is safe here because demo.css
+   is only ever loaded by the demo page. */
+html {
+  scrollbar-gutter: stable;
+}
