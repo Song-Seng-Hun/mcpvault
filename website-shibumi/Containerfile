@@ -1,17 +1,27 @@
 # Minimal pinned Bun image for the Shibumi-stack website skeleton.
 # Built for rootless Podman; runs as the non-root `bun` user.
+#
+# BUILD CONTEXT IS THE REPO ROOT, not this directory:
+#   podman build -f website-shibumi/Containerfile -t mcpvault-site .
+# The root package.json must be copied to /package.json because
+# src/lib/version.ts reads the published MCP package version from three
+# directories above /app/src/lib at startup (nav badge + structured data);
+# without it the server exits 1 with ENOENT at import time.
 FROM docker.io/oven/bun:1.3.14-alpine
 
 WORKDIR /app
 ENV NODE_ENV=production
 
 # Install exactly what the committed lockfile says.
-COPY package.json bun.lock ./
+COPY website-shibumi/package.json website-shibumi/bun.lock ./
 RUN bun install --frozen-lockfile --production
 
-COPY tsconfig.json server.ts ./
-COPY src ./src
-COPY public ./public
+COPY website-shibumi/tsconfig.json website-shibumi/server.ts ./
+COPY website-shibumi/src ./src
+COPY website-shibumi/public ./public
+
+# Repo-root manifest: the single source of the published package version.
+COPY package.json /package.json
 
 USER bun
 EXPOSE 3000

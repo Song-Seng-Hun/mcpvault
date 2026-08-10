@@ -197,10 +197,17 @@ export function createApp(options: AppOptions = {}): Hono {
     if (!(await file.exists())) return await next();
 
     const isMarkdown = pathname.endsWith(".md");
+    // /llm.txt shares the .md files' baseline headers (public, max-age=0,
+    // must-revalidate) rather than the long-lived static default.
+    const isLlmText = pathname === "/llm.txt";
     const headers = new Headers({
-      "content-type": isMarkdown ? "text/markdown; charset=utf-8" : file.type || "application/octet-stream",
+      "content-type": isMarkdown
+        ? "text/markdown; charset=utf-8"
+        : isLlmText
+          ? "text/plain; charset=utf-8"
+          : file.type || "application/octet-stream",
       "content-length": String(file.size),
-      "cache-control": isMarkdown ? MARKDOWN_STATIC_CACHE_CONTROL : STATIC_CACHE_CONTROL,
+      "cache-control": isMarkdown || isLlmText ? MARKDOWN_STATIC_CACHE_CONTROL : STATIC_CACHE_CONTROL,
     });
     const body = c.req.method === "HEAD" ? null : file;
     return new Response(body, { status: 200, headers });

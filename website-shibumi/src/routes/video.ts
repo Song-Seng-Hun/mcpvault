@@ -18,7 +18,9 @@ const VIDEO_TYPES: Record<string, string> = {
 
 export const VIDEO_EXTENSIONS = Object.keys(VIDEO_TYPES);
 
-const CACHE_CONTROL = "public, max-age=3600";
+// Baseline (headers-baseline.json): production serves the video with a
+// 4-hour TTL, not the generic 1-hour static default.
+const CACHE_CONTROL = "public, max-age=14400";
 
 interface ByteRange {
   start: number;

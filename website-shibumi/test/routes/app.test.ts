@@ -49,8 +49,9 @@ describe("static serving", () => {
     expect(res.status).toBe(200);
     expect(await res.text()).toBe("hello from llm.txt\n");
     expect(res.headers.get("content-length")).toBe("19");
-    expect(res.headers.get("cache-control")).toBe("public, max-age=3600");
-    expect(res.headers.get("content-type")).toContain("text/plain");
+    // llm.txt shares the .md baseline headers, not the static default.
+    expect(res.headers.get("cache-control")).toBe("public, max-age=0, must-revalidate");
+    expect(res.headers.get("content-type")).toBe("text/plain; charset=utf-8");
   });
 
   test("serves markdown endpoints with markdown charset and revalidate cache-control", async () => {
