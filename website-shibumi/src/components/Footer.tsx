@@ -24,7 +24,7 @@ export function Footer() {
                 <GitHubIcon className="icon" />
                 <span class="label">GitHub Repository</span>
               </a>
-              <a href="https://www.npmjs.com/package/mcpvault" target="_blank" rel="noopener noreferrer" class="footer-icon-link">
+              <a href="https://www.npmjs.com/package/@bitbonsai/mcpvault" target="_blank" rel="noopener noreferrer" class="footer-icon-link">
                 <NpmIcon className="icon" />
                 <span class="label">npm package</span>
               </a>
