@@ -304,6 +304,12 @@ a {
   border-radius: 0.5rem;
   font-weight: 500;
   transition: all 0.3s ease;
+  /* Multi-word labels ("How It Works") must never wrap into stacked lines
+     at squeezed widths; truncate with an ellipsis instead. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 12rem;
 }
 
 [data-component="nav"] .nav-link:hover {
