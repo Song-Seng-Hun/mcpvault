@@ -76,6 +76,32 @@ describe("GET / (HTML)", () => {
   });
 });
 
+describe("GET / (Alpine interactivity, Phase 3)", () => {
+  test("loads the bundled Alpine client script", async () => {
+    const body = await (await app.request("/")).text();
+    expect(body).toContain('<script type="module" src="/client/alpine.js">');
+  });
+
+  test("names the nav module and mobile menu wiring", async () => {
+    const body = await (await app.request("/")).text();
+    expect(body).toContain('x-data="nav"');
+    expect(body).toContain('x-on:click="toggle()"');
+    expect(body).toContain('x-bind:hidden="!open"');
+  });
+
+  test("names the newsletterSignup module and binds the email field/submit handler", async () => {
+    const body = await (await app.request("/")).text();
+    expect(body).toContain('x-data="newsletterSignup"');
+    expect(body).toContain('x-model="email"');
+    expect(body).toContain('submit()');
+  });
+
+  test("still keeps the no-JS form action/method for the newsletter form", async () => {
+    const body = await (await app.request("/")).text();
+    expect(body).toContain('method="post" action="/api/subscribe"');
+  });
+});
+
 describe("GET / (Markdown negotiation)", () => {
   test("Accept: text/markdown without text/html serves the Markdown counterpart", async () => {
     const res = await app.request("/", { headers: { accept: "text/markdown" } });

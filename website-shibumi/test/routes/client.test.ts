@@ -35,6 +35,15 @@ describe("GET /client/alpine.js", () => {
     expect(body).toContain("interactiveDemo");
   });
 
+  test("registers the nav, newsletterSignup, and terminal modules (Phase 3)", async () => {
+    const body = await (await app.request("/client/alpine.js")).text();
+    // Minified output renames local identifiers, but Alpine.data()'s string
+    // keys survive minification unchanged.
+    expect(body).toContain('"nav"');
+    expect(body).toContain('"newsletterSignup"');
+    expect(body).toContain('"terminal"');
+  });
+
   test("caches the bundle across requests (identical bytes, no rebuild)", async () => {
     const first = await (await app.request("/client/alpine.js")).text();
     const second = await (await app.request("/client/alpine.js")).text();

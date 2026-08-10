@@ -26,6 +26,7 @@ export function HowItWorksPage({ currentPath, version }: HowItWorksPageProps) {
       canonical="https://mcpvault.org/how-it-works"
       page="how-it-works"
       pageStylesheet="/styles/how-it-works.css"
+      clientScript="/client/alpine.js"
       version={version}
     >
       <Nav currentPath={currentPath} version={version} />

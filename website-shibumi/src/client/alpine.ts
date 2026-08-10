@@ -1,5 +1,5 @@
 /**
- * Client bundle entry point for the demo page's Alpine interactivity.
+ * Client bundle entry point for the site's Alpine interactivity.
  *
  * Imports `@alpinejs/csp`, not the standard `alpinejs` package (per the
  * plan's Alpine section): the CSP build's evaluator never calls
@@ -11,13 +11,27 @@
  * "vendor Alpine locally".
  *
  * Every named module this app registers is added here, then `Alpine.start()`
- * is called once. Only `interactiveDemo` exists so far (Phase 3 step 1 --
- * InteractiveDemo/ResponseRenderer); nav/theme/terminal/newsletter modules
- * land in later Phase 3 steps and get added to this same registration list.
+ * is called once. `nav` (mobile menu, every page) and `newsletterSignup`
+ * (home page) joined `interactiveDemo` (Phase 3 step 1) in this step;
+ * `terminal` (install page) landed in the same step. `themeToggle` exists
+ * as a module too, but its component stays unmounted (see
+ * `ThemeToggle.tsx`), so it isn't registered here yet -- registering an
+ * unused module would be dead weight in the shipped bundle.
+ *
+ * `./fade-in-observer` is imported for its side effect only -- it is
+ * plain JS, not an Alpine.data() module (see that file for why), so it
+ * never appears in the `Alpine.data(...)` list below.
  */
 import Alpine from "@alpinejs/csp";
+import "./fade-in-observer";
 import { interactiveDemo } from "./interactive-demo";
+import { nav } from "./nav";
+import { newsletterSignup } from "./newsletter";
+import { terminal } from "./terminal";
 
 Alpine.data("interactiveDemo", interactiveDemo);
+Alpine.data("nav", nav);
+Alpine.data("newsletterSignup", newsletterSignup);
+Alpine.data("terminal", terminal);
 
 Alpine.start();

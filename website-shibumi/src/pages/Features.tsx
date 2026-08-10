@@ -28,6 +28,7 @@ export function FeaturesPage({ currentPath, version }: FeaturesPageProps) {
       canonical="https://mcpvault.org/features"
       page="features"
       pageStylesheet="/styles/features.css"
+      clientScript="/client/alpine.js"
       version={version}
     >
       <Nav currentPath={currentPath} version={version} />

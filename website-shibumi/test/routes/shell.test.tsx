@@ -126,7 +126,7 @@ describe("Footer", () => {
 });
 
 describe("ThemeToggle", () => {
-  test("renders in the default dark state matching <html class=\"dark\">, unwired", () => {
+  test("renders in the default dark state matching <html class=\"dark\">", () => {
     const html = ThemeToggle({}).toString();
     expect(html).toContain('data-theme="dark"');
     expect(html).toContain('aria-label="Switch to light mode"');
@@ -144,5 +144,29 @@ describe("ThemeToggle", () => {
     const html = ThemeToggle({}).toString();
     expect(html).not.toContain('class="theme-toggle"');
     expect(html).toContain('data-component="theme-toggle"');
+  });
+
+  test("names the themeToggle Alpine.data() module and its init()/toggle() methods (Phase 3, still unmounted)", () => {
+    const html = ThemeToggle({}).toString();
+    expect(html).toContain('x-data="themeToggle"');
+    expect(html).toContain('x-init="init()"');
+    expect(html).toContain('x-on:click="toggle()"');
+  });
+
+  test("only the icon matching the server-rendered theme is visible without JavaScript", () => {
+    // Dark (default): the first icon span rendered (the dark icon) has no
+    // static "hidden" class; the second (the light icon) does.
+    const darkHtml = ThemeToggle({}).toString();
+    const darkVisibleIndex = darkHtml.indexOf('<span class="icon" aria-hidden="true"');
+    const darkHiddenIndex = darkHtml.indexOf('<span class="icon hidden" aria-hidden="true"');
+    expect(darkVisibleIndex).toBeGreaterThan(-1);
+    expect(darkHiddenIndex).toBeGreaterThan(darkVisibleIndex);
+
+    // Light: the roles flip -- the hidden icon now comes first.
+    const lightHtml = ThemeToggle({ theme: "light" }).toString();
+    const lightHiddenIndex = lightHtml.indexOf('<span class="icon hidden" aria-hidden="true"');
+    const lightVisibleIndex = lightHtml.indexOf('<span class="icon" aria-hidden="true"');
+    expect(lightHiddenIndex).toBeGreaterThan(-1);
+    expect(lightVisibleIndex).toBeGreaterThan(lightHiddenIndex);
   });
 });

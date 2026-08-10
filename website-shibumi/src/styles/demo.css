@@ -19,24 +19,10 @@
  *
  * The Astro source's `gradient-text` class on the heading is dropped here,
  * same precedent as FeatureGrid/FAQ/ComparisonTable/HowItWorks/SkillsContent.
+ *
+ * `.fade-in-on-scroll`/`@keyframes fade-in-up` moved to shared.css (Phase 3),
+ * same as features.css/install.css -- see features.css's comment.
  */
-
-.fade-in-on-scroll {
-  opacity: 0;
-  transform: translateY(1rem);
-  animation: fade-in-up 0.6s ease-out forwards;
-}
-
-@keyframes fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(2rem);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 
 /* ---------------------------------------------------------------------- */
 /* Section shell                                                         */
@@ -238,6 +224,24 @@
 
 [data-component="interactive-demo"] .hidden {
   display: none;
+}
+
+/* `.demo-window-body` wraps whichever single example panel is currently
+   visible (every other panel is `.hidden`/`display: none`). Its rendered
+   height is entirely the active panel's content height, which changes
+   twice per playback: once when the typing indicator is replaced by the
+   AI response + Technical Details block, and once on tab switch. `height:
+   auto` can't itself be transitioned across browsers, so `interactive-demo
+   .ts` measures `scrollHeight` and sets an explicit pixel height on this
+   element (see `growToContent`) -- this rule is what makes that pixel
+   change animate instead of jump. `overflow: hidden` clips during the
+   transition; it's also what lets `scrollHeight` report the *new*
+   content's full height while this element's own height is still frozen
+   at the *old* pixel value, which is the trick that makes measuring after
+   the DOM has already changed, but before un-freezing the height, work. */
+[data-component="interactive-demo"] .demo-window-body {
+  overflow: hidden;
+  transition: height 300ms ease-out;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -477,18 +481,19 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-component="interactive-demo"] .fade-in-on-scroll {
-    animation: none;
-    opacity: 1;
-    transform: none;
-  }
-
+  /* `.fade-in-on-scroll` itself is covered by shared.css's global
+     reduced-motion override now; only this page's own animated elements
+     need a local one. */
   [data-component="interactive-demo"] .demo-window-status-dot {
     animation: none;
   }
 
   [data-component="interactive-demo"] .demo-typing-dot {
     animation: none;
+  }
+
+  [data-component="interactive-demo"] .demo-window-body {
+    transition: none;
   }
 }
 

@@ -73,12 +73,18 @@ describe("GET /install/ (HTML)", () => {
     const claudeCodeIndex = body.indexOf('data-content="claude-code"');
     expect(standardIndex).toBeGreaterThan(-1);
     expect(claudeCodeIndex).toBeGreaterThan(-1);
-    // The standard panel's own opening tag has no "hidden" class...
+    // Check the static `class` attribute specifically, not the whole opening
+    // tag: Phase 3's `x-bind:class="{ hidden: activeTab !== '...' }"` also
+    // contains the substring "hidden" (Alpine's own gating expression), on
+    // every panel including "standard" -- that's the no-JS-safe default
+    // (Alpine never runs), not a visible class.
     const standardTagEnd = body.indexOf(">", standardIndex);
-    expect(body.slice(body.lastIndexOf("<div", standardIndex), standardTagEnd)).not.toContain("hidden");
-    // ...but every other config panel does.
+    const standardTag = body.slice(body.lastIndexOf("<div", standardIndex), standardTagEnd);
+    expect(standardTag).toMatch(/class="config-content"/);
+    // ...but every other config panel's static class does.
     const claudeCodeTagEnd = body.indexOf(">", claudeCodeIndex);
-    expect(body.slice(body.lastIndexOf("<div", claudeCodeIndex), claudeCodeTagEnd)).toContain("hidden");
+    const claudeCodeTag = body.slice(body.lastIndexOf("<div", claudeCodeIndex), claudeCodeTagEnd);
+    expect(claudeCodeTag).toMatch(/class="config-content hidden"/);
   });
 
   test("preserves the hand-colored CLI command and TOML markup as raw HTML", async () => {
@@ -100,6 +106,59 @@ describe("GET /install/ (HTML)", () => {
     const body = await (await app.request("/install/")).text();
     expect(body).toContain('data-copy="npm install -g @modelcontextprotocol/inspector"');
     expect(body).toContain("data-copy=\"{&quot;mcpServers&quot;");
+  });
+});
+
+describe("GET /install/ (Alpine interactivity, Phase 3)", () => {
+  test("loads the bundled Alpine client script", async () => {
+    const body = await (await app.request("/install/")).text();
+    expect(body).toContain('<script type="module" src="/client/alpine.js">');
+  });
+
+  test("names the terminal module on the section root and starts the typing animation", async () => {
+    const body = await (await app.request("/install/")).text();
+    expect(body).toContain('x-data="terminal"');
+    expect(body).toContain('x-init="startTyping()"');
+  });
+
+  // Hono's JSX renderer HTML-escapes attribute values, so a literal `'`
+  // becomes `&#39;` in the served markup -- same helper as demo.test.tsx.
+  function q(id: string): string {
+    return `&#39;${id}&#39;`;
+  }
+
+  test("every config tab names selectTab and binds its own active class", async () => {
+    const body = await (await app.request("/install/")).text();
+    for (const id of ["standard", "claude-code", "gemini-cli", "opencode", "codex"]) {
+      expect(body).toContain(`x-on:click="selectTab(${q(id)})"`);
+      expect(body).toContain(`x-bind:class="{ active: activeTab === ${q(id)} }"`);
+    }
+  });
+
+  test("every config panel binds its own hidden class", async () => {
+    const body = await (await app.request("/install/")).text();
+    for (const id of ["standard", "claude-code", "gemini-cli", "opencode", "codex"]) {
+      expect(body).toContain(`x-bind:class="{ hidden: activeTab !== ${q(id)} }"`);
+    }
+  });
+
+  test("every copy button reads its payload from its own data-copy attribute, not an inline literal", async () => {
+    const body = await (await app.request("/install/")).text();
+    const copyOnClickCount = body.match(/x-on:click="copy\(\$el\.dataset\.copy\)"/g) ?? [];
+    // 8 copy-code-btn (standard, claude-code CLI, opencode CLI, opencode
+    // config, gemini CLI, gemini config, codex) + 2 inspector-copy-btn.
+    expect(copyOnClickCount.length).toBe(9);
+  });
+
+  test("the inspector command lines carry typed-progress bindings for the typing animation", async () => {
+    const body = await (await app.request("/install/")).text();
+    expect(body).toContain('x-text="typed[0]"');
+    expect(body).toContain('x-text="typed[1]"');
+  });
+
+  test("names the nav module (shared shell)", async () => {
+    const body = await (await app.request("/install/")).text();
+    expect(body).toContain('x-data="nav"');
   });
 });
 

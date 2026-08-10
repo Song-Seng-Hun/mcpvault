@@ -26,6 +26,7 @@ export function InstallPage({ currentPath, version }: InstallPageProps) {
       canonical="https://mcpvault.org/install"
       page="install"
       pageStylesheet="/styles/install.css"
+      clientScript="/client/alpine.js"
       version={version}
     >
       <Nav currentPath={currentPath} version={version} />

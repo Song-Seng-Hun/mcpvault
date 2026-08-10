@@ -95,6 +95,60 @@ a {
 }
 
 /* -------------------------------------------------------------------- */
+/* Shared scroll-reveal utility                                         */
+/* -------------------------------------------------------------------- */
+
+/*
+ * `.fade-in-on-scroll` / `@keyframes fade-in-up` are the one deliberate
+ * exception to this file's "every selector is rooted under a
+ * data-component" convention: features.css, install.css, demo.css,
+ * skill.css, and how-it-works.css each used to carry their own byte-for-byte
+ * copy of this exact rule (an unrooted global class, matching the Astro
+ * source's own unrooted `.fade-in-on-scroll` convention across
+ * ComparisonTable/FeatureGrid/HowItWorks/SkillsContent), so it is
+ * centralized here once instead of staying duplicated five times.
+ *
+ * The animation only plays once `fade-in-observer.ts` (plain JS, not
+ * Alpine -- see that file) adds `.is-visible` after the element scrolls
+ * into view. That gating class is new: the duplicated per-page rules this
+ * replaces played `animation: fade-in-up ... forwards` unconditionally, so
+ * every element animated on page load regardless of scroll position --
+ * `.fade-in-on-scroll` and `.is-visible` were never actually wired
+ * together anywhere in this app. See `fade-in-observer.ts` for the fuller
+ * story, including how production has the same disconnect.
+ */
+.fade-in-on-scroll {
+  opacity: 0;
+  transform: translateY(1rem);
+}
+
+.fade-in-on-scroll.is-visible {
+  animation: fade-in-up 0.6s ease-out forwards;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(2rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-in-on-scroll {
+    opacity: 1;
+    transform: none;
+  }
+
+  .fade-in-on-scroll.is-visible {
+    animation: none;
+  }
+}
+
+/* -------------------------------------------------------------------- */
 /* App shell / background watermark                                     */
 /* -------------------------------------------------------------------- */
 
@@ -516,6 +570,10 @@ a {
   width: 0.75rem;
   height: 0.75rem;
   color: var(--color-background);
+}
+
+[data-component="theme-toggle"] .slider .icon.hidden {
+  display: none;
 }
 
 [data-component="theme-toggle"] .sr-status {

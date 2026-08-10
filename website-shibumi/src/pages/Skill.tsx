@@ -24,6 +24,7 @@ export function SkillPage({ currentPath, version }: SkillPageProps) {
       canonical="https://mcpvault.org/skill"
       page="skill"
       pageStylesheet="/styles/skill.css"
+      clientScript="/client/alpine.js"
       version={version}
     >
       <Nav currentPath={currentPath} version={version} />

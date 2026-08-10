@@ -6,33 +6,12 @@
  * Convention: every component has a `data-component` root (matching
  * shared.css); page-only rules are rooted under `[data-page="features"]`.
  *
- * `.fade-in-on-scroll`/`@keyframes fade-in-up` are a shared utility (not
- * namespaced under one component) because all three sections below use it
- * identically, matching the Astro source's own global utility class.
- * Per the plan, the scroll-triggered `IntersectionObserver` that added
- * `.animate-fade-in-up` in Layout.astro's vanilla `<script>` is Phase 3
- * scope; the animation itself already plays on load without JavaScript
- * (the scoped `<style>` blocks below applied `animation: fade-in-up ...`
- * directly, unconditionally), so the page still renders and animates
- * correctly with no JS.
+ * `.fade-in-on-scroll`/`@keyframes fade-in-up` moved to shared.css (Phase 3):
+ * this page used to carry its own byte-for-byte copy of that rule, now
+ * centralized since features/install/demo/skill/how-it-works all used it
+ * identically. `fade-in-observer.ts` (plain JS) adds the `.is-visible`
+ * class the shared rule now gates the animation behind.
  */
-
-.fade-in-on-scroll {
-  opacity: 0;
-  transform: translateY(1rem);
-  animation: fade-in-up 0.6s ease-out forwards;
-}
-
-@keyframes fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(2rem);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 
 /* ---------------------------------------------------------------------- */
 /* FeatureGrid                                                            */

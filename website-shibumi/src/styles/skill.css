@@ -9,8 +9,11 @@
  * this file mirrors that with one wrapper class per sub-block instead of a
  * `data-component` per sub-block.
  *
- * `.fade-in-on-scroll`/`@keyframes fade-in-up` are repeated here rather than
- * centralized in shared.css, matching every other page stylesheet.
+ * `.fade-in-on-scroll`/`@keyframes fade-in-up` moved to shared.css (Phase 3)
+ * -- see features.css's comment. This page kept its own longer 0.8s/2rem
+ * variant (matching the Astro source's SkillsContent.astro exactly, which
+ * differed from ComparisonTable/FeatureGrid's 0.6s/1rem), so it overrides
+ * shared.css's defaults below, rooted under this page's own component.
  *
  * The Astro source's `gradient-text` class on the hero `<h1>` is dropped
  * here, same precedent as FeatureGrid/FAQ/ComparisonTable/HowItWorks's
@@ -27,16 +30,20 @@
  * accent-colored text with no pill in production too.
  */
 
-.fade-in-on-scroll {
-  opacity: 0;
+[data-component="skill-content"] .fade-in-on-scroll {
   transform: translateY(2rem);
-  animation: fade-in-up 0.8s ease-out forwards;
 }
 
-@keyframes fade-in-up {
-  to {
-    opacity: 1;
-    transform: translateY(0);
+[data-component="skill-content"] .fade-in-on-scroll.is-visible {
+  animation-duration: 0.8s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Both overrides above are more specific than shared.css's reduced-motion
+     rule (an attribute selector beats a bare class), so this page needs its
+     own copy to actually win under that media query. */
+  [data-component="skill-content"] .fade-in-on-scroll {
+    transform: none;
   }
 }
 

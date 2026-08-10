@@ -11,10 +11,11 @@
  *  - `.terminal-window` styles -- those belong to the Install page/group,
  *    not the shell, even though Layout.astro carried them globally.
  *
- * `clientScript` (added Phase 3 step 1) is opt-in per page rather than a
- * shell-wide `<script>`: only the Demo page has an Alpine module to load so
- * far, and every other page should keep shipping zero client JS until its
- * own Phase 3 step lands.
+ * `clientScript` (added Phase 3 step 1) stays an explicit per-page prop
+ * rather than an unconditional shell-wide `<script>`, so a page can still
+ * ship zero client JS by simply omitting it -- but every page currently in
+ * the router passes `"/client/alpine.js"`, since `Nav`'s mobile menu alone
+ * (present on every page) now names an Alpine.data() module.
  *
  * Raw-HTML audit: the only non-escaped output below is the JSON-LD
  * `<script>` body. Hono's JSX renderer HTML-escapes every string child

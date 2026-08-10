@@ -2,14 +2,26 @@
  * Install-page terminal/config-tab UI. Ported from Terminal.astro.
  *
  * Scope for this group (Phase 2, group 4 -- "install"): markup, scoped CSS,
- * and the Markdown counterpart. Deliberately NOT ported here (Phase 3):
- *  - the vanilla `<script>` that wired `.copy-btn` clicks and `.config-tab`
- *    switching -- becomes named `Alpine.data()` modules per the plan.
- *  - the "Copied!" feedback swap it produced.
- * Every tab/copy control keeps its `data-tab`/`data-content`/`data-copy`
- * attribute so Phase 3 can hook Alpine onto this exact markup; only the
- * "standard" tab is visible by default (`.config-content.hidden` on the
- * rest), matching the Astro source's initial server-rendered state.
+ * and the Markdown counterpart.
+ *
+ * Phase 3: `.copy-btn` clicks and `.config-tab` switching are now the
+ * `terminal` Alpine.data() module (`../client/terminal.ts`) -- `x-data`
+ * names it on the section root, tab buttons call `selectTab(id)` and bind
+ * their own `active` class, panels bind their `hidden` class, and every
+ * copy button calls `copy($el.dataset.copy)` and reads that same
+ * `data-copy` attribute back for its own "Copied!" feedback (see
+ * `terminal.ts` for why it's read from the attribute rather than named as
+ * an inline string literal). Every tab/copy control still keeps its
+ * `data-tab`/`data-content`/`data-copy` attribute, so a no-JS visitor sees
+ * exactly the same server-rendered state as before: only the "standard"
+ * tab is visible (`.config-content.hidden` on the rest), and every button
+ * shows its static "Copy code" label.
+ *
+ * Also Phase 3 (maintainer decision 2026-08-10, demo-purpose only): the two
+ * MCP Inspector command lines type themselves out on load via the same
+ * module's `startTyping()`/`typed` state -- a cosmetic addition with no
+ * production equivalent. Without JavaScript the full command text is what
+ * server-renders and stays put, since `x-text` never runs.
  *
  * Simplification pass (maintainer decision 2026-08-10, recorded in
  * `.plans/shibumi-website-migration.md` "Approved deviations"): this
@@ -110,6 +122,11 @@ const CLAUDE_CODE_CLI_HTML =
 const CODEX_TOML_HTML = `<span style="color: #cba6f7;">[mcp_servers.obsidian]</span>
 <span style="color: #89b4fa;">command</span> <span style="color: #94e2d5;">=</span> <span style="color: #a6e3a1;">"npx"</span>
 <span style="color: #89b4fa;">args</span> <span style="color: #94e2d5;">=</span> <span style="color: #cdd6f4;">[</span><span style="color: #a6e3a1;">"-y"</span><span style="color: #cdd6f4;">,</span> <span style="color: #a6e3a1;">"@bitbonsai/mcpvault@latest"</span><span style="color: #cdd6f4;">,</span> <span style="color: #a6e3a1;">"/path/to/your/vault"</span><span style="color: #cdd6f4;">]</span>`;
+
+/** Reused verbatim on every copy button -- see the Phase 3 port comment above and `terminal.ts`. */
+const COPY_ON_CLICK = "copy($el.dataset.copy)";
+const COPY_LABEL_XTEXT = "copiedText === $el.closest('button').dataset.copy ? 'Copied!' : 'Copy code'";
+const COPY_IS_COPIED_CLASS = "{ 'is-copied': copiedText === $el.dataset.copy }";
 
 interface ConfigTab {
   id: string;
@@ -268,7 +285,7 @@ export async function Terminal() {
   ]);
 
   return (
-    <section id="install" data-component="terminal" aria-labelledby="terminal-heading">
+    <section id="install" data-component="terminal" aria-labelledby="terminal-heading" x-data="terminal" x-init="startTyping()">
       <div class="terminal-inner">
         <div class="terminal-intro fade-in-on-scroll">
           <h2 id="terminal-heading" class="terminal-intro-title">
@@ -295,23 +312,28 @@ export async function Terminal() {
               <div class="terminal-body">
                 <div class="config-tabs">
                   {CONFIG_TABS.map((tab) => (
-                    <button class={`config-tab${tab.id === "standard" ? " active" : ""}`} data-tab={tab.id}>
+                    <button
+                      class={`config-tab${tab.id === "standard" ? " active" : ""}`}
+                      data-tab={tab.id}
+                      x-on:click={`selectTab('${tab.id}')`}
+                      x-bind:class={`{ active: activeTab === '${tab.id}' }`}
+                    >
                       {tab.label}
                     </button>
                   ))}
                 </div>
 
                 {/* Standard config (Claude Desktop / ChatGPT+) */}
-                <div class="config-content" data-content="standard">
+                <div class="config-content" data-content="standard" x-bind:class="{ hidden: activeTab !== 'standard' }">
                   <div class="code-scroll">{raw(standardHtml)}</div>
-                  <button class="copy-code-btn copy-btn" data-copy={STANDARD_CONFIG_COPY} title="Copy configuration" aria-label="Copy configuration to clipboard">
+                  <button class="copy-code-btn copy-btn" data-copy={STANDARD_CONFIG_COPY} title="Copy configuration" aria-label="Copy configuration to clipboard" x-on:click={COPY_ON_CLICK} x-bind:class={COPY_IS_COPIED_CLASS}>
                     <CopyIcon className="icon" />
-                    <span>Copy code</span>
+                    <span x-text={COPY_LABEL_XTEXT}>Copy code</span>
                   </button>
                 </div>
 
                 {/* Claude Code config */}
-                <div class="config-content hidden" data-content="claude-code">
+                <div class="config-content hidden" data-content="claude-code" x-bind:class="{ hidden: activeTab !== 'claude-code' }">
                   <div class="info-card info-card--mb">
                     <div class="info-card-row">
                       <ZapIcon className="info-card-icon" />
@@ -320,9 +342,9 @@ export async function Terminal() {
                         <div class="code-scroll">
                           <pre class="cli-command">{raw(CLAUDE_CODE_CLI_HTML)}</pre>
                         </div>
-                        <button class="copy-code-btn copy-btn info-card-copy" data-copy={CLAUDE_CODE_CLI_COPY} title="Copy configuration" aria-label="Copy configuration to clipboard">
+                        <button class="copy-code-btn copy-btn info-card-copy" data-copy={CLAUDE_CODE_CLI_COPY} title="Copy configuration" aria-label="Copy configuration to clipboard" x-on:click={COPY_ON_CLICK} x-bind:class={COPY_IS_COPIED_CLASS}>
                           <CopyIcon className="icon" />
-                          <span>Copy code</span>
+                          <span x-text={COPY_LABEL_XTEXT}>Copy code</span>
                         </button>
                       </div>
                     </div>
@@ -344,16 +366,16 @@ export async function Terminal() {
                 </div>
 
                 {/* OpenCode config */}
-                <div class="config-content hidden" data-content="opencode">
+                <div class="config-content hidden" data-content="opencode" x-bind:class="{ hidden: activeTab !== 'opencode' }">
                   <div class="info-card">
                     <div class="info-card-row">
                       <ZapIcon className="info-card-icon" />
                       <div class="info-card-body">
                         <p class="info-card-title">Use the CLI</p>
                         <code class="code-chip code-chip--cli">{OPENCODE_CLI_COPY}</code>
-                        <button class="copy-code-btn copy-btn info-card-copy" data-copy={OPENCODE_CLI_COPY} title="Copy command" aria-label="Copy command to clipboard">
+                        <button class="copy-code-btn copy-btn info-card-copy" data-copy={OPENCODE_CLI_COPY} title="Copy command" aria-label="Copy command to clipboard" x-on:click={COPY_ON_CLICK} x-bind:class={COPY_IS_COPIED_CLASS}>
                           <CopyIcon className="icon" />
-                          <span>Copy code</span>
+                          <span x-text={COPY_LABEL_XTEXT}>Copy code</span>
                         </button>
                         <p class="info-card-hint">
                           Interactive wizard — select <strong class="info-card-hint-strong">local</strong>, then enter the command:{" "}
@@ -365,9 +387,9 @@ export async function Terminal() {
 
                   <p class="config-content-note">Or configure manually:</p>
                   <div class="code-scroll">{raw(opencodeHtml)}</div>
-                  <button class="copy-code-btn copy-btn" data-copy={OPENCODE_CONFIG_COPY} title="Copy configuration" aria-label="Copy configuration to clipboard">
+                  <button class="copy-code-btn copy-btn" data-copy={OPENCODE_CONFIG_COPY} title="Copy configuration" aria-label="Copy configuration to clipboard" x-on:click={COPY_ON_CLICK} x-bind:class={COPY_IS_COPIED_CLASS}>
                     <CopyIcon className="icon" />
-                    <span>Copy code</span>
+                    <span x-text={COPY_LABEL_XTEXT}>Copy code</span>
                   </button>
 
                   <ScopeListCard
@@ -385,16 +407,16 @@ export async function Terminal() {
                 </div>
 
                 {/* Gemini CLI config */}
-                <div class="config-content hidden" data-content="gemini-cli">
+                <div class="config-content hidden" data-content="gemini-cli" x-bind:class="{ hidden: activeTab !== 'gemini-cli' }">
                   <div class="info-card info-card--mb">
                     <div class="info-card-row">
                       <ZapIcon className="info-card-icon" />
                       <div class="info-card-body">
                         <p class="info-card-title">Use the CLI</p>
                         <code class="code-chip code-chip--cli">{GEMINI_CLI_COPY}</code>
-                        <button class="copy-code-btn copy-btn info-card-copy" data-copy={GEMINI_CLI_COPY} title="Copy command" aria-label="Copy command to clipboard">
+                        <button class="copy-code-btn copy-btn info-card-copy" data-copy={GEMINI_CLI_COPY} title="Copy command" aria-label="Copy command to clipboard" x-on:click={COPY_ON_CLICK} x-bind:class={COPY_IS_COPIED_CLASS}>
                           <CopyIcon className="icon" />
-                          <span>Copy code</span>
+                          <span x-text={COPY_LABEL_XTEXT}>Copy code</span>
                         </button>
                       </div>
                     </div>
@@ -404,9 +426,9 @@ export async function Terminal() {
                     Or configure manually in <code class="code-chip code-chip--plain">~/.gemini/settings.json</code>:
                   </p>
                   <div class="code-scroll">{raw(geminiHtml)}</div>
-                  <button class="copy-code-btn copy-btn" data-copy={GEMINI_CONFIG_COPY} title="Copy configuration" aria-label="Copy configuration to clipboard">
+                  <button class="copy-code-btn copy-btn" data-copy={GEMINI_CONFIG_COPY} title="Copy configuration" aria-label="Copy configuration to clipboard" x-on:click={COPY_ON_CLICK} x-bind:class={COPY_IS_COPIED_CLASS}>
                     <CopyIcon className="icon" />
-                    <span>Copy code</span>
+                    <span x-text={COPY_LABEL_XTEXT}>Copy code</span>
                   </button>
 
                   <UsageExamplesCard
@@ -416,13 +438,13 @@ export async function Terminal() {
                 </div>
 
                 {/* OpenAI Codex config (TOML) */}
-                <div class="config-content hidden" data-content="codex">
+                <div class="config-content hidden" data-content="codex" x-bind:class="{ hidden: activeTab !== 'codex' }">
                   <div class="code-scroll">
                     <pre class="cli-command cli-command--toml">{raw(CODEX_TOML_HTML)}</pre>
                   </div>
-                  <button class="copy-code-btn copy-btn" data-copy={CODEX_COPY} title="Copy configuration" aria-label="Copy configuration to clipboard">
+                  <button class="copy-code-btn copy-btn" data-copy={CODEX_COPY} title="Copy configuration" aria-label="Copy configuration to clipboard" x-on:click={COPY_ON_CLICK} x-bind:class={COPY_IS_COPIED_CLASS}>
                     <CopyIcon className="icon" />
-                    <span>Copy code</span>
+                    <span x-text={COPY_LABEL_XTEXT}>Copy code</span>
                   </button>
 
                   <UsageExamplesCard
@@ -573,13 +595,22 @@ export async function Terminal() {
               </div>
               <div class="terminal-body">
                 <div class="inspector-commands">
-                  {INSPECTOR_COMMANDS.map((cmd) => (
+                  {INSPECTOR_COMMANDS.map((cmd, index) => (
                     <>
                       <div class="inspector-comment">{cmd.comment}</div>
                       <div class="inspector-command-row">
                         <span class="inspector-prompt">$</span>
-                        <span class="inspector-command-text">{cmd.command}</span>
-                        <button class="inspector-copy-btn copy-btn" data-copy={cmd.copy} title="Copy to clipboard" aria-label={cmd.ariaLabel}>
+                        <span class="inspector-command-text" x-text={`typed[${index}]`}>
+                          {cmd.command}
+                        </span>
+                        <button
+                          class="inspector-copy-btn copy-btn"
+                          data-copy={cmd.copy}
+                          title="Copy to clipboard"
+                          aria-label={cmd.ariaLabel}
+                          x-on:click={COPY_ON_CLICK}
+                          x-bind:class="{ 'is-copied': copiedText === $el.dataset.copy }"
+                        >
                           <CopyIcon className="icon" />
                         </button>
                       </div>
