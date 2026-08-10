@@ -13,10 +13,12 @@
  * Every named module this app registers is added here, then `Alpine.start()`
  * is called once. `nav` (mobile menu, every page) and `newsletterSignup`
  * (home page) joined `interactiveDemo` (Phase 3 step 1) in this step;
- * `terminal` (install page) landed in the same step. `themeToggle` exists
- * as a module too, but its component stays unmounted (see
- * `ThemeToggle.tsx`), so it isn't registered here yet -- registering an
- * unused module would be dead weight in the shipped bundle.
+ * `terminal` (install page) landed in the same step, and `updatesCallout`
+ * (home page's "Recent Updates" expand/collapse) landed later in Phase 3.
+ * `themeToggle` exists as a module too, but its component stays unmounted
+ * (see `ThemeToggle.tsx` -- no layout/page renders `<ThemeToggle />` yet),
+ * so it isn't registered here yet -- registering an unused module would be
+ * dead weight in the shipped bundle.
  *
  * `./fade-in-observer` is imported for its side effect only -- it is
  * plain JS, not an Alpine.data() module (see that file for why), so it
@@ -28,10 +30,12 @@ import { interactiveDemo } from "./interactive-demo";
 import { nav } from "./nav";
 import { newsletterSignup } from "./newsletter";
 import { terminal } from "./terminal";
+import { updatesCallout } from "./updates-callout";
 
 Alpine.data("interactiveDemo", interactiveDemo);
 Alpine.data("nav", nav);
 Alpine.data("newsletterSignup", newsletterSignup);
 Alpine.data("terminal", terminal);
+Alpine.data("updatesCallout", updatesCallout);
 
 Alpine.start();

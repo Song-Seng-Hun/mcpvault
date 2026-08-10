@@ -2,11 +2,29 @@
  * "Recent Updates" callout. Ported from UpdateCallout.astro.
  *
  * The expand/collapse toggle was a vanilla `<script>` in Astro
- * (`initUpdatesToggle`), toggling `aria-expanded` and an `is-collapsed` /
- * `is-expanded` class pair. Per the plan, vanilla state scripts become
- * named Alpine.data() modules in Phase 3, not here -- this port keeps the
- * static, collapsed markup (matching the panel's default state before any
- * script ran) so the page still renders and reads correctly with no JS.
+ * (`initUpdatesToggle`), toggling `aria-expanded` (plus the button's
+ * `aria-label`/`title` and the `data-updates-label` span's text) and an
+ * `is-collapsed`/`is-expanded` class pair on both the button and the
+ * panel. Phase 3: that's now the `updatesCallout` Alpine.data() module
+ * (`../client/updates-callout.ts`) -- `x-data` names it on the section
+ * root, the button calls `toggle()` and binds `aria-expanded`/`class`/
+ * `aria-label`/`title` to `expanded`, and the panel binds its own `class`
+ * to the same property. Every attribute below is grammar the
+ * `@alpinejs/csp` build's restricted evaluator accepts (bare identifiers,
+ * ternaries, object literals with quoted hyphenated keys -- see
+ * `Terminal.tsx`'s `{ 'is-copied': ... }` for the same pattern already
+ * proven elsewhere -- and method calls with no arguments), never an
+ * inline function body.
+ *
+ * The static markup below (`aria-expanded="false"`, `class="... is-
+ * collapsed"`, the literal "Show full history" text) is the no-JS
+ * fallback Alpine's `x-bind:*`/`x-text` only overwrite once it actually
+ * hydrates -- same convention as `Nav.tsx`'s mobile menu. That fallback
+ * state clips the older-updates list to `max-height: 2.5rem` with a
+ * mask-image fade (`home.css`), not `display: none`, so the full list
+ * stays in the DOM -- reachable by search engines, screen readers, Ctrl/
+ * Cmd+F -- even with no JavaScript at all; only the visual reveal needs a
+ * script, matching the original Astro behavior exactly.
  *
  * `lucide-react`'s `Rocket` is replaced with the audited `RocketIcon`.
  */
@@ -356,7 +374,7 @@ const OLDER_UPDATES: Update[] = [
 
 export function UpdateCallout() {
   return (
-    <section data-component="update-callout">
+    <section data-component="update-callout" x-data="updatesCallout">
       <div class="callout-inner">
         <div class="callout-icon">
           <RocketIcon className="icon" />
@@ -366,8 +384,21 @@ export function UpdateCallout() {
             <h3>
               Recent Updates <span class="version-pill">v0.15.0</span>
             </h3>
-            <button type="button" class="updates-toggle updates-toggle-compact" data-updates-toggle aria-expanded="false" aria-controls="older-updates" aria-label="Show full history" title="Show full history">
-              <span class="sr-only" data-updates-label>
+            <button
+              type="button"
+              class="updates-toggle updates-toggle-compact"
+              data-updates-toggle
+              aria-expanded="false"
+              aria-controls="older-updates"
+              aria-label="Show full history"
+              title="Show full history"
+              x-on:click="toggle()"
+              x-bind:aria-expanded="expanded"
+              x-bind:class="{ 'is-expanded': expanded }"
+              x-bind:aria-label="expanded ? 'Show less' : 'Show full history'"
+              x-bind:title="expanded ? 'Show less' : 'Show full history'"
+            >
+              <span class="sr-only" data-updates-label x-text="expanded ? 'Show less' : 'Show full history'">
                 Show full history
               </span>
               <svg class="updates-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -385,7 +416,7 @@ export function UpdateCallout() {
             , thanks @vdhome-dev)
           </p>
 
-          <div id="older-updates" class="older-updates is-collapsed" data-updates-panel>
+          <div id="older-updates" class="older-updates is-collapsed" data-updates-panel x-bind:class="{ 'is-expanded': expanded, 'is-collapsed': !expanded }">
             <ul>
               {OLDER_UPDATES.map((update) => (
                 <li>
