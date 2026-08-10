@@ -912,20 +912,11 @@
 }
 
 [data-component="newsletter-signup"] .eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
   margin: 0;
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.2em;
   color: var(--color-muted-foreground);
-}
-
-[data-component="newsletter-signup"] .eyebrow-line {
-  width: 2rem;
-  height: 1px;
-  background: rgba(163, 163, 163, 0.4);
 }
 
 [data-component="newsletter-signup"] h2 {

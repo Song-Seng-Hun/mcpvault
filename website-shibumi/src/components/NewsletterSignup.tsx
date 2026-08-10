@@ -17,10 +17,7 @@ export function NewsletterSignup() {
         <div class="newsletter-card">
           <div class="newsletter-grid">
             <div>
-              <p class="eyebrow">
-                <span class="eyebrow-line" aria-hidden="true"></span>
-                Stay in the loop
-              </p>
+              <p class="eyebrow">Stay in the loop</p>
               <h2>Ship updates to your inbox</h2>
               <p class="lede">Get a lightweight email whenever MCPVault ships a new release, adds a client configuration, or shares Obsidian automation recipes.</p>
               <ul class="highlights">
