@@ -296,23 +296,29 @@ a {
 [data-component="nav"] .nav-links {
   display: none;
   align-items: center;
-  gap: 2rem;
+  /* Scale the gap down before items would clip: every item must stay
+     visible at any width; labels truncate (ellipsis) before the row
+     overflows. */
+  gap: clamp(0.25rem, 2vw, 2rem);
+  min-width: 0;
 }
 
 [data-component="nav"] .nav-link {
   position: relative;
   color: rgba(255, 255, 255, 0.7);
   text-decoration: none;
-  padding: 0.5rem 1rem;
   border-radius: 0.5rem;
   font-weight: 500;
   transition: all 0.3s ease;
   /* Multi-word labels ("How It Works") must never wrap into stacked lines
-     at squeezed widths; truncate with an ellipsis instead. */
+     at squeezed widths; the item shrinks and truncates with an ellipsis
+     instead, so all nav items always stay visible. */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 12rem;
+  min-width: 0;
+  flex-shrink: 1;
+  padding: 0.5rem clamp(0.25rem, 1vw, 1rem);
 }
 
 [data-component="nav"] .nav-link:hover {
