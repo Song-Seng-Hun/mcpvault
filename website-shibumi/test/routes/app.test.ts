@@ -53,10 +53,12 @@ describe("static serving", () => {
     expect(res.headers.get("content-type")).toContain("text/plain");
   });
 
-  test("serves markdown endpoints", async () => {
+  test("serves markdown endpoints with markdown charset and revalidate cache-control", async () => {
     const res = await app.request("/index.md");
     expect(res.status).toBe(200);
     expect(await res.text()).toBe("# MCPVault\n");
+    expect(res.headers.get("content-type")).toBe("text/markdown; charset=utf-8");
+    expect(res.headers.get("cache-control")).toBe("public, max-age=0, must-revalidate");
   });
 
   test("HEAD returns headers without a body", async () => {
@@ -74,6 +76,18 @@ describe("static serving", () => {
   test("rejects encoded null bytes", async () => {
     const res = await app.request("/llm.txt%00.mp4");
     expect([400, 404]).toContain(res.status);
+  });
+});
+
+describe("X-Robots-Tag", () => {
+  test("is set on ordinary page/static responses (Cloudflare Pages _headers parity, PR #188)", async () => {
+    const res = await app.request("/llm.txt");
+    expect(res.headers.get("x-robots-tag")).toBe("index, follow");
+  });
+
+  test("is set on 404 responses too", async () => {
+    const res = await app.request("/nope");
+    expect(res.headers.get("x-robots-tag")).toBe("index, follow");
   });
 });
 

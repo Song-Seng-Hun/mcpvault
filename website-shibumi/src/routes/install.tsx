@@ -16,7 +16,7 @@ import { prefersMarkdown } from "../lib/content-negotiation";
 import { packageVersion } from "../lib/version";
 import { InstallPage } from "../pages/Install";
 
-const MARKDOWN_CACHE_CONTROL = "public, max-age=3600";
+const CACHE_CONTROL = "public, max-age=0, must-revalidate";
 
 export function registerInstallRoute(app: Hono, publicDir: string): void {
   app.get("/install/", async (c) => {
@@ -27,12 +27,14 @@ export function registerInstallRoute(app: Hono, publicDir: string): void {
           status: 200,
           headers: {
             "content-type": "text/markdown; charset=utf-8",
-            "cache-control": MARKDOWN_CACHE_CONTROL,
+            "cache-control": CACHE_CONTROL,
           },
         });
       }
     }
 
-    return c.html(<InstallPage currentPath={c.req.path} version={packageVersion} />);
+    return c.html(<InstallPage currentPath={c.req.path} version={packageVersion} />, 200, {
+      "cache-control": CACHE_CONTROL,
+    });
   });
 }

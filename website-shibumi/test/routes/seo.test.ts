@@ -48,6 +48,31 @@ describe("GET /robots.txt", () => {
   });
 });
 
+describe("GET /sitemap-0.xml", () => {
+  test("301s to /sitemap.xml instead of reproducing production's broken 200 (headers-baseline finding)", async () => {
+    const res = await app.request("/sitemap-0.xml", { redirect: "manual" });
+    expect(res.status).toBe(301);
+    expect(res.headers.get("location")).toBe("/sitemap.xml");
+  });
+});
+
+describe("robots.txt byte parity with website/public/robots.txt", () => {
+  test("is byte-identical to the production static file for the production siteUrl", async () => {
+    const res = await createApp().request("/robots.txt");
+    const body = await res.text();
+    // Two crawler groups under two different comments, and no trailing
+    // newline -- copied verbatim from `website/public/robots.txt` rather
+    // than re-derived, per the Phase 2 review.
+    expect(body).toBe(
+      "User-agent: *\nAllow: /\n\n# Sitemaps\nSitemap: https://mcpvault.org/sitemap.xml\n\n# AI crawlers\n" +
+        "User-agent: GPTBot\nAllow: /\n\nUser-agent: Google-Extended\nAllow: /\n\nUser-agent: CCBot\nAllow: /\n\n" +
+        "User-agent: Claude-Web\nAllow: /\n\nUser-agent: anthropic-ai\nAllow: /\n\nUser-agent: ChatGPT-User\nAllow: /\n\n" +
+        "# LLM-specific crawlers\nUser-agent: PerplexityBot\nAllow: /\n\nUser-agent: YouBot\nAllow: /\n\n" +
+        "User-agent: FacebookBot\nAllow: /\n\n# Crawl delay for all bots\nCrawl-delay: 1",
+    );
+  });
+});
+
 describe("default siteUrl", () => {
   test("createApp() with no options points the sitemap at production", async () => {
     const res = await createApp().request("/sitemap.xml");

@@ -41,6 +41,10 @@ export interface AppOptions {
 }
 
 const STATIC_CACHE_CONTROL = "public, max-age=3600";
+// Matches the page/markdown routes' CACHE_CONTROL (routes/home.tsx et al.):
+// static .md files under publicDir (e.g. /index.md) must send the same
+// charset and revalidation semantics as their content-negotiated siblings.
+const MARKDOWN_STATIC_CACHE_CONTROL = "public, max-age=0, must-revalidate";
 
 /** Minimal request logger; silent under bun test. */
 function requestLogger(): MiddlewareHandler {
@@ -67,6 +71,21 @@ export function createApp(options: AppOptions = {}): Hono {
   // Non-CSP headers are the secure-headers defaults; the explicit CSP (no
   // 'unsafe-eval', matching the @alpinejs/csp build) is defined in lib/csp.ts.
   app.use(secureHeaders({ contentSecurityPolicy }));
+
+  // Cloudflare Pages' public/_headers set `X-Robots-Tag: index, follow` on
+  // every response (PR #188); that rule dies at cutover since Pages is no
+  // longer in front of this origin, so it is replicated here as a Hono
+  // header instead of assumed to survive.
+  app.use("*", async (c, next) => {
+    await next();
+    // Mutate the existing Response's headers directly (same pattern
+    // `hono/secure-headers` uses) rather than `c.header()`: that helper
+    // recreates the Response from `.body` once finalized, and re-deriving
+    // a stream from a Bun.file().slice() Range body that way drops the
+    // slice and re-streams the whole file (confirmed against the video
+    // Range tests).
+    c.res.headers.set("X-Robots-Tag", "index, follow");
+  });
 
   // Production 301s bare page paths to their trailing-slash form (Cloudflare
   // rules from PRs #187/#188); replicated here so behavior survives cutover.
@@ -177,10 +196,11 @@ export function createApp(options: AppOptions = {}): Hono {
     const file = Bun.file(filePath);
     if (!(await file.exists())) return await next();
 
+    const isMarkdown = pathname.endsWith(".md");
     const headers = new Headers({
-      "content-type": file.type || "application/octet-stream",
+      "content-type": isMarkdown ? "text/markdown; charset=utf-8" : file.type || "application/octet-stream",
       "content-length": String(file.size),
-      "cache-control": STATIC_CACHE_CONTROL,
+      "cache-control": isMarkdown ? MARKDOWN_STATIC_CACHE_CONTROL : STATIC_CACHE_CONTROL,
     });
     const body = c.req.method === "HEAD" ? null : file;
     return new Response(body, { status: 200, headers });

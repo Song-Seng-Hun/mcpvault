@@ -22,16 +22,21 @@ export const SITE_ROUTES: readonly string[] = ["/", "/install/", "/features/", "
 const XML_CACHE_CONTROL = "public, max-age=3600";
 const ROBOTS_CACHE_CONTROL = "public, max-age=14400, must-revalidate";
 
-const AI_CRAWLERS = ["GPTBot", "Google-Extended", "CCBot", "Claude-Web", "anthropic-ai", "ChatGPT-User", "PerplexityBot", "YouBot", "FacebookBot"];
-
 export function buildSitemapXml(baseUrl: string, routes: readonly string[]): string {
   const urls = routes.map((route) => `  <url><loc>${baseUrl}${route}</loc></url>`).join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
 }
 
+// Two groups, two different comments and no trailing newline -- this must
+// stay byte-identical to the production `website/public/robots.txt` file
+// (confirmed against Phase 2 review), not just semantically equivalent.
+const AI_CRAWLER_GROUP = ["GPTBot", "Google-Extended", "CCBot", "Claude-Web", "anthropic-ai", "ChatGPT-User"];
+const LLM_CRAWLER_GROUP = ["PerplexityBot", "YouBot", "FacebookBot"];
+
 export function buildRobotsTxt(baseUrl: string): string {
-  const aiRules = AI_CRAWLERS.map((agent) => `User-agent: ${agent}\nAllow: /`).join("\n\n");
-  return `User-agent: *\nAllow: /\n\n# Sitemaps\nSitemap: ${baseUrl}/sitemap.xml\n\n# LLM-specific crawlers\n${aiRules}\n\n# Crawl delay for all bots\nCrawl-delay: 1\n`;
+  const aiRules = AI_CRAWLER_GROUP.map((agent) => `User-agent: ${agent}\nAllow: /`).join("\n\n");
+  const llmRules = LLM_CRAWLER_GROUP.map((agent) => `User-agent: ${agent}\nAllow: /`).join("\n\n");
+  return `User-agent: *\nAllow: /\n\n# Sitemaps\nSitemap: ${baseUrl}/sitemap.xml\n\n# AI crawlers\n${aiRules}\n\n# LLM-specific crawlers\n${llmRules}\n\n# Crawl delay for all bots\nCrawl-delay: 1`;
 }
 
 export function registerSeoRoutes(app: Hono, baseUrl: string = SITE_URL): void {
@@ -48,4 +53,11 @@ export function registerSeoRoutes(app: Hono, baseUrl: string = SITE_URL): void {
       "cache-control": ROBOTS_CACHE_CONTROL,
     }),
   );
+
+  // Production served /sitemap-0.xml too (the same broken 200 text/html SPA
+  // fallback as /sitemap.xml -- see the headers baseline finding). Since
+  // /sitemap.xml now serves real XML (an approved migration deviation, see
+  // the plan), the -0 alias 301s to it rather than duplicating the sitemap
+  // body under a second URL; recorded as a further deviation in the plan.
+  app.get("/sitemap-0.xml", (c) => c.redirect("/sitemap.xml", 301));
 }
