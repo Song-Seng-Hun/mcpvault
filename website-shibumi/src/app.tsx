@@ -40,7 +40,11 @@ export interface AppOptions {
   downloads?: DownloadsRouteOptions;
 }
 
-const STATIC_CACHE_CONTROL = "public, max-age=3600";
+// Outside production the hour-long TTL makes every local CSS tweak invisible
+// until a hard refresh; dev serves no-store instead. Production keeps the
+// baseline-matching header.
+const STATIC_CACHE_CONTROL =
+  process.env.NODE_ENV === "production" ? "public, max-age=3600" : "no-store";
 // Matches the page/markdown routes' CACHE_CONTROL (routes/home.tsx et al.):
 // static .md files under publicDir (e.g. /index.md) must send the same
 // charset and revalidation semantics as their content-negotiated siblings.
