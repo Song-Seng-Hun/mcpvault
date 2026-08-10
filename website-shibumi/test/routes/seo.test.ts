@@ -38,6 +38,8 @@ describe("GET /robots.txt", () => {
     expect(body).toContain("Allow: /");
     expect(body).toContain("Sitemap: https://example.test/sitemap.xml");
     expect(body).toContain("Crawl-delay: 1");
+    // Shell-review carry-over: the first port silently dropped this comment.
+    expect(body).toContain("# LLM-specific crawlers");
   });
 
   test("matches the pure builder function", async () => {

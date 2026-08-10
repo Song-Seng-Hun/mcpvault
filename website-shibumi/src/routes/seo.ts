@@ -31,7 +31,7 @@ export function buildSitemapXml(baseUrl: string, routes: readonly string[]): str
 
 export function buildRobotsTxt(baseUrl: string): string {
   const aiRules = AI_CRAWLERS.map((agent) => `User-agent: ${agent}\nAllow: /`).join("\n\n");
-  return `User-agent: *\nAllow: /\n\n# Sitemaps\nSitemap: ${baseUrl}/sitemap.xml\n\n# AI crawlers\n${aiRules}\n\n# Crawl delay for all bots\nCrawl-delay: 1\n`;
+  return `User-agent: *\nAllow: /\n\n# Sitemaps\nSitemap: ${baseUrl}/sitemap.xml\n\n# LLM-specific crawlers\n${aiRules}\n\n# Crawl delay for all bots\nCrawl-delay: 1\n`;
 }
 
 export function registerSeoRoutes(app: Hono, baseUrl: string = SITE_URL): void {

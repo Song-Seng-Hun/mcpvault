@@ -46,7 +46,6 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   position: relative;
-  overflow-x: hidden;
 }
 
 a {
@@ -320,11 +319,26 @@ a {
 /* Footer                                                                */
 /* -------------------------------------------------------------------- */
 
+/* Gutters match Footer.astro's `px-4 sm:px-6 lg:px-8`, not a fixed 1rem. */
 [data-component="footer"] {
   position: relative;
   padding: 4rem 1rem;
   background: linear-gradient(to top, rgba(23, 23, 23, 0.2), var(--color-background));
   border-top: 1px solid rgba(38, 38, 38, 0.5);
+}
+
+@media (min-width: 640px) {
+  [data-component="footer"] {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  [data-component="footer"] {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
 }
 
 [data-component="footer"] .footer-inner {

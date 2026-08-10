@@ -35,3 +35,28 @@ describe("GET /styles/*", () => {
     expect([400, 404]).toContain(res.status);
   });
 });
+
+describe("shared.css and home.css (shell-review carry-overs)", () => {
+  const realApp = createApp();
+
+  test("footer gutters are responsive (px-4 sm:px-6 lg:px-8), not a fixed 1rem", async () => {
+    const body = await (await realApp.request("/styles/shared.css")).text();
+    const footerBlock = body.slice(body.indexOf('[data-component="footer"] {'));
+    expect(footerBlock).toContain("padding: 4rem 1rem;");
+    expect(body).toContain("@media (min-width: 640px)");
+    expect(body).toContain("@media (min-width: 1024px)");
+  });
+
+  test("body overflow-x: hidden is not a global rule", async () => {
+    const body = await (await realApp.request("/styles/shared.css")).text();
+    const bodyBlock = body.slice(body.indexOf("body {"), body.indexOf("body {") + body.slice(body.indexOf("body {")).indexOf("}"));
+    expect(bodyBlock).not.toContain("overflow-x");
+  });
+
+  test("home.css scopes overflow-x: hidden to the home page only", async () => {
+    const body = await (await realApp.request("/styles/home.css")).text();
+    expect(body).toContain('[data-page="home"] {');
+    const pageBlock = body.slice(body.indexOf('[data-page="home"] {'));
+    expect(pageBlock).toContain("overflow-x: hidden;");
+  });
+});

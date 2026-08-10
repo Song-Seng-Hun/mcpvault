@@ -88,6 +88,12 @@ describe("Layout", () => {
     expect(body).toContain('href="#main-content"');
     expect(body).toContain('id="main-content"');
   });
+
+  test("includes the Counter.dev analytics script (shell-review carry-over)", async () => {
+    const body = await (await testApp().request("/")).text();
+    expect(body).toContain('src="https://cdn.counter.dev/script.js"');
+    expect(body).toContain('data-id="56795b69-4872-4bfc-a640-4c0a9de06db8"');
+  });
 });
 
 describe("Nav", () => {
@@ -132,5 +138,11 @@ describe("ThemeToggle", () => {
     expect(html).toContain('data-theme="light"');
     expect(html).toContain('aria-label="Switch to dark mode"');
     expect(html).toContain("Light mode active");
+  });
+
+  test("does not carry the dead, unstyled class=\"theme-toggle\" (shell-review carry-over)", () => {
+    const html = ThemeToggle({}).toString();
+    expect(html).not.toContain('class="theme-toggle"');
+    expect(html).toContain('data-component="theme-toggle"');
   });
 });

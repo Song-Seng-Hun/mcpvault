@@ -9,6 +9,11 @@
  * it up yet, so there is no visual change. Phase 3 decides whether to
  * mount it and gives it an `Alpine.data()` module for the click/localStorage
  * behavior the old React `useState`/`useEffect` handled client-side.
+ *
+ * Styling convention: one selector root per component (shared.css). The
+ * React source also carried a plain `class="theme-toggle"` with no matching
+ * CSS anywhere -- dead weight, not a second styling system to preserve.
+ * Dropped in favor of the single `[data-component="theme-toggle"]` root.
  */
 export interface ThemeToggleProps {
   /** Defaults to "dark" to match the server-rendered `<html class="dark">`. */
@@ -18,7 +23,7 @@ export interface ThemeToggleProps {
 export function ThemeToggle({ theme = "dark" }: ThemeToggleProps) {
   const isDark = theme === "dark";
   return (
-    <button type="button" class="theme-toggle" data-component="theme-toggle" data-theme={theme} aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}>
+    <button type="button" data-component="theme-toggle" data-theme={theme} aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}>
       <span class="slider">
         <span class="icon" aria-hidden="true">
           {isDark ? (

@@ -19,6 +19,11 @@
  * JSON ourselves, escape `<` to prevent a `</script>` breakout, and mark it
  * with `raw()` -- safe because the input is fully server-controlled (no
  * request data), never user input.
+ *
+ * Shell-review carry-over: the Counter.dev analytics `<script>` from
+ * Layout.astro (lines 497-498) was silently dropped in the first port of
+ * this file. It carries no request/user data (fixed `src`/`data-id`), so a
+ * plain JSX attribute is fine -- no raw() needed.
  */
 import { raw } from "hono/html";
 import { BackgroundWatermark } from "../components/BackgroundWatermark";
@@ -151,6 +156,8 @@ export function Layout({ title = DEFAULT_TITLE, description = DEFAULT_DESCRIPTIO
         <BackgroundWatermark />
 
         <div data-component="app-shell">{children}</div>
+
+        <script defer src="https://cdn.counter.dev/script.js" data-id="56795b69-4872-4bfc-a640-4c0a9de06db8" data-utcoffset="1"></script>
       </body>
       </html>
     </>
