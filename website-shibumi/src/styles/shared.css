@@ -310,15 +310,20 @@ a {
   border-radius: 0.5rem;
   font-weight: 500;
   transition: all 0.3s ease;
-  /* Multi-word labels ("How It Works") must never wrap into stacked lines
-     at squeezed widths; the item shrinks and truncates with an ellipsis
-     instead, so all nav items always stay visible. */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-width: 0;
-  flex-shrink: 1;
+  /* Short labels keep their full text at every width... */
+  flex-shrink: 0;
   padding: 0.5rem clamp(0.25rem, 1vw, 1rem);
+}
+
+/* ...only the one long label gives way: "How It Works" shrinks and
+   truncates with an ellipsis when the row runs out of room, keeping all
+   items visible. */
+[data-component="nav"] .nav-links .nav-link[href="/how-it-works"] {
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 [data-component="nav"] .nav-link:hover {
