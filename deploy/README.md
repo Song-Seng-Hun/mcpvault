@@ -31,7 +31,7 @@ shibumi-server add <domain> \
   --repository bitbonsai/mcpvault \
   --checkout /srv/shibumi/apps/mcpvault-web \
   --port 9100 \
-  --ref refs/heads/shibumi \
+  --ref refs/heads/staging \
   --compose-file website-shibumi/compose.yaml
 ```
 
@@ -40,7 +40,7 @@ shibumi-server add <domain> \
   derived from the domain: existing dashes double (`-` -> `--`), then dots
   become dashes, so `mcpvault.org` -> `mcpvault-org` and the webhook path is
   `/hooks/github/mcpvault-org`.
-- `--ref refs/heads/shibumi` tracks the migration branch for staging. At
+- `--ref refs/heads/staging` tracks the migration branch for staging. At
   cutover, switch the production app to `refs/heads/main` (edit
   `~/.config/shibumi-server/config.json` and restart the user service).
 - `add` generates the webhook HMAC secret itself and writes it to
