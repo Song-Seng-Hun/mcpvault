@@ -1,6 +1,7 @@
 # Plans
 
 ## Active
+- [ ] [Shibumi website migration](shibumi-website-migration.md): p0–p5 DONE, `shibumi` branch pushed (302 tests green); next: shibumi-server install on Hetzner + staging.mcpvault.org, then p6 staging QA; deploy = shibumi-server in-situ builds behind Caddy
 - [ ] MCP SDK v2 migration on `feat/mcp-sdk-v2`: dual-era stdio works; rebase onto `main`, then replace session HTTP with stateless v2 handlers
 - [ ] Contributor PRs #146, #163, #164, #173, #174, #175 waiting on requested changes
 - [ ] Issue follow-ups #49, #165, #167, #170 waiting on testers/contributors

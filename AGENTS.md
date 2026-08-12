@@ -145,3 +145,9 @@ When modifying file operations:
 - MCP SDK v2 uses split `@modelcontextprotocol/server`, `/client`, `/core`, `/node` packages. `@modelcontextprotocol/sdk@latest` remains v1.x.
 - Version bump updates website nav/Hero automatically only. Manually sync `website/src/components/UpdateCallout.astro`, `website/public/index.md`, and `CHANGELOG.md`.
 - Production npm publishing is triggered by a GitHub Release and runs with provenance. Follow `RELEASING.md`; do not manually run `npm publish` for normal production releases, and do not backfill a release for an npm version that already exists.
+- website-shibumi (shibumi branch) Hono JSX: escapes string children even inside `<script>` — JSON-LD/inline scripts need `raw()`; HTML entities in JSX text double-escape, use literal Unicode chars.
+- Bun TSX parser rejects dotted attribute names: Alpine modifiers need spread form `{...{"x-on:click.outside": "close()"}}`.
+- Hono `c.header()` in middleware after `next()` rebuilds Response from `.body` — drops `Bun.file().slice()` Range bodies (video 206 becomes full file). Mutate `c.res.headers.set()` directly.
+- hono serveStatic on Bun: incomplete Range support — video served by dedicated route on `Bun.file().slice()` (src/routes/video.ts), never serveStatic.
+- website-shibumi container builds from REPO ROOT context (`-f website-shibumi/Containerfile .`): root package.json must be copied to `/package.json` or server exits 1 at import (version badge reads it).
+- CSS: `animation-fill-mode: forwards` keeps finished animation attached forever and kills descendant `backdrop-filter` even with final `transform: none`; detach via `.fade-in-done { animation: none }` on animationend.

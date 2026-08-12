@@ -64,7 +64,7 @@ Yes. Configure multiple MCP server entries, one per vault path.
 Read/write tools support `.md`, `.markdown`, `.txt`, `.base`, and `.canvas` files. `list_directory` may show other filenames (like `.png` or `.pdf`), but non-note files are not read as notes.
 
 ### Is search semantic?
-No. Search is lexical full-text matching with BM25 ranking, not embedding/vector semantic retrieval.
+No. Search is lexical full-text matching with BM25 ranking, not embedding/vector semantic retrieval. For semantic search, pair MCPVault with a dedicated vector-search MCP server such as Qdrant's [mcp-server-qdrant](https://github.com/qdrant/mcp-server-qdrant) or Chroma's [chroma-mcp](https://github.com/chroma-core/chroma-mcp): the companion server owns embeddings and its index while MCPVault stays deterministic and local.
 
 ### What if the AI makes a mistake?
 Use backups or version control. Deletions require explicit path confirmation and all operations stay inside your configured vault.
