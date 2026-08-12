@@ -27,7 +27,7 @@ const FAQ_ITEMS: FaqItem[] = [
   },
   {
     q: "Is search semantic?",
-    a: "Search is lexical full-text search with multi-word matching and BM25 relevance ranking. It does not use embeddings or vector indexes.",
+    a: "Search is lexical full-text search with multi-word matching and BM25 relevance ranking. It does not use embeddings or vector indexes. For semantic search, pair MCPVault with a dedicated vector-search MCP server such as Qdrant's mcp-server-qdrant or Chroma's chroma-mcp: the companion server owns the embeddings index while MCPVault stays deterministic and local.",
   },
   {
     q: "What if the AI makes a mistake?",
