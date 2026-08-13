@@ -26,11 +26,10 @@ services:
     restart: on-failure
     ports:
       - "127.0.0.1:${SHIBUMI_PORT:-9100}:3000"
-    # Not committed. Create on the host as mode 0600, owned by the shibumi
-    # deploy user: install -m 600 -o <user> -g <user> /dev/null \
-    #   /srv/shibumi/secrets/mcpvault-web.env
+    # Not committed. Lives under deploy user's config directory so rootless
+    # shibumi-server can create and read it without root access.
     env_file:
-      - path: /srv/shibumi/secrets/mcpvault-web.env
+      - path: ${HOME}/.config/shibumi-server/app-secrets/mcpvault-web.env
         required: false
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/healthz"]

@@ -59,8 +59,9 @@ shibumi-server add <domain> \
 Not committed, not baked into the image. Create before the first deploy:
 
 ```sh
-install -m 600 -o <shibumi-user> -g <shibumi-user> /dev/null \
-  /srv/shibumi/secrets/mcpvault-web.env
+install -d -m 700 ~/.config/shibumi-server/app-secrets
+install -m 600 /dev/null \
+  ~/.config/shibumi-server/app-secrets/mcpvault-web.env
 # then edit in place:
 #   RESEND_API_KEY=...
 #   RESEND_AUDIENCE_ID=...
