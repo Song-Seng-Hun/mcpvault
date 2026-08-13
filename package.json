@@ -33,7 +33,10 @@
     "prepack": "npm install",
     "publish:dry": "npm publish --dry-run",
     "publish:beta": "npm publish --tag beta",
-    "publish:latest": "npm publish"
+    "publish:latest": "npm publish",
+    "ship": "bun scripts/ship.ts",
+    "ship:setup": "bun scripts/ship.ts --setup",
+    "ship:update": "bun scripts/ship.ts --update"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
@@ -42,6 +45,7 @@
     "yaml": "^2.9.0"
   },
   "devDependencies": {
+    "@clack/prompts": "^0.7.0",
     "@types/node": "^26.1.2",
     "tsx": "^4.23.9",
     "typescript": "^7.0.2",

@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "provider": "shibumi-server",
+  "server": {
+    "hostname": "alpha"
+  },
+  "domain": "staging.mcpvault.org",
+  "appId": "staging-mcpvault-org",
+  "repository": "github:bitbonsai/mcpvault",
+  "branch": "staging",
+  "webhookUrl": "https://staging.mcpvault.org/hooks/github/staging-mcpvault-org",
+  "service": "web",
+  "healthPath": "/healthz",
+  "cutoverRequired": false
+}
