@@ -40,9 +40,9 @@ shibumi-server add <domain> \
   derived from the domain: existing dashes double (`-` -> `--`), then dots
   become dashes, so `mcpvault.org` -> `mcpvault-org` and the webhook path is
   `/hooks/github/mcpvault-org`.
-- `--ref refs/heads/staging` tracks the migration branch for staging. At
-  cutover, switch the production app to `refs/heads/main` (edit
-  `~/.config/shibumi-server/config.json` and restart the user service).
+- `--ref refs/heads/staging` tracks the migration branch for staging. Register
+  production separately as `mcpvault.org` with `--ref refs/heads/main`; do not
+  repurpose staging registration.
 - `add` generates the webhook HMAC secret itself and writes it to
   `~/.config/shibumi-server/secrets.env` (mode 0600), then prints the webhook
   URL and secret variable name. Never invent or commit this secret.

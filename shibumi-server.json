@@ -4,12 +4,12 @@
   "server": {
     "hostname": "alpha"
   },
-  "domain": "staging.mcpvault.org",
-  "appId": "staging-mcpvault-org",
+  "domain": "mcpvault.org",
+  "appId": "mcpvault-org",
   "repository": "github:bitbonsai/mcpvault",
-  "branch": "staging",
-  "webhookUrl": "https://staging.mcpvault.org/hooks/github/staging-mcpvault-org",
+  "branch": "main",
+  "webhookUrl": "https://mcpvault.org/hooks/github/mcpvault-org",
   "service": "web",
   "healthPath": "/healthz",
-  "cutoverRequired": false
+  "cutoverRequired": true
 }

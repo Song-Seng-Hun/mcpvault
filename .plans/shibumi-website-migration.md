@@ -2,7 +2,7 @@
 
 ## Status
 
-p0–p5 done; `shibumi` branch pushed to origin 2026-08-10 (CI workflow `.github/workflows/website-shibumi.yml` dropped in `aa3350f` — maintainer call, deploy is in-situ so Actions adds nothing). Next: Hetzner host + staging hostname, then host setup and p6. Do not change production hosting until the staging and visual-regression gates below pass and the maintainer explicitly approves cutover.
+p0–p6 done; `staging` deployed at `staging.mcpvault.org`. Route, asset, API, install, video playback/range, responsive screenshot, and browser console checks passed 2026-08-13. Production registration and explicit maintainer cutover remain. Do not change production hosting until the maintainer approves cutover.
 
 ## Why
 
