@@ -29,7 +29,7 @@ resource-limited user service. See the shibumi-server README for details.
 ```bash
 shibumi-server add <domain> \
   --repository bitbonsai/mcpvault \
-  --checkout /srv/shibumi/apps/mcpvault-web \
+  --checkout "$HOME/shibumi/mcpvault-web" \
   --port 9100 \
   --ref refs/heads/staging \
   --compose-file website-shibumi/compose.yaml

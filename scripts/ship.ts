@@ -97,7 +97,7 @@ async function git(...args: string[]): Promise<string> {
   return (await run(["git", ...args])).stdout.trim();
 }
 
-const setupFiles = ["package.json", "bun.lock", "scripts/ship.ts", "shibumi-server.json"];
+const setupFiles = ["package.json", "package-lock.json", "scripts/ship.ts", "shibumi-server.json"];
 
 async function offerSetupCommit(): Promise<"none" | "committed" | "declined"> {
   const changed: string[] = [];
