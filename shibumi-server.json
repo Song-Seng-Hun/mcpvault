@@ -11,5 +11,5 @@
   "webhookUrl": "https://mcpvault.org/hooks/github/mcpvault-org",
   "service": "web",
   "healthPath": "/healthz",
-  "cutoverRequired": true
+  "cutoverRequired": false
 }
