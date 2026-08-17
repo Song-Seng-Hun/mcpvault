@@ -16,9 +16,9 @@ type Pairing = {
 
 const PAIRINGS: Pairing[] = [
   {
-    name: 'v1 server',
-    short: 'v1',
-    detail: 'today’s npm release + a current client (SDK 1.30.0)',
+    name: 'MCPVault today',
+    short: 'today',
+    detail: 'the current npm release, measured as a baseline',
     coldStart: { median: 107.3, p95: 155.5, n: 8 },
     tools: {
       'tools/list': { median: 0.15, p95: 0.28, n: 50 },
@@ -29,9 +29,9 @@ const PAIRINGS: Pairing[] = [
     },
   },
   {
-    name: 'v2 server, current client',
-    short: 'v2 + current',
-    detail: 'the v2 build serving the same client every app uses today',
+    name: 'v2 with today’s apps',
+    short: 'v2, today’s apps',
+    detail: 'the v2 build answering the apps you already use, unchanged (Claude Desktop, Cursor, and friends)',
     coldStart: { median: 109.8, p95: 116.8, n: 8 },
     tools: {
       'tools/list': { median: 0.14, p95: 0.28, n: 50 },
@@ -42,9 +42,9 @@ const PAIRINGS: Pairing[] = [
     },
   },
   {
-    name: 'v2 server, v2 client',
-    short: 'v2 + v2',
-    detail: 'both sides on the new SDK (2.0.0), default settings',
+    name: 'v2 with new apps',
+    short: 'v2, new apps',
+    detail: 'the v2 build with an app on the new SDK (2.0.0), how connections will look as the ecosystem updates',
     coldStart: { median: 105.8, p95: 107.8, n: 8 },
     tools: {
       'tools/list': { median: 0.17, p95: 0.34, n: 50 },
@@ -92,7 +92,7 @@ const fmt = (v: number) => (v >= 10 ? v.toFixed(1) : v.toFixed(2));
       {coldChart.title} <span class="font-normal text-muted-foreground">· {coldChart.unit}</span>
     </figcaption>
     {coldChart.rows.map((row, i) => (
-      <div class="mb-2 grid grid-cols-[6.5rem_1fr] items-center gap-3 last:mb-0">
+      <div class="mb-2 grid grid-cols-[8rem_1fr] items-center gap-3 last:mb-0">
         <span class="text-right text-xs text-muted-foreground">{row.short}</span>
         <div
           class="bench-track relative h-5"
@@ -127,7 +127,7 @@ const fmt = (v: number) => (v >= 10 ? v.toFixed(1) : v.toFixed(2));
         <figure class="bench-card rounded-xl border border-border bg-card p-4">
           <figcaption class="mb-3 text-sm font-semibold text-foreground">{chart.title}</figcaption>
           {chart.rows.map((row, i) => (
-            <div class="mb-2 grid grid-cols-[4.5rem_1fr] items-center gap-2 last:mb-0">
+            <div class="mb-2 grid grid-cols-[6.5rem_1fr] items-center gap-2 last:mb-0">
               <span class="text-right text-[11px] text-muted-foreground">{row.short}</span>
               <div
                 class="bench-track relative h-5"

@@ -6,7 +6,7 @@ MCPVault already runs on the MCP 2026-07-28 specification (TypeScript SDK v2). I
 
 Three pairings, one real vault (381 notes, 84 folders, 3.2 MB), stdio, read-only. Measured 2026-08-17 on macOS, Node 26, SDK 1.30.0 vs 2.0.0. Medians in ms.
 
-| metric | v1 server | v2 server, current client | v2 server, v2 client |
+| metric | MCPVault today | v2 with today's apps | v2 with new apps |
 |---|---|---|---|
 | cold start (n=8) | 107.3 | 109.8 | 105.8 |
 | tools/list (n=50) | 0.15 | 0.14 | 0.17 |
