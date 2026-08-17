@@ -10,6 +10,7 @@ Serve `.md` versions of every public page for agents. Use the markdown endpoints
 - `/demo` → `https://mcpvault.org/demo.md`
 - `/how-it-works` → `https://mcpvault.org/how-it-works.md`
 - `/skill` → `https://mcpvault.org/skill.md`
+- `/benchmarks` → `https://mcpvault.org/benchmarks.md`
 
 All markdown files live in `website/public/` inside the repo so they stay in sync with the Astro pages. When citing content, reference the `.md` URL to keep responses reproducible for other agents.
 
