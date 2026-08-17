@@ -1,6 +1,6 @@
 # MCP v2 Benchmarks
 
-**TL;DR:** the v2 build ties today's release: same ~107 ms cold start, same per-request latency for every current app. The only slowdown is a test-harness configuration no shipping app hits. Scripts are public, rerun them on your own vault.
+**TL;DR:** MCPVault now speaks both the new MCP protocol (2026-07-28) and the current one, from the same process. Speed is unchanged: ~107 ms to connect, identical per-request latency.
 
 MCPVault already runs on the MCP 2026-07-28 specification (TypeScript SDK v2). It serves both protocol generations from a single process: each client gets an answer in whichever version it speaks. Existing setups keep working unchanged.
 
