@@ -17,7 +17,7 @@ import type { Hono } from "hono";
 export const SITE_URL = "https://mcpvault.org";
 
 /** Every public page route, trailing-slash form (matches PRs #187/#188). */
-export const SITE_ROUTES: readonly string[] = ["/", "/install/", "/features/", "/demo/", "/how-it-works/", "/skill/"];
+export const SITE_ROUTES: readonly string[] = ["/", "/install/", "/features/", "/demo/", "/how-it-works/", "/skill/", "/benchmarks/"];
 
 const XML_CACHE_CONTROL = "public, max-age=3600";
 const ROBOTS_CACHE_CONTROL = "public, max-age=14400, must-revalidate";

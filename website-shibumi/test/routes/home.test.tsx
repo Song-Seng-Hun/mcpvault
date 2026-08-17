@@ -63,7 +63,7 @@ describe("GET / (HTML)", () => {
   test("renders SpecPreviewCallout, UpdateCallout, and NewsletterSignup", async () => {
     const body = await (await app.request("/")).text();
     expect(body).toContain('data-component="spec-preview-callout"');
-    expect(body).toContain("latest MCP spec");
+    expect(body).toContain("MCP v2");
     expect(body).toContain('data-component="update-callout"');
     expect(body).toContain("Recent Updates");
     expect(body).toContain('data-component="newsletter-signup"');
