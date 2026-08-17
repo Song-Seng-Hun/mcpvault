@@ -7,25 +7,22 @@
  * GitHub webhook. Later, `bun run ship` checks local work, pushes one commit,
  * and follows deployment status until the app is healthy.
  *
- * Commit this file and shibumi-server.json. SSH targets stay in machine-local
- * Shibumi config. Webhook secrets stay on the server and pass directly to GitHub CLI.
+ * Commit this file and shibumi-server.json. SSH targets stay in local Git
+ * config. Webhook secrets stay on the server and pass directly to GitHub CLI.
  */
 
 import { cancel, confirm, intro, isCancel, log, outro, spinner, text } from "@clack/prompts";
-import { chmod, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { createConnection } from "node:net";
-import { dirname, join, resolve } from "node:path";
+import { chmod, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 
 const root = process.cwd();
 const configPath = join(root, "shibumi-server.json");
 const DOMAIN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const SSH_TARGET = /^(?!-)[A-Za-z0-9_.@:-]+$/;
-const SERVER_HOSTNAME = /^[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$/;
 const COMMIT = /^[a-f0-9]{40}$/;
 const SERVER_CLI = "~/.local/bin/shibumi-server";
 const LATEST_SOURCE = "https://shibumistack.dev/ship/latest.ts";
-const CURRENT_SOURCE = "https://shibumistack.dev/ship/v22.ts";
+const CURRENT_SOURCE = "https://shibumistack.dev/ship/v20.ts";
 let sshControlDirectory: string | undefined;
 let sshControlTarget: string | undefined;
 const accent = (value: string) => process.stdout.isTTY && !("NO_COLOR" in process.env) && process.env.TERM !== "dumb"
@@ -42,10 +39,7 @@ interface ClientConfig {
   branch: string;
   webhookUrl: string;
   service: string;
-  port: number;
   healthPath: string;
-  deploymentMode: "build" | "prebuilt";
-  platform?: `linux/${string}`;
   cutoverRequired: boolean;
 }
 
@@ -67,24 +61,19 @@ interface DeployStatus {
 
 interface HistoryEntry {
   commit?: string;
-  kind?: string;
   state?: string;
   stage?: string;
-  durationMs?: number;
 }
 
 interface ShipOptions {
   setup: boolean;
   update: boolean;
-  rollback: boolean;
-  logs: boolean;
-  dev: boolean;
   yes: boolean;
   server?: string;
   domain?: string;
 }
 
-let options: ShipOptions = { setup: false, update: false, rollback: false, logs: false, dev: false, yes: false };
+let options: ShipOptions = { setup: false, update: false, yes: false };
 let agentRun = false;
 
 export function isAgentExecution(env: NodeJS.ProcessEnv = process.env, stdinTTY = Boolean(process.stdin.isTTY), stdoutTTY = Boolean(process.stdout.isTTY)): boolean {
@@ -93,15 +82,12 @@ export function isAgentExecution(env: NodeJS.ProcessEnv = process.env, stdinTTY 
 }
 
 export function parseShipArgs(args: string[]): ShipOptions {
-  const parsed: ShipOptions = { setup: false, update: false, rollback: false, logs: false, dev: false, yes: false };
+  const parsed: ShipOptions = { setup: false, update: false, yes: false };
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === "--") continue;
     if (argument === "--setup") parsed.setup = true;
     else if (argument === "--update") parsed.update = true;
-    else if (argument === "--rollback") parsed.rollback = true;
-    else if (argument === "--logs") parsed.logs = true;
-    else if (argument === "--dev") parsed.dev = true;
     else if (argument === "--yes" || argument === "-y") parsed.yes = true;
     else if (argument === "--server" || argument === "--domain") {
       const value = args[index + 1];
@@ -111,93 +97,9 @@ export function parseShipArgs(args: string[]): ShipOptions {
       index += 1;
     } else throw new Error(`unknown ship option: ${argument}`);
   }
-  if ([parsed.setup, parsed.update, parsed.rollback, parsed.logs, parsed.dev].filter(Boolean).length > 1) throw new Error("choose only one ship action");
   if (parsed.server && !SSH_TARGET.test(parsed.server)) throw new Error("--server must be an SSH host or user@host without spaces");
   if (parsed.domain && !DOMAIN.test(parsed.domain)) throw new Error("--domain must be a lowercase public hostname");
   return parsed;
-}
-
-export function formatDuration(milliseconds: number): string {
-  const seconds = Math.max(1, Math.round(milliseconds / 1_000));
-  if (seconds < 60) return `${seconds} second${seconds === 1 ? "" : "s"}`;
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds % 60;
-  return `${minutes} minute${minutes === 1 ? "" : "s"}${remainder ? ` ${remainder} second${remainder === 1 ? "" : "s"}` : ""}`;
-}
-
-export function latestDeployDuration(history: HistoryEntry[]): number | undefined {
-  return [...history].reverse().find((entry) => entry.kind === "webhook" && entry.state === "succeeded"
-    && Number.isInteger(entry.durationMs) && entry.durationMs! > 0)?.durationMs;
-}
-
-interface ClientSettings {
-  version: 1;
-  defaultServer?: string;
-  servers: Record<string, { sshTarget: string }>;
-}
-
-export function clientSettingsPath(env: NodeJS.ProcessEnv = process.env, home = homedir()): string {
-  return join(env.XDG_CONFIG_HOME || join(home, ".config"), "shibumi", "config.json");
-}
-
-async function readClientSettings(): Promise<ClientSettings> {
-  try {
-    const value: unknown = JSON.parse(await readFile(clientSettingsPath(), "utf8"));
-    if (!value || typeof value !== "object" || Array.isArray(value) || (value as { version?: unknown }).version !== 1) throw new Error("invalid client settings");
-    const servers = (value as { servers?: unknown }).servers;
-    const defaultServer = (value as { defaultServer?: unknown }).defaultServer;
-    if (!servers || typeof servers !== "object" || Array.isArray(servers)
-      || Object.entries(servers).some(([hostname, entry]) => !SERVER_HOSTNAME.test(hostname)
-        || !entry || typeof entry !== "object" || Array.isArray(entry)
-        || typeof (entry as { sshTarget?: unknown }).sshTarget !== "string"
-        || !SSH_TARGET.test((entry as { sshTarget: string }).sshTarget))
-      || (defaultServer !== undefined && (typeof defaultServer !== "string" || !(defaultServer in servers)))) throw new Error("invalid client settings");
-    return value as ClientSettings;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, servers: {} };
-    throw new Error(`${clientSettingsPath()} is invalid.\n\nNext: repair or remove this local client config, then retry.`);
-  }
-}
-
-async function savedSshTarget(hostname?: string): Promise<string | undefined> {
-  const settings = await readClientSettings();
-  const configured = hostname ? settings.servers[hostname]?.sshTarget : undefined;
-  if (configured) {
-    log.info(`Server  ${configured}\nConfig  ${clientSettingsPath()}`);
-    return configured;
-  }
-  if (hostname) return undefined;
-  const servers = Object.entries(settings.servers);
-  if (servers.length === 0) return undefined;
-  const fallback = settings.defaultServer && settings.servers[settings.defaultServer]
-    ? settings.servers[settings.defaultServer].sshTarget
-    : servers[0][1].sshTarget;
-  if (options.yes) {
-    log.info(`Server  ${fallback}\nConfig  ${clientSettingsPath()}`);
-    return fallback;
-  }
-  if (agentRun) throw new Error(`Deployment server confirmation required.\n\nAgent: ask user whether to use ${fallback}, then run bun run ship:setup --server <target>.`);
-  const answer = await text({
-    message: "SSH server",
-    placeholder: fallback,
-    validate: (value) => SSH_TARGET.test(value || fallback) ? undefined : "Use an SSH host, user@host, or SSH alias without spaces",
-  });
-  return isCancel(answer) ? undefined : answer || fallback;
-}
-
-async function rememberSshTarget(hostname: string, sshTarget: string): Promise<void> {
-  if (!SERVER_HOSTNAME.test(hostname) || !SSH_TARGET.test(sshTarget)) throw new Error("resolved SSH server is unsafe");
-  const settings = await readClientSettings();
-  if (settings.servers[hostname]?.sshTarget === sshTarget) return;
-  settings.servers[hostname] = { sshTarget };
-  settings.defaultServer = hostname;
-  const path = clientSettingsPath();
-  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-  const temporary = `${path}.tmp-${process.pid}`;
-  await writeFile(temporary, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
-  await chmod(temporary, 0o600);
-  await rename(temporary, path);
-  log.success(`Saved server ${sshTarget} in ${path}`);
 }
 
 async function approve(message: string): Promise<boolean> {
@@ -212,22 +114,16 @@ function explain(title: string, message: string): void {
 
 // Run argument arrays directly. Avoiding a shell keeps repository and SSH input
 // from becoming executable command text.
-async function run(args: string[], options: {
-  input?: string;
-  inputFile?: string;
-  cwd?: string;
-  inherit?: boolean;
-  allowFailure?: boolean;
-} = {}): Promise<Result> {
+async function run(args: string[], options: { input?: string; inherit?: boolean; allowFailure?: boolean } = {}): Promise<Result> {
   const inherit = options.inherit ?? false;
   const child = Bun.spawn(args, {
-    cwd: options.cwd ?? root,
-    stdin: options.inputFile ? Bun.file(options.inputFile) : options.input === undefined ? (inherit ? "inherit" : "ignore") : "pipe",
+    cwd: root,
+    stdin: options.input === undefined ? (inherit ? "inherit" : "ignore") : "pipe",
     stdout: inherit ? "inherit" : "pipe",
     stderr: inherit ? "inherit" : "pipe",
   });
   if (options.input !== undefined) {
-    if (!child.stdin || typeof child.stdin === "number") throw new Error("cannot open command input");
+    if (!child.stdin) throw new Error("cannot open command input");
     child.stdin.write(options.input);
     child.stdin.end();
   }
@@ -294,55 +190,6 @@ function composeCandidates(files: string[]): string[] {
   return files.filter((file) => /(^|\/)(?:compose\.ya?ml|docker-compose\.ya?ml)$/.test(file));
 }
 
-export function deploymentFileTemplates(hasBuildScript: boolean): Record<string, string> {
-  return {
-    Dockerfile: `FROM oven/bun:alpine
-
-WORKDIR /app
-
-COPY package.json bun.lock* ./
-RUN bun install --frozen-lockfile
-
-COPY . .
-${hasBuildScript ? "RUN bun run build\n\n" : ""}ENV HOST=0.0.0.0
-ENV PORT=3000
-EXPOSE 3000
-
-CMD ["bun", "run", "start"]
-`,
-    "compose.yaml": `services:
-  app:
-    build: .
-    ports:
-      - "127.0.0.1:\${SHIBUMI_PORT:-9001}:3000"
-    environment:
-      HOST: 0.0.0.0
-      PORT: "3000"
-    init: true
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 512M
-`,
-    ".dockerignore": `.git
-node_modules
-.env
-.env.*
-!.env.example
-data
-*.log
-`,
-  };
-}
-
 export function composeFileFromTracked(files: string[]): string {
   const candidates = composeCandidates(files);
   for (const preferred of ["compose.yaml", "compose.yml", "docker-compose.yml", "docker-compose.yaml"]) {
@@ -387,47 +234,6 @@ async function otherWorktreeCompose(): Promise<WorktreeCompose[]> {
   return alternatives;
 }
 
-async function prepareCompose(): Promise<boolean> {
-  const branch = await git("branch", "--show-current");
-  if (!branch) throw new Error("ship requires a named Git branch");
-  const tracked = (await git("ls-files")).split("\n").filter(Boolean);
-  if (composeCandidates(tracked).length > 0) return false;
-  const alternatives = await otherWorktreeCompose();
-  if (alternatives.length > 0) throw new Error(missingComposeMessage(branch, alternatives));
-
-  const names = ["compose.yaml", "compose.yml", "docker-compose.yml", "docker-compose.yaml"];
-  const existingCompose = (await Promise.all(names.map(async (name) => await Bun.file(join(root, name)).exists() ? name : undefined))).find(Boolean);
-  if (existingCompose) {
-    outro(`Found uncommitted ${existingCompose}.\n\nNext: review it, commit and push it, then run bun run ship:setup.`);
-    return true;
-  }
-
-  if (agentRun && !options.yes) {
-    throw new Error("Compose deployment files are missing.\n\nAgent: ask user for permission to generate Dockerfile, compose.yaml, and .dockerignore, then run bun run ship:setup -y.");
-  }
-  if (!options.yes) {
-    const accepted = await confirm({ message: "No Compose deployment found. Generate recommended Bun deployment files?", initialValue: true });
-    if (isCancel(accepted) || !accepted) throw new Error(missingComposeMessage(branch, []));
-  }
-
-  const packageJson = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as { scripts?: Record<string, unknown> };
-  const dockerfileExists = await Bun.file(join(root, "Dockerfile")).exists();
-  if (!dockerfileExists && typeof packageJson.scripts?.start !== "string") {
-    throw new Error("Dockerfile generation requires a package.json start script.\n\nNext: add a start script that binds to 0.0.0.0 and reads PORT, then run bun run ship:setup.");
-  }
-  const templates = deploymentFileTemplates(typeof packageJson.scripts?.build === "string");
-  const written: string[] = [];
-  for (const [name, contents] of Object.entries(templates)) {
-    if (name === "Dockerfile" && dockerfileExists) continue;
-    if (await Bun.file(join(root, name)).exists()) continue;
-    await writeFile(join(root, name), contents, { mode: 0o644 });
-    written.push(name);
-  }
-  log.success(`Generated ${written.join(", ")}`);
-  outro("Review generated deployment files and verify app binds to 0.0.0.0 and reads PORT.\n\nNext: commit and push these changes, then run bun run ship:setup.");
-  return true;
-}
-
 async function inferredProject() {
   const packageJson = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as { name?: unknown; scripts?: Record<string, unknown> };
   const repository = repositoryFromRemote(await git("remote", "get-url", "origin"));
@@ -453,15 +259,11 @@ export function validateConfig(value: unknown): ClientConfig {
     || typeof config.repository !== "string" || !/^github:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(config.repository)
     || typeof config.branch !== "string" || !/^[A-Za-z0-9._/-]+$/.test(config.branch)
     || typeof config.webhookUrl !== "string" || config.webhookUrl !== `https://${config.domain}/hooks/github/${config.appId}`
-    || typeof config.service !== "string" || typeof config.port !== "number" || !Number.isInteger(config.port) || config.port < 1024 || config.port > 65_535
-    || typeof config.healthPath !== "string" || typeof config.cutoverRequired !== "boolean"
-    || (config.deploymentMode !== undefined && config.deploymentMode !== "build" && config.deploymentMode !== "prebuilt")
-    || (config.platform !== undefined && !/^linux\/(?:arm64|amd64)$/.test(config.platform))
-    || (config.deploymentMode === "prebuilt" && config.platform === undefined)
+    || typeof config.service !== "string" || typeof config.healthPath !== "string" || typeof config.cutoverRequired !== "boolean"
     || !config.server || typeof config.server.hostname !== "string") {
     throw new Error("shibumi-server.json is invalid");
   }
-  return { ...config, deploymentMode: config.deploymentMode ?? "build" } as ClientConfig;
+  return config as ClientConfig;
 }
 
 async function readConfig(): Promise<ClientConfig | undefined> {
@@ -473,23 +275,11 @@ async function readConfig(): Promise<ClientConfig | undefined> {
   }
 }
 
-// Read legacy project-local targets, then migrate them into machine-local
-// client settings instead of committed shibumi-server.json.
+// SSH target is machine-specific, so keep it in local .git/config instead of
+// committed shibumi-server.json.
 async function localSshTarget(): Promise<string | undefined> {
   const result = await run(["git", "config", "--local", "--get", "shibumi.server"], { allowFailure: true });
   return result.exitCode === 0 && result.stdout.trim() ? result.stdout.trim() : undefined;
-}
-
-async function configuredSshTarget(hostname?: string): Promise<string | undefined> {
-  if (options.server) {
-    log.info(`Server  ${options.server}\nSource  --server`);
-    return options.server;
-  }
-  const saved = await savedSshTarget(hostname);
-  if (saved) return saved;
-  const legacy = await localSshTarget();
-  if (legacy) log.info(`Server  ${legacy}\nSource  project .git/config (migrating)`);
-  return legacy;
 }
 
 async function suggestedSshTarget(): Promise<string | undefined> {
@@ -503,19 +293,21 @@ async function suggestedSshTarget(): Promise<string | undefined> {
 }
 
 async function requestSshTarget(configHostname?: string): Promise<string | undefined> {
-  if (options.server) return options.server;
-  const suggestion = await suggestedSshTarget() ?? configHostname;
-  if (options.yes) {
-    if (!suggestion) throw new Error("--yes requires a configured server or --server <target>");
-    return suggestion;
+  if (options.server) {
+    await run(["git", "config", "--local", "shibumi.server", options.server]);
+    log.success("SSH target saved to local Git config. It will not be committed.");
+    return options.server;
   }
+  const suggestion = await suggestedSshTarget() ?? configHostname;
   if (agentRun) {
-    if (!suggestion) throw new Error("SSH server could not be inferred.\n\nAgent: ask user for their SSH target (user@host or SSH alias), then run bun run ship:setup --server <target>");
+    if (!suggestion) throw new Error("SSH server could not be inferred.\n\nAgent: ask user for their SSH target (user@host or SSH alias), then run bun run ship:setup -- --server <target>");
+    await run(["git", "config", "--local", "shibumi.server", suggestion]);
+    log.success("Inferred SSH target and saved it to local Git config.");
     return suggestion;
   }
   explain(
     "Local configuration",
-    `Use the same user@server target or SSH alias you use in your terminal.\nIt will be saved in ${clientSettingsPath()} on this computer and will not be committed.\nResolved server hostname, app domain, and deploy settings go in committed shibumi-server.json.`,
+    "Use the same user@server target or SSH alias you use in your terminal.\nIt will be saved in .git/config on this computer and will not be committed.\nResolved server hostname, app domain, and deploy settings go in committed shibumi-server.json.",
   );
   const answer = await text({
     message: "SSH target (user@server or alias)",
@@ -526,6 +318,8 @@ async function requestSshTarget(configHostname?: string): Promise<string | undef
   const target = answer || suggestion;
   if (!target) return undefined;
   if (!await approve(`Save ${target} locally and connect?`)) return undefined;
+  await run(["git", "config", "--local", "shibumi.server", target]);
+  log.success("SSH target saved to local Git config. It will not be committed.");
   return target;
 }
 
@@ -533,7 +327,7 @@ async function resolvedSshHostname(target: string): Promise<string> {
   if (!SSH_TARGET.test(target)) throw new Error("local SSH target is unsafe");
   const result = await run(["ssh", "-G", "--", target]);
   const hostname = /^hostname\s+(.+)$/m.exec(result.stdout)?.[1]?.trim();
-  if (!hostname || !SERVER_HOSTNAME.test(hostname)) {
+  if (!hostname || !/^[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$/.test(hostname)) {
     throw new Error("cannot resolve SSH server hostname");
   }
   return hostname.toLowerCase();
@@ -559,15 +353,15 @@ async function closeSshControl(): Promise<void> {
   sshControlTarget = undefined;
 }
 
-async function ssh(target: string, remoteArgs: string[], options: { tty?: boolean; allowFailure?: boolean; inputFile?: string } = {}): Promise<Result> {
+async function ssh(target: string, remoteArgs: string[], options: { tty?: boolean; allowFailure?: boolean } = {}): Promise<Result> {
   if (!SSH_TARGET.test(target)) throw new Error("local SSH target is unsafe");
   if (sshControlTarget && sshControlTarget !== target) throw new Error("ship supports one SSH target per run");
   sshControlTarget = target;
   for (const arg of remoteArgs) if (/[\0\r\n]/.test(arg)) throw new Error("remote argument is unsafe");
   return run([
     "ssh", "-o", "StrictHostKeyChecking=yes", "-o", "ControlMaster=auto", "-o", "ControlPersist=60", "-S", await sshControlPath(),
-    ...(agentRun ? ["-o", "BatchMode=yes"] : []), ...(options.inputFile ? ["-C"] : []), ...(options.tty ? ["-t"] : []), "--", target, ...remoteArgs,
-  ], { inherit: options.tty, allowFailure: options.allowFailure, inputFile: options.inputFile });
+    ...(agentRun ? ["-o", "BatchMode=yes"] : []), ...(options.tty ? ["-t"] : []), "--", target, ...remoteArgs,
+  ], { inherit: options.tty, allowFailure: options.allowFailure });
 }
 
 function versionAtLeast(current: string, minimum: string): boolean {
@@ -582,10 +376,10 @@ function versionAtLeast(current: string, minimum: string): boolean {
 // Install only through the reviewed, version-pinned website endpoint.
 async function ensureServer(target: string): Promise<void> {
   const version = await ssh(target, [SERVER_CLI, "--version"], { allowFailure: true });
-  if (version.exitCode === 0 && versionAtLeast(version.stdout.trim(), "0.7.2")) return;
+  if (version.exitCode === 0 && versionAtLeast(version.stdout.trim(), "0.1.26")) return;
   if (agentRun) throw new Error(version.exitCode === 0
-    ? `shibumi-server ${version.stdout.trim()} needs an upgrade.\n\nAgent: ask user to run bun run ship:setup from this project in their terminal, then retry.`
-    : "shibumi-server is not installed.\n\nAgent: ask user to run bun run ship:setup from this project in their terminal, then retry.");
+    ? `shibumi-server ${version.stdout.trim()} needs an upgrade.\n\nAgent: ask user to run shis update on the server, then retry.`
+    : "shibumi-server is not installed.\n\nAgent: ask user to run curl -fsSL https://shibumistack.dev/install/server | bash on their Linux server, then retry.");
   explain(
     version.exitCode === 0 ? `shibumi-server ${version.stdout.trim()} needs an upgrade` : "shibumi-server is not installed",
     "This runs the reviewed installer on the SSH server. SSH and sudo prompts stay attached directly to your terminal.",
@@ -600,7 +394,7 @@ async function ensureServer(target: string): Promise<void> {
 async function remoteSetup(target: string, _force: boolean): Promise<ClientConfig> {
   const project = await inferredProject();
   let domain = options.domain ?? project.domain;
-  if (!domain && (agentRun || options.yes)) throw new Error("App domain could not be inferred.\n\nAgent: ask user for the app domain, then run bun run ship:setup --domain <domain>");
+  if (!domain && agentRun) throw new Error("App domain could not be inferred.\n\nAgent: ask user for the app domain, then run bun run ship:setup -- --domain <domain>");
   if (!domain) {
     const answer = await text({
       message: "App domain",
@@ -610,16 +404,15 @@ async function remoteSetup(target: string, _force: boolean): Promise<ClientConfi
     if (isCancel(answer)) throw new Error("setup cancelled");
     domain = answer;
   }
-  const serverHostname = await resolvedSshHostname(target);
-  await rememberSshTarget(serverHostname, target);
   await ensureServer(target);
   const appId = appIdForDomain(domain);
+  const serverHostname = await resolvedSshHostname(target);
   let downloaded = await ssh(target, [
     "env", "SHIBUMI_SKIP_UPDATE_CHECK=1", SERVER_CLI, "client-config", appId, "--server-hostname", serverHostname,
   ], { allowFailure: true });
 
   if (downloaded.exitCode !== 0) {
-    if (agentRun) throw new Error("Server app registration needs interactive SSH and sudo.\n\nAgent: ask user to run bun run ship:setup from this project in their terminal, then retry.");
+    if (agentRun) throw new Error(`Server app registration is required.\n\nAgent: ask user to run shis add ${domain} on ${target}, then retry.`);
     explain(
       "Server setup required",
       `SSH target  ${target}\nDomain      ${domain}\nRepository  github:${project.repository}\n\nSSH and sudo prompts stay attached to this terminal.`,
@@ -632,8 +425,6 @@ async function remoteSetup(target: string, _force: boolean): Promise<ClientConfi
       "--compose-file", project.composeFile,
       "--service", project.service,
       "--health-path", project.healthPath,
-      "--deployment-mode", "prebuilt",
-      ...(options.yes ? ["--yes"] : []),
     ], { tty: true, allowFailure: true });
     if (setup.exitCode !== 0) throw new Error("server app setup is incomplete.\n\nNext: complete the DNS or server action above, then run bun run ship:setup.");
     downloaded = await ssh(target, [
@@ -641,19 +432,9 @@ async function remoteSetup(target: string, _force: boolean): Promise<ClientConfi
     ], { allowFailure: true });
   }
   if (downloaded.exitCode !== 0) throw new Error("server app registration is incomplete.\n\nNext: complete the DNS or server action above, then run bun run ship:setup.");
-  let config = validateConfig(JSON.parse(downloaded.stdout));
+  const config = validateConfig(JSON.parse(downloaded.stdout));
   if (config.repository !== `github:${project.repository}`) throw new Error(`registered domain belongs to ${config.repository}\n\nNext: use the matching project or remove the conflicting server registration.`);
   if (config.branch !== project.branch) throw new Error(`registered domain deploys ${config.branch}, but current branch is ${project.branch}.\n\nNext: check out ${config.branch}, or register another domain for ${project.branch}.`);
-  if (config.deploymentMode !== "prebuilt") {
-    const enabled = await ssh(target, [
-      "env", "SHIBUMI_SKIP_UPDATE_CHECK=1", SERVER_CLI, "enable-prebuilt", appId,
-    ], { allowFailure: true });
-    if (enabled.exitCode !== 0) throw new Error(`${enabled.stderr.trim() || "could not enable prebuilt deployments"}\n\nNext: update shibumi-server, then rerun bun run ship:setup.`);
-    downloaded = await ssh(target, [
-      "env", "SHIBUMI_SKIP_UPDATE_CHECK=1", SERVER_CLI, "client-config", appId, "--server-hostname", serverHostname,
-    ]);
-    config = validateConfig(JSON.parse(downloaded.stdout));
-  }
   await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
   log.success(`Found ${domain} on ${serverHostname}`);
   log.success("Wrote shibumi-server.json");
@@ -717,8 +498,7 @@ async function ensureWebhook(config: ClientConfig, target: string): Promise<void
     existing ? "GitHub webhook needs repair" : "GitHub webhook is missing",
     `Repository  ${repository}\nPayload URL ${config.webhookUrl}\nEvents      push\n\nThe secret travels from server to GitHub CLI through memory only.`,
   );
-  if (!existing && !await approve("Create webhook with GitHub CLI?")) throw new Error(`Next: review ${config.webhookUrl} at https://github.com/${repository}/settings/hooks`);
-  if (existing) log.info("Refreshing webhook secret from server configuration");
+  if (!await approve(existing ? "Refresh webhook secret?" : "Create webhook with GitHub CLI?")) throw new Error(`Next: review ${config.webhookUrl} at https://github.com/${repository}/settings/hooks`);
   const secretResult = await ssh(target, ["env", "SHIBUMI_SKIP_UPDATE_CHECK=1", SERVER_CLI, "webhook-secret", config.appId]);
   const secretValue: unknown = JSON.parse(secretResult.stdout);
   const secret = secretValue && typeof secretValue === "object" ? (secretValue as { secret?: unknown }).secret : undefined;
@@ -750,17 +530,15 @@ async function ensureWebhook(config: ClientConfig, target: string): Promise<void
   throw new Error(`GitHub webhook is configured but not reachable yet.\n\nNext: confirm ${config.domain} DNS and TLS, then run bun run ship:setup. For proxied Cloudflare domains, use Full (strict) SSL/TLS mode.\n\nGitHub: https://github.com/${repository}/settings/hooks`);
 }
 
-async function setup(force: boolean): Promise<{ config: ClientConfig; target: string; changed: boolean } | undefined> {
+async function setup(force: boolean): Promise<{ config: ClientConfig; target: string; changed: boolean }> {
   let config = await readConfig();
-  if ((force || !config) && await prepareCompose()) return undefined;
   if (force || !config) await inferredProject();
-  let target = await configuredSshTarget(config?.server.hostname);
+  let target = await localSshTarget();
   if (!target) target = await requestSshTarget(config?.server.hostname);
   if (!target) throw new Error("SSH server is required");
   const previous = config;
   if (force || !config) config = await remoteSetup(target, force);
   if (!config) throw new Error("deployment setup did not return client configuration");
-  await rememberSshTarget(config.server.hostname, target);
   await ensureWebhook(config, target);
   return { config, target, changed: !previous || JSON.stringify(previous) !== JSON.stringify(config) };
 }
@@ -802,84 +580,15 @@ async function preflight(config: ClientConfig): Promise<number> {
   return counts[0];
 }
 
-export function prebuiltImage(appId: string, commit: string): string {
-  if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(appId) || !COMMIT.test(commit)) throw new Error("invalid prebuilt image identity");
-  return `localhost/shibumi-server/upload/${appId}:${commit}`;
-}
-
-async function buildAndUpload(config: ClientConfig, target: string, commit: string): Promise<void> {
-  if (config.deploymentMode !== "prebuilt") return;
-  if (!config.platform) throw new Error("server image platform is missing.\n\nNext: run bun run ship:setup.");
-  const docker = await run(["docker", "info"], { allowFailure: true });
-  if (docker.exitCode !== 0) throw new Error("Docker is not running.\n\nNext: start Docker Desktop, then run bun run ship.");
-  const composeVersion = await run(["docker", "compose", "version"], { allowFailure: true });
-  if (composeVersion.exitCode !== 0) throw new Error("Docker Compose is unavailable.\n\nNext: install or update Docker Desktop, then run bun run ship.");
-  const submodules = (await git("ls-files", "--stage")).split("\n").filter((line) => line.startsWith("160000 "));
-  if (submodules.length > 0) throw new Error("Prebuilt shipping does not support Git submodules yet.\n\nNext: remove the submodule dependency or use server build mode.");
-
-  const project = await inferredProject();
-  const temporary = await mkdtemp("/tmp/shibumi-build-");
-  const context = join(temporary, "context");
-  const sourceArchive = join(temporary, "source.tar");
-  const imageArchive = join(temporary, "image.tar");
-  const override = join(temporary, "compose.prebuilt.yaml");
-  const image = prebuiltImage(config.appId, commit);
-  const progress = spinner();
-  try {
-    progress.start(`Building ${config.platform} image from ${commit.slice(0, 7)}`);
-    await mkdir(context);
-    await run(["git", "archive", "--format=tar", "--output", sourceArchive, commit]);
-    await run(["tar", "-xf", sourceArchive, "-C", context]);
-    await writeFile(override, `services:\n  ${JSON.stringify(config.service)}:\n    image: ${JSON.stringify(image)}\n    platform: ${JSON.stringify(config.platform)}\n`);
-    await run([
-      "docker", "compose",
-      "--project-name", `shibumi-build-${config.appId}`,
-      "--file", join(context, project.composeFile),
-      "--file", override,
-      "build", config.service,
-    ], { cwd: context });
-    const inspected = await run(["docker", "image", "inspect", "--format", "{{.Os}}/{{.Architecture}}", image]);
-    if (inspected.stdout.trim() !== config.platform) throw new Error(`built image platform is ${inspected.stdout.trim() || "unknown"}; ${config.platform} required`);
-    progress.message("Packing image for SSH upload");
-    await run(["docker", "image", "save", "--output", imageArchive, image]);
-    progress.message(`Uploading image to ${target}`);
-    const archiveBytes = (await stat(imageArchive)).size;
-    const loaded = await ssh(target, [
-      "env", "SHIBUMI_SKIP_UPDATE_CHECK=1", SERVER_CLI, "image-load", config.appId, commit, String(archiveBytes),
-    ], { inputFile: imageArchive, allowFailure: true });
-    if (loaded.exitCode !== 0) throw new Error(loaded.stderr.trim() || loaded.stdout.trim() || "server rejected prebuilt image");
-    progress.stop("Prebuilt image verified on server");
-    await run(["docker", "image", "rm", image], { allowFailure: true });
-  } catch (error) {
-    progress.stop("Prebuilt image failed", 1);
-    throw error;
-  } finally {
-    await rm(temporary, { recursive: true, force: true });
-  }
-}
-
-async function estimatedDeployDuration(config: ClientConfig, target: string): Promise<number | undefined> {
-  const result = await ssh(target, [
-    "env", "SHIBUMI_SKIP_UPDATE_CHECK=1", SERVER_CLI, "history", config.appId, "--json",
-  ], { allowFailure: true });
-  if (result.exitCode !== 0 || !result.stdout.trim()) return undefined;
-  try {
-    const history: unknown = JSON.parse(result.stdout);
-    return Array.isArray(history) ? latestDeployDuration(history as HistoryEntry[]) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 // Follow status for the exact pushed commit. This prevents an older or parallel
 // deployment from being reported as success for current ship.
-async function followStatus(config: ClientConfig, target: string, commit: string, estimateMs?: number): Promise<void> {
+async function followStatus(config: ClientConfig, target: string, commit: string): Promise<void> {
   const progress = spinner();
   const fit = (value: string) => {
     const width = Math.max(24, (process.stdout.columns ?? 80) - 8);
     return value.length > width ? `${value.slice(0, width - 1)}…` : value;
   };
-  progress.start(estimateMs ? `Waiting for webhook (ETA: ${formatDuration(estimateMs)})` : "Waiting for webhook");
+  progress.start("Waiting for webhook");
   const startedAt = Date.now();
   const deadline = startedAt + 12 * 60_000;
   const webhookDeadline = startedAt + 45_000;
@@ -904,13 +613,13 @@ async function followStatus(config: ClientConfig, target: string, commit: string
       }
       if (!queued && status.state === "succeeded") {
         progress.stop(config.cutoverRequired
-          ? "New upstream healthy at 127.0.0.1 (Caddy cutover pending)"
-          : "Deployment complete");
+          ? `New upstream healthy at 127.0.0.1 (Caddy cutover pending)`
+          : `Shipped ${status.url ?? `https://${config.domain}`}`);
         return;
       }
       if (!queued && status.state === "failed") {
         progress.stop(`Deployment failed during ${status.stage ?? "unknown"}`, 1);
-        throw new Error(`${[status.message ?? "deployment failed", status.output].filter(Boolean).join("\n")}\n\nNext: run bun run ship:logs.`);
+        throw new Error([status.message ?? "deployment failed", status.output].filter(Boolean).join("\n"));
       }
     } else if (lastStage) {
       const history = await ssh(target, [
@@ -920,13 +629,13 @@ async function followStatus(config: ClientConfig, target: string, commit: string
         const terminal = terminalHistory(JSON.parse(history.stdout) as HistoryEntry[], commit);
         if (terminal?.state === "succeeded") {
           progress.stop(config.cutoverRequired
-            ? "New upstream healthy at 127.0.0.1 (Caddy cutover pending)"
-            : "Deployment complete");
+            ? `New upstream healthy at 127.0.0.1 (Caddy cutover pending)`
+            : `Shipped https://${config.domain}`);
           return;
         }
         if (terminal?.state === "failed") {
           progress.stop(`Deployment failed during ${terminal.stage ?? "unknown"}`, 1);
-          throw new Error(`deployment failed during ${terminal.stage ?? "unknown"}.\n\nNext: run bun run ship:logs.`);
+          throw new Error(`deployment failed during ${terminal.stage ?? "unknown"}.\n\nNext: run ssh ${target} shibumi-server history ${config.appId}.`);
         }
       }
     }
@@ -956,7 +665,7 @@ async function followStatus(config: ClientConfig, target: string, commit: string
 // healthy and user explicitly approves Caddy cutover.
 async function completeCutover(config: ClientConfig, target: string): Promise<boolean> {
   if (!config.cutoverRequired) return false;
-  if (agentRun) throw new Error("Existing-domain cutover needs interactive SSH and sudo.\n\nAgent: ask user to run bun run ship from this project in their terminal.");
+  if (agentRun) throw new Error(`Existing-domain cutover needs server confirmation.\n\nAgent: ask user to run ssh ${target} shis caddy-cutover ${config.appId}, then retry.`);
   explain(
     "Existing-domain cutover",
     `The new app is healthy, but ${config.domain} still serves its previous upstream.\nCaddy cutover validates and reloads configuration without stopping active connections.`,
@@ -978,105 +687,6 @@ async function completeCutover(config: ClientConfig, target: string): Promise<bo
   return true;
 }
 
-async function projectTarget(config: ClientConfig): Promise<string> {
-  const target = await configuredSshTarget(config.server.hostname) ?? await requestSshTarget(config.server.hostname);
-  if (!target) throw new Error("SSH server is required");
-  await rememberSshTarget(config.server.hostname, target);
-  return target;
-}
-
-async function showLogs(): Promise<void> {
-  try {
-    const config = await readConfig();
-    if (!config) throw new Error("Shibumi setup is missing.\n\nNext: run bun run ship:setup.");
-    const result = await ssh(await projectTarget(config), [
-      "env", "SHIBUMI_SKIP_UPDATE_CHECK=1", SERVER_CLI, "logs", config.appId,
-    ], { allowFailure: true });
-    if (result.exitCode !== 0) throw new Error(result.stderr.trim() || "deployment log is unavailable");
-    process.stdout.write(result.stdout);
-  } finally {
-    await closeSshControl();
-  }
-}
-
-function portIsBusy(port: number): Promise<boolean> {
-  return new Promise((resolveBusy) => {
-    const socket = createConnection({ host: "127.0.0.1", port });
-    socket.setTimeout(500);
-    socket.once("connect", () => { socket.destroy(); resolveBusy(true); });
-    socket.once("timeout", () => { socket.destroy(); resolveBusy(false); });
-    socket.once("error", () => resolveBusy(false));
-  });
-}
-
-async function runDev(): Promise<void> {
-  const config = await readConfig();
-  if (!config) throw new Error("Shibumi setup is missing.\n\nNext: run bun run ship:setup.");
-  if (await portIsBusy(config.port)) {
-    const lsof = Bun.which("lsof");
-    const fuser = Bun.which("fuser");
-    if (!lsof && !fuser) throw new Error(`Port ${config.port} is already in use.\n\nNext: stop that process, then run bun dev again.`);
-    const found = lsof
-      ? await run([lsof, "-nP", `-iTCP:${config.port}`, "-sTCP:LISTEN", "-t"], { allowFailure: true })
-      : await run([fuser!, "-n", "tcp", String(config.port)], { allowFailure: true });
-    const pids = [...new Set(`${found.stdout} ${found.stderr}`.split(/\s+/).filter((value) => /^\d+$/.test(value)).map(Number))];
-    if (pids.length === 0) throw new Error(`Port ${config.port} is already in use.\n\nNext: stop that process, then run bun dev again.`);
-    const details = await run(["ps", "-o", "pid=,comm=", "-p", pids.join(",")], { allowFailure: true });
-    log.warn(`Port ${config.port} is in use${details.stdout.trim() ? `:\n${details.stdout.trim()}` : ""}`);
-    const accepted = await confirm({ message: "Stop it and start this project?", initialValue: false });
-    if (isCancel(accepted) || !accepted) return;
-    for (const pid of pids) process.kill(pid, "SIGTERM");
-    const deadline = Date.now() + 5_000;
-    while (await portIsBusy(config.port) && Date.now() < deadline) await Bun.sleep(100);
-    if (await portIsBusy(config.port)) throw new Error(`Port ${config.port} did not stop.\n\nNext: stop PID ${pids.join(", ")} manually, then run bun dev again.`);
-  }
-  log.info(`Local  http://127.0.0.1:${config.port}\nRemote https://${config.domain}`);
-  const child = Bun.spawn([process.execPath, "run", "dev:app"], {
-    cwd: root,
-    env: { ...process.env, PORT: String(config.port), SHIBUMI_PORT: String(config.port) },
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-  process.exitCode = await child.exited;
-}
-
-async function rollbackShip(): Promise<void> {
-  intro("渋み  ship rollback");
-  try {
-    const config = await readConfig();
-    if (!config) throw new Error("Shibumi setup is missing.\n\nNext: run bun run ship:setup.");
-    const target = await projectTarget(config);
-    const status = await ssh(target, [
-      "env", "SHIBUMI_SKIP_UPDATE_CHECK=1", SERVER_CLI, "status", config.appId, "--json",
-    ], { allowFailure: true });
-    if (status.exitCode === 0 && status.stdout.trim() && status.stdout.trim() !== "null") {
-      const current = JSON.parse(status.stdout) as DeployStatus;
-      if (current.state === "accepted" || current.state === "running") {
-        throw new Error(`Deployment ${current.commit?.slice(0, 7) ?? ""} is still ${current.state}.\n\nNext: wait for it to finish, then retry bun run ship --rollback.`);
-      }
-    }
-    if (!await approve(`Restore the previous retained image for ${config.domain}?`)) {
-      cancel("Rollback cancelled");
-      return;
-    }
-    const startedAt = Date.now();
-    const progress = spinner();
-    progress.start("Restoring previous image");
-    const rollback = await ssh(target, [
-      "env", "SHIBUMI_SKIP_UPDATE_CHECK=1", SERVER_CLI, "rollback", config.appId, "--yes",
-    ], { allowFailure: true });
-    if (rollback.exitCode !== 0) {
-      progress.stop("Rollback failed", 1);
-      throw new Error(rollback.stderr.trim() || rollback.stdout.trim() || "server rollback failed");
-    }
-    progress.stop(`Rolled back in ${formatDuration(Date.now() - startedAt)}`);
-    outro(`https://${config.domain}`);
-  } finally {
-    await closeSshControl();
-  }
-}
-
 // Setup exits after configuration changes so user can review and commit them.
 // Normal ship reaches push only when configuration is already stable.
 export async function runShip(): Promise<void> {
@@ -1084,7 +694,6 @@ export async function runShip(): Promise<void> {
   try {
     const forceSetup = options.setup;
     const result = await setup(forceSetup);
-    if (!result) return;
     const setupCommit = await offerSetupCommit();
     if (forceSetup || result.changed || setupCommit === "declined") {
       outro(setupCommit === "declined"
@@ -1092,8 +701,6 @@ export async function runShip(): Promise<void> {
         : `${accent("Next:")} bun run ship`);
       return;
     }
-    const estimateMs = await estimatedDeployDuration(result.config, result.target);
-    const startedAt = Date.now();
     const ahead = await preflight(result.config);
     if (!await approve(ahead > 0
       ? `Push ${result.config.branch} and deploy ${result.config.domain}?`
@@ -1103,7 +710,6 @@ export async function runShip(): Promise<void> {
     }
     const commit = await git("rev-parse", "HEAD");
     if (!COMMIT.test(commit)) throw new Error("cannot determine shipped commit");
-    await buildAndUpload(result.config, result.target, commit);
     if (ahead > 0) await run(["git", "push", "origin", result.config.branch], { inherit: true });
     else {
       const redeploy = await ssh(result.target, [
@@ -1120,13 +726,11 @@ export async function runShip(): Promise<void> {
         log.info("Deployment already running for this commit. Following its progress.");
       }
     }
-    await followStatus(result.config, result.target, commit, estimateMs);
+    await followStatus(result.config, result.target, commit);
     const changed = await completeCutover(result.config, result.target);
-    if (changed) log.info("Updated shibumi-server.json after Caddy cutover");
-    const complete = spinner();
-    complete.start("Finishing ship");
-    complete.stop(`Shipped in ${formatDuration(Date.now() - startedAt)} (--rollback if needed)`);
-    outro(`https://${result.config.domain}`);
+    outro(changed
+      ? `Shipped https://${result.config.domain}. Commit updated shibumi-server.json.`
+      : `https://${result.config.domain}`);
   } finally {
     await closeSshControl();
   }
@@ -1165,11 +769,7 @@ export function runShipCli(): void {
     process.exitCode = 1;
     return;
   }
-  const action = options.update ? updateShipClient()
-    : options.rollback ? rollbackShip()
-    : options.logs ? showLogs()
-    : options.dev ? runDev()
-    : runShip();
+  const action = options.update ? updateShipClient() : runShip();
   action.catch((error) => {
     cancel(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
