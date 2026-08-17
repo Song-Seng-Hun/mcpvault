@@ -63,8 +63,17 @@ const TOOLS = Object.keys(PAIRINGS[0].tools);
 type ChartRow = { short: string; name: string; color: string; stat: Stat; widthPct: number };
 type ChartSpec = { title: string; unit: string; axisMax: number; rows: ChartRow[] };
 
+// Round an axis limit up to a clean 1/1.5/2/2.5/5/10 step, e.g. 109.8 -> 120.
+function niceCeil(v: number): number {
+  const mag = 10 ** Math.floor(Math.log10(v));
+  for (const step of [1, 1.2, 1.5, 2, 2.5, 5, 10]) {
+    if (v <= step * mag) return step * mag;
+  }
+  return 10 * mag;
+}
+
 function buildChart(title: string, unit: string, stats: Stat[]): ChartSpec {
-  const axisMax = Math.max(...stats.map((s) => s.median)) * 1.06;
+  const axisMax = niceCeil(Math.max(...stats.map((s) => s.median)) * 1.02);
   return {
     title,
     unit,
@@ -107,7 +116,7 @@ const fmt = (v: number) => (v >= 10 ? v.toFixed(1) : v.toFixed(2));
       </div>
     ))}
     <div class="mt-2 flex justify-between border-t border-border pt-1 text-[11px] tabular-nums text-muted-foreground/70">
-      <span>0</span><span>{fmt(coldChart.axisMax)} ms</span>
+      <span>0</span><span>{coldChart.axisMax} ms</span>
     </div>
   </figure>
 
