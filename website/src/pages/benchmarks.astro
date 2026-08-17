@@ -2,7 +2,7 @@
 import Layout from '@layouts/Layout.astro';
 import Nav from '@components/Nav.astro';
 import Footer from '@components/Footer.astro';
-import BenchmarkCharts from '@components/BenchmarkCharts';
+import BenchmarkCharts from '@components/BenchmarkCharts.astro';
 
 const branchUrl = 'https://github.com/bitbonsai/mcpvault/tree/feat/mcp-sdk-v2';
 const scriptsUrl = 'https://github.com/bitbonsai/mcpvault/tree/feat/mcp-sdk-v2/benchmarks';
@@ -40,7 +40,7 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
 
     <section class="px-4 pb-8 sm:px-6 lg:px-8" aria-label="Benchmark results">
       <div class="mx-auto max-w-4xl">
-        <BenchmarkCharts client:visible />
+        <BenchmarkCharts />
       </div>
     </section>
 
@@ -100,22 +100,3 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
   </main>
 </Layout>
 
-<style>
-  /* Left-to-right wipe when the chart island mounts (client:visible). */
-  :global(.bench-chart-reveal) {
-    animation: bench-wipe 0.9s ease-out both;
-  }
-  @keyframes bench-wipe {
-    from {
-      clip-path: inset(0 100% 0 0);
-    }
-    to {
-      clip-path: inset(0 0 0 0);
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    :global(.bench-chart-reveal) {
-      animation: none;
-    }
-  }
-</style>
