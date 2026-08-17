@@ -60,11 +60,11 @@ const PAIRINGS: Pairing[] = [
 const COLORS = ['#0891b2', '#8b5cf6', '#d97706'];
 const TOOLS = Object.keys(PAIRINGS[0].tools);
 
-type ChartRow = { short: string; name: string; color: string; stat: Stat; widthPct: number; p95Pct: number };
+type ChartRow = { short: string; name: string; color: string; stat: Stat; widthPct: number };
 type ChartSpec = { title: string; unit: string; axisMax: number; rows: ChartRow[] };
 
 function buildChart(title: string, unit: string, stats: Stat[]): ChartSpec {
-  const axisMax = Math.max(...stats.map((s) => s.p95)) * 1.08;
+  const axisMax = Math.max(...stats.map((s) => s.median)) * 1.06;
   return {
     title,
     unit,
@@ -75,7 +75,6 @@ function buildChart(title: string, unit: string, stats: Stat[]): ChartSpec {
       color: COLORS[i],
       stat,
       widthPct: (stat.median / axisMax) * 100,
-      p95Pct: (stat.p95 / axisMax) * 100,
     })),
   };
 }
@@ -92,7 +91,7 @@ const fmt = (v: number) => (v >= 10 ? v.toFixed(1) : v.toFixed(2));
       {coldChart.title} <span class="font-normal text-muted-foreground">· {coldChart.unit}</span>
     </figcaption>
     {coldChart.rows.map((row, i) => (
-      <div class="mb-2 grid grid-cols-[8rem_1fr] items-center gap-3 last:mb-0">
+      <div class="mb-2 grid grid-cols-[8rem_1fr_3.5rem] items-center gap-3 last:mb-0">
         <span class="text-right text-xs text-muted-foreground">{row.short}</span>
         <div
           class="bench-track relative h-5"
@@ -100,17 +99,11 @@ const fmt = (v: number) => (v >= 10 ? v.toFixed(1) : v.toFixed(2));
         >
           <div
             class="bench-bar absolute top-0.5 h-4 rounded-r"
-            style={`width:${row.widthPct}%;background:${row.color};animation-delay:${i * 120}ms`}
+            style={`width:${row.widthPct}%;background:${row.color};animation-delay:${i * 80}ms`}
           >
           </div>
-          <div class="bench-p95 absolute top-0 h-5 w-0.5 rounded-full" style={`left:${row.p95Pct}%`}></div>
-          <span
-            class="absolute top-0 text-xs tabular-nums text-muted-foreground"
-            style={`left:calc(${Math.max(row.widthPct, row.p95Pct)}% + 8px)`}
-          >
-            {fmt(row.stat.median)}
-          </span>
         </div>
+        <span class="text-right text-xs tabular-nums text-muted-foreground">{fmt(row.stat.median)}</span>
       </div>
     ))}
     <div class="mt-2 flex justify-between border-t border-border pt-1 text-[11px] tabular-nums text-muted-foreground/70">
@@ -135,10 +128,9 @@ const fmt = (v: number) => (v >= 10 ? v.toFixed(1) : v.toFixed(2));
               >
                 <div
                   class="bench-bar absolute top-0.5 h-4 rounded-r"
-                  style={`width:${row.widthPct}%;background:${row.color};animation-delay:${i * 120}ms`}
+                  style={`width:${row.widthPct}%;background:${row.color};animation-delay:${i * 80}ms`}
                 >
                 </div>
-                <div class="bench-p95 absolute top-0 h-5 w-0.5 rounded-full" style={`left:${row.p95Pct}%`}></div>
               </div>
             </div>
           ))}
@@ -163,10 +155,6 @@ const fmt = (v: number) => (v >= 10 ? v.toFixed(1) : v.toFixed(2));
         <span><strong class="font-semibold text-foreground">{p.short}</strong> · {p.name}: {p.detail}</span>
       </span>
     ))}
-    <span class="flex items-center gap-2">
-      <span class="bench-p95 inline-block h-3 w-0.5 flex-shrink-0 rounded-full" aria-hidden="true"></span>
-      <span>tick marks p95</span>
-    </span>
   </div>
 
   <details class="rounded-xl border border-border bg-card px-4 py-3">
@@ -204,9 +192,6 @@ const fmt = (v: number) => (v >= 10 ? v.toFixed(1) : v.toFixed(2));
   .bench-track {
     background: rgba(148, 163, 184, 0.07);
     border-radius: 0 0.25rem 0.25rem 0;
-  }
-  .bench-p95 {
-    background: rgba(163, 163, 163, 0.55);
   }
   .bench-bar {
     transform-origin: left center;
