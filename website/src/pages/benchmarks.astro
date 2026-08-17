@@ -32,9 +32,21 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
         </p>
         <p class="mt-3 max-w-3xl text-base leading-relaxed text-muted-foreground">
           We benchmarked the upgrade before shipping it. Three pairings, one real vault
-          (381 notes), everything over stdio. The result is a tie: the v2 build costs
-          existing clients nothing.
+          (381 notes), everything over stdio.
         </p>
+
+        <aside
+          class="mt-6 rounded-xl border border-violet-400/25 bg-card/40 p-5 backdrop-blur-md"
+          aria-label="Summary"
+        >
+          <p class="text-xs font-semibold uppercase tracking-wider text-violet-400">TL;DR</p>
+          <p class="mt-2 text-base leading-relaxed text-foreground">
+            The v2 build is a tie with today's release: same ~107 ms cold start, same
+            per-request latency for every app you already use. The only slowdown lives in a
+            test-harness configuration no shipping app hits. Rerun it yourself with the
+            scripts below.
+          </p>
+        </aside>
       </div>
     </section>
 
