@@ -3,8 +3,8 @@
 /**
  * Project-owned client for shibumi-server.
  *
- * `bun run ship:setup` connects this repository to one server and creates its
- * GitHub webhook. Later, `bun run ship` checks local work, pushes one commit,
+ * `bun ship:setup` connects this repository to one server and creates its
+ * GitHub webhook. Later, `bun ship` checks local work, pushes one commit,
  * and follows deployment status until the app is healthy.
  *
  * Commit this file and shibumi-server.json. SSH targets stay in machine-local
@@ -25,7 +25,7 @@ const SERVER_HOSTNAME = /^[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$/;
 const COMMIT = /^[a-f0-9]{40}$/;
 const SERVER_CLI = "~/.local/bin/shibumi-server";
 const LATEST_SOURCE = "https://shibumistack.dev/ship/latest.ts";
-const CURRENT_SOURCE = "https://shibumistack.dev/ship/v22.ts";
+const CURRENT_SOURCE = "https://shibumistack.dev/ship/v23.ts";
 let sshControlDirectory: string | undefined;
 let sshControlTarget: string | undefined;
 const accent = (value: string) => process.stdout.isTTY && !("NO_COLOR" in process.env) && process.env.TERM !== "dumb"
@@ -176,7 +176,7 @@ async function savedSshTarget(hostname?: string): Promise<string | undefined> {
     log.info(`Server  ${fallback}\nConfig  ${clientSettingsPath()}`);
     return fallback;
   }
-  if (agentRun) throw new Error(`Deployment server confirmation required.\n\nAgent: ask user whether to use ${fallback}, then run bun run ship:setup --server <target>.`);
+  if (agentRun) throw new Error(`Deployment server confirmation required.\n\nAgent: ask user whether to use ${fallback}, then run bun ship:setup --server <target>.`);
   const answer = await text({
     message: "SSH server",
     placeholder: fallback,
@@ -398,12 +398,12 @@ async function prepareCompose(): Promise<boolean> {
   const names = ["compose.yaml", "compose.yml", "docker-compose.yml", "docker-compose.yaml"];
   const existingCompose = (await Promise.all(names.map(async (name) => await Bun.file(join(root, name)).exists() ? name : undefined))).find(Boolean);
   if (existingCompose) {
-    outro(`Found uncommitted ${existingCompose}.\n\nNext: review it, commit and push it, then run bun run ship:setup.`);
+    outro(`Found uncommitted ${existingCompose}.\n\nNext: review it, commit and push it, then run bun ship:setup.`);
     return true;
   }
 
   if (agentRun && !options.yes) {
-    throw new Error("Compose deployment files are missing.\n\nAgent: ask user for permission to generate Dockerfile, compose.yaml, and .dockerignore, then run bun run ship:setup -y.");
+    throw new Error("Compose deployment files are missing.\n\nAgent: ask user for permission to generate Dockerfile, compose.yaml, and .dockerignore, then run bun ship:setup -y.");
   }
   if (!options.yes) {
     const accepted = await confirm({ message: "No Compose deployment found. Generate recommended Bun deployment files?", initialValue: true });
@@ -413,7 +413,7 @@ async function prepareCompose(): Promise<boolean> {
   const packageJson = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as { scripts?: Record<string, unknown> };
   const dockerfileExists = await Bun.file(join(root, "Dockerfile")).exists();
   if (!dockerfileExists && typeof packageJson.scripts?.start !== "string") {
-    throw new Error("Dockerfile generation requires a package.json start script.\n\nNext: add a start script that binds to 0.0.0.0 and reads PORT, then run bun run ship:setup.");
+    throw new Error("Dockerfile generation requires a package.json start script.\n\nNext: add a start script that binds to 0.0.0.0 and reads PORT, then run bun ship:setup.");
   }
   const templates = deploymentFileTemplates(typeof packageJson.scripts?.build === "string");
   const written: string[] = [];
@@ -424,7 +424,7 @@ async function prepareCompose(): Promise<boolean> {
     written.push(name);
   }
   log.success(`Generated ${written.join(", ")}`);
-  outro("Review generated deployment files and verify app binds to 0.0.0.0 and reads PORT.\n\nNext: commit and push these changes, then run bun run ship:setup.");
+  outro("Review generated deployment files and verify app binds to 0.0.0.0 and reads PORT.\n\nNext: commit and push these changes, then run bun ship:setup.");
   return true;
 }
 
@@ -510,7 +510,7 @@ async function requestSshTarget(configHostname?: string): Promise<string | undef
     return suggestion;
   }
   if (agentRun) {
-    if (!suggestion) throw new Error("SSH server could not be inferred.\n\nAgent: ask user for their SSH target (user@host or SSH alias), then run bun run ship:setup --server <target>");
+    if (!suggestion) throw new Error("SSH server could not be inferred.\n\nAgent: ask user for their SSH target (user@host or SSH alias), then run bun ship:setup --server <target>");
     return suggestion;
   }
   explain(
@@ -584,8 +584,8 @@ async function ensureServer(target: string): Promise<void> {
   const version = await ssh(target, [SERVER_CLI, "--version"], { allowFailure: true });
   if (version.exitCode === 0 && versionAtLeast(version.stdout.trim(), "0.7.2")) return;
   if (agentRun) throw new Error(version.exitCode === 0
-    ? `shibumi-server ${version.stdout.trim()} needs an upgrade.\n\nAgent: ask user to run bun run ship:setup from this project in their terminal, then retry.`
-    : "shibumi-server is not installed.\n\nAgent: ask user to run bun run ship:setup from this project in their terminal, then retry.");
+    ? `shibumi-server ${version.stdout.trim()} needs an upgrade.\n\nAgent: ask user to run bun ship:setup from this project in their terminal, then retry.`
+    : "shibumi-server is not installed.\n\nAgent: ask user to run bun ship:setup from this project in their terminal, then retry.");
   explain(
     version.exitCode === 0 ? `shibumi-server ${version.stdout.trim()} needs an upgrade` : "shibumi-server is not installed",
     "This runs the reviewed installer on the SSH server. SSH and sudo prompts stay attached directly to your terminal.",
@@ -600,7 +600,7 @@ async function ensureServer(target: string): Promise<void> {
 async function remoteSetup(target: string, _force: boolean): Promise<ClientConfig> {
   const project = await inferredProject();
   let domain = options.domain ?? project.domain;
-  if (!domain && (agentRun || options.yes)) throw new Error("App domain could not be inferred.\n\nAgent: ask user for the app domain, then run bun run ship:setup --domain <domain>");
+  if (!domain && (agentRun || options.yes)) throw new Error("App domain could not be inferred.\n\nAgent: ask user for the app domain, then run bun ship:setup --domain <domain>");
   if (!domain) {
     const answer = await text({
       message: "App domain",
@@ -619,7 +619,7 @@ async function remoteSetup(target: string, _force: boolean): Promise<ClientConfi
   ], { allowFailure: true });
 
   if (downloaded.exitCode !== 0) {
-    if (agentRun) throw new Error("Server app registration needs interactive SSH and sudo.\n\nAgent: ask user to run bun run ship:setup from this project in their terminal, then retry.");
+    if (agentRun) throw new Error("Server app registration needs interactive SSH and sudo.\n\nAgent: ask user to run bun ship:setup from this project in their terminal, then retry.");
     explain(
       "Server setup required",
       `SSH target  ${target}\nDomain      ${domain}\nRepository  github:${project.repository}\n\nSSH and sudo prompts stay attached to this terminal.`,
@@ -635,12 +635,12 @@ async function remoteSetup(target: string, _force: boolean): Promise<ClientConfi
       "--deployment-mode", "prebuilt",
       ...(options.yes ? ["--yes"] : []),
     ], { tty: true, allowFailure: true });
-    if (setup.exitCode !== 0) throw new Error("server app setup is incomplete.\n\nNext: complete the DNS or server action above, then run bun run ship:setup.");
+    if (setup.exitCode !== 0) throw new Error("server app setup is incomplete.\n\nNext: complete the DNS or server action above, then run bun ship:setup.");
     downloaded = await ssh(target, [
       "env", "SHIBUMI_SKIP_UPDATE_CHECK=1", SERVER_CLI, "client-config", appId, "--server-hostname", serverHostname,
     ], { allowFailure: true });
   }
-  if (downloaded.exitCode !== 0) throw new Error("server app registration is incomplete.\n\nNext: complete the DNS or server action above, then run bun run ship:setup.");
+  if (downloaded.exitCode !== 0) throw new Error("server app registration is incomplete.\n\nNext: complete the DNS or server action above, then run bun ship:setup.");
   let config = validateConfig(JSON.parse(downloaded.stdout));
   if (config.repository !== `github:${project.repository}`) throw new Error(`registered domain belongs to ${config.repository}\n\nNext: use the matching project or remove the conflicting server registration.`);
   if (config.branch !== project.branch) throw new Error(`registered domain deploys ${config.branch}, but current branch is ${project.branch}.\n\nNext: check out ${config.branch}, or register another domain for ${project.branch}.`);
@@ -648,7 +648,7 @@ async function remoteSetup(target: string, _force: boolean): Promise<ClientConfi
     const enabled = await ssh(target, [
       "env", "SHIBUMI_SKIP_UPDATE_CHECK=1", SERVER_CLI, "enable-prebuilt", appId,
     ], { allowFailure: true });
-    if (enabled.exitCode !== 0) throw new Error(`${enabled.stderr.trim() || "could not enable prebuilt deployments"}\n\nNext: update shibumi-server, then rerun bun run ship:setup.`);
+    if (enabled.exitCode !== 0) throw new Error(`${enabled.stderr.trim() || "could not enable prebuilt deployments"}\n\nNext: update shibumi-server, then rerun bun ship:setup.`);
     downloaded = await ssh(target, [
       "env", "SHIBUMI_SKIP_UPDATE_CHECK=1", SERVER_CLI, "client-config", appId, "--server-hostname", serverHostname,
     ]);
@@ -677,19 +677,19 @@ async function ensureGitHubAuth(): Promise<void> {
   if (status.exitCode === 0) return;
   explain("GitHub sign-in required", "GitHub CLI stores your credentials. Shibumi never reads them.");
   if (agentRun || options.yes) throw new Error("GitHub sign-in required.\n\nAgent: ask user to run gh auth login -h github.com -p https -w, then retry.");
-  if (!await approve("Sign in to GitHub now?")) throw new Error("Next: run gh auth login -h github.com -p https -w, then rerun bun run ship.");
+  if (!await approve("Sign in to GitHub now?")) throw new Error("Next: run gh auth login -h github.com -p https -w, then rerun bun ship.");
   const login = await run(["gh", "auth", "login", "-h", "github.com", "-p", "https", "-w"], { inherit: true, allowFailure: true });
   if (login.exitCode !== 0 || (await run(["gh", "auth", "status", "-h", "github.com"], { allowFailure: true })).exitCode !== 0) {
-    throw new Error("GitHub sign-in did not complete.\n\nNext: run gh auth login -h github.com -p https -w, then rerun bun run ship.");
+    throw new Error("GitHub sign-in did not complete.\n\nNext: run gh auth login -h github.com -p https -w, then rerun bun ship.");
   }
 }
 
 async function authorizeWebhookAccess(): Promise<void> {
   explain("GitHub webhook access required", "GitHub CLI needs admin:repo_hook to create or repair this repository webhook.");
   if (agentRun || options.yes) throw new Error("GitHub webhook access required.\n\nAgent: ask user to run gh auth refresh -h github.com -s admin:repo_hook, then retry.");
-  if (!await approve("Authorize webhook access now?")) throw new Error("Next: run gh auth refresh -h github.com -s admin:repo_hook, then rerun bun run ship.");
+  if (!await approve("Authorize webhook access now?")) throw new Error("Next: run gh auth refresh -h github.com -s admin:repo_hook, then rerun bun ship.");
   const refresh = await run(["gh", "auth", "refresh", "-h", "github.com", "-s", "admin:repo_hook"], { inherit: true, allowFailure: true });
-  if (refresh.exitCode !== 0) throw new Error("GitHub webhook authorization did not complete.\n\nNext: run gh auth refresh -h github.com -s admin:repo_hook, then rerun bun run ship.");
+  if (refresh.exitCode !== 0) throw new Error("GitHub webhook authorization did not complete.\n\nNext: run gh auth refresh -h github.com -s admin:repo_hook, then rerun bun ship.");
 }
 
 async function findWebhook(config: ClientConfig): Promise<GitHubWebhook | undefined> {
@@ -700,7 +700,7 @@ async function findWebhook(config: ClientConfig): Promise<GitHubWebhook | undefi
     await authorizeWebhookAccess();
     hooks = await run(["gh", "api", `repos/${repository}/hooks?per_page=100`], { allowFailure: true });
   }
-  if (hooks.exitCode !== 0) throw new Error(`${hooks.stderr.trim() || "GitHub CLI could not read repository webhooks"}\n\nNext: confirm repository admin access, then rerun bun run ship.`);
+  if (hooks.exitCode !== 0) throw new Error(`${hooks.stderr.trim() || "GitHub CLI could not read repository webhooks"}\n\nNext: confirm repository admin access, then rerun bun ship.`);
   return matchingWebhook(JSON.parse(hooks.stdout), config.webhookUrl);
 }
 
@@ -734,7 +734,7 @@ async function ensureWebhook(config: ClientConfig, target: string): Promise<void
     await authorizeWebhookAccess();
     result = await run(args, { input, allowFailure: true });
   }
-  if (result.exitCode !== 0) throw new Error(`${result.stderr.trim() || "GitHub CLI could not configure webhook"}\n\nNext: confirm repository admin access, then rerun bun run ship.`);
+  if (result.exitCode !== 0) throw new Error(`${result.stderr.trim() || "GitHub CLI could not configure webhook"}\n\nNext: confirm repository admin access, then rerun bun ship.`);
   const hookId = existing?.id ?? (JSON.parse(result.stdout) as { id?: unknown }).id;
   if (typeof hookId !== "number") throw new Error("GitHub returned an invalid webhook");
   const ping = await run(["gh", "api", "-X", "POST", `repos/${repository}/hooks/${hookId}/pings`], { allowFailure: true });
@@ -747,7 +747,7 @@ async function ensureWebhook(config: ClientConfig, target: string): Promise<void
       return;
     }
   }
-  throw new Error(`GitHub webhook is configured but not reachable yet.\n\nNext: confirm ${config.domain} DNS and TLS, then run bun run ship:setup. For proxied Cloudflare domains, use Full (strict) SSL/TLS mode.\n\nGitHub: https://github.com/${repository}/settings/hooks`);
+  throw new Error(`GitHub webhook is configured but not reachable yet.\n\nNext: confirm ${config.domain} DNS and TLS, then run bun ship:setup. For proxied Cloudflare domains, use Full (strict) SSL/TLS mode.\n\nGitHub: https://github.com/${repository}/settings/hooks`);
 }
 
 async function setup(force: boolean): Promise<{ config: ClientConfig; target: string; changed: boolean } | undefined> {
@@ -772,7 +772,7 @@ async function preflight(config: ClientConfig): Promise<number> {
   if (`github:${project.repository}` !== config.repository) throw new Error(`origin does not match ${config.repository}`);
   if (project.branch !== config.branch) throw new Error(`current branch must be ${config.branch}`);
   const status = await git("status", "--short");
-  if (status) throw new Error(`Ship paused: working tree has uncommitted changes.\n\n${status}\n\nNext: commit or stash these changes, then run bun run ship.`);
+  if (status) throw new Error(`Ship paused: working tree has uncommitted changes.\n\n${status}\n\nNext: commit or stash these changes, then run bun ship.`);
 
   const progress = spinner();
   progress.start(`Fetching origin/${config.branch}`);
@@ -809,11 +809,11 @@ export function prebuiltImage(appId: string, commit: string): string {
 
 async function buildAndUpload(config: ClientConfig, target: string, commit: string): Promise<void> {
   if (config.deploymentMode !== "prebuilt") return;
-  if (!config.platform) throw new Error("server image platform is missing.\n\nNext: run bun run ship:setup.");
+  if (!config.platform) throw new Error("server image platform is missing.\n\nNext: run bun ship:setup.");
   const docker = await run(["docker", "info"], { allowFailure: true });
-  if (docker.exitCode !== 0) throw new Error("Docker is not running.\n\nNext: start Docker Desktop, then run bun run ship.");
+  if (docker.exitCode !== 0) throw new Error("Docker is not running.\n\nNext: start Docker Desktop, then run bun ship.");
   const composeVersion = await run(["docker", "compose", "version"], { allowFailure: true });
-  if (composeVersion.exitCode !== 0) throw new Error("Docker Compose is unavailable.\n\nNext: install or update Docker Desktop, then run bun run ship.");
+  if (composeVersion.exitCode !== 0) throw new Error("Docker Compose is unavailable.\n\nNext: install or update Docker Desktop, then run bun ship.");
   const submodules = (await git("ls-files", "--stage")).split("\n").filter((line) => line.startsWith("160000 "));
   if (submodules.length > 0) throw new Error("Prebuilt shipping does not support Git submodules yet.\n\nNext: remove the submodule dependency or use server build mode.");
 
@@ -910,7 +910,7 @@ async function followStatus(config: ClientConfig, target: string, commit: string
       }
       if (!queued && status.state === "failed") {
         progress.stop(`Deployment failed during ${status.stage ?? "unknown"}`, 1);
-        throw new Error(`${[status.message ?? "deployment failed", status.output].filter(Boolean).join("\n")}\n\nNext: run bun run ship:logs.`);
+        throw new Error(`${[status.message ?? "deployment failed", status.output].filter(Boolean).join("\n")}\n\nNext: run bun ship:logs.`);
       }
     } else if (lastStage) {
       const history = await ssh(target, [
@@ -926,7 +926,7 @@ async function followStatus(config: ClientConfig, target: string, commit: string
         }
         if (terminal?.state === "failed") {
           progress.stop(`Deployment failed during ${terminal.stage ?? "unknown"}`, 1);
-          throw new Error(`deployment failed during ${terminal.stage ?? "unknown"}.\n\nNext: run bun run ship:logs.`);
+          throw new Error(`deployment failed during ${terminal.stage ?? "unknown"}.\n\nNext: run bun ship:logs.`);
         }
       }
     }
@@ -944,7 +944,7 @@ async function followStatus(config: ClientConfig, target: string, commit: string
     }
     if (!lastStage && Date.now() >= webhookDeadline) {
       progress.stop("Webhook did not start deployment", 1);
-      throw new Error(`GitHub webhook did not reach shibumi-server.\n\nNext: check https://github.com/${config.repository.slice("github:".length)}/settings/hooks, then rerun bun run ship after repairing delivery.`);
+      throw new Error(`GitHub webhook did not reach shibumi-server.\n\nNext: check https://github.com/${config.repository.slice("github:".length)}/settings/hooks, then rerun bun ship after repairing delivery.`);
     }
     await Bun.sleep(2_000);
   }
@@ -956,7 +956,7 @@ async function followStatus(config: ClientConfig, target: string, commit: string
 // healthy and user explicitly approves Caddy cutover.
 async function completeCutover(config: ClientConfig, target: string): Promise<boolean> {
   if (!config.cutoverRequired) return false;
-  if (agentRun) throw new Error("Existing-domain cutover needs interactive SSH and sudo.\n\nAgent: ask user to run bun run ship from this project in their terminal.");
+  if (agentRun) throw new Error("Existing-domain cutover needs interactive SSH and sudo.\n\nAgent: ask user to run bun ship from this project in their terminal.");
   explain(
     "Existing-domain cutover",
     `The new app is healthy, but ${config.domain} still serves its previous upstream.\nCaddy cutover validates and reloads configuration without stopping active connections.`,
@@ -988,7 +988,7 @@ async function projectTarget(config: ClientConfig): Promise<string> {
 async function showLogs(): Promise<void> {
   try {
     const config = await readConfig();
-    if (!config) throw new Error("Shibumi setup is missing.\n\nNext: run bun run ship:setup.");
+    if (!config) throw new Error("Shibumi setup is missing.\n\nNext: run bun ship:setup.");
     const result = await ssh(await projectTarget(config), [
       "env", "SHIBUMI_SKIP_UPDATE_CHECK=1", SERVER_CLI, "logs", config.appId,
     ], { allowFailure: true });
@@ -1011,7 +1011,7 @@ function portIsBusy(port: number): Promise<boolean> {
 
 async function runDev(): Promise<void> {
   const config = await readConfig();
-  if (!config) throw new Error("Shibumi setup is missing.\n\nNext: run bun run ship:setup.");
+  if (!config) throw new Error("Shibumi setup is missing.\n\nNext: run bun ship:setup.");
   if (await portIsBusy(config.port)) {
     const lsof = Bun.which("lsof");
     const fuser = Bun.which("fuser");
@@ -1045,7 +1045,7 @@ async function rollbackShip(): Promise<void> {
   intro("渋み  ship rollback");
   try {
     const config = await readConfig();
-    if (!config) throw new Error("Shibumi setup is missing.\n\nNext: run bun run ship:setup.");
+    if (!config) throw new Error("Shibumi setup is missing.\n\nNext: run bun ship:setup.");
     const target = await projectTarget(config);
     const status = await ssh(target, [
       "env", "SHIBUMI_SKIP_UPDATE_CHECK=1", SERVER_CLI, "status", config.appId, "--json",
@@ -1053,7 +1053,7 @@ async function rollbackShip(): Promise<void> {
     if (status.exitCode === 0 && status.stdout.trim() && status.stdout.trim() !== "null") {
       const current = JSON.parse(status.stdout) as DeployStatus;
       if (current.state === "accepted" || current.state === "running") {
-        throw new Error(`Deployment ${current.commit?.slice(0, 7) ?? ""} is still ${current.state}.\n\nNext: wait for it to finish, then retry bun run ship --rollback.`);
+        throw new Error(`Deployment ${current.commit?.slice(0, 7) ?? ""} is still ${current.state}.\n\nNext: wait for it to finish, then retry bun ship --rollback.`);
       }
     }
     if (!await approve(`Restore the previous retained image for ${config.domain}?`)) {
@@ -1088,8 +1088,8 @@ export async function runShip(): Promise<void> {
     const setupCommit = await offerSetupCommit();
     if (forceSetup || result.changed || setupCommit === "declined") {
       outro(setupCommit === "declined"
-        ? `${accent("Next:")} review and commit Shibumi setup files, then run bun run ship.`
-        : `${accent("Next:")} bun run ship`);
+        ? `${accent("Next:")} review and commit Shibumi setup files, then run bun ship.`
+        : `${accent("Next:")} bun ship`);
       return;
     }
     const estimateMs = await estimatedDeployDuration(result.config, result.target);
