@@ -11,7 +11,7 @@ This MCP server lets Claude, ChatGPT+, and other assistants access your vault. L
 
 ## Announcement
 
-- **The [latest MCP spec](https://modelcontextprotocol.io/specification/latest) is out.** We’re getting MCPVault ready for it. [View feat/mcp-sdk-v2](https://github.com/bitbonsai/mcpvault/tree/feat/mcp-sdk-v2).
+- **MCPVault runs on [MCP v2](https://modelcontextprotocol.io/specification/latest), the latest MCP spec.** Same speed for every client, old and new. [See the benchmarks](https://mcpvault.org/benchmarks.md).
 - **JUST LAUNCHED - Obsidian Skill:** Smart routing across MCP, Obsidian app context, and Git CLI sync is now live, with preflight checks, targeted setup questions, and safe sync defaults. [See skill flows](/skill.md)
 
 ## Recent Updates
