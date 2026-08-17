@@ -2,11 +2,11 @@
 import { ArrowRight, GitBranch } from 'lucide-react';
 
 const specUrl = 'https://modelcontextprotocol.io/specification/latest';
-const branchUrl = 'https://github.com/bitbonsai/mcpvault/tree/feat/mcp-sdk-v2';
 ---
 
 <section class="spec-preview relative px-4 pb-4 sm:px-6 lg:px-8" aria-label="Latest MCP specification development preview">
-  <div class="mx-auto max-w-4xl">
+  <div class="relative mx-auto max-w-4xl">
+    <div id="spec-confetti" class="pointer-events-none absolute inset-0 z-20" aria-hidden="true"></div>
     <div class="spec-preview-card relative overflow-hidden rounded-xl border border-border/60 bg-card/70 px-5 py-4">
       <div class="relative z-10 flex items-center justify-between gap-3">
         <div class="flex min-w-0 items-center gap-3">
@@ -24,13 +24,11 @@ const branchUrl = 'https://github.com/bitbonsai/mcpvault/tree/feat/mcp-sdk-v2';
         </div>
 
         <a
-          href={branchUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="View the feat/mcp-sdk-v2 branch"
+          href="/benchmarks"
+          aria-label="See the MCP v2 benchmarks"
           class="work-link inline-flex h-10 w-10 flex-shrink-0 items-center justify-center gap-2 rounded-lg border border-accent/25 bg-accent/10 text-sm font-semibold text-accent transition-colors hover:border-accent/45 hover:bg-accent/20 sm:w-auto sm:px-3"
         >
-          <span class="hidden sm:inline">View feat/mcp-sdk-v2</span>
+          <span class="hidden sm:inline">See the benchmarks</span>
           <ArrowRight className="h-4 w-4" aria-hidden="true" />
         </a>
       </div>
@@ -74,3 +72,71 @@ const branchUrl = 'https://github.com/bitbonsai/mcpvault/tree/feat/mcp-sdk-v2';
   }
 
 </style>
+
+<script>
+  // One confetti burst over the spec banner per visit to this page.
+  function specConfetti() {
+    const layer = document.getElementById('spec-confetti');
+    if (!layer || layer.dataset.done) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    try {
+      if (sessionStorage.getItem('spec-confetti-shown')) return;
+      sessionStorage.setItem('spec-confetti-shown', '1');
+    } catch {
+      /* private mode: fall back to once per page view */
+    }
+    layer.dataset.done = '1';
+
+    const colors = ['#8b5cf6', '#06b6d4', '#d97706', '#22c55e', '#fafafa'];
+    // Three firework bursts across the banner. Pieces fly on evenly spaced
+    // angles (jittered) so every direction is covered, decelerate, and fade
+    // in place: no gravity pull.
+    const bursts = [
+      { x: 25, delay: 0, linger: 0 },
+      { x: 50, delay: 140, linger: 0 },
+      { x: 75, delay: 280, linger: 700 },
+    ];
+    const PIECES = 42;
+    for (const burst of bursts) {
+      for (let i = 0; i < PIECES; i++) {
+        const piece = document.createElement('span');
+        const size = 4 + Math.random() * 4;
+        piece.style.cssText = [
+          'position:absolute',
+          'top:50%',
+          `left:${burst.x}%`,
+          `width:${size}px`,
+          `height:${size * 0.6}px`,
+          `background:${colors[i % colors.length]}`,
+          'border-radius:1px',
+        ].join(';');
+        layer.appendChild(piece);
+
+        const angle = (i / PIECES) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+        const distance = 70 + Math.random() * 150;
+        const dx = Math.cos(angle) * distance;
+        const dy = Math.sin(angle) * distance;
+        const spin = (Math.random() - 0.5) * 720;
+        piece
+          .animate(
+            [
+              { transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 1 },
+              { transform: `translate(${dx * 0.85}px,${dy * 0.85}px) rotate(${spin * 0.7}deg) scale(1)`, opacity: 1, offset: 0.6 },
+              { transform: `translate(${dx}px,${dy}px) rotate(${spin}deg) scale(0.6)`, opacity: 0 },
+            ],
+            {
+              duration: 700 + Math.random() * 300 + burst.linger,
+              delay: burst.delay,
+              easing: 'cubic-bezier(0.1, 0.8, 0.3, 1)',
+              fill: 'forwards',
+            },
+          )
+          .finished.then(() => piece.remove())
+          .catch(() => piece.remove());
+      }
+    }
+  }
+
+  specConfetti();
+  document.addEventListener('astro:page-load', specConfetti);
+</script>
