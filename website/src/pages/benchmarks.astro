@@ -24,7 +24,7 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
         </h1>
         <p class="mt-4 max-w-3xl text-base leading-relaxed text-muted-foreground">
           The Model Context Protocol published its
-          <a href={specUrl} target="_blank" rel="noopener noreferrer" class="text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent">2026-07-28 specification</a>
+          <a href={specUrl} target="_blank" rel="noopener noreferrer" class="text-violet-400 underline decoration-violet-400/50 underline-offset-2 transition-colors hover:text-violet-300 hover:decoration-violet-300">2026-07-28 specification</a>
           this July. MCPVault already runs on the new official SDK and serves both protocol
           generations from a single process: each client gets an answer in whichever version
           it speaks. Your current setup keeps working as is, and when your favorite app moves
@@ -88,10 +88,84 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
             Per-request numbers are medians on a warm connection after one warmup call
             (50 iterations per tool, 20 for search_notes). Measured 2026-08-17 on macOS,
             Node 26, SDK 1.30.0 vs 2.0.0. The scripts live in the
-            <a href={scriptsUrl} target="_blank" rel="noopener noreferrer" class="text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent">benchmarks folder</a>
-            of the <a href={branchUrl} target="_blank" rel="noopener noreferrer" class="text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent">feat/mcp-sdk-v2 branch</a>,
+            <a href={scriptsUrl} target="_blank" rel="noopener noreferrer" class="text-violet-400 underline decoration-violet-400/50 underline-offset-2 transition-colors hover:text-violet-300 hover:decoration-violet-300">benchmarks folder</a>
+            of the <a href={branchUrl} target="_blank" rel="noopener noreferrer" class="text-violet-400 underline decoration-violet-400/50 underline-offset-2 transition-colors hover:text-violet-300 hover:decoration-violet-300">feat/mcp-sdk-v2 branch</a>,
             so you can rerun them against your own vault.
           </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="px-4 pb-16 sm:px-6 lg:px-8" aria-label="Frequently asked questions">
+      <div class="mx-auto max-w-4xl">
+        <h2 class="text-xl font-semibold text-foreground">For the skeptics</h2>
+        <p class="mt-2 text-base text-muted-foreground">
+          Fair questions a developer should ask about a project benchmarking itself.
+        </p>
+        <div class="mt-4 space-y-3">
+          <details class="rounded-xl border border-border/50 bg-card/40 p-5 backdrop-blur-md">
+            <summary class="cursor-pointer list-none font-semibold text-foreground">
+              Sub-millisecond tool calls? That looks made up.
+            </summary>
+            <p class="mt-3 leading-relaxed text-muted-foreground">
+              It's stdio on localhost: no network, no TLS, and the note being read sits in the
+              OS page cache after the warmup call. The number measures server processing,
+              which is exactly the part the SDK swap could have changed. It says nothing about
+              how fast your assistant's full round-trip feels.
+            </p>
+          </details>
+          <details class="rounded-xl border border-border/50 bg-card/40 p-5 backdrop-blur-md">
+            <summary class="cursor-pointer list-none font-semibold text-foreground">
+              Eight cold starts and twenty searches is a tiny sample.
+            </summary>
+            <p class="mt-3 leading-relaxed text-muted-foreground">
+              It is. Enough to compare medians of a low-variance local process, too thin for
+              anything subtler. That's why every median ships with its p95 in the table above,
+              and why the claim is a tie rather than a speedup.
+            </p>
+          </details>
+          <details class="rounded-xl border border-border/50 bg-card/40 p-5 backdrop-blur-md">
+            <summary class="cursor-pointer list-none font-semibold text-foreground">
+              v2 wins some rows. Convenient.
+            </summary>
+            <p class="mt-3 leading-relaxed text-muted-foreground">
+              That's noise. Differences of a few percent flip between runs on the same machine.
+              If we believed those rows, we'd have to also believe v1 wins others. We don't
+              claim v2 is faster anywhere, only that it isn't slower.
+            </p>
+          </details>
+          <details class="rounded-xl border border-border/50 bg-card/40 p-5 backdrop-blur-md">
+            <summary class="cursor-pointer list-none font-semibold text-foreground">
+              You benchmarked your own project and concluded it's fine.
+            </summary>
+            <p class="mt-3 leading-relaxed text-muted-foreground">
+              Which is why nothing here asks for trust. The two scripts are in the repo, take
+              a vault path, and print the same JSON these charts embed verbatim. One machine,
+              one vault, macOS: if your numbers disagree, open an issue with them.
+            </p>
+          </details>
+          <details class="rounded-xl border border-border/50 bg-card/40 p-5 backdrop-blur-md">
+            <summary class="cursor-pointer list-none font-semibold text-foreground">
+              Two protocol versions in one server sounds like per-request overhead.
+            </summary>
+            <p class="mt-3 leading-relaxed text-muted-foreground">
+              The version is settled once per connection, during the opening exchange. After
+              that there's no detection on the request path, which is what the flat per-request
+              numbers show. Both paths are exercised by the test suite (279 tests, including a
+              protocol matrix that connects one client per version).
+            </p>
+          </details>
+          <details class="rounded-xl border border-border/50 bg-card/40 p-5 backdrop-blur-md">
+            <summary class="cursor-pointer list-none font-semibold text-foreground">
+              So nothing at all got slower? Really?
+            </summary>
+            <p class="mt-3 leading-relaxed text-muted-foreground">
+              One thing did, and no shipping app hits it: forcing a v2-SDK client to pin the
+              new protocol version adds about 110 ms once at connect, from negotiation probing
+              in the current client SDK. We only encounter it in our own test harness, where
+              pinning is the point. Publishing it here because you'd find it anyway.
+            </p>
+          </details>
         </div>
       </div>
     </section>

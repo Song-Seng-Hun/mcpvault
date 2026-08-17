@@ -27,6 +27,15 @@ All three pairings tie within run-to-run noise. The v2 build costs existing clie
 
 The 2026-07-28 spec makes the HTTP transport stateless, so an MCP server can sit behind any ordinary load balancer. For MCPVault that means a future opt-in HTTP package built on this v2 core, while the default stays local-first stdio.
 
+## For the skeptics
+
+- **Sub-millisecond tool calls?** stdio on localhost: no network, no TLS, note in the OS page cache after warmup. Measures server processing, the part the SDK swap could have changed. Says nothing about full assistant round-trip feel.
+- **Tiny samples (n=8 cold, n=20 search).** True. Enough to compare medians of a low-variance local process. Every median ships with its p95, and the claim is a tie, never a speedup.
+- **v2 wins some rows.** Noise. Few-percent differences flip between runs. We claim v2 isn't slower, nothing more.
+- **Self-benchmark, self-approval.** The scripts are public, take a vault path, and print the JSON these numbers embed verbatim. If your numbers disagree, open an issue with them.
+- **Dual-protocol overhead?** Version settles once per connection during the opening exchange. Request path has no detection, which the flat per-request numbers show. Both paths run in the 279-test suite.
+- **Nothing got slower at all?** One thing did, and no shipping app hits it: forcing a v2-SDK client to pin the new protocol version adds ~110 ms once at connect (negotiation probing in the current client SDK). We hit it only in our own test harness.
+
 ## Method
 
 Each pairing spawns `mcpvault <vault> --read-only` over stdio. Cold start is the median of 8 full connect cycles. Per-request numbers are medians on a warm connection after one warmup call. Scripts: `benchmarks/` on the [feat/mcp-sdk-v2 branch](https://github.com/bitbonsai/mcpvault/tree/feat/mcp-sdk-v2/benchmarks).
