@@ -31,12 +31,12 @@ The 2026-07-28 spec makes the HTTP transport stateless, so an MCP server can sit
 
 ## For the skeptics
 
-- **Sub-millisecond tool calls?** stdio on localhost: no network, no TLS, note in the OS page cache after warmup. Measures server processing, the part the SDK swap could have changed. Says nothing about full assistant round-trip feel.
-- **Tiny samples (n=8 cold, n=20 search).** True. Enough to compare medians of a low-variance local process. Every median ships with its p95, and the claim is a tie, never a speedup.
-- **v2 wins some rows.** Noise. Few-percent differences flip between runs. We claim v2 isn't slower, nothing more.
-- **Self-benchmark, self-approval.** The scripts are public, take a vault path, and print the JSON these numbers embed verbatim. If your numbers disagree, open an issue with them.
-- **Dual-protocol overhead?** Version settles once per connection during the opening exchange. Request path has no detection, which the flat per-request numbers show. Both paths run in the 279-test suite.
-- **Nothing got slower at all?** One thing did, and no shipping app hits it: forcing a v2-SDK client to pin the new protocol version adds ~110 ms once at connect (negotiation probing in the current client SDK). We hit it only in our own test harness.
+- **Sub-millisecond tool calls?** stdio on the same machine: no network, file already in the OS cache. Isolates server processing, the only part the SDK swap could change.
+- **Tiny samples (n=8 cold, n=20 search).** True. Enough to compare medians of a quiet local process, and why the claim is a tie, never a speedup. p95 in the table.
+- **v2 wins some rows.** Noise. Those differences flip between runs. The claim is only that v2 isn't slower.
+- **Self-benchmark, self-approval.** The scripts print the exact numbers on this page. Rerun them on your vault; open an issue if results differ.
+- **Dual-protocol overhead?** Version settles once, at connect. Requests never re-check it.
+- **Nothing got slower at all?** One thing: pinning a v2 client to the new protocol adds ~110 ms once at connect. Only our test harness pins; shipping apps don't.
 
 ## Method
 
