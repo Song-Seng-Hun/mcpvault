@@ -27,7 +27,7 @@ All three pairings tie within run-to-run noise. The v2 build costs existing clie
 
 ## HTTP possibility
 
-The 2026-07-28 spec makes the HTTP transport stateless, so an MCP server can sit behind any ordinary load balancer. For MCPVault that means a future opt-in HTTP package built on this v2 core, while the default stays local-first stdio.
+The 2026-07-28 spec makes the HTTP transport stateless, so an MCP server can sit behind any ordinary load balancer. For MCPVault that means a future opt-in HTTP package built on this v2 core, while the default stays local-first stdio. Tracked in [issue #49](https://github.com/bitbonsai/mcpvault/issues/49).
 
 ## For the skeptics
 
