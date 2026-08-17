@@ -79,6 +79,12 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
     const layer = document.getElementById('spec-confetti');
     if (!layer || layer.dataset.done) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    try {
+      if (sessionStorage.getItem('spec-confetti-shown')) return;
+      sessionStorage.setItem('spec-confetti-shown', '1');
+    } catch {
+      /* private mode: fall back to once per page view */
+    }
     layer.dataset.done = '1';
 
     const colors = ['#8b5cf6', '#06b6d4', '#d97706', '#22c55e', '#fafafa'];

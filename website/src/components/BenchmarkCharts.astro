@@ -29,9 +29,9 @@ const PAIRINGS: Pairing[] = [
     },
   },
   {
-    name: 'v2 with today’s apps',
-    short: 'v2, today’s apps',
-    detail: 'the v2 build answering the apps you already use, unchanged (Claude Desktop, Cursor, and friends)',
+    name: 'MCP v2 with today’s apps',
+    short: 'MCP v2, today’s apps',
+    detail: 'the MCP v2 build answering the apps you already use, unchanged (Claude Desktop, Cursor, and friends)',
     coldStart: { median: 109.8, p95: 116.8, n: 8 },
     tools: {
       'tools/list': { median: 0.14, p95: 0.28, n: 50 },
@@ -42,9 +42,9 @@ const PAIRINGS: Pairing[] = [
     },
   },
   {
-    name: 'v2 with new apps',
-    short: 'v2, new apps',
-    detail: 'the v2 build with an app on the new SDK (2.0.0), how connections will look as the ecosystem updates',
+    name: 'MCP v2 with new apps',
+    short: 'MCP v2, new apps',
+    detail: 'the MCP v2 build with an app on the new SDK (2.0.0), how connections will look as the ecosystem updates',
     coldStart: { median: 105.8, p95: 107.8, n: 8 },
     tools: {
       'tools/list': { median: 0.17, p95: 0.34, n: 50 },
@@ -100,7 +100,7 @@ const fmt = (v: number) => (v >= 10 ? v.toFixed(1) : v.toFixed(2));
       {coldChart.title} <span class="font-normal text-muted-foreground">· {coldChart.unit}</span>
     </figcaption>
     {coldChart.rows.map((row, i) => (
-      <div class="mb-2 grid grid-cols-[8rem_1fr_3.5rem] items-center gap-3 last:mb-0">
+      <div class="mb-2 grid grid-cols-[9.5rem_1fr_3.5rem] items-center gap-3 last:mb-0">
         <span class="text-right text-xs text-muted-foreground">{row.short}</span>
         <div
           class="bench-track relative h-5"
@@ -129,7 +129,7 @@ const fmt = (v: number) => (v >= 10 ? v.toFixed(1) : v.toFixed(2));
         <figure class="bench-card rounded-xl border border-border/50 bg-card/40 p-4 backdrop-blur-md">
           <figcaption class="mb-3 text-sm font-semibold text-foreground">{chart.title}</figcaption>
           {chart.rows.map((row, i) => (
-            <div class="mb-2 grid grid-cols-[6.5rem_1fr] items-center gap-2 last:mb-0">
+            <div class="mb-2 grid grid-cols-[8.5rem_1fr] items-center gap-2 last:mb-0">
               <span class="text-right text-[11px] text-muted-foreground">{row.short}</span>
               <div
                 class="bench-track relative h-5"
@@ -161,7 +161,7 @@ const fmt = (v: number) => (v >= 10 ? v.toFixed(1) : v.toFixed(2));
     {PAIRINGS.map((p, i) => (
       <span class="flex items-start gap-2">
         <span class="mt-[0.3rem] inline-block h-2.5 w-2.5 flex-shrink-0 rounded-sm" style={`background:${COLORS[i]}`} aria-hidden="true"></span>
-        <span><strong class="font-semibold text-foreground">{p.short}</strong> · {p.name}: {p.detail}</span>
+        <span><strong class="font-semibold text-foreground">{p.name}</strong>: {p.detail}</span>
       </span>
     ))}
   </div>

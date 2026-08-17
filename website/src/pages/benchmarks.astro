@@ -25,10 +25,11 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
         <p class="mt-4 max-w-3xl text-base leading-relaxed text-muted-foreground">
           The Model Context Protocol published its
           <a href={specUrl} target="_blank" rel="noopener noreferrer" class="text-violet-400 underline decoration-violet-400/50 underline-offset-2 transition-colors hover:text-violet-300 hover:decoration-violet-300">2026-07-28 specification</a>
-          this July. MCPVault already runs on the new official SDK and serves both protocol
-          generations from a single process: each client gets an answer in whichever version
-          it speaks. Your current setup keeps working as is, and when your favorite app moves
-          to the new protocol, MCPVault is already there.
+          in July 2026. MCPVault runs on the new official SDK, which we call
+          <strong class="font-semibold text-foreground">MCP v2</strong>, and serves both
+          protocol generations from a single process: each client gets an answer in whichever
+          version it speaks. Your current setup keeps working as is, and when your favorite
+          app moves to the new protocol, MCPVault is already there.
         </p>
         <p class="mt-3 max-w-3xl text-base leading-relaxed text-muted-foreground">
           We benchmarked the upgrade before shipping it. Three pairings, one real vault
@@ -41,10 +42,10 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
         >
           <p class="text-xs font-semibold uppercase tracking-wider text-violet-400">TL;DR</p>
           <p class="mt-2 text-base leading-relaxed text-foreground">
-            MCPVault now speaks both the new MCP protocol (2026-07-28) and the current one,
-            from the same process. Speed is unchanged: ~107 ms to connect, identical
-            per-request latency. Nothing to change on your side, now or when your apps move
-            to the new protocol.
+            Benchmarks of MCPVault on <strong class="font-semibold">MCP v2</strong>: ~107 ms
+            to connect and identical per-request speed, whether the app talks the old protocol
+            or the new one. Below: the numbers, why we moved, what stateless HTTP opens up,
+            and answers for skeptics.
           </p>
         </aside>
       </div>
@@ -59,17 +60,19 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
     <section class="px-4 pb-8 sm:px-6 lg:px-8">
       <div class="mx-auto max-w-4xl space-y-6">
         <div>
-          <h2 class="text-[1.44rem] font-semibold text-foreground">Why move at all?</h2>
+          <h2 class="text-[1.44rem] font-semibold text-foreground">Why should we move?</h2>
           <ul class="mt-3 space-y-2 text-base leading-relaxed text-muted-foreground">
             <li>
               <strong class="font-semibold text-foreground">Every client, one server.</strong>
-              The dual-era build detects what each client speaks during the opening exchange.
-              Apps on the current protocol and apps on 2026-07-28 connect to the same MCPVault.
+              The <strong class="font-semibold text-foreground">MCP v2</strong> build detects
+              what each client speaks during the opening exchange. Apps on the current protocol
+              and apps on 2026-07-28 connect to the same MCPVault.
             </li>
             <li>
               <strong class="font-semibold text-foreground">The maintained SDK line.</strong>
-              New MCP features, fixes, and security patches now land in the v2 packages first.
-              Staying on the 1.x SDK means waiting for backports.
+              New MCP features, fixes, and security patches land in the
+              <strong class="font-semibold text-foreground">MCP v2</strong> packages first.
+              Staying on the 1.x SDK means those reach you late, or never.
             </li>
             <li>
               <strong class="font-semibold text-foreground">Richer tool definitions ahead.</strong>
@@ -88,7 +91,8 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
             HTTP mode, your vault reachable by AI assistants that never touch your filesystem,
             without the session bookkeeping that made the old approach fragile. MCPVault stays
             local-first by default; HTTP would ship as a separate opt-in package built on this
-            v2 core. That work is tracked in
+            <strong class="font-semibold text-foreground">MCP v2</strong> core. That work is
+            tracked in
             <a href="https://github.com/bitbonsai/mcpvault/issues/49" target="_blank" rel="noopener noreferrer" class="text-violet-400 underline decoration-violet-400/50 underline-offset-2 transition-colors hover:text-violet-300 hover:decoration-violet-300">issue #49</a>.
           </p>
         </div>
@@ -100,9 +104,9 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
             Cold start is the median of 8 full connect cycles, spawn to first response.
             Per-request numbers are medians on a warm connection after one warmup call
             (50 iterations per tool, 20 for search_notes). Measured 2026-08-17 on macOS,
-            Node 26, SDK 1.30.0 vs 2.0.0. The scripts live in the
-            <a href={scriptsUrl} target="_blank" rel="noopener noreferrer" class="text-violet-400 underline decoration-violet-400/50 underline-offset-2 transition-colors hover:text-violet-300 hover:decoration-violet-300">benchmarks folder</a>
-            of the <a href={branchUrl} target="_blank" rel="noopener noreferrer" class="text-violet-400 underline decoration-violet-400/50 underline-offset-2 transition-colors hover:text-violet-300 hover:decoration-violet-300">feat/mcp-sdk-v2 branch</a>,
+            Node 26, SDK 1.30.0 vs 2.0.0. The scripts live in the repo's
+            <a href="https://github.com/bitbonsai/mcpvault/tree/main/benchmarks" target="_blank" rel="noopener noreferrer" class="text-violet-400 underline decoration-violet-400/50 underline-offset-2 transition-colors hover:text-violet-300 hover:decoration-violet-300">benchmarks folder</a>
+            (also on the <a href={branchUrl} target="_blank" rel="noopener noreferrer" class="text-violet-400 underline decoration-violet-400/50 underline-offset-2 transition-colors hover:text-violet-300 hover:decoration-violet-300">feat/mcp-sdk-v2 branch</a>),
             so you can rerun them against your own vault.
           </p>
         </div>
@@ -137,11 +141,11 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
           </details>
           <details class="rounded-xl border border-border/50 bg-card/40 p-5 backdrop-blur-md">
             <summary class="cursor-pointer list-none font-semibold text-foreground">
-              v2 wins some rows. Convenient.
+              MCP v2 wins some rows. Convenient.
             </summary>
             <p class="mt-3 leading-relaxed text-muted-foreground">
-              Noise. Those differences flip between runs. The claim is only that v2 isn't
-              slower.
+              Noise. Those differences flip between runs. The claim is only that
+              <strong class="font-semibold text-foreground">MCP v2</strong> isn't slower.
             </p>
           </details>
           <details class="rounded-xl border border-border/50 bg-card/40 p-5 backdrop-blur-md">
@@ -167,7 +171,7 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
               So nothing at all got slower? Really?
             </summary>
             <p class="mt-3 leading-relaxed text-muted-foreground">
-              One thing: pinning a v2 client to the new protocol version adds about 110 ms,
+              One thing: pinning an <strong class="font-semibold text-foreground">MCP v2</strong> client to the new protocol version adds about 110 ms,
               once, at connect. Only our test harness does that; shipping apps don't pin.
               Publishing it because you'd find it anyway.
             </p>
