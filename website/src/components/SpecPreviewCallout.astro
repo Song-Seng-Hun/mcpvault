@@ -86,9 +86,9 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
     // angles (jittered) so every direction is covered, decelerate, and fade
     // in place: no gravity pull.
     const bursts = [
-      { x: 25, delay: 0 },
-      { x: 50, delay: 140 },
-      { x: 75, delay: 280 },
+      { x: 25, delay: 0, linger: 0 },
+      { x: 50, delay: 140, linger: 0 },
+      { x: 75, delay: 280, linger: 700 },
     ];
     const PIECES = 42;
     for (const burst of bursts) {
@@ -119,7 +119,7 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
               { transform: `translate(${dx}px,${dy}px) rotate(${spin}deg) scale(0.6)`, opacity: 0 },
             ],
             {
-              duration: 700 + Math.random() * 300,
+              duration: 700 + Math.random() * 300 + burst.linger,
               delay: burst.delay,
               easing: 'cubic-bezier(0.1, 0.8, 0.3, 1)',
               fill: 'forwards',
