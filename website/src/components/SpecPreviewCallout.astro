@@ -5,7 +5,8 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
 ---
 
 <section class="spec-preview relative px-4 pb-4 sm:px-6 lg:px-8" aria-label="Latest MCP specification development preview">
-  <div class="mx-auto max-w-4xl">
+  <div class="relative mx-auto max-w-4xl">
+    <div id="spec-confetti" class="pointer-events-none absolute inset-0 z-20" aria-hidden="true"></div>
     <div class="spec-preview-card relative overflow-hidden rounded-xl border border-border/60 bg-card/70 px-5 py-4">
       <div class="relative z-10 flex items-center justify-between gap-3">
         <div class="flex min-w-0 items-center gap-3">
@@ -71,3 +72,53 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
   }
 
 </style>
+
+<script>
+  // One confetti burst over the spec banner per visit to this page.
+  function specConfetti() {
+    const layer = document.getElementById('spec-confetti');
+    if (!layer || layer.dataset.done) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    layer.dataset.done = '1';
+
+    const colors = ['#8b5cf6', '#06b6d4', '#d97706', '#22c55e', '#fafafa'];
+    for (let i = 0; i < 48; i++) {
+      const piece = document.createElement('span');
+      const size = 4 + Math.random() * 5;
+      piece.style.cssText = [
+        'position:absolute',
+        'top:55%',
+        `left:${6 + Math.random() * 88}%`,
+        `width:${size}px`,
+        `height:${size * 0.55}px`,
+        `background:${colors[i % colors.length]}`,
+        'border-radius:1px',
+      ].join(';');
+      layer.appendChild(piece);
+
+      const drift = (Math.random() - 0.5) * 260;
+      const rise = -(70 + Math.random() * 150);
+      const fall = 150 + Math.random() * 130;
+      const spin = (Math.random() - 0.5) * 900;
+      piece
+        .animate(
+          [
+            { transform: 'translate(0,0) rotate(0deg)', opacity: 1 },
+            { transform: `translate(${drift * 0.6}px,${rise}px) rotate(${spin * 0.5}deg)`, opacity: 1, offset: 0.35 },
+            { transform: `translate(${drift}px,${fall}px) rotate(${spin}deg)`, opacity: 0 },
+          ],
+          {
+            duration: 1500 + Math.random() * 900,
+            delay: Math.random() * 250,
+            easing: 'cubic-bezier(0.15, 0.6, 0.35, 1)',
+            fill: 'forwards',
+          },
+        )
+        .finished.then(() => piece.remove())
+        .catch(() => piece.remove());
+    }
+  }
+
+  specConfetti();
+  document.addEventListener('astro:page-load', specConfetti);
+</script>
