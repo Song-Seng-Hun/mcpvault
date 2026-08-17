@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { createServer } from "./src/createServer.js";
 import { parseCliArgs } from "./src/cli.js";
 import { readFileSync } from "fs";
@@ -59,9 +59,12 @@ Examples:
 const { vaultPathArg, readOnly } = parseCliArgs(cliArgs);
 const vaultPath = resolve(vaultPathArg || process.cwd());
 
-const server = createServer(vaultPath, { version: VERSION, readOnly });
-const transport = new StdioServerTransport();
-await server.connect(transport);
+// Serve both the legacy handshake-based protocol and MCP 2026-07-28 from the
+// same process. The opening exchange selects the era for this connection.
+const serverHandle = serveStdio(
+  () => createServer(vaultPath, { version: VERSION, readOnly }),
+  { onerror: (error) => console.error(error) },
+);
 
 // Exit when the client disconnects (stdin EOF) or the process is asked to
 // terminate. Hosts that don't send an MCP shutdown request otherwise leave
@@ -71,7 +74,7 @@ async function shutdown() {
   if (isShuttingDown) return;
   isShuttingDown = true;
   try {
-    await server.close();
+    await serverHandle.close();
   } catch {
     // Best-effort: exit regardless of transport close errors.
   }

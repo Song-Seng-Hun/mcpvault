@@ -1,8 +1,4 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+import { Server, type Tool } from "@modelcontextprotocol/server";
 import { FileSystemService } from "./filesystem.js";
 import { FrontmatterHandler, parseFrontmatter } from "./frontmatter.js";
 import { PathFilter } from "./pathfilter.js";
@@ -46,8 +42,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     capabilities: { tools: {} },
   });
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => {
-    const tools = [
+  server.setRequestHandler("tools/list", async () => {
+    const tools: Tool[] = [
         {
           name: "read_note",
           description: "Read a note from the Obsidian vault",
@@ -297,7 +293,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     };
   });
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler("tools/call", async (request) => {
     const { name: toolName, arguments: args } = request.params;
     const trimmedArgs = trimPaths(args);
 
