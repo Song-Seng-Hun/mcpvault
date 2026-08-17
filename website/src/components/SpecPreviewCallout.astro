@@ -82,41 +82,52 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
     layer.dataset.done = '1';
 
     const colors = ['#8b5cf6', '#06b6d4', '#d97706', '#22c55e', '#fafafa'];
-    for (let i = 0; i < 48; i++) {
-      const piece = document.createElement('span');
-      const size = 4 + Math.random() * 5;
-      piece.style.cssText = [
-        'position:absolute',
-        'top:50%',
-        'left:50%',
-        `width:${size}px`,
-        `height:${size * 0.55}px`,
-        `background:${colors[i % colors.length]}`,
-        'border-radius:1px',
-      ].join(';');
-      layer.appendChild(piece);
+    // Three firework bursts across the banner. Pieces fly on evenly spaced
+    // angles (jittered) so every direction is covered, decelerate, and fade
+    // in place: no gravity pull.
+    const bursts = [
+      { x: 25, delay: 0 },
+      { x: 50, delay: 140 },
+      { x: 75, delay: 280 },
+    ];
+    const PIECES = 22;
+    for (const burst of bursts) {
+      for (let i = 0; i < PIECES; i++) {
+        const piece = document.createElement('span');
+        const size = 4 + Math.random() * 4;
+        piece.style.cssText = [
+          'position:absolute',
+          'top:50%',
+          `left:${burst.x}%`,
+          `width:${size}px`,
+          `height:${size * 0.6}px`,
+          `background:${colors[i % colors.length]}`,
+          'border-radius:1px',
+        ].join(';');
+        layer.appendChild(piece);
 
-      // Radial explosion from the banner center, quick decay with a hint of gravity.
-      const angle = Math.random() * Math.PI * 2;
-      const distance = 90 + Math.random() * 210;
-      const dx = Math.cos(angle) * distance;
-      const dy = Math.sin(angle) * distance;
-      const spin = (Math.random() - 0.5) * 720;
-      piece
-        .animate(
-          [
-            { transform: 'translate(0,0) rotate(0deg)', opacity: 1 },
-            { transform: `translate(${dx}px,${dy}px) rotate(${spin * 0.7}deg)`, opacity: 1, offset: 0.55 },
-            { transform: `translate(${dx * 1.15}px,${dy * 1.15 + 40}px) rotate(${spin}deg)`, opacity: 0 },
-          ],
-          {
-            duration: 650 + Math.random() * 350,
-            easing: 'cubic-bezier(0.1, 0.7, 0.3, 1)',
-            fill: 'forwards',
-          },
-        )
-        .finished.then(() => piece.remove())
-        .catch(() => piece.remove());
+        const angle = (i / PIECES) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+        const distance = 70 + Math.random() * 150;
+        const dx = Math.cos(angle) * distance;
+        const dy = Math.sin(angle) * distance;
+        const spin = (Math.random() - 0.5) * 720;
+        piece
+          .animate(
+            [
+              { transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 1 },
+              { transform: `translate(${dx * 0.85}px,${dy * 0.85}px) rotate(${spin * 0.7}deg) scale(1)`, opacity: 1, offset: 0.6 },
+              { transform: `translate(${dx}px,${dy}px) rotate(${spin}deg) scale(0.6)`, opacity: 0 },
+            ],
+            {
+              duration: 700 + Math.random() * 300,
+              delay: burst.delay,
+              easing: 'cubic-bezier(0.1, 0.8, 0.3, 1)',
+              fill: 'forwards',
+            },
+          )
+          .finished.then(() => piece.remove())
+          .catch(() => piece.remove());
+      }
     }
   }
 
