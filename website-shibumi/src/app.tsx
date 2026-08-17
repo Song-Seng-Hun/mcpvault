@@ -9,6 +9,7 @@ import type { MiddlewareHandler } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 import { join, normalize, resolve, sep } from "node:path";
 import { contentSecurityPolicy } from "./lib/csp";
+import { registerBenchmarksRoute } from "./routes/benchmarks";
 import { registerClientRoute } from "./routes/client";
 import { registerDemoRoute } from "./routes/demo";
 import { registerDownloadsRoute, type DownloadsRouteOptions } from "./routes/downloads";
@@ -144,6 +145,7 @@ export function createApp(options: AppOptions = {}): Hono {
 
   // Features page (Phase 2, group 3).
   registerFeaturesRoute(app, publicDir);
+  registerBenchmarksRoute(app, publicDir);
 
   // Install page (Phase 2, group 4).
   registerInstallRoute(app, publicDir);

@@ -25,6 +25,8 @@
  * never appears in the `Alpine.data(...)` list below.
  */
 import Alpine from "@alpinejs/csp";
+import "./bench-reveal";
+import "./confetti";
 import "./fade-in-observer";
 import { interactiveDemo } from "./interactive-demo";
 import { nav } from "./nav";

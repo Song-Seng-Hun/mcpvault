@@ -38,6 +38,19 @@ interface Update {
 
 const OLDER_UPDATES: Update[] = [
   {
+    version: "v0.15.0",
+    date: "August 2026",
+    body: (
+      <>
+        Added <code>--read-only</code> mode, which exposes read tools only and rejects all vault mutations (
+        <a href="https://github.com/bitbonsai/mcpvault/issues/112" target="_blank" rel="noopener noreferrer">
+          #112
+        </a>
+        , thanks @vdhome-dev)
+      </>
+    ),
+  },
+  {
     version: "v0.14.1",
     date: "August 2026",
     body: (
@@ -382,7 +395,7 @@ export function UpdateCallout() {
         <div class="callout-body">
           <div class="updates-heading">
             <h3>
-              Recent Updates <span class="version-pill">v0.15.0</span>
+              Recent Updates <span class="version-pill">v0.16.0</span>
             </h3>
             <button
               type="button"
@@ -408,12 +421,8 @@ export function UpdateCallout() {
           </div>
 
           <p class="latest-update">
-            <span class="entry-version">v0.15.0 (August 2026):</span> Added <code>--read-only</code> mode, which exposes read tools only and rejects all
-            vault mutations (
-            <a href="https://github.com/bitbonsai/mcpvault/issues/112" target="_blank" rel="noopener noreferrer">
-              #112
-            </a>
-            , thanks @vdhome-dev)
+            <span class="entry-version">v0.16.0 (August 2026):</span> Migrated to <strong>MCP v2</strong>, the official SDK for the 2026-07-28 spec. One
+            process serves both protocol generations at the same speed (<a href="/benchmarks/">benchmarks</a>)
           </p>
 
           <div id="older-updates" class="older-updates is-collapsed" data-updates-panel x-bind:class="{ 'is-expanded': expanded, 'is-collapsed': !expanded }">

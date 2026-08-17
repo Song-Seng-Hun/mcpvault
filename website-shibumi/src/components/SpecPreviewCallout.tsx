@@ -7,12 +7,12 @@
 import { ArrowRightIcon, GitBranchIcon } from "./icons";
 
 const SPEC_URL = "https://modelcontextprotocol.io/specification/latest";
-const BRANCH_URL = "https://github.com/bitbonsai/mcpvault/tree/feat/mcp-sdk-v2";
 
 export function SpecPreviewCallout() {
   return (
     <section data-component="spec-preview-callout" aria-label="Latest MCP specification development preview">
-      <div class="callout-inner">
+      <div class="callout-inner" style="position:relative">
+        <div id="spec-confetti" style="position:absolute;inset:0;pointer-events:none;z-index:20" aria-hidden="true"></div>
         <div class="callout-card">
           <div class="callout-row">
             <div class="callout-message">
@@ -22,19 +22,19 @@ export function SpecPreviewCallout() {
 
               <p class="callout-text">
                 <span class="callout-headline">
-                  The{" "}
+                  MCPVault runs on{" "}
                   <a href={SPEC_URL} target="_blank" rel="noopener noreferrer" class="spec-link">
-                    latest MCP spec
-                  </a>{" "}
-                  is out.
+                    MCP v2
+                  </a>
+                  , the latest spec.
                 </span>
-                <span class="callout-short"> We’re getting ready for it.</span>
-                <span class="callout-long"> We’re getting MCPVault ready for it.</span>
+                <span class="callout-short"> Same speed, every client.</span>
+                <span class="callout-long"> Same speed for every client, old and new.</span>
               </p>
             </div>
 
-            <a href={BRANCH_URL} target="_blank" rel="noopener noreferrer" aria-label="View the feat/mcp-sdk-v2 branch" class="work-link">
-              <span class="work-link-label">View feat/mcp-sdk-v2</span>
+            <a href="/benchmarks/" aria-label="See the MCP v2 benchmarks" class="work-link">
+              <span class="work-link-label">See the benchmarks</span>
               <ArrowRightIcon className="icon" />
             </a>
           </div>
