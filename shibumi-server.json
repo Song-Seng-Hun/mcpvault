@@ -14,5 +14,6 @@
   "healthPath": "/healthz",
   "deploymentMode": "prebuilt",
   "platform": "linux/arm64",
-  "cutoverRequired": false
+  "cutoverRequired": false,
+  "trigger": "ship"
 }
