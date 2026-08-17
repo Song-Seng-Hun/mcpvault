@@ -25,7 +25,7 @@ const SERVER_HOSTNAME = /^[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$/;
 const COMMIT = /^[a-f0-9]{40}$/;
 const SERVER_CLI = "~/.local/bin/shibumi-server";
 const LATEST_SOURCE = "https://shibumistack.dev/ship/latest.ts";
-const CURRENT_SOURCE = "https://shibumistack.dev/ship/v23.ts";
+const CURRENT_SOURCE = "https://shibumistack.dev/ship/v24.ts";
 let sshControlDirectory: string | undefined;
 let sshControlTarget: string | undefined;
 const accent = (value: string) => process.stdout.isTTY && !("NO_COLOR" in process.env) && process.env.TERM !== "dumb"
@@ -79,12 +79,13 @@ interface ShipOptions {
   rollback: boolean;
   logs: boolean;
   dev: boolean;
+  rebuild: boolean;
   yes: boolean;
   server?: string;
   domain?: string;
 }
 
-let options: ShipOptions = { setup: false, update: false, rollback: false, logs: false, dev: false, yes: false };
+let options: ShipOptions = { setup: false, update: false, rollback: false, logs: false, dev: false, rebuild: false, yes: false };
 let agentRun = false;
 
 export function isAgentExecution(env: NodeJS.ProcessEnv = process.env, stdinTTY = Boolean(process.stdin.isTTY), stdoutTTY = Boolean(process.stdout.isTTY)): boolean {
@@ -93,7 +94,7 @@ export function isAgentExecution(env: NodeJS.ProcessEnv = process.env, stdinTTY 
 }
 
 export function parseShipArgs(args: string[]): ShipOptions {
-  const parsed: ShipOptions = { setup: false, update: false, rollback: false, logs: false, dev: false, yes: false };
+  const parsed: ShipOptions = { setup: false, update: false, rollback: false, logs: false, dev: false, rebuild: false, yes: false };
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === "--") continue;
@@ -102,6 +103,7 @@ export function parseShipArgs(args: string[]): ShipOptions {
     else if (argument === "--rollback") parsed.rollback = true;
     else if (argument === "--logs") parsed.logs = true;
     else if (argument === "--dev") parsed.dev = true;
+    else if (argument === "--rebuild") parsed.rebuild = true;
     else if (argument === "--yes" || argument === "-y") parsed.yes = true;
     else if (argument === "--server" || argument === "--domain") {
       const value = args[index + 1];
@@ -112,6 +114,7 @@ export function parseShipArgs(args: string[]): ShipOptions {
     } else throw new Error(`unknown ship option: ${argument}`);
   }
   if ([parsed.setup, parsed.update, parsed.rollback, parsed.logs, parsed.dev].filter(Boolean).length > 1) throw new Error("choose only one ship action");
+  if (parsed.rebuild && (parsed.setup || parsed.update || parsed.rollback || parsed.logs || parsed.dev)) throw new Error("--rebuild applies only to shipping");
   if (parsed.server && !SSH_TARGET.test(parsed.server)) throw new Error("--server must be an SSH host or user@host without spaces");
   if (parsed.domain && !DOMAIN.test(parsed.domain)) throw new Error("--domain must be a lowercase public hostname");
   return parsed;
@@ -429,7 +432,7 @@ async function prepareCompose(): Promise<boolean> {
 }
 
 async function inferredProject() {
-  const packageJson = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as { name?: unknown; scripts?: Record<string, unknown> };
+  const packageJson = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as { name?: unknown; version?: unknown; scripts?: Record<string, unknown> };
   const repository = repositoryFromRemote(await git("remote", "get-url", "origin"));
   const branch = await git("branch", "--show-current");
   if (!branch) throw new Error("ship requires a named Git branch");
@@ -582,7 +585,7 @@ function versionAtLeast(current: string, minimum: string): boolean {
 // Install only through the reviewed, version-pinned website endpoint.
 async function ensureServer(target: string): Promise<void> {
   const version = await ssh(target, [SERVER_CLI, "--version"], { allowFailure: true });
-  if (version.exitCode === 0 && versionAtLeast(version.stdout.trim(), "0.7.2")) return;
+  if (version.exitCode === 0 && versionAtLeast(version.stdout.trim(), "0.7.11")) return;
   if (agentRun) throw new Error(version.exitCode === 0
     ? `shibumi-server ${version.stdout.trim()} needs an upgrade.\n\nAgent: ask user to run bun ship:setup from this project in their terminal, then retry.`
     : "shibumi-server is not installed.\n\nAgent: ask user to run bun ship:setup from this project in their terminal, then retry.");
@@ -807,6 +810,18 @@ export function prebuiltImage(appId: string, commit: string): string {
   return `localhost/shibumi-server/upload/${appId}:${commit}`;
 }
 
+export function prebuiltLabels(appId: string, commit: string, repository: string, sourceTree: string, version?: unknown): Record<string, string> {
+  prebuiltImage(appId, commit);
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) || !COMMIT.test(sourceTree)) throw new Error("invalid prebuilt image source");
+  return {
+    "dev.shibumistack.app-id": appId,
+    "dev.shibumistack.source-tree": sourceTree,
+    "org.opencontainers.image.revision": commit,
+    "org.opencontainers.image.source": `https://github.com/${repository}`,
+    ...(typeof version === "string" && version.length <= 128 ? { "org.opencontainers.image.version": version } : {}),
+  };
+}
+
 async function buildAndUpload(config: ClientConfig, target: string, commit: string): Promise<void> {
   if (config.deploymentMode !== "prebuilt") return;
   if (!config.platform) throw new Error("server image platform is missing.\n\nNext: run bun ship:setup.");
@@ -830,16 +845,20 @@ async function buildAndUpload(config: ClientConfig, target: string, commit: stri
     await mkdir(context);
     await run(["git", "archive", "--format=tar", "--output", sourceArchive, commit]);
     await run(["tar", "-xf", sourceArchive, "-C", context]);
-    await writeFile(override, `services:\n  ${JSON.stringify(config.service)}:\n    image: ${JSON.stringify(image)}\n    platform: ${JSON.stringify(config.platform)}\n`);
+    const sourceTree = (await git("rev-parse", `${commit}^{tree}`)).toLowerCase();
+    const labels = prebuiltLabels(config.appId, commit, project.repository, sourceTree, project.packageJson.version);
+    const buildLabels = Object.entries(labels).map(([name, value]) => `        ${JSON.stringify(name)}: ${JSON.stringify(value)}`).join("\n");
+    await writeFile(override, `services:\n  ${JSON.stringify(config.service)}:\n    image: ${JSON.stringify(image)}\n    platform: ${JSON.stringify(config.platform)}\n    build:\n      labels:\n${buildLabels}\n`);
     await run([
       "docker", "compose",
       "--project-name", `shibumi-build-${config.appId}`,
       "--file", join(context, project.composeFile),
       "--file", override,
-      "build", config.service,
+      "build", ...(options.rebuild ? ["--no-cache"] : []), config.service,
     ], { cwd: context });
-    const inspected = await run(["docker", "image", "inspect", "--format", "{{.Os}}/{{.Architecture}}", image]);
-    if (inspected.stdout.trim() !== config.platform) throw new Error(`built image platform is ${inspected.stdout.trim() || "unknown"}; ${config.platform} required`);
+    const inspected = await run(["docker", "image", "inspect", "--format", "{{.Id}} {{.Os}}/{{.Architecture}}", image]);
+    const [imageId, platform] = inspected.stdout.trim().split(/\s+/, 2);
+    if (platform !== config.platform) throw new Error(`built image platform is ${platform || "unknown"}; ${config.platform} required`);
     progress.message("Packing image for SSH upload");
     await run(["docker", "image", "save", "--output", imageArchive, image]);
     progress.message(`Uploading image to ${target}`);
@@ -848,7 +867,7 @@ async function buildAndUpload(config: ClientConfig, target: string, commit: stri
       "env", "SHIBUMI_SKIP_UPDATE_CHECK=1", SERVER_CLI, "image-load", config.appId, commit, String(archiveBytes),
     ], { inputFile: imageArchive, allowFailure: true });
     if (loaded.exitCode !== 0) throw new Error(loaded.stderr.trim() || loaded.stdout.trim() || "server rejected prebuilt image");
-    progress.stop("Prebuilt image verified on server");
+    progress.stop(`Built and uploaded ${commit.slice(0, 7)} (${Math.ceil(archiveBytes / 1024 ** 2)} MiB, ${imageId?.replace(/^sha256:/, "").slice(0, 12) || "unknown digest"})`);
     await run(["docker", "image", "rm", image], { allowFailure: true });
   } catch (error) {
     progress.stop("Prebuilt image failed", 1);
