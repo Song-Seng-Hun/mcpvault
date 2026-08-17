@@ -19,7 +19,7 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
   <main id="main-content">
     <section class="px-4 pt-28 pb-8 sm:px-6 lg:px-8">
       <div class="mx-auto max-w-4xl">
-        <h1 class="text-3xl font-bold text-foreground sm:text-4xl">
+        <h1 class="text-[2.074rem] font-bold leading-tight text-foreground sm:text-[2.488rem]">
           Ready for the next MCP. Same speed.
         </h1>
         <p class="mt-4 max-w-3xl text-base leading-relaxed text-muted-foreground">
@@ -59,7 +59,7 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
     <section class="px-4 pb-8 sm:px-6 lg:px-8">
       <div class="mx-auto max-w-4xl space-y-6">
         <div>
-          <h2 class="text-xl font-semibold text-foreground">Why move at all?</h2>
+          <h2 class="text-[1.44rem] font-semibold text-foreground">Why move at all?</h2>
           <ul class="mt-3 space-y-2 text-base leading-relaxed text-muted-foreground">
             <li>
               <strong class="font-semibold text-foreground">Every client, one server.</strong>
@@ -80,7 +80,7 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
         </div>
 
         <div>
-          <h2 class="text-xl font-semibold text-foreground">What this opens up: HTTP</h2>
+          <h2 class="text-[1.44rem] font-semibold text-foreground">What this opens up: HTTP</h2>
           <p class="mt-3 max-w-3xl text-base leading-relaxed text-muted-foreground">
             The 2026-07-28 spec makes the HTTP transport stateless: servers stop tracking
             per-client sessions, so an MCP server can sit behind any ordinary load balancer
@@ -93,7 +93,7 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
         </div>
 
         <div>
-          <h2 class="text-xl font-semibold text-foreground">Method</h2>
+          <h2 class="text-[1.44rem] font-semibold text-foreground">Method</h2>
           <p class="mt-3 max-w-3xl text-base leading-relaxed text-muted-foreground">
             Each pairing spawns <code>mcpvault &lt;vault&gt; --read-only</code> over stdio.
             Cold start is the median of 8 full connect cycles, spawn to first response.
@@ -110,7 +110,7 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
 
     <section class="px-4 pb-16 sm:px-6 lg:px-8" aria-label="Frequently asked questions">
       <div class="mx-auto max-w-4xl">
-        <h2 class="text-xl font-semibold text-foreground">For the skeptics</h2>
+        <h2 class="text-[1.44rem] font-semibold text-foreground">For the skeptics</h2>
         <p class="mt-2 text-base text-muted-foreground">
           Fair questions a developer should ask about a project benchmarking itself.
         </p>
@@ -186,3 +186,13 @@ const specUrl = 'https://modelcontextprotocol.io/specification/latest';
   </main>
 </Layout>
 
+
+<style>
+  /* Vertical rhythm: paragraphs breathe below, not only above. */
+  p {
+    margin-bottom: 1rem;
+  }
+  p:last-child {
+    margin-bottom: 0;
+  }
+</style>
