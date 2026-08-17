@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-08-17
+
+### Changed
+- Migrated to the official MCP TypeScript SDK v2 (`@modelcontextprotocol/server` 2.0.0, spec 2026-07-28).
+- The stdio server is now dual-era: legacy and 2026-07-28 clients are served from the same process, selected per connection. No latency change for existing clients (see https://mcpvault.org/benchmarks).
+
+### Added
+- Protocol matrix tests covering both protocol eras.
+- `benchmarks/` scripts comparing MCP v1 and MCP v2 latency.
+
 ## [0.15.0] - 2026-08-09
 
 ### Added
