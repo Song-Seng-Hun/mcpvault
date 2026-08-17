@@ -159,8 +159,8 @@ const fmt = (v: number) => (v >= 10 ? v.toFixed(1) : v.toFixed(2));
 
   <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
     {PAIRINGS.map((p, i) => (
-      <span class="flex items-center gap-2">
-        <span class="inline-block h-2.5 w-2.5 flex-shrink-0 rounded-sm" style={`background:${COLORS[i]}`} aria-hidden="true"></span>
+      <span class="flex items-start gap-2">
+        <span class="mt-[0.3rem] inline-block h-2.5 w-2.5 flex-shrink-0 rounded-sm" style={`background:${COLORS[i]}`} aria-hidden="true"></span>
         <span><strong class="font-semibold text-foreground">{p.short}</strong> · {p.name}: {p.detail}</span>
       </span>
     ))}
