@@ -25,6 +25,7 @@ The markdown files are simplified representations of the same content shown in t
 | Features `/features` | `FeatureGrid.astro`, `ComparisonTable.astro` | `public/features.md` |
 | Demo `/demo` | `InteractiveDemo.tsx` | `public/demo.md` |
 | How It Works `/how-it-works` | `HowItWorks.astro` | `public/how-it-works.md` |
+| Benchmarks `/benchmarks` | `BenchmarkCharts.astro`, `pages/benchmarks.astro` | `public/benchmarks.md` |
 
 ## Architecture
 
