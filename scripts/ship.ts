@@ -967,6 +967,13 @@ async function buildAndUpload(config: ClientConfig, target: string, commit: stri
     await run(["git", "archive", "--format=tar", "--output", sourceArchive, commit]);
     await run(["tar", "-xf", sourceArchive, "-C", context]);
     const sourceTree = (await git("rev-parse", `${commit}^{tree}`)).toLowerCase();
+    // Stamp the build into the site's static assets: curl mcpvault.org/version.json
+    // answers "what exactly is deployed" without any server-side plumbing.
+    await writeFile(join(context, "website-shibumi", "public", "version.json"), JSON.stringify({
+      version: project.packageJson.version ?? "unknown",
+      commit,
+      builtAt: new Date().toISOString(),
+    }) + "\n");
     const labels = prebuiltLabels(config.appId, commit, project.repository, sourceTree, project.packageJson.version);
     const buildLabels = Object.entries(labels).map(([name, value]) => `        ${JSON.stringify(name)}: ${JSON.stringify(value)}`).join("\n");
     await writeFile(override, `services:\n  ${JSON.stringify(config.service)}:\n    image: ${JSON.stringify(image)}\n    platform: ${JSON.stringify(config.platform)}\n    build:\n      labels:\n${buildLabels}\n`);
