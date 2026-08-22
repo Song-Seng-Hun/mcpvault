@@ -317,6 +317,8 @@ Rollback immediately if pages, media, APIs, TLS, or visual checks regress: resto
 
 ### Phase 8 — cleanup and upstream learning
 
+Status 2026-08-23: steps 1-3 executed (PR deleting `website/`, AGENTS.md and RELEASING.md pointers moved to `website-shibumi/`). Cloudflare Pages was already absent from PR checks; confirm the Pages project is disconnected in the dashboard (step 2, maintainer). Steps 4-5 remain.
+
 1. Remove the parallel Astro website only after the observation window.
 2. Disable obsolete Cloudflare Pages production deployment hooks only after rollback is no longer needed.
 3. Update `website/AGENTS.md`, root commands, README contributor guidance, and deployment documentation.
