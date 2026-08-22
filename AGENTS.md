@@ -43,7 +43,7 @@ src/
   uri.ts               # Obsidian URI generation
   types.ts             # All TypeScript interfaces
   *.test.ts            # Co-located test files
-website/               # Astro 5 website (separate package, see website/AGENTS.md)
+website-shibumi/       # Bun + Hono + TSX website serving mcpvault.org (separate package)
 ```
 
 ### Core Components
@@ -98,14 +98,14 @@ website/               # Astro 5 website (separate package, see website/AGENTS.m
 
 ## Website (Dual Content)
 
-The `website/` directory is a separate Astro package. It serves content in two formats that **must be kept in sync**:
+The `website-shibumi/` directory is a separate Bun + Hono + TSX package serving mcpvault.org (deployed via shibumi-server, see `website-shibumi/compose.yaml`). It serves content in two formats that **must be kept in sync**:
 
 | Format | Location | Audience |
 |--------|----------|----------|
-| HTML (rich, interactive) | `website/src/components/` | Browsers |
-| Markdown (plain text) | `website/public/*.md` + `llm.txt` | LLMs and AI agents |
+| HTML (rich, interactive) | `website-shibumi/src/components/` | Browsers |
+| Markdown (plain text) | `website-shibumi/public/*.md` + `llm.txt` | LLMs and AI agents |
 
-When updating content, always update both. See `website/AGENTS.md` for full details and file mapping.
+When updating content, always update both.
 
 ## Testing
 
@@ -143,9 +143,9 @@ When modifying file operations:
 - Root server uses npm + `package-lock.json`; website uses Bun separately. Root `bun.lock` becomes stale/misleading; do not recreate.
 - Before merging or publishing ANY website change, deploy a preview, capture screenshots of every affected page, and inspect them for visual regressions. Also smoke-test video playback, posters/static assets, badges/API endpoints, and direct route loads; green build/deployment checks alone are insufficient.
 - MCP SDK v2 uses split `@modelcontextprotocol/server`, `/client`, `/core`, `/node` packages. `@modelcontextprotocol/sdk@latest` remains v1.x.
-- Version bump updates website nav/Hero automatically only. Manually sync `website/src/components/UpdateCallout.astro`, `website/public/index.md`, and `CHANGELOG.md`.
+- Version bump updates website nav/Hero automatically only. Manually sync `website-shibumi/src/components/UpdateCallout.tsx`, `website-shibumi/public/index.md`, and `CHANGELOG.md`.
 - Production npm publishing is triggered by a GitHub Release and runs with provenance. Follow `RELEASING.md`; do not manually run `npm publish` for normal production releases, and do not backfill a release for an npm version that already exists.
-- website-shibumi (shibumi branch) Hono JSX: escapes string children even inside `<script>` — JSON-LD/inline scripts need `raw()`; HTML entities in JSX text double-escape, use literal Unicode chars.
+- website-shibumi Hono JSX: escapes string children even inside `<script>` — JSON-LD/inline scripts need `raw()`; HTML entities in JSX text double-escape, use literal Unicode chars.
 - Bun TSX parser rejects dotted attribute names: Alpine modifiers need spread form `{...{"x-on:click.outside": "close()"}}`.
 - Hono `c.header()` in middleware after `next()` rebuilds Response from `.body` — drops `Bun.file().slice()` Range bodies (video 206 becomes full file). Mutate `c.res.headers.set()` directly.
 - hono serveStatic on Bun: incomplete Range support — video served by dedicated route on `Bun.file().slice()` (src/routes/video.ts), never serveStatic.

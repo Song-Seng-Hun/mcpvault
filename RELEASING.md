@@ -12,7 +12,7 @@ The release PR must contain every artifact users will receive:
 - source and tests
 - rebuilt `dist/` from the same source
 - `CHANGELOG.md`
-- website release history in both `website/src/components/UpdateCallout.astro` and `website/public/index.md`
+- website release history in both `website-shibumi/src/components/UpdateCallout.tsx` and `website-shibumi/public/index.md`
 - any feature documentation in both browser and Markdown formats
 
 Run the root tests, build, audit, dry-run package, and website build before merging.
