@@ -1,8 +1,8 @@
-# How MCPVault Works
+# How MCPVault works
 
 Practical prompts you can try with your AI assistant and MCPVault.
 
-## Search & Read Notes
+## Search and read notes
 
 **Prompt:** Find my productivity notes and summarize the key concepts
 
@@ -17,7 +17,7 @@ Practical prompts you can try with your AI assistant and MCPVault.
 - Found notes: "Notes/Getting Things Done.md" (5 matches), "Books/Deep Work.md" (4 matches)
 - Key concepts: Time blocking, focused work sessions, eliminating distractions, weekly reviews
 
-## Update Metadata
+## Update metadata
 
 **Prompt:** Mark all my project notes as completed
 
@@ -25,7 +25,7 @@ Practical prompts you can try with your AI assistant and MCPVault.
 
 1. AI calls `update_frontmatter` for each project note
 2. Sets status to "completed" and adds completion date
-3. Frontmatter is safely merged with existing fields; unmodified keys keep their raw formatting
+3. MCPVault merges the changed fields; unmodified keys keep their raw formatting
 
 **Example request:**
 ```json
@@ -38,20 +38,20 @@ Practical prompts you can try with your AI assistant and MCPVault.
 }
 ```
 
-## Available MCP Tools
+## Available MCP tools
 
 | Tool | Description |
 |------|-------------|
 | read_note | Read a single note with frontmatter |
 | write_note | Create or overwrite a note (supports overwrite, append, prepend modes) |
-| patch_note | Efficient partial update via find-and-replace |
+| patch_note | Replace an exact text match without rewriting the full note |
 | list_directory | List files and folders in the vault (includes non-note filenames) |
 | delete_note | Delete a note with optional soft-delete: permanent, vault trash, or system trash |
 | search_notes | Search by note name or content across the vault |
 | move_note | Move or rename a note |
 | move_file | Move or rename any file (binary-safe, file-only, requires path confirmation) |
 | read_multiple_notes | Batch read up to 10 notes |
-| update_frontmatter | Safely update YAML frontmatter |
+| update_frontmatter | Validate and update YAML frontmatter |
 | get_notes_info | Get metadata without reading content |
 | get_frontmatter | Extract frontmatter only |
 | manage_tags | Add, remove, or list tags |

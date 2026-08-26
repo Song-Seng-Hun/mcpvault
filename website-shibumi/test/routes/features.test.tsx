@@ -38,7 +38,7 @@ describe("GET /features/ (HTML)", () => {
   test("sets page-specific title, description, and canonical", async () => {
     const body = await (await app.request("/features/")).text();
     expect(body).toContain("<title>Features | MCPVault</title>");
-    expect(body).toContain('content="Intelligent search, safe frontmatter handling, security-first design, and more. See how MCPVault compares to alternatives."');
+    expect(body).toContain('content="Review MCPVault search, frontmatter, file tools, path restrictions, supported clients, and access methods."');
     expect(body).toContain('<link rel="canonical" href="https://mcpvault.org/features"/>');
   });
 
@@ -53,9 +53,9 @@ describe("GET /features/ (HTML)", () => {
   test("renders FeatureGrid with all ten cards and the highlighted code sample", async () => {
     const body = await (await app.request("/features/")).text();
     expect(body).toContain('data-component="feature-grid"');
-    expect(body).toContain("Core Features");
-    expect(body).toContain("Powerful Search");
-    expect(body).toContain("Multi-Platform");
+    expect(body).toContain("Core features");
+    expect(body).toContain("Full-text search");
+    expect(body).toContain("MCP client support");
     // Server-side Shiki highlighting, not react-syntax-highlighter.
     expect(body).toContain('class="shiki');
     expect(body).toContain("Notes/GTD.md");
@@ -64,9 +64,9 @@ describe("GET /features/ (HTML)", () => {
   test("renders ComparisonTable with every feature row and the CTA links", async () => {
     const body = await (await app.request("/features/")).text();
     expect(body).toContain('data-component="comparison-table"');
-    expect(body).toContain("Why Choose MCPVault?");
-    expect(body).toContain("Setup Complexity");
-    expect(body).toContain("Reliability");
+    expect(body).toContain("Compare access methods");
+    expect(body).toContain("Frontmatter updates");
+    expect(body).toContain("Access boundary");
     expect(body).toContain('href="/install"');
     expect(body).toContain('href="https://github.com/bitbonsai/mcpvault"');
   });

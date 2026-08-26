@@ -20,7 +20,7 @@ export function SkillPage({ currentPath, version }: SkillPageProps) {
   return (
     <Layout
       title="Skill"
-      description="Obsidian skill combining MCP server tools with Obsidian CLI context. Routing, workflow patterns, and safety defaults."
+      description="Install an Obsidian skill that routes file operations to MCPVault, app actions to Obsidian CLI, and sync tasks to Git."
       canonical="https://mcpvault.org/skill"
       page="skill"
       pageStylesheet="/styles/skill.css"

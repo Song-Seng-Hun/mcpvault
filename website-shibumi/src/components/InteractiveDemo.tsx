@@ -58,10 +58,10 @@ interface DemoExample {
 const EXAMPLES: DemoExample[] = [
   {
     id: "patch",
-    title: "Efficient Editing",
+    title: "Exact patch",
     icon: PenSquareIcon,
     claude: "Add the equation for energy-mass equivalence to my physics notes",
-    response: `MCP-Obsidian: Using patch_note...
+    response: `MCPVault: Using patch_note...
 
 Request:
 \`\`\`json
@@ -82,22 +82,20 @@ Response:
 }
 \`\`\`
 
-Done! Added Einstein's equation to your notes.
-Only the specific section was updated - no full file rewrite needed.`,
+Added Einstein's equation to your notes.
+Only the matching section was changed.`,
     details: [
-      "MCP server used patch_note for efficient partial update",
-      "Multi-line text replacement performed atomically",
-      "Frontmatter and formatting preserved perfectly",
-      "10x faster than rewriting entire file",
-      "replaceAll defaults to false — fails safely if multiple matches found",
+      "patch_note replaces an exact text match",
+      "Surrounding content and frontmatter remain unchanged",
+      "replaceAll defaults to false and returns an error when multiple matches exist",
     ],
   },
   {
     id: "write",
-    title: "Create Notes",
+    title: "Create a note",
     icon: FilePenLineIcon,
     claude: "Create a quick note about today's meeting",
-    response: `MCP-Obsidian: Using write_note...
+    response: `MCPVault: Using write_note...
 
 Request:
 \`\`\`json
@@ -110,21 +108,19 @@ Request:
 Response:
 Successfully wrote note: Meetings/Team Sync.md (mode: overwrite)
 
-Done! I've created your meeting note.`,
+Created the meeting note.`,
     details: [
-      "MCP server wrote the complete note to disk",
-      "AI generated the structured content",
-      "File created atomically with proper formatting",
-      "Ready to open and edit in Obsidian",
+      "write_note wrote the complete note to disk",
       "Supports overwrite, append, and prepend modes",
+      "The new file is available in Obsidian",
     ],
   },
   {
     id: "read_multiple",
-    title: "Read Multiple Notes",
+    title: "Read multiple notes",
     icon: LibraryBigIcon,
     claude: "Read all my book club notes and give me a summary",
-    response: `MCP-Obsidian: Using read_multiple_notes...
+    response: `MCPVault: Using read_multiple_notes...
 
 Request:
 \`\`\`json
@@ -157,17 +153,16 @@ Common themes across these books: systems thinking, habit formation, and focus. 
     details: [
       "MCP server read multiple files in one request (max 10)",
       "Returns ok (successful) and err (failed) arrays",
-      "AI analyzes across multiple documents",
-      "More efficient than reading files one-by-one",
-      "prettyPrint defaults to false for minimal token usage",
+      "The client can summarize the returned documents",
+      "prettyPrint defaults to false for compact output",
     ],
   },
   {
     id: "frontmatter",
-    title: "Manage Frontmatter",
+    title: "Update frontmatter",
     icon: TagsIcon,
     claude: "Update the status and add tags to my project planning note",
-    response: `MCP-Obsidian: Using update_frontmatter...
+    response: `MCPVault: Using update_frontmatter...
 
 Request:
 \`\`\`json
@@ -189,21 +184,20 @@ Request:
 Response:
 Successfully updated frontmatter for: Projects/Website Redesign.md
 
-Done! I've updated the frontmatter with the new status and tags.`,
+Updated the frontmatter with the new status and tags.`,
     details: [
-      "MCP server safely updated YAML frontmatter",
-      "Merges with existing frontmatter by default (merge: true)",
-      "Updates are performed atomically",
+      "Frontmatter merges with existing fields by default (merge: true)",
+      "Unchanged fields keep their existing formatting",
       "Note content remains untouched",
-      "YAML is validated before writing to prevent corruption",
+      "MCPVault validates YAML before writing",
     ],
   },
   {
     id: "search",
-    title: "Search Content",
+    title: "Search content",
     icon: SearchIcon,
     claude: 'Search for "React hooks" in my notes',
-    response: `MCP-Obsidian: Using search_notes...
+    response: `MCPVault: Using search_notes...
 
 Request:
 \`\`\`json
@@ -276,7 +270,7 @@ export async function InteractiveDemo() {
         <div class="demo-details" x-bind:class="{ hidden: isTyping }">
           <h3 class="demo-details-title">
             <InfoIcon className="demo-details-icon" />
-            Technical Details
+            Technical details
           </h3>
           <div class="demo-details-grid">
             {example.details.map((detail) => (
@@ -296,9 +290,9 @@ export async function InteractiveDemo() {
       <div class="demo-inner">
         <div class="demo-header fade-in-on-scroll">
           <h2 id="demo-heading" class="demo-title">
-            See It In Action
+            Tool examples
           </h2>
-          <p class="demo-lede">Watch how AI assistants intelligently interact with your Obsidian vault. These examples show real conversations and outcomes.</p>
+          <p class="demo-lede">Each tab shows a prompt, the MCP tool request, its response, and the resulting file operation.</p>
         </div>
 
         <div class="demo-tabs fade-in-on-scroll">
@@ -323,7 +317,7 @@ export async function InteractiveDemo() {
               <span class="demo-window-dot demo-window-dot--yellow" />
               <span class="demo-window-dot demo-window-dot--green" />
             </div>
-            <span class="demo-window-title">AI Desktop Tool - MCP-Obsidian Active</span>
+            <span class="demo-window-title">MCP client - MCPVault connected</span>
             <div class="demo-window-status">
               <span class="demo-window-status-dot" />
               <span class="demo-window-status-text">Connected</span>
@@ -334,10 +328,10 @@ export async function InteractiveDemo() {
         </div>
 
         <div class="demo-cta fade-in-on-scroll">
-          <p class="demo-cta-text">Ready to experience this level of AI-powered note management?</p>
+          <p class="demo-cta-text">Use these examples after connecting MCPVault to your client.</p>
           <a href="/install" class="demo-cta-link">
             <DownloadIcon className="icon" />
-            Get Started Now
+            Installation
           </a>
         </div>
       </div>

@@ -11,7 +11,7 @@
  * rather than doing nothing on submit -- see `newsletter.ts` for why the
  * banners bind `hidden` directly instead of a `.hidden` class.
  */
-const HIGHLIGHTS = ["Release announcements before they hit npm", "Deep dives on new MCP client integrations", "Security tips for running MCPVault in production"];
+const HIGHLIGHTS = ["Release notes", "New client configuration guides", "Obsidian workflow examples"];
 
 export function NewsletterSignup() {
   return (
@@ -20,9 +20,9 @@ export function NewsletterSignup() {
         <div class="newsletter-card">
           <div class="newsletter-grid">
             <div>
-              <p class="eyebrow">Stay in the loop</p>
-              <h2>Ship updates to your inbox</h2>
-              <p class="lede">Get a lightweight email whenever MCPVault ships a new release, adds a client configuration, or shares Obsidian automation recipes.</p>
+              <p class="eyebrow">Release email</p>
+              <h2>Get MCPVault updates</h2>
+              <p class="lede">Receive one email when MCPVault publishes a release, adds setup instructions for a client, or documents a new Obsidian workflow.</p>
               <ul class="highlights">
                 {HIGHLIGHTS.map((item) => (
                   <li>

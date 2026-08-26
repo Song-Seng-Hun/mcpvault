@@ -39,7 +39,7 @@ describe("GET /demo/ (HTML)", () => {
   test("sets page-specific title, description, and canonical", async () => {
     const body = await (await app.request("/demo/")).text();
     expect(body).toContain("<title>Demo | MCPVault</title>");
-    expect(body).toContain('content="See MCPVault in action. Interactive examples showing how AI assistants read, write, search, and manage your Obsidian vault."');
+    expect(body).toContain('content="Tool request and response examples for reading, writing, searching, and updating notes with MCPVault."');
     expect(body).toContain('<link rel="canonical" href="https://mcpvault.org/demo"/>');
   });
 
@@ -54,7 +54,7 @@ describe("GET /demo/ (HTML)", () => {
   test("renders every example tab", async () => {
     const body = await (await app.request("/demo/")).text();
     expect(body).toContain('data-component="interactive-demo"');
-    expect(body).toContain("See It In Action");
+    expect(body).toContain("Tool examples");
     expect(body).toContain('data-tab="patch"');
     expect(body).toContain('data-tab="write"');
     expect(body).toContain('data-tab="read_multiple"');
@@ -82,7 +82,7 @@ describe("GET /demo/ (HTML)", () => {
     expect(body).toContain("Read all my book club notes and give me a summary");
     expect(body).toContain("Update the status and add tags to my project planning note");
     expect(body).toContain('Search for &quot;React hooks&quot; in my notes');
-    expect(body).toContain("Done! Added Einstein&#39;s equation to your notes.");
+    expect(body).toContain("Added Einstein&#39;s equation to your notes.");
   });
 
   test("renders syntax-highlighted JSON for the response code blocks", async () => {
@@ -92,17 +92,17 @@ describe("GET /demo/ (HTML)", () => {
     expect(body).toContain("Physics/Relativity.md");
   });
 
-  test("renders the Technical Details section for every panel", async () => {
+  test("renders the technical details section for every panel", async () => {
     const body = await (await app.request("/demo/")).text();
-    expect(body).toContain("Technical Details");
-    expect(body).toContain("MCP server used patch_note for efficient partial update");
-    expect(body).toContain("YAML is validated before writing to prevent corruption");
+    expect(body).toContain("Technical details");
+    expect(body).toContain("patch_note replaces an exact text match");
+    expect(body).toContain("MCPVault validates YAML before writing");
   });
 
-  test("renders the Get Started Now CTA linking to /install", async () => {
+  test("renders the installation CTA linking to /install", async () => {
     const body = await (await app.request("/demo/")).text();
     expect(body).toContain('href="/install"');
-    expect(body).toContain("Get Started Now");
+    expect(body).toContain("Installation");
   });
 
   test("renders the injected package version in the structured data", async () => {

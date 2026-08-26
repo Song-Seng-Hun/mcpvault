@@ -271,10 +271,10 @@ interface PrivacyItem {
 }
 
 const PRIVACY_ITEMS: PrivacyItem[] = [
-  { icon: CheckIcon, variant: "success", text: "Your vault files stay on your computer" },
-  { icon: CheckIcon, variant: "success", text: "We never see, store, or transmit your data" },
-  { icon: CheckIcon, variant: "success", text: "Only you and your AI assistant can access your notes" },
-  { icon: XIcon, variant: "error", text: "AI providers (Anthropic, OpenAI) process content you share with them" },
+  { icon: CheckIcon, variant: "success", text: "MCPVault reads files from the vault path you configure" },
+  { icon: CheckIcon, variant: "success", text: "MCPVault has no hosted service that receives your vault files" },
+  { icon: CheckIcon, variant: "success", text: "Path checks keep file tools inside the configured vault" },
+  { icon: XIcon, variant: "error", text: "Your AI client or provider may receive note content used in requests" },
 ];
 
 export async function Terminal() {
@@ -289,9 +289,9 @@ export async function Terminal() {
       <div class="terminal-inner">
         <div class="terminal-intro fade-in-on-scroll">
           <h2 id="terminal-heading" class="terminal-intro-title">
-            Quick Install
+            Install MCPVault
           </h2>
-          <p class="terminal-intro-lede">Get MCPVault running in seconds with any MCP-compatible platform</p>
+          <p class="terminal-intro-lede">Choose your MCP client and add one local server entry.</p>
         </div>
 
         <div class="terminal-steps">
@@ -299,7 +299,7 @@ export async function Terminal() {
           <div class="terminal-step fade-in-on-scroll">
             <div class="step-heading">
               <div class="step-number">1</div>
-              <h3 class="step-title">Configure Your AI Platform</h3>
+              <h3 class="step-title">Configure your MCP client</h3>
             </div>
 
             <div class="terminal-window">
@@ -499,7 +499,7 @@ export async function Terminal() {
                 <p class="setup-details-note">
                   <ZapIcon className="info-card-icon" />
                   <span>
-                    <strong>No pre-installation needed!</strong> npx automatically downloads and runs the server when needed.
+                    <strong>Package download:</strong> npx downloads MCPVault when the client starts the server.
                   </span>
                 </p>
               </div>
@@ -583,7 +583,7 @@ export async function Terminal() {
           <div class="terminal-step fade-in-on-scroll">
             <div class="step-heading">
               <div class="step-number step-number--accent-2">2</div>
-              <h3 class="step-title">Developers: Test with MCP Inspector</h3>
+              <h3 class="step-title">Test with MCP Inspector</h3>
             </div>
 
             <div class="terminal-window">
@@ -635,7 +635,7 @@ export async function Terminal() {
                 </span>
               </p>
               <div class="inspector-list">
-                <div class="inspector-list-label">Perfect for:</div>
+                <div class="inspector-list-label">Use it to:</div>
                 <ul class="inspector-list-items">
                   <li>Testing server functionality before integration</li>
                   <li>Debugging MCP method calls and responses</li>
@@ -665,11 +665,11 @@ export async function Terminal() {
                 <span class="platforms-banner-row">
                   <GlobeIcon className="icon" />
                   <span>
-                    <strong>Works with all MCP-compatible platforms:</strong> Claude Desktop, ChatGPT+, Claude Code, OpenCode, Gemini CLI, Cursor IDE, Windsurf, and more coming soon!
+                    <strong>Client support:</strong> The examples above cover Claude Desktop, ChatGPT+, Claude Code, OpenCode, Gemini CLI, Cursor, and Windsurf.
                   </span>
                 </span>
                 <br />
-                Use the same configuration with your platform's MCP server settings.
+                Other clients can use MCPVault if they support local stdio MCP servers.
               </p>
             </div>
             <div class="privacy-card">
@@ -688,7 +688,7 @@ export async function Terminal() {
               </div>
 
               <div class="privacy-footer">
-                <p class="privacy-footer-text">For commercial Claude users: Your data won't be used for AI training.</p>
+                <p class="privacy-footer-text">Your AI provider's retention and training terms still apply to content it receives.</p>
               </div>
             </div>
           </div>
@@ -700,9 +700,9 @@ export async function Terminal() {
                 <div class="success-icon">
                   <CheckIcon className="icon" />
                 </div>
-                <h3 class="success-title">You're all set!</h3>
+                <h3 class="success-title">Verify the connection</h3>
               </div>
-              <p class="success-text">Restart your AI platform and you'll see MCPVault connected. Your AI assistant can now safely read, search, and manage your Obsidian vault.</p>
+              <p class="success-text">Restart your client, then ask it to list MCPVault tools or search for a known note.</p>
               <div class="success-badges">
                 {SUCCESS_BADGES.map((badge) => (
                   <span class="success-badge">

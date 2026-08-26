@@ -22,7 +22,7 @@ export function InstallPage({ currentPath, version }: InstallPageProps) {
   return (
     <Layout
       title="Install"
-      description="Get MCPVault running in seconds. Configuration for Claude Desktop, ChatGPT+, Claude Code, Gemini CLI, and more."
+      description="Configuration examples for running MCPVault with Claude Desktop, ChatGPT+, Claude Code, Gemini CLI, OpenCode, and OpenAI Codex."
       canonical="https://mcpvault.org/install"
       page="install"
       pageStylesheet="/styles/install.css"

@@ -22,7 +22,7 @@ export function HowItWorksPage({ currentPath, version }: HowItWorksPageProps) {
   return (
     <Layout
       title="How It Works"
-      description="Practical usage examples showing how AI assistants interact with your Obsidian vault through MCPVault."
+      description="Follow MCPVault search, batch read, and frontmatter update requests from prompt to tool response."
       canonical="https://mcpvault.org/how-it-works"
       page="how-it-works"
       pageStylesheet="/styles/how-it-works.css"

@@ -395,7 +395,7 @@ export function UpdateCallout() {
         <div class="callout-body">
           <div class="updates-heading">
             <h3>
-              Recent Updates <span class="version-pill">v0.16.0</span>
+              Recent updates <span class="version-pill">v0.16.0</span>
             </h3>
             <button
               type="button"
@@ -421,8 +421,8 @@ export function UpdateCallout() {
           </div>
 
           <p class="latest-update">
-            <span class="entry-version">v0.16.0 (August 2026):</span> Migrated to <strong>MCP v2</strong>, the official SDK for the 2026-07-28 spec. One
-            process serves both protocol generations at the same speed (<a href="/benchmarks/">benchmarks</a>)
+            <span class="entry-version">v0.16.0 (August 2026):</span> Moved to <strong>MCP v2</strong>, the official SDK for the 2026-07-28 specification. One
+            process accepts both protocol generations, with no material slowdown in our <a href="/benchmarks/">benchmarks</a>.
           </p>
 
           <div id="older-updates" class="older-updates is-collapsed" data-updates-panel x-bind:class="{ 'is-expanded': expanded, 'is-collapsed': !expanded }">

@@ -40,16 +40,16 @@ export function Hero({ version }: HeroProps) {
           </span>
         </h1>
 
-        <p class="hero-tagline">Your assistant. Your notes. Zero friction.</p>
+        <p class="hero-tagline">Connect MCP clients to your Obsidian vault.</p>
 
-        <p class="hero-subtext">This MCP server lets Claude, ChatGPT+, and other assistants access your vault. Locally, safe frontmatter, no cloud sync.</p>
+        <p class="hero-subtext">MCPVault reads, searches, and edits local vault files. Obsidian can stay closed, and frontmatter updates preserve existing formatting.</p>
 
         <div class="hero-cta">
           <a href="/install" class="btn-primary">
             <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
             </svg>
-            Get Started
+            Install MCPVault
           </a>
           <a href="https://github.com/bitbonsai/mcpvault" target="_blank" rel="noopener noreferrer" class="btn-secondary">
             <GitHubIcon className="icon" />
