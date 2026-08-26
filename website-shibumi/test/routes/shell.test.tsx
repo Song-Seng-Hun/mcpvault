@@ -49,7 +49,7 @@ describe("Layout", () => {
   test("sets canonical, Open Graph, and default metadata", async () => {
     const body = await (await testApp().request("/")).text();
     expect(body).toContain('<link rel="canonical" href="https://mcpvault.org"/>');
-    expect(body).toContain('<meta property="og:title" content="MCPVault - Universal AI Bridge for Obsidian Vaults"/>');
+    expect(body).toContain('<meta property="og:title" content="MCPVault - MCP Server for Obsidian Vaults"/>');
     expect(body).toContain('<meta name="theme-color" content="#0a0a0a"/>');
   });
 

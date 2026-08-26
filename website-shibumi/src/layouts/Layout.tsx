@@ -41,9 +41,9 @@ import { FONT_LOADER_SCRIPT, structuredDataJson } from "../lib/csp";
 import { packageVersion } from "../lib/version";
 
 const SITE_URL = "https://mcpvault.org";
-const DEFAULT_TITLE = "MCPVault - Universal AI Bridge for Obsidian Vaults";
+const DEFAULT_TITLE = "MCPVault - MCP Server for Obsidian Vaults";
 const DEFAULT_DESCRIPTION =
-  "Connect ANY AI assistant to your Obsidian vault with the open MCP standard. Works with Claude, ChatGPT, and future AI tools. Private, secure, and future-proof.";
+  "Run MCPVault locally to let MCP-compatible assistants read, search, and edit notes in an Obsidian vault.";
 const DEFAULT_IMAGE = `${SITE_URL}/og-image.jpg`;
 
 export interface LayoutProps {
@@ -97,7 +97,7 @@ export function Layout({ title = DEFAULT_TITLE, description = DEFAULT_DESCRIPTIO
 
         <meta
           name="keywords"
-          content="obsidian, mcp, ai, universal, claude, chatgpt, model context protocol, knowledge management, pkm, ai bridge, vault, notes, markdown, mcp server, ai assistant, future-proof"
+          content="obsidian, mcp, ai, claude, chatgpt, model context protocol, knowledge management, pkm, vault, notes, markdown, mcp server, ai assistant"
         />
         <meta name="author" content="Mauricio Wolff (bitbonsai)" />
         <meta name="robots" content="index, follow" />

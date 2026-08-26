@@ -38,7 +38,7 @@ describe("GET /skill/ (HTML)", () => {
   test("sets page-specific title, description, and canonical", async () => {
     const body = await (await app.request("/skill/")).text();
     expect(body).toContain("<title>Skill | MCPVault</title>");
-    expect(body).toContain('content="Obsidian skill combining MCP server tools with Obsidian CLI context. Routing, workflow patterns, and safety defaults."');
+    expect(body).toContain('content="Install an Obsidian skill that routes file operations to MCPVault, app actions to Obsidian CLI, and sync tasks to Git."');
     expect(body).toContain('<link rel="canonical" href="https://mcpvault.org/skill"/>');
   });
 
@@ -55,8 +55,8 @@ describe("GET /skill/ (HTML)", () => {
     expect(body).toContain('data-component="skill-content"');
     expect(body).toContain("Obsidian Skill");
     expect(body).toContain("npx skills add bitbonsai/mcpvault");
-    expect(body).toContain("Find any note instantly");
-    expect(body).toContain("Sync across devices");
+    expect(body).toContain("Search notes");
+    expect(body).toContain("Run Git sync");
   });
 
   test("renders the copy button with a data-copy hook and no inline script", async () => {
@@ -99,17 +99,17 @@ describe("GET /skill/ (HTML)", () => {
     expect(body).toContain("search my vault for...");
     expect(body).toContain("Not a fit for");
     expect(body).toContain("Workflow Patterns");
-    expect(body).toContain("Sequential Orchestration");
+    expect(body).toContain("Search, then open");
     expect(body).toContain("Safety Defaults");
-    expect(body).toContain("No Shell Interpolation");
+    expect(body).toContain("Structured command arguments");
   });
 
-  test("renders Quick Start with the SKILL.md frontmatter sample and Install Now CTA", async () => {
+  test("renders Quick Start with the SKILL.md frontmatter sample and installation CTA", async () => {
     const body = await (await app.request("/skill/")).text();
     expect(body).toContain("Quick Start");
     expect(body).toContain("name: obsidian");
     expect(body).toContain('href="/install"');
-    expect(body).toContain("Install Now");
+    expect(body).toContain("Installation");
   });
 
   test("renders the injected package version in the structured data", async () => {

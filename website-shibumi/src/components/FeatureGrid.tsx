@@ -32,65 +32,65 @@ const FRONTMATTER_EXAMPLE = `{
 export async function FeatureGrid() {
   const cards = await Promise.all([
     FeatureCard({
-      title: "Powerful Search",
-      description: "Fast full-text search with multi-word matching and BM25 relevance ranking. AI can locate notes by content, tags, or metadata instantly.",
+      title: "Full-text search",
+      description: "Search matches note filenames and content, supports multiple words, and ranks results with BM25.",
       icon: "search",
       size: "large",
       accent: true,
       codeExample: SEARCH_CODE_EXAMPLE,
     }),
     FeatureCard({
-      title: "Safe Frontmatter Handling",
+      title: "Frontmatter updates",
       description: "AST-aware YAML updates preserve raw formatting for unmodified fields. Dates, quotes, and time values keep their original form while only changed keys are rewritten.",
       icon: "shield",
       size: "medium",
       codeExample: FRONTMATTER_EXAMPLE,
     }),
     FeatureCard({
-      title: "File Operations",
-      description: "Read, write, and manage notes safely. Create, update, and organize your vault with AI assistance.",
+      title: "Note and file operations",
+      description: "Tools read, write, patch, move, list, and delete notes. Patch updates replace exact text instead of rewriting full files.",
       icon: "file",
       size: "medium",
     }),
     FeatureCard({
-      title: "Security First",
-      description: "Path traversal protection and safe file operations. Controlled AI access through MCP protocol.",
+      title: "Vault boundary",
+      description: "Path checks block traversal, symlink escapes, dotfiles, .obsidian, .git, and node_modules.",
       icon: "vault",
       size: "medium",
     }),
     FeatureCard({
-      title: "Node.js Compatible",
-      description: "Built with Node.js for broad compatibility and ecosystem support.",
+      title: "Runs on Node.js",
+      description: "MCP clients launch the server as a local Node.js process over stdio.",
       icon: "node",
       size: "small",
     }),
     FeatureCard({
-      title: "Token Optimized",
-      description: "Minified JSON field names and compact responses. Less token usage means faster, cheaper API calls.",
+      title: "Compact responses",
+      description: "Search and batch responses use short field names by default. prettyPrint returns expanded output when needed.",
       icon: "tokens",
       size: "small",
     }),
     FeatureCard({
-      title: "TypeScript",
-      description: "Fully typed for excellent developer experience.",
+      title: "TypeScript API",
+      description: "The package exports TypeScript declarations and public types for library use.",
       icon: "typescript",
       size: "small",
     }),
     FeatureCard({
-      title: "Open Source",
-      description: "MIT licensed and community driven.",
+      title: "MIT licensed",
+      description: "Source code, tests, and issue tracking are public on GitHub.",
       icon: "heart",
       size: "small",
     }),
     FeatureCard({
-      title: "Complete Toolkit",
-      description: "18 MCP tools for vault management: read/write/patch/move files, search content, manage tags, update frontmatter, vault stats, and more. Built for AI assistant integration.",
+      title: "18 MCP tools",
+      description: "Tools cover note reads and writes, exact patches, file moves, search, tags, frontmatter, outlines, line ranges, and vault statistics.",
       icon: "toolkit",
       size: "medium",
     }),
     FeatureCard({
-      title: "Multi-Platform",
-      description: "Works with Claude Desktop, ChatGPT+ Desktop, OpenCode, Gemini CLI, OpenAI Codex, Cursor, Windsurf, IntelliJ, and other MCP-compatible AI platforms.",
+      title: "MCP client support",
+      description: "Setup guides cover Claude Desktop, ChatGPT+ Desktop, Claude Code, OpenCode, Gemini CLI, OpenAI Codex, Cursor, Windsurf, and IntelliJ.",
       icon: "platform",
       size: "medium",
     }),
@@ -101,9 +101,9 @@ export async function FeatureGrid() {
       <div class="feature-grid-inner">
         <div class="feature-grid-header fade-in-on-scroll">
           <h2 id="feature-grid-heading" class="feature-grid-title">
-            Core Features
+            Core features
           </h2>
-          <p class="feature-grid-lede">Designed for safety, performance, and developer experience. Every feature gives AI intelligent access without compromising your data.</p>
+          <p class="feature-grid-lede">MCPVault works directly with vault files. These tools and path checks define what clients can do with them.</p>
         </div>
 
         <div class="feature-grid">{cards}</div>

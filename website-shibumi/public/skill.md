@@ -1,6 +1,6 @@
 # Obsidian Skill
 
-Combines MCP server safety with Obsidian CLI context. One skill that routes each operation to the right backend.
+Routes file operations to MCPVault, app actions to Obsidian CLI, and sync tasks to Git.
 
 ## Install
 
@@ -8,12 +8,12 @@ Combines MCP server safety with Obsidian CLI context. One skill that routes each
 npx skills add bitbonsai/mcpvault
 ```
 
-### What can you do with it?
+### What it covers
 
-- **Find any note instantly** — Full-text search with relevance ranking across your entire vault.
-- **Organize with smart tags** — Add, remove, and bulk-manage tags and frontmatter across hundreds of notes.
-- **Edit notes safely** — Atomic read/write/patch operations with path sandboxing.
-- **Sync across devices** — Optional git-based sync with no paid subscription required.
+- Full-text search across note filenames and content, ranked with BM25.
+- Tag and frontmatter updates that leave note content unchanged.
+- Read, write, and patch tools scoped to the configured vault root.
+- Optional Git commands for committing, pulling, and pushing a vault.
 
 ## Routing Matrix
 
@@ -21,11 +21,11 @@ Each operation maps to exactly one backend. The skill picks the right one automa
 
 | Operation | MCP | Obsidian CLI | Git | Notes |
 |-----------|-----|-------------|-----|-------|
-| Read note | yes | — | — | Safe, sandboxed read via MCP |
-| Write / patch note | yes | — | — | Atomic writes with validation |
+| Read note | yes | — | — | Vault-scoped read via MCP |
+| Write / patch note | yes | — | — | Validated writes through MCPVault |
 | Search vault | yes | — | — | BM25-ranked full-text search |
 | Resolve [[wiki links]] | yes | — | — | wiki_link picks the shallowest match first, then locale-sorts equal-depth paths; other matches are returned as alternatives |
-| Manage tags / frontmatter | yes | — | — | Safe YAML merge |
+| Manage tags / frontmatter | yes | — | — | Frontmatter merge through MCP |
 | List all tags with counts | yes | — | — | Filesystem scan, works headless |
 | Move / rename notes | yes | — | — | MCP move followed by explicit backlink search, repair, and verification |
 | Get active file | — | yes | — | Currently focused file in Obsidian |
@@ -57,7 +57,7 @@ The skill does not invoke `obsidian move` automatically. Delayed link rewrites c
 
 1. Preflight: verify git, repo, identity, and remote.
 2. If setup is incomplete, ask one targeted question with a recommended default.
-3. Run safe sync sequence: `git add -A` -> `git commit` (if changes) -> `git pull --rebase` -> `git push`.
+3. Run sync sequence: `git add -A` → `git commit` (if changes) → `git pull --rebase` → `git push`.
 4. Stop on conflicts and provide manual next steps.
 
 ## Expanded Flow Playbook
@@ -85,21 +85,21 @@ If any check fails, ask one targeted setup question with a recommended default.
 ```text
 User: Use git to store my vault and keep it synced.
 Skill: I will run a git preflight first (git, repo, identity, remote), then set up anything missing with one targeted question.
-Skill: Preflight OK. Running sync: git add -A -> git commit (if changes) -> git pull --rebase -> git push.
+Skill: Preflight OK. Running sync: git add -A → git commit (if changes) → git pull --rebase → git push.
 Skill: Done. Vault synced to origin/main. No force push used.
 ```
 
 ## What It Is
 
-**MCP Server** — Handles all file I/O: reading, writing, searching, patching, and organizing notes. Enforces path sandboxing, validates inputs, and performs atomic operations. The safe default for any vault mutation.
+**MCP Server:** Handles note reads, writes, searches, patches, and moves. It validates inputs and rejects paths outside the configured vault.
 
-**Obsidian CLI** — Uses Obsidian's official CLI for operations that need the running desktop app: active file, opening notes in the editor, daily notes with template expansion, read-only backlink discovery, and plugin commands. The skill tracks the current official CLI — a preflight detects your installed binary at runtime, so nothing is pinned to a version that can go stale.
+**Obsidian CLI:** Uses Obsidian's official CLI for operations that need the running desktop app: active file, opening notes in the editor, daily notes with template expansion, read-only backlink discovery, and plugin commands. A preflight checks the installed CLI at runtime instead of assuming a fixed version.
 
-**Git Sync** — Plain git for vault syncing across devices. No Obsidian Sync subscription required. Works headlessly via cron, launchd, or CI — no app needs to be running.
+**Git sync:** Commits, pulls, and pushes vault files. Cron, launchd, or CI can run the commands without Obsidian.
 
 ## Git-Based Vault Sync
 
-An Obsidian vault is just a folder of markdown files. You can `git init` inside it, add a remote, and push/pull like any repo. No proprietary format, no paid service.
+An Obsidian vault is a folder of markdown files. Run `git init` inside it, add a remote, then commit, pull, and push like any repository.
 
 ### Headless automation
 
@@ -119,10 +119,10 @@ The [Obsidian Git](https://github.com/Vinzent03/obsidian-git) community plugin (
 
 ### Caveats
 
-- **Not real-time** — git syncs on commit intervals, not instantly
-- **Merge conflicts** — editing the same note on two devices before syncing requires manual resolution
-- **Large binaries** — images and PDFs aren't great for git; use `.gitignore` or Git LFS
-- **Workspace files** — add `.obsidian/workspace.json` to `.gitignore`
+- Git sync runs when changes are committed.
+- Editing the same note on two devices before syncing may require manual conflict resolution.
+- Images and PDFs may need `.gitignore` or Git LFS.
+- Add `.obsidian/workspace.json` to `.gitignore`.
 
 Recommended .gitignore:
 
@@ -136,18 +136,18 @@ Recommended .gitignore:
 ## When To Use
 
 **Trigger phrases:**
-- "search my vault for..." -> MCP
-- "update the frontmatter on..." -> MCP
-- "tag all notes about..." -> MCP
-- "what tags exist in my vault?" -> MCP (list_all_tags)
-- "what file am I looking at?" -> Obsidian CLI
-- "what's the active note?" -> Obsidian CLI
-- "open this note in Obsidian" -> Obsidian CLI
-- "add a task to my daily note" -> Obsidian CLI
-- "what links to this note?" -> Obsidian CLI
-- "sync my vault" -> Git CLI
-- "use git to store my vault" -> Git CLI
-- "move this note to..." -> MCP `move_note`, then explicit backlink repair and verification
+- "search my vault for..." → MCP
+- "update the frontmatter on..." → MCP
+- "tag all notes about..." → MCP
+- "what tags exist in my vault?" → MCP (`list_all_tags`)
+- "what file am I looking at?" → Obsidian CLI
+- "what's the active note?" → Obsidian CLI
+- "open this note in Obsidian" → Obsidian CLI
+- "add a task to my daily note" → Obsidian CLI
+- "what links to this note?" → Obsidian CLI
+- "sync my vault" → Git CLI
+- "use git to store my vault" → Git CLI
+- "move this note to..." → MCP `move_note`, then explicit backlink repair and verification
 
 **Not a fit for:**
 - General markdown editing (no vault context)
@@ -156,19 +156,19 @@ Recommended .gitignore:
 
 ## Workflow Patterns
 
-### 1. Sequential Orchestration
+### 1. Search, then open
 
-Chain MCP reads into app actions. Search for a note via MCP, then open it in Obsidian for visual editing.
+Search for a note through MCP, read it, then open it in Obsidian for visual editing.
 
 Steps: search_notes → read_note → open in Obsidian
 
-### 2. Context-Aware Selection
+### 2. Choose a backend
 
-The skill picks the right backend automatically. File operations route through MCP; app-context actions use the official Obsidian CLI, with obsidian:// URIs as fallback.
+File operations use MCPVault. Actions that need the running app use Obsidian CLI, with `obsidian://` URIs as fallback.
 
-Steps: Analyze user intent → Route to MCP or App → Execute with safety checks
+Steps: Read the request → choose MCP or Obsidian CLI → run the operation
 
-### 3. Iterative Refinement
+### 3. Review and patch
 
 Write a draft via MCP, review in Obsidian, then patch corrections back through MCP.
 
@@ -176,10 +176,10 @@ Steps: write_note → review in editor → patch_note
 
 ## Safety Defaults
 
-- **Prefer MCP Writes** — All file mutations go through the MCP server, which validates paths, confirms targets, and performs atomic writes.
-- **Confirm Destructive Actions** — Deletes and moves require explicit path confirmation parameters, preventing accidental data loss.
-- **No Shell Interpolation** — Commands use structured arguments, never string-interpolated shell input. No injection vectors.
-- **Sandbox by Default** — MCP tools are scoped to the vault root. Path traversal is blocked at the server level.
+- File mutations go through MCPVault path validation.
+- Destructive tools require explicit confirmation parameters.
+- Commands pass argument arrays instead of building shell command strings from note content.
+- MCP tools reject traversal outside the configured vault root.
 
 ## Quick Start
 

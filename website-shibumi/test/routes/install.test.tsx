@@ -38,7 +38,7 @@ describe("GET /install/ (HTML)", () => {
   test("sets page-specific title, description, and canonical", async () => {
     const body = await (await app.request("/install/")).text();
     expect(body).toContain("<title>Install | MCPVault</title>");
-    expect(body).toContain('content="Get MCPVault running in seconds. Configuration for Claude Desktop, ChatGPT+, Claude Code, Gemini CLI, and more."');
+    expect(body).toContain('content="Configuration examples for running MCPVault with Claude Desktop, ChatGPT+, Claude Code, Gemini CLI, OpenCode, and OpenAI Codex."');
     expect(body).toContain('<link rel="canonical" href="https://mcpvault.org/install"/>');
   });
 
@@ -53,7 +53,7 @@ describe("GET /install/ (HTML)", () => {
   test("renders the Terminal section with every platform tab", async () => {
     const body = await (await app.request("/install/")).text();
     expect(body).toContain('data-component="terminal"');
-    expect(body).toContain("Quick Install");
+    expect(body).toContain("Install MCPVault");
     expect(body).toContain('data-tab="standard"');
     expect(body).toContain('data-tab="claude-code"');
     expect(body).toContain('data-tab="gemini-cli"');
@@ -95,11 +95,11 @@ describe("GET /install/ (HTML)", () => {
 
   test("renders the MCP Inspector step, platform compatibility, privacy, and success sections", async () => {
     const body = await (await app.request("/install/")).text();
-    expect(body).toContain("Developers: Test with MCP Inspector");
+    expect(body).toContain("Test with MCP Inspector");
     expect(body).toContain("mcp-inspector npx @bitbonsai/mcpvault@latest /path/to/vault");
-    expect(body).toContain("Works with all MCP-compatible platforms");
+    expect(body).toContain("Other clients can use MCPVault if they support local stdio MCP servers.");
     expect(body).toContain("What &quot;private&quot; means:");
-    expect(body).toContain("You&#39;re all set!");
+    expect(body).toContain("Verify the connection");
   });
 
   test("preserves every copy-to-clipboard control's data-copy attribute for Phase 3's Alpine wiring", async () => {

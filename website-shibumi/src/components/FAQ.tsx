@@ -11,27 +11,27 @@ interface FaqItem {
 const FAQ_ITEMS: FaqItem[] = [
   {
     q: "Does my data leave my computer?",
-    a: "Vault files stay on your machine. MCPVault reads and writes local files directly. Your AI provider only sees content that your client sends to it.",
+    a: "MCPVault reads and writes files on your machine and has no hosted service. Your AI client or provider may receive note content used in requests.",
   },
   {
     q: "Does Obsidian need to be running?",
-    a: "No. MCPVault uses filesystem access, so it works even when Obsidian is closed.",
+    a: "No. MCPVault uses filesystem access, so Obsidian can be closed.",
   },
   {
     q: "Can I use multiple vaults?",
-    a: "Yes. Configure multiple MCP server entries, each pointing to a different vault path.",
+    a: "Yes. Configure one MCP server entry for each vault path.",
   },
   {
     q: "What file types are supported?",
-    a: "Read and write tools support .md, .markdown, .txt, .base, and .canvas files. Directory listing can include other filenames (like images or PDFs), but non-note files are not read as notes.",
+    a: "Read and write tools support .md, .markdown, .txt, .base, and .canvas files. list_directory may show other filenames, but note tools do not read those files as notes.",
   },
   {
     q: "Is search semantic?",
-    a: "Search is lexical full-text search with multi-word matching and BM25 relevance ranking. It does not use embeddings or vector indexes. For semantic search, pair MCPVault with a dedicated vector-search MCP server such as Qdrant's mcp-server-qdrant or Chroma's chroma-mcp: the companion server owns the embeddings index while MCPVault stays deterministic and local.",
+    a: "Search uses lexical matching with BM25 ranking, not embeddings or a vector index. For semantic search, pair MCPVault with a separate vector-search MCP server such as Qdrant's mcp-server-qdrant or Chroma's chroma-mcp.",
   },
   {
     q: "What if the AI makes a mistake?",
-    a: "Use version control or vault backups for recovery. Deletions require path confirmation, and write operations are scoped to your selected vault.",
+    a: "Use backups or version control for recovery. Deletions require path confirmation, and file operations are restricted to the configured vault.",
   },
 ];
 
@@ -43,7 +43,7 @@ export function FAQ() {
           <h2 id="faq-heading" class="faq-title">
             FAQ
           </h2>
-          <p class="faq-lede">Common setup and safety questions.</p>
+          <p class="faq-lede">Setup, file access, and recovery.</p>
         </div>
 
         <div class="faq-list">

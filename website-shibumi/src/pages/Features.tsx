@@ -24,7 +24,7 @@ export function FeaturesPage({ currentPath, version }: FeaturesPageProps) {
   return (
     <Layout
       title="Features"
-      description="Intelligent search, safe frontmatter handling, security-first design, and more. See how MCPVault compares to alternatives."
+      description="Review MCPVault search, frontmatter, file tools, path restrictions, supported clients, and access methods."
       canonical="https://mcpvault.org/features"
       page="features"
       pageStylesheet="/styles/features.css"

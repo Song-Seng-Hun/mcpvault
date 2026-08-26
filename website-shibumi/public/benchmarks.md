@@ -1,43 +1,62 @@
-# MCP v2 Benchmarks
+# MCP v2 compatibility benchmarks
 
-**TL;DR:** benchmarks of MCPVault on **MCP v2**: ~107 ms to connect and identical per-request speed, whether the app talks the old protocol or the new one. Below: the numbers, why we moved, what stateless HTTP opens up, and answers for skeptics.
-
-MCPVault runs on the MCP 2026-07-28 specification via the new official SDK, which we call **MCP v2**. It serves both protocol generations from a single process: each client gets an answer in whichever version it speaks. Existing setups keep working unchanged.
+MCPVault uses the official 2.0 SDK for the MCP 2026-07-28 specification. One process accepts clients using either protocol generation, so existing configurations continue to work.
 
 ## Results
 
-Three pairings, one real vault (381 notes, 84 folders, 3.2 MB), stdio, read-only. Measured 2026-08-17 on macOS, Node 26, SDK 1.30.0 vs 2.0.0. Medians in ms.
+We tested three pairings against one vault with 381 notes, 84 folders, and 3.2 MB of content. Each server ran read-only over stdio. Measurements were taken on 2026-08-17 using macOS, Node 26, SDK 1.30.0, and SDK 2.0.0.
 
-| metric | MCPVault today | MCP v2, today's apps | MCP v2, new apps |
+| metric | Current release | MCP v2 with current clients | MCP v2 with new clients |
 |---|---|---|---|
-| cold start (n=8) | 107.3 | 109.8 | 105.8 |
-| tools/list (n=50) | 0.15 | 0.14 | 0.17 |
-| get_vault_stats (n=50) | 12.13 | 11.4 | 11.66 |
-| read_note (n=50) | 0.46 | 0.43 | 0.45 |
-| list_directory (n=50) | 0.45 | 0.43 | 0.46 |
-| search_notes (n=20) | 85.53 | 84.33 | 85.62 |
+| cold start (n=8) | 107.3 ms | 109.8 ms | 105.8 ms |
+| tools/list (n=50) | 0.15 ms | 0.14 ms | 0.17 ms |
+| get_vault_stats (n=50) | 12.13 ms | 11.4 ms | 11.66 ms |
+| read_note (n=50) | 0.46 ms | 0.43 ms | 0.45 ms |
+| list_directory (n=50) | 0.45 ms | 0.43 ms | 0.46 ms |
+| search_notes (n=20) | 85.53 ms | 84.33 ms | 85.62 ms |
 
-All three pairings tie within run-to-run noise. The **MCP v2** build costs existing clients nothing.
+All three pairings fell within normal run-to-run variation. This benchmark found no material slowdown after the SDK migration.
 
-## Why should we move
+## Why MCPVault moved
 
-- **Every client, one server.** The **MCP v2** build detects each client's protocol during the opening exchange.
-- **The maintained SDK line.** New MCP features and security patches land in the **MCP v2** packages first.
-- **Richer tool definitions ahead.** The new spec supports full JSON Schema 2020-12 for tool inputs.
+- One process accepts clients using either protocol generation.
+- New MCP fixes and security updates land on the 2.x SDK line.
+- The specification supports JSON Schema 2020-12 for more precise tool input definitions.
 
-## HTTP possibility
+## Stateless HTTP
 
-The 2026-07-28 spec makes the HTTP transport stateless, so an MCP server can sit behind any ordinary load balancer. For MCPVault that means a future opt-in HTTP package built on this **MCP v2** core, while the default stays local-first stdio. Tracked in [issue #49](https://github.com/bitbonsai/mcpvault/issues/49).
+The 2026-07-28 specification removes per-client server sessions from the HTTP transport. This can simplify running an MCP server behind a load balancer.
 
-## For the skeptics
+MCPVault does not expose an HTTP transport today. [Issue #49](https://github.com/bitbonsai/mcpvault/issues/49) tracks a separate, opt-in HTTP package. Local stdio will remain the default.
 
-- **Sub-millisecond tool calls?** stdio on the same machine: no network, file already in the OS cache. Isolates server processing, the only part the SDK swap could change.
-- **Tiny samples (n=8 cold, n=20 search).** True. Enough to compare medians of a quiet local process, and why the claim is a tie, never a speedup. p95 in the table.
-- **MCP v2 wins some rows.** Noise. Those differences flip between runs. The claim is only that **MCP v2** isn't slower.
-- **Self-benchmark, self-approval.** The scripts print the exact numbers on this page. Rerun them on your vault; open an issue if results differ.
-- **Dual-protocol overhead?** Version settles once, at connect. Requests never re-check it.
-- **Nothing got slower at all?** One thing: pinning an **MCP v2** client to the new protocol adds ~110 ms once at connect. Only our test harness pins; shipping apps don't.
+## Questions about the results
+
+### Why are some calls below one millisecond?
+
+The server and client run on the same machine over stdio, with files already in the operating system cache. These numbers isolate server processing and do not include model or network latency.
+
+### Are the samples large enough?
+
+Eight cold starts and twenty searches are small samples. They are enough to compare medians on this machine, but they do not establish performance for every vault or computer.
+
+### Why does MCP v2 win some rows?
+
+The differences change between runs. We treat them as measurement noise and make no speedup claim.
+
+### How can I verify the results?
+
+The scripts print the values used on this page. Run them against your vault and open an issue if the results differ.
+
+### Does dual-protocol support add work to every request?
+
+Protocol selection happens once when the client connects. Requests do not repeat that check.
+
+### Did anything get slower?
+
+Pinning an MCP v2 client to the new protocol adds about 110 ms once during connection. Shipping clients do not currently pin the protocol this way; the benchmark harness does.
 
 ## Method
 
-Each pairing spawns `mcpvault <vault> --read-only` over stdio. Cold start is the median of 8 full connect cycles. Per-request numbers are medians on a warm connection after one warmup call. Scripts: [`benchmarks/`](https://github.com/bitbonsai/mcpvault/tree/main/benchmarks) in the repo (also on the [feat/mcp-sdk-v2 branch](https://github.com/bitbonsai/mcpvault/tree/feat/mcp-sdk-v2/benchmarks)).
+Each pairing spawns `mcpvault <vault> --read-only` over stdio. Cold start is the median of eight full connect cycles. Per-request values are medians from a warm connection after one warmup call, using 50 iterations per tool and 20 for `search_notes`.
+
+Run the scripts from the repository's [`benchmarks/`](https://github.com/bitbonsai/mcpvault/tree/main/benchmarks) directory.

@@ -188,7 +188,7 @@ export async function HowItWorksSection() {
       <div class="how-it-works-inner">
         <div class="how-it-works-header fade-in-on-scroll">
           <h2 id="how-it-works-heading" class="how-it-works-title">
-            Usage Examples
+            Usage examples
           </h2>
           <p class="how-it-works-lede">Practical prompts you can try with your AI assistant and MCPVault.</p>
         </div>
@@ -201,13 +201,13 @@ export async function HowItWorksSection() {
               <TargetIcon className="icon" />
             </div>
             <div class="how-it-works-cta-text">
-              <h3 class="how-it-works-cta-title">Example Prompts</h3>
-              <p class="how-it-works-cta-description">Once MCPVault is set up, these prompts demonstrate search, read, and write operations in a single flow.</p>
+              <h3 class="how-it-works-cta-title">What these examples cover</h3>
+              <p class="how-it-works-cta-description">The prompts show search, batch reads, and frontmatter updates from request to response.</p>
               <a href="/install" class="how-it-works-cta-link">
                 <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                Get Started Now
+                Installation
               </a>
             </div>
           </div>

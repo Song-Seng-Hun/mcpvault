@@ -1,8 +1,8 @@
 # Install MCPVault
 
-Get MCPVault running in seconds with any MCP-compatible platform.
+Choose your MCP client and add one local server entry.
 
-## Step 1: Configure Your AI Platform
+## Step 1: Configure your MCP client
 
 ### Claude Desktop / ChatGPT+
 
@@ -25,7 +25,7 @@ Add to your MCP configuration file:
 claude mcp add-json obsidian --scope user '{"type":"stdio","command":"npx","args":["@bitbonsai/mcpvault@latest","/path/to/your/vault"]}'
 ```
 
-**Configuration Scopes:**
+**Configuration scopes:**
 - `--scope user` - Available across all your projects (recommended)
 - `--scope project` - Team-shared via .mcp.json file
 - `--scope local` - Current project only (private)
@@ -140,29 +140,29 @@ Replace `/path/to/your/vault` with the full absolute path.
 
 </details>
 
-No pre-installation needed! npx automatically downloads and runs the server.
+`npx` downloads MCPVault when the client starts the server.
 
-## Step 2: Test with MCP Inspector (Developers)
+## Step 2: Test with MCP Inspector
 
 ```bash
 npm install -g @modelcontextprotocol/inspector
 mcp-inspector npx @bitbonsai/mcpvault@latest /path/to/vault
 ```
 
-Opens interactive web interface at http://localhost:5173 for testing all MCP methods.
+MCP Inspector opens a web interface at http://localhost:5173 for testing MCP methods.
 
-## Platform Compatibility
+## Client support
 
-Works with all MCP-compatible platforms: Claude Desktop, ChatGPT+, Claude Code, OpenCode, Gemini CLI, Cursor IDE, Windsurf, and more.
+The examples above cover Claude Desktop, ChatGPT+, Claude Code, OpenCode, Gemini CLI, Cursor, and Windsurf. Other clients can use MCPVault if they support local stdio MCP servers.
 
-## Privacy
+## Data flow
 
-- Your vault files stay on your computer
-- We never see, store, or transmit your data
-- Only you and your AI assistant can access your notes
-- AI providers (Anthropic, OpenAI) process content you share with them
-- For commercial Claude users: Your data won't be used for AI training
+- MCPVault reads files from the vault path you configure.
+- MCPVault has no hosted service that receives your vault files.
+- Path checks keep file tools inside the configured vault.
+- Your AI client or provider may receive note content used in requests.
+- Your provider's retention and training terms apply to content it receives.
 
-## You're All Set!
+## Verify the connection
 
-Restart your AI platform and you'll see MCPVault connected. Your AI assistant can now safely read, search, and manage your Obsidian vault.
+Restart your client, then ask it to list MCPVault tools or search for a known note.

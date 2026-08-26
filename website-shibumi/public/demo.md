@@ -1,8 +1,8 @@
-# MCPVault Interactive Demo
+# MCPVault tool examples
 
-See how AI assistants intelligently interact with your Obsidian vault. These examples show real conversations and outcomes.
+Each example shows a prompt, the MCP tool request, and the resulting file operation.
 
-## Efficient Editing (patch_note)
+## Exact patch (`patch_note`)
 
 **User:** Add the equation for energy-mass equivalence to my physics notes
 
@@ -15,9 +15,9 @@ See how AI assistants intelligently interact with your Obsidian vault. These exa
 }
 ```
 
-**Result:** Only the specific section was updated - no full file rewrite needed. 10x faster than rewriting entire file.
+**Result:** MCPVault replaced the matching section. Surrounding content and frontmatter were unchanged.
 
-## Create Notes (write_note)
+## Create a note (`write_note`)
 
 **User:** Create a quick note about today's meeting
 
@@ -29,9 +29,9 @@ See how AI assistants intelligently interact with your Obsidian vault. These exa
 }
 ```
 
-**Result:** File created atomically with proper formatting. Ready to open in Obsidian.
+**Result:** MCPVault wrote the note to disk. `write_note` also supports append and prepend modes.
 
-## Read Multiple Notes (read_multiple_notes)
+## Read multiple notes (`read_multiple_notes`)
 
 **User:** Read all my book club notes and give me a summary
 
@@ -46,9 +46,9 @@ See how AI assistants intelligently interact with your Obsidian vault. These exa
 }
 ```
 
-**Result:** All 3 notes read in a single request. AI analyzes across multiple documents efficiently.
+**Result:** All three notes were returned in one request for the client to summarize.
 
-## Manage Frontmatter (update_frontmatter)
+## Update frontmatter (`update_frontmatter`)
 
 **User:** Update the status and add tags to my project planning note
 
@@ -65,9 +65,9 @@ See how AI assistants intelligently interact with your Obsidian vault. These exa
 }
 ```
 
-**Result:** YAML frontmatter safely updated. Existing fields preserved with original formatting. Note content untouched.
+**Result:** Existing frontmatter fields kept their formatting, changed fields were updated, and note content was untouched.
 
-## Search Content (search_notes)
+## Search content (`search_notes`)
 
 **User:** Search for "React hooks" in my notes
 
@@ -101,9 +101,9 @@ See how AI assistants intelligently interact with your Obsidian vault. These exa
 
 **Result:** Found 2 notes with 11 total matches. Token-optimized response with minified field names (p=path, t=title, ex=excerpt, mc=matchCount, ln=lineNumber).
 
-## Technical Notes
+## Technical notes
 
-- `prettyPrint` defaults to false for minimal token usage
-- All operations are performed atomically
-- Frontmatter is always validated before writing
+- `prettyPrint` defaults to false for compact responses
+- Write and frontmatter tools validate inputs before writing
+- Frontmatter updates preserve formatting for unchanged fields
 - Search returns 21-char context excerpts around matches

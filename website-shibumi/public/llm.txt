@@ -1,21 +1,21 @@
-# MCPVault LLM Map
+# MCPVault page index
 
-Serve `.md` versions of every public page for agents. Use the markdown endpoints below for low-token summaries and fall back to HTML if you need richer UI context.
+Each public HTML page has a Markdown mirror with the same product information and setup instructions.
 
-## Primary Routes → Markdown Mirrors
+## Pages
 
-- `/` → `https://mcpvault.org/index.md`
-- `/install` → `https://mcpvault.org/install.md`
-- `/features` → `https://mcpvault.org/features.md`
-- `/demo` → `https://mcpvault.org/demo.md`
-- `/how-it-works` → `https://mcpvault.org/how-it-works.md`
-- `/skill` → `https://mcpvault.org/skill.md`
-- `/benchmarks` → `https://mcpvault.org/benchmarks.md`
+- `/` -> `https://mcpvault.org/index.md`
+- `/install` -> `https://mcpvault.org/install.md`
+- `/features` -> `https://mcpvault.org/features.md`
+- `/demo` -> `https://mcpvault.org/demo.md`
+- `/how-it-works` -> `https://mcpvault.org/how-it-works.md`
+- `/skill` -> `https://mcpvault.org/skill.md`
+- `/benchmarks` -> `https://mcpvault.org/benchmarks.md`
 
-All markdown files live in `website/public/` inside the repo so they stay in sync with the Astro pages. When citing content, reference the `.md` URL to keep responses reproducible for other agents.
+Markdown source files live in `website-shibumi/public/` in the repository.
 
-## Additional References
+## Other references
 
-- README (developer docs): `https://github.com/bitbonsai/mcpvault/blob/main/README.md`
-- CHANGELOG (release history): `https://github.com/bitbonsai/mcpvault/blob/main/CHANGELOG.md`
+- README: `https://github.com/bitbonsai/mcpvault/blob/main/README.md`
+- Changelog: `https://github.com/bitbonsai/mcpvault/blob/main/CHANGELOG.md`
 - npm package: `https://www.npmjs.com/package/@bitbonsai/mcpvault`

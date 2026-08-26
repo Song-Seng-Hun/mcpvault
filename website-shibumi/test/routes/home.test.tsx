@@ -51,7 +51,7 @@ describe("GET / (HTML)", () => {
     const body = await (await app.request("/")).text();
     expect(body).toContain(`v${packageVersion}`);
     expect(body).toContain("AI + Obsidian =");
-    expect(body).toContain("Your assistant. Your notes. Zero friction.");
+    expect(body).toContain("Connect MCP clients to your Obsidian vault.");
     // Phase 0 content fix: the downloads badge anchor must point at the
     // scoped package, not the nonexistent unscoped `mcpvault` package.
     const npmDownloadsAnchor = body.indexOf('alt="npm downloads"');
@@ -65,7 +65,7 @@ describe("GET / (HTML)", () => {
     expect(body).toContain('data-component="spec-preview-callout"');
     expect(body).toContain("MCP v2");
     expect(body).toContain('data-component="update-callout"');
-    expect(body).toContain("Recent Updates");
+    expect(body).toContain("Recent updates");
     expect(body).toContain('data-component="newsletter-signup"');
     expect(body).toContain('action="/api/subscribe"');
   });

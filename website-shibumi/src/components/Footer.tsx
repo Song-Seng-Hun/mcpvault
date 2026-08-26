@@ -18,7 +18,7 @@ export function Footer() {
               </span>
               <span class="footer-brand-name">MCPVault</span>
             </div>
-            <p class="footer-tagline">Give AI safe, intelligent access to your Obsidian vault. Purpose-built for seamless AI-powered note management.</p>
+            <p class="footer-tagline">A local MCP server for reading, searching, and editing Obsidian vaults.</p>
             <div class="footer-links-row">
               <a href="https://github.com/bitbonsai/mcpvault" target="_blank" rel="noopener noreferrer" class="footer-icon-link">
                 <GitHubIcon className="icon" />
@@ -54,7 +54,7 @@ export function Footer() {
               <a href="https://github.com/bitbonsai/mcpvault/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer">
                 Changelog
               </a>
-              <a href="https://github.com/bitbonsai/mcpvault/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">
+              <a href="https://github.com/bitbonsai/mcpvault#contributing" target="_blank" rel="noopener noreferrer">
                 Contributing
               </a>
               <a href="https://github.com/bitbonsai" target="_blank" rel="noopener noreferrer">
@@ -66,7 +66,7 @@ export function Footer() {
 
         <div class="footer-bottom">
           <p class="footer-copyright">© {year} bitbonsai. Released under the MIT License.</p>
-          <p class="footer-credit">Made with ❤️ for the Obsidian community</p>
+          <p class="footer-credit">Built for the Obsidian community</p>
           <p class="footer-credit">
             Built with <a href="https://shibumistack.dev" target="_blank" rel="noopener noreferrer" class="footer-stack-link">Shibumi Stack</a>
           </p>

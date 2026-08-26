@@ -43,8 +43,8 @@ interface RoutingRow {
 }
 
 const ROUTES: RoutingRow[] = [
-  { operation: "Read note", mcp: true, app: false, git: false, notes: "Safe, sandboxed read via MCP" },
-  { operation: "Write / patch note", mcp: true, app: false, git: false, notes: "Atomic writes with validation" },
+  { operation: "Read note", mcp: true, app: false, git: false, notes: "Vault-scoped read via MCP" },
+  { operation: "Write / patch note", mcp: true, app: false, git: false, notes: "Validated writes through MCPVault" },
   { operation: "Search vault", mcp: true, app: false, git: false, notes: "BM25-ranked full-text search" },
   {
     operation: "Resolve [[wiki links]]",
@@ -53,7 +53,7 @@ const ROUTES: RoutingRow[] = [
     git: false,
     notes: "wiki_link picks the shallowest match first, then locale-sorts equal-depth paths; other matches are returned as alternatives",
   },
-  { operation: "Manage tags / frontmatter", mcp: true, app: false, git: false, notes: "Safe YAML merge" },
+  { operation: "Manage tags / frontmatter", mcp: true, app: false, git: false, notes: "Frontmatter merge through MCP" },
   {
     operation: "Move / rename notes",
     mcp: true,
@@ -64,7 +64,7 @@ const ROUTES: RoutingRow[] = [
   { operation: "Open note in Obsidian", mcp: false, app: true, git: false, notes: "Requires the desktop app running" },
   { operation: "Trigger plugin commands", mcp: false, app: true, git: false, notes: "Workspace actions, plugin APIs" },
   { operation: "Export to PDF", mcp: false, app: true, git: false, notes: "App-level rendering pipeline" },
-  { operation: "Sync vault across devices", mcp: false, app: false, git: true, notes: "Plain git — no Obsidian Sync needed" },
+  { operation: "Sync vault across devices", mcp: false, app: false, git: true, notes: "Git commit, pull, and push" },
   { operation: "Automated backup", mcp: false, app: false, git: true, notes: "Cron / launchd, no UI needed" },
 ];
 
@@ -77,20 +77,20 @@ interface Workflow {
 
 const WORKFLOWS: Workflow[] = [
   {
-    title: "Sequential Orchestration",
-    description: "Chain MCP reads into app actions. Search for a note via MCP, then open it in Obsidian for visual editing.",
+    title: "Search, then open",
+    description: "Search for a note through MCP, read it, then open it in Obsidian for visual editing.",
     steps: ["MCP: search_notes", "MCP: read_note", "App: open in Obsidian"],
     icon: "1",
   },
   {
-    title: "Context-Aware Selection",
+    title: "Choose a backend",
     description:
-      "The skill picks the right backend automatically. File operations route through MCP; app-context actions use the official Obsidian CLI, with obsidian:// URIs as fallback.",
-    steps: ["Analyze user intent", "Route to MCP or App", "Execute with safety checks"],
+      "File operations use MCPVault. Actions that need the running app use Obsidian CLI, with obsidian:// URIs as fallback.",
+    steps: ["Read the request", "Choose MCP or Obsidian CLI", "Run the operation"],
     icon: "2",
   },
   {
-    title: "Iterative Refinement",
+    title: "Review and patch",
     description: "Write a draft via MCP, review in Obsidian, then patch corrections back through MCP.",
     steps: ["MCP: write_note", "App: review in editor", "MCP: patch_note"],
     icon: "3",
@@ -105,15 +105,15 @@ interface SafetyRule {
 const SAFETY_RULES: SafetyRule[] = [
   {
     title: "Prefer MCP Writes",
-    description: "All file mutations go through the MCP server, which validates paths, confirms targets, and performs atomic writes.",
+    description: "File mutations go through MCPVault path validation. Destructive tools require explicit confirmation parameters.",
   },
   {
     title: "Confirm Destructive Actions",
     description: "Deletes and moves require explicit path confirmation parameters, preventing accidental data loss.",
   },
   {
-    title: "No Shell Interpolation",
-    description: "Commands use structured arguments, never string-interpolated shell input. No injection vectors.",
+    title: "Structured command arguments",
+    description: "Commands pass argument arrays instead of building shell command strings from note content.",
   },
   {
     title: "Sandbox by Default",
@@ -139,7 +139,7 @@ const TRIGGERS: Trigger[] = [
 const SYNC_FLOW: string[] = [
   "Preflight: verify git, repo, identity, and remote",
   "Ask one targeted question if setup is incomplete",
-  "Run: git add -A -> git commit (if changes) -> git pull --rebase -> git push",
+  "Run: git add -A → git commit (if changes) → git pull --rebase → git push",
   "Stop on conflicts and provide manual next steps",
 ];
 
@@ -151,7 +151,7 @@ interface ConversationTurn {
 const EXAMPLE_CONVERSATION: ConversationTurn[] = [
   { role: "User", text: "Use git to store my vault and keep it synced." },
   { role: "Skill", text: "I will run a git preflight first (git, repo, identity, remote), then set up anything missing with one targeted question." },
-  { role: "Skill", text: "Preflight OK. Running sync: git add -A -> git commit (if changes) -> git pull --rebase -> git push." },
+  { role: "Skill", text: "Preflight OK. Running sync: git add -A → git commit (if changes) → git pull --rebase → git push." },
   { role: "Skill", text: "Done. Vault synced to origin/main. No force push used." },
 ];
 
@@ -168,23 +168,23 @@ interface MiniFeature {
 const MINI_FEATURES: MiniFeature[] = [
   {
     iconPath: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
-    title: "Find any note instantly",
-    desc: "Full-text search across your entire vault with relevance ranking. Just describe what you're looking for.",
+    title: "Search notes",
+    desc: "Full-text search matches filenames and content, then ranks results with BM25.",
   },
   {
     iconPath: "M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z",
-    title: "Organize with smart tags",
-    desc: "Add, remove, and bulk-manage tags and frontmatter across hundreds of notes in seconds.",
+    title: "Manage tags and frontmatter",
+    desc: "Add or remove tags, and update frontmatter fields without rewriting note content.",
   },
   {
     iconPath: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z",
-    title: "Edit notes safely",
-    desc: "Read, write, and patch notes with atomic operations. Path sandboxing prevents accidental changes outside your vault.",
+    title: "Edit notes through MCPVault",
+    desc: "Read, write, and patch tools validate paths against the configured vault root.",
   },
   {
     iconPath: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15",
-    title: "Sync across devices",
-    desc: "Optional git-based sync keeps your vault backed up and available everywhere — no paid subscription required.",
+    title: "Run Git sync",
+    desc: "Optional Git commands commit, pull, and push a vault after checking repository setup.",
   },
 ];
 
@@ -210,9 +210,7 @@ export function SkillsContent() {
             Obsidian Skill
           </h1>
           <p class="skill-hero-lede">
-            Combines MCP server safety with Obsidian CLI context.
-            <br />
-            One skill that routes each operation to the right backend.
+            Routes file operations to MCPVault, app actions to Obsidian CLI, and sync tasks to Git.
           </p>
         </div>
 
@@ -297,7 +295,7 @@ export function SkillsContent() {
         {/* Flow Cheat Sheet */}
         <div class="skill-cheatsheet fade-in-on-scroll">
           <h2 class="skill-section-title">Flow Cheat Sheet</h2>
-          <p class="skill-section-lede">The skill routes by intent. MCP is the safe default for vault edits, Obsidian context is used for app-specific actions, and Git CLI handles sync/backup.</p>
+          <p class="skill-section-lede">The requested operation determines whether the skill uses MCPVault, Obsidian CLI, or Git.</p>
           <div class="skill-cheatsheet-grid">
             <div class="skill-card">
               <h3 class="skill-card-title">Intent Routing</h3>
@@ -418,21 +416,19 @@ export function SkillsContent() {
             <div class="skill-card">
               <h3 class="skill-card-title">MCP Server</h3>
               <p class="skill-card-body">
-                Handles all file I/O: reading, writing, searching, patching, and organizing notes. Enforces path sandboxing, validates inputs, and performs atomic operations. The safe default for
-                any vault mutation.
+                Handles note reads, writes, searches, patches, and moves. It validates inputs and rejects paths outside the configured vault.
               </p>
             </div>
             <div class="skill-card">
               <h3 class="skill-card-title">Obsidian CLI</h3>
               <p class="skill-card-body">
                 Uses Obsidian's official CLI for operations that need the running desktop app: active file, opening notes in the editor, daily notes with template expansion, read-only backlink
-                discovery, and plugin commands. The skill tracks the current official CLI — a preflight detects your installed binary at runtime, so nothing is pinned to a version that can go
-                stale.
+                discovery, and plugin commands. A preflight checks the installed CLI at runtime instead of assuming a fixed version.
               </p>
             </div>
             <div class="skill-card">
               <h3 class="skill-card-title">Git Sync</h3>
-              <p class="skill-card-body">Plain git for vault syncing across devices. No Obsidian Sync subscription required. Works headlessly via cron, launchd, or CI — no app needs to be running.</p>
+              <p class="skill-card-body">Git commits, pulls, and pushes vault files. Cron, launchd, or CI can run the commands without Obsidian.</p>
             </div>
           </div>
         </div>
@@ -443,7 +439,7 @@ export function SkillsContent() {
             <summary class="skill-collapsible-summary">
               <div>
                 <h3 class="skill-collapsible-title">Git-Based Vault Sync</h3>
-                <p class="skill-collapsible-subtitle">Free alternative to Obsidian Sync — expand for setup details</p>
+                <p class="skill-collapsible-subtitle">Repository setup, automation, and conflict notes</p>
               </div>
               <CollapsibleChevron />
             </summary>
@@ -452,8 +448,8 @@ export function SkillsContent() {
                 <div>
                   <h4 class="skill-playbook-heading">How it works</h4>
                   <p class="skill-git-sync-text">
-                    An Obsidian vault is just a folder of markdown files. You can <code class="skill-code-pill skill-code-pill--accent">git init</code> inside it, add a remote, and push/pull
-                    like any repo. No proprietary format, no paid service.
+                    An Obsidian vault is a folder of markdown files. Run <code class="skill-code-pill skill-code-pill--accent">git init</code> inside it, add a remote, then commit, pull, and push
+                    like any repository.
                   </p>
                   <h4 class="skill-playbook-heading">Headless automation</h4>
                   <div class="skill-code-panel skill-code-panel--mb">
@@ -475,25 +471,25 @@ export function SkillsContent() {
                     <li class="skill-bullet-row">
                       <span class="skill-bullet-mark">-</span>
                       <span>
-                        <strong class="skill-strong">Not real-time</strong> — git syncs on commit intervals, not instantly
+                        <strong class="skill-strong">Commit intervals:</strong> Git sync runs when changes are committed.
                       </span>
                     </li>
                     <li class="skill-bullet-row">
                       <span class="skill-bullet-mark">-</span>
                       <span>
-                        <strong class="skill-strong">Merge conflicts</strong> — editing the same note on two devices before syncing requires manual resolution
+                        <strong class="skill-strong">Merge conflicts:</strong> Editing the same note on two devices before syncing requires manual resolution.
                       </span>
                     </li>
                     <li class="skill-bullet-row">
                       <span class="skill-bullet-mark">-</span>
                       <span>
-                        <strong class="skill-strong">Large binaries</strong> — images and PDFs aren't great for git; use <code class="skill-code-accent">.gitignore</code> or Git LFS
+                        <strong class="skill-strong">Large binaries:</strong> Images and PDFs may need <code class="skill-code-accent">.gitignore</code> or Git LFS.
                       </span>
                     </li>
                     <li class="skill-bullet-row">
                       <span class="skill-bullet-mark">-</span>
                       <span>
-                        <strong class="skill-strong">Workspace files</strong> — add <code class="skill-code-accent">.obsidian/workspace.json</code> to <code class="skill-code-accent">.gitignore</code>
+                        <strong class="skill-strong">Workspace files:</strong> Add <code class="skill-code-accent">.obsidian/workspace.json</code> to <code class="skill-code-accent">.gitignore</code>.
                       </span>
                     </li>
                   </ul>
@@ -597,13 +593,13 @@ export function SkillsContent() {
           <div class="skill-cta">
             <div class="skill-cta-card">
               <div class="skill-cta-text">
-                <h3 class="skill-cta-title">Ready to get started?</h3>
-                <p class="skill-cta-description">Install MCPVault and connect your vault to any AI assistant.</p>
+                <h3 class="skill-cta-title">Install the skill</h3>
+                <p class="skill-cta-description">Add routing instructions for MCPVault, Obsidian CLI, and Git.</p>
                 <a href="/install" class="skill-cta-link">
                   <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
-                  Install Now
+                  Installation
                 </a>
               </div>
             </div>

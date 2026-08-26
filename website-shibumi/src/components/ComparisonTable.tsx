@@ -26,52 +26,52 @@ interface FeatureRow {
 
 const FEATURES: FeatureRow[] = [
   {
-    name: "Setup Complexity",
-    mcpObsidian: { status: "success", text: "Simple", description: "Just point to vault path - works instantly" },
-    otherMcpObsidian: { status: "error", text: "Complex", description: "Requires Obsidian plugin + API key setup" },
-    directAccess: { status: "warning", text: "Variable", description: "Depends on chosen approach" },
+    name: "Setup",
+    mcpObsidian: { status: "success", text: "One command", description: "Run npx with the vault path" },
+    otherMcpObsidian: { status: "warning", text: "Plugin setup", description: "Install and configure a REST API plugin" },
+    directAccess: { status: "warning", text: "Client-specific", description: "Configure filesystem access in each client" },
   },
   {
-    name: "Obsidian Running Required",
-    mcpObsidian: { status: "success", text: "No", description: "Works with closed Obsidian - direct file access" },
-    otherMcpObsidian: { status: "error", text: "Yes", description: "Obsidian must be running with REST API plugin" },
-    directAccess: { status: "success", text: "No", description: "Direct file manipulation" },
+    name: "Obsidian running",
+    mcpObsidian: { status: "success", text: "Not required", description: "Reads vault files directly" },
+    otherMcpObsidian: { status: "warning", text: "Required", description: "The plugin runs inside Obsidian" },
+    directAccess: { status: "success", text: "Not required", description: "Reads files outside Obsidian" },
   },
   {
-    name: "Plugin Dependencies",
-    mcpObsidian: { status: "success", text: "None", description: "Zero dependencies - pure file system access" },
-    otherMcpObsidian: { status: "error", text: "Required", description: "Needs Local REST API community plugin" },
-    directAccess: { status: "success", text: "None", description: "No additional software needed" },
+    name: "Plugin dependency",
+    mcpObsidian: { status: "success", text: "None", description: "Runs as a separate local process" },
+    otherMcpObsidian: { status: "warning", text: "Required", description: "Uses a community REST API plugin" },
+    directAccess: { status: "success", text: "None", description: "Uses client or shell file tools" },
   },
   {
-    name: "Frontmatter Safety",
-    mcpObsidian: { status: "success", text: "Protected", description: "AST-aware updates preserve raw formatting for unmodified fields" },
-    otherMcpObsidian: { status: "warning", text: "API-dependent", description: "Safety depends on Obsidian API implementation" },
-    directAccess: { status: "error", text: "Can corrupt", description: "No safety mechanisms" },
+    name: "Frontmatter updates",
+    mcpObsidian: { status: "success", text: "AST-aware", description: "Preserves formatting for unchanged YAML fields" },
+    otherMcpObsidian: { status: "warning", text: "Endpoint-specific", description: "Behavior depends on the plugin endpoint" },
+    directAccess: { status: "warning", text: "Tool-specific", description: "Behavior depends on the file editing tool" },
   },
   {
-    name: "Built-in Search",
-    mcpObsidian: { status: "success", text: "Advanced", description: "Full-text search with BM25 relevance ranking" },
-    otherMcpObsidian: { status: "success", text: "Good", description: "Uses Obsidian's search via API" },
-    directAccess: { status: "error", text: "None", description: "Basic grep at best" },
+    name: "Search",
+    mcpObsidian: { status: "success", text: "Built in", description: "Filename and content search with BM25 ranking" },
+    otherMcpObsidian: { status: "success", text: "Obsidian-backed", description: "Uses search exposed by the plugin" },
+    directAccess: { status: "warning", text: "Tool-specific", description: "May use grep, indexing, or client search" },
   },
   {
-    name: "Performance",
-    mcpObsidian: { status: "success", text: "Fast", description: "Optimized for large vaults with batch I/O" },
-    otherMcpObsidian: { status: "warning", text: "API overhead", description: "HTTP API calls add latency" },
-    directAccess: { status: "warning", text: "Variable", description: "Depends on system capabilities" },
+    name: "Connection",
+    mcpObsidian: { status: "success", text: "Local stdio", description: "The MCP client launches the server" },
+    otherMcpObsidian: { status: "warning", text: "Local HTTP", description: "The plugin exposes an API port" },
+    directAccess: { status: "success", text: "Local process", description: "The client reads files directly" },
   },
   {
-    name: "Link Handling",
-    mcpObsidian: { status: "success", text: "Safe", description: "Preserves note content and frontmatter during moves" },
-    otherMcpObsidian: { status: "success", text: "Good", description: "Leverages Obsidian's link management" },
-    directAccess: { status: "error", text: "Breaks links", description: "Can corrupt references" },
+    name: "Move operations",
+    mcpObsidian: { status: "success", text: "Built in", description: "Note and file moves use vault path checks" },
+    otherMcpObsidian: { status: "success", text: "Plugin endpoint", description: "Behavior follows the plugin implementation" },
+    directAccess: { status: "warning", text: "Tool-specific", description: "Behavior depends on the file editing tool" },
   },
   {
-    name: "Reliability",
-    mcpObsidian: { status: "success", text: "High", description: "Direct file access - no intermediary failures" },
-    otherMcpObsidian: { status: "warning", text: "Plugin-dependent", description: "Can fail if Obsidian crashes or plugin issues" },
-    directAccess: { status: "warning", text: "Variable", description: "Depends on implementation quality" },
+    name: "Access boundary",
+    mcpObsidian: { status: "success", text: "Vault-scoped", description: "Blocks traversal, symlink escapes, and restricted paths" },
+    otherMcpObsidian: { status: "success", text: "API-scoped", description: "Access follows plugin and Obsidian settings" },
+    directAccess: { status: "warning", text: "Client-scoped", description: "Access follows the client's filesystem permissions" },
   },
 ];
 
@@ -100,9 +100,9 @@ export function ComparisonTable() {
       <div class="comparison-inner">
         <div class="comparison-header fade-in-on-scroll">
           <h2 id="comparison-table-heading" class="comparison-title">
-            Why Choose MCPVault?
+            Compare access methods
           </h2>
-          <p class="comparison-lede">See how MCPVault compares to plugin-based alternatives and direct file manipulation. Purpose-built for Obsidian means better safety, performance, and intelligence.</p>
+          <p class="comparison-lede">The main difference is where each approach runs and which layer controls access to vault files.</p>
         </div>
 
         <div class="comparison-table-scroll fade-in-on-scroll">
@@ -115,12 +115,12 @@ export function ComparisonTable() {
                   <div class="comparison-head-cell-subtitle">This package</div>
                 </div>
                 <div class="comparison-head-cell">
-                  <div class="comparison-head-cell-title">Other MCPVault</div>
-                  <div class="comparison-head-cell-subtitle">Plugin-based</div>
+                  <div class="comparison-head-cell-title">Plugin + REST API</div>
+                  <div class="comparison-head-cell-subtitle">Obsidian community plugin</div>
                 </div>
                 <div class="comparison-head-cell">
-                  <div class="comparison-head-cell-title">Direct File Access</div>
-                  <div class="comparison-head-cell-subtitle">Manual approach</div>
+                  <div class="comparison-head-cell-title">General file access</div>
+                  <div class="comparison-head-cell-subtitle">Client or shell tools</div>
                 </div>
               </div>
             </div>
@@ -139,16 +139,16 @@ export function ComparisonTable() {
             <div class="comparison-table-footer">
               <div class="comparison-summary">
                 <div class="comparison-summary-item">
-                  <div class="comparison-summary-value comparison-summary-value--accent">8/8</div>
-                  <div class="comparison-summary-label">Features with clear advantage</div>
+                  <div class="comparison-summary-value comparison-summary-value--accent">18</div>
+                  <div class="comparison-summary-label">MCP tools</div>
                 </div>
                 <div class="comparison-summary-item">
-                  <div class="comparison-summary-value comparison-summary-value--success">Zero</div>
-                  <div class="comparison-summary-label">Plugin dependencies required</div>
+                  <div class="comparison-summary-value comparison-summary-value--success">0</div>
+                  <div class="comparison-summary-label">Required Obsidian plugins</div>
                 </div>
                 <div class="comparison-summary-item">
-                  <div class="comparison-summary-value comparison-summary-value--warning">Instant</div>
-                  <div class="comparison-summary-label">Setup time (vs hours)</div>
+                  <div class="comparison-summary-value comparison-summary-value--warning">5</div>
+                  <div class="comparison-summary-label">Supported note file types</div>
                 </div>
               </div>
             </div>
@@ -162,11 +162,11 @@ export function ComparisonTable() {
                 <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-                Install Now
+                Installation
               </a>
               <a href="https://github.com/bitbonsai/mcpvault" target="_blank" rel="noopener noreferrer" class="comparison-cta-secondary">
                 <GitHubIcon className="icon" />
-                View Source
+                Source code
               </a>
             </div>
           </div>

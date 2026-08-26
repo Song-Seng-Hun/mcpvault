@@ -1,22 +1,22 @@
-# MCPVault - Universal AI Bridge for Obsidian Vaults
+# MCPVault - MCP server for Obsidian vaults
 
 **License:** MIT | **Free**
 
-## Your assistant. Your notes. Zero friction.
+## Connect MCP clients to your Obsidian vault
 
-This MCP server lets Claude, ChatGPT+, and other assistants access your vault. Locally, safe frontmatter, no cloud sync.
+MCPVault reads, searches, and edits local vault files. Obsidian can stay closed, and frontmatter updates preserve existing formatting.
 
-- [Get Started](/install) - Install and configure in seconds
+- [Installation](/install) - Configuration examples for supported clients
 - [View on GitHub](https://github.com/bitbonsai/mcpvault)
 
 ## Announcement
 
-- **MCPVault runs on [MCP v2](https://modelcontextprotocol.io/specification/latest), the latest MCP spec.** Same speed for every client, old and new. [See the benchmarks](https://mcpvault.org/benchmarks.md).
-- **JUST LAUNCHED - Obsidian Skill:** Smart routing across MCP, Obsidian app context, and Git CLI sync is now live, with preflight checks, targeted setup questions, and safe sync defaults. [See skill flows](/skill.md)
+- MCPVault runs on [MCP v2](https://modelcontextprotocol.io/specification/latest), the latest MCP specification. Existing and new clients showed no material slowdown in [our benchmarks](https://mcpvault.org/benchmarks.md).
+- The [Obsidian skill](/skill.md) routes file operations to MCPVault, app actions to Obsidian CLI, and sync tasks to Git.
 
 ## Recent Updates
 
-- **v0.16.0 (August 2026):** Migrated to **MCP v2**, the official SDK for the 2026-07-28 spec. One process serves both protocol generations at the same speed ([benchmarks](https://mcpvault.org/benchmarks.md)).
+- **v0.16.0 (August 2026):** Moved to **MCP v2**, the official SDK for the 2026-07-28 specification. One process accepts both protocol generations, with no material slowdown in [our benchmarks](https://mcpvault.org/benchmarks.md).
 - **v0.15.0 (August 2026):** Added `--read-only` mode, which exposes read tools only and rejects all vault mutations. ([#112](https://github.com/bitbonsai/mcpvault/issues/112), thanks @vdhome-dev)
 - **v0.14.1 (August 2026):** Security: dotfiles and hidden directories are now denied at any vault depth, closing an extension-filter bypass. ([#115](https://github.com/bitbonsai/mcpvault/pull/115), thanks @sadegh)
 - **v0.14.0 (August 2026):** Added `get_note_outline` and `read_note_lines` for navigating and reading targeted sections of large notes without loading the full file. ([#146](https://github.com/bitbonsai/mcpvault/pull/146), thanks @kartik7704)
@@ -40,14 +40,14 @@ This MCP server lets Claude, ChatGPT+, and other assistants access your vault. L
 ## Navigation
 
 - [Install](/install.md) - Configuration for all supported platforms
-- [Features](/features.md) - Core features and comparison with alternatives
-- [Demo](/demo.md) - Interactive examples of vault operations
-- [How It Works](/how-it-works.md) - Usage examples with real AI conversations
-- [Skill](/skill.md) - Obsidian skill routing and workflow patterns
+- [Features](/features.md) - Tools, path restrictions, and access methods
+- [Demo](/demo.md) - MCP tool requests and responses
+- [How it works](/how-it-works.md) - Prompt-to-tool examples
+- [Skill](/skill.md) - Routing between MCPVault, Obsidian CLI, and Git
 
 ## Links
 
 - Repository: https://github.com/bitbonsai/mcpvault
-- npm: https://www.npmjs.com/package/mcpvault
+- npm: https://www.npmjs.com/package/@bitbonsai/mcpvault
 - Changelog: https://github.com/bitbonsai/mcpvault/blob/main/CHANGELOG.md
 - Website: https://mcpvault.org

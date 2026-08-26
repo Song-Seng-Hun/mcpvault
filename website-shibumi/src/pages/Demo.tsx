@@ -26,7 +26,7 @@ export function DemoPage({ currentPath, version }: DemoPageProps) {
   return (
     <Layout
       title="Demo"
-      description="See MCPVault in action. Interactive examples showing how AI assistants read, write, search, and manage your Obsidian vault."
+      description="Tool request and response examples for reading, writing, searching, and updating notes with MCPVault."
       canonical="https://mcpvault.org/demo"
       page="demo"
       pageStylesheet="/styles/demo.css"

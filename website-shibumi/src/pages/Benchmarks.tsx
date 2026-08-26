@@ -62,8 +62,8 @@ export interface BenchmarksPageProps {
 export function BenchmarksPage({ currentPath, version }: BenchmarksPageProps) {
   return (
     <Layout
-      title="MCP v2 Benchmarks"
-      description="MCPVault already runs on the new MCP specification (2026-07-28). Benchmarks show identical speed for every client, old and new."
+      title="MCP v2 benchmarks"
+      description="MCPVault compatibility benchmarks for current clients and clients using the MCP 2026-07-28 specification."
       canonical="https://mcpvault.org/benchmarks"
       page="benchmarks"
       pageStylesheet="/styles/benchmarks.css"
@@ -75,25 +75,22 @@ export function BenchmarksPage({ currentPath, version }: BenchmarksPageProps) {
       <main id="main-content" data-component="benchmarks">
         <section class="bench-section bench-hero">
           <div class="bench-container">
-            <h1>Ready for the next MCP. Same speed.</h1>
+            <h1>MCP v2 compatibility benchmarks</h1>
             <p>
               The Model Context Protocol published its{" "}
               <a href={SPEC_URL} target="_blank" rel="noopener noreferrer">
                 2026-07-28 specification
               </a>{" "}
-              in July 2026. MCPVault runs on the new official SDK, which we call <strong>MCP v2</strong>, and serves
-              both protocol generations from a single process: each client gets an answer in whichever version it
-              speaks. Your current setup keeps working as is, and when your favorite app moves to the new protocol,
-              MCPVault is already there.
+              in July 2026. MCPVault uses the new official SDK, which we call <strong>MCP v2</strong>. One process
+              accepts both protocol generations, so existing client configurations continue to work.
             </p>
             <p>We benchmarked the upgrade before shipping it. Three pairings, one real vault (381 notes), everything over stdio.</p>
 
             <aside class="bench-tldr" aria-label="Summary">
               <p class="bench-tldr-label">TL;DR</p>
               <p>
-                Benchmarks of MCPVault on <strong>MCP v2</strong>: ~107 ms to connect and identical per-request speed,
-                whether the app talks the old protocol or the new one. Below: the numbers, why we moved, what stateless
-                HTTP opens up, and answers for skeptics.
+                Across this test, <strong>MCP v2</strong> connected in about 107 ms and showed no material per-request
+                slowdown for current or new clients.
               </p>
             </aside>
           </div>
@@ -108,37 +105,24 @@ export function BenchmarksPage({ currentPath, version }: BenchmarksPageProps) {
         <section class="bench-section">
           <div class="bench-container bench-prose">
             <div>
-              <h2>Why should we move?</h2>
+              <h2>Why MCPVault moved</h2>
               <ul>
-                <li>
-                  <strong>Every client, one server.</strong> The <strong>MCP v2</strong> build detects what each client
-                  speaks during the opening exchange. Apps on the current protocol and apps on 2026-07-28 connect to
-                  the same MCPVault.
-                </li>
-                <li>
-                  <strong>The maintained SDK line.</strong> New MCP features, fixes, and security patches land in the{" "}
-                  <strong>MCP v2</strong> packages first. Staying on the 1.x SDK means those reach you late, or never.
-                </li>
-                <li>
-                  <strong>Richer tool definitions ahead.</strong> The new spec supports full JSON Schema 2020-12, so
-                  tool inputs can be described more precisely as clients adopt it.
-                </li>
+                <li>One process accepts clients using either protocol generation.</li>
+                <li>New MCP fixes and security updates land on the 2.x SDK line.</li>
+                <li>The specification supports JSON Schema 2020-12 for more precise tool input definitions.</li>
               </ul>
             </div>
 
             <div>
-              <h2>What this opens up: HTTP</h2>
+              <h2>Stateless HTTP</h2>
               <p>
-                The 2026-07-28 spec makes the HTTP transport stateless: servers stop tracking per-client sessions, so
-                an MCP server can sit behind any ordinary load balancer and serve many clients from plain
-                infrastructure. For MCPVault that means a future HTTP mode, your vault reachable by AI assistants that
-                never touch your filesystem, without the session bookkeeping that made the old approach fragile.
-                MCPVault stays local-first by default; HTTP would ship as a separate opt-in package built on this{" "}
-                <strong>MCP v2</strong> core. That work is tracked in{" "}
+                The 2026-07-28 specification removes per-client server sessions from the HTTP transport. This can
+                simplify running an MCP server behind a load balancer. MCPVault does not expose an HTTP transport
+                today. A separate, opt-in HTTP package is tracked in{" "}
                 <a href={ISSUE_URL} target="_blank" rel="noopener noreferrer">
                   issue #49
                 </a>
-                .
+                {". "}Local stdio will remain the default.
               </p>
             </div>
 
@@ -152,7 +136,7 @@ export function BenchmarksPage({ currentPath, version }: BenchmarksPageProps) {
                 <a href={SCRIPTS_URL} target="_blank" rel="noopener noreferrer">
                   benchmarks folder
                 </a>
-                , so you can rerun them against your own vault.
+                {", "}so you can rerun them against your own vault.
               </p>
             </div>
           </div>

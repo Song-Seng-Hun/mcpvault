@@ -28,8 +28,8 @@ export function SpecPreviewCallout() {
                   </a>
                   , the latest spec.
                 </span>
-                <span class="callout-short"> Same speed, every client.</span>
-                <span class="callout-long"> Same speed for every client, old and new.</span>
+                <span class="callout-short"> No material slowdown in tests.</span>
+                <span class="callout-long"> Existing and new clients showed no material slowdown in our benchmarks.</span>
               </p>
             </div>
 

@@ -39,7 +39,7 @@ describe("GET /how-it-works/ (HTML)", () => {
   test("sets page-specific title, description, and canonical", async () => {
     const body = await (await app.request("/how-it-works/")).text();
     expect(body).toContain("<title>How It Works | MCPVault</title>");
-    expect(body).toContain('content="Practical usage examples showing how AI assistants interact with your Obsidian vault through MCPVault."');
+    expect(body).toContain('content="Follow MCPVault search, batch read, and frontmatter update requests from prompt to tool response."');
     expect(body).toContain('<link rel="canonical" href="https://mcpvault.org/how-it-works"/>');
   });
 
@@ -54,7 +54,7 @@ describe("GET /how-it-works/ (HTML)", () => {
   test("renders both usage examples with their prompts, tags, and descriptions", async () => {
     const body = await (await app.request("/how-it-works/")).text();
     expect(body).toContain('data-component="how-it-works"');
-    expect(body).toContain("Usage Examples");
+    expect(body).toContain("Usage examples");
     expect(body).toContain("Search &amp; Read Notes");
     expect(body).toContain("Find my productivity notes and summarize the key concepts");
     expect(body).toContain("Update Metadata");
@@ -70,11 +70,11 @@ describe("GET /how-it-works/ (HTML)", () => {
     expect(body).toContain("completed");
   });
 
-  test("renders the Get Started CTA linking to /install", async () => {
+  test("renders the installation CTA linking to /install", async () => {
     const body = await (await app.request("/how-it-works/")).text();
-    expect(body).toContain("Example Prompts");
+    expect(body).toContain("What these examples cover");
     expect(body).toContain('href="/install"');
-    expect(body).toContain("Get Started Now");
+    expect(body).toContain("Installation");
   });
 
   test("renders the injected package version in the structured data", async () => {
