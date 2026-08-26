@@ -40,7 +40,7 @@ describe("GET /demo/ (HTML)", () => {
     const body = await (await app.request("/demo/")).text();
     expect(body).toContain("<title>Demo | MCPVault</title>");
     expect(body).toContain('content="Tool request and response examples for reading, writing, searching, and updating notes with MCPVault."');
-    expect(body).toContain('<link rel="canonical" href="https://mcpvault.org/demo"/>');
+    expect(body).toContain('<link rel="canonical" href="https://mcpvault.org/demo/"/>');
   });
 
   test("loads the page-specific stylesheet after the shared one", async () => {
@@ -101,7 +101,7 @@ describe("GET /demo/ (HTML)", () => {
 
   test("renders the installation CTA linking to /install", async () => {
     const body = await (await app.request("/demo/")).text();
-    expect(body).toContain('href="/install"');
+    expect(body).toContain('href="/install/"');
     expect(body).toContain("Installation");
   });
 

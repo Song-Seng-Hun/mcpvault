@@ -5,12 +5,12 @@ Each public HTML page has a Markdown mirror with the same product information an
 ## Pages
 
 - `/` -> `https://mcpvault.org/index.md`
-- `/install` -> `https://mcpvault.org/install.md`
-- `/features` -> `https://mcpvault.org/features.md`
-- `/demo` -> `https://mcpvault.org/demo.md`
-- `/how-it-works` -> `https://mcpvault.org/how-it-works.md`
-- `/skill` -> `https://mcpvault.org/skill.md`
-- `/benchmarks` -> `https://mcpvault.org/benchmarks.md`
+- `/install/` -> `https://mcpvault.org/install.md`
+- `/features/` -> `https://mcpvault.org/features.md`
+- `/demo/` -> `https://mcpvault.org/demo.md`
+- `/how-it-works/` -> `https://mcpvault.org/how-it-works.md`
+- `/skill/` -> `https://mcpvault.org/skill.md`
+- `/benchmarks/` -> `https://mcpvault.org/benchmarks.md`
 
 Markdown source files live in `website-shibumi/public/` in the repository.
 

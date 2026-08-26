@@ -40,7 +40,7 @@ describe("GET /how-it-works/ (HTML)", () => {
     const body = await (await app.request("/how-it-works/")).text();
     expect(body).toContain("<title>How It Works | MCPVault</title>");
     expect(body).toContain('content="Follow MCPVault search, batch read, and frontmatter update requests from prompt to tool response."');
-    expect(body).toContain('<link rel="canonical" href="https://mcpvault.org/how-it-works"/>');
+    expect(body).toContain('<link rel="canonical" href="https://mcpvault.org/how-it-works/"/>');
   });
 
   test("loads the page-specific stylesheet after the shared one", async () => {
@@ -73,7 +73,7 @@ describe("GET /how-it-works/ (HTML)", () => {
   test("renders the installation CTA linking to /install", async () => {
     const body = await (await app.request("/how-it-works/")).text();
     expect(body).toContain("What these examples cover");
-    expect(body).toContain('href="/install"');
+    expect(body).toContain('href="/install/"');
     expect(body).toContain("Installation");
   });
 

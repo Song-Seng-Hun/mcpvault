@@ -64,7 +64,7 @@ export function BenchmarksPage({ currentPath, version }: BenchmarksPageProps) {
     <Layout
       title="MCP v2 benchmarks"
       description="MCPVault compatibility benchmarks for current clients and clients using the MCP 2026-07-28 specification."
-      canonical="https://mcpvault.org/benchmarks"
+      canonical="https://mcpvault.org/benchmarks/"
       page="benchmarks"
       pageStylesheet="/styles/benchmarks.css"
       clientScript="/client/alpine.js"

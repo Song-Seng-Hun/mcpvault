@@ -17,7 +17,7 @@ import { registerFeaturesRoute } from "./routes/features";
 import { registerHomeRoute } from "./routes/home";
 import { registerHowItWorksRoute } from "./routes/how-it-works";
 import { registerInstallRoute } from "./routes/install";
-import { registerSeoRoutes, SITE_URL } from "./routes/seo";
+import { registerSeoRoutes, SITE_ROUTES, SITE_URL } from "./routes/seo";
 import { registerSkillRoute } from "./routes/skill";
 import { registerSubscribeRoute, type SubscribeRouteOptions } from "./routes/subscribe";
 import { registerUnsubscribeRoute } from "./routes/unsubscribe";
@@ -117,7 +117,7 @@ export function createApp(options: AppOptions = {}): Hono {
   // Production 301s bare page paths to their trailing-slash form (Cloudflare
   // rules from PRs #187/#188); replicated here so behavior survives cutover.
   // Only the known page routes redirect — anything else must fall through to 404.
-  const trailingSlashPages = new Set(["/install", "/features", "/demo", "/how-it-works", "/skill"]);
+  const trailingSlashPages = new Set(SITE_ROUTES.filter((path) => path !== "/").map((path) => path.slice(0, -1)));
   app.use("*", async (c, next) => {
     const { pathname, search } = new URL(c.req.url);
     if (trailingSlashPages.has(pathname)) {

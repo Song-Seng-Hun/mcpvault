@@ -39,7 +39,7 @@ describe("GET /skill/ (HTML)", () => {
     const body = await (await app.request("/skill/")).text();
     expect(body).toContain("<title>Skill | MCPVault</title>");
     expect(body).toContain('content="Install an Obsidian skill that routes file operations to MCPVault, app actions to Obsidian CLI, and sync tasks to Git."');
-    expect(body).toContain('<link rel="canonical" href="https://mcpvault.org/skill"/>');
+    expect(body).toContain('<link rel="canonical" href="https://mcpvault.org/skill/"/>');
   });
 
   test("loads the page-specific stylesheet after the shared one", async () => {
@@ -108,7 +108,7 @@ describe("GET /skill/ (HTML)", () => {
     const body = await (await app.request("/skill/")).text();
     expect(body).toContain("Quick Start");
     expect(body).toContain("name: obsidian");
-    expect(body).toContain('href="/install"');
+    expect(body).toContain('href="/install/"');
     expect(body).toContain("Installation");
   });
 

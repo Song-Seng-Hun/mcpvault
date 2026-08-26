@@ -21,7 +21,7 @@ export function SkillPage({ currentPath, version }: SkillPageProps) {
     <Layout
       title="Skill"
       description="Install an Obsidian skill that routes file operations to MCPVault, app actions to Obsidian CLI, and sync tasks to Git."
-      canonical="https://mcpvault.org/skill"
+      canonical="https://mcpvault.org/skill/"
       page="skill"
       pageStylesheet="/styles/skill.css"
       clientScript="/client/alpine.js"

@@ -87,7 +87,7 @@ function unsubscribePageHtml(): string {
           <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#a0a0a0;">
             You won't receive any more emails from MCPVault. If this was a mistake, you can re-subscribe on the homepage.
           </p>
-          <a href="https://mcpvault.org" style="display:inline-block;padding:10px 24px;font-size:14px;font-weight:600;color:#ffffff;background-color:#7c3aed;border-radius:8px;text-decoration:none;">Back to mcpvault.org</a>
+          <a href="https://mcpvault.org/" style="display:inline-block;padding:10px 24px;font-size:14px;font-weight:600;color:#ffffff;background-color:#7c3aed;border-radius:8px;text-decoration:none;">Back to mcpvault.org</a>
         </td></tr>
       </table>
     </td></tr>
