@@ -595,7 +595,7 @@ export function SkillsContent() {
               <div class="skill-cta-text">
                 <h3 class="skill-cta-title">Install the skill</h3>
                 <p class="skill-cta-description">Add routing instructions for MCPVault, Obsidian CLI, and Git.</p>
-                <a href="/install" class="skill-cta-link">
+                <a href="/install/" class="skill-cta-link">
                   <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>

@@ -329,7 +329,7 @@ export async function InteractiveDemo() {
 
         <div class="demo-cta fade-in-on-scroll">
           <p class="demo-cta-text">Use these examples after connecting MCPVault to your client.</p>
-          <a href="/install" class="demo-cta-link">
+          <a href="/install/" class="demo-cta-link">
             <DownloadIcon className="icon" />
             Installation
           </a>

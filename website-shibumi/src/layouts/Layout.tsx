@@ -61,7 +61,7 @@ export interface LayoutProps {
   children?: unknown;
 }
 
-export function Layout({ title = DEFAULT_TITLE, description = DEFAULT_DESCRIPTION, image = DEFAULT_IMAGE, canonical = SITE_URL, page, pageStylesheet, clientScript, version = packageVersion, children }: LayoutProps) {
+export function Layout({ title = DEFAULT_TITLE, description = DEFAULT_DESCRIPTION, image = DEFAULT_IMAGE, canonical = `${SITE_URL}/`, page, pageStylesheet, clientScript, version = packageVersion, children }: LayoutProps) {
   const fullTitle = title.includes("MCPVault") ? title : `${title} | MCPVault`;
   // Built by lib/csp.ts so the CSP header's belt-and-braces hash is computed
   // from the exact same serialization this layout renders.

@@ -23,7 +23,7 @@ export function HowItWorksPage({ currentPath, version }: HowItWorksPageProps) {
     <Layout
       title="How It Works"
       description="Follow MCPVault search, batch read, and frontmatter update requests from prompt to tool response."
-      canonical="https://mcpvault.org/how-it-works"
+      canonical="https://mcpvault.org/how-it-works/"
       page="how-it-works"
       pageStylesheet="/styles/how-it-works.css"
       clientScript="/client/alpine.js"

@@ -27,7 +27,7 @@ function testApp() {
   );
   app.get("/install/", (c) =>
     c.html(
-      <Layout page="install" title="Install" canonical="https://mcpvault.org/install" version="9.9.9">
+      <Layout page="install" title="Install" canonical="https://mcpvault.org/install/" version="9.9.9">
         <Nav currentPath={c.req.path} version="9.9.9" />
         <main id="main-content">install content</main>
         <Footer />
@@ -48,7 +48,7 @@ describe("Layout", () => {
 
   test("sets canonical, Open Graph, and default metadata", async () => {
     const body = await (await testApp().request("/")).text();
-    expect(body).toContain('<link rel="canonical" href="https://mcpvault.org"/>');
+    expect(body).toContain('<link rel="canonical" href="https://mcpvault.org/"/>');
     expect(body).toContain('<meta property="og:title" content="MCPVault - MCP Server for Obsidian Vaults"/>');
     expect(body).toContain('<meta name="theme-color" content="#0a0a0a"/>');
   });
@@ -56,7 +56,7 @@ describe("Layout", () => {
   test("per-page title and canonical override the defaults", async () => {
     const body = await (await testApp().request("/install/")).text();
     expect(body).toContain("<title>Install | MCPVault</title>");
-    expect(body).toContain('<link rel="canonical" href="https://mcpvault.org/install"/>');
+    expect(body).toContain('<link rel="canonical" href="https://mcpvault.org/install/"/>');
   });
 
   test("sets data-page on body for page-scoped CSS", async () => {
@@ -99,8 +99,8 @@ describe("Layout", () => {
 describe("Nav", () => {
   test("marks the current route active and links stay HTML links (works with no JS)", async () => {
     const body = await (await testApp().request("/install/")).text();
-    expect(body).toContain('href="/install" class="nav-link nav-link-active"');
-    expect(body).toContain('href="/features" class="nav-link"');
+    expect(body).toContain('href="/install/" class="nav-link nav-link-active"');
+    expect(body).toContain('href="/features/" class="nav-link"');
   });
 
   test("mobile menu panel is present but hidden without JavaScript", async () => {
@@ -121,7 +121,7 @@ describe("Footer", () => {
     const body = await (await testApp().request("/")).text();
     const year = new Date().getFullYear();
     expect(body).toContain(`© ${year} bitbonsai`);
-    expect(body).toContain('href="/install">Installation</a>');
+    expect(body).toContain('href="/install/">Installation</a>');
   });
 });
 

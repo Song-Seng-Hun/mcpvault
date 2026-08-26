@@ -39,7 +39,7 @@ describe("GET /install/ (HTML)", () => {
     const body = await (await app.request("/install/")).text();
     expect(body).toContain("<title>Install | MCPVault</title>");
     expect(body).toContain('content="Configuration examples for running MCPVault with Claude Desktop, ChatGPT+, Claude Code, Gemini CLI, OpenCode, and OpenAI Codex."');
-    expect(body).toContain('<link rel="canonical" href="https://mcpvault.org/install"/>');
+    expect(body).toContain('<link rel="canonical" href="https://mcpvault.org/install/"/>');
   });
 
   test("loads the page-specific stylesheet after the shared one", async () => {

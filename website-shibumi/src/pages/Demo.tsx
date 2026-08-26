@@ -27,7 +27,7 @@ export function DemoPage({ currentPath, version }: DemoPageProps) {
     <Layout
       title="Demo"
       description="Tool request and response examples for reading, writing, searching, and updating notes with MCPVault."
-      canonical="https://mcpvault.org/demo"
+      canonical="https://mcpvault.org/demo/"
       page="demo"
       pageStylesheet="/styles/demo.css"
       clientScript="/client/alpine.js"

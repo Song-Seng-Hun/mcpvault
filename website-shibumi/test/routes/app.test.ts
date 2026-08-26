@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, sep } from "node:path";
 import { createApp } from "../../src/app";
+import { SITE_ROUTES, SITE_URL } from "../../src/routes/seo";
 
 let publicDir: string;
 let app: ReturnType<typeof createApp>;
@@ -28,10 +29,25 @@ describe("GET /healthz", () => {
 });
 
 describe("page redirects", () => {
-  test("redirects /benchmarks to its trailing-slash route", async () => {
-    const res = await app.request("/benchmarks?source=reddit", { redirect: "manual" });
-    expect(res.status).toBe(301);
-    expect(res.headers.get("location")).toBe("/benchmarks/?source=reddit");
+  test("redirects every bare page path to its trailing-slash route", async () => {
+    for (const route of SITE_ROUTES) {
+      if (route === "/") continue;
+      const barePath = route.slice(0, -1);
+      const res = await app.request(`${barePath}?source=test`, { redirect: "manual" });
+      expect(res.status).toBe(301);
+      expect(res.headers.get("location")).toBe(`${route}?source=test`);
+    }
+  });
+
+  test("renders trailing slashes in page links and canonical URLs", async () => {
+    const barePaths = SITE_ROUTES.filter((route) => route !== "/").map((route) => route.slice(0, -1));
+    for (const route of SITE_ROUTES) {
+      const body = await (await app.request(route)).text();
+      expect(body).toContain(`<link rel="canonical" href="${SITE_URL}${route}"/>`);
+      for (const barePath of barePaths) {
+        expect(body).not.toContain(`href="${barePath}"`);
+      }
+    }
   });
 });
 

@@ -34,11 +34,11 @@ export function Footer() {
           <div>
             <h3>Quick Links</h3>
             <div class="footer-link-list">
-              <a href="/install">Installation</a>
-              <a href="/demo">Demo</a>
-              <a href="/features">Features</a>
-              <a href="/how-it-works">How It Works</a>
-              <a href="/skill">Skill</a>
+              <a href="/install/">Installation</a>
+              <a href="/demo/">Demo</a>
+              <a href="/features/">Features</a>
+              <a href="/how-it-works/">How It Works</a>
+              <a href="/skill/">Skill</a>
             </div>
           </div>
 

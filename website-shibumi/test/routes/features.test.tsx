@@ -39,7 +39,7 @@ describe("GET /features/ (HTML)", () => {
     const body = await (await app.request("/features/")).text();
     expect(body).toContain("<title>Features | MCPVault</title>");
     expect(body).toContain('content="Review MCPVault search, frontmatter, file tools, path restrictions, supported clients, and access methods."');
-    expect(body).toContain('<link rel="canonical" href="https://mcpvault.org/features"/>');
+    expect(body).toContain('<link rel="canonical" href="https://mcpvault.org/features/"/>');
   });
 
   test("loads the page-specific stylesheet after the shared one", async () => {
@@ -67,7 +67,7 @@ describe("GET /features/ (HTML)", () => {
     expect(body).toContain("Compare access methods");
     expect(body).toContain("Frontmatter updates");
     expect(body).toContain("Access boundary");
-    expect(body).toContain('href="/install"');
+    expect(body).toContain('href="/install/"');
     expect(body).toContain('href="https://github.com/bitbonsai/mcpvault"');
   });
 

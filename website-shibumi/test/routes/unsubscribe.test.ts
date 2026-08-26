@@ -65,7 +65,7 @@ describe("GET /api/unsubscribe", () => {
     expect(calls).toEqual([{ audienceId: "aud_test", email: "person@example.com" }]);
     const body = await res.text();
     expect(body).toContain("<title>Unsubscribed - MCPVault</title>");
-    expect(body).toContain('href="https://mcpvault.org"');
+    expect(body).toContain('href="https://mcpvault.org/"');
   });
 
   test("missing Resend configuration returns 500 with the exact message", async () => {

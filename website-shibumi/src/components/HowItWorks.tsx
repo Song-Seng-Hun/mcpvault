@@ -203,7 +203,7 @@ export async function HowItWorksSection() {
             <div class="how-it-works-cta-text">
               <h3 class="how-it-works-cta-title">What these examples cover</h3>
               <p class="how-it-works-cta-description">The prompts show search, batch reads, and frontmatter updates from request to response.</p>
-              <a href="/install" class="how-it-works-cta-link">
+              <a href="/install/" class="how-it-works-cta-link">
                 <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>

@@ -6,7 +6,7 @@
 
 MCPVault reads, searches, and edits local vault files. Obsidian can stay closed, and frontmatter updates preserve existing formatting.
 
-- [Installation](/install) - Configuration examples for supported clients
+- [Installation](/install/) - Configuration examples for supported clients
 - [View on GitHub](https://github.com/bitbonsai/mcpvault)
 
 ## Announcement

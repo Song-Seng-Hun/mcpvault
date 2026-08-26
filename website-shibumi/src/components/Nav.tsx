@@ -28,11 +28,11 @@ export interface NavLink {
 }
 
 export const NAV_LINKS: NavLink[] = [
-  { href: "/install", label: "Install" },
-  { href: "/features", label: "Features" },
-  { href: "/demo", label: "Demo" },
-  { href: "/how-it-works", label: "How It Works", shortLabel: "How" },
-  { href: "/skill", label: "Skill" },
+  { href: "/install/", label: "Install" },
+  { href: "/features/", label: "Features" },
+  { href: "/demo/", label: "Demo" },
+  { href: "/how-it-works/", label: "How It Works", shortLabel: "How" },
+  { href: "/skill/", label: "Skill" },
 ];
 
 export interface NavProps {
@@ -41,8 +41,9 @@ export interface NavProps {
 }
 
 function isActive(currentPath: string, href: string): boolean {
-  const normalized = currentPath.replace(/\/$/, "") || "/";
-  return normalized === href;
+  const normalizedCurrentPath = currentPath.replace(/\/$/, "") || "/";
+  const normalizedHref = href.replace(/\/$/, "") || "/";
+  return normalizedCurrentPath === normalizedHref;
 }
 
 export function Nav({ currentPath, version }: NavProps) {

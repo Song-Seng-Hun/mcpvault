@@ -58,7 +58,7 @@ export function structuredData(version: string) {
     "@type": "SoftwareApplication",
     name: "MCPVault",
     description: "Local MCP server for reading, searching, and editing notes in an Obsidian vault.",
-    url: "https://mcpvault.org",
+    url: "https://mcpvault.org/",
     downloadUrl: "https://www.npmjs.com/package/@bitbonsai/mcpvault",
     softwareVersion: version,
     operatingSystem: ["macOS", "Windows", "Linux"],
