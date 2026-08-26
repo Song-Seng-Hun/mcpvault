@@ -117,7 +117,7 @@ export function createApp(options: AppOptions = {}): Hono {
   // Production 301s bare page paths to their trailing-slash form (Cloudflare
   // rules from PRs #187/#188); replicated here so behavior survives cutover.
   // Only the known page routes redirect — anything else must fall through to 404.
-  const trailingSlashPages = new Set(["/install", "/features", "/demo", "/how-it-works", "/skill"]);
+  const trailingSlashPages = new Set(["/install", "/features", "/demo", "/how-it-works", "/skill", "/benchmarks"]);
   app.use("*", async (c, next) => {
     const { pathname, search } = new URL(c.req.url);
     if (trailingSlashPages.has(pathname)) {

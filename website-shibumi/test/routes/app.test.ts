@@ -27,6 +27,14 @@ describe("GET /healthz", () => {
   });
 });
 
+describe("page redirects", () => {
+  test("redirects /benchmarks to its trailing-slash route", async () => {
+    const res = await app.request("/benchmarks?source=reddit", { redirect: "manual" });
+    expect(res.status).toBe(301);
+    expect(res.headers.get("location")).toBe("/benchmarks/?source=reddit");
+  });
+});
+
 describe("security headers", () => {
   test("are present on responses", async () => {
     const res = await app.request("/healthz");
