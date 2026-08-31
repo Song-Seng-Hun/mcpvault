@@ -494,6 +494,42 @@ describe("daily notes", () => {
   });
 });
 
+describe("tasks", () => {
+  test("lists open, completed, and all tasks in stable order", async () => {
+    await mkdir(join(testVaultPath, "Projects"), { recursive: true });
+    await writeFile(join(testVaultPath, "Projects/Plan.md"), [
+      "---",
+      "task: - [ ] frontmatter",
+      "---",
+      "- [ ] First",
+      "- [x] Done",
+      "~~~markdown",
+      "- [ ] ignored",
+      "~~~",
+    ].join("\n"));
+    await writeFile(join(testVaultPath, "Inbox.md"), "- [ ] Inbox task");
+
+    await expect(fileSystem.listTasks({ status: "open" })).resolves.toMatchObject({
+      tasks: [
+        { path: "Inbox.md", line: 1, text: "Inbox task", status: "open" },
+        { path: "Projects/Plan.md", line: 4, text: "First", status: "open" },
+      ],
+      total: 2,
+      truncated: false,
+    });
+
+    await expect(fileSystem.listTasks({ status: "completed", pathPrefix: "Projects" })).resolves.toMatchObject({
+      tasks: [{ path: "Projects/Plan.md", line: 5, text: "Done", status: "completed" }],
+      total: 1,
+    });
+  });
+
+  test("rejects restricted or escaping task scopes", async () => {
+    await expect(fileSystem.listTasks({ pathPrefix: ".obsidian" })).rejects.toThrow(/Access denied/);
+    await expect(fileSystem.listTasks({ pathPrefix: "../outside" })).rejects.toThrow(/within the vault/);
+  });
+});
+
 // ============================================================================
 // READ NOTE LINES TESTS
 // ============================================================================

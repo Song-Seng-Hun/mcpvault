@@ -1352,4 +1352,102 @@ export class FileSystemService {
             .map(([tag, count]) => ({ tag, count }))
             .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
     }
+    async listTasks(params = {}) {
+        const status = params.status || 'open';
+        if (status !== 'open' && status !== 'completed' && status !== 'all') {
+            throw new Error('status must be open, completed, or all');
+        }
+        const requestedLimit = params.limit ?? 100;
+        if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
+            throw new Error('limit must be a positive integer');
+        }
+        const limit = Math.min(requestedLimit, 500);
+        const rawPathPrefix = params.pathPrefix ? this.normalizePath(params.pathPrefix) : '';
+        let pathPrefix = '';
+        // Validate the optional scope before scanning. resolvePath performs the
+        // lexical and symlink boundary checks; listing validation blocks hidden
+        // and system directories such as .obsidian and .git.
+        if (rawPathPrefix) {
+            if (!this.pathFilter.isAllowedForListing(rawPathPrefix)) {
+                throw new Error(`Access denied: ${rawPathPrefix}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
+            }
+            const resolvedPrefix = this.resolvePath(rawPathPrefix);
+            pathPrefix = relative(this.vaultPath, resolvedPrefix).replace(/\\/g, '/');
+            if (pathPrefix && !this.pathFilter.isAllowedForListing(pathPrefix)) {
+                throw new Error(`Access denied: ${pathPrefix}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
+            }
+        }
+        const tasks = [];
+        const notePaths = (await this.collectVaultFiles())
+            .filter(path => this.pathFilter.isAllowed(path))
+            .filter(path => /\.(?:md|markdown|txt)$/i.test(path))
+            .filter(path => !pathPrefix || path === pathPrefix || path.startsWith(`${pathPrefix}/`))
+            .sort((a, b) => a.localeCompare(b));
+        for (const path of notePaths) {
+            let content;
+            try {
+                content = await readFile(this.resolvePath(path), 'utf-8');
+            }
+            catch {
+                continue;
+            }
+            let inFrontmatter = false;
+            let frontmatterEnded = false;
+            let inFence = false;
+            let fenceChar = '';
+            let fenceLength = 0;
+            const fenceRegex = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+            const lines = content.split('\n');
+            for (let index = 0; index < lines.length; index++) {
+                const line = lines[index].replace(/\r$/, '');
+                if (!frontmatterEnded && index === 0 && line === '---') {
+                    inFrontmatter = true;
+                    continue;
+                }
+                if (inFrontmatter) {
+                    if (line === '---') {
+                        inFrontmatter = false;
+                        frontmatterEnded = true;
+                    }
+                    continue;
+                }
+                const fenceMatch = fenceRegex.exec(line);
+                if (fenceMatch) {
+                    const markers = fenceMatch[1];
+                    const trailing = fenceMatch[2];
+                    const char = markers.charAt(0);
+                    if (!inFence) {
+                        inFence = true;
+                        fenceChar = char;
+                        fenceLength = markers.length;
+                    }
+                    else if (char === fenceChar && markers.length >= fenceLength && trailing.trim() === '') {
+                        inFence = false;
+                        fenceChar = '';
+                        fenceLength = 0;
+                    }
+                    continue;
+                }
+                if (inFence)
+                    continue;
+                const taskMatch = /^(\s*)[-*+]\s+\[([ xX])\]\s+(.*)$/.exec(line);
+                if (!taskMatch)
+                    continue;
+                const taskStatus = taskMatch[2].toLowerCase() === 'x' ? 'completed' : 'open';
+                if (status !== 'all' && status !== taskStatus)
+                    continue;
+                tasks.push({
+                    path,
+                    line: index + 1,
+                    text: taskMatch[3].trim(),
+                    status: taskStatus,
+                });
+            }
+        }
+        return {
+            tasks: tasks.slice(0, limit),
+            total: tasks.length,
+            truncated: tasks.length > limit,
+        };
+    }
 }

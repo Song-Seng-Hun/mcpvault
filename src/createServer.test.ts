@@ -25,7 +25,7 @@ test("createServer returns a Server instance", () => {
   expect(typeof server.connect).toBe("function");
 });
 
-test("server registers 24 tools", async () => {
+test("server registers 25 tools", async () => {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -37,7 +37,7 @@ test("server registers 24 tools", async () => {
   ]);
 
   const result = await client.listTools();
-  expect(result.tools).toHaveLength(24);
+  expect(result.tools).toHaveLength(25);
 
   const toolNames = result.tools.map((t) => t.name).sort();
   expect(toolNames).toEqual([
@@ -54,6 +54,7 @@ test("server registers 24 tools", async () => {
     "get_vault_stats",
     "list_all_tags",
     "list_directory",
+    "list_tasks",
     "manage_tags",
     "move_file",
     "move_note",
@@ -249,11 +250,12 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
   try {
     const listedTools = await client.listTools();
     const toolNames = listedTools.tools.map((tool) => tool.name);
-    expect(toolNames).toHaveLength(16);
+    expect(toolNames).toHaveLength(17);
     expect(toolNames).toContain("read_note");
     expect(toolNames).toContain("search_notes");
     expect(toolNames).not.toContain("write_note");
     expect(toolNames).not.toContain("manage_tags");
+    expect(toolNames).toContain("list_tasks");
 
     const readResult = await client.callTool({
       name: "read_note",
@@ -321,6 +323,41 @@ test("daily_note creates safely, appends, and reads the note", async () => {
       arguments: { action: "create", date: "2026-09-01", folder: "Journal", content: "overwritten" },
     });
     expect(JSON.parse((noOverwrite.content as any)[0].text).created).toBe(false);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test("list_tasks returns filtered tasks and ignores frontmatter and code fences", async () => {
+  const { server, client } = await connectClient();
+  try {
+    await mkdir(join(testVaultPath, "Projects"), { recursive: true });
+    await writeFile(join(testVaultPath, "Projects/Plan.md"), [
+      "---",
+      "task: - [ ] not a body task",
+      "---",
+      "# Plan",
+      "- [ ] Open task",
+      "  - [x] Completed child",
+      "```md",
+      "- [ ] Ignored example",
+      "```",
+    ].join("\n"));
+
+    const open = await client.callTool({ name: "list_tasks", arguments: { pathPrefix: "Projects" } });
+    expect(open.isError).toBeFalsy();
+    expect(JSON.parse((open.content as any)[0].text)).toEqual({
+      tasks: [{ path: "Projects/Plan.md", line: 5, text: "Open task", status: "open" }],
+      total: 1,
+      truncated: false,
+    });
+
+    const all = await client.callTool({ name: "list_tasks", arguments: { status: "all" } });
+    expect(JSON.parse((all.content as any)[0].text).tasks).toEqual([
+      { path: "Projects/Plan.md", line: 5, text: "Open task", status: "open" },
+      { path: "Projects/Plan.md", line: 6, text: "Completed child", status: "completed" },
+    ]);
   } finally {
     await client.close();
     await server.close();

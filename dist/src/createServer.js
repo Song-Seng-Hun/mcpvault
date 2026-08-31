@@ -221,6 +221,19 @@ export function createServer(vaultPath, options = {}) {
                 }
             },
             {
+                name: "list_tasks",
+                description: "List checkbox tasks across the vault. Defaults to open tasks; use status=completed or status=all to include completed tasks. Ignores YAML frontmatter and fenced code blocks.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        status: { type: "string", enum: ["open", "completed", "all"], description: "Task status to return (default: open)", default: "open" },
+                        pathPrefix: { type: "string", description: "Restrict results to a vault subtree, e.g. Projects/2026" },
+                        limit: { type: "number", description: "Maximum tasks to return (default: 100, max: 500)", default: 100 },
+                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                    }
+                }
+            },
+            {
                 name: "wiki_link",
                 description: "Read an Obsidian wiki link. Accepts the same syntax as Obsidian: [[Document Name]] or [[Document Name|Display Text]], including table-authored escapes like [[Document Name\\|Display]] and path-qualified links like [[folder/Document Name]]. A #fragment suffix in the input is ignored. Searches the vault for an exact basename match (or exact vault-relative path match when the name contains '/') and returns the file's content. When multiple files share the basename, picks the first (vault root first, then alphabetical by path) and lists the other paths in structuredContent.alternatives. Content is returned bare — ready for direct use in context.",
                 inputSchema: {
@@ -514,6 +527,25 @@ export function createServer(vaultPath, options = {}) {
                         content: [{ type: "text", text: JSON.stringify(tags, null, indent) }]
                     };
                 }
+                case "list_tasks": {
+                    const status = trimmedArgs.status || 'open';
+                    if (status !== 'open' && status !== 'completed' && status !== 'all') {
+                        throw new Error('status must be open, completed, or all');
+                    }
+                    const requestedLimit = trimmedArgs.limit === undefined ? 100 : Number(trimmedArgs.limit);
+                    if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
+                        throw new Error('limit must be a positive integer');
+                    }
+                    const tasks = await fileSystem.listTasks({
+                        status,
+                        pathPrefix: trimmedArgs.pathPrefix,
+                        limit: Math.min(requestedLimit, 500),
+                    });
+                    const indent = trimmedArgs.prettyPrint ? 2 : undefined;
+                    return {
+                        content: [{ type: "text", text: JSON.stringify(tasks, null, indent) }]
+                    };
+                }
                 case "wiki_link":
                     return await handleWikiLinkTool(fileSystem, trimmedArgs);
                 case "get_backlinks": {
@@ -631,6 +663,8 @@ function trimPaths(args) {
         trimmed.confirmNewPath = trimmed.confirmNewPath.trim();
     if (trimmed.folder && typeof trimmed.folder === 'string')
         trimmed.folder = trimmed.folder.trim();
+    if (trimmed.pathPrefix && typeof trimmed.pathPrefix === 'string')
+        trimmed.pathPrefix = trimmed.pathPrefix.trim();
     if (trimmed.paths && Array.isArray(trimmed.paths)) {
         trimmed.paths = trimmed.paths.map((p) => typeof p === 'string' ? p.trim() : p);
     }

@@ -117,6 +117,7 @@ An MCP client starts MCPVault as a local stdio process and passes the vault path
   - Metadata and tags: `get_frontmatter`, `update_frontmatter`, `get_notes_info`, `get_vault_stats`, `manage_tags`, `list_all_tags`
   - Wiki links: `wiki_link` resolves names and returns alternative paths when a name is ambiguous; `get_backlinks` finds incoming wikilinks, `get_outlinks` lists outgoing wikilinks, `find_unresolved_links` finds broken references, and `find_orphan_notes` finds isolated notes
   - Daily notes: `get_daily_note` reads a date-based note and `daily_note` safely creates or appends to one
+  - Tasks: `list_tasks` finds open, completed, or all checkbox tasks while ignoring frontmatter and fenced code blocks
 - `write_note` supports overwrite, append, and prepend modes.
 - `delete_note` and `move_file` require matching confirmation paths.
 - Path arguments are trimmed before validation.
@@ -928,6 +929,40 @@ provided explicitly.
   "arguments": {
     "date": "today"
   }
+}
+```
+
+### `list_tasks`
+
+List checkbox tasks across the vault. By default only open tasks are returned;
+use `status: "completed"` or `status: "all"` for other views. Results include
+the vault-relative path, 1-based line number, task text, and status. Use
+`pathPrefix` to limit the scan to a subtree and `limit` to cap the response.
+YAML frontmatter and fenced code blocks are ignored.
+
+```json
+{
+  "name": "list_tasks",
+  "arguments": {
+    "status": "open",
+    "pathPrefix": "Projects",
+    "limit": 100
+  }
+}
+```
+
+```json
+{
+  "tasks": [
+    {
+      "path": "Projects/Plan.md",
+      "line": 12,
+      "text": "Publish the release notes",
+      "status": "open"
+    }
+  ],
+  "total": 1,
+  "truncated": false
 }
 ```
 

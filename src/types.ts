@@ -229,6 +229,28 @@ export interface DailyNoteResult {
   message?: string;
 }
 
+// Task types
+export type TaskStatus = 'open' | 'completed' | 'all';
+
+export interface TaskItem {
+  path: string;
+  line: number;
+  text: string;
+  status: 'open' | 'completed';
+}
+
+export interface ListTasksParams {
+  status?: TaskStatus;
+  pathPrefix?: string;
+  limit?: number;
+}
+
+export interface ListTasksResult {
+  tasks: TaskItem[];
+  total: number;
+  truncated: boolean;
+}
+
 // Vault statistics types
 export interface VaultStats {
   totalNotes: number;
