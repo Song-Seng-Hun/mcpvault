@@ -25,7 +25,7 @@ test("createServer returns a Server instance", () => {
   expect(typeof server.connect).toBe("function");
 });
 
-test("server registers 68 tools", async () => {
+test("server registers 71 tools", async () => {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -37,7 +37,7 @@ test("server registers 68 tools", async () => {
   ]);
 
   const result = await client.listTools();
-  expect(result.tools).toHaveLength(68);
+  expect(result.tools).toHaveLength(71);
 
   const toolNames = result.tools.map((t) => t.name).sort();
   expect(toolNames).toEqual([
@@ -78,6 +78,7 @@ test("server registers 68 tools", async () => {
     "list_journal_entries",
     "list_mentions",
     "list_tasks",
+    "list_whispers",
     "login_scope",
     "logout_scope",
     "manage_tags",
@@ -94,6 +95,7 @@ test("server registers 68 tools", async () => {
     "read_multiple_notes",
     "read_note",
     "read_note_lines",
+    "read_references",
     "read_scoped_note",
     "register_scope_account",
     "report_wiki_issue",
@@ -103,6 +105,7 @@ test("server registers 68 tools", async () => {
     "search_notes",
     "search_scoped_notes",
     "send_chat_message",
+    "send_whisper",
     "update_discussion_status",
     "update_frontmatter",
     "whoami_scope",
@@ -293,7 +296,7 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
   try {
     const listedTools = await client.listTools();
     const toolNames = listedTools.tools.map((tool) => tool.name);
-    expect(toolNames).toHaveLength(39);
+    expect(toolNames).toHaveLength(41);
     expect(toolNames).toContain("read_note");
     expect(toolNames).toContain("search_notes");
     expect(toolNames).not.toContain("write_note");
@@ -352,6 +355,7 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
       { name: "comment_on_blog_post", arguments: { slug: "blocked", content: "blocked" } },
       { name: "create_chat_room", arguments: { roomId: "blocked", title: "blocked", expectedRevision: "missing" } },
       { name: "send_chat_message", arguments: { roomId: "blocked", content: "blocked" } },
+      { name: "send_whisper", arguments: { to: "blocked", content: "blocked" } },
     ];
 
     for (const mutation of mutations) {

@@ -46,7 +46,11 @@ test('public chat rooms preserve authenticated model identities and independent 
     const tooLong = await client.callTool({ name: 'send_chat_message', arguments: { roomId: 'architecture', content: 'x'.repeat(281), accessToken: codexToken } });
     expect(tooLong.isError).toBe(true);
 
-    const first = await json(client, 'send_chat_message', { roomId: 'architecture', content: 'I propose a Markdown-first design. @claude', accessToken: codexToken });
+    await client.callTool({ name: 'write_note', arguments: { path: 'Design.md', content: 'Markdown-first design notes' } });
+    await client.callTool({ name: 'write_note', arguments: { path: 'scope://model/codex/private-design.md', content: 'Private model notes', accessToken: codexToken } });
+    const privateReference = await client.callTool({ name: 'send_chat_message', arguments: { roomId: 'architecture', content: 'This must not leak', references: ['scope://model/codex/private-design.md'], accessToken: codexToken } });
+    expect(privateReference.isError).toBe(true);
+    const first = await json(client, 'send_chat_message', { roomId: 'architecture', content: 'I propose a Markdown-first design. @claude', references: ['Design.md'], accessToken: codexToken });
     const second = await json(client, 'send_chat_message', { roomId: 'architecture', content: 'I agree, with one indexing caveat. @codex', replyTo: first.value.messageId, accessToken: claudeToken });
     expect(second.value.roomId).toBe('architecture');
     expect(second.value.path).toContain('Community/ChatMessages/architecture/');
@@ -55,6 +59,9 @@ test('public chat rooms preserve authenticated model identities and independent 
     expect(room.value.messages).toHaveLength(2);
     expect(room.value.messages[0]).toMatchObject({ author: 'codex', content: expect.stringContaining('Markdown-first') });
     expect(room.value.messages[1]).toMatchObject({ author: 'claude', replyTo: first.value.messageId });
+    expect(room.value.messages[0].references).toEqual(['Design.md']);
+    const resolved = await json(client, 'read_references', { path: first.value.path });
+    expect(resolved.value.references[0]).toMatchObject({ path: 'Design.md', title: 'Design' });
 
     const tail = await json(client, 'read_chat_room', { roomId: 'architecture', limit: 1 });
     expect(tail.value.messages).toHaveLength(1);
@@ -62,8 +69,9 @@ test('public chat rooms preserve authenticated model identities and independent 
     expect(tail.value.truncated).toBe(true);
     const incremental = await json(client, 'read_chat_room', { roomId: 'architecture', afterMessageId: first.value.messageId, contextBefore: 2, limit: 2 });
     expect(incremental.value.messages.map((message: any) => message.messageId)).toEqual([first.value.messageId, second.value.messageId]);
-    const mentions = await json(client, 'list_mentions', { accessToken: codexToken });
+    const mentions = await json(client, 'list_mentions', { accessToken: codexToken, contextBefore: 1, contextAfter: 1 });
     expect(mentions.value.mentions).toEqual(expect.arrayContaining([expect.objectContaining({ messageId: second.value.messageId, kind: 'chat_message' })]));
+    expect(mentions.value.mentions.find((item: any) => item.messageId === second.value.messageId).context).toEqual(expect.arrayContaining([expect.objectContaining({ id: first.value.messageId })]));
   } finally {
     await client.close();
     await server.close();

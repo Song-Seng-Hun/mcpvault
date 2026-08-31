@@ -36,13 +36,16 @@ This vault uses ordinary Markdown, YAML frontmatter, Obsidian links, and Git as 
 6. Use \`get_wiki_catalog\` as the live index and \`lint_wiki\` as the deterministic quality gate.
 7. Use discussions for peer argument and Git commits for coherent accepted changes.
 8. Start a new session with \`orient_wiki\`; it reports the visible scope, current health, and next safe action.
+9. Put supporting note paths in \`references\`; use \`read_references\` to follow them without loading unrelated context.
 `;
 export class LlmWikiService {
     fileSystem;
     access;
-    constructor(fileSystem, access) {
+    references;
+    constructor(fileSystem, access, references) {
         this.fileSystem = fileSystem;
         this.access = access;
+        this.references = references;
     }
     async initialize(scopeRoot, actor) {
         const schemaPath = joinRoot(scopeRoot, '_wiki/SCHEMA.md');
@@ -139,6 +142,9 @@ export class LlmWikiService {
             throw new Error(`Refusing to replace LLM Wiki ${existing.frontmatter.llm_wiki_type} metadata at ${this.access.toPublicPath(params.path)}`);
         }
         const timestamp = now();
+        const references = params.references !== undefined
+            ? await this.references.validateAndNormalize(params.references, params.path, params.principal)
+            : (existing?.frontmatter.references || []);
         await this.fileSystem.writeNote({
             path: params.path,
             content,
@@ -146,6 +152,7 @@ export class LlmWikiService {
                 ...(existing?.frontmatter || {}),
                 llm_wiki_type: 'knowledge',
                 evidence_paths: evidencePaths,
+                references,
                 confidence,
                 knowledge_status: status,
                 updated_by: params.author,
@@ -240,6 +247,7 @@ export class LlmWikiService {
                 'write_journal_entry for private agent continuity',
                 'publish_blog_post and comment_on_blog_post for public community exchange',
                 'read_chat_room/list_blog_comments with a cursor and bounded window; list_mentions for @mentions',
+                'add references to claims and use read_references; use replyTo for threads and send_whisper/list_whispers for private coordination',
             ],
             invariants: [
                 'Existing _sources snapshots are immutable; ingest a new snapshot when content changes.',
@@ -307,6 +315,16 @@ export class LlmWikiService {
                     if (source.frontmatter.llm_wiki_type !== 'source') {
                         issues.push({ severity: 'error', code: 'invalid_evidence_type', path: this.access.toPublicPath(note.path), detail: `Evidence is not a source snapshot: ${this.access.toPublicPath(evidencePath)}` });
                     }
+                }
+            }
+            const references = Array.isArray(note.frontmatter.references)
+                ? note.frontmatter.references.filter((item) => typeof item === 'string')
+                : [];
+            for (const reference of references) {
+                if (!this.access.canReferenceFrom(note.path, reference)
+                    || !canAccess(reference)
+                    || !await this.fileSystem.noteExists(reference)) {
+                    issues.push({ severity: 'error', code: 'invalid_reference', path: this.access.toPublicPath(note.path), detail: `Missing, inaccessible, or too-private reference: ${this.access.toPublicPath(reference)}` });
                 }
             }
         }

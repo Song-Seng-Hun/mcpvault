@@ -33,8 +33,10 @@ function requireParticipant(principal) {
 }
 export class ChatService {
     fileSystem;
-    constructor(fileSystem) {
+    references;
+    constructor(fileSystem, references) {
         this.fileSystem = fileSystem;
+        this.references = references;
     }
     async createRoom(params) {
         const principal = requireParticipant(params.principal);
@@ -99,6 +101,7 @@ export class ChatService {
             await this.fileSystem.readNote(messagePath(roomId, params.replyTo));
         const timestamp = now();
         const path = messagePath(roomId, messageId);
+        const references = await this.references.validateAndNormalize(params.references, path, principal);
         await this.fileSystem.writeNote({
             path,
             content: `${content}\n`,
@@ -106,6 +109,7 @@ export class ChatService {
                 mcpvault_type: 'chat_message', message_id: messageId, room_id: roomId,
                 author: identity(principal), author_role: principal.role, created_at: timestamp, updated_at: timestamp,
                 mentions: extractMentions(content),
+                references,
                 ...(params.replyTo && { reply_to: normalizeScopeId(params.replyTo, 'replyTo') }),
             },
             expectedRevision: 'missing',
@@ -153,6 +157,7 @@ export class ChatService {
                 createdAt: note.frontmatter.created_at,
                 content,
                 revision,
+                references: note.frontmatter.references || [],
             })),
             totalMessages: result.total,
             truncated: start > 0 || result.truncated || start + selected.length < result.notes.length,

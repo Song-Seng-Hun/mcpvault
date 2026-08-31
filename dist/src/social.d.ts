@@ -1,12 +1,14 @@
 import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
+import type { ReferenceService } from './references.js';
 export declare const MAX_COMMUNITY_TEXT_LENGTH = 280;
 export declare function extractMentions(content: string): string[];
 export declare class SocialService {
     private readonly fileSystem;
     private readonly access;
-    constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy);
+    private readonly references;
+    constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, references: ReferenceService);
     private findJournalEntry;
     writeJournalEntry(params: {
         principal?: ScopePrincipal;
@@ -17,6 +19,7 @@ export declare class SocialService {
         content: string;
         mood?: string;
         tags?: unknown;
+        references?: unknown;
         expectedRevision?: string;
     }): Promise<{
         success: boolean;
@@ -62,6 +65,7 @@ export declare class SocialService {
         content: string;
         status?: string;
         tags?: unknown;
+        references?: unknown;
         expectedRevision: string;
     }): Promise<{
         success: boolean;
@@ -98,6 +102,7 @@ export declare class SocialService {
         content: string;
         revision: string;
         commentCount: number;
+        resolvedReferences: Record<string, unknown>[];
     }>;
     commentOnBlogPost(params: {
         principal?: ScopePrincipal;
@@ -105,6 +110,7 @@ export declare class SocialService {
         content: string;
         replyTo?: string;
         commentId?: string;
+        references?: unknown;
     }): Promise<{
         success: boolean;
         commentId: string;
@@ -128,6 +134,7 @@ export declare class SocialService {
             createdAt: any;
             content: string;
             revision: string;
+            references: any;
         }[];
         total: number;
         truncated: boolean;
@@ -138,6 +145,8 @@ export declare class SocialService {
         principal?: ScopePrincipal;
         limit?: number;
         maxChars?: number;
+        contextBefore?: number;
+        contextAfter?: number;
     }): Promise<{
         mentions: Record<string, unknown>[];
         total: number;

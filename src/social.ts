@@ -3,6 +3,7 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import { normalizeScopeId } from './scopes.js';
+import type { ReferenceService } from './references.js';
 
 const JOURNAL_ROOT = '_journal/entries';
 const BLOG_ROOT = 'Community/Posts';
@@ -70,6 +71,7 @@ export class SocialService {
   constructor(
     private readonly fileSystem: FileSystemService,
     private readonly access: ScopeAccessPolicy,
+    private readonly references: ReferenceService,
   ) {}
 
   private async findJournalEntry(agentId: string, entryId: string) {
@@ -95,6 +97,7 @@ export class SocialService {
     content: string;
     mood?: string;
     tags?: unknown;
+    references?: unknown;
     expectedRevision?: string;
   }) {
     const principal = requireAgent(params.principal);
@@ -187,6 +190,7 @@ export class SocialService {
     content: string;
     status?: string;
     tags?: unknown;
+    references?: unknown;
     expectedRevision: string;
   }) {
     const principal = requirePublisher(params.principal);
@@ -211,6 +215,9 @@ export class SocialService {
         ...(existing?.note.frontmatter || {}), mcpvault_type: 'blog_post', post_id: slug, title,
         author: existing?.note.frontmatter.author || identity(principal), author_role: existing?.note.frontmatter.author_role || principal.role,
         status, tags: cleanTags(params.tags ?? existing?.note.frontmatter.tags),
+        references: params.references !== undefined
+          ? await this.references.validateAndNormalize(params.references, path, principal)
+          : (existing?.note.frontmatter.references || []),
         ...(existing ? { updated_at: timestamp } : { created_at: timestamp, updated_at: timestamp }),
       },
       expectedRevision: params.expectedRevision,
@@ -252,10 +259,11 @@ export class SocialService {
       throw new Error('This draft is private to its author');
     }
     const comments = await this.listBlogComments({ slug: params.slug, limit: 1 });
-    return { path, fm: note.frontmatter, content: note.content, revision: note.revision, commentCount: comments.total };
+    return { path, fm: note.frontmatter, content: note.content, revision: note.revision, commentCount: comments.total,
+      resolvedReferences: await this.references.resolve(note.frontmatter.references, params.principal), };
   }
 
-  async commentOnBlogPost(params: { principal?: ScopePrincipal; slug: string; content: string; replyTo?: string; commentId?: string }) {
+  async commentOnBlogPost(params: { principal?: ScopePrincipal; slug: string; content: string; replyTo?: string; commentId?: string; references?: unknown }) {
     const principal = requirePublisher(params.principal);
     const slug = normalizeScopeId(params.slug, 'slug');
     const post = await this.readBlogPost(slug);
@@ -268,6 +276,7 @@ export class SocialService {
     }
     const timestamp = now();
     const path = commentPath(slug, commentId);
+    const references = await this.references.validateAndNormalize(params.references, path, principal);
     await this.fileSystem.writeNote({
       path,
       content: `${content}\n`,
@@ -275,6 +284,7 @@ export class SocialService {
         mcpvault_type: 'blog_comment', comment_id: commentId, post_id: slug,
         author: identity(principal), author_role: principal.role, created_at: timestamp, updated_at: timestamp,
         mentions: extractMentions(content),
+        references,
         ...(params.replyTo && { reply_to: normalizeScopeId(params.replyTo, 'replyTo') }),
       },
       expectedRevision: 'missing',
@@ -318,6 +328,7 @@ export class SocialService {
         createdAt: note.frontmatter.created_at,
         content,
         revision,
+        references: note.frontmatter.references || [],
       })),
       total: result.total,
       truncated: start > 0 || result.truncated || start + selected.length < result.notes.length,
@@ -326,7 +337,7 @@ export class SocialService {
     };
   }
 
-  async listMentions(params: { principal?: ScopePrincipal; limit?: number; maxChars?: number }) {
+  async listMentions(params: { principal?: ScopePrincipal; limit?: number; maxChars?: number; contextBefore?: number; contextAfter?: number }) {
     const principal = requirePublisher(params.principal);
     const targets = new Set([identity(principal), principal.modelId, ...(principal.agentId ? [principal.agentId] : [])]);
     const [comments, messages] = await Promise.all([
@@ -356,7 +367,28 @@ export class SocialService {
         createdAt: note.frontmatter.created_at,
         content: full.content,
         revision: full.revision,
+        references: note.frontmatter.references || [],
       });
+      const contextBefore = Math.min(Math.max(Number(params.contextBefore ?? 1), 0), 3);
+      const contextAfter = Math.min(Math.max(Number(params.contextAfter ?? 1), 0), 3);
+      if (contextBefore || contextAfter) {
+        const isChat = note.frontmatter.mcpvault_type === 'chat_message';
+        const root = isChat
+          ? `Community/ChatMessages/${note.frontmatter.room_id}`
+          : `Community/Comments/${note.frontmatter.post_id}`;
+        const key = isChat ? 'message_id' : 'comment_id';
+        const id = note.frontmatter[key];
+        const timeline = await this.fileSystem.queryNotes({ pathPrefix: root, filters: { mcpvault_type: isChat ? 'chat_message' : 'blog_comment' }, sortBy: 'created_at', sortOrder: 'asc', limit: 500 });
+        const at = timeline.notes.findIndex(item => item.frontmatter[key] === id);
+        const context: Array<Record<string, unknown>> = [];
+        for (let index = Math.max(0, at - contextBefore); index <= Math.min(timeline.notes.length - 1, at + contextAfter); index += 1) {
+          if (index === at || context.length >= contextBefore + contextAfter) continue;
+          const neighbor = await this.fileSystem.readNote(timeline.notes[index]!.path);
+          context.push({ path: timeline.notes[index]!.path, id: neighbor.frontmatter[key], author: neighbor.frontmatter.author, createdAt: neighbor.frontmatter.created_at, content: neighbor.content });
+        }
+        mentions.at(-1)!.context = context;
+        usedChars += context.reduce((sum, item) => sum + Array.from(String(item.content || '')).length, 0);
+      }
       usedChars += length;
     }
     return { mentions, total: notes.length, truncated: notes.length > mentions.length, targets: Array.from(targets) };

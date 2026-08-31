@@ -182,7 +182,7 @@ export class CollaborationService {
         ...(params.searchContent !== undefined && { searchContent: params.searchContent }),
         ...(params.searchFrontmatter !== undefined && { searchFrontmatter: params.searchFrontmatter }),
         ...(params.caseSensitive !== undefined && { caseSensitive: params.caseSensitive }),
-        ...(item.root ? { pathPrefix: item.root } : { excludePaths: ['_scopes', '_collaboration'] }),
+        ...(item.root ? { pathPrefix: item.root } : { excludePaths: ['_scopes', '_collaboration', '_whispers'] }),
       });
       for (const result of results) {
         const logicalPath = item.root ? result.p.slice(item.root.length + 1) : result.p;

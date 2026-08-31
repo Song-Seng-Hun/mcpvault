@@ -3,6 +3,7 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import { normalizeScopeId } from './scopes.js';
 import { extractMentions, MAX_COMMUNITY_TEXT_LENGTH } from './social.js';
+import type { ReferenceService } from './references.js';
 
 const ROOM_ROOT = 'Community/ChatRooms';
 const MESSAGE_ROOT = 'Community/ChatMessages';
@@ -37,7 +38,7 @@ function requireParticipant(principal?: ScopePrincipal): ScopePrincipal {
 }
 
 export class ChatService {
-  constructor(private readonly fileSystem: FileSystemService) {}
+  constructor(private readonly fileSystem: FileSystemService, private readonly references: ReferenceService) {}
 
   async createRoom(params: { principal?: ScopePrincipal; roomId: string; title: string; description?: string; expectedRevision: string }) {
     const principal = requireParticipant(params.principal);
@@ -89,7 +90,7 @@ export class ChatService {
     return { path, note };
   }
 
-  async sendMessage(params: { principal?: ScopePrincipal; roomId: string; content: string; replyTo?: string; messageId?: string }) {
+  async sendMessage(params: { principal?: ScopePrincipal; roomId: string; content: string; replyTo?: string; messageId?: string; references?: unknown }) {
     const principal = requireParticipant(params.principal);
     const roomId = normalizeScopeId(params.roomId, 'roomId');
     const room = await this.readRoom(roomId);
@@ -99,6 +100,7 @@ export class ChatService {
     if (params.replyTo) await this.fileSystem.readNote(messagePath(roomId, params.replyTo));
     const timestamp = now();
     const path = messagePath(roomId, messageId);
+    const references = await this.references.validateAndNormalize(params.references, path, principal);
     await this.fileSystem.writeNote({
       path,
       content: `${content}\n`,
@@ -106,6 +108,7 @@ export class ChatService {
         mcpvault_type: 'chat_message', message_id: messageId, room_id: roomId,
         author: identity(principal), author_role: principal.role, created_at: timestamp, updated_at: timestamp,
         mentions: extractMentions(content),
+        references,
         ...(params.replyTo && { reply_to: normalizeScopeId(params.replyTo, 'replyTo') }),
       },
       expectedRevision: 'missing',
@@ -152,6 +155,7 @@ export class ChatService {
         createdAt: note.frontmatter.created_at,
         content,
         revision,
+        references: note.frontmatter.references || [],
       })),
       totalMessages: result.total,
       truncated: start > 0 || result.truncated || start + selected.length < result.notes.length,

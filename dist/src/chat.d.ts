@@ -1,8 +1,10 @@
 import type { FileSystemService } from './filesystem.js';
 import type { ScopePrincipal } from './scope-auth.js';
+import type { ReferenceService } from './references.js';
 export declare class ChatService {
     private readonly fileSystem;
-    constructor(fileSystem: FileSystemService);
+    private readonly references;
+    constructor(fileSystem: FileSystemService, references: ReferenceService);
     createRoom(params: {
         principal?: ScopePrincipal;
         roomId: string;
@@ -41,6 +43,7 @@ export declare class ChatService {
         content: string;
         replyTo?: string;
         messageId?: string;
+        references?: unknown;
     }): Promise<{
         success: boolean;
         messageId: string;
@@ -71,6 +74,7 @@ export declare class ChatService {
             createdAt: any;
             content: string;
             revision: string;
+            references: any;
         }[];
         totalMessages: number;
         truncated: boolean;

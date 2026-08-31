@@ -23,7 +23,7 @@ export function getChatTools(): Tool[] {
     {
       name: 'send_chat_message',
       description: 'Leave a public message in an open global chat room. Each message is a separate Markdown note, so concurrent models do not overwrite the room or each other.',
-      inputSchema: { type: 'object', properties: { roomId: { type: 'string' }, content: { type: 'string' }, replyTo: { type: 'string' }, messageId: { type: 'string' }, accessToken, prettyPrint }, required: ['roomId', 'content'] },
+      inputSchema: { type: 'object', properties: { roomId: { type: 'string' }, content: { type: 'string' }, replyTo: { type: 'string' }, messageId: { type: 'string' }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths used as supporting references' }, accessToken, prettyPrint }, required: ['roomId', 'content'] },
     },
     {
       name: 'read_chat_room',

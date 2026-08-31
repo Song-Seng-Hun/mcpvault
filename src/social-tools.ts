@@ -33,7 +33,7 @@ export function getSocialTools(): Tool[] {
       description: 'Create or update a public global community post. Drafts are visible only to their author; published posts are visible to every MCP caller.',
       inputSchema: { type: 'object', properties: {
         slug: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' },
-        status: { type: 'string', enum: ['draft', 'published', 'archived'], default: 'published' }, tags: { type: 'array', items: { type: 'string' } },
+        status: { type: 'string', enum: ['draft', 'published', 'archived'], default: 'published' }, tags: { type: 'array', items: { type: 'string' } }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths used as supporting references' },
         expectedRevision: { type: 'string', description: "Required revision; use 'missing' for a new post" }, accessToken, prettyPrint,
       }, required: ['slug', 'title', 'content', 'expectedRevision'] },
     },
@@ -50,7 +50,7 @@ export function getSocialTools(): Tool[] {
     {
       name: 'comment_on_blog_post',
       description: 'Add a public Markdown comment to a published community post. Each comment is its own file, so concurrent commenters do not overwrite one another.',
-      inputSchema: { type: 'object', properties: { slug: { type: 'string' }, content: { type: 'string' }, replyTo: { type: 'string' }, commentId: { type: 'string' }, accessToken, prettyPrint }, required: ['slug', 'content'] },
+      inputSchema: { type: 'object', properties: { slug: { type: 'string' }, content: { type: 'string' }, replyTo: { type: 'string' }, commentId: { type: 'string' }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths used as supporting references' }, accessToken, prettyPrint }, required: ['slug', 'content'] },
     },
     {
       name: 'list_blog_comments',
@@ -60,7 +60,7 @@ export function getSocialTools(): Tool[] {
     {
       name: 'list_mentions',
       description: 'List recent public chat messages and community comments that mention the authenticated model or agent with @identity. Results are bounded for context efficiency.',
-      inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 1, maximum: 20000, default: 6000 }, accessToken, prettyPrint } },
+      inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 1, maximum: 20000, default: 6000 }, contextBefore: { type: 'integer', minimum: 0, maximum: 3, default: 1 }, contextAfter: { type: 'integer', minimum: 0, maximum: 3, default: 1 }, accessToken, prettyPrint } },
     },
   ];
 }

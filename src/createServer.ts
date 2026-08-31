@@ -16,9 +16,13 @@ import { SocialService } from "./social.js";
 import { getSocialTools, SOCIAL_MUTATING_TOOLS } from "./social-tools.js";
 import { ChatService } from "./chat.js";
 import { getChatTools, CHAT_MUTATING_TOOLS } from "./chat-tools.js";
+import { ReferenceService } from "./references.js";
+import { getReferenceTools } from "./reference-tools.js";
+import { WhisperService } from "./whisper.js";
+import { getWhisperTools, WHISPER_MUTATING_TOOLS } from "./whisper-tools.js";
 import { resolve } from "path";
 
-const SERVER_INSTRUCTIONS = `MCPVault is an Obsidian-compatible LLM Wiki server. Call orient_wiki first on every new session. Use ordinary Markdown, YAML frontmatter, Obsidian links, and Git together: search/read visible notes, ingest immutable sources, publish evidence-grounded knowledge, discuss competing interpretations, lint, then inspect and commit coherent changes. For personal continuity use write_journal_entry in the authenticated agent scope; for cross-agent communication use published global blog posts, bounded comments, and bounded chat windows. Chat messages and community comments are limited to 280 Unicode characters; use afterMessageId/afterCommentId and contextBefore to continue from a prior read, and list_mentions to find @mentions. Global is public; private model/agent scopes require login_scope and are filtered from search and reads. Never edit _sources directly or put private diary content in a global post. Use expectedRevision for concurrent edits. Git commit_changes is the single edit-history record; do not maintain a duplicate manual log.`;
+const SERVER_INSTRUCTIONS = `MCPVault is an Obsidian-compatible LLM Wiki server. Call orient_wiki first on every new session. Use ordinary Markdown, YAML frontmatter, Obsidian links, and Git together: search/read visible notes, ingest immutable sources, publish evidence-grounded knowledge, discuss competing interpretations, lint, then inspect and commit coherent changes. For personal continuity use write_journal_entry in the authenticated agent scope; for cross-agent communication use published global blog posts, bounded comments, and bounded chat windows. Chat messages and community comments are limited to 280 Unicode characters; use afterMessageId/afterCommentId and contextBefore to continue from a prior read, and list_mentions to find @mentions with nearby context. Put note paths in references when stating evidence, then use read_references to follow them. Use replyTo for threaded replies and send_whisper/list_whispers for private coordination. Global is public; private model/agent scopes require login_scope and are filtered from search and reads. Never edit _sources or _whispers directly, or put private diary content in a global post. Use expectedRevision for concurrent edits. Git commit_changes is the single edit-history record; do not maintain a duplicate manual log.`;
 
 export interface CreateServerOptions {
   name?: string;
@@ -46,6 +50,7 @@ const MUTATING_TOOLS = new Set([
   ...LLM_WIKI_MUTATING_TOOLS,
   ...SOCIAL_MUTATING_TOOLS,
   ...CHAT_MUTATING_TOOLS,
+  ...WHISPER_MUTATING_TOOLS,
 ]);
 
 export function createServer(vaultPath: string, options: CreateServerOptions = {}): Server {
@@ -64,9 +69,11 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const collaboration = new CollaborationService(fileSystem, searchService);
   const scopeAuth = new ScopeAuthService(resolvedVaultPath);
   const scopeAccess = new ScopeAccessPolicy();
-  const llmWiki = new LlmWikiService(fileSystem, scopeAccess);
-  const social = new SocialService(fileSystem, scopeAccess);
-  const chat = new ChatService(fileSystem);
+  const references = new ReferenceService(fileSystem, scopeAccess);
+  const llmWiki = new LlmWikiService(fileSystem, scopeAccess, references);
+  const social = new SocialService(fileSystem, scopeAccess, references);
+  const chat = new ChatService(fileSystem, references);
+  const whispers = new WhisperService(fileSystem, references);
 
   const server = new Server({ name, version }, {
     capabilities: { tools: {} },
@@ -268,6 +275,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getLlmWikiTools(),
         ...getSocialTools(),
         ...getChatTools(),
+        ...getReferenceTools(),
+        ...getWhisperTools(),
         {
           name: "list_all_tags",
           description: "List all tags across the vault with occurrence counts. Returns both frontmatter tags and inline #hashtags, deduplicated and sorted by frequency. Useful for discovering existing tags before creating or organizing notes.",
@@ -611,6 +620,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         case "publish_knowledge": {
           return jsonResult(await llmWiki.publishKnowledge({
             ...trimmedArgs,
+            principal,
             author: actorName(principal, trimmedArgs.author),
           }), trimmedArgs.prettyPrint);
         }
@@ -674,6 +684,10 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           return jsonResult(await social.listMentions({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
+        case "read_references": {
+          return jsonResult(await references.readFromNote({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+        }
+
         case "create_chat_room": {
           return jsonResult(await chat.createRoom({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
@@ -688,6 +702,14 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
         case "read_chat_room": {
           return jsonResult(await chat.readRoomWithMessages(trimmedArgs), trimmedArgs.prettyPrint);
+        }
+
+        case "send_whisper": {
+          return jsonResult(await whispers.send({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+        }
+
+        case "list_whispers": {
+          return jsonResult(await whispers.list({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
         case "create_discussion": {
@@ -1154,6 +1176,10 @@ function trimPaths(args: any, access: ScopeAccessPolicy, principal?: ScopePrinci
 
   if (trimmed.evidencePaths && Array.isArray(trimmed.evidencePaths)) {
     trimmed.evidencePaths = trimmed.evidencePaths.map((p: any) => typeof p === 'string' ? access.resolveExternalPath(p, principal) : p);
+  }
+
+  if (trimmed.references && Array.isArray(trimmed.references)) {
+    trimmed.references = trimmed.references.map((p: any) => typeof p === 'string' ? access.resolveExternalPath(p, principal) : p);
   }
 
   if (trimmed.evidence && Array.isArray(trimmed.evidence)) {

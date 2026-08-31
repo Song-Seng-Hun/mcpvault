@@ -1,10 +1,12 @@
 import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
+import type { ReferenceService } from './references.js';
 export declare class LlmWikiService {
     private readonly fileSystem;
     private readonly access;
-    constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy);
+    private readonly references;
+    constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, references: ReferenceService);
     initialize(scopeRoot: string, actor: string): Promise<{
         success: boolean;
         created: boolean;
@@ -29,9 +31,11 @@ export declare class LlmWikiService {
         revision: string;
     }>;
     publishKnowledge(params: {
+        principal?: ScopePrincipal;
         path: string;
         content: string;
         evidencePaths: string[];
+        references?: unknown;
         author: string;
         confidence?: string;
         status?: string;

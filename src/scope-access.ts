@@ -3,6 +3,7 @@ import { expandScopePath, parseScopePath } from './scopes.js';
 
 const PRIVATE_ROOT = '_scopes';
 const SOURCE_SEGMENT = '_sources';
+const WHISPER_ROOT = '_whispers';
 
 function normalizePhysicalPath(value: string): string {
   return String(value || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
@@ -25,6 +26,7 @@ export class ScopeAccessPolicy {
         ? principal.modelId === owner.id
         : principal.agentId === owner.id;
     }
+    if (normalized.toLowerCase() === WHISPER_ROOT || normalized.toLowerCase().startsWith(`${WHISPER_ROOT}/`)) return false;
     return true;
   }
 
@@ -44,6 +46,9 @@ export class ScopeAccessPolicy {
     const normalized = normalizePhysicalPath(raw);
     if (normalized.toLowerCase() === PRIVATE_ROOT || normalized.toLowerCase().startsWith(`${PRIVATE_ROOT}/`)) {
       throw new Error('Direct _scopes paths are private; use an authorized scope:// URI');
+    }
+    if (normalized.toLowerCase() === WHISPER_ROOT || normalized.toLowerCase().startsWith(`${WHISPER_ROOT}/`)) {
+      throw new Error('Direct _whispers paths are private; use list_whispers');
     }
     return raw;
   }

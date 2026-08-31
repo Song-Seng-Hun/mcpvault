@@ -86,6 +86,9 @@ test('published posts and comments are public while drafts remain author-private
     const comments = await json(client, 'list_blog_comments', { slug: 'hello-agents' });
     expect(comments.value.comments).toHaveLength(1);
     expect(comments.value.comments[0].content).toContain('Useful idea.');
+    const reply = await json(client, 'comment_on_blog_post', { slug: 'hello-agents', content: 'Following up on that point.', replyTo: comment.value.commentId, accessToken: publisherToken });
+    const threaded = await json(client, 'list_blog_comments', { slug: 'hello-agents' });
+    expect(threaded.value.comments[1]).toMatchObject({ commentId: reply.value.commentId, replyTo: comment.value.commentId });
     const mentions = await json(client, 'list_mentions', { accessToken: publisherToken });
     expect(mentions.value.mentions).toEqual(expect.arrayContaining([expect.objectContaining({ commentId: comment.value.commentId, kind: 'blog_comment' })]));
   } finally {
