@@ -109,7 +109,7 @@ An MCP client starts MCPVault as a local stdio process and passes the vault path
 
 - AST-aware frontmatter updates preserve formatting for unchanged YAML fields.
 - Path checks block traversal, symlink escapes, dotfiles, `.obsidian`, `.git`, and `node_modules`.
-- Forty-two MCP tools cover note, collaboration, scope, and revision operations:
+- Fifty-four MCP tools cover note, collaboration, private scope, LLM Wiki, and revision operations:
   - File operations: `read_note`, `write_note`, `patch_note`, `delete_note`, `move_note`, `move_file`
   - Partial reads: `get_note_outline`, `read_note_lines`
   - Directory and batch reads: `list_directory`, `read_multiple_notes`
@@ -120,8 +120,9 @@ An MCP client starts MCPVault as a local stdio process and passes the vault path
   - Tasks: `list_tasks` finds open, completed, or all checkbox tasks while ignoring frontmatter and fenced code blocks
   - Structured queries: `query_notes` filters and sorts notes using YAML frontmatter properties
   - Revision history: ordinary edits remain file changes; `commit_changes` groups them into Git revisions with author and reason, while history, diff, and single-note restore tools provide safe recovery
-  - Hierarchical scopes: every path tool accepts durable `scope://global/...`, `scope://model/<model>/...`, and `scope://agent/<agent>/...` paths; scoped reads use agent → model → global fallback
+  - Private hierarchical scopes: global is the public default; login tokens unlock only their own durable `scope://model/<model>/...` and `scope://agent/<agent>/...` paths, with agent → model → global fallback
   - Multi-AI collaboration: persistent agent handoff/recovery and equal-peer Markdown discussions preserve arguments, evidence, decisions, and authors without a separate database
+  - LLM Wiki workflow: immutable source ingestion, evidence-grounded knowledge publishing, a live catalog, deterministic lint, and a durable Error Book build on the same Markdown/frontmatter/Git foundation
 - `read_note` returns a SHA-256 `revision`; pass it as `expectedRevision` to `write_note`, `patch_note`, or `update_frontmatter` to reject stale concurrent edits. Use `"missing"` when creating a note that must not already exist.
 - `write_note` supports overwrite, append, and prepend modes.
 - `delete_note` and `move_file` require matching confirmation paths.
@@ -1009,11 +1010,11 @@ Note content is omitted by default and can be requested with
 
 ### Hierarchical scopes and multi-AI collaboration
 
-Scopes are durable namespaces, not permission boundaries. The global namespace
-is the existing vault root, so old notes and tools keep working unchanged.
-Model and agent notes are ordinary Markdown under `_scopes/models/<model>/` and
-`_scopes/agents/<agent>/`; therefore Obsidian links, searches, and Git history
-continue to work without a parallel storage system.
+The global namespace is public and is the default. The model and agent
+namespaces are private. They remain ordinary Markdown under
+`_scopes/models/<model>/` and `_scopes/agents/<agent>/`, so Obsidian and Git
+still work without a parallel content database, but MCP tools expose them only
+to the account that owns the scope.
 
 Every existing path-based tool accepts scope URIs:
 
@@ -1023,11 +1024,38 @@ scope://model/codex/Guides/Editing.md
 scope://agent/researcher/Working Notes.md
 ```
 
+With no `accessToken`, every read, search, directory listing, tag/stat/task
+aggregation, link analysis, structured query, and Git status call sees only
+global content. `search_notes` therefore uses global as its zero-configuration
+default. An authenticated agent searches agent → its parent model → global; an
+authenticated model searches model → global. Results never include another
+owner's namespace. Direct `_scopes/...` physical paths are rejected even for
+the owner; use the corresponding `scope://` URI.
+
+Create and use accounts without restarting or reconfiguring the one running
+server:
+
+1. `register_scope_account` claims an unowned model with `accountId`,
+   `modelId`, and a password of at least 12 characters.
+2. `login_scope` returns a process-local 12-hour `accessToken`.
+3. Pass that token to ordinary tools when private content is needed. Omit it
+   deliberately for a global-only view.
+4. A logged-in model owner may call `register_scope_account` with its token and
+   an `agentId` to create an account under that model.
+5. `logout_scope` revokes one session. `change_scope_password` revokes every
+   session for that account.
+
+Passwords are never stored. A salted scrypt hash is persisted in
+`.mcpvault/scope-auth.json`, a hidden path excluded from MCP note access and
+Git revision commits. Raw session tokens live only in server memory, so a
+server restart requires login again but does not require account recreation.
+Use a unique password because MCP tool arguments may be visible to the client
+that performs registration or login.
+
 Use `read_scoped_note` or `search_scoped_notes` when one logical path should
-resolve in agent → model → global order. A more specific note overrides the
-same logical path only for that scoped read; it does not copy or mutate the
-broader note. When an `agentId` is supplied, its model is inferred from the
-persistent identity unless an explicit `modelId` is provided.
+resolve in the authenticated agent → model → global order. A more specific
+note overrides the same logical path only for that scoped read; it does not
+copy or mutate the broader note.
 
 `create_agent_scope` stores a persistent identity, current session, purpose,
 and generation in the agent namespace. `handoff_agent_scope` transfers it to a
@@ -1049,6 +1077,35 @@ Discussions live as Markdown in `_collaboration/discussions/`:
 These tools do not auto-commit. Once a coherent group of note and discussion
 changes is ready, use `commit_changes` with the author and reason. Git remains
 the single authoritative change log and rollback mechanism.
+
+### LLM Wiki workflow
+
+LLM Wiki features are integrated into normal notes rather than stored in a
+second database or committed by a separate history system:
+
+1. `initialize_llm_wiki` creates a minimal `_wiki/SCHEMA.md` contract in the
+   selected scope, only when missing.
+2. `ingest_source` captures an immutable Markdown snapshot under `_sources/`
+   with its origin, author, timestamp, and SHA-256 content hash. Re-ingesting
+   identical content is idempotent; changed content gets a new source ID.
+3. `publish_knowledge` creates or revises a normal note with explicit
+   `evidence_paths`, confidence, status, author, and optimistic revision check.
+   A public note cannot cite private evidence that its readers cannot verify.
+4. Normal `search_notes` and `read_scoped_note` provide the query workflow.
+   `get_wiki_catalog` computes the current index from frontmatter instead of
+   maintaining a conflict-prone central index by hand.
+5. `lint_wiki` checks source integrity, missing/invalid evidence, and broken
+   wikilinks within only the caller's visible scopes.
+6. `report_wiki_issue` and `resolve_wiki_issue` form the durable Error Book for
+   contradictions, unsupported claims, stale facts, broken links, and missing
+   context. Equal-peer discussions remain the place for arguments about the
+   repair.
+
+Existing note mutation tools cannot write, patch, delete, move, retag, or
+restore an `_sources/` snapshot. An external editor such as Obsidian can still
+change a file on disk, but `lint_wiki` detects the resulting hash mismatch.
+Git remains the sole authoritative edit-reason, author, history, and rollback
+mechanism; the live catalog and Error Book do not duplicate Git's job.
 
 ### Git-backed revision history
 

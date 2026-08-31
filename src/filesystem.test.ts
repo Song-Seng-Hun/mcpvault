@@ -1580,13 +1580,22 @@ test("path with tilde vault prefix is resolved correctly", async () => {
 // SYMLINK SECURITY
 // ============================================================================
 
+function isUnsupportedSymlinkError(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && (error.code === 'EPERM' || error.code === 'EACCES');
+}
+
 test("symlink to file outside vault is blocked", async () => {
   const outsideDir = await mkdtemp(join(tmpdir(), "mcpvault-outside-"));
   const outsideFile = join(outsideDir, "secret.txt");
   await writeFile(outsideFile, "SECRET DATA");
 
   try {
-    await symlink(outsideFile, join(testVaultPath, "evil-link.md"));
+    try {
+      await symlink(outsideFile, join(testVaultPath, "evil-link.md"));
+    } catch (error) {
+      if (isUnsupportedSymlinkError(error)) return;
+      throw error;
+    }
     await expect(fileSystem.readNote("evil-link.md"))
       .rejects.toThrow(/Symlink target is outside vault/);
   } finally {
@@ -1598,7 +1607,12 @@ test("symlink to file inside vault works", async () => {
   const content = "# Real Note\n\nThis is inside the vault.";
   await mkdir(join(testVaultPath, "deep"), { recursive: true });
   await writeFile(join(testVaultPath, "deep/real-note.md"), content);
-  await symlink(join(testVaultPath, "deep/real-note.md"), join(testVaultPath, "shortcut.md"));
+  try {
+    await symlink(join(testVaultPath, "deep/real-note.md"), join(testVaultPath, "shortcut.md"));
+  } catch (error) {
+    if (isUnsupportedSymlinkError(error)) return;
+    throw error;
+  }
 
   const note = await fileSystem.readNote("shortcut.md");
   expect(note.content).toContain("This is inside the vault.");
@@ -1609,7 +1623,12 @@ test("symlink to directory outside vault is skipped in listDirectory", async () 
   await writeFile(join(outsideDir, "secret.txt"), "SECRET");
 
   try {
-    await symlink(outsideDir, join(testVaultPath, "evil-dir"));
+    try {
+      await symlink(outsideDir, join(testVaultPath, "evil-dir"));
+    } catch (error) {
+      if (isUnsupportedSymlinkError(error)) return;
+      throw error;
+    }
     const listing = await fileSystem.listDirectory("");
     expect(listing.directories).not.toContain("evil-dir");
     expect(listing.files).not.toContain("evil-dir");
@@ -1621,14 +1640,24 @@ test("symlink to directory outside vault is skipped in listDirectory", async () 
 test("symlink to directory inside vault is listed", async () => {
   await mkdir(join(testVaultPath, "real-folder"), { recursive: true });
   await writeFile(join(testVaultPath, "real-folder/note.md"), "# Note");
-  await symlink(join(testVaultPath, "real-folder"), join(testVaultPath, "linked-folder"));
+  try {
+    await symlink(join(testVaultPath, "real-folder"), join(testVaultPath, "linked-folder"));
+  } catch (error) {
+    if (isUnsupportedSymlinkError(error)) return;
+    throw error;
+  }
 
   const listing = await fileSystem.listDirectory("");
   expect(listing.directories).toContain("linked-folder");
 });
 
 test("broken symlink is handled gracefully", async () => {
-  await symlink("/nonexistent/path/file.md", join(testVaultPath, "broken-link.md"));
+  try {
+    await symlink("/nonexistent/path/file.md", join(testVaultPath, "broken-link.md"));
+  } catch (error) {
+    if (isUnsupportedSymlinkError(error)) return;
+    throw error;
+  }
 
   await expect(fileSystem.readNote("broken-link.md"))
     .rejects.toThrow(/File not found/);
@@ -1640,7 +1669,12 @@ test("symlinked file outside vault is skipped in listDirectory", async () => {
   await writeFile(outsideFile, "SECRET");
 
   try {
-    await symlink(outsideFile, join(testVaultPath, "evil-file-link.md"));
+    try {
+      await symlink(outsideFile, join(testVaultPath, "evil-file-link.md"));
+    } catch (error) {
+      if (isUnsupportedSymlinkError(error)) return;
+      throw error;
+    }
     const listing = await fileSystem.listDirectory("");
     expect(listing.files).not.toContain("evil-file-link.md");
   } finally {
@@ -1687,7 +1721,7 @@ test("path with plus sign works", async () => {
   expect(note.content).toContain("C++ notes");
 });
 
-test("path with pipe character works", async () => {
+test.skipIf(process.platform === 'win32')("path with pipe character works", async () => {
   const testPath = "choice|option.md";
   const content = "# Choice note";
 

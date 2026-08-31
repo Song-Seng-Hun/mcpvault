@@ -4,7 +4,11 @@ export { FileSystemService } from './filesystem.js';
 export { FrontmatterHandler, parseFrontmatter } from './frontmatter.js';
 export { PathFilter } from './pathfilter.js';
 export { SearchService } from './search.js';
-export { CollaborationService, expandScopePath, scopeRoot } from './scopes.js';
+export { CollaborationService, expandScopePath, parseScopePath, scopeRoot } from './scopes.js';
 export type { ScopeKind } from './scopes.js';
+export { ScopeAuthService } from './scope-auth.js';
+export type { ScopePrincipal } from './scope-auth.js';
+export { ScopeAccessPolicy } from './scope-access.js';
+export { LlmWikiService } from './llm-wiki.js';
 export * from './types.js';
 //# sourceMappingURL=index.d.ts.map

@@ -40,6 +40,10 @@ src/
   frontmatter.ts       # FrontmatterHandler — YAML parsing via gray-matter
   pathfilter.ts        # PathFilter — security layer for path validation
   search.ts            # SearchService — full-text search with token-optimized output
+  scopes.ts            # Durable global/model/agent namespaces and collaboration records
+  scope-auth.ts        # Persistent hashed accounts and process-local login sessions
+  scope-access.ts      # Private-scope path authorization and source immutability boundary
+  llm-wiki.ts          # Source ingestion, grounded publishing, catalog, lint, Error Book
   uri.ts               # Obsidian URI generation
   types.ts             # All TypeScript interfaces
   *.test.ts            # Co-located test files
@@ -48,7 +52,7 @@ website-shibumi/       # Bun + Hono + TSX website serving mcpvault.org (separate
 
 ### Core Components
 
-**server.ts** — Entry point. Registers 18 MCP tools, handles CLI args (--help, --version, --read-only, vault path), initializes services, routes tool calls. Read-only mode hides mutating tools and rejects direct mutation calls. Auto-trims whitespace from all path arguments. Exits on stdin EOF / SIGTERM / SIGINT (graceful `server.close()`), otherwise hosts orphan the process (#159).
+**server.ts** — Entry point. Registers 54 MCP tools, handles CLI args (--help, --version, --read-only, vault path), initializes services, routes tool calls. Read-only mode hides mutating tools and rejects direct mutation calls. Auto-trims whitespace from all path arguments. Exits on stdin EOF / SIGTERM / SIGINT (graceful `server.close()`), otherwise hosts orphan the process (#159).
 
 **FileSystemService** (`src/filesystem.ts`) — Orchestrates file ops with security. Path resolution and traversal prevention. Implements: read, write, patch, delete, move, list, batch read, outline and line-range reads, frontmatter update, tag management, vault stats. Uses native `fs/promises`.
 
@@ -58,7 +62,11 @@ website-shibumi/       # Bun + Hono + TSX website serving mcpvault.org (separate
 
 **SearchService** (`src/search.ts`) — Content and frontmatter search with multi-word matching and BM25 relevance reranking. Returns token-optimized results with minified field names: `{p, t, ex, mc, ln, uri}`. Max 20 results.
 
-### 18 MCP Tools
+**ScopeAuthService / ScopeAccessPolicy** (`src/scope-auth.ts`, `src/scope-access.ts`) — One long-running server supports dynamic model and agent registration/login. Anonymous calls see global only. Tokens unlock only their own model and agent paths; direct `_scopes/` paths and aggregate/search leaks are blocked. Passwords are persisted only as salted scrypt hashes under the PathFilter-hidden `.mcpvault/` directory; raw sessions stay in memory.
+
+**LlmWikiService** (`src/llm-wiki.ts`) — Adds the LLM Wiki source/schema/knowledge/Error Book workflow without a second content or history database. `_sources/` snapshots are immutable through MCP tools, knowledge notes require verifiable source evidence, and catalog/lint are computed from ordinary Markdown/frontmatter.
+
+### Core MCP Tools
 
 | Tool | Description |
 |------|-------------|
@@ -80,17 +88,25 @@ website-shibumi/       # Bun + Hono + TSX website serving mcpvault.org (separate
 | get_vault_stats | Vault statistics: total notes, folders, size, recent files |
 | list_all_tags | List all tags across the vault with occurrence counts |
 | wiki_link | Resolve Obsidian [[wiki links]] (incl. path-qualified [[folder/Note]]) and return the note |
+| register_scope_account / login_scope | Claim a model or provision an agent account, then obtain a private-scope token without restarting the server |
+| read_scoped_note / search_scoped_notes | Resolve or search only the authenticated agent → model → global hierarchy |
+| initialize_llm_wiki / ingest_source | Create the scope schema and capture immutable source snapshots |
+| publish_knowledge / get_wiki_catalog / lint_wiki | Maintain evidence-grounded normal notes and compute a live index/quality gate |
+| report_wiki_issue / resolve_wiki_issue | Maintain the persistent LLM Wiki Error Book |
 
 ### Design Patterns
 
 - **Service layer**: Each service has single responsibility, dependency-injected into server.ts, independently testable
 - **Security-first**: All paths validated through PathFilter, `resolvePath()` prevents traversal, confirmation required for destructive ops
+- **Private by scope**: global is public by default; model/agent paths require login and every vault-wide aggregate must receive the same physical-path access predicate
 - **Token optimization**: Minified field names by default (`fm` not `frontmatter`), optional `prettyPrint` parameter, compact search format
 - **Error handling**: Structured results with `success` boolean, failed batch ops return partial results (`ok` + `err` arrays)
 
 ### Key Implementation Details
 
 - **Paths**: Always relative to vault root. Leading slashes stripped. Whitespace trimmed automatically.
+- **Scope paths**: External callers must use `scope://model/<id>/...` or `scope://agent/<id>/...` with the owning token. Never expose or accept direct `_scopes/...` paths.
+- **LLM Wiki sources**: Existing `_sources/` snapshots may only be created by `ingest_source`; generic mutation tools must remain blocked and `lint_wiki` must continue detecting external edits by hash.
 - **Frontmatter**: Always use FrontmatterHandler for read/write. `originalContent` field has raw file content. Empty frontmatter = no YAML block.
 - **Write modes**: overwrite (default), append (content to end, merge frontmatter), prepend (content to beginning, merge frontmatter)
 - **Patch**: Exact string match including whitespace/newlines. `replaceAll: false` (default) fails on multiple matches to prevent accidents.

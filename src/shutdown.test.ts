@@ -65,7 +65,7 @@ test("stdio server exits on SIGTERM", async () => {
     child.kill("SIGTERM");
 
     const exitCode = await exitPromise;
-    expect(exitCode).toBe(0);
+    expect(process.platform === "win32" ? [0, null] : [0]).toContain(exitCode);
   } finally {
     if (child.exitCode === null) child.kill("SIGKILL");
     await rm(vaultPath, { recursive: true }).catch(() => {});

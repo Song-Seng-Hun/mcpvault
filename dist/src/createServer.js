@@ -5,8 +5,13 @@ import { PathFilter } from "./pathfilter.js";
 import { SearchService } from "./search.js";
 import { handleWikiLinkTool } from "./wikilink/index.js";
 import { GitHistoryService } from "./git-history.js";
-import { CollaborationService, expandScopePath } from "./scopes.js";
+import { CollaborationService } from "./scopes.js";
 import { COLLABORATION_MUTATING_TOOLS, getCollaborationTools } from "./collaboration-tools.js";
+import { ScopeAuthService } from "./scope-auth.js";
+import { ScopeAccessPolicy } from "./scope-access.js";
+import { getScopeAuthTools, SCOPE_AUTH_MUTATING_TOOLS, SCOPE_AUTH_TOOL_NAMES } from "./scope-auth-tools.js";
+import { LlmWikiService } from "./llm-wiki.js";
+import { getLlmWikiTools, LLM_WIKI_MUTATING_TOOLS } from "./llm-wiki-tools.js";
 import { resolve } from "path";
 const MUTATING_TOOLS = new Set([
     "write_note",
@@ -21,6 +26,8 @@ const MUTATING_TOOLS = new Set([
     "commit_changes",
     "restore_note_revision",
     ...COLLABORATION_MUTATING_TOOLS,
+    ...SCOPE_AUTH_MUTATING_TOOLS,
+    ...LLM_WIKI_MUTATING_TOOLS,
 ]);
 export function createServer(vaultPath, options = {}) {
     const { name = "mcpvault", version = "0.0.0", pathFilter = new PathFilter(), frontmatterHandler = new FrontmatterHandler(), readOnly = false, } = options;
@@ -29,6 +36,9 @@ export function createServer(vaultPath, options = {}) {
     const searchService = new SearchService(resolvedVaultPath, pathFilter);
     const gitHistory = new GitHistoryService(resolvedVaultPath, pathFilter);
     const collaboration = new CollaborationService(fileSystem, searchService);
+    const scopeAuth = new ScopeAuthService(resolvedVaultPath);
+    const scopeAccess = new ScopeAccessPolicy();
+    const llmWiki = new LlmWikiService(fileSystem, scopeAccess);
     const server = new Server({ name, version }, {
         capabilities: { tools: {} },
     });
@@ -223,6 +233,8 @@ export function createServer(vaultPath, options = {}) {
                 }
             },
             ...getCollaborationTools(),
+            ...getScopeAuthTools(),
+            ...getLlmWikiTools(),
             {
                 name: "list_all_tags",
                 description: "List all tags across the vault with occurrence counts. Returns both frontmatter tags and inline #hashtags, deduplicated and sorted by frequency. Useful for discovering existing tags before creating or organizing notes.",
@@ -462,6 +474,16 @@ export function createServer(vaultPath, options = {}) {
                 }
             }
         ];
+        for (const tool of tools) {
+            if (SCOPE_AUTH_TOOL_NAMES.has(tool.name))
+                continue;
+            const schema = tool.inputSchema;
+            schema.properties ||= {};
+            schema.properties.accessToken ||= {
+                type: "string",
+                description: "Optional token from login_scope. Without it, only the public global scope is visible.",
+            };
+        }
         return {
             tools: readOnly
                 ? tools.filter((tool) => !MUTATING_TOOLS.has(tool.name))
@@ -480,37 +502,111 @@ export function createServer(vaultPath, options = {}) {
             };
         }
         try {
-            const trimmedArgs = trimPaths(args);
+            const rawArgs = args && typeof args === 'object' ? { ...args } : {};
+            if (toolName === 'register_scope_account')
+                return jsonResult(await scopeAuth.register(rawArgs), rawArgs.prettyPrint);
+            if (toolName === 'login_scope')
+                return jsonResult(await scopeAuth.login(rawArgs), rawArgs.prettyPrint);
+            if (toolName === 'logout_scope')
+                return jsonResult(scopeAuth.logout(rawArgs.accessToken), rawArgs.prettyPrint);
+            if (toolName === 'whoami_scope')
+                return jsonResult(scopeAuth.whoami(rawArgs.accessToken), rawArgs.prettyPrint);
+            if (toolName === 'change_scope_password')
+                return jsonResult(await scopeAuth.changePassword(rawArgs), rawArgs.prettyPrint);
+            const principal = scopeAuth.authenticate(rawArgs.accessToken);
+            const trimmedArgs = trimPaths(rawArgs, scopeAccess, principal);
+            const canAccessPath = (path) => scopeAccess.canAccessPhysicalPath(path, principal);
+            assertImmutableSourceBoundary(toolName, trimmedArgs, scopeAccess);
             switch (toolName) {
                 case "get_scope_context": {
-                    return jsonResult(collaboration.getScopeContext(trimmedArgs.modelId, trimmedArgs.agentId), trimmedArgs.prettyPrint);
+                    return jsonResult(collaboration.getScopeContext(principal?.modelId, principal?.agentId), trimmedArgs.prettyPrint);
                 }
                 case "create_agent_scope": {
+                    await assertCanManageAgent(fileSystem, principal, trimmedArgs.agentId, trimmedArgs.modelId);
                     return jsonResult(await collaboration.createAgentScope(trimmedArgs), trimmedArgs.prettyPrint);
                 }
                 case "handoff_agent_scope": {
+                    await assertCanManageAgent(fileSystem, principal, trimmedArgs.agentId);
                     return jsonResult(await collaboration.handoffAgentScope(trimmedArgs), trimmedArgs.prettyPrint);
                 }
                 case "resume_agent_scope": {
+                    await assertCanManageAgent(fileSystem, principal, trimmedArgs.agentId);
                     return jsonResult(await collaboration.resumeAgentScope(trimmedArgs), trimmedArgs.prettyPrint);
                 }
                 case "read_scoped_note": {
-                    return jsonResult(await collaboration.readScopedNote(trimmedArgs), trimmedArgs.prettyPrint);
+                    return jsonResult(await collaboration.readScopedNote({
+                        path: trimmedArgs.path,
+                        ...(principal?.modelId && { modelId: principal.modelId }),
+                        ...(principal?.agentId && { agentId: principal.agentId }),
+                    }), trimmedArgs.prettyPrint);
                 }
                 case "search_scoped_notes": {
-                    return jsonResult(await collaboration.searchScopedNotes(trimmedArgs), trimmedArgs.prettyPrint);
+                    return jsonResult(await collaboration.searchScopedNotes({
+                        query: trimmedArgs.query,
+                        limit: trimmedArgs.limit,
+                        searchContent: trimmedArgs.searchContent,
+                        searchFrontmatter: trimmedArgs.searchFrontmatter,
+                        caseSensitive: trimmedArgs.caseSensitive,
+                        ...(principal?.modelId && { modelId: principal.modelId }),
+                        ...(principal?.agentId && { agentId: principal.agentId }),
+                    }), trimmedArgs.prettyPrint);
+                }
+                case "initialize_llm_wiki": {
+                    const scopeRoot = trimmedArgs.scopeUri || '';
+                    return jsonResult(await llmWiki.initialize(scopeRoot, actorName(principal, trimmedArgs.actor)), trimmedArgs.prettyPrint);
+                }
+                case "ingest_source": {
+                    return jsonResult(await llmWiki.ingestSource({
+                        ...trimmedArgs,
+                        scopeRoot: trimmedArgs.scopeUri || '',
+                        capturedBy: actorName(principal, trimmedArgs.capturedBy),
+                    }), trimmedArgs.prettyPrint);
+                }
+                case "publish_knowledge": {
+                    return jsonResult(await llmWiki.publishKnowledge({
+                        ...trimmedArgs,
+                        author: actorName(principal, trimmedArgs.author),
+                    }), trimmedArgs.prettyPrint);
+                }
+                case "get_wiki_catalog": {
+                    return jsonResult(await llmWiki.catalog(principal), trimmedArgs.prettyPrint);
+                }
+                case "lint_wiki": {
+                    return jsonResult(await llmWiki.lint(principal, trimmedArgs.limit), trimmedArgs.prettyPrint);
+                }
+                case "report_wiki_issue": {
+                    return jsonResult(await llmWiki.reportIssue({
+                        ...trimmedArgs,
+                        scopeRoot: trimmedArgs.scopeUri || '',
+                        reportedBy: actorName(principal, trimmedArgs.reportedBy),
+                    }), trimmedArgs.prettyPrint);
+                }
+                case "resolve_wiki_issue": {
+                    return jsonResult(await llmWiki.resolveIssue({
+                        ...trimmedArgs,
+                        actor: actorName(principal, trimmedArgs.actor),
+                    }), trimmedArgs.prettyPrint);
                 }
                 case "create_discussion": {
-                    return jsonResult(await collaboration.createDiscussion(trimmedArgs), trimmedArgs.prettyPrint);
+                    return jsonResult(await collaboration.createDiscussion({
+                        ...trimmedArgs,
+                        createdBy: actorName(principal, trimmedArgs.createdBy),
+                    }), trimmedArgs.prettyPrint);
                 }
                 case "get_discussion": {
                     return jsonResult(await collaboration.getDiscussion(trimmedArgs.discussionId), trimmedArgs.prettyPrint);
                 }
                 case "add_discussion_argument": {
-                    return jsonResult(await collaboration.addDiscussionArgument(trimmedArgs), trimmedArgs.prettyPrint);
+                    return jsonResult(await collaboration.addDiscussionArgument({
+                        ...trimmedArgs,
+                        actor: actorName(principal, trimmedArgs.actor),
+                    }), trimmedArgs.prettyPrint);
                 }
                 case "update_discussion_status": {
-                    return jsonResult(await collaboration.updateDiscussionStatus(trimmedArgs), trimmedArgs.prettyPrint);
+                    return jsonResult(await collaboration.updateDiscussionStatus({
+                        ...trimmedArgs,
+                        actor: actorName(principal, trimmedArgs.actor),
+                    }), trimmedArgs.prettyPrint);
                 }
                 case "read_note": {
                     const note = await fileSystem.readNote(trimmedArgs.path);
@@ -547,6 +643,9 @@ export function createServer(vaultPath, options = {}) {
                 }
                 case "list_directory": {
                     const listing = await fileSystem.listDirectory(trimmedArgs.path || '');
+                    const base = String(trimmedArgs.path || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+                    listing.directories = listing.directories.filter(name => canAccessPath(base ? `${base}/${name}` : name));
+                    listing.files = listing.files.filter(name => canAccessPath(base ? `${base}/${name}` : name));
                     const indent = trimmedArgs.prettyPrint ? 2 : undefined;
                     return {
                         content: [{ type: "text", text: JSON.stringify({ dirs: listing.directories, files: listing.files }, null, indent) }]
@@ -564,15 +663,25 @@ export function createServer(vaultPath, options = {}) {
                     };
                 }
                 case "search_notes": {
-                    const results = await searchService.search({
-                        query: trimmedArgs.query,
-                        limit: trimmedArgs.limit,
-                        searchContent: trimmedArgs.searchContent,
-                        searchFrontmatter: trimmedArgs.searchFrontmatter,
-                        caseSensitive: trimmedArgs.caseSensitive,
-                        pathPrefix: trimmedArgs.pathPrefix,
-                        excludePaths: trimmedArgs.excludePaths
-                    });
+                    const results = trimmedArgs.pathPrefix
+                        ? (await searchService.search({
+                            query: trimmedArgs.query,
+                            limit: trimmedArgs.limit,
+                            searchContent: trimmedArgs.searchContent,
+                            searchFrontmatter: trimmedArgs.searchFrontmatter,
+                            caseSensitive: trimmedArgs.caseSensitive,
+                            pathPrefix: trimmedArgs.pathPrefix,
+                            excludePaths: trimmedArgs.excludePaths,
+                        })).filter(result => canAccessPath(result.p))
+                        : await collaboration.searchScopedNotes({
+                            query: trimmedArgs.query,
+                            limit: trimmedArgs.limit,
+                            searchContent: trimmedArgs.searchContent,
+                            searchFrontmatter: trimmedArgs.searchFrontmatter,
+                            caseSensitive: trimmedArgs.caseSensitive,
+                            ...(principal?.modelId && { modelId: principal.modelId }),
+                            ...(principal?.agentId && { agentId: principal.agentId }),
+                        });
                     const indent = trimmedArgs.prettyPrint ? 2 : undefined;
                     return {
                         content: [{ type: "text", text: JSON.stringify(results, null, indent) }]
@@ -655,14 +764,14 @@ export function createServer(vaultPath, options = {}) {
                 }
                 case "get_vault_stats": {
                     const recentCount = Math.min(trimmedArgs.recentCount || 5, 20);
-                    const stats = await fileSystem.getVaultStats(recentCount);
+                    const stats = await fileSystem.getVaultStats(recentCount, canAccessPath);
                     const indent = trimmedArgs.prettyPrint ? 2 : undefined;
                     return {
                         content: [{ type: "text", text: JSON.stringify({ notes: stats.totalNotes, folders: stats.totalFolders, size: stats.totalSize, recent: stats.recentlyModified }, null, indent) }]
                     };
                 }
                 case "list_all_tags": {
-                    const tags = await fileSystem.listAllTags();
+                    const tags = await fileSystem.listAllTags(canAccessPath);
                     const indent = trimmedArgs.prettyPrint ? 2 : undefined;
                     return {
                         content: [{ type: "text", text: JSON.stringify(tags, null, indent) }]
@@ -681,7 +790,7 @@ export function createServer(vaultPath, options = {}) {
                         status,
                         pathPrefix: trimmedArgs.pathPrefix,
                         limit: Math.min(requestedLimit, 500),
-                    });
+                    }, canAccessPath);
                     const indent = trimmedArgs.prettyPrint ? 2 : undefined;
                     return {
                         content: [{ type: "text", text: JSON.stringify(tasks, null, indent) }]
@@ -699,7 +808,7 @@ export function createServer(vaultPath, options = {}) {
                         sortOrder: trimmedArgs.sortOrder,
                         limit: Math.min(requestedLimit, 500),
                         includeContent: trimmedArgs.includeContent,
-                    });
+                    }, canAccessPath);
                     const indent = trimmedArgs.prettyPrint ? 2 : undefined;
                     return {
                         content: [{ type: "text", text: JSON.stringify(result, null, indent) }]
@@ -707,6 +816,7 @@ export function createServer(vaultPath, options = {}) {
                 }
                 case "get_revision_status": {
                     const status = await gitHistory.status();
+                    status.pending = status.pending.filter(change => canAccessPath(change.path) && (!change.previousPath || canAccessPath(change.previousPath)));
                     const indent = trimmedArgs.prettyPrint ? 2 : undefined;
                     return {
                         content: [{ type: "text", text: JSON.stringify(status, null, indent) }]
@@ -722,9 +832,15 @@ export function createServer(vaultPath, options = {}) {
                     };
                 }
                 case "commit_changes": {
+                    let commitPaths = trimmedArgs.paths;
+                    if (!commitPaths) {
+                        const pending = (await gitHistory.status()).pending
+                            .filter(change => canAccessPath(change.path) && (!change.previousPath || canAccessPath(change.previousPath)));
+                        commitPaths = Array.from(new Set(pending.flatMap(change => [change.path, change.previousPath].filter((path) => Boolean(path)))));
+                    }
                     const result = await gitHistory.commitChanges({
                         reason: trimmedArgs.reason,
-                        ...(trimmedArgs.paths !== undefined && { paths: trimmedArgs.paths }),
+                        paths: commitPaths,
                         ...(trimmedArgs.authorName !== undefined && { authorName: trimmedArgs.authorName }),
                         ...(trimmedArgs.authorEmail !== undefined && { authorEmail: trimmedArgs.authorEmail }),
                     });
@@ -775,13 +891,13 @@ export function createServer(vaultPath, options = {}) {
                     };
                 }
                 case "wiki_link":
-                    return await handleWikiLinkTool(fileSystem, trimmedArgs);
+                    return await handleWikiLinkTool(fileSystem, trimmedArgs, canAccessPath);
                 case "get_backlinks": {
                     const requestedLimit = trimmedArgs.limit === undefined ? 100 : Number(trimmedArgs.limit);
                     if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
                         throw new Error('limit must be a positive integer');
                     }
-                    const backlinks = await fileSystem.getBacklinks(trimmedArgs.path, Math.min(requestedLimit, 500));
+                    const backlinks = await fileSystem.getBacklinks(trimmedArgs.path, Math.min(requestedLimit, 500), canAccessPath);
                     const indent = trimmedArgs.prettyPrint ? 2 : undefined;
                     return {
                         content: [{ type: "text", text: JSON.stringify(backlinks, null, indent) }]
@@ -803,7 +919,7 @@ export function createServer(vaultPath, options = {}) {
                     if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
                         throw new Error('limit must be a positive integer');
                     }
-                    const unresolved = await fileSystem.findUnresolvedLinks(Math.min(requestedLimit, 500));
+                    const unresolved = await fileSystem.findUnresolvedLinks(Math.min(requestedLimit, 500), canAccessPath);
                     const indent = trimmedArgs.prettyPrint ? 2 : undefined;
                     return {
                         content: [{ type: "text", text: JSON.stringify(unresolved, null, indent) }]
@@ -839,7 +955,7 @@ export function createServer(vaultPath, options = {}) {
                     if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
                         throw new Error('limit must be a positive integer');
                     }
-                    const orphans = await fileSystem.findOrphanNotes(Math.min(requestedLimit, 500));
+                    const orphans = await fileSystem.findOrphanNotes(Math.min(requestedLimit, 500), canAccessPath);
                     const indent = trimmedArgs.prettyPrint ? 2 : undefined;
                     return {
                         content: [{ type: "text", text: JSON.stringify(orphans, null, indent) }]
@@ -875,21 +991,74 @@ export function createServer(vaultPath, options = {}) {
     });
     return server;
 }
-function trimPaths(args) {
+function trimPaths(args, access, principal) {
     const trimmed = { ...args };
-    for (const key of ['path', 'oldPath', 'newPath', 'confirmPath', 'confirmOldPath', 'confirmNewPath', 'folder', 'pathPrefix']) {
+    for (const key of ['path', 'oldPath', 'newPath', 'confirmPath', 'confirmOldPath', 'confirmNewPath', 'folder', 'pathPrefix', 'scopeUri', 'subjectPath']) {
         if (trimmed[key] && typeof trimmed[key] === 'string')
-            trimmed[key] = expandScopePath(trimmed[key]);
+            trimmed[key] = access.resolveExternalPath(trimmed[key], principal);
     }
     if (trimmed.sortBy && typeof trimmed.sortBy === 'string')
         trimmed.sortBy = trimmed.sortBy.trim();
     if (trimmed.paths && Array.isArray(trimmed.paths)) {
-        trimmed.paths = trimmed.paths.map((p) => typeof p === 'string' ? expandScopePath(p) : p);
+        trimmed.paths = trimmed.paths.map((p) => typeof p === 'string' ? access.resolveExternalPath(p, principal) : p);
     }
     if (trimmed.excludePaths && Array.isArray(trimmed.excludePaths)) {
-        trimmed.excludePaths = trimmed.excludePaths.map((p) => typeof p === 'string' ? expandScopePath(p) : p);
+        trimmed.excludePaths = trimmed.excludePaths.map((p) => typeof p === 'string' ? access.resolveExternalPath(p, principal) : p);
+    }
+    if (trimmed.evidencePaths && Array.isArray(trimmed.evidencePaths)) {
+        trimmed.evidencePaths = trimmed.evidencePaths.map((p) => typeof p === 'string' ? access.resolveExternalPath(p, principal) : p);
+    }
+    if (trimmed.evidence && Array.isArray(trimmed.evidence)) {
+        trimmed.evidence = trimmed.evidence.map((item) => typeof item === 'string' && item.trim().toLowerCase().startsWith('scope://')
+            ? access.toPublicPath(access.resolveExternalPath(item, principal))
+            : item);
     }
     return trimmed;
+}
+function assertImmutableSourceBoundary(toolName, args, access) {
+    const paths = [];
+    if (['write_note', 'patch_note', 'delete_note', 'update_frontmatter', 'restore_note_revision', 'publish_knowledge'].includes(toolName)) {
+        if (typeof args.path === 'string')
+            paths.push(args.path);
+    }
+    if (toolName === 'manage_tags' && args.operation !== 'list' && typeof args.path === 'string')
+        paths.push(args.path);
+    if (['move_note', 'move_file'].includes(toolName)) {
+        if (typeof args.oldPath === 'string')
+            paths.push(args.oldPath);
+        if (typeof args.newPath === 'string')
+            paths.push(args.newPath);
+    }
+    if (toolName === 'daily_note' && typeof args.folder === 'string')
+        paths.push(args.folder);
+    for (const path of paths)
+        access.assertMutationAllowed(path, toolName);
+}
+async function assertCanManageAgent(fileSystem, principal, agentIdInput, modelIdInput) {
+    if (!principal)
+        throw new Error('Login is required to manage a private agent scope');
+    const agentId = String(agentIdInput || '').trim().toLowerCase();
+    if (!agentId)
+        throw new Error('agentId is required');
+    let modelId = typeof modelIdInput === 'string' && modelIdInput.trim() ? modelIdInput.trim().toLowerCase() : undefined;
+    if (!modelId) {
+        const identityPath = `_scopes/agents/${agentId}/_identity.md`;
+        const identity = await fileSystem.readNote(identityPath);
+        modelId = String(identity.frontmatter.model_id || '').trim().toLowerCase();
+    }
+    if (principal.modelId !== modelId)
+        throw new Error(`Access denied: agent '${agentId}' belongs to another model scope`);
+    if (principal.role === 'agent' && principal.agentId !== agentId) {
+        throw new Error(`Access denied: agent account '${principal.accountId}' cannot manage agent '${agentId}'`);
+    }
+}
+function actorName(principal, explicit) {
+    if (principal)
+        return principal.agentId || principal.modelId || principal.accountId;
+    const actor = typeof explicit === 'string' ? explicit.trim() : '';
+    if (!actor)
+        throw new Error('actor identity is required for a global unauthenticated operation');
+    return actor;
 }
 function jsonResult(value, prettyPrint) {
     return { content: [{ type: 'text', text: JSON.stringify(value, null, prettyPrint ? 2 : undefined) }] };

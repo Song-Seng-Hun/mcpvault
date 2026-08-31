@@ -7,8 +7,8 @@ export function getCollaborationTools() {
     return [
         {
             name: 'get_scope_context',
-            description: 'Describe durable global, model, and agent namespaces. Any existing path-based tool accepts scope://global/path, scope://model/model-id/path, or scope://agent/agent-id/path.',
-            inputSchema: { type: 'object', properties: { modelId: { type: 'string' }, agentId: { type: 'string' }, prettyPrint } },
+            description: 'Describe the public global namespace and private model/agent namespaces available to the supplied login_scope accessToken.',
+            inputSchema: { type: 'object', properties: { prettyPrint } },
         },
         {
             name: 'create_agent_scope',
@@ -38,14 +38,14 @@ export function getCollaborationTools() {
             name: 'read_scoped_note',
             description: 'Read one logical note using agent > model > global fallback, returning the winning scope and revision.',
             inputSchema: { type: 'object', properties: {
-                    path: { type: 'string', description: 'Logical note path without scope:// prefix' }, modelId: { type: 'string' }, agentId: { type: 'string' }, prettyPrint,
+                    path: { type: 'string', description: 'Logical note path without scope:// prefix' }, prettyPrint,
                 }, required: ['path'] },
         },
         {
             name: 'search_scoped_notes',
-            description: 'Search agent, model, then global scopes and deduplicate overridden logical paths by precedence.',
+            description: 'Search the authenticated agent, its model, then global scope and deduplicate overridden logical paths. Without login, searches global only.',
             inputSchema: { type: 'object', properties: {
-                    query: { type: 'string' }, modelId: { type: 'string' }, agentId: { type: 'string' },
+                    query: { type: 'string' },
                     limit: { type: 'integer', minimum: 1, maximum: 20, default: 10 }, searchContent: { type: 'boolean', default: true },
                     searchFrontmatter: { type: 'boolean', default: false }, caseSensitive: { type: 'boolean', default: false }, prettyPrint,
                 }, required: ['query'] },

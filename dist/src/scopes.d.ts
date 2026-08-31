@@ -1,6 +1,12 @@
 import type { FileSystemService } from './filesystem.js';
 import type { SearchService } from './search.js';
 export type ScopeKind = 'global' | 'model' | 'agent';
+export declare function normalizeScopeId(value: string, field: string): string;
+export declare function parseScopePath(value: string): {
+    kind: ScopeKind;
+    id?: string;
+    logicalPath: string;
+} | undefined;
 /** Convert a durable scope URI into the ordinary vault path used by every existing tool. */
 export declare function expandScopePath(value: string): string;
 export declare function scopeRoot(kind: ScopeKind, id?: string): string;
@@ -26,6 +32,7 @@ export declare class CollaborationService {
             root: string;
             identityPath: string;
         };
+        access: string;
         note: string;
     };
     createAgentScope(params: {

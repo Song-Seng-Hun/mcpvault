@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Single-server model and agent accounts with salted scrypt password hashes, short-lived in-memory sessions, login throttling, and private scope authorization without server restarts.
+- Integrated LLM Wiki workflow for immutable source ingestion, evidence-grounded knowledge publishing, dynamic cataloging, deterministic lint, and durable Error Book issues.
+
+### Security
+- Global is now the anonymous/default view. Model and agent scopes require their owning login token, direct `_scopes/` path access is rejected, and search, tags, stats, tasks, links, structured queries, and Git pending status filter inaccessible paths.
+- Public knowledge and issue records cannot cite more-private evidence that public readers could not verify.
+
+### Fixed
+- Windows test helpers now use platform-aware path handling and tolerate unavailable symlink privileges; the POSIX-only pipe-filename test is skipped on Windows.
+
 ## [0.16.0] - 2026-08-17
 
 ### Changed

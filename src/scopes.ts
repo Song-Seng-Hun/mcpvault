@@ -8,12 +8,28 @@ const ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const DISCUSSION_STATUSES = new Set(['open', 'resolved', 'rejected', 'superseded']);
 const DISCUSSION_STANCES = new Set(['support', 'challenge', 'alternative', 'question']);
 
-function normalizeId(value: string, field: string): string {
+export function normalizeScopeId(value: string, field: string): string {
   const id = String(value || '').trim().toLowerCase();
   if (!ID_PATTERN.test(id)) {
     throw new Error(`${field} must be 1-64 lowercase letters, numbers, dots, underscores, or hyphens`);
   }
   return id;
+}
+
+export function parseScopePath(value: string): { kind: ScopeKind; id?: string; logicalPath: string } | undefined {
+  const raw = String(value || '').trim();
+  if (!raw.toLowerCase().startsWith('scope://')) return undefined;
+  const match = /^scope:\/\/(global|model|agent)(?:\/([^/]+))?(?:\/(.*))?$/i.exec(raw.replace(/\\/g, '/'));
+  if (!match) throw new Error(`Invalid scope path: ${raw}`);
+  const kind = match[1]!.toLowerCase() as ScopeKind;
+  if (kind === 'global') {
+    return { kind, logicalPath: [match[2], match[3]].filter(Boolean).join('/') };
+  }
+  return {
+    kind,
+    id: normalizeScopeId(match[2] || '', `${kind}Id`),
+    logicalPath: match[3] || '',
+  };
 }
 
 function normalizeLogicalPath(value: string): string {
@@ -28,25 +44,24 @@ function normalizeLogicalPath(value: string): string {
 export function expandScopePath(value: string): string {
   const raw = String(value || '').trim();
   if (!raw.toLowerCase().startsWith('scope://')) return raw;
-  const match = /^scope:\/\/(global|model|agent)(?:\/([^/]+))?(?:\/(.*))?$/i.exec(raw.replace(/\\/g, '/'));
-  if (!match) throw new Error(`Invalid scope path: ${raw}`);
-  const kind = match[1]!.toLowerCase() as ScopeKind;
+  const parsed = parseScopePath(raw)!;
+  const kind = parsed.kind;
   if (kind === 'global') {
-    const logical = [match[2], match[3]].filter(Boolean).join('/');
+    const logical = parsed.logicalPath;
     return logical ? normalizeLogicalPath(logical) : '';
   }
-  const id = normalizeId(match[2] || '', `${kind}Id`);
-  const logical = match[3] ? normalizeLogicalPath(match[3]) : '';
+  const id = parsed.id!;
+  const logical = parsed.logicalPath ? normalizeLogicalPath(parsed.logicalPath) : '';
   return `_scopes/${kind}s/${id}${logical ? `/${logical}` : ''}`;
 }
 
 export function scopeRoot(kind: ScopeKind, id?: string): string {
   if (kind === 'global') return '';
-  return `_scopes/${kind}s/${normalizeId(id || '', `${kind}Id`)}`;
+  return `_scopes/${kind}s/${normalizeScopeId(id || '', `${kind}Id`)}`;
 }
 
 const now = () => new Date().toISOString();
-const discussionPath = (id: string) => `_collaboration/discussions/${normalizeId(id, 'discussionId')}.md`;
+const discussionPath = (id: string) => `_collaboration/discussions/${normalizeScopeId(id, 'discussionId')}.md`;
 const identityPath = (agentId: string) => `${scopeRoot('agent', agentId)}/_identity.md`;
 
 function evidenceLines(evidence?: string[]): string {
@@ -58,29 +73,30 @@ export class CollaborationService {
   constructor(private fileSystem: FileSystemService, private searchService: SearchService) {}
 
   private async inferModelId(agentId?: string, explicitModelId?: string): Promise<string | undefined> {
-    if (explicitModelId) return normalizeId(explicitModelId, 'modelId');
+    if (explicitModelId) return normalizeScopeId(explicitModelId, 'modelId');
     if (!agentId) return undefined;
     const path = identityPath(agentId);
     if (!await this.fileSystem.noteExists(path)) return undefined;
     const identity = await this.fileSystem.readNote(path);
-    return identity.frontmatter.model_id ? normalizeId(String(identity.frontmatter.model_id), 'modelId') : undefined;
+    return identity.frontmatter.model_id ? normalizeScopeId(String(identity.frontmatter.model_id), 'modelId') : undefined;
   }
 
   getScopeContext(modelId?: string, agentId?: string) {
-    const model = modelId ? normalizeId(modelId, 'modelId') : undefined;
-    const agent = agentId ? normalizeId(agentId, 'agentId') : undefined;
+    const model = modelId ? normalizeScopeId(modelId, 'modelId') : undefined;
+    const agent = agentId ? normalizeScopeId(agentId, 'agentId') : undefined;
     return {
       precedence: ['agent', 'model', 'global'],
       global: { uri: 'scope://global/', root: '' },
       ...(model && { model: { id: model, uri: `scope://model/${model}/`, root: scopeRoot('model', model) } }),
       ...(agent && { agent: { id: agent, uri: `scope://agent/${agent}/`, root: scopeRoot('agent', agent), identityPath: identityPath(agent) } }),
-      note: 'Scopes are durable namespaces, not access-control boundaries. Files remain searchable, linkable, and Git-versioned.',
+      access: model || agent ? 'authenticated-private-plus-global' : 'public-global-only',
+      note: 'Global is public and is the default. Model and agent namespaces are private; login_scope access is required and searches never include another owner\'s scope.',
     };
   }
 
   async createAgentScope(params: { agentId: string; modelId: string; sessionId: string; displayName?: string; purpose?: string }) {
-    const agentId = normalizeId(params.agentId, 'agentId');
-    const modelId = normalizeId(params.modelId, 'modelId');
+    const agentId = normalizeScopeId(params.agentId, 'agentId');
+    const modelId = normalizeScopeId(params.modelId, 'modelId');
     const sessionId = String(params.sessionId || '').trim();
     if (!sessionId) throw new Error('sessionId is required');
     const path = identityPath(agentId);
@@ -97,7 +113,7 @@ export class CollaborationService {
   }
 
   async handoffAgentScope(params: { agentId: string; fromSessionId: string; toSessionId: string; reason: string; expectedGeneration: number }) {
-    const agentId = normalizeId(params.agentId, 'agentId');
+    const agentId = normalizeScopeId(params.agentId, 'agentId');
     const path = identityPath(agentId);
     const note = await this.fileSystem.readNote(path);
     const generation = Number(note.frontmatter.generation);
@@ -118,7 +134,7 @@ export class CollaborationService {
   }
 
   async resumeAgentScope(params: { agentId: string; newSessionId: string; reason: string; expectedGeneration: number }) {
-    const agentId = normalizeId(params.agentId, 'agentId');
+    const agentId = normalizeScopeId(params.agentId, 'agentId');
     const path = identityPath(agentId);
     const note = await this.fileSystem.readNote(path);
     const generation = Number(note.frontmatter.generation);
@@ -185,7 +201,7 @@ export class CollaborationService {
     const position = String(params.initialPosition || '').trim();
     if (!title || !actor || !position) throw new Error('title, createdBy, and initialPosition are required');
     const generated = `${new Date().toISOString().slice(0, 10)}-${randomUUID().slice(0, 8)}`;
-    const id = normalizeId(params.discussionId || generated, 'discussionId');
+    const id = normalizeScopeId(params.discussionId || generated, 'discussionId');
     const path = discussionPath(id);
     const timestamp = now();
     const subject = params.subjectPath?.trim();
@@ -234,7 +250,7 @@ export class CollaborationService {
   }
 
   async getDiscussion(discussionId: string) {
-    const id = normalizeId(discussionId, 'discussionId');
+    const id = normalizeScopeId(discussionId, 'discussionId');
     const path = discussionPath(id);
     const note = await this.fileSystem.readNote(path);
     return { discussionId: id, path, fm: note.frontmatter, content: note.content, revision: note.revision };

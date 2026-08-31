@@ -39,20 +39,33 @@ test('ordinary tools accept scope URIs and scoped reads use agent-model-global p
   const client = new Client({ name: 'scope-test', version: '1.0.0' });
   await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
   try {
+    await client.callTool({ name: 'register_scope_account', arguments: { accountId: 'codex-owner', modelId: 'codex', password: 'codex-test-password' } });
+    const modelLogin = await client.callTool({ name: 'login_scope', arguments: { accountId: 'codex-owner', password: 'codex-test-password' } });
+    const modelToken = JSON.parse((modelLogin.content as any)[0].text).accessToken;
     await client.callTool({ name: 'write_note', arguments: { path: 'Guide.md', content: 'global answer' } });
-    await client.callTool({ name: 'write_note', arguments: { path: 'scope://model/codex/Guide.md', content: 'model answer' } });
-    await client.callTool({ name: 'create_agent_scope', arguments: { agentId: 'reviewer', modelId: 'codex', sessionId: 'scope-test-session' } });
+    await client.callTool({ name: 'write_note', arguments: { path: 'scope://model/codex/Guide.md', content: 'model answer', accessToken: modelToken } });
+    await client.callTool({ name: 'create_agent_scope', arguments: { agentId: 'reviewer', modelId: 'codex', sessionId: 'scope-test-session', accessToken: modelToken } });
+    await client.callTool({ name: 'register_scope_account', arguments: {
+      accountId: 'reviewer-account', modelId: 'codex', agentId: 'reviewer', password: 'reviewer-password', accessToken: modelToken,
+    } });
+    const agentLogin = await client.callTool({ name: 'login_scope', arguments: { accountId: 'reviewer-account', password: 'reviewer-password' } });
+    const agentToken = JSON.parse((agentLogin.content as any)[0].text).accessToken;
 
-    const inherited = await client.callTool({ name: 'read_scoped_note', arguments: { path: 'Guide.md', agentId: 'reviewer' } });
+    const inherited = await client.callTool({ name: 'read_scoped_note', arguments: { path: 'Guide.md', accessToken: agentToken } });
     expect(JSON.parse((inherited.content as any)[0].text)).toMatchObject({ scope: 'model', content: 'model answer' });
 
-    await client.callTool({ name: 'write_note', arguments: { path: 'scope://agent/reviewer/Guide.md', content: 'agent answer' } });
+    await client.callTool({ name: 'write_note', arguments: { path: 'scope://agent/reviewer/Guide.md', content: 'agent answer', accessToken: agentToken } });
 
-    const read = await client.callTool({ name: 'read_note', arguments: { path: 'scope://model/codex/Guide.md' } });
+    const read = await client.callTool({ name: 'read_note', arguments: { path: 'scope://model/codex/Guide.md', accessToken: modelToken } });
     expect(JSON.parse((read.content as any)[0].text)).toMatchObject({ content: 'model answer' });
 
-    const scoped = await client.callTool({ name: 'read_scoped_note', arguments: { path: 'Guide.md', agentId: 'reviewer' } });
+    const scoped = await client.callTool({ name: 'read_scoped_note', arguments: { path: 'Guide.md', accessToken: agentToken } });
     expect(JSON.parse((scoped.content as any)[0].text)).toMatchObject({ scope: 'agent', content: 'agent answer' });
+
+    const anonymousRead = await client.callTool({ name: 'read_note', arguments: { path: 'scope://model/codex/Guide.md' } });
+    expect(anonymousRead.isError).toBe(true);
+    const bypassRead = await client.callTool({ name: 'read_note', arguments: { path: '_scopes/models/codex/Guide.md', accessToken: modelToken } });
+    expect(bypassRead.isError).toBe(true);
   } finally {
     await client.close();
     await server.close();
@@ -116,15 +129,18 @@ test('scoped notes use the same Git commit, history, and rollback foundation', a
   const client = new Client({ name: 'scope-git-test', version: '1.0.0' });
   await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
   try {
+    await client.callTool({ name: 'register_scope_account', arguments: { accountId: 'gemini-owner', modelId: 'gemini', password: 'gemini-test-password' } });
+    const login = await client.callTool({ name: 'login_scope', arguments: { accountId: 'gemini-owner', password: 'gemini-test-password' } });
+    const accessToken = JSON.parse((login.content as any)[0].text).accessToken;
     const initialized = await client.callTool({ name: 'initialize_revision_history', arguments: { confirm: true } });
     expect(initialized.isError).toBeFalsy();
     const scopedPath = 'scope://model/gemini/Shared Policy.md';
-    await client.callTool({ name: 'write_note', arguments: { path: scopedPath, content: 'Initial shared policy' } });
+    await client.callTool({ name: 'write_note', arguments: { path: scopedPath, content: 'Initial shared policy', accessToken } });
     const committed = await client.callTool({ name: 'commit_changes', arguments: {
-      reason: 'Establish Gemini model policy', paths: [scopedPath], authorName: 'Gemini Agent', authorEmail: 'gemini@example.test',
+      reason: 'Establish Gemini model policy', paths: [scopedPath], authorName: 'Gemini Agent', authorEmail: 'gemini@example.test', accessToken,
     } });
     expect(committed.isError).toBeFalsy();
-    const history = await client.callTool({ name: 'get_note_history', arguments: { path: scopedPath } });
+    const history = await client.callTool({ name: 'get_note_history', arguments: { path: scopedPath, accessToken } });
     expect(JSON.parse((history.content as any)[0].text)[0]).toMatchObject({ reason: 'Establish Gemini model policy', authorName: 'Gemini Agent' });
   } finally {
     await client.close();

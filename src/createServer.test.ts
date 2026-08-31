@@ -25,7 +25,7 @@ test("createServer returns a Server instance", () => {
   expect(typeof server.connect).toBe("function");
 });
 
-test("server registers 42 tools", async () => {
+test("server registers 54 tools", async () => {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -37,11 +37,12 @@ test("server registers 42 tools", async () => {
   ]);
 
   const result = await client.listTools();
-  expect(result.tools).toHaveLength(42);
+  expect(result.tools).toHaveLength(54);
 
   const toolNames = result.tools.map((t) => t.name).sort();
   expect(toolNames).toEqual([
     "add_discussion_argument",
+    "change_scope_password",
     "commit_changes",
     "compare_note_revisions",
     "create_agent_scope",
@@ -61,26 +62,37 @@ test("server registers 42 tools", async () => {
     "get_revision_status",
     "get_scope_context",
     "get_vault_stats",
+    "get_wiki_catalog",
     "handoff_agent_scope",
+    "ingest_source",
+    "initialize_llm_wiki",
     "initialize_revision_history",
+    "lint_wiki",
     "list_all_tags",
     "list_directory",
     "list_tasks",
+    "login_scope",
+    "logout_scope",
     "manage_tags",
     "move_file",
     "move_note",
     "patch_note",
+    "publish_knowledge",
     "query_notes",
     "read_multiple_notes",
     "read_note",
     "read_note_lines",
     "read_scoped_note",
+    "register_scope_account",
+    "report_wiki_issue",
+    "resolve_wiki_issue",
     "restore_note_revision",
     "resume_agent_scope",
     "search_notes",
     "search_scoped_notes",
     "update_discussion_status",
     "update_frontmatter",
+    "whoami_scope",
     "wiki_link",
     "write_note",
   ]);
@@ -267,7 +279,7 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
   try {
     const listedTools = await client.listTools();
     const toolNames = listedTools.tools.map((tool) => tool.name);
-    expect(toolNames).toHaveLength(25);
+    expect(toolNames).toHaveLength(30);
     expect(toolNames).toContain("read_note");
     expect(toolNames).toContain("search_notes");
     expect(toolNames).not.toContain("write_note");
@@ -309,6 +321,13 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
       { name: "create_discussion", arguments: { title: "blocked", createdBy: "codex", initialPosition: "blocked" } },
       { name: "add_discussion_argument", arguments: { discussionId: "blocked", actor: "codex", stance: "support", argument: "blocked", expectedRevision: "missing" } },
       { name: "update_discussion_status", arguments: { discussionId: "blocked", actor: "codex", status: "resolved", reason: "blocked", expectedRevision: "missing" } },
+      { name: "register_scope_account", arguments: { accountId: "blocked", modelId: "blocked", password: "blocked-password" } },
+      { name: "change_scope_password", arguments: { accessToken: "blocked", currentPassword: "blocked-password", newPassword: "blocked-password-2" } },
+      { name: "initialize_llm_wiki", arguments: { actor: "blocked" } },
+      { name: "ingest_source", arguments: { title: "blocked", content: "blocked", capturedBy: "blocked" } },
+      { name: "publish_knowledge", arguments: { path: "blocked.md", content: "blocked", evidencePaths: ["source.md"], expectedRevision: "missing", author: "blocked" } },
+      { name: "report_wiki_issue", arguments: { kind: "other", title: "blocked", description: "blocked", reportedBy: "blocked" } },
+      { name: "resolve_wiki_issue", arguments: { path: "blocked.md", resolution: "blocked", expectedRevision: "missing", actor: "blocked" } },
     ];
 
     for (const mutation of mutations) {

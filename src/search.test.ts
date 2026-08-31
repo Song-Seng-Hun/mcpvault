@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from "vitest";
 import { SearchService } from "./search.js";
 import { PathFilter } from "./pathfilter.js";
 import { writeFile, mkdir, mkdtemp, rm } from "fs/promises";
-import { join } from "path";
+import { dirname, join } from "path";
 import { tmpdir } from "os";
 
 let testVaultPath: string;
@@ -24,7 +24,7 @@ afterEach(async () => {
 // Helper to write a note directly to disk
 async function writeNote(path: string, content: string) {
   const fullPath = join(testVaultPath, path);
-  const dir = fullPath.substring(0, fullPath.lastIndexOf("/"));
+  const dir = dirname(fullPath);
   if (dir !== testVaultPath) {
     await mkdir(dir, { recursive: true });
   }

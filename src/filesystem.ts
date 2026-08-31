@@ -1122,7 +1122,7 @@ export class FileSystemService {
    *
    * Throws only on caller misuse (empty name).
    */
-  async findPathForWikiLink(wikiLinkName: string): Promise<string[]> {
+  async findPathForWikiLink(wikiLinkName: string, canAccessPath: (path: string) => boolean = () => true): Promise<string[]> {
     if (!wikiLinkName.trim()) {
       throw new Error('Empty wiki link — provide a document name inside [[ ]].');
     }
@@ -1153,7 +1153,7 @@ export class FileSystemService {
             ? entryRelativePath === normalizedName
             : entry.name === normalizedName)
         ) {
-          matches.push(entryRelativePath);
+          if (canAccessPath(entryRelativePath)) matches.push(entryRelativePath);
         }
       }
     };
@@ -1171,7 +1171,7 @@ export class FileSystemService {
     return matches;
   }
 
-  async getBacklinks(path: string, limit: number = 100): Promise<BacklinksResult> {
+  async getBacklinks(path: string, limit: number = 100, canAccessPath: (path: string) => boolean = () => true): Promise<BacklinksResult> {
     const target = this.normalizePath(path);
     if (!this.pathFilter.isAllowed(target)) {
       throw new Error(`Access denied: ${target}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
@@ -1199,7 +1199,7 @@ export class FileSystemService {
           continue;
         }
 
-        if (!entry.isFile() || entryRelativePath === target || !this.pathFilter.isAllowed(entryRelativePath)) {
+        if (!entry.isFile() || entryRelativePath === target || !this.pathFilter.isAllowed(entryRelativePath) || !canAccessPath(entryRelativePath)) {
           continue;
         }
 
@@ -1249,8 +1249,8 @@ export class FileSystemService {
     };
   }
 
-  async findUnresolvedLinks(limit: number = 100): Promise<UnresolvedLinksResult> {
-    const vaultFiles = await this.collectVaultFiles();
+  async findUnresolvedLinks(limit: number = 100, canAccessPath: (path: string) => boolean = () => true): Promise<UnresolvedLinksResult> {
+    const vaultFiles = (await this.collectVaultFiles()).filter(canAccessPath);
     const noteFiles = vaultFiles.filter((path) => this.isNotePath(path));
     const unresolved: UnresolvedLinksResult['unresolved'] = [];
     let total = 0;
@@ -1279,8 +1279,8 @@ export class FileSystemService {
     };
   }
 
-  async findOrphanNotes(limit: number = 100): Promise<OrphanNotesResult> {
-    const vaultFiles = await this.collectVaultFiles();
+  async findOrphanNotes(limit: number = 100, canAccessPath: (path: string) => boolean = () => true): Promise<OrphanNotesResult> {
+    const vaultFiles = (await this.collectVaultFiles()).filter(canAccessPath);
     const noteFiles = vaultFiles.filter((path) => this.isNotePath(path));
     const incomingCounts = new Map(noteFiles.map((path) => [path.toLowerCase(), 0]));
 
@@ -1500,7 +1500,7 @@ export class FileSystemService {
     return lines.slice(clampedStart - 1, clampedEnd).join('\n');
   }
 
-  async getVaultStats(recentCount: number = 5): Promise<VaultStats> {
+  async getVaultStats(recentCount: number = 5, canAccessPath: (path: string) => boolean = () => true): Promise<VaultStats> {
     let totalNotes = 0;
     let totalFolders = 0;
     let totalSize = 0;
@@ -1517,10 +1517,10 @@ export class FileSystemService {
           if (!this.pathFilter.isAllowedForListing(entryRelativePath)) {
             continue;
           }
-          totalFolders++;
+          if (canAccessPath(entryRelativePath)) totalFolders++;
           await scanDirectory(fullEntryPath, entryRelativePath);
         } else if (entry.isFile()) {
-          if (!this.pathFilter.isAllowed(entryRelativePath)) {
+          if (!this.pathFilter.isAllowed(entryRelativePath) || !canAccessPath(entryRelativePath)) {
             continue;
           }
 
@@ -1557,7 +1557,7 @@ export class FileSystemService {
     };
   }
 
-  async listAllTags(): Promise<Array<{ tag: string; count: number }>> {
+  async listAllTags(canAccessPath: (path: string) => boolean = () => true): Promise<Array<{ tag: string; count: number }>> {
     const tagCounts = new Map<string, number>();
 
     const inlineTagRegex = /(?:^|\s)#([a-zA-Z][a-zA-Z0-9_/\-]*)/g;
@@ -1572,7 +1572,7 @@ export class FileSystemService {
         if (entry.isDirectory()) {
           if (!this.pathFilter.isAllowedForListing(entryRelativePath)) continue;
           await scanDirectory(fullEntryPath, entryRelativePath);
-        } else if (entry.isFile() && this.pathFilter.isAllowed(entryRelativePath)) {
+        } else if (entry.isFile() && this.pathFilter.isAllowed(entryRelativePath) && canAccessPath(entryRelativePath)) {
           try {
             const content = await readFile(fullEntryPath, 'utf-8');
             const parsed = this.frontmatterHandler.parse(content);
@@ -1623,7 +1623,7 @@ export class FileSystemService {
     return pathPrefix;
   }
 
-  async listTasks(params: ListTasksParams = {}): Promise<ListTasksResult> {
+  async listTasks(params: ListTasksParams = {}, canAccessPath: (path: string) => boolean = () => true): Promise<ListTasksResult> {
     const status = params.status || 'open';
     if (status !== 'open' && status !== 'completed' && status !== 'all') {
       throw new Error('status must be open, completed, or all');
@@ -1641,6 +1641,7 @@ export class FileSystemService {
     const tasks: TaskItem[] = [];
     const notePaths = (await this.collectVaultFiles())
       .filter(path => this.pathFilter.isAllowed(path))
+      .filter(canAccessPath)
       .filter(path => /\.(?:md|markdown|txt)$/i.test(path))
       .filter(path => !pathPrefix || path === pathPrefix || path.startsWith(`${pathPrefix}/`))
       .sort((a, b) => a.localeCompare(b));
@@ -1716,7 +1717,7 @@ export class FileSystemService {
     };
   }
 
-  async queryNotes(params: QueryNotesParams = {}): Promise<QueryNotesResult> {
+  async queryNotes(params: QueryNotesParams = {}, canAccessPath: (path: string) => boolean = () => true): Promise<QueryNotesResult> {
     const requestedLimit = params.limit ?? 100;
     if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
       throw new Error('limit must be a positive integer');
@@ -1737,6 +1738,7 @@ export class FileSystemService {
     const notes: QueryNote[] = [];
     const notePaths = (await this.collectVaultFiles())
       .filter(path => this.pathFilter.isAllowed(path))
+      .filter(canAccessPath)
       .filter(path => /\.(?:md|markdown|txt)$/i.test(path))
       .filter(path => !pathPrefix || path === pathPrefix || path.startsWith(`${pathPrefix}/`))
       .sort((a, b) => a.localeCompare(b));

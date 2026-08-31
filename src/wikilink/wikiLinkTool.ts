@@ -23,6 +23,7 @@ export interface WikiLinkToolArgs {
 export async function handleWikiLinkTool(
   fileSystem: FileSystemService,
   args: WikiLinkToolArgs,
+  canAccessPath: (path: string) => boolean = () => true,
 ): Promise<CallToolResult> {
   const indent = args.prettyPrint ? 2 : undefined;
 
@@ -38,7 +39,7 @@ export async function handleWikiLinkTool(
     };
   }
 
-  const paths = await fileSystem.findPathForWikiLink(parsed.document);
+  const paths = await fileSystem.findPathForWikiLink(parsed.document, canAccessPath);
 
   if (paths.length === 0) {
     return {

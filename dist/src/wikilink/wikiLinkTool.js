@@ -12,7 +12,7 @@ import { parseWikiLink } from './resolveWikiLink.js';
  *   `path` (the resolved pick), and `alternatives` (the other matched paths,
  *   present only when more than one file shares the basename).
  */
-export async function handleWikiLinkTool(fileSystem, args) {
+export async function handleWikiLinkTool(fileSystem, args, canAccessPath = () => true) {
     const indent = args.prettyPrint ? 2 : undefined;
     let parsed;
     try {
@@ -26,7 +26,7 @@ export async function handleWikiLinkTool(fileSystem, args) {
             isError: true,
         };
     }
-    const paths = await fileSystem.findPathForWikiLink(parsed.document);
+    const paths = await fileSystem.findPathForWikiLink(parsed.document, canAccessPath);
     if (paths.length === 0) {
         return {
             content: [{

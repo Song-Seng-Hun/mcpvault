@@ -61,11 +61,11 @@ export declare class FileSystemService {
      *
      * Throws only on caller misuse (empty name).
      */
-    findPathForWikiLink(wikiLinkName: string): Promise<string[]>;
-    getBacklinks(path: string, limit?: number): Promise<BacklinksResult>;
+    findPathForWikiLink(wikiLinkName: string, canAccessPath?: (path: string) => boolean): Promise<string[]>;
+    getBacklinks(path: string, limit?: number, canAccessPath?: (path: string) => boolean): Promise<BacklinksResult>;
     getOutlinks(path: string, limit?: number): Promise<OutlinksResult>;
-    findUnresolvedLinks(limit?: number): Promise<UnresolvedLinksResult>;
-    findOrphanNotes(limit?: number): Promise<OrphanNotesResult>;
+    findUnresolvedLinks(limit?: number, canAccessPath?: (path: string) => boolean): Promise<UnresolvedLinksResult>;
+    findOrphanNotes(limit?: number, canAccessPath?: (path: string) => boolean): Promise<OrphanNotesResult>;
     private isNotePath;
     getDailyNote(dateInput?: DailyDateInput, folder?: string): Promise<DailyNoteResult>;
     writeDailyNote(params: {
@@ -78,13 +78,13 @@ export declare class FileSystemService {
     private collectVaultFiles;
     getNoteOutline(path: string): Promise<NoteHeading[]>;
     readNoteLines(params: ReadNoteLinesParams): Promise<string>;
-    getVaultStats(recentCount?: number): Promise<VaultStats>;
-    listAllTags(): Promise<Array<{
+    getVaultStats(recentCount?: number, canAccessPath?: (path: string) => boolean): Promise<VaultStats>;
+    listAllTags(canAccessPath?: (path: string) => boolean): Promise<Array<{
         tag: string;
         count: number;
     }>>;
     private resolvePathPrefix;
-    listTasks(params?: ListTasksParams): Promise<ListTasksResult>;
-    queryNotes(params?: QueryNotesParams): Promise<QueryNotesResult>;
+    listTasks(params?: ListTasksParams, canAccessPath?: (path: string) => boolean): Promise<ListTasksResult>;
+    queryNotes(params?: QueryNotesParams, canAccessPath?: (path: string) => boolean): Promise<QueryNotesResult>;
 }
 //# sourceMappingURL=filesystem.d.ts.map
