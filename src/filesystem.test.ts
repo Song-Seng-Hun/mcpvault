@@ -439,6 +439,35 @@ describe("findUnresolvedLinks", () => {
   });
 });
 
+describe("findOrphanNotes", () => {
+  test("counts incoming links and ignores self-links", async () => {
+    await writeFile(join(testVaultPath, "linked.md"), "linked");
+    await writeFile(join(testVaultPath, "source.md"), "[[linked]]");
+    await writeFile(join(testVaultPath, "self.md"), "[[self]]");
+    await writeFile(join(testVaultPath, "orphan.md"), "orphan");
+
+    const result = await fileSystem.findOrphanNotes();
+
+    expect(result.orphans).toEqual([
+      { path: "orphan.md", incomingLinks: 0 },
+      { path: "self.md", incomingLinks: 0 },
+      { path: "source.md", incomingLinks: 0 },
+    ]);
+    expect(result.total).toBe(3);
+  });
+
+  test("honors the result limit", async () => {
+    await writeFile(join(testVaultPath, "one.md"), "one");
+    await writeFile(join(testVaultPath, "two.md"), "two");
+
+    const result = await fileSystem.findOrphanNotes(1);
+
+    expect(result.orphans).toHaveLength(1);
+    expect(result.total).toBe(2);
+    expect(result.truncated).toBe(true);
+  });
+});
+
 // ============================================================================
 // READ NOTE LINES TESTS
 // ============================================================================

@@ -115,7 +115,7 @@ An MCP client starts MCPVault as a local stdio process and passes the vault path
   - Directory and batch reads: `list_directory`, `read_multiple_notes`
   - Search: `search_notes` with multi-word matching and BM25 reranking
   - Metadata and tags: `get_frontmatter`, `update_frontmatter`, `get_notes_info`, `get_vault_stats`, `manage_tags`, `list_all_tags`
-  - Wiki links: `wiki_link` resolves names and returns alternative paths when a name is ambiguous; `get_backlinks` finds incoming wikilinks, `get_outlinks` lists outgoing wikilinks, and `find_unresolved_links` finds broken references
+  - Wiki links: `wiki_link` resolves names and returns alternative paths when a name is ambiguous; `get_backlinks` finds incoming wikilinks, `get_outlinks` lists outgoing wikilinks, `find_unresolved_links` finds broken references, and `find_orphan_notes` finds isolated notes
 - `write_note` supports overwrite, append, and prepend modes.
 - `delete_note` and `move_file` require matching confirmation paths.
 - Path arguments are trimmed before validation.
@@ -859,6 +859,35 @@ raw link, parsed target, and compact context.
       "target": "Missing Note",
       "context": "See [[Missing Note#Details|Details]]."
     }
+  ],
+  "total": 1,
+  "truncated": false
+}
+```
+
+### `find_orphan_notes`
+
+Find notes that have no incoming wikilinks from another note. Self-links do not
+count as incoming links, so a note that only links to itself remains an orphan.
+Attachment links are ignored for this note graph check.
+
+**Request:**
+
+```json
+{
+  "name": "find_orphan_notes",
+  "arguments": {
+    "limit": 100
+  }
+}
+```
+
+**Response:**
+
+```json
+{
+  "orphans": [
+    { "path": "Scratch.md", "incomingLinks": 0 }
   ],
   "total": 1,
   "truncated": false

@@ -170,6 +170,15 @@ export interface UnresolvedLinksResult {
     total: number;
     truncated: boolean;
 }
+export interface OrphanNote {
+    path: string;
+    incomingLinks: number;
+}
+export interface OrphanNotesResult {
+    orphans: OrphanNote[];
+    total: number;
+    truncated: boolean;
+}
 export interface VaultStats {
     totalNotes: number;
     totalFolders: number;

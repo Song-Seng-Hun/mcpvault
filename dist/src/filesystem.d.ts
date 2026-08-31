@@ -1,6 +1,6 @@
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
-import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, MoveNoteParams, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult } from './types.js';
+import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, MoveNoteParams, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult } from './types.js';
 /**
  * Map a filesystem write failure to a clear, accurate Error.
  *
@@ -56,6 +56,8 @@ export declare class FileSystemService {
     getBacklinks(path: string, limit?: number): Promise<BacklinksResult>;
     getOutlinks(path: string, limit?: number): Promise<OutlinksResult>;
     findUnresolvedLinks(limit?: number): Promise<UnresolvedLinksResult>;
+    findOrphanNotes(limit?: number): Promise<OrphanNotesResult>;
+    private isNotePath;
     private collectVaultFiles;
     getNoteOutline(path: string): Promise<NoteHeading[]>;
     readNoteLines(params: ReadNoteLinesParams): Promise<string>;

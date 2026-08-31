@@ -67,8 +67,28 @@ export function extractWikiLinkOccurrences(content: string): Array<OutlinkMatch>
 export function findUnresolvedLinkMatches(content: string, vaultFiles: string[]): UnresolvedLinkMatch[] {
   const normalizedFiles = vaultFiles.map(normalizePath);
   return extractWikiLinkOccurrences(content)
-    .filter(({ target }) => !isResolvedTarget(target, normalizedFiles))
+    .filter(({ target }) => resolveWikiLinkTargets(target, normalizedFiles).length === 0)
     .map(({ target, line, link, context }) => ({ target, line, link, context, path: '' }));
+}
+
+export function resolveWikiLinkTargets(target: string, vaultFiles: string[]): string[] {
+  const normalizedTarget = normalizePath(target);
+  if (!normalizedTarget) return [];
+
+  const hasExtension = /(^|\/)[^/]+\.[^/]+$/.test(normalizedTarget);
+  return vaultFiles.filter((file) => {
+    const normalizedFile = normalizePath(file);
+    if (hasExtension) {
+      return normalizedTarget.includes('/')
+        ? normalizedFile === normalizedTarget
+        : basenameWithoutExtension(normalizedFile) === normalizedTarget;
+    }
+
+    const fileWithoutExtension = normalizedFile.replace(/\.[^/.]+$/, '');
+    return normalizedTarget.includes('/')
+      ? fileWithoutExtension === normalizedTarget
+      : basenameWithoutExtension(fileWithoutExtension) === normalizedTarget;
+  });
 }
 
 function linkDocument(rawLink: string): string {
@@ -104,20 +124,4 @@ function matchesTarget(document: string, normalizedTarget: string, targetBasenam
   return normalizedDocument.includes('/')
     ? normalizedDocument === normalizedTarget
     : normalizedDocument === targetBasename;
-}
-
-function isResolvedTarget(target: string, vaultFiles: string[]): boolean {
-  const normalizedTarget = normalizePath(target);
-  if (!normalizedTarget) return false;
-
-  const hasExtension = /(^|\/)[^/]+\.[^/]+$/.test(normalizedTarget);
-  return vaultFiles.some((file) => {
-    const normalizedFile = normalizePath(file);
-    if (hasExtension) return normalizedFile === normalizedTarget;
-
-    const fileWithoutExtension = normalizedFile.replace(/\.[^/.]+$/, '');
-    return normalizedTarget.includes('/')
-      ? fileWithoutExtension === normalizedTarget
-      : basenameWithoutExtension(fileWithoutExtension) === normalizedTarget;
-  });
 }

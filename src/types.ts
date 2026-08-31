@@ -207,6 +207,17 @@ export interface UnresolvedLinksResult {
   truncated: boolean;
 }
 
+export interface OrphanNote {
+  path: string;
+  incomingLinks: number;
+}
+
+export interface OrphanNotesResult {
+  orphans: OrphanNote[];
+  total: number;
+  truncated: boolean;
+}
+
 // Vault statistics types
 export interface VaultStats {
   totalNotes: number;

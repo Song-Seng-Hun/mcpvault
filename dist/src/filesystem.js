@@ -6,7 +6,7 @@ import trash from 'trash';
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
 import { generateObsidianUri } from './uri.js';
-import { extractWikiLinkOccurrences, findBacklinkMatches, findUnresolvedLinkMatches } from './backlinks.js';
+import { extractWikiLinkOccurrences, findBacklinkMatches, findUnresolvedLinkMatches, resolveWikiLinkTargets } from './backlinks.js';
 /**
  * Map a filesystem write failure to a clear, accurate Error.
  *
@@ -1032,11 +1032,10 @@ export class FileSystemService {
     }
     async findUnresolvedLinks(limit = 100) {
         const vaultFiles = await this.collectVaultFiles();
+        const noteFiles = vaultFiles.filter((path) => this.isNotePath(path));
         const unresolved = [];
         let total = 0;
-        for (const source of vaultFiles) {
-            if (!this.pathFilter.isAllowed(source))
-                continue;
+        for (const source of noteFiles) {
             try {
                 const content = await readFile(this.resolvePath(source), 'utf-8');
                 const found = findUnresolvedLinkMatches(content, vaultFiles);
@@ -1057,6 +1056,38 @@ export class FileSystemService {
             total,
             truncated: total > unresolved.length,
         };
+    }
+    async findOrphanNotes(limit = 100) {
+        const vaultFiles = await this.collectVaultFiles();
+        const noteFiles = vaultFiles.filter((path) => this.isNotePath(path));
+        const incomingCounts = new Map(noteFiles.map((path) => [path.toLowerCase(), 0]));
+        for (const source of noteFiles) {
+            try {
+                const content = await readFile(this.resolvePath(source), 'utf-8');
+                for (const { target } of extractWikiLinkOccurrences(content)) {
+                    for (const destination of resolveWikiLinkTargets(target, noteFiles)) {
+                        if (destination.toLowerCase() !== source.toLowerCase()) {
+                            const key = destination.toLowerCase();
+                            incomingCounts.set(key, (incomingCounts.get(key) || 0) + 1);
+                        }
+                    }
+                }
+            }
+            catch {
+                // An unreadable note contributes no observed incoming links.
+            }
+        }
+        const orphans = noteFiles
+            .filter((path) => incomingCounts.get(path.toLowerCase()) === 0)
+            .map((path) => ({ path, incomingLinks: 0 }));
+        return {
+            orphans: orphans.slice(0, limit),
+            total: orphans.length,
+            truncated: orphans.length > Math.min(limit, orphans.length),
+        };
+    }
+    isNotePath(path) {
+        return /\.(?:md|markdown|txt)$/i.test(path);
     }
     async collectVaultFiles() {
         const files = [];

@@ -12,4 +12,5 @@ import type { BacklinkMatch, OutlinkMatch, UnresolvedLinkMatch } from './types.j
 export declare function findBacklinkMatches(content: string, targetPath: string): BacklinkMatch[];
 export declare function extractWikiLinkOccurrences(content: string): Array<OutlinkMatch>;
 export declare function findUnresolvedLinkMatches(content: string, vaultFiles: string[]): UnresolvedLinkMatch[];
+export declare function resolveWikiLinkTargets(target: string, vaultFiles: string[]): string[];
 //# sourceMappingURL=backlinks.d.ts.map

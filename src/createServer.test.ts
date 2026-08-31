@@ -25,7 +25,7 @@ test("createServer returns a Server instance", () => {
   expect(typeof server.connect).toBe("function");
 });
 
-test("server registers 21 tools", async () => {
+test("server registers 22 tools", async () => {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -37,11 +37,12 @@ test("server registers 21 tools", async () => {
   ]);
 
   const result = await client.listTools();
-  expect(result.tools).toHaveLength(21);
+  expect(result.tools).toHaveLength(22);
 
   const toolNames = result.tools.map((t) => t.name).sort();
   expect(toolNames).toEqual([
     "delete_note",
+    "find_orphan_notes",
     "find_unresolved_links",
     "get_backlinks",
     "get_frontmatter",
@@ -246,7 +247,7 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
   try {
     const listedTools = await client.listTools();
     const toolNames = listedTools.tools.map((tool) => tool.name);
-    expect(toolNames).toHaveLength(14);
+    expect(toolNames).toHaveLength(15);
     expect(toolNames).toContain("read_note");
     expect(toolNames).toContain("search_notes");
     expect(toolNames).not.toContain("write_note");
@@ -281,6 +282,31 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
     expect(await readFile(join(testVaultPath, "existing.md"), "utf8")).toBe(
       "# Existing\n\nSafe content",
     );
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test("find_orphan_notes excludes linked notes and self-links", async () => {
+  const { server, client } = await connectClient();
+  try {
+    await writeFile(join(testVaultPath, "Linked.md"), "linked");
+    await writeFile(join(testVaultPath, "Source.md"), "[[Linked]]");
+    await writeFile(join(testVaultPath, "Self.md"), "[[Self]]");
+    await writeFile(join(testVaultPath, "Orphan.md"), "No incoming links");
+
+    const result = await client.callTool({ name: "find_orphan_notes", arguments: {} });
+    expect(result.isError).toBeFalsy();
+    expect(JSON.parse((result.content as any)[0].text)).toEqual({
+      orphans: [
+        { path: "Orphan.md", incomingLinks: 0 },
+        { path: "Self.md", incomingLinks: 0 },
+        { path: "Source.md", incomingLinks: 0 },
+      ],
+      total: 3,
+      truncated: false,
+    });
   } finally {
     await client.close();
     await server.close();

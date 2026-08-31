@@ -259,6 +259,17 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           }
         },
         {
+          name: "find_orphan_notes",
+          description: "Find notes with no incoming wikilinks from another note. Self-links and attachment links do not prevent a note from being considered an orphan. Results include the note path and incoming link count.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              limit: { type: "number", description: "Maximum orphan notes to return (default: 100, max: 500)", default: 100 },
+              prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+            }
+          }
+        },
+        {
           name: "find_unresolved_links",
           description: "Find broken Obsidian wikilinks across the vault. Returns source paths, line numbers, raw links, targets, and compact context. Explicit links to existing attachments are treated as resolved; fenced code blocks are ignored.",
           inputSchema: {
@@ -550,6 +561,18 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           const indent = trimmedArgs.prettyPrint ? 2 : undefined;
           return {
             content: [{ type: "text", text: JSON.stringify(unresolved, null, indent) }]
+          };
+        }
+
+        case "find_orphan_notes": {
+          const requestedLimit = trimmedArgs.limit === undefined ? 100 : Number(trimmedArgs.limit);
+          if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
+            throw new Error('limit must be a positive integer');
+          }
+          const orphans = await fileSystem.findOrphanNotes(Math.min(requestedLimit, 500));
+          const indent = trimmedArgs.prettyPrint ? 2 : undefined;
+          return {
+            content: [{ type: "text", text: JSON.stringify(orphans, null, indent) }]
           };
         }
 
