@@ -530,6 +530,65 @@ describe("tasks", () => {
   });
 });
 
+describe("structured frontmatter queries", () => {
+  test("filters scalar and array properties, sorts, and optionally includes content", async () => {
+    await mkdir(join(testVaultPath, "Projects"), { recursive: true });
+    await writeFile(join(testVaultPath, "Projects/Alpha.md"), [
+      "---",
+      "status: active",
+      "tags: [project, urgent]",
+      "meta:",
+      "  owner: alice",
+      "priority: 2",
+      "---",
+      "Alpha body",
+    ].join("\n"));
+    await writeFile(join(testVaultPath, "Projects/Beta.md"), [
+      "---",
+      "status: active",
+      "tags: [project]",
+      "meta:",
+      "  owner: bob",
+      "priority: 1",
+      "---",
+      "Beta body",
+    ].join("\n"));
+    await writeFile(join(testVaultPath, "Projects/Archived.md"), "---\nstatus: archived\n---\nOld body");
+
+    await expect(fileSystem.queryNotes({
+      filters: { status: "active", tags: ["project"] },
+      pathPrefix: "Projects/./",
+      sortBy: "priority",
+      sortOrder: "desc",
+      includeContent: true,
+    })).resolves.toMatchObject({
+      notes: [
+        { path: "Projects/Alpha.md", frontmatter: { status: "active", priority: 2 }, content: "Alpha body" },
+        { path: "Projects/Beta.md", frontmatter: { status: "active", priority: 1 }, content: "Beta body" },
+      ],
+      total: 2,
+      truncated: false,
+    });
+
+    await expect(fileSystem.queryNotes({ filters: { "meta.owner": "bob" } })).resolves.toMatchObject({
+      notes: [{ path: "Projects/Beta.md" }],
+      total: 1,
+    });
+  });
+
+  test("keeps missing sort properties last and rejects unsafe options", async () => {
+    await writeFile(join(testVaultPath, "WithPriority.md"), "---\npriority: 1\n---\nOne");
+    await writeFile(join(testVaultPath, "WithoutPriority.md"), "---\nstatus: active\n---\nTwo");
+
+    await expect(fileSystem.queryNotes({ sortBy: "priority" })).resolves.toMatchObject({
+      notes: [{ path: "WithPriority.md" }, { path: "WithoutPriority.md" }],
+    });
+    await expect(fileSystem.queryNotes({ pathPrefix: ".git" })).rejects.toThrow(/Access denied/);
+    await expect(fileSystem.queryNotes({ limit: 0 })).rejects.toThrow(/positive integer/);
+    await expect(fileSystem.queryNotes({ sortOrder: "sideways" as "asc" })).rejects.toThrow(/sortOrder/);
+  });
+});
+
 // ============================================================================
 // READ NOTE LINES TESTS
 // ============================================================================

@@ -25,7 +25,7 @@ test("createServer returns a Server instance", () => {
   expect(typeof server.connect).toBe("function");
 });
 
-test("server registers 25 tools", async () => {
+test("server registers 26 tools", async () => {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -37,7 +37,7 @@ test("server registers 25 tools", async () => {
   ]);
 
   const result = await client.listTools();
-  expect(result.tools).toHaveLength(25);
+  expect(result.tools).toHaveLength(26);
 
   const toolNames = result.tools.map((t) => t.name).sort();
   expect(toolNames).toEqual([
@@ -59,6 +59,7 @@ test("server registers 25 tools", async () => {
     "move_file",
     "move_note",
     "patch_note",
+    "query_notes",
     "read_multiple_notes",
     "read_note",
     "read_note_lines",
@@ -250,12 +251,13 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
   try {
     const listedTools = await client.listTools();
     const toolNames = listedTools.tools.map((tool) => tool.name);
-    expect(toolNames).toHaveLength(17);
+    expect(toolNames).toHaveLength(18);
     expect(toolNames).toContain("read_note");
     expect(toolNames).toContain("search_notes");
     expect(toolNames).not.toContain("write_note");
     expect(toolNames).not.toContain("manage_tags");
     expect(toolNames).toContain("list_tasks");
+    expect(toolNames).toContain("query_notes");
 
     const readResult = await client.callTool({
       name: "read_note",
@@ -358,6 +360,51 @@ test("list_tasks returns filtered tasks and ignores frontmatter and code fences"
       { path: "Projects/Plan.md", line: 5, text: "Open task", status: "open" },
       { path: "Projects/Plan.md", line: 6, text: "Completed child", status: "completed" },
     ]);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test("query_notes filters and sorts frontmatter through the MCP tool", async () => {
+  const { server, client } = await connectClient();
+  try {
+    await writeFile(join(testVaultPath, "Alpha.md"), [
+      "---",
+      "status: active",
+      "tags: [project, urgent]",
+      "priority: 2",
+      "---",
+      "Alpha body",
+    ].join("\n"));
+    await writeFile(join(testVaultPath, "Beta.md"), [
+      "---",
+      "status: active",
+      "tags: [project]",
+      "priority: 1",
+      "---",
+      "Beta body",
+    ].join("\n"));
+    await writeFile(join(testVaultPath, "Archived.md"), "---\nstatus: archived\n---\nOld body");
+
+    const result = await client.callTool({
+      name: "query_notes",
+      arguments: {
+        filters: { status: "active", tags: "project" },
+        sortBy: "priority",
+        sortOrder: "desc",
+        includeContent: true,
+      },
+    });
+    expect(result.isError).toBeFalsy();
+    expect(JSON.parse((result.content as any)[0].text)).toEqual({
+      notes: [
+        { path: "Alpha.md", frontmatter: { status: "active", tags: ["project", "urgent"], priority: 2 }, content: "Alpha body" },
+        { path: "Beta.md", frontmatter: { status: "active", tags: ["project"], priority: 1 }, content: "Beta body" },
+      ],
+      total: 2,
+      truncated: false,
+    });
   } finally {
     await client.close();
     await server.close();

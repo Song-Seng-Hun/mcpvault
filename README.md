@@ -118,6 +118,7 @@ An MCP client starts MCPVault as a local stdio process and passes the vault path
   - Wiki links: `wiki_link` resolves names and returns alternative paths when a name is ambiguous; `get_backlinks` finds incoming wikilinks, `get_outlinks` lists outgoing wikilinks, `find_unresolved_links` finds broken references, and `find_orphan_notes` finds isolated notes
   - Daily notes: `get_daily_note` reads a date-based note and `daily_note` safely creates or appends to one
   - Tasks: `list_tasks` finds open, completed, or all checkbox tasks while ignoring frontmatter and fenced code blocks
+  - Structured queries: `query_notes` filters and sorts notes using YAML frontmatter properties
 - `write_note` supports overwrite, append, and prepend modes.
 - `delete_note` and `move_file` require matching confirmation paths.
 - Path arguments are trimmed before validation.
@@ -959,6 +960,42 @@ YAML frontmatter and fenced code blocks are ignored.
       "line": 12,
       "text": "Publish the release notes",
       "status": "open"
+    }
+  ],
+  "total": 1,
+  "truncated": false
+}
+```
+
+### `query_notes`
+
+Query notes using structured YAML frontmatter instead of text matching. Filters
+use exact values; array fields match when they contain the requested value or
+values. Nested properties can be addressed with dot notation. Results are
+sorted by path by default, or by a frontmatter property when `sortBy` is set.
+Note content is omitted by default and can be requested with
+`includeContent: true`.
+
+```json
+{
+  "name": "query_notes",
+  "arguments": {
+    "filters": { "status": "active", "tags": "project" },
+    "pathPrefix": "Projects",
+    "sortBy": "priority",
+    "sortOrder": "desc",
+    "limit": 100,
+    "includeContent": false
+  }
+}
+```
+
+```json
+{
+  "notes": [
+    {
+      "path": "Projects/Plan.md",
+      "frontmatter": { "status": "active", "tags": ["project"], "priority": 2 }
     }
   ],
   "total": 1,

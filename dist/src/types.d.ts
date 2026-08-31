@@ -206,6 +206,24 @@ export interface ListTasksResult {
     total: number;
     truncated: boolean;
 }
+export interface QueryNotesParams {
+    filters?: Record<string, unknown>;
+    pathPrefix?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+    limit?: number;
+    includeContent?: boolean;
+}
+export interface QueryNote {
+    path: string;
+    frontmatter: Record<string, any>;
+    content?: string;
+}
+export interface QueryNotesResult {
+    notes: QueryNote[];
+    total: number;
+    truncated: boolean;
+}
 export interface VaultStats {
     totalNotes: number;
     totalFolders: number;

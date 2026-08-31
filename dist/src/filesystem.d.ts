@@ -1,6 +1,6 @@
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
-import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, MoveNoteParams, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult, DailyNoteResult, ListTasksParams, ListTasksResult } from './types.js';
+import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, MoveNoteParams, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult, DailyNoteResult, ListTasksParams, ListTasksResult, QueryNotesParams, QueryNotesResult } from './types.js';
 import { type DailyDateInput } from './daily.js';
 /**
  * Map a filesystem write failure to a clear, accurate Error.
@@ -75,6 +75,8 @@ export declare class FileSystemService {
         tag: string;
         count: number;
     }>>;
+    private resolvePathPrefix;
     listTasks(params?: ListTasksParams): Promise<ListTasksResult>;
+    queryNotes(params?: QueryNotesParams): Promise<QueryNotesResult>;
 }
 //# sourceMappingURL=filesystem.d.ts.map

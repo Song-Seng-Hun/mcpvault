@@ -254,6 +254,22 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           }
         },
         {
+          name: "query_notes",
+          description: "Filter notes by structured YAML frontmatter and optionally sort by a frontmatter property. Filters use exact values; array fields match when they contain the requested value(s).",
+          inputSchema: {
+            type: "object",
+            properties: {
+              filters: { type: "object", description: "Frontmatter filters, including dot notation for nested properties, e.g. {\"status\": \"active\", \"project\": \"alpha\"}" },
+              pathPrefix: { type: "string", description: "Restrict results to a vault subtree, e.g. Projects/2026" },
+              sortBy: { type: "string", description: "path (default) or a frontmatter property, including nested dot notation" },
+              sortOrder: { type: "string", enum: ["asc", "desc"], description: "Sort direction (default: asc)", default: "asc" },
+              limit: { type: "number", description: "Maximum notes to return (default: 100, max: 500)", default: 100 },
+              includeContent: { type: "boolean", description: "Include the note body in each result (default: false)", default: false },
+              prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+            }
+          }
+        },
+        {
           name: "wiki_link",
           description: "Read an Obsidian wiki link. Accepts the same syntax as Obsidian: [[Document Name]] or [[Document Name|Display Text]], including table-authored escapes like [[Document Name\\|Display]] and path-qualified links like [[folder/Document Name]]. A #fragment suffix in the input is ignored. Searches the vault for an exact basename match (or exact vault-relative path match when the name contains '/') and returns the file's content. When multiple files share the basename, picks the first (vault root first, then alphabetical by path) and lists the other paths in structuredContent.alternatives. Content is returned bare — ready for direct use in context.",
           inputSchema: {
@@ -586,6 +602,25 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           };
         }
 
+        case "query_notes": {
+          const requestedLimit = trimmedArgs.limit === undefined ? 100 : Number(trimmedArgs.limit);
+          if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
+            throw new Error('limit must be a positive integer');
+          }
+          const result = await fileSystem.queryNotes({
+            filters: trimmedArgs.filters,
+            pathPrefix: trimmedArgs.pathPrefix,
+            sortBy: trimmedArgs.sortBy,
+            sortOrder: trimmedArgs.sortOrder,
+            limit: Math.min(requestedLimit, 500),
+            includeContent: trimmedArgs.includeContent,
+          });
+          const indent = trimmedArgs.prettyPrint ? 2 : undefined;
+          return {
+            content: [{ type: "text", text: JSON.stringify(result, null, indent) }]
+          };
+        }
+
         case "wiki_link":
           return await handleWikiLinkTool(fileSystem, trimmedArgs);
 
@@ -708,6 +743,7 @@ function trimPaths(args: any): any {
   if (trimmed.confirmNewPath && typeof trimmed.confirmNewPath === 'string') trimmed.confirmNewPath = trimmed.confirmNewPath.trim();
   if (trimmed.folder && typeof trimmed.folder === 'string') trimmed.folder = trimmed.folder.trim();
   if (trimmed.pathPrefix && typeof trimmed.pathPrefix === 'string') trimmed.pathPrefix = trimmed.pathPrefix.trim();
+  if (trimmed.sortBy && typeof trimmed.sortBy === 'string') trimmed.sortBy = trimmed.sortBy.trim();
 
   if (trimmed.paths && Array.isArray(trimmed.paths)) {
     trimmed.paths = trimmed.paths.map((p: any) => typeof p === 'string' ? p.trim() : p);

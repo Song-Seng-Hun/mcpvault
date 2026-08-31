@@ -8,6 +8,38 @@ import { PathFilter } from './pathfilter.js';
 import { generateObsidianUri } from './uri.js';
 import { extractWikiLinkOccurrences, findBacklinkMatches, findUnresolvedLinkMatches, resolveWikiLinkTargets } from './backlinks.js';
 import { buildDailyNotePath, resolveDailyDate } from './daily.js';
+function getFrontmatterValue(frontmatter, key) {
+    let current = frontmatter;
+    for (const segment of key.split('.')) {
+        if (!current || typeof current !== 'object' || !Object.prototype.hasOwnProperty.call(current, segment)) {
+            return { found: false };
+        }
+        current = current[segment];
+    }
+    return { found: true, value: current };
+}
+function frontmatterValuesEqual(actual, expected) {
+    if (Array.isArray(actual) && Array.isArray(expected)) {
+        return expected.every(expectedValue => actual.some(actualValue => frontmatterValuesEqual(actualValue, expectedValue)));
+    }
+    if (Array.isArray(actual)) {
+        return actual.some(value => frontmatterValuesEqual(value, expected));
+    }
+    if (Array.isArray(expected)) {
+        return false;
+    }
+    if (actual && expected && typeof actual === 'object' && typeof expected === 'object') {
+        return JSON.stringify(actual) === JSON.stringify(expected);
+    }
+    return actual === expected;
+}
+function compareQueryValues(a, b) {
+    if (typeof a === 'number' && typeof b === 'number')
+        return a - b;
+    if (typeof a === 'boolean' && typeof b === 'boolean')
+        return Number(a) - Number(b);
+    return String(a ?? '').localeCompare(String(b ?? ''), undefined, { numeric: true, sensitivity: 'base' });
+}
 /**
  * Map a filesystem write failure to a clear, accurate Error.
  *
@@ -1352,6 +1384,20 @@ export class FileSystemService {
             .map(([tag, count]) => ({ tag, count }))
             .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
     }
+    resolvePathPrefix(input) {
+        const rawPathPrefix = input ? this.normalizePath(input) : '';
+        if (!rawPathPrefix)
+            return '';
+        if (!this.pathFilter.isAllowedForListing(rawPathPrefix)) {
+            throw new Error(`Access denied: ${rawPathPrefix}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
+        }
+        const resolvedPrefix = this.resolvePath(rawPathPrefix);
+        const pathPrefix = relative(this.vaultPath, resolvedPrefix).replace(/\\/g, '/');
+        if (pathPrefix && !this.pathFilter.isAllowedForListing(pathPrefix)) {
+            throw new Error(`Access denied: ${pathPrefix}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
+        }
+        return pathPrefix;
+    }
     async listTasks(params = {}) {
         const status = params.status || 'open';
         if (status !== 'open' && status !== 'completed' && status !== 'all') {
@@ -1362,21 +1408,10 @@ export class FileSystemService {
             throw new Error('limit must be a positive integer');
         }
         const limit = Math.min(requestedLimit, 500);
-        const rawPathPrefix = params.pathPrefix ? this.normalizePath(params.pathPrefix) : '';
-        let pathPrefix = '';
         // Validate the optional scope before scanning. resolvePath performs the
         // lexical and symlink boundary checks; listing validation blocks hidden
         // and system directories such as .obsidian and .git.
-        if (rawPathPrefix) {
-            if (!this.pathFilter.isAllowedForListing(rawPathPrefix)) {
-                throw new Error(`Access denied: ${rawPathPrefix}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
-            }
-            const resolvedPrefix = this.resolvePath(rawPathPrefix);
-            pathPrefix = relative(this.vaultPath, resolvedPrefix).replace(/\\/g, '/');
-            if (pathPrefix && !this.pathFilter.isAllowedForListing(pathPrefix)) {
-                throw new Error(`Access denied: ${pathPrefix}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
-            }
-        }
+        const pathPrefix = this.resolvePathPrefix(params.pathPrefix);
         const tasks = [];
         const notePaths = (await this.collectVaultFiles())
             .filter(path => this.pathFilter.isAllowed(path))
@@ -1448,6 +1483,70 @@ export class FileSystemService {
             tasks: tasks.slice(0, limit),
             total: tasks.length,
             truncated: tasks.length > limit,
+        };
+    }
+    async queryNotes(params = {}) {
+        const requestedLimit = params.limit ?? 100;
+        if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
+            throw new Error('limit must be a positive integer');
+        }
+        const limit = Math.min(requestedLimit, 500);
+        const sortOrder = params.sortOrder || 'asc';
+        if (sortOrder !== 'asc' && sortOrder !== 'desc') {
+            throw new Error('sortOrder must be asc or desc');
+        }
+        if (params.sortBy !== undefined && !params.sortBy.trim()) {
+            throw new Error('sortBy cannot be empty');
+        }
+        if (params.filters !== undefined && (typeof params.filters !== 'object' || Array.isArray(params.filters) || params.filters === null)) {
+            throw new Error('filters must be an object');
+        }
+        const pathPrefix = this.resolvePathPrefix(params.pathPrefix);
+        const notes = [];
+        const notePaths = (await this.collectVaultFiles())
+            .filter(path => this.pathFilter.isAllowed(path))
+            .filter(path => /\.(?:md|markdown|txt)$/i.test(path))
+            .filter(path => !pathPrefix || path === pathPrefix || path.startsWith(`${pathPrefix}/`))
+            .sort((a, b) => a.localeCompare(b));
+        for (const path of notePaths) {
+            let raw;
+            try {
+                raw = await readFile(this.resolvePath(path), 'utf-8');
+            }
+            catch {
+                continue;
+            }
+            const parsed = this.frontmatterHandler.parse(raw);
+            const filters = params.filters || {};
+            const matches = Object.entries(filters).every(([key, expected]) => {
+                const actual = getFrontmatterValue(parsed.frontmatter, key);
+                return actual.found && frontmatterValuesEqual(actual.value, expected);
+            });
+            if (!matches)
+                continue;
+            notes.push({
+                path,
+                frontmatter: parsed.frontmatter,
+                ...(params.includeContent && { content: parsed.content }),
+            });
+        }
+        const sortBy = params.sortBy || 'path';
+        notes.sort((a, b) => {
+            const aValue = sortBy === 'path' ? a.path : getFrontmatterValue(a.frontmatter, sortBy).value;
+            const bValue = sortBy === 'path' ? b.path : getFrontmatterValue(b.frontmatter, sortBy).value;
+            const aMissing = aValue === undefined;
+            const bMissing = bValue === undefined;
+            if (aMissing !== bMissing)
+                return aMissing ? 1 : -1;
+            const comparison = compareQueryValues(aValue, bValue);
+            if (comparison !== 0)
+                return sortOrder === 'asc' ? comparison : -comparison;
+            return a.path.localeCompare(b.path);
+        });
+        return {
+            notes: notes.slice(0, limit),
+            total: notes.length,
+            truncated: notes.length > limit,
         };
     }
 }

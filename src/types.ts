@@ -251,6 +251,28 @@ export interface ListTasksResult {
   truncated: boolean;
 }
 
+// Structured frontmatter query types
+export interface QueryNotesParams {
+  filters?: Record<string, unknown>;
+  pathPrefix?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  limit?: number;
+  includeContent?: boolean;
+}
+
+export interface QueryNote {
+  path: string;
+  frontmatter: Record<string, any>;
+  content?: string;
+}
+
+export interface QueryNotesResult {
+  notes: QueryNote[];
+  total: number;
+  truncated: boolean;
+}
+
 // Vault statistics types
 export interface VaultStats {
   totalNotes: number;
