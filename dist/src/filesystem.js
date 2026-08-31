@@ -6,6 +6,7 @@ import trash from 'trash';
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
 import { generateObsidianUri } from './uri.js';
+import { extractWikiLinkOccurrences, findBacklinkMatches, findUnresolvedLinkMatches } from './backlinks.js';
 /**
  * Map a filesystem write failure to a clear, accurate Error.
  *
@@ -962,6 +963,120 @@ export class FileSystemService {
             return da !== db ? da - db : a.localeCompare(b);
         });
         return matches;
+    }
+    async getBacklinks(path, limit = 100) {
+        const target = this.normalizePath(path);
+        if (!this.pathFilter.isAllowed(target)) {
+            throw new Error(`Access denied: ${target}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
+        }
+        // Validate that the requested target is an existing readable note before
+        // scanning the vault. This also applies the same symlink boundary checks
+        // as read_note.
+        await this.readNote(target);
+        const backlinks = [];
+        let total = 0;
+        const scanDirectory = async (dirPath, relativePath = '') => {
+            const entries = await readdir(dirPath, { withFileTypes: true });
+            for (const entry of entries) {
+                const entryRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+                const fullEntryPath = join(dirPath, entry.name);
+                if (entry.isDirectory()) {
+                    if (this.pathFilter.isAllowedForListing(entryRelativePath)) {
+                        await scanDirectory(fullEntryPath, entryRelativePath);
+                    }
+                    continue;
+                }
+                if (!entry.isFile() || entryRelativePath === target || !this.pathFilter.isAllowed(entryRelativePath)) {
+                    continue;
+                }
+                try {
+                    const content = await readFile(fullEntryPath, 'utf-8');
+                    const found = findBacklinkMatches(content, target);
+                    for (const backlink of found) {
+                        total += 1;
+                        if (backlinks.length < limit) {
+                            backlinks.push({ ...backlink, path: entryRelativePath });
+                        }
+                    }
+                }
+                catch {
+                    // A single unreadable or concurrently removed note should not make
+                    // a vault-wide read operation fail.
+                }
+            }
+        };
+        await scanDirectory(this.vaultPath);
+        backlinks.sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line);
+        return {
+            target,
+            backlinks,
+            total,
+            truncated: total > backlinks.length,
+        };
+    }
+    async getOutlinks(path, limit = 100) {
+        const source = this.normalizePath(path);
+        if (!this.pathFilter.isAllowed(source)) {
+            throw new Error(`Access denied: ${source}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
+        }
+        const note = await this.readNote(source);
+        const allOutlinks = extractWikiLinkOccurrences(note.originalContent);
+        const outlinks = allOutlinks.slice(0, limit);
+        const total = allOutlinks.length;
+        return {
+            source,
+            outlinks,
+            total,
+            truncated: total > outlinks.length,
+        };
+    }
+    async findUnresolvedLinks(limit = 100) {
+        const vaultFiles = await this.collectVaultFiles();
+        const unresolved = [];
+        let total = 0;
+        for (const source of vaultFiles) {
+            if (!this.pathFilter.isAllowed(source))
+                continue;
+            try {
+                const content = await readFile(this.resolvePath(source), 'utf-8');
+                const found = findUnresolvedLinkMatches(content, vaultFiles);
+                for (const link of found) {
+                    total += 1;
+                    if (unresolved.length < limit) {
+                        unresolved.push({ ...link, path: source });
+                    }
+                }
+            }
+            catch {
+                // Skip files that are unreadable or disappear during the scan.
+            }
+        }
+        unresolved.sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line);
+        return {
+            unresolved,
+            total,
+            truncated: total > unresolved.length,
+        };
+    }
+    async collectVaultFiles() {
+        const files = [];
+        const scanDirectory = async (dirPath, relativePath = '') => {
+            const entries = await readdir(dirPath, { withFileTypes: true });
+            for (const entry of entries) {
+                const entryRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+                const fullEntryPath = join(dirPath, entry.name);
+                if (entry.isDirectory()) {
+                    if (this.pathFilter.isAllowedForListing(entryRelativePath)) {
+                        await scanDirectory(fullEntryPath, entryRelativePath);
+                    }
+                }
+                else if (entry.isFile() && this.pathFilter.isAllowedForListing(entryRelativePath)) {
+                    files.push(entryRelativePath);
+                }
+            }
+        };
+        await scanDirectory(this.vaultPath);
+        return files;
     }
     async getNoteOutline(path) {
         path = this.normalizePath(path);

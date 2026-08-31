@@ -138,6 +138,38 @@ export interface ReadNoteLinesParams {
     startLine: number;
     endLine: number;
 }
+export interface BacklinkMatch {
+    path: string;
+    line: number;
+    link: string;
+    context: string;
+}
+export interface BacklinksResult {
+    target: string;
+    backlinks: BacklinkMatch[];
+    total: number;
+    truncated: boolean;
+}
+export interface OutlinkMatch {
+    target: string;
+    line: number;
+    link: string;
+    context: string;
+}
+export interface OutlinksResult {
+    source: string;
+    outlinks: OutlinkMatch[];
+    total: number;
+    truncated: boolean;
+}
+export interface UnresolvedLinkMatch extends OutlinkMatch {
+    path: string;
+}
+export interface UnresolvedLinksResult {
+    unresolved: UnresolvedLinkMatch[];
+    total: number;
+    truncated: boolean;
+}
 export interface VaultStats {
     totalNotes: number;
     totalFolders: number;

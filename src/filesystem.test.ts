@@ -368,6 +368,77 @@ describe("getNoteOutline", () => {
   });
 });
 
+describe("getBacklinks", () => {
+  test("matches basename and path-qualified wikilinks", async () => {
+    await mkdir(join(testVaultPath, "folder"), { recursive: true });
+    await writeFile(join(testVaultPath, "folder", "Target.md"), "target");
+    await writeFile(join(testVaultPath, "source.md"), "[[folder/Target]]\n[[Target#Heading]]");
+
+    const result = await fileSystem.getBacklinks("folder/Target.md");
+
+    expect(result.total).toBe(2);
+    expect(result.truncated).toBe(false);
+    expect(result.backlinks.map(({ path, line }) => ({ path, line }))).toEqual([
+      { path: "source.md", line: 1 },
+      { path: "source.md", line: 2 },
+    ]);
+  });
+
+  test("enforces the result limit and rejects restricted targets", async () => {
+    await writeFile(join(testVaultPath, "Target.md"), "target");
+    await writeFile(join(testVaultPath, "source.md"), "[[Target]]\n[[Target]]");
+
+    const result = await fileSystem.getBacklinks("Target.md", 1);
+    expect(result.total).toBe(2);
+    expect(result.backlinks).toHaveLength(1);
+    expect(result.truncated).toBe(true);
+    await expect(fileSystem.getBacklinks(".obsidian/app.json")).rejects.toThrow(/Access denied/);
+  });
+});
+
+describe("getOutlinks", () => {
+  test("returns all wikilink destinations and reports truncation", async () => {
+    await writeFile(join(testVaultPath, "source.md"), "[[One]]\n[[Two#Heading]]\n```\n[[Ignored]]\n```");
+
+    const result = await fileSystem.getOutlinks("source.md", 1);
+
+    expect(result.source).toBe("source.md");
+    expect(result.total).toBe(2);
+    expect(result.outlinks).toHaveLength(1);
+    expect(result.outlinks[0]).toMatchObject({ target: "One", line: 1, link: "[[One]]" });
+    expect(result.truncated).toBe(true);
+  });
+
+  test("rejects restricted source paths", async () => {
+    await expect(fileSystem.getOutlinks(".obsidian/app.json")).rejects.toThrow(/Access denied/);
+  });
+});
+
+describe("findUnresolvedLinks", () => {
+  test("resolves notes and explicit attachment links", async () => {
+    await mkdir(join(testVaultPath, "folder"), { recursive: true });
+    await writeFile(join(testVaultPath, "folder", "Target.md"), "target");
+    await writeFile(join(testVaultPath, "image.png"), "image");
+    await writeFile(join(testVaultPath, "source.md"), "[[folder/Target]]\n![[image.png]]\n[[Missing]]");
+
+    const result = await fileSystem.findUnresolvedLinks();
+
+    expect(result.total).toBe(1);
+    expect(result.unresolved[0]).toMatchObject({ path: "source.md", line: 3, target: "Missing" });
+    expect(result.truncated).toBe(false);
+  });
+
+  test("enforces the result limit", async () => {
+    await writeFile(join(testVaultPath, "source.md"), "[[MissingOne]]\n[[MissingTwo]]");
+
+    const result = await fileSystem.findUnresolvedLinks(1);
+
+    expect(result.total).toBe(2);
+    expect(result.unresolved).toHaveLength(1);
+    expect(result.truncated).toBe(true);
+  });
+});
+
 // ============================================================================
 // READ NOTE LINES TESTS
 // ============================================================================

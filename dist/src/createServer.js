@@ -239,6 +239,43 @@ export function createServer(vaultPath, options = {}) {
                 }
             },
             {
+                name: "find_unresolved_links",
+                description: "Find broken Obsidian wikilinks across the vault. Returns source paths, line numbers, raw links, targets, and compact context. Explicit links to existing attachments are treated as resolved; fenced code blocks are ignored.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        limit: { type: "number", description: "Maximum unresolved link occurrences to return (default: 100, max: 500)", default: 100 },
+                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                    }
+                }
+            },
+            {
+                name: "get_outlinks",
+                description: "List the Obsidian wikilinks from a note. Returns destination targets, line numbers, raw link text, and compact line context. Includes embeds, aliases, headings, and path-qualified links; ignores fenced code blocks.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        path: { type: "string", description: "Path to the source note relative to vault root" },
+                        limit: { type: "number", description: "Maximum outlink occurrences to return (default: 100, max: 500)", default: 100 },
+                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                    },
+                    required: ["path"]
+                }
+            },
+            {
+                name: "get_backlinks",
+                description: "Find notes that link to a target note. Returns matching note paths, line numbers, link text, and compact line context. Scans Obsidian wikilinks including embeds, aliases, headings, and path-qualified links; ignores fenced code blocks.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        path: { type: "string", description: "Path to the target note relative to vault root" },
+                        limit: { type: "number", description: "Maximum backlink occurrences to return (default: 100, max: 500)", default: 100 },
+                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                    },
+                    required: ["path"]
+                }
+            },
+            {
                 name: "get_note_outline",
                 description: "Get the heading structure of a note without reading its full content. Returns headings with level, text, and line number. Use this first to navigate large notes efficiently, then call read_note_lines to read only the section you need.",
                 inputSchema: {
@@ -440,6 +477,39 @@ export function createServer(vaultPath, options = {}) {
                 }
                 case "wiki_link":
                     return await handleWikiLinkTool(fileSystem, trimmedArgs);
+                case "get_backlinks": {
+                    const requestedLimit = trimmedArgs.limit === undefined ? 100 : Number(trimmedArgs.limit);
+                    if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
+                        throw new Error('limit must be a positive integer');
+                    }
+                    const backlinks = await fileSystem.getBacklinks(trimmedArgs.path, Math.min(requestedLimit, 500));
+                    const indent = trimmedArgs.prettyPrint ? 2 : undefined;
+                    return {
+                        content: [{ type: "text", text: JSON.stringify(backlinks, null, indent) }]
+                    };
+                }
+                case "get_outlinks": {
+                    const requestedLimit = trimmedArgs.limit === undefined ? 100 : Number(trimmedArgs.limit);
+                    if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
+                        throw new Error('limit must be a positive integer');
+                    }
+                    const outlinks = await fileSystem.getOutlinks(trimmedArgs.path, Math.min(requestedLimit, 500));
+                    const indent = trimmedArgs.prettyPrint ? 2 : undefined;
+                    return {
+                        content: [{ type: "text", text: JSON.stringify(outlinks, null, indent) }]
+                    };
+                }
+                case "find_unresolved_links": {
+                    const requestedLimit = trimmedArgs.limit === undefined ? 100 : Number(trimmedArgs.limit);
+                    if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
+                        throw new Error('limit must be a positive integer');
+                    }
+                    const unresolved = await fileSystem.findUnresolvedLinks(Math.min(requestedLimit, 500));
+                    const indent = trimmedArgs.prettyPrint ? 2 : undefined;
+                    return {
+                        content: [{ type: "text", text: JSON.stringify(unresolved, null, indent) }]
+                    };
+                }
                 case "get_note_outline": {
                     const headings = await fileSystem.getNoteOutline(trimmedArgs.path);
                     const indent = trimmedArgs.prettyPrint ? 2 : undefined;

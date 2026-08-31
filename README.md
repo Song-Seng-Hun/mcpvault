@@ -115,7 +115,7 @@ An MCP client starts MCPVault as a local stdio process and passes the vault path
   - Directory and batch reads: `list_directory`, `read_multiple_notes`
   - Search: `search_notes` with multi-word matching and BM25 reranking
   - Metadata and tags: `get_frontmatter`, `update_frontmatter`, `get_notes_info`, `get_vault_stats`, `manage_tags`, `list_all_tags`
-  - Wiki links: `wiki_link` resolves names and returns alternative paths when a name is ambiguous
+  - Wiki links: `wiki_link` resolves names and returns alternative paths when a name is ambiguous; `get_backlinks` finds incoming wikilinks, `get_outlinks` lists outgoing wikilinks, and `find_unresolved_links` finds broken references
 - `write_note` supports overwrite, append, and prepend modes.
 - `delete_note` and `move_file` require matching confirmation paths.
 - Path arguments are trimmed before validation.
@@ -752,6 +752,118 @@ Search for notes in the vault by content or frontmatter with multi-word matching
 - `mc` = match count
 - `ln` = line number
 - `uri` = Obsidian deep link for quick opening
+
+### `get_backlinks`
+
+Find incoming Obsidian wikilinks for a note without returning the full source
+notes. Embeds, aliases, heading/block fragments, and path-qualified links are
+reported with their source path, 1-indexed line number, and compact context.
+Links inside fenced code blocks are ignored. The result is capped at 500
+occurrences; `truncated` indicates when more matches exist.
+
+**Request:**
+
+```json
+{
+  "name": "get_backlinks",
+  "arguments": {
+    "path": "Projects/roadmap.md",
+    "limit": 100
+  }
+}
+```
+
+**Response:**
+
+```json
+{
+  "target": "Projects/roadmap.md",
+  "backlinks": [
+    {
+      "path": "index.md",
+      "line": 12,
+      "link": "[[Projects/roadmap|Roadmap]]",
+      "context": "See [[Projects/roadmap|Roadmap]]."
+    }
+  ],
+  "total": 1,
+  "truncated": false
+}
+```
+
+### `get_outlinks`
+
+List the wikilinks contained in a note. Each occurrence includes its
+destination, source line, raw link, and compact context. Embeds, aliases, and
+heading/block fragments are preserved in the raw link while the `target` field
+contains the destination without the alias or fragment. Fenced code blocks are
+ignored.
+
+**Request:**
+
+```json
+{
+  "name": "get_outlinks",
+  "arguments": {
+    "path": "Projects/roadmap.md",
+    "limit": 100
+  }
+}
+```
+
+**Response:**
+
+```json
+{
+  "source": "Projects/roadmap.md",
+  "outlinks": [
+    {
+      "target": "Projects/spec",
+      "line": 8,
+      "link": "[[Projects/spec|Specification]]",
+      "context": "Read the [[Projects/spec|Specification]]."
+    }
+  ],
+  "total": 1,
+  "truncated": false
+}
+```
+
+### `find_unresolved_links`
+
+Scan the vault for wikilinks whose destination does not exist. Explicit links
+to attachments are resolved against all visible vault files, while links in
+fenced code blocks are ignored. Results include the source path, line number,
+raw link, parsed target, and compact context.
+
+**Request:**
+
+```json
+{
+  "name": "find_unresolved_links",
+  "arguments": {
+    "limit": 100
+  }
+}
+```
+
+**Response:**
+
+```json
+{
+  "unresolved": [
+    {
+      "path": "index.md",
+      "line": 12,
+      "link": "[[Missing Note#Details|Details]]",
+      "target": "Missing Note",
+      "context": "See [[Missing Note#Details|Details]]."
+    }
+  ],
+  "total": 1,
+  "truncated": false
+}
+```
 
 ### `move_note`
 

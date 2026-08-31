@@ -25,7 +25,7 @@ test("createServer returns a Server instance", () => {
   expect(typeof server.connect).toBe("function");
 });
 
-test("server registers 18 tools", async () => {
+test("server registers 21 tools", async () => {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -37,14 +37,17 @@ test("server registers 18 tools", async () => {
   ]);
 
   const result = await client.listTools();
-  expect(result.tools).toHaveLength(18);
+  expect(result.tools).toHaveLength(21);
 
   const toolNames = result.tools.map((t) => t.name).sort();
   expect(toolNames).toEqual([
     "delete_note",
+    "find_unresolved_links",
+    "get_backlinks",
     "get_frontmatter",
     "get_note_outline",
     "get_notes_info",
+    "get_outlinks",
     "get_vault_stats",
     "list_all_tags",
     "list_directory",
@@ -243,7 +246,7 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
   try {
     const listedTools = await client.listTools();
     const toolNames = listedTools.tools.map((tool) => tool.name);
-    expect(toolNames).toHaveLength(11);
+    expect(toolNames).toHaveLength(14);
     expect(toolNames).toContain("read_note");
     expect(toolNames).toContain("search_notes");
     expect(toolNames).not.toContain("write_note");
@@ -278,6 +281,123 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
     expect(await readFile(join(testVaultPath, "existing.md"), "utf8")).toBe(
       "# Existing\n\nSafe content",
     );
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test("find_unresolved_links reports only broken wikilinks", async () => {
+  const { server, client } = await connectClient();
+  try {
+    await writeFile(join(testVaultPath, "Target.md"), "target");
+    await writeFile(join(testVaultPath, "asset.png"), "not markdown");
+    await writeFile(join(testVaultPath, "Source.md"), [
+      "Valid: [[Target]].",
+      "Attachment: ![[asset.png]].",
+      "Broken: [[Missing#Heading|display]].",
+      "```md",
+      "[[Ignored]]",
+      "```",
+    ].join("\n"));
+
+    const result = await client.callTool({ name: "find_unresolved_links", arguments: {} });
+    expect(result.isError).toBeFalsy();
+    expect(JSON.parse((result.content as any)[0].text)).toEqual({
+      unresolved: [{
+        path: "Source.md",
+        line: 3,
+        link: "[[Missing#Heading|display]]",
+        target: "Missing",
+        context: "Broken: [[Missing#Heading|display]].",
+      }],
+      total: 1,
+      truncated: false,
+    });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test("get_outlinks returns destinations and ignores fenced examples", async () => {
+  const { server, client } = await connectClient();
+  try {
+    await writeFile(join(testVaultPath, "Source.md"), [
+      "See [[Target|the target]].",
+      "Embed: ![[folder/Other#Details]].",
+      "```md",
+      "[[Ignored]]",
+      "```",
+    ].join("\n"));
+
+    const result = await client.callTool({
+      name: "get_outlinks",
+      arguments: { path: "Source.md" },
+    });
+    expect(result.isError).toBeFalsy();
+    expect(JSON.parse((result.content as any)[0].text)).toEqual({
+      source: "Source.md",
+      outlinks: [
+        {
+          target: "Target",
+          line: 1,
+          link: "[[Target|the target]]",
+          context: "See [[Target|the target]].",
+        },
+        {
+          target: "folder/Other",
+          line: 2,
+          link: "![[folder/Other#Details]]",
+          context: "Embed: ![[folder/Other#Details]].",
+        },
+      ],
+      total: 2,
+      truncated: false,
+    });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test("get_backlinks returns wikilink occurrences with line context", async () => {
+  const { server, client } = await connectClient();
+  try {
+    await mkdir(join(testVaultPath, "Projects"), { recursive: true });
+    await writeFile(join(testVaultPath, "Target.md"), "# Target");
+    await writeFile(join(testVaultPath, "Projects", "Source.md"), [
+      "# Source",
+      "",
+      "See [[Target|the target]].",
+      "Embed: ![[Target#Details]].",
+      "```md",
+      "[[Target]]",
+      "```",
+    ].join("\n"));
+
+    const result = await client.callTool({
+      name: "get_backlinks",
+      arguments: { path: "Target.md" },
+    });
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as any)[0].text);
+    expect(parsed.target).toBe("Target.md");
+    expect(parsed.total).toBe(2);
+    expect(parsed.backlinks).toEqual([
+      {
+        path: "Projects/Source.md",
+        line: 3,
+        link: "[[Target|the target]]",
+        context: "See [[Target|the target]].",
+      },
+      {
+        path: "Projects/Source.md",
+        line: 4,
+        link: "![[Target#Details]]",
+        context: "Embed: ![[Target#Details]].",
+      },
+    ]);
   } finally {
     await client.close();
     await server.close();
