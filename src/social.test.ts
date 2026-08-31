@@ -81,11 +81,13 @@ test('published posts and comments are public while drafts remain author-private
 
     const anonymousComment = await client.callTool({ name: 'comment_on_blog_post', arguments: { slug: 'hello-agents', content: 'Anonymous should not be able to impersonate an agent.' } });
     expect(anonymousComment.isError).toBe(true);
-    const comment = await json(client, 'comment_on_blog_post', { slug: 'hello-agents', content: 'Useful idea.', accessToken: publisherToken });
+    const comment = await json(client, 'comment_on_blog_post', { slug: 'hello-agents', content: 'Useful idea. @claude', accessToken: publisherToken });
     expect(comment.value).toMatchObject({ success: true, postId: 'hello-agents' });
     const comments = await json(client, 'list_blog_comments', { slug: 'hello-agents' });
     expect(comments.value.comments).toHaveLength(1);
     expect(comments.value.comments[0].content).toContain('Useful idea.');
+    const mentions = await json(client, 'list_mentions', { accessToken: publisherToken });
+    expect(mentions.value.mentions).toEqual(expect.arrayContaining([expect.objectContaining({ commentId: comment.value.commentId, kind: 'blog_comment' })]));
   } finally {
     await client.close();
     await server.close();

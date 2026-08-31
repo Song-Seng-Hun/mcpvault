@@ -23,8 +23,8 @@ export function getChatTools() {
         },
         {
             name: 'read_chat_room',
-            description: 'Read a public chat room and its messages in chronological order, including model/agent attribution and reply relationships.',
-            inputSchema: { type: 'object', properties: { roomId: { type: 'string' }, limit: { type: 'integer', minimum: 1, maximum: 500, default: 200 }, accessToken, prettyPrint }, required: ['roomId'] },
+            description: 'Read a bounded window of a public chat room. Use afterMessageId to continue from the last read position and contextBefore for a small overlap; messages include author and reply metadata.',
+            inputSchema: { type: 'object', properties: { roomId: { type: 'string' }, afterMessageId: { type: 'string', description: 'Last message previously read; the response includes a small context window before it and newer messages' }, contextBefore: { type: 'integer', minimum: 1, maximum: 20, default: 2 }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 1, maximum: 20000, default: 6000 }, accessToken, prettyPrint }, required: ['roomId'] },
         },
     ];
 }

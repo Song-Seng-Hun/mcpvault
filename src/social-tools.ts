@@ -54,8 +54,13 @@ export function getSocialTools(): Tool[] {
     },
     {
       name: 'list_blog_comments',
-      description: 'Read the public comment thread for a community post in chronological order.',
-      inputSchema: { type: 'object', properties: { slug: { type: 'string' }, limit: { type: 'integer', minimum: 1, maximum: 500, default: 100 }, accessToken, prettyPrint }, required: ['slug'] },
+      description: 'Read a bounded window of the public comment thread. Use afterCommentId to continue from the last read position and contextBefore for a small overlap.',
+      inputSchema: { type: 'object', properties: { slug: { type: 'string' }, afterCommentId: { type: 'string', description: 'Last comment previously read; the response includes a small context window before it and newer comments' }, contextBefore: { type: 'integer', minimum: 1, maximum: 20, default: 2 }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 1, maximum: 20000, default: 6000 }, accessToken, prettyPrint }, required: ['slug'] },
+    },
+    {
+      name: 'list_mentions',
+      description: 'List recent public chat messages and community comments that mention the authenticated model or agent with @identity. Results are bounded for context efficiency.',
+      inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 1, maximum: 20000, default: 6000 }, accessToken, prettyPrint } },
     },
   ];
 }

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { normalizeScopeId } from './scopes.js';
+import { extractMentions, MAX_COMMUNITY_TEXT_LENGTH } from './social.js';
 const ROOM_ROOT = 'Community/ChatRooms';
 const MESSAGE_ROOT = 'Community/ChatMessages';
 const ROOM_STATUSES = new Set(['open', 'archived']);
@@ -7,6 +8,21 @@ const now = () => new Date().toISOString();
 const roomPath = (roomId) => `${ROOM_ROOT}/${normalizeScopeId(roomId, 'roomId')}.md`;
 const messagesRoot = (roomId) => `${MESSAGE_ROOT}/${normalizeScopeId(roomId, 'roomId')}`;
 const messagePath = (roomId, messageId) => `${messagesRoot(roomId)}/${normalizeScopeId(messageId, 'messageId')}.md`;
+function shortMessage(content) {
+    const normalized = String(content ?? '').trim();
+    if (!normalized)
+        throw new Error('content is required');
+    const length = Array.from(normalized).length;
+    if (length > MAX_COMMUNITY_TEXT_LENGTH)
+        throw new Error(`content must be ${MAX_COMMUNITY_TEXT_LENGTH} Unicode characters or fewer (received ${length})`);
+    return normalized;
+}
+function windowNumber(value, fallback, maximum) {
+    const number = value === undefined ? fallback : Number(value);
+    if (!Number.isInteger(number) || number < 1)
+        throw new Error('window limits must be positive integers');
+    return Math.min(number, maximum);
+}
 function identity(principal) {
     return principal.agentId || principal.modelId;
 }
@@ -77,9 +93,7 @@ export class ChatService {
         const room = await this.readRoom(roomId);
         if (room.note.frontmatter.status !== 'open')
             throw new Error('Cannot send a message to an archived room');
-        const content = String(params.content ?? '').trim();
-        if (!content)
-            throw new Error('content is required');
+        const content = shortMessage(params.content);
         const messageId = params.messageId ? normalizeScopeId(params.messageId, 'messageId') : `message-${randomUUID().slice(0, 10)}`;
         if (params.replyTo)
             await this.fileSystem.readNote(messagePath(roomId, params.replyTo));
@@ -91,6 +105,7 @@ export class ChatService {
             frontmatter: {
                 mcpvault_type: 'chat_message', message_id: messageId, room_id: roomId,
                 author: identity(principal), author_role: principal.role, created_at: timestamp, updated_at: timestamp,
+                mentions: extractMentions(content),
                 ...(params.replyTo && { reply_to: normalizeScopeId(params.replyTo, 'replyTo') }),
             },
             expectedRevision: 'missing',
@@ -103,11 +118,32 @@ export class ChatService {
         const room = await this.readRoom(roomId);
         const result = await this.fileSystem.queryNotes({
             pathPrefix: messagesRoot(roomId), filters: { mcpvault_type: 'chat_message' },
-            sortBy: 'created_at', sortOrder: 'asc', limit: Math.min(Math.max(Number(params.limit || 200), 1), 500), includeContent: true,
+            sortBy: 'created_at', sortOrder: 'asc', limit: 500,
         });
+        const limit = windowNumber(params.limit, 20, 100);
+        const maxChars = windowNumber(params.maxChars, 6000, 20000);
+        const contextBefore = windowNumber(params.contextBefore, 2, 20) - 1;
+        const cursorIndex = params.afterMessageId
+            ? result.notes.findIndex(note => note.frontmatter.message_id === normalizeScopeId(params.afterMessageId, 'afterMessageId'))
+            : -1;
+        if (params.afterMessageId && cursorIndex < 0)
+            throw new Error(`afterMessageId was not found in room: ${params.afterMessageId}`);
+        const start = cursorIndex >= 0 ? Math.max(0, cursorIndex - contextBefore) : Math.max(0, result.notes.length - limit);
+        const selected = [];
+        let usedChars = 0;
+        for (let index = start; index < result.notes.length && selected.length < limit; index += 1) {
+            const note = result.notes[index];
+            const full = await this.fileSystem.readNote(note.path);
+            const contentLength = Array.from(full.content).length;
+            if (selected.length > 0 && usedChars + contentLength > maxChars)
+                break;
+            selected.push({ note, content: full.content, revision: full.revision });
+            usedChars += contentLength;
+        }
+        const last = selected.at(-1)?.note.frontmatter.message_id;
         return {
             room: { path: room.path, fm: room.note.frontmatter, content: room.note.content, revision: room.note.revision },
-            messages: result.notes.map(note => ({
+            messages: selected.map(({ note, content, revision }) => ({
                 path: note.path,
                 messageId: note.frontmatter.message_id,
                 roomId: note.frontmatter.room_id,
@@ -115,10 +151,13 @@ export class ChatService {
                 authorRole: note.frontmatter.author_role,
                 replyTo: note.frontmatter.reply_to,
                 createdAt: note.frontmatter.created_at,
-                content: note.content,
+                content,
+                revision,
             })),
             totalMessages: result.total,
-            truncated: result.truncated,
+            truncated: start > 0 || result.truncated || start + selected.length < result.notes.length,
+            nextCursor: last,
+            contextBefore: cursorIndex >= 0 ? contextBefore + 1 : 0,
         };
     }
 }

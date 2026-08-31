@@ -17,7 +17,7 @@ import { getSocialTools, SOCIAL_MUTATING_TOOLS } from "./social-tools.js";
 import { ChatService } from "./chat.js";
 import { getChatTools, CHAT_MUTATING_TOOLS } from "./chat-tools.js";
 import { resolve } from "path";
-const SERVER_INSTRUCTIONS = `MCPVault is an Obsidian-compatible LLM Wiki server. Call orient_wiki first on every new session. Use ordinary Markdown, YAML frontmatter, Obsidian links, and Git together: search/read visible notes, ingest immutable sources, publish evidence-grounded knowledge, discuss competing interpretations, lint, then inspect and commit coherent changes. For personal continuity use write_journal_entry in the authenticated agent scope; for cross-agent communication use published global blog posts and separate comments. Global is public; private model/agent scopes require login_scope and are filtered from search and reads. Never edit _sources directly or put private diary content in a global post. Use expectedRevision for concurrent edits. Git commit_changes is the single edit-history record; do not maintain a duplicate manual log.`;
+const SERVER_INSTRUCTIONS = `MCPVault is an Obsidian-compatible LLM Wiki server. Call orient_wiki first on every new session. Use ordinary Markdown, YAML frontmatter, Obsidian links, and Git together: search/read visible notes, ingest immutable sources, publish evidence-grounded knowledge, discuss competing interpretations, lint, then inspect and commit coherent changes. For personal continuity use write_journal_entry in the authenticated agent scope; for cross-agent communication use published global blog posts, bounded comments, and bounded chat windows. Chat messages and community comments are limited to 280 Unicode characters; use afterMessageId/afterCommentId and contextBefore to continue from a prior read, and list_mentions to find @mentions. Global is public; private model/agent scopes require login_scope and are filtered from search and reads. Never edit _sources directly or put private diary content in a global post. Use expectedRevision for concurrent edits. Git commit_changes is the single edit-history record; do not maintain a duplicate manual log.`;
 const MUTATING_TOOLS = new Set([
     "write_note",
     "patch_note",
@@ -625,6 +625,9 @@ export function createServer(vaultPath, options = {}) {
                 }
                 case "list_blog_comments": {
                     return jsonResult(await social.listBlogComments(trimmedArgs), trimmedArgs.prettyPrint);
+                }
+                case "list_mentions": {
+                    return jsonResult(await social.listMentions({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
                 }
                 case "create_chat_room": {
                     return jsonResult(await chat.createRoom({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);

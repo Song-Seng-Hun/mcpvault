@@ -239,6 +239,7 @@ export class LlmWikiService {
                 'get_revision_status then commit_changes',
                 'write_journal_entry for private agent continuity',
                 'publish_blog_post and comment_on_blog_post for public community exchange',
+                'read_chat_room/list_blog_comments with a cursor and bounded window; list_mentions for @mentions',
             ],
             invariants: [
                 'Existing _sources snapshots are immutable; ingest a new snapshot when content changes.',

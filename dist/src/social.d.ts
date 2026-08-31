@@ -1,6 +1,8 @@
 import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
+export declare const MAX_COMMUNITY_TEXT_LENGTH = 280;
+export declare function extractMentions(content: string): string[];
 export declare class SocialService {
     private readonly fileSystem;
     private readonly access;
@@ -113,6 +115,9 @@ export declare class SocialService {
     listBlogComments(params: {
         slug: string;
         limit?: number;
+        afterCommentId?: string;
+        contextBefore?: number;
+        maxChars?: number;
     }): Promise<{
         comments: {
             path: string;
@@ -121,10 +126,23 @@ export declare class SocialService {
             author: any;
             replyTo: any;
             createdAt: any;
-            content: string | undefined;
+            content: string;
+            revision: string;
         }[];
         total: number;
         truncated: boolean;
+        nextCursor: any;
+        contextBefore: number;
+    }>;
+    listMentions(params: {
+        principal?: ScopePrincipal;
+        limit?: number;
+        maxChars?: number;
+    }): Promise<{
+        mentions: Record<string, unknown>[];
+        total: number;
+        truncated: boolean;
+        targets: string[];
     }>;
 }
 //# sourceMappingURL=social.d.ts.map

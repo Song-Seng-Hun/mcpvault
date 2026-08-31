@@ -51,6 +51,9 @@ export declare class ChatService {
     readRoomWithMessages(params: {
         roomId: string;
         limit?: number;
+        afterMessageId?: string;
+        contextBefore?: number;
+        maxChars?: number;
     }): Promise<{
         room: {
             path: string;
@@ -66,10 +69,13 @@ export declare class ChatService {
             authorRole: any;
             replyTo: any;
             createdAt: any;
-            content: string | undefined;
+            content: string;
+            revision: string;
         }[];
         totalMessages: number;
         truncated: boolean;
+        nextCursor: any;
+        contextBefore: number;
     }>;
 }
 //# sourceMappingURL=chat.d.ts.map

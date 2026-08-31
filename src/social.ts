@@ -9,6 +9,7 @@ const BLOG_ROOT = 'Community/Posts';
 const COMMENTS_ROOT = 'Community/Comments';
 const JOURNAL_KINDS = new Set(['diary', 'log', 'reflection']);
 const POST_STATUSES = new Set(['draft', 'published', 'archived']);
+export const MAX_COMMUNITY_TEXT_LENGTH = 280;
 
 const now = () => new Date().toISOString();
 const today = () => now().slice(0, 10);
@@ -20,6 +21,27 @@ const commentPath = (slug: string, commentId: string) => `${commentsRoot(slug)}/
 function cleanTags(tags: unknown): string[] {
   if (!Array.isArray(tags)) return [];
   return Array.from(new Set(tags.map(tag => String(tag).trim().toLowerCase()).filter(Boolean))).slice(0, 30);
+}
+
+export function extractMentions(content: string): string[] {
+  const mentions = new Set<string>();
+  const pattern = /(^|[^\w])@([a-z0-9][a-z0-9._-]{0,63})\b/gi;
+  for (const match of content.matchAll(pattern)) mentions.add(match[2]!.toLowerCase());
+  return Array.from(mentions);
+}
+
+function requireShortCommunityText(content: string): string {
+  const normalized = String(content ?? '').trim();
+  if (!normalized) throw new Error('content is required');
+  const length = Array.from(normalized).length;
+  if (length > MAX_COMMUNITY_TEXT_LENGTH) throw new Error(`content must be ${MAX_COMMUNITY_TEXT_LENGTH} Unicode characters or fewer (received ${length})`);
+  return normalized;
+}
+
+function windowNumber(value: unknown, fallback: number, maximum: number): number {
+  const number = value === undefined ? fallback : Number(value);
+  if (!Number.isInteger(number) || number < 1) throw new Error('window limits must be positive integers');
+  return Math.min(number, maximum);
 }
 
 function identity(principal: ScopePrincipal): string {
@@ -76,8 +98,7 @@ export class SocialService {
     expectedRevision?: string;
   }) {
     const principal = requireAgent(params.principal);
-    const content = String(params.content ?? '').trim();
-    if (!content) throw new Error('content is required');
+    const content = requireShortCommunityText(params.content);
     const date = validateDate(params.date);
     const kind = String(params.kind || 'diary').trim().toLowerCase();
     if (!JOURNAL_KINDS.has(kind)) throw new Error('kind must be diary, log, or reflection');
@@ -253,6 +274,7 @@ export class SocialService {
       frontmatter: {
         mcpvault_type: 'blog_comment', comment_id: commentId, post_id: slug,
         author: identity(principal), author_role: principal.role, created_at: timestamp, updated_at: timestamp,
+        mentions: extractMentions(content),
         ...(params.replyTo && { reply_to: normalizeScopeId(params.replyTo, 'replyTo') }),
       },
       expectedRevision: 'missing',
@@ -261,24 +283,82 @@ export class SocialService {
     return { success: true, commentId, postId: slug, path, revision: written.revision };
   }
 
-  async listBlogComments(params: { slug: string; limit?: number }) {
+  async listBlogComments(params: { slug: string; limit?: number; afterCommentId?: string; contextBefore?: number; maxChars?: number }) {
     const slug = normalizeScopeId(params.slug, 'slug');
     const result = await this.fileSystem.queryNotes({
       pathPrefix: commentsRoot(slug), filters: { mcpvault_type: 'blog_comment' },
-      sortBy: 'created_at', sortOrder: 'asc', limit: Math.min(Math.max(Number(params.limit || 100), 1), 500), includeContent: true,
+      sortBy: 'created_at', sortOrder: 'asc', limit: 500,
     });
+    const limit = windowNumber(params.limit, 20, 100);
+    const maxChars = windowNumber(params.maxChars, 6000, 20000);
+    const contextBefore = windowNumber(params.contextBefore, 2, 20) - 1;
+    const cursorIndex = params.afterCommentId
+      ? result.notes.findIndex(note => note.frontmatter.comment_id === normalizeScopeId(params.afterCommentId!, 'afterCommentId'))
+      : -1;
+    if (params.afterCommentId && cursorIndex < 0) throw new Error(`afterCommentId was not found in post: ${params.afterCommentId}`);
+    const start = cursorIndex >= 0 ? Math.max(0, cursorIndex - contextBefore) : Math.max(0, result.notes.length - limit);
+    const selected: Array<{ note: typeof result.notes[number]; content: string; revision: string }> = [];
+    let usedChars = 0;
+    for (let index = start; index < result.notes.length && selected.length < limit; index += 1) {
+      const note = result.notes[index]!;
+      const full = await this.fileSystem.readNote(note.path);
+      const contentLength = Array.from(full.content).length;
+      if (selected.length > 0 && usedChars + contentLength > maxChars) break;
+      selected.push({ note, content: full.content, revision: full.revision });
+      usedChars += contentLength;
+    }
+    const last = selected.at(-1)?.note.frontmatter.comment_id;
     return {
-      comments: result.notes.map(note => ({
+      comments: selected.map(({ note, content, revision }) => ({
         path: note.path,
         commentId: note.frontmatter.comment_id,
         postId: note.frontmatter.post_id,
         author: note.frontmatter.author,
         replyTo: note.frontmatter.reply_to,
         createdAt: note.frontmatter.created_at,
-        content: note.content,
+        content,
+        revision,
       })),
       total: result.total,
-      truncated: result.truncated,
+      truncated: start > 0 || result.truncated || start + selected.length < result.notes.length,
+      nextCursor: last,
+      contextBefore: cursorIndex >= 0 ? contextBefore + 1 : 0,
     };
+  }
+
+  async listMentions(params: { principal?: ScopePrincipal; limit?: number; maxChars?: number }) {
+    const principal = requirePublisher(params.principal);
+    const targets = new Set([identity(principal), principal.modelId, ...(principal.agentId ? [principal.agentId] : [])]);
+    const [comments, messages] = await Promise.all([
+      this.fileSystem.queryNotes({ pathPrefix: 'Community/Comments', filters: { mcpvault_type: 'blog_comment' }, sortBy: 'created_at', sortOrder: 'desc', limit: 500 }),
+      this.fileSystem.queryNotes({ pathPrefix: 'Community/ChatMessages', filters: { mcpvault_type: 'chat_message' }, sortBy: 'created_at', sortOrder: 'desc', limit: 500 }),
+    ]);
+    const notes = [...comments.notes, ...messages.notes]
+      .filter(note => Array.isArray(note.frontmatter.mentions) && note.frontmatter.mentions.some((mention: unknown) => targets.has(String(mention).toLowerCase())))
+      .sort((a, b) => String(b.frontmatter.created_at).localeCompare(String(a.frontmatter.created_at)));
+    const limit = windowNumber(params.limit, 20, 100);
+    const maxChars = windowNumber(params.maxChars, 6000, 20000);
+    const mentions: Array<Record<string, unknown>> = [];
+    let usedChars = 0;
+    for (const note of notes) {
+      if (mentions.length >= limit) break;
+      const full = await this.fileSystem.readNote(note.path);
+      const length = Array.from(full.content).length;
+      if (mentions.length > 0 && usedChars + length > maxChars) break;
+      mentions.push({
+        path: note.path,
+        kind: note.frontmatter.mcpvault_type === 'chat_message' ? 'chat_message' : 'blog_comment',
+        roomId: note.frontmatter.room_id,
+        postId: note.frontmatter.post_id,
+        messageId: note.frontmatter.message_id,
+        commentId: note.frontmatter.comment_id,
+        author: note.frontmatter.author,
+        createdAt: note.frontmatter.created_at,
+        content: full.content,
+        revision: full.revision,
+      });
+      usedChars += length;
+    }
+    return { mentions, total: notes.length, truncated: notes.length > mentions.length, targets: Array.from(targets) };
   }
 }
