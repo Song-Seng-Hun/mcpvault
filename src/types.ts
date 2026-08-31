@@ -273,6 +273,52 @@ export interface QueryNotesResult {
   truncated: boolean;
 }
 
+// Git-backed revision history types
+export interface RevisionChange {
+  status: string;
+  path: string;
+  previousPath?: string;
+}
+
+export interface RevisionStatus {
+  enabled: boolean;
+  repoRoot?: string;
+  branch?: string;
+  head?: string;
+  pending: RevisionChange[];
+  message?: string;
+}
+
+export interface RevisionEntry {
+  revision: string;
+  authorName: string;
+  authorEmail: string;
+  timestamp: string;
+  reason: string;
+}
+
+export interface CommitChangesResult {
+  success: boolean;
+  committed: boolean;
+  revision?: string;
+  paths: string[];
+  message: string;
+}
+
+export interface InitializeRevisionResult {
+  success: boolean;
+  initialized: boolean;
+  message: string;
+}
+
+export interface RevisionDiffResult {
+  path: string;
+  fromRevision: string;
+  toRevision: string;
+  diff: string;
+  truncated: boolean;
+}
+
 // Vault statistics types
 export interface VaultStats {
   totalNotes: number;

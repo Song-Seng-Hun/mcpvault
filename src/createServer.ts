@@ -4,6 +4,7 @@ import { FrontmatterHandler, parseFrontmatter } from "./frontmatter.js";
 import { PathFilter } from "./pathfilter.js";
 import { SearchService } from "./search.js";
 import { handleWikiLinkTool } from "./wikilink/index.js";
+import { GitHistoryService } from "./git-history.js";
 import { resolve } from "path";
 
 export interface CreateServerOptions {
@@ -24,6 +25,9 @@ const MUTATING_TOOLS = new Set([
   "update_frontmatter",
   "manage_tags",
   "daily_note",
+  "initialize_revision_history",
+  "commit_changes",
+  "restore_note_revision",
 ]);
 
 export function createServer(vaultPath: string, options: CreateServerOptions = {}): Server {
@@ -38,6 +42,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const resolvedVaultPath = resolve(vaultPath);
   const fileSystem = new FileSystemService(resolvedVaultPath, pathFilter, frontmatterHandler);
   const searchService = new SearchService(resolvedVaultPath, pathFilter);
+  const gitHistory = new GitHistoryService(resolvedVaultPath, pathFilter);
 
   const server = new Server({ name, version }, {
     capabilities: { tools: {} },
@@ -267,6 +272,85 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
               includeContent: { type: "boolean", description: "Include the note body in each result (default: false)", default: false },
               prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
             }
+          }
+        },
+        {
+          name: "get_revision_status",
+          description: "Check whether Git-backed vault history is initialized and list pending safe vault changes. Ordinary MCP and Obsidian edits remain normal file changes until commit_changes groups them into a meaningful revision.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+            }
+          }
+        },
+        {
+          name: "initialize_revision_history",
+          description: "Initialize a Git repository at the vault root for revision history. Creates no commit and does not configure a remote. Requires explicit confirmation.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              confirm: { type: "boolean", description: "Must be true to create the vault .git repository" }
+            },
+            required: ["confirm"]
+          }
+        },
+        {
+          name: "commit_changes",
+          description: "Save pending vault file changes as one meaningful Git revision. Uses Git as the only history log; no duplicate audit database and no automatic commit per edit. Restricted paths such as .obsidian and .git are never included.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              reason: { type: "string", description: "Required edit summary explaining why these changes belong together" },
+              paths: { type: "array", items: { type: "string" }, maxItems: 500, description: "Optional exact vault-relative paths to commit. Omit to commit all safe pending vault changes." },
+              authorName: { type: "string", description: "Optional revision author name; must be paired with authorEmail. Defaults to Git configuration." },
+              authorEmail: { type: "string", description: "Optional revision author email; must be paired with authorName. Defaults to Git configuration." },
+              prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+            },
+            required: ["reason"]
+          }
+        },
+        {
+          name: "get_note_history",
+          description: "Return a note's Git revision history with author, timestamp, and edit reason. Follows renames when Git can detect them.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Vault-relative note path" },
+              limit: { type: "number", description: "Maximum revisions to return (default: 20, max: 100)", default: 20 },
+              prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+            },
+            required: ["path"]
+          }
+        },
+        {
+          name: "compare_note_revisions",
+          description: "Show the Git diff for one note between two revisions without invoking external diff tools. toRevision defaults to HEAD.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Vault-relative note path" },
+              fromRevision: { type: "string", description: "Older Git revision, tag, or ref" },
+              toRevision: { type: "string", description: "Newer Git revision, tag, or ref (default: HEAD)", default: "HEAD" },
+              prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+            },
+            required: ["path", "fromRevision"]
+          }
+        },
+        {
+          name: "restore_note_revision",
+          description: "Restore one note from a Git revision as a new pending file change. Never resets the repository or discards other notes. Refuses to overwrite an already-pending change unless overwritePending=true and requires exact path and revision confirmations.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Vault-relative note path" },
+              revision: { type: "string", description: "Revision to restore from" },
+              confirmPath: { type: "string", description: "Must exactly match path" },
+              confirmRevision: { type: "string", description: "Must exactly match revision" },
+              overwritePending: { type: "boolean", description: "Allow replacing an uncommitted change to this note (default: false)", default: false },
+              prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+            },
+            required: ["path", "revision", "confirmPath", "confirmRevision"]
           }
         },
         {
@@ -615,6 +699,85 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             limit: Math.min(requestedLimit, 500),
             includeContent: trimmedArgs.includeContent,
           });
+          const indent = trimmedArgs.prettyPrint ? 2 : undefined;
+          return {
+            content: [{ type: "text", text: JSON.stringify(result, null, indent) }]
+          };
+        }
+
+        case "get_revision_status": {
+          const status = await gitHistory.status();
+          const indent = trimmedArgs.prettyPrint ? 2 : undefined;
+          return {
+            content: [{ type: "text", text: JSON.stringify(status, null, indent) }]
+          };
+        }
+
+        case "initialize_revision_history": {
+          if (trimmedArgs.confirm !== true) {
+            throw new Error('confirm must be true to initialize revision history');
+          }
+          const result = await gitHistory.initialize();
+          return {
+            content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+          };
+        }
+
+        case "commit_changes": {
+          const result = await gitHistory.commitChanges({
+            reason: trimmedArgs.reason,
+            ...(trimmedArgs.paths !== undefined && { paths: trimmedArgs.paths }),
+            ...(trimmedArgs.authorName !== undefined && { authorName: trimmedArgs.authorName }),
+            ...(trimmedArgs.authorEmail !== undefined && { authorEmail: trimmedArgs.authorEmail }),
+          });
+          const indent = trimmedArgs.prettyPrint ? 2 : undefined;
+          return {
+            content: [{ type: "text", text: JSON.stringify(result, null, indent) }]
+          };
+        }
+
+        case "get_note_history": {
+          const requestedLimit = trimmedArgs.limit === undefined ? 20 : Number(trimmedArgs.limit);
+          if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
+            throw new Error('limit must be a positive integer');
+          }
+          const history = await gitHistory.noteHistory(trimmedArgs.path, Math.min(requestedLimit, 100));
+          const indent = trimmedArgs.prettyPrint ? 2 : undefined;
+          return {
+            content: [{ type: "text", text: JSON.stringify(history, null, indent) }]
+          };
+        }
+
+        case "compare_note_revisions": {
+          const result = await gitHistory.compareNoteRevisions(
+            trimmedArgs.path,
+            trimmedArgs.fromRevision,
+            trimmedArgs.toRevision || 'HEAD',
+          );
+          const indent = trimmedArgs.prettyPrint ? 2 : undefined;
+          return {
+            content: [{ type: "text", text: JSON.stringify(result, null, indent) }]
+          };
+        }
+
+        case "restore_note_revision": {
+          if (trimmedArgs.confirmPath !== trimmedArgs.path) {
+            throw new Error('confirmPath must exactly match path');
+          }
+          if (trimmedArgs.confirmRevision !== trimmedArgs.revision) {
+            throw new Error('confirmRevision must exactly match revision');
+          }
+          if (!trimmedArgs.overwritePending && await gitHistory.hasPendingChange(trimmedArgs.path)) {
+            throw new Error('The note has an uncommitted change. Commit it first or explicitly set overwritePending=true to replace it.');
+          }
+          const snapshot = await gitHistory.fileAtRevision(trimmedArgs.path, trimmedArgs.revision);
+          await fileSystem.writeNote({ path: snapshot.path, content: snapshot.content, mode: 'overwrite' });
+          const result = {
+            success: true,
+            path: snapshot.path,
+            revision: snapshot.revision,
+            message: `Restored ${snapshot.path} from ${snapshot.revision.slice(0, 12)} as a pending change. Use commit_changes with a restoration reason to save the revision.`,
+          };
           const indent = trimmedArgs.prettyPrint ? 2 : undefined;
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, indent) }]

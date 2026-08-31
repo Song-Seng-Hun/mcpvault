@@ -119,6 +119,7 @@ An MCP client starts MCPVault as a local stdio process and passes the vault path
   - Daily notes: `get_daily_note` reads a date-based note and `daily_note` safely creates or appends to one
   - Tasks: `list_tasks` finds open, completed, or all checkbox tasks while ignoring frontmatter and fenced code blocks
   - Structured queries: `query_notes` filters and sorts notes using YAML frontmatter properties
+  - Revision history: ordinary edits remain file changes; `commit_changes` groups them into Git revisions with author and reason, while history, diff, and single-note restore tools provide safe recovery
 - `write_note` supports overwrite, append, and prepend modes.
 - `delete_note` and `move_file` require matching confirmation paths.
 - Path arguments are trimmed before validation.
@@ -1002,6 +1003,51 @@ Note content is omitted by default and can be requested with
   "truncated": false
 }
 ```
+
+### Git-backed revision history
+
+Revision history is optional and uses Git itself as the only source of truth.
+MCPVault does not create a second audit database and does not auto-commit every
+`write_note` or `patch_note` call. Edits made through MCPVault, Obsidian, or
+another editor remain ordinary working-tree changes until `commit_changes`
+groups them into one meaningful revision.
+
+The workflow is:
+
+1. Call `initialize_revision_history` once with `confirm: true` if the vault is
+   not already a Git repository.
+2. Edit notes normally with any existing MCPVault tool or with Obsidian.
+3. Inspect pending safe paths with `get_revision_status`.
+4. Call `commit_changes` with a required edit reason and optional author
+   identity. If author fields are omitted, Git `user.name` and `user.email` are
+   used.
+5. Use `get_note_history` and `compare_note_revisions` to inspect changes.
+6. Use `restore_note_revision` to restore only one note as a new pending change,
+   then record the restoration with `commit_changes`.
+
+```json
+{
+  "name": "commit_changes",
+  "arguments": {
+    "reason": "Clarify the project acceptance criteria",
+    "paths": ["Projects/Plan.md"],
+    "authorName": "Knowledge Editor",
+    "authorEmail": "editor@example.com"
+  }
+}
+```
+
+`commit_changes` never pushes to a remote. Restricted paths such as `.git`,
+`.obsidian`, `.trash`, and other dotfiles are excluded. Git hooks and commit
+signing are disabled for MCP-created revisions, and repository-local executable
+clean filters other than standard Git LFS filters are rejected before staging. The vault must itself be the Git
+repository root; MCPVault refuses to operate on a vault nested inside a broader
+repository so sibling files cannot be committed accidentally.
+
+`restore_note_revision` never runs `git reset` or rewrites history. It restores
+the selected note through the same validated filesystem layer as ordinary note
+writes, refuses to overwrite an uncommitted version by default, and leaves the
+restoration pending for review and a new commit.
 
 ### `move_note`
 

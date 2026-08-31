@@ -25,7 +25,7 @@ test("createServer returns a Server instance", () => {
   expect(typeof server.connect).toBe("function");
 });
 
-test("server registers 26 tools", async () => {
+test("server registers 32 tools", async () => {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -37,10 +37,12 @@ test("server registers 26 tools", async () => {
   ]);
 
   const result = await client.listTools();
-  expect(result.tools).toHaveLength(26);
+  expect(result.tools).toHaveLength(32);
 
   const toolNames = result.tools.map((t) => t.name).sort();
   expect(toolNames).toEqual([
+    "commit_changes",
+    "compare_note_revisions",
     "daily_note",
     "delete_note",
     "find_orphan_notes",
@@ -48,10 +50,13 @@ test("server registers 26 tools", async () => {
     "get_backlinks",
     "get_daily_note",
     "get_frontmatter",
+    "get_note_history",
     "get_note_outline",
     "get_notes_info",
     "get_outlinks",
+    "get_revision_status",
     "get_vault_stats",
+    "initialize_revision_history",
     "list_all_tags",
     "list_directory",
     "list_tasks",
@@ -63,6 +68,7 @@ test("server registers 26 tools", async () => {
     "read_multiple_notes",
     "read_note",
     "read_note_lines",
+    "restore_note_revision",
     "search_notes",
     "update_frontmatter",
     "wiki_link",
@@ -251,13 +257,18 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
   try {
     const listedTools = await client.listTools();
     const toolNames = listedTools.tools.map((tool) => tool.name);
-    expect(toolNames).toHaveLength(18);
+    expect(toolNames).toHaveLength(21);
     expect(toolNames).toContain("read_note");
     expect(toolNames).toContain("search_notes");
     expect(toolNames).not.toContain("write_note");
     expect(toolNames).not.toContain("manage_tags");
     expect(toolNames).toContain("list_tasks");
     expect(toolNames).toContain("query_notes");
+    expect(toolNames).toContain("get_revision_status");
+    expect(toolNames).toContain("get_note_history");
+    expect(toolNames).toContain("compare_note_revisions");
+    expect(toolNames).not.toContain("commit_changes");
+    expect(toolNames).not.toContain("restore_note_revision");
 
     const readResult = await client.callTool({
       name: "read_note",
@@ -275,6 +286,9 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
       { name: "update_frontmatter", arguments: { path: "existing.md", frontmatter: { status: "changed" } } },
       { name: "manage_tags", arguments: { path: "existing.md", operation: "list" } },
       { name: "daily_note", arguments: { action: "append", content: "blocked" } },
+      { name: "initialize_revision_history", arguments: { confirm: true } },
+      { name: "commit_changes", arguments: { reason: "blocked" } },
+      { name: "restore_note_revision", arguments: { path: "existing.md", revision: "HEAD", confirmPath: "existing.md", confirmRevision: "HEAD" } },
     ];
 
     for (const mutation of mutations) {
@@ -405,6 +419,88 @@ test("query_notes filters and sorts frontmatter through the MCP tool", async () 
       total: 2,
       truncated: false,
     });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test("revision tools checkpoint ordinary edits and restore one note safely", async () => {
+  const { server, client } = await connectClient();
+  try {
+    const initialized = await client.callTool({
+      name: "initialize_revision_history",
+      arguments: { confirm: true },
+    });
+    expect(initialized.isError).toBeFalsy();
+
+    await client.callTool({
+      name: "write_note",
+      arguments: { path: "Plan.md", content: "version one" },
+    });
+    const firstCommit = await client.callTool({
+      name: "commit_changes",
+      arguments: {
+        reason: "Create the plan",
+        authorName: "MCP Test",
+        authorEmail: "mcp@example.com",
+      },
+    });
+    expect(firstCommit.isError).toBeFalsy();
+    const first = JSON.parse((firstCommit.content as any)[0].text);
+    expect(first).toMatchObject({ committed: true, paths: ["Plan.md"] });
+
+    await client.callTool({
+      name: "patch_note",
+      arguments: { path: "Plan.md", oldString: "one", newString: "two" },
+    });
+    const secondCommit = await client.callTool({
+      name: "commit_changes",
+      arguments: {
+        reason: "Clarify the plan",
+        authorName: "MCP Test",
+        authorEmail: "mcp@example.com",
+      },
+    });
+    const second = JSON.parse((secondCommit.content as any)[0].text);
+    expect(second.committed).toBe(true);
+
+    const history = await client.callTool({ name: "get_note_history", arguments: { path: "Plan.md" } });
+    expect(JSON.parse((history.content as any)[0].text).map((entry: any) => entry.reason)).toEqual([
+      "Clarify the plan",
+      "Create the plan",
+    ]);
+
+    const comparison = await client.callTool({
+      name: "compare_note_revisions",
+      arguments: { path: "Plan.md", fromRevision: first.revision, toRevision: second.revision },
+    });
+    expect(JSON.parse((comparison.content as any)[0].text).diff).toContain("+version two");
+
+    await client.callTool({
+      name: "patch_note",
+      arguments: { path: "Plan.md", oldString: "two", newString: "three" },
+    });
+    const protectedRestore = await client.callTool({
+      name: "restore_note_revision",
+      arguments: { path: "Plan.md", revision: first.revision, confirmPath: "Plan.md", confirmRevision: first.revision },
+    });
+    expect(protectedRestore.isError).toBe(true);
+    expect((protectedRestore.content as any)[0].text).toContain("uncommitted change");
+
+    const restored = await client.callTool({
+      name: "restore_note_revision",
+      arguments: {
+        path: "Plan.md",
+        revision: first.revision,
+        confirmPath: "Plan.md",
+        confirmRevision: first.revision,
+        overwritePending: true,
+      },
+    });
+    expect(restored.isError).toBeFalsy();
+    const note = await client.callTool({ name: "read_note", arguments: { path: "Plan.md" } });
+    expect(JSON.parse((note.content as any)[0].text).content).toBe("version one");
   } finally {
     await client.close();
     await server.close();
