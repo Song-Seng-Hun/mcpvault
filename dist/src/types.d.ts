@@ -179,6 +179,16 @@ export interface OrphanNotesResult {
     total: number;
     truncated: boolean;
 }
+export interface DailyNoteResult {
+    success: boolean;
+    action: 'get' | 'create' | 'append';
+    date: string;
+    path: string;
+    created?: boolean;
+    frontmatter?: Record<string, any>;
+    content?: string;
+    message?: string;
+}
 export interface VaultStats {
     totalNotes: number;
     totalFolders: number;

@@ -1,6 +1,7 @@
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
-import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, MoveNoteParams, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult } from './types.js';
+import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, MoveNoteParams, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult, DailyNoteResult } from './types.js';
+import { type DailyDateInput } from './daily.js';
 /**
  * Map a filesystem write failure to a clear, accurate Error.
  *
@@ -58,6 +59,14 @@ export declare class FileSystemService {
     findUnresolvedLinks(limit?: number): Promise<UnresolvedLinksResult>;
     findOrphanNotes(limit?: number): Promise<OrphanNotesResult>;
     private isNotePath;
+    getDailyNote(dateInput?: DailyDateInput, folder?: string): Promise<DailyNoteResult>;
+    writeDailyNote(params: {
+        action: 'create' | 'append';
+        date?: DailyDateInput;
+        folder?: string;
+        content?: string;
+        frontmatter?: Record<string, any>;
+    }): Promise<DailyNoteResult>;
     private collectVaultFiles;
     getNoteOutline(path: string): Promise<NoteHeading[]>;
     readNoteLines(params: ReadNoteLinesParams): Promise<string>;

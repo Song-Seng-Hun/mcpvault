@@ -468,6 +468,32 @@ describe("findOrphanNotes", () => {
   });
 });
 
+describe("daily notes", () => {
+  test("creates without overwriting and appends with a separator", async () => {
+    const created = await fileSystem.writeDailyNote({
+      action: "create", date: "2026-09-01", folder: "Journal", content: "first",
+    });
+    expect(created.created).toBe(true);
+
+    const duplicate = await fileSystem.writeDailyNote({
+      action: "create", date: "2026-09-01", folder: "Journal", content: "second",
+    });
+    expect(duplicate.created).toBe(false);
+
+    await fileSystem.writeDailyNote({
+      action: "append", date: "2026-09-01", folder: "Journal", content: "second",
+    });
+    await expect(fileSystem.getDailyNote("2026-09-01", "Journal")).resolves.toMatchObject({
+      content: "first\nsecond",
+    });
+  });
+
+  test("rejects invalid dates and restricted folders", async () => {
+    await expect(fileSystem.getDailyNote("2026-02-30")).rejects.toThrow(/Invalid calendar date/);
+    await expect(fileSystem.writeDailyNote({ action: "create", folder: ".obsidian", content: "blocked" })).rejects.toThrow(/Access denied/);
+  });
+});
+
 // ============================================================================
 // READ NOTE LINES TESTS
 // ============================================================================

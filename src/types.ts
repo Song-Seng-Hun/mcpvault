@@ -218,6 +218,17 @@ export interface OrphanNotesResult {
   truncated: boolean;
 }
 
+export interface DailyNoteResult {
+  success: boolean;
+  action: 'get' | 'create' | 'append';
+  date: string;
+  path: string;
+  created?: boolean;
+  frontmatter?: Record<string, any>;
+  content?: string;
+  message?: string;
+}
+
 // Vault statistics types
 export interface VaultStats {
   totalNotes: number;

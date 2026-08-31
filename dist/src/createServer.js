@@ -13,6 +13,7 @@ const MUTATING_TOOLS = new Set([
     "move_file",
     "update_frontmatter",
     "manage_tags",
+    "daily_note",
 ]);
 export function createServer(vaultPath, options = {}) {
     const { name = "mcpvault", version = "0.0.0", pathFilter = new PathFilter(), frontmatterHandler = new FrontmatterHandler(), readOnly = false, } = options;
@@ -236,6 +237,33 @@ export function createServer(vaultPath, options = {}) {
                         }
                     },
                     required: ["document"]
+                }
+            },
+            {
+                name: "get_daily_note",
+                description: "Read a daily note using the local date or an explicit YYYY-MM-DD date. Defaults to Daily Notes/YYYY-MM-DD.md and never creates or modifies files.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        date: { type: "string", description: "today, yesterday, tomorrow, or YYYY-MM-DD (default: today)", default: "today" },
+                        folder: { type: "string", description: "Daily note folder relative to the vault (default: Daily Notes)", default: "Daily Notes" },
+                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                    }
+                }
+            },
+            {
+                name: "daily_note",
+                description: "Create or append to a daily note. Create never overwrites an existing note. Append requires content. Defaults to Daily Notes/YYYY-MM-DD.md.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        action: { type: "string", enum: ["create", "append"], description: "Operation to perform" },
+                        date: { type: "string", description: "today, yesterday, tomorrow, or YYYY-MM-DD (default: today)", default: "today" },
+                        folder: { type: "string", description: "Daily note folder relative to the vault (default: Daily Notes)", default: "Daily Notes" },
+                        content: { type: "string", description: "Initial content for create, or content to append for append" },
+                        frontmatter: { type: "object", description: "Optional frontmatter for a newly created note or merged frontmatter for append" }
+                    },
+                    required: ["action"]
                 }
             },
             {
@@ -521,6 +549,31 @@ export function createServer(vaultPath, options = {}) {
                         content: [{ type: "text", text: JSON.stringify(unresolved, null, indent) }]
                     };
                 }
+                case "get_daily_note": {
+                    const dailyNote = await fileSystem.getDailyNote(trimmedArgs.date || 'today', trimmedArgs.folder || 'Daily Notes');
+                    const indent = trimmedArgs.prettyPrint ? 2 : undefined;
+                    return {
+                        content: [{ type: "text", text: JSON.stringify(dailyNote, null, indent) }]
+                    };
+                }
+                case "daily_note": {
+                    if (trimmedArgs.action !== 'create' && trimmedArgs.action !== 'append') {
+                        throw new Error('action must be create or append');
+                    }
+                    const frontmatter = trimmedArgs.frontmatter === undefined
+                        ? undefined
+                        : parseFrontmatter(trimmedArgs.frontmatter);
+                    const dailyNote = await fileSystem.writeDailyNote({
+                        action: trimmedArgs.action,
+                        date: trimmedArgs.date,
+                        folder: trimmedArgs.folder,
+                        content: trimmedArgs.content,
+                        ...(frontmatter !== undefined && { frontmatter }),
+                    });
+                    return {
+                        content: [{ type: "text", text: JSON.stringify(dailyNote, null, 2) }]
+                    };
+                }
                 case "find_orphan_notes": {
                     const requestedLimit = trimmedArgs.limit === undefined ? 100 : Number(trimmedArgs.limit);
                     if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
@@ -576,6 +629,8 @@ function trimPaths(args) {
         trimmed.confirmOldPath = trimmed.confirmOldPath.trim();
     if (trimmed.confirmNewPath && typeof trimmed.confirmNewPath === 'string')
         trimmed.confirmNewPath = trimmed.confirmNewPath.trim();
+    if (trimmed.folder && typeof trimmed.folder === 'string')
+        trimmed.folder = trimmed.folder.trim();
     if (trimmed.paths && Array.isArray(trimmed.paths)) {
         trimmed.paths = trimmed.paths.map((p) => typeof p === 'string' ? p.trim() : p);
     }

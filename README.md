@@ -116,6 +116,7 @@ An MCP client starts MCPVault as a local stdio process and passes the vault path
   - Search: `search_notes` with multi-word matching and BM25 reranking
   - Metadata and tags: `get_frontmatter`, `update_frontmatter`, `get_notes_info`, `get_vault_stats`, `manage_tags`, `list_all_tags`
   - Wiki links: `wiki_link` resolves names and returns alternative paths when a name is ambiguous; `get_backlinks` finds incoming wikilinks, `get_outlinks` lists outgoing wikilinks, `find_unresolved_links` finds broken references, and `find_orphan_notes` finds isolated notes
+  - Daily notes: `get_daily_note` reads a date-based note and `daily_note` safely creates or appends to one
 - `write_note` supports overwrite, append, and prepend modes.
 - `delete_note` and `move_file` require matching confirmation paths.
 - Path arguments are trimmed before validation.
@@ -891,6 +892,42 @@ Attachment links are ignored for this note graph check.
   ],
   "total": 1,
   "truncated": false
+}
+```
+
+### `get_daily_note` and `daily_note`
+
+Daily note paths default to `Daily Notes/YYYY-MM-DD.md`. Use `today`,
+`yesterday`, `tomorrow`, or an explicit `YYYY-MM-DD` date, and pass `folder` to
+choose another vault-relative folder. `get_daily_note` only reads. The
+mutating `daily_note` tool supports `create` and `append`; `create` never
+overwrites an existing note, and `append` inserts a line separator when needed.
+The server does not read or modify `.obsidian/daily-notes.json`, so this
+filesystem mode intentionally uses the documented default unless a folder is
+provided explicitly.
+
+**Create:**
+
+```json
+{
+  "name": "daily_note",
+  "arguments": {
+    "action": "create",
+    "date": "today",
+    "folder": "Daily Notes",
+    "content": "- [ ] Review inbox"
+  }
+}
+```
+
+**Read:**
+
+```json
+{
+  "name": "get_daily_note",
+  "arguments": {
+    "date": "today"
+  }
 }
 ```
 

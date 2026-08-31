@@ -7,6 +7,7 @@ import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
 import { generateObsidianUri } from './uri.js';
 import { extractWikiLinkOccurrences, findBacklinkMatches, findUnresolvedLinkMatches, resolveWikiLinkTargets } from './backlinks.js';
+import { buildDailyNotePath, resolveDailyDate } from './daily.js';
 /**
  * Map a filesystem write failure to a clear, accurate Error.
  *
@@ -1088,6 +1089,59 @@ export class FileSystemService {
     }
     isNotePath(path) {
         return /\.(?:md|markdown|txt)$/i.test(path);
+    }
+    async getDailyNote(dateInput = 'today', folder = 'Daily Notes') {
+        const date = resolveDailyDate(dateInput);
+        const path = buildDailyNotePath(folder, date);
+        const note = await this.readNote(path);
+        return {
+            success: true,
+            action: 'get',
+            date,
+            path,
+            frontmatter: note.frontmatter,
+            content: note.content,
+        };
+    }
+    async writeDailyNote(params) {
+        const date = resolveDailyDate(params.date || 'today');
+        const path = buildDailyNotePath(params.folder || 'Daily Notes', date);
+        const content = params.content ?? '';
+        if (params.action === 'append' && !content.trim()) {
+            throw new Error('content is required for the append action');
+        }
+        const alreadyExists = await this.exists(path);
+        if (params.action === 'create' && alreadyExists) {
+            return {
+                success: true,
+                action: 'create',
+                date,
+                path,
+                created: false,
+                message: 'Daily note already exists; it was not overwritten.',
+            };
+        }
+        let contentToWrite = content;
+        if (params.action === 'append' && alreadyExists) {
+            const existing = await this.readNote(path);
+            if (existing.originalContent.length > 0 && !existing.originalContent.endsWith('\n')) {
+                contentToWrite = `\n${content}`;
+            }
+        }
+        await this.writeNote({
+            path,
+            content: contentToWrite,
+            ...(params.frontmatter !== undefined && { frontmatter: params.frontmatter }),
+            mode: params.action === 'append' ? 'append' : 'overwrite',
+        });
+        return {
+            success: true,
+            action: params.action,
+            date,
+            path,
+            created: !alreadyExists,
+            message: params.action === 'create' ? 'Daily note created.' : 'Content appended to daily note.',
+        };
     }
     async collectVaultFiles() {
         const files = [];

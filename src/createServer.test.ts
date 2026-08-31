@@ -25,7 +25,7 @@ test("createServer returns a Server instance", () => {
   expect(typeof server.connect).toBe("function");
 });
 
-test("server registers 22 tools", async () => {
+test("server registers 24 tools", async () => {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -37,14 +37,16 @@ test("server registers 22 tools", async () => {
   ]);
 
   const result = await client.listTools();
-  expect(result.tools).toHaveLength(22);
+  expect(result.tools).toHaveLength(24);
 
   const toolNames = result.tools.map((t) => t.name).sort();
   expect(toolNames).toEqual([
+    "daily_note",
     "delete_note",
     "find_orphan_notes",
     "find_unresolved_links",
     "get_backlinks",
+    "get_daily_note",
     "get_frontmatter",
     "get_note_outline",
     "get_notes_info",
@@ -247,7 +249,7 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
   try {
     const listedTools = await client.listTools();
     const toolNames = listedTools.tools.map((tool) => tool.name);
-    expect(toolNames).toHaveLength(15);
+    expect(toolNames).toHaveLength(16);
     expect(toolNames).toContain("read_note");
     expect(toolNames).toContain("search_notes");
     expect(toolNames).not.toContain("write_note");
@@ -268,6 +270,7 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
       { name: "move_file", arguments: { oldPath: "existing.md", newPath: "moved.md", confirmOldPath: "existing.md", confirmNewPath: "moved.md" } },
       { name: "update_frontmatter", arguments: { path: "existing.md", frontmatter: { status: "changed" } } },
       { name: "manage_tags", arguments: { path: "existing.md", operation: "list" } },
+      { name: "daily_note", arguments: { action: "append", content: "blocked" } },
     ];
 
     for (const mutation of mutations) {
@@ -282,6 +285,42 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
     expect(await readFile(join(testVaultPath, "existing.md"), "utf8")).toBe(
       "# Existing\n\nSafe content",
     );
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test("daily_note creates safely, appends, and reads the note", async () => {
+  const { server, client } = await connectClient();
+  try {
+    const created = await client.callTool({
+      name: "daily_note",
+      arguments: { action: "create", date: "2026-09-01", folder: "Journal", content: "# Today" },
+    });
+    expect(created.isError).toBeFalsy();
+    expect(JSON.parse((created.content as any)[0].text)).toMatchObject({
+      action: "create", date: "2026-09-01", path: "Journal/2026-09-01.md", created: true,
+    });
+
+    const appended = await client.callTool({
+      name: "daily_note",
+      arguments: { action: "append", date: "2026-09-01", folder: "Journal", content: "- Done" },
+    });
+    expect(appended.isError).toBeFalsy();
+
+    const read = await client.callTool({
+      name: "get_daily_note",
+      arguments: { date: "2026-09-01", folder: "Journal" },
+    });
+    expect(read.isError).toBeFalsy();
+    expect(JSON.parse((read.content as any)[0].text).content).toBe("# Today\n- Done");
+
+    const noOverwrite = await client.callTool({
+      name: "daily_note",
+      arguments: { action: "create", date: "2026-09-01", folder: "Journal", content: "overwritten" },
+    });
+    expect(JSON.parse((noOverwrite.content as any)[0].text).created).toBe(false);
   } finally {
     await client.close();
     await server.close();
