@@ -57,6 +57,14 @@ test('ingest, publish, catalog, lint, and immutable source enforcement form one 
     const lint = await callJson(client, 'lint_wiki', {});
     expect(lint.value.errors).toBe(0);
 
+    const orientation = await callJson(client, 'orient_wiki', {});
+    expect(orientation.value.protocol).toBe('mcpvault-llm-wiki/v1');
+    expect(orientation.value.visibleScopes).toEqual([{ kind: 'global', uri: 'scope://global/' }]);
+    expect(orientation.value.nextActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ tool: 'get_revision_status' }),
+      expect.objectContaining({ tool: 'commit_changes' }),
+    ]));
+
     const issue = await callJson(client, 'report_wiki_issue', {
       issueId: 'verify-claim', kind: 'unsupported_claim', title: 'Verify one claim', description: 'The claim needs a second source.', reportedBy: 'reviewer',
       subjectPath: 'Concepts/Compounding Wiki.md', evidencePaths: ['_sources/karpathy-idea.md'],
@@ -81,6 +89,30 @@ test('ingest, publish, catalog, lint, and immutable source enforcement form one 
     await writeFile(rawPath, (await readFile(rawPath, 'utf8')).replace('Persistent', 'Tampered'), 'utf8');
     const damaged = await callJson(client, 'lint_wiki', {});
     expect(damaged.value.issues).toContainEqual(expect.objectContaining({ code: 'source_hash_mismatch' }));
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('knowledge-related commits are blocked by Wiki errors while ordinary notes remain normal Git changes', async () => {
+  const { server, client } = await setup();
+  try {
+    const initialized = await client.callTool({ name: 'initialize_revision_history', arguments: { confirm: true } });
+    expect(initialized.isError).toBeFalsy();
+    await client.callTool({ name: 'write_note', arguments: {
+      path: 'Ordinary.md', content: '# Ordinary note\n', expectedRevision: 'missing',
+    } });
+    const ordinaryCommit = await callJson(client, 'commit_changes', { reason: 'Add an ordinary note' });
+    expect(ordinaryCommit.value.success).toBe(true);
+
+    await client.callTool({ name: 'write_note', arguments: {
+      path: 'Broken knowledge.md', content: '# Unsupported\n', frontmatter: { llm_wiki_type: 'knowledge' }, expectedRevision: 'missing',
+    } });
+    const blocked = await client.callTool({ name: 'commit_changes', arguments: { reason: 'Attempt to save unsupported knowledge' } });
+    expect(blocked.isError).toBe(true);
+    expect((blocked.content as any)[0].text).toContain('Wiki validation blocked commit');
+    expect((blocked.content as any)[0].text).toContain('knowledge_without_evidence');
   } finally {
     await client.close();
     await server.close();

@@ -11,6 +11,16 @@ const ISSUE_KINDS = new Set(['contradiction', 'unsupported_claim', 'stale', 'bro
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const now = () => new Date().toISOString();
 const joinRoot = (root: string, path: string) => root ? `${root}/${path}` : path;
+const normalizePath = (value: string) => String(value || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+
+function isWikiControlPath(path: string): boolean {
+  const normalized = normalizePath(path).toLowerCase();
+  return normalized === '_wiki'
+    || normalized.startsWith('_wiki/')
+    || normalized === '_sources'
+    || normalized.startsWith('_sources/')
+    || /^_scopes\/(models|agents)\/[^/]+\/(?:_wiki|_sources)(?:\/|$)/.test(normalized);
+}
 
 const DEFAULT_SCHEMA = `# LLM Wiki schema
 
@@ -32,6 +42,7 @@ This vault uses ordinary Markdown, YAML frontmatter, Obsidian links, and Git as 
 5. Record contradictions and unsupported claims as Wiki issues; resolve them only with a reason.
 6. Use \`get_wiki_catalog\` as the live index and \`lint_wiki\` as the deterministic quality gate.
 7. Use discussions for peer argument and Git commits for coherent accepted changes.
+8. Start a new session with \`orient_wiki\`; it reports the visible scope, current health, and next safe action.
 `;
 
 export class LlmWikiService {
@@ -195,6 +206,100 @@ export class LlmWikiService {
       return acc;
     }, {});
     return { counts, entries, total: entries.length, truncated: result.truncated };
+  }
+
+  async orient(principal?: ScopePrincipal) {
+    const [catalog, lint] = await Promise.all([
+      this.catalog(principal),
+      this.lint(principal, 200),
+    ]);
+    const visibleScopes = this.access.scopeRoots(principal).map(scope => ({
+      kind: scope.kind,
+      uri: scope.kind === 'global' ? 'scope://global/' : this.access.toPublicPath(scope.root),
+    }));
+    const counts = catalog.counts;
+    const nextActions: Array<{ tool: string; reason: string }> = [];
+
+    if (!counts.schema) {
+      nextActions.push({ tool: 'initialize_llm_wiki', reason: 'Create the missing schema contract for the current scope.' });
+    }
+    if (!counts.source) {
+      nextActions.push({ tool: 'ingest_source', reason: 'Capture the source material before making load-bearing claims.' });
+    } else if (!counts.knowledge) {
+      nextActions.push({ tool: 'publish_knowledge', reason: 'Turn source snapshots into evidence-grounded Markdown knowledge notes.' });
+    }
+    if (lint.errors > 0) {
+      nextActions.push({ tool: 'lint_wiki', reason: `Repair ${lint.errors} blocking Wiki validation error(s) before committing.` });
+    } else {
+      nextActions.push({ tool: 'get_revision_status', reason: 'Inspect safe pending file changes before grouping a revision.' });
+      nextActions.push({ tool: 'commit_changes', reason: 'Commit a coherent accepted change with a concise reason; Git is the edit log.' });
+    }
+    if (counts.knowledge) {
+      nextActions.push({ tool: 'create_discussion', reason: 'Use an equal-peer discussion for competing interpretations or challenges.' });
+    }
+    if (!principal) {
+      nextActions.push({ tool: 'login_scope', reason: 'Authenticate only when this session needs private model or agent scopes.' });
+    }
+
+    return {
+      protocol: 'mcpvault-llm-wiki/v1',
+      purpose: 'Scope-aware, evidence-grounded Markdown knowledge with Obsidian compatibility and Git history.',
+      access: {
+        mode: principal ? 'authenticated-private-plus-global' : 'public-global-only',
+        principal: principal ? {
+          accountId: principal.accountId,
+          modelId: principal.modelId,
+          ...(principal.agentId && { agentId: principal.agentId }),
+          role: principal.role,
+        } : null,
+        note: 'Global is public. Private model and agent scopes are visible only to their authorized owner; searches are filtered the same way as reads.',
+      },
+      visibleScopes,
+      workflow: [
+        'orient_wiki',
+        'search_notes or read_scoped_note',
+        'ingest_source for new evidence',
+        'publish_knowledge for grounded notes',
+        'create_discussion and add_discussion_argument for peer review',
+        'lint_wiki',
+        'get_revision_status then commit_changes',
+      ],
+      invariants: [
+        'Existing _sources snapshots are immutable; ingest a new snapshot when content changes.',
+        'Every load-bearing knowledge claim needs evidence_paths pointing to immutable sources.',
+        'Use expectedRevision on edits to prevent silent overwrites.',
+        'Git commits are the authoritative author/reason/history record; do not create a duplicate edit log.',
+      ],
+      catalog,
+      lint,
+      nextActions,
+    };
+  }
+
+  async validateCommitPaths(paths: string[], principal?: ScopePrincipal) {
+    const relevant = new Set<string>();
+    for (const path of paths) {
+      const normalized = normalizePath(path);
+      if (isWikiControlPath(normalized)) {
+        relevant.add(normalized);
+        continue;
+      }
+      if (!this.access.canAccessPhysicalPath(normalized, principal) || !await this.fileSystem.noteExists(normalized)) continue;
+      const note = await this.fileSystem.readNote(normalized);
+      if (note.frontmatter.llm_wiki_type === 'knowledge') relevant.add(normalized);
+    }
+    if (relevant.size === 0) return { checked: false, relevantPaths: [] as string[], errors: 0, warnings: 0 };
+
+    const lint = await this.lint(principal, 500);
+    if (!lint.healthy) {
+      const details = lint.issues
+        .filter(issue => issue.severity === 'error')
+        .slice(0, 5)
+        .map(issue => `${issue.code} at ${issue.path}`)
+        .join('; ');
+      throw new Error(`Wiki validation blocked commit: ${lint.errors} error(s) must be repaired before committing${details ? ` (${details})` : ''}. Run lint_wiki for the complete report.`);
+    }
+    return { checked: true, relevantPaths: Array.from(relevant), errors: lint.errors, warnings: lint.warnings };
   }
 
   async lint(principal?: ScopePrincipal, limit: number = 200) {

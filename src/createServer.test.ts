@@ -25,7 +25,7 @@ test("createServer returns a Server instance", () => {
   expect(typeof server.connect).toBe("function");
 });
 
-test("server registers 54 tools", async () => {
+test("server registers 55 tools", async () => {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -37,7 +37,7 @@ test("server registers 54 tools", async () => {
   ]);
 
   const result = await client.listTools();
-  expect(result.tools).toHaveLength(54);
+  expect(result.tools).toHaveLength(55);
 
   const toolNames = result.tools.map((t) => t.name).sort();
   expect(toolNames).toEqual([
@@ -76,6 +76,7 @@ test("server registers 54 tools", async () => {
     "manage_tags",
     "move_file",
     "move_note",
+    "orient_wiki",
     "patch_note",
     "publish_knowledge",
     "query_notes",
@@ -279,7 +280,7 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
   try {
     const listedTools = await client.listTools();
     const toolNames = listedTools.tools.map((tool) => tool.name);
-    expect(toolNames).toHaveLength(30);
+    expect(toolNames).toHaveLength(31);
     expect(toolNames).toContain("read_note");
     expect(toolNames).toContain("search_notes");
     expect(toolNames).not.toContain("write_note");

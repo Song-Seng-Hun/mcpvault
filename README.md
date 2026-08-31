@@ -109,7 +109,7 @@ An MCP client starts MCPVault as a local stdio process and passes the vault path
 
 - AST-aware frontmatter updates preserve formatting for unchanged YAML fields.
 - Path checks block traversal, symlink escapes, dotfiles, `.obsidian`, `.git`, and `node_modules`.
-- Fifty-four MCP tools cover note, collaboration, private scope, LLM Wiki, and revision operations:
+- Fifty-five MCP tools cover note, collaboration, private scope, LLM Wiki, and revision operations:
   - File operations: `read_note`, `write_note`, `patch_note`, `delete_note`, `move_note`, `move_file`
   - Partial reads: `get_note_outline`, `read_note_lines`
   - Directory and batch reads: `list_directory`, `read_multiple_notes`
@@ -122,7 +122,7 @@ An MCP client starts MCPVault as a local stdio process and passes the vault path
   - Revision history: ordinary edits remain file changes; `commit_changes` groups them into Git revisions with author and reason, while history, diff, and single-note restore tools provide safe recovery
   - Private hierarchical scopes: global is the public default; login tokens unlock only their own durable `scope://model/<model>/...` and `scope://agent/<agent>/...` paths, with agent → model → global fallback
   - Multi-AI collaboration: persistent agent handoff/recovery and equal-peer Markdown discussions preserve arguments, evidence, decisions, and authors without a separate database
-  - LLM Wiki workflow: immutable source ingestion, evidence-grounded knowledge publishing, a live catalog, deterministic lint, and a durable Error Book build on the same Markdown/frontmatter/Git foundation
+  - LLM Wiki workflow: `orient_wiki` teaches a new session the visible scope and next action; immutable source ingestion, evidence-grounded knowledge publishing, a live catalog, deterministic lint, and a durable Error Book build on the same Markdown/frontmatter/Git foundation
 - `read_note` returns a SHA-256 `revision`; pass it as `expectedRevision` to `write_note`, `patch_note`, or `update_frontmatter` to reject stale concurrent edits. Use `"missing"` when creating a note that must not already exist.
 - `write_note` supports overwrite, append, and prepend modes.
 - `delete_note` and `move_file` require matching confirmation paths.
@@ -130,6 +130,18 @@ An MCP client starts MCPVault as a local stdio process and passes the vault path
 - Search and batch tools return compact fields by default; set `prettyPrint: true` for expanded output.
 - The package exports TypeScript declarations and public types.
 - MCPVault requires no Obsidian plugin.
+
+### LLM Wiki workflow
+
+MCPVault makes the operating protocol discoverable at connection time. A new agent should call `orient_wiki`, then follow the returned scope-aware workflow:
+
+1. Search or read the visible notes; authenticate only when private model or agent material is needed.
+2. Capture external material with `ingest_source`; source snapshots are immutable.
+3. Create or update a normal Markdown note with `publish_knowledge`, including `evidencePaths`.
+4. Use discussions for competing interpretations and the Error Book for durable contradictions or unsupported claims.
+5. Run `lint_wiki`, inspect `get_revision_status`, and call `commit_changes` with a meaningful reason.
+
+Knowledge-related commits are automatically blocked when Wiki lint reports errors. Ordinary notes continue to behave as ordinary Git changes. Git remains the single edit-history record; the Wiki schema and catalog describe knowledge but do not duplicate commit logs.
 
 ## Prerequisites
 

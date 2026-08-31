@@ -1,0 +1,99 @@
+# MCPVault LLM Wiki operating model
+
+This document turns the external LLM Wiki material we studied into the
+operating contract for MCPVault. It is a design and implementation map, not a
+copy of any external document.
+
+## Sources and what each contributes
+
+- [Andrej Karpathy's original LLM Wiki idea](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f): a persistent, interlinked Markdown workspace in which an AI compounds useful context instead of starting from zero.
+- [Andrew Staker's LLM Wiki plugin](https://github.com/TheAndrewStaker/llm-wiki-plugin): a practical file-based workflow around raw sources, processed wiki pages, explicit schema, deterministic linting, reflection, and shared agent skills.
+- [Andrew Staker's personal wiki notes](https://ajr.fyi/meta/readme): source snapshots should remain immutable, the wiki is the processed layer, and dialogue/review should precede integration.
+- [Retrieval as Reasoning: The LLM-Wiki System](https://arxiv.org/abs/2605.25480): a research framing of compiling evidence into a reusable wiki, composing it during retrieval, and evolving it through an error/feedback loop.
+
+The first link is an idea document rather than a peer-reviewed paper. The
+research paper is useful for the compile/compose/evolve model, while Andrew's
+files are useful for the concrete Markdown and agent workflow.
+
+## Canonical layers
+
+MCPVault keeps all durable knowledge in the Obsidian vault. There is no second
+knowledge database and no duplicate edit log.
+
+| Layer | Durable representation | Rule | MCPVault entry point |
+| --- | --- | --- | --- |
+| Raw evidence | `_sources/*.md` with YAML hash and capture metadata | Immutable after capture; changed material gets a new snapshot | `ingest_source` |
+| Knowledge | Ordinary Markdown notes with `llm_wiki_type: knowledge` and `evidence_paths` | Every load-bearing claim has visible provenance and an uncertainty status | `publish_knowledge`, normal note tools |
+| Error Book | `_wiki/issues/*.md` | Contradictions, unsupported claims, stale facts, and broken context are durable repair work | `report_wiki_issue`, `resolve_wiki_issue` |
+| Protocol | `_wiki/SCHEMA.md` plus server instructions | A new session can discover how to operate the Wiki | `initialize_llm_wiki`, `orient_wiki` |
+| History | Vault Git repository | One meaningful commit records author, reason, diff, and rollback point | `get_revision_status`, `commit_changes`, history tools |
+| Debate | Markdown discussions | Arguments and evidence are peer review; accepted changes become notes and commits | discussion tools |
+
+Obsidian remains the editor and renderer: notes, folders, YAML, wikilinks,
+backlinks, and ordinary file edits remain valid. MCPVault adds the protocol,
+scope checks, source integrity checks, and Git quality gate around that
+foundation.
+
+## Scope and visibility
+
+The visibility order for an authenticated agent is:
+
+```text
+agent scope -> model scope -> global scope
+```
+
+Global is the public default. A model can see its own model scope and its own
+agent scopes; an agent can see its own agent scope, its parent model scope,
+and global. Anonymous callers see global only. The same policy applies to
+read, search, catalog, lint, backlinks, outlinks, orphan detection, and Git
+status/history. A private source cannot be used to ground a more-public note.
+
+## Session protocol
+
+`orient_wiki` is intentionally read-only and is the first call for every new
+session. It returns the caller's visible scopes, catalog, lint health,
+invariants, and suggested next actions.
+
+The normal loop is:
+
+1. Orient, then search/read only the visible material.
+2. Ingest new external material as an immutable source snapshot.
+3. Publish or revise a normal Markdown knowledge note with source evidence.
+4. Debate competing interpretations and record unresolved problems in the
+   Error Book.
+5. Lint the visible Wiki and repair every error.
+6. Inspect pending changes and commit one coherent unit with a reason.
+7. On the next session, orient again and continue from the files and Git
+   history.
+
+An agent does not need to know the external LLM Wiki vocabulary beforehand:
+the MCP initialization instructions, `orient_wiki` description, schema, and
+tool descriptions provide the minimum operating protocol at runtime.
+
+## Quality and history rules
+
+- `expectedRevision` is used for note updates so two agents do not silently
+  overwrite each other.
+- `lint_wiki` is deterministic and checks source hashes, source immutability,
+  evidence existence/type, and broken wikilinks.
+- `commit_changes` automatically runs the Wiki gate when the selected change
+  touches `_sources`, `_wiki`, or a knowledge note. A commit is rejected when
+  lint has errors; ordinary non-Wiki notes are not held hostage by unrelated
+  Wiki problems.
+- Git is the only authoritative edit log. The catalog, schema, discussions,
+  and Error Book explain knowledge state; they do not imitate Git history.
+- A correction should be a new source snapshot or a new revision of the
+  knowledge note, with a discussion/issue when the disagreement matters. A
+  previous Git revision remains available for inspection and safe single-note
+  restoration.
+
+## Deliberate boundaries
+
+- The protocol cannot prove that a caller is really the model it claims to be;
+  private scope accounts and bearer sessions provide the practical boundary.
+- Obsidian itself can still open the whole local vault. Scope privacy is
+  enforced at the MCP server boundary, not by changing Obsidian's local view.
+- Files edited directly in Obsidian are valid working-tree changes. They enter
+  the same lint and Git workflow on the next orientation/validation cycle.
+- A source hash mismatch is treated as an integrity error, not silently
+  repaired. Preserve the original evidence or ingest a new snapshot.

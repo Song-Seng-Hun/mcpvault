@@ -14,6 +14,8 @@ import { LlmWikiService } from "./llm-wiki.js";
 import { getLlmWikiTools, LLM_WIKI_MUTATING_TOOLS } from "./llm-wiki-tools.js";
 import { resolve } from "path";
 
+const SERVER_INSTRUCTIONS = `MCPVault is an Obsidian-compatible LLM Wiki server. Call orient_wiki first on every new session. Use ordinary Markdown, YAML frontmatter, Obsidian links, and Git together: search/read visible notes, ingest immutable sources, publish evidence-grounded knowledge, discuss competing interpretations, lint, then inspect and commit coherent changes. Global is public; private model/agent scopes require login_scope and are filtered from search and reads. Never edit _sources directly. Use expectedRevision for concurrent edits. Git commit_changes is the single edit-history record; do not maintain a duplicate manual log.`;
+
 export interface CreateServerOptions {
   name?: string;
   version?: string;
@@ -60,6 +62,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
   const server = new Server({ name, version }, {
     capabilities: { tools: {} },
+    instructions: SERVER_INSTRUCTIONS,
   });
 
   server.setRequestHandler("tools/list", async () => {
@@ -543,6 +546,10 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           return jsonResult(collaboration.getScopeContext(principal?.modelId, principal?.agentId), trimmedArgs.prettyPrint);
         }
 
+        case "orient_wiki": {
+          return jsonResult(await llmWiki.orient(principal), trimmedArgs.prettyPrint);
+        }
+
         case "create_agent_scope": {
           await assertCanManageAgent(fileSystem, principal, trimmedArgs.agentId, trimmedArgs.modelId);
           return jsonResult(await collaboration.createAgentScope(trimmedArgs), trimmedArgs.prettyPrint);
@@ -895,6 +902,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
               .filter(change => canAccessPath(change.path) && (!change.previousPath || canAccessPath(change.previousPath)));
             commitPaths = Array.from(new Set(pending.flatMap(change => [change.path, change.previousPath].filter((path): path is string => Boolean(path)))));
           }
+          await llmWiki.validateCommitPaths(commitPaths, principal);
           const result = await gitHistory.commitChanges({
             reason: trimmedArgs.reason,
             paths: commitPaths,

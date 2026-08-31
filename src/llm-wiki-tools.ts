@@ -11,6 +11,11 @@ export const LLM_WIKI_MUTATING_TOOLS = [
 export function getLlmWikiTools(): Tool[] {
   return [
     {
+      name: 'orient_wiki',
+      description: 'Call this first after connecting. Returns the visible scope, current Wiki health, operating invariants, and the next safe MCP action without changing files.',
+      inputSchema: { type: 'object', properties: { accessToken, prettyPrint } },
+    },
+    {
       name: 'initialize_llm_wiki',
       description: 'Initialize the minimal schema contract for one scope. Creates missing files only and never overwrites an existing schema.',
       inputSchema: { type: 'object', properties: { scopeUri, actor: { type: 'string' }, accessToken, prettyPrint } },

@@ -56,6 +56,61 @@ export declare class LlmWikiService {
         total: number;
         truncated: boolean;
     }>;
+    orient(principal?: ScopePrincipal): Promise<{
+        protocol: string;
+        purpose: string;
+        access: {
+            mode: string;
+            principal: {
+                accountId: string;
+                modelId: string;
+                agentId?: string;
+                role: "agent" | "model";
+            } | null;
+            note: string;
+        };
+        visibleScopes: {
+            kind: "agent" | "global" | "model";
+            uri: string;
+        }[];
+        workflow: string[];
+        invariants: string[];
+        catalog: {
+            counts: Record<string, number>;
+            entries: {
+                path: string;
+                type: any;
+                title: any;
+                status: any;
+                confidence: any;
+                updatedAt: any;
+            }[];
+            total: number;
+            truncated: boolean;
+        };
+        lint: {
+            healthy: boolean;
+            errors: number;
+            warnings: number;
+            issues: {
+                severity: 'error' | 'warning';
+                code: string;
+                path: string;
+                detail: string;
+            }[];
+            truncated: boolean;
+        };
+        nextActions: {
+            tool: string;
+            reason: string;
+        }[];
+    }>;
+    validateCommitPaths(paths: string[], principal?: ScopePrincipal): Promise<{
+        checked: boolean;
+        relevantPaths: string[];
+        errors: number;
+        warnings: number;
+    }>;
     lint(principal?: ScopePrincipal, limit?: number): Promise<{
         healthy: boolean;
         errors: number;
