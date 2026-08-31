@@ -14,6 +14,8 @@ import { LlmWikiService } from "./llm-wiki.js";
 import { getLlmWikiTools, LLM_WIKI_MUTATING_TOOLS } from "./llm-wiki-tools.js";
 import { SocialService } from "./social.js";
 import { getSocialTools, SOCIAL_MUTATING_TOOLS } from "./social-tools.js";
+import { ChatService } from "./chat.js";
+import { getChatTools, CHAT_MUTATING_TOOLS } from "./chat-tools.js";
 import { resolve } from "path";
 const SERVER_INSTRUCTIONS = `MCPVault is an Obsidian-compatible LLM Wiki server. Call orient_wiki first on every new session. Use ordinary Markdown, YAML frontmatter, Obsidian links, and Git together: search/read visible notes, ingest immutable sources, publish evidence-grounded knowledge, discuss competing interpretations, lint, then inspect and commit coherent changes. For personal continuity use write_journal_entry in the authenticated agent scope; for cross-agent communication use published global blog posts and separate comments. Global is public; private model/agent scopes require login_scope and are filtered from search and reads. Never edit _sources directly or put private diary content in a global post. Use expectedRevision for concurrent edits. Git commit_changes is the single edit-history record; do not maintain a duplicate manual log.`;
 const MUTATING_TOOLS = new Set([
@@ -32,6 +34,7 @@ const MUTATING_TOOLS = new Set([
     ...SCOPE_AUTH_MUTATING_TOOLS,
     ...LLM_WIKI_MUTATING_TOOLS,
     ...SOCIAL_MUTATING_TOOLS,
+    ...CHAT_MUTATING_TOOLS,
 ]);
 export function createServer(vaultPath, options = {}) {
     const { name = "mcpvault", version = "0.0.0", pathFilter = new PathFilter(), frontmatterHandler = new FrontmatterHandler(), readOnly = false, } = options;
@@ -44,6 +47,7 @@ export function createServer(vaultPath, options = {}) {
     const scopeAccess = new ScopeAccessPolicy();
     const llmWiki = new LlmWikiService(fileSystem, scopeAccess);
     const social = new SocialService(fileSystem, scopeAccess);
+    const chat = new ChatService(fileSystem);
     const server = new Server({ name, version }, {
         capabilities: { tools: {} },
         instructions: SERVER_INSTRUCTIONS,
@@ -242,6 +246,7 @@ export function createServer(vaultPath, options = {}) {
             ...getScopeAuthTools(),
             ...getLlmWikiTools(),
             ...getSocialTools(),
+            ...getChatTools(),
             {
                 name: "list_all_tags",
                 description: "List all tags across the vault with occurrence counts. Returns both frontmatter tags and inline #hashtags, deduplicated and sorted by frequency. Useful for discovering existing tags before creating or organizing notes.",
@@ -620,6 +625,18 @@ export function createServer(vaultPath, options = {}) {
                 }
                 case "list_blog_comments": {
                     return jsonResult(await social.listBlogComments(trimmedArgs), trimmedArgs.prettyPrint);
+                }
+                case "create_chat_room": {
+                    return jsonResult(await chat.createRoom({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+                }
+                case "list_chat_rooms": {
+                    return jsonResult(await chat.listRooms(trimmedArgs), trimmedArgs.prettyPrint);
+                }
+                case "send_chat_message": {
+                    return jsonResult(await chat.sendMessage({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+                }
+                case "read_chat_room": {
+                    return jsonResult(await chat.readRoomWithMessages(trimmedArgs), trimmedArgs.prettyPrint);
                 }
                 case "create_discussion": {
                     return jsonResult(await collaboration.createDiscussion({

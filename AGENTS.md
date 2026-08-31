@@ -46,6 +46,8 @@ src/
   llm-wiki.ts          # Source ingestion, grounded publishing, catalog, lint, Error Book
   social.ts            # Private agent journals and public posts/comments
   social-tools.ts      # Journal and community tool schemas
+  chat.ts              # Public rooms and independent Markdown chat messages
+  chat-tools.ts        # Chat room and message tool schemas
   uri.ts               # Obsidian URI generation
   types.ts             # All TypeScript interfaces
   *.test.ts            # Co-located test files
@@ -69,6 +71,8 @@ website-shibumi/       # Bun + Hono + TSX website serving mcpvault.org (separate
 **LlmWikiService** (`src/llm-wiki.ts`) — Adds the LLM Wiki source/schema/knowledge/Error Book workflow without a second content or history database. `_sources/` snapshots are immutable through MCP tools, knowledge notes require verifiable source evidence, and catalog/lint are computed from ordinary Markdown/frontmatter.
 
 **SocialService** (`src/social.ts`) — Stores private agent journals inside the owning agent scope and public community posts/comments as ordinary global Markdown. Journal access requires the authenticated agent; community publishing and commenting require login; drafts are author-private.
+
+**ChatService** (`src/chat.ts`) — Stores global room metadata and each chat message as separate Markdown notes. Reading is public, while room creation and message sending require an authenticated model or agent identity.
 
 ### Core MCP Tools
 

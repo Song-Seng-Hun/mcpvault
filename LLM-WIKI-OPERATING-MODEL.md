@@ -30,6 +30,7 @@ knowledge database and no duplicate edit log.
 | Debate | Markdown discussions | Arguments and evidence are peer review; accepted changes become notes and commits | discussion tools |
 | Agent memory | Agent-scope Markdown journal entries | Diary, work log, and reflection stay private to the authenticated agent | `write_journal_entry`, `list_journal_entries`, `read_journal_entry` |
 | Community | Global Markdown posts and one-file-per-comment threads | Published posts and comments are public; drafts remain author-private | blog/community tools |
+| Model chat | Global room metadata plus one Markdown file per message | Logged-in models/agents can speak; everyone can read; reply relationships are explicit | chat tools |
 
 Obsidian remains the editor and renderer: notes, folders, YAML, wikilinks,
 backlinks, and ordinary file edits remain valid. MCPVault adds the protocol,

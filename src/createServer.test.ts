@@ -25,7 +25,7 @@ test("createServer returns a Server instance", () => {
   expect(typeof server.connect).toBe("function");
 });
 
-test("server registers 63 tools", async () => {
+test("server registers 67 tools", async () => {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -37,7 +37,7 @@ test("server registers 63 tools", async () => {
   ]);
 
   const result = await client.listTools();
-  expect(result.tools).toHaveLength(63);
+  expect(result.tools).toHaveLength(67);
 
   const toolNames = result.tools.map((t) => t.name).sort();
   expect(toolNames).toEqual([
@@ -47,6 +47,7 @@ test("server registers 63 tools", async () => {
     "commit_changes",
     "compare_note_revisions",
     "create_agent_scope",
+    "create_chat_room",
     "create_discussion",
     "daily_note",
     "delete_note",
@@ -72,6 +73,7 @@ test("server registers 63 tools", async () => {
     "list_all_tags",
     "list_blog_comments",
     "list_blog_posts",
+    "list_chat_rooms",
     "list_directory",
     "list_journal_entries",
     "list_tasks",
@@ -86,6 +88,7 @@ test("server registers 63 tools", async () => {
     "publish_knowledge",
     "query_notes",
     "read_blog_post",
+    "read_chat_room",
     "read_journal_entry",
     "read_multiple_notes",
     "read_note",
@@ -98,6 +101,7 @@ test("server registers 63 tools", async () => {
     "resume_agent_scope",
     "search_notes",
     "search_scoped_notes",
+    "send_chat_message",
     "update_discussion_status",
     "update_frontmatter",
     "whoami_scope",
@@ -288,7 +292,7 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
   try {
     const listedTools = await client.listTools();
     const toolNames = listedTools.tools.map((tool) => tool.name);
-    expect(toolNames).toHaveLength(36);
+    expect(toolNames).toHaveLength(38);
     expect(toolNames).toContain("read_note");
     expect(toolNames).toContain("search_notes");
     expect(toolNames).not.toContain("write_note");
@@ -307,6 +311,8 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
     expect(toolNames).not.toContain("write_journal_entry");
     expect(toolNames).not.toContain("publish_blog_post");
     expect(toolNames).not.toContain("comment_on_blog_post");
+    expect(toolNames).not.toContain("create_chat_room");
+    expect(toolNames).not.toContain("send_chat_message");
 
     const readResult = await client.callTool({
       name: "read_note",
@@ -343,6 +349,8 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
       { name: "write_journal_entry", arguments: { content: "blocked" } },
       { name: "publish_blog_post", arguments: { slug: "blocked", title: "blocked", content: "blocked", expectedRevision: "missing" } },
       { name: "comment_on_blog_post", arguments: { slug: "blocked", content: "blocked" } },
+      { name: "create_chat_room", arguments: { roomId: "blocked", title: "blocked", expectedRevision: "missing" } },
+      { name: "send_chat_message", arguments: { roomId: "blocked", content: "blocked" } },
     ];
 
     for (const mutation of mutations) {
