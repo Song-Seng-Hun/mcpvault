@@ -25,7 +25,7 @@ test("createServer returns a Server instance", () => {
   expect(typeof server.connect).toBe("function");
 });
 
-test("server registers 55 tools", async () => {
+test("server registers 63 tools", async () => {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -37,12 +37,13 @@ test("server registers 55 tools", async () => {
   ]);
 
   const result = await client.listTools();
-  expect(result.tools).toHaveLength(55);
+  expect(result.tools).toHaveLength(63);
 
   const toolNames = result.tools.map((t) => t.name).sort();
   expect(toolNames).toEqual([
     "add_discussion_argument",
     "change_scope_password",
+    "comment_on_blog_post",
     "commit_changes",
     "compare_note_revisions",
     "create_agent_scope",
@@ -69,7 +70,10 @@ test("server registers 55 tools", async () => {
     "initialize_revision_history",
     "lint_wiki",
     "list_all_tags",
+    "list_blog_comments",
+    "list_blog_posts",
     "list_directory",
+    "list_journal_entries",
     "list_tasks",
     "login_scope",
     "logout_scope",
@@ -78,8 +82,11 @@ test("server registers 55 tools", async () => {
     "move_note",
     "orient_wiki",
     "patch_note",
+    "publish_blog_post",
     "publish_knowledge",
     "query_notes",
+    "read_blog_post",
+    "read_journal_entry",
     "read_multiple_notes",
     "read_note",
     "read_note_lines",
@@ -95,6 +102,7 @@ test("server registers 55 tools", async () => {
     "update_frontmatter",
     "whoami_scope",
     "wiki_link",
+    "write_journal_entry",
     "write_note",
   ]);
 
@@ -280,7 +288,7 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
   try {
     const listedTools = await client.listTools();
     const toolNames = listedTools.tools.map((tool) => tool.name);
-    expect(toolNames).toHaveLength(31);
+    expect(toolNames).toHaveLength(36);
     expect(toolNames).toContain("read_note");
     expect(toolNames).toContain("search_notes");
     expect(toolNames).not.toContain("write_note");
@@ -296,6 +304,9 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
     expect(toolNames).toContain("read_scoped_note");
     expect(toolNames).not.toContain("create_agent_scope");
     expect(toolNames).not.toContain("add_discussion_argument");
+    expect(toolNames).not.toContain("write_journal_entry");
+    expect(toolNames).not.toContain("publish_blog_post");
+    expect(toolNames).not.toContain("comment_on_blog_post");
 
     const readResult = await client.callTool({
       name: "read_note",
@@ -329,6 +340,9 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
       { name: "publish_knowledge", arguments: { path: "blocked.md", content: "blocked", evidencePaths: ["source.md"], expectedRevision: "missing", author: "blocked" } },
       { name: "report_wiki_issue", arguments: { kind: "other", title: "blocked", description: "blocked", reportedBy: "blocked" } },
       { name: "resolve_wiki_issue", arguments: { path: "blocked.md", resolution: "blocked", expectedRevision: "missing", actor: "blocked" } },
+      { name: "write_journal_entry", arguments: { content: "blocked" } },
+      { name: "publish_blog_post", arguments: { slug: "blocked", title: "blocked", content: "blocked", expectedRevision: "missing" } },
+      { name: "comment_on_blog_post", arguments: { slug: "blocked", content: "blocked" } },
     ];
 
     for (const mutation of mutations) {

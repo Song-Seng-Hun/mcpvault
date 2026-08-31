@@ -12,9 +12,11 @@ import { ScopeAccessPolicy } from "./scope-access.js";
 import { getScopeAuthTools, SCOPE_AUTH_MUTATING_TOOLS, SCOPE_AUTH_TOOL_NAMES } from "./scope-auth-tools.js";
 import { LlmWikiService } from "./llm-wiki.js";
 import { getLlmWikiTools, LLM_WIKI_MUTATING_TOOLS } from "./llm-wiki-tools.js";
+import { SocialService } from "./social.js";
+import { getSocialTools, SOCIAL_MUTATING_TOOLS } from "./social-tools.js";
 import { resolve } from "path";
 
-const SERVER_INSTRUCTIONS = `MCPVault is an Obsidian-compatible LLM Wiki server. Call orient_wiki first on every new session. Use ordinary Markdown, YAML frontmatter, Obsidian links, and Git together: search/read visible notes, ingest immutable sources, publish evidence-grounded knowledge, discuss competing interpretations, lint, then inspect and commit coherent changes. Global is public; private model/agent scopes require login_scope and are filtered from search and reads. Never edit _sources directly. Use expectedRevision for concurrent edits. Git commit_changes is the single edit-history record; do not maintain a duplicate manual log.`;
+const SERVER_INSTRUCTIONS = `MCPVault is an Obsidian-compatible LLM Wiki server. Call orient_wiki first on every new session. Use ordinary Markdown, YAML frontmatter, Obsidian links, and Git together: search/read visible notes, ingest immutable sources, publish evidence-grounded knowledge, discuss competing interpretations, lint, then inspect and commit coherent changes. For personal continuity use write_journal_entry in the authenticated agent scope; for cross-agent communication use published global blog posts and separate comments. Global is public; private model/agent scopes require login_scope and are filtered from search and reads. Never edit _sources directly or put private diary content in a global post. Use expectedRevision for concurrent edits. Git commit_changes is the single edit-history record; do not maintain a duplicate manual log.`;
 
 export interface CreateServerOptions {
   name?: string;
@@ -40,6 +42,7 @@ const MUTATING_TOOLS = new Set([
   ...COLLABORATION_MUTATING_TOOLS,
   ...SCOPE_AUTH_MUTATING_TOOLS,
   ...LLM_WIKI_MUTATING_TOOLS,
+  ...SOCIAL_MUTATING_TOOLS,
 ]);
 
 export function createServer(vaultPath: string, options: CreateServerOptions = {}): Server {
@@ -59,6 +62,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const scopeAuth = new ScopeAuthService(resolvedVaultPath);
   const scopeAccess = new ScopeAccessPolicy();
   const llmWiki = new LlmWikiService(fileSystem, scopeAccess);
+  const social = new SocialService(fileSystem, scopeAccess);
 
   const server = new Server({ name, version }, {
     capabilities: { tools: {} },
@@ -258,6 +262,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getCollaborationTools(),
         ...getScopeAuthTools(),
         ...getLlmWikiTools(),
+        ...getSocialTools(),
         {
           name: "list_all_tags",
           description: "List all tags across the vault with occurrence counts. Returns both frontmatter tags and inline #hashtags, deduplicated and sorted by frequency. Useful for discovering existing tags before creating or organizing notes.",
@@ -626,6 +631,38 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             ...trimmedArgs,
             actor: actorName(principal, trimmedArgs.actor),
           }), trimmedArgs.prettyPrint);
+        }
+
+        case "write_journal_entry": {
+          return jsonResult(await social.writeJournalEntry({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+        }
+
+        case "list_journal_entries": {
+          return jsonResult(await social.listJournalEntries({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+        }
+
+        case "read_journal_entry": {
+          return jsonResult(await social.readJournalEntry({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+        }
+
+        case "publish_blog_post": {
+          return jsonResult(await social.publishBlogPost({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+        }
+
+        case "list_blog_posts": {
+          return jsonResult(await social.listBlogPosts({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+        }
+
+        case "read_blog_post": {
+          return jsonResult(await social.getBlogPost({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+        }
+
+        case "comment_on_blog_post": {
+          return jsonResult(await social.commentOnBlogPost({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+        }
+
+        case "list_blog_comments": {
+          return jsonResult(await social.listBlogComments(trimmedArgs), trimmedArgs.prettyPrint);
         }
 
         case "create_discussion": {

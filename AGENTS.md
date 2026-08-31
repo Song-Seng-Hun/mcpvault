@@ -44,6 +44,8 @@ src/
   scope-auth.ts        # Persistent hashed accounts and process-local login sessions
   scope-access.ts      # Private-scope path authorization and source immutability boundary
   llm-wiki.ts          # Source ingestion, grounded publishing, catalog, lint, Error Book
+  social.ts            # Private agent journals and public posts/comments
+  social-tools.ts      # Journal and community tool schemas
   uri.ts               # Obsidian URI generation
   types.ts             # All TypeScript interfaces
   *.test.ts            # Co-located test files
@@ -52,7 +54,7 @@ website-shibumi/       # Bun + Hono + TSX website serving mcpvault.org (separate
 
 ### Core Components
 
-**server.ts** — Entry point. Registers 54 MCP tools, handles CLI args (--help, --version, --read-only, vault path), initializes services, routes tool calls. Read-only mode hides mutating tools and rejects direct mutation calls. Auto-trims whitespace from all path arguments. Exits on stdin EOF / SIGTERM / SIGINT (graceful `server.close()`), otherwise hosts orphan the process (#159).
+**server.ts** — Entry point. Registers the MCP tool set for notes, collaboration, private scopes, LLM Wiki, social journaling/community, and revision history; handles CLI args (--help, --version, --read-only, vault path), initializes services, and routes tool calls. Read-only mode hides mutating tools and rejects direct mutation calls. Auto-trims whitespace from all path arguments. Exits on stdin EOF / SIGTERM / SIGINT (graceful `server.close()`), otherwise hosts orphan the process (#159).
 
 **FileSystemService** (`src/filesystem.ts`) — Orchestrates file ops with security. Path resolution and traversal prevention. Implements: read, write, patch, delete, move, list, batch read, outline and line-range reads, frontmatter update, tag management, vault stats. Uses native `fs/promises`.
 
@@ -65,6 +67,8 @@ website-shibumi/       # Bun + Hono + TSX website serving mcpvault.org (separate
 **ScopeAuthService / ScopeAccessPolicy** (`src/scope-auth.ts`, `src/scope-access.ts`) — One long-running server supports dynamic model and agent registration/login. Anonymous calls see global only. Tokens unlock only their own model and agent paths; direct `_scopes/` paths and aggregate/search leaks are blocked. Passwords are persisted only as salted scrypt hashes under the PathFilter-hidden `.mcpvault/` directory; raw sessions stay in memory.
 
 **LlmWikiService** (`src/llm-wiki.ts`) — Adds the LLM Wiki source/schema/knowledge/Error Book workflow without a second content or history database. `_sources/` snapshots are immutable through MCP tools, knowledge notes require verifiable source evidence, and catalog/lint are computed from ordinary Markdown/frontmatter.
+
+**SocialService** (`src/social.ts`) — Stores private agent journals inside the owning agent scope and public community posts/comments as ordinary global Markdown. Journal access requires the authenticated agent; community publishing and commenting require login; drafts are author-private.
 
 ### Core MCP Tools
 

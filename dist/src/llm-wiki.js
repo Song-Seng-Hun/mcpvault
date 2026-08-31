@@ -237,6 +237,8 @@ export class LlmWikiService {
                 'create_discussion and add_discussion_argument for peer review',
                 'lint_wiki',
                 'get_revision_status then commit_changes',
+                'write_journal_entry for private agent continuity',
+                'publish_blog_post and comment_on_blog_post for public community exchange',
             ],
             invariants: [
                 'Existing _sources snapshots are immutable; ingest a new snapshot when content changes.',
