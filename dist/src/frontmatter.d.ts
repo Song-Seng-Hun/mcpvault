@@ -1,4 +1,4 @@
-import type { ParsedNote, FrontmatterValidationResult } from './types.js';
+import type { ParsedNoteContent, FrontmatterValidationResult } from './types.js';
 /**
  * Parse a frontmatter value that may be a JSON string (LLM clients sometimes
  * pass frontmatter as a serialized JSON string instead of an object).
@@ -6,7 +6,7 @@ import type { ParsedNote, FrontmatterValidationResult } from './types.js';
  */
 export declare function parseFrontmatter(value: any): Record<string, any> | undefined;
 export declare class FrontmatterHandler {
-    parse(content: string): ParsedNote;
+    parse(content: string): ParsedNoteContent;
     stringify(frontmatterData: Record<string, any>, content: string): string;
     validate(frontmatterData: Record<string, any>): FrontmatterValidationResult;
     private checkForProblematicValues;

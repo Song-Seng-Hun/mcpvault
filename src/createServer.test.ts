@@ -25,7 +25,7 @@ test("createServer returns a Server instance", () => {
   expect(typeof server.connect).toBe("function");
 });
 
-test("server registers 32 tools", async () => {
+test("server registers 42 tools", async () => {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -37,25 +37,31 @@ test("server registers 32 tools", async () => {
   ]);
 
   const result = await client.listTools();
-  expect(result.tools).toHaveLength(32);
+  expect(result.tools).toHaveLength(42);
 
   const toolNames = result.tools.map((t) => t.name).sort();
   expect(toolNames).toEqual([
+    "add_discussion_argument",
     "commit_changes",
     "compare_note_revisions",
+    "create_agent_scope",
+    "create_discussion",
     "daily_note",
     "delete_note",
     "find_orphan_notes",
     "find_unresolved_links",
     "get_backlinks",
     "get_daily_note",
+    "get_discussion",
     "get_frontmatter",
     "get_note_history",
     "get_note_outline",
     "get_notes_info",
     "get_outlinks",
     "get_revision_status",
+    "get_scope_context",
     "get_vault_stats",
+    "handoff_agent_scope",
     "initialize_revision_history",
     "list_all_tags",
     "list_directory",
@@ -68,8 +74,12 @@ test("server registers 32 tools", async () => {
     "read_multiple_notes",
     "read_note",
     "read_note_lines",
+    "read_scoped_note",
     "restore_note_revision",
+    "resume_agent_scope",
     "search_notes",
+    "search_scoped_notes",
+    "update_discussion_status",
     "update_frontmatter",
     "wiki_link",
     "write_note",
@@ -257,7 +267,7 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
   try {
     const listedTools = await client.listTools();
     const toolNames = listedTools.tools.map((tool) => tool.name);
-    expect(toolNames).toHaveLength(21);
+    expect(toolNames).toHaveLength(25);
     expect(toolNames).toContain("read_note");
     expect(toolNames).toContain("search_notes");
     expect(toolNames).not.toContain("write_note");
@@ -269,6 +279,10 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
     expect(toolNames).toContain("compare_note_revisions");
     expect(toolNames).not.toContain("commit_changes");
     expect(toolNames).not.toContain("restore_note_revision");
+    expect(toolNames).toContain("get_scope_context");
+    expect(toolNames).toContain("read_scoped_note");
+    expect(toolNames).not.toContain("create_agent_scope");
+    expect(toolNames).not.toContain("add_discussion_argument");
 
     const readResult = await client.callTool({
       name: "read_note",
@@ -289,6 +303,12 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
       { name: "initialize_revision_history", arguments: { confirm: true } },
       { name: "commit_changes", arguments: { reason: "blocked" } },
       { name: "restore_note_revision", arguments: { path: "existing.md", revision: "HEAD", confirmPath: "existing.md", confirmRevision: "HEAD" } },
+      { name: "create_agent_scope", arguments: { agentId: "blocked", modelId: "codex", sessionId: "s1" } },
+      { name: "handoff_agent_scope", arguments: { agentId: "blocked", fromSessionId: "s1", toSessionId: "s2", reason: "blocked", expectedGeneration: 1 } },
+      { name: "resume_agent_scope", arguments: { agentId: "blocked", newSessionId: "s2", reason: "blocked", expectedGeneration: 1 } },
+      { name: "create_discussion", arguments: { title: "blocked", createdBy: "codex", initialPosition: "blocked" } },
+      { name: "add_discussion_argument", arguments: { discussionId: "blocked", actor: "codex", stance: "support", argument: "blocked", expectedRevision: "missing" } },
+      { name: "update_discussion_status", arguments: { discussionId: "blocked", actor: "codex", status: "resolved", reason: "blocked", expectedRevision: "missing" } },
     ];
 
     for (const mutation of mutations) {

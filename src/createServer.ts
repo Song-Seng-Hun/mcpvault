@@ -5,6 +5,8 @@ import { PathFilter } from "./pathfilter.js";
 import { SearchService } from "./search.js";
 import { handleWikiLinkTool } from "./wikilink/index.js";
 import { GitHistoryService } from "./git-history.js";
+import { CollaborationService, expandScopePath } from "./scopes.js";
+import { COLLABORATION_MUTATING_TOOLS, getCollaborationTools } from "./collaboration-tools.js";
 import { resolve } from "path";
 
 export interface CreateServerOptions {
@@ -28,6 +30,7 @@ const MUTATING_TOOLS = new Set([
   "initialize_revision_history",
   "commit_changes",
   "restore_note_revision",
+  ...COLLABORATION_MUTATING_TOOLS,
 ]);
 
 export function createServer(vaultPath: string, options: CreateServerOptions = {}): Server {
@@ -43,6 +46,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const fileSystem = new FileSystemService(resolvedVaultPath, pathFilter, frontmatterHandler);
   const searchService = new SearchService(resolvedVaultPath, pathFilter);
   const gitHistory = new GitHistoryService(resolvedVaultPath, pathFilter);
+  const collaboration = new CollaborationService(fileSystem, searchService);
 
   const server = new Server({ name, version }, {
     capabilities: { tools: {} },
@@ -71,7 +75,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
               path: { type: "string", description: "Path to the note relative to vault root" },
               content: { type: "string", description: "Content of the note" },
               frontmatter: { type: "object", description: "Frontmatter object (optional)" },
-              mode: { type: "string", enum: ["overwrite", "append", "prepend"], description: "Write mode: 'overwrite' (default), 'append', or 'prepend'", default: "overwrite" }
+              mode: { type: "string", enum: ["overwrite", "append", "prepend"], description: "Write mode: 'overwrite' (default), 'append', or 'prepend'", default: "overwrite" },
+              expectedRevision: { type: "string", description: "Optional revision from read_note; use 'missing' to create only if absent" }
             },
             required: ["path", "content"]
           }
@@ -85,7 +90,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
               path: { type: "string", description: "Path to the note relative to vault root" },
               oldString: { type: "string", description: "The exact string to replace. Must match exactly including whitespace and line breaks." },
               newString: { type: "string", description: "The new string to insert in place of oldString" },
-              replaceAll: { type: "boolean", description: "If true, replace all occurrences. If false (default), the operation will fail if multiple matches are found to prevent unintended replacements.", default: false }
+              replaceAll: { type: "boolean", description: "If true, replace all occurrences. If false (default), the operation will fail if multiple matches are found to prevent unintended replacements.", default: false },
+              expectedRevision: { type: "string", description: "Optional revision from read_note; rejects stale updates" }
             },
             required: ["path", "oldString", "newString"]
           }
@@ -182,7 +188,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             properties: {
               path: { type: "string", description: "Path to the note" },
               frontmatter: { type: "object", description: "Frontmatter object to update" },
-              merge: { type: "boolean", description: "Merge with existing frontmatter (default: true)", default: true }
+              merge: { type: "boolean", description: "Merge with existing frontmatter (default: true)", default: true },
+              expectedRevision: { type: "string", description: "Optional revision from read_note; rejects stale updates" }
             },
             required: ["path", "frontmatter"]
           }
@@ -235,6 +242,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             }
           }
         },
+        ...getCollaborationTools(),
         {
           name: "list_all_tags",
           description: "List all tags across the vault with occurrence counts. Returns both frontmatter tags and inline #hashtags, deduplicated and sorted by frequency. Useful for discovering existing tags before creating or organizing notes.",
@@ -484,7 +492,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
   server.setRequestHandler("tools/call", async (request) => {
     const { name: toolName, arguments: args } = request.params;
-    const trimmedArgs = trimPaths(args);
 
     if (readOnly && MUTATING_TOOLS.has(toolName)) {
       return {
@@ -497,12 +504,53 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     }
 
     try {
+      const trimmedArgs = trimPaths(args);
       switch (toolName) {
+        case "get_scope_context": {
+          return jsonResult(collaboration.getScopeContext(trimmedArgs.modelId, trimmedArgs.agentId), trimmedArgs.prettyPrint);
+        }
+
+        case "create_agent_scope": {
+          return jsonResult(await collaboration.createAgentScope(trimmedArgs), trimmedArgs.prettyPrint);
+        }
+
+        case "handoff_agent_scope": {
+          return jsonResult(await collaboration.handoffAgentScope(trimmedArgs), trimmedArgs.prettyPrint);
+        }
+
+        case "resume_agent_scope": {
+          return jsonResult(await collaboration.resumeAgentScope(trimmedArgs), trimmedArgs.prettyPrint);
+        }
+
+        case "read_scoped_note": {
+          return jsonResult(await collaboration.readScopedNote(trimmedArgs), trimmedArgs.prettyPrint);
+        }
+
+        case "search_scoped_notes": {
+          return jsonResult(await collaboration.searchScopedNotes(trimmedArgs), trimmedArgs.prettyPrint);
+        }
+
+        case "create_discussion": {
+          return jsonResult(await collaboration.createDiscussion(trimmedArgs), trimmedArgs.prettyPrint);
+        }
+
+        case "get_discussion": {
+          return jsonResult(await collaboration.getDiscussion(trimmedArgs.discussionId), trimmedArgs.prettyPrint);
+        }
+
+        case "add_discussion_argument": {
+          return jsonResult(await collaboration.addDiscussionArgument(trimmedArgs), trimmedArgs.prettyPrint);
+        }
+
+        case "update_discussion_status": {
+          return jsonResult(await collaboration.updateDiscussionStatus(trimmedArgs), trimmedArgs.prettyPrint);
+        }
+
         case "read_note": {
           const note = await fileSystem.readNote(trimmedArgs.path);
           const indent = trimmedArgs.prettyPrint ? 2 : undefined;
           return {
-            content: [{ type: "text", text: JSON.stringify({ fm: note.frontmatter, content: note.content }, null, indent) }]
+            content: [{ type: "text", text: JSON.stringify({ fm: note.frontmatter, content: note.content, revision: note.revision }, null, indent) }]
           };
         }
 
@@ -512,7 +560,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             path: trimmedArgs.path,
             content: trimmedArgs.content,
             ...(fm !== undefined && { frontmatter: fm }),
-            mode: trimmedArgs.mode || 'overwrite'
+            mode: trimmedArgs.mode || 'overwrite',
+            expectedRevision: trimmedArgs.expectedRevision,
           });
           return {
             content: [{ type: "text", text: `Successfully wrote note: ${trimmedArgs.path} (mode: ${trimmedArgs.mode || 'overwrite'})` }]
@@ -524,7 +573,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             path: trimmedArgs.path,
             oldString: trimmedArgs.oldString,
             newString: trimmedArgs.newString,
-            replaceAll: trimmedArgs.replaceAll
+            replaceAll: trimmedArgs.replaceAll,
+            expectedRevision: trimmedArgs.expectedRevision,
           });
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -614,7 +664,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           await fileSystem.updateFrontmatter({
             path: trimmedArgs.path,
             frontmatter: fm,
-            merge: trimmedArgs.merge
+            merge: trimmedArgs.merge,
+            expectedRevision: trimmedArgs.expectedRevision,
           });
           return {
             content: [{ type: "text", text: `Successfully updated frontmatter for: ${trimmedArgs.path}` }]
@@ -898,19 +949,22 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 function trimPaths(args: any): any {
   const trimmed = { ...args };
 
-  if (trimmed.path && typeof trimmed.path === 'string') trimmed.path = trimmed.path.trim();
-  if (trimmed.oldPath && typeof trimmed.oldPath === 'string') trimmed.oldPath = trimmed.oldPath.trim();
-  if (trimmed.newPath && typeof trimmed.newPath === 'string') trimmed.newPath = trimmed.newPath.trim();
-  if (trimmed.confirmPath && typeof trimmed.confirmPath === 'string') trimmed.confirmPath = trimmed.confirmPath.trim();
-  if (trimmed.confirmOldPath && typeof trimmed.confirmOldPath === 'string') trimmed.confirmOldPath = trimmed.confirmOldPath.trim();
-  if (trimmed.confirmNewPath && typeof trimmed.confirmNewPath === 'string') trimmed.confirmNewPath = trimmed.confirmNewPath.trim();
-  if (trimmed.folder && typeof trimmed.folder === 'string') trimmed.folder = trimmed.folder.trim();
-  if (trimmed.pathPrefix && typeof trimmed.pathPrefix === 'string') trimmed.pathPrefix = trimmed.pathPrefix.trim();
+  for (const key of ['path', 'oldPath', 'newPath', 'confirmPath', 'confirmOldPath', 'confirmNewPath', 'folder', 'pathPrefix']) {
+    if (trimmed[key] && typeof trimmed[key] === 'string') trimmed[key] = expandScopePath(trimmed[key]);
+  }
   if (trimmed.sortBy && typeof trimmed.sortBy === 'string') trimmed.sortBy = trimmed.sortBy.trim();
 
   if (trimmed.paths && Array.isArray(trimmed.paths)) {
-    trimmed.paths = trimmed.paths.map((p: any) => typeof p === 'string' ? p.trim() : p);
+    trimmed.paths = trimmed.paths.map((p: any) => typeof p === 'string' ? expandScopePath(p) : p);
+  }
+
+  if (trimmed.excludePaths && Array.isArray(trimmed.excludePaths)) {
+    trimmed.excludePaths = trimmed.excludePaths.map((p: any) => typeof p === 'string' ? expandScopePath(p) : p);
   }
 
   return trimmed;
+}
+
+function jsonResult(value: unknown, prettyPrint?: boolean) {
+  return { content: [{ type: 'text' as const, text: JSON.stringify(value, null, prettyPrint ? 2 : undefined) }] };
 }

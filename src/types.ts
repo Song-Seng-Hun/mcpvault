@@ -1,8 +1,13 @@
-export interface ParsedNote {
+export interface ParsedNoteContent {
   frontmatter: Record<string, any>;
   content: string;
   originalContent: string;
   matter?: string;
+}
+
+export interface ParsedNote extends ParsedNoteContent {
+  /** SHA-256 of originalContent, used to reject stale concurrent edits. */
+  revision: string;
 }
 
 export interface NoteWriteParams {
@@ -10,6 +15,8 @@ export interface NoteWriteParams {
   content: string;
   frontmatter?: Record<string, any>;
   mode?: 'overwrite' | 'append' | 'prepend';
+  /** Expected SHA-256 revision, or "missing" to require a new note. */
+  expectedRevision?: string;
 }
 
 export interface PatchNoteParams {
@@ -17,6 +24,7 @@ export interface PatchNoteParams {
   oldString: string;
   newString: string;
   replaceAll?: boolean;
+  expectedRevision?: string;
 }
 
 export interface PatchNoteResult {
@@ -129,6 +137,7 @@ export interface UpdateFrontmatterParams {
   path: string;
   frontmatter: Record<string, any>;
   merge?: boolean;
+  expectedRevision?: string;
 }
 
 // Note info types

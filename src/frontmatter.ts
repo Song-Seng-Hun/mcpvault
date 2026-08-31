@@ -1,6 +1,6 @@
 import matter from 'gray-matter';
 import { parse, stringify, parseDocument } from 'yaml';
-import type { ParsedNote, FrontmatterValidationResult } from './types.js';
+import type { ParsedNoteContent, FrontmatterValidationResult } from './types.js';
 
 // Use the 'yaml' package as gray-matter's engine instead of js-yaml.
 // js-yaml@3.x (pinned by gray-matter@4) has known quadratic-DoS via
@@ -45,7 +45,7 @@ export function parseFrontmatter(value: any): Record<string, any> | undefined {
 }
 
 export class FrontmatterHandler {
-  parse(content: string): ParsedNote {
+  parse(content: string): ParsedNoteContent {
     try {
       const parsed = matter(content, withYamlEngine());
       return {

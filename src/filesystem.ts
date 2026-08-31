@@ -2,6 +2,7 @@ import { join, resolve, relative, dirname } from 'path';
 import { homedir } from 'os';
 import { readdir, stat, readFile, writeFile, unlink, mkdir, access, rename, copyFile } from 'node:fs/promises';
 import { constants, realpathSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import trash from 'trash';
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
@@ -92,6 +93,25 @@ function stripAtxClosingSequence(text: string): string {
 export class FileSystemService {
   private frontmatterHandler: FrontmatterHandler;
   private pathFilter: PathFilter;
+  private mutationTails = new Map<string, Promise<void>>();
+
+  private revision(content: string): string {
+    return createHash('sha256').update(content, 'utf8').digest('hex');
+  }
+
+  private async withMutationLock<T>(path: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.mutationTails.get(path) || Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>(resolveLock => { release = resolveLock; });
+    this.mutationTails.set(path, current);
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+      if (this.mutationTails.get(path) === current) this.mutationTails.delete(path);
+    }
+  }
 
   constructor(
     private vaultPath: string,
@@ -202,7 +222,7 @@ export class FileSystemService {
 
     try {
       const content = await readFile(fullPath, 'utf-8');
-      return this.frontmatterHandler.parse(content);
+      return { ...this.frontmatterHandler.parse(content), revision: this.revision(content) };
     } catch (error) {
       if (error instanceof Error && 'code' in error) {
         if (error.code === 'ENOENT') {
@@ -219,14 +239,45 @@ export class FileSystemService {
     }
   }
 
+  async noteExists(path: string): Promise<boolean> {
+    path = this.normalizePath(path);
+    if (!this.pathFilter.isAllowed(path)) return false;
+    try {
+      return (await stat(this.resolvePath(path))).isFile();
+    } catch {
+      return false;
+    }
+  }
+
+  private async assertExpectedRevision(path: string, expectedRevision?: string): Promise<void> {
+    if (!expectedRevision) return;
+    const exists = await this.noteExists(path);
+    if (expectedRevision === 'missing') {
+      if (exists) throw new Error(`Revision conflict for ${path}: expected a new note, but it already exists`);
+      return;
+    }
+    if (!exists) throw new Error(`Revision conflict for ${path}: expected ${expectedRevision}, but the note is missing`);
+    const current = (await this.readNote(path)).revision;
+    if (current !== expectedRevision) {
+      throw new Error(`Revision conflict for ${path}: expected ${expectedRevision}, current ${current}. Read the note again before changing it.`);
+    }
+  }
+
   async writeNote(params: NoteWriteParams): Promise<void> {
-    const { content, frontmatter, mode = 'overwrite' } = params;
+    const path = this.normalizePath(params.path);
+    return this.withMutationLock(path, () => this.writeNoteUnlocked({ ...params, path }));
+  }
+
+  private async writeNoteUnlocked(params: NoteWriteParams): Promise<void> {
+    const { content, frontmatter, mode = 'overwrite', expectedRevision } = params;
     const path = this.normalizePath(params.path);
     const fullPath = this.resolvePath(path);
 
     if (!this.pathFilter.isAllowed(path)) {
       throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
     }
+
+    await this.assertExpectedRevision(path, expectedRevision);
 
     // Validate content is a defined string to prevent writing literal "undefined"
     if (content === undefined || content === null) {
@@ -296,7 +347,12 @@ export class FileSystemService {
   }
 
   async patchNote(params: PatchNoteParams): Promise<PatchNoteResult> {
-    const { oldString, newString, replaceAll = false } = params;
+    const path = this.normalizePath(params.path);
+    return this.withMutationLock(path, () => this.patchNoteUnlocked({ ...params, path }));
+  }
+
+  private async patchNoteUnlocked(params: PatchNoteParams): Promise<PatchNoteResult> {
+    const { oldString, newString, replaceAll = false, expectedRevision } = params;
     const path = this.normalizePath(params.path);
 
     if (!this.pathFilter.isAllowed(path)) {
@@ -334,6 +390,7 @@ export class FileSystemService {
     }
 
     try {
+      await this.assertExpectedRevision(path, expectedRevision);
       // Read the existing note
       const note = await this.readNote(path);
 
@@ -855,12 +912,19 @@ export class FileSystemService {
   }
 
   async updateFrontmatter(params: UpdateFrontmatterParams): Promise<void> {
-    const { frontmatter, merge = true } = params;
+    const path = this.normalizePath(params.path);
+    return this.withMutationLock(path, () => this.updateFrontmatterUnlocked({ ...params, path }));
+  }
+
+  private async updateFrontmatterUnlocked(params: UpdateFrontmatterParams): Promise<void> {
+    const { frontmatter, merge = true, expectedRevision } = params;
     const path = this.normalizePath(params.path);
 
     if (!this.pathFilter.isAllowed(path)) {
       throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
     }
+
+    await this.assertExpectedRevision(path, expectedRevision);
 
     // Read the existing note
     const note = await this.readNote(path);
@@ -884,7 +948,7 @@ export class FileSystemService {
       await writeFile(fullPath, updatedContent, 'utf-8');
     } else {
       // Replace frontmatter entirely (or no existing matter to preserve)
-      await this.writeNote({
+      await this.writeNoteUnlocked({
         path,
         content: note.content,
         frontmatter: newFrontmatter

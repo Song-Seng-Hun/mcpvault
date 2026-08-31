@@ -109,7 +109,7 @@ An MCP client starts MCPVault as a local stdio process and passes the vault path
 
 - AST-aware frontmatter updates preserve formatting for unchanged YAML fields.
 - Path checks block traversal, symlink escapes, dotfiles, `.obsidian`, `.git`, and `node_modules`.
-- Eighteen MCP tools cover note and file operations:
+- Forty-two MCP tools cover note, collaboration, scope, and revision operations:
   - File operations: `read_note`, `write_note`, `patch_note`, `delete_note`, `move_note`, `move_file`
   - Partial reads: `get_note_outline`, `read_note_lines`
   - Directory and batch reads: `list_directory`, `read_multiple_notes`
@@ -120,6 +120,9 @@ An MCP client starts MCPVault as a local stdio process and passes the vault path
   - Tasks: `list_tasks` finds open, completed, or all checkbox tasks while ignoring frontmatter and fenced code blocks
   - Structured queries: `query_notes` filters and sorts notes using YAML frontmatter properties
   - Revision history: ordinary edits remain file changes; `commit_changes` groups them into Git revisions with author and reason, while history, diff, and single-note restore tools provide safe recovery
+  - Hierarchical scopes: every path tool accepts durable `scope://global/...`, `scope://model/<model>/...`, and `scope://agent/<agent>/...` paths; scoped reads use agent → model → global fallback
+  - Multi-AI collaboration: persistent agent handoff/recovery and equal-peer Markdown discussions preserve arguments, evidence, decisions, and authors without a separate database
+- `read_note` returns a SHA-256 `revision`; pass it as `expectedRevision` to `write_note`, `patch_note`, or `update_frontmatter` to reject stale concurrent edits. Use `"missing"` when creating a note that must not already exist.
 - `write_note` supports overwrite, append, and prepend modes.
 - `delete_note` and `move_file` require matching confirmation paths.
 - Path arguments are trimmed before validation.
@@ -1003,6 +1006,49 @@ Note content is omitted by default and can be requested with
   "truncated": false
 }
 ```
+
+### Hierarchical scopes and multi-AI collaboration
+
+Scopes are durable namespaces, not permission boundaries. The global namespace
+is the existing vault root, so old notes and tools keep working unchanged.
+Model and agent notes are ordinary Markdown under `_scopes/models/<model>/` and
+`_scopes/agents/<agent>/`; therefore Obsidian links, searches, and Git history
+continue to work without a parallel storage system.
+
+Every existing path-based tool accepts scope URIs:
+
+```text
+scope://global/Guides/Editing.md
+scope://model/codex/Guides/Editing.md
+scope://agent/researcher/Working Notes.md
+```
+
+Use `read_scoped_note` or `search_scoped_notes` when one logical path should
+resolve in agent → model → global order. A more specific note overrides the
+same logical path only for that scoped read; it does not copy or mutate the
+broader note. When an `agentId` is supplied, its model is inferred from the
+persistent identity unless an explicit `modelId` is provided.
+
+`create_agent_scope` stores a persistent identity, current session, purpose,
+and generation in the agent namespace. `handoff_agent_scope` transfers it to a
+known next session. If a session disappears before handoff,
+`resume_agent_scope` records a recovery. Both operations require the current
+generation, so stale sessions cannot silently reclaim the identity.
+
+Discussions live as Markdown in `_collaboration/discussions/`:
+
+1. `create_discussion` records a proposal, actor, subject, and evidence.
+2. Peers call `get_discussion`, then `add_discussion_argument` with a stance of
+   `support`, `challenge`, `alternative`, or `question`.
+3. `update_discussion_status` records an attributed `open`, `resolved`,
+   `rejected`, or `superseded` decision. A later peer may reopen it with a
+   reason; no model receives extra voting weight.
+4. Argument and status updates require the discussion's latest
+   `expectedRevision`, preventing one model from overwriting a newer response.
+
+These tools do not auto-commit. Once a coherent group of note and discussion
+changes is ready, use `commit_changes` with the author and reason. Git remains
+the single authoritative change log and rollback mechanism.
 
 ### Git-backed revision history
 

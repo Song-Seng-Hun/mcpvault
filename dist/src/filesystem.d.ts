@@ -16,6 +16,9 @@ export declare class FileSystemService {
     private vaultPath;
     private frontmatterHandler;
     private pathFilter;
+    private mutationTails;
+    private revision;
+    private withMutationLock;
     constructor(vaultPath: string, pathFilter?: PathFilter, frontmatterHandler?: FrontmatterHandler);
     /**
      * Normalize an incoming path to be vault-relative. Strips leading slashes
@@ -25,8 +28,12 @@ export declare class FileSystemService {
     private normalizePath;
     private resolvePath;
     readNote(path: string): Promise<ParsedNote>;
+    noteExists(path: string): Promise<boolean>;
+    private assertExpectedRevision;
     writeNote(params: NoteWriteParams): Promise<void>;
+    private writeNoteUnlocked;
     patchNote(params: PatchNoteParams): Promise<PatchNoteResult>;
+    private patchNoteUnlocked;
     listDirectory(path?: string): Promise<DirectoryListing>;
     exists(path: string): Promise<boolean>;
     isDirectory(path: string): Promise<boolean>;
@@ -35,6 +42,7 @@ export declare class FileSystemService {
     moveFile(params: MoveFileParams): Promise<MoveResult>;
     readMultipleNotes(params: BatchReadParams): Promise<BatchReadResult>;
     updateFrontmatter(params: UpdateFrontmatterParams): Promise<void>;
+    private updateFrontmatterUnlocked;
     getNotesInfo(paths: string[]): Promise<NoteInfo[]>;
     manageTags(params: TagManagementParams): Promise<TagManagementResult>;
     getVaultPath(): string;
