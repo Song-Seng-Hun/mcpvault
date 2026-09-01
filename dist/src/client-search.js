@@ -1,6 +1,7 @@
 const MAX_QUERY_CHARS = 500;
 const MAX_RESULT_LIMIT = 50;
 const MAX_INDEXED_DOCUMENTS = 5_000;
+const MAX_TOKENS_PER_DOCUMENT = 4_096;
 function normalize(value) {
     return value.normalize('NFKC').toLocaleLowerCase();
 }
@@ -16,6 +17,28 @@ function terms(value) {
     }
     return [...new Set([...words, ...grams])];
 }
+function tokenCounts(value) {
+    const normalized = normalize(value);
+    const counts = new Map();
+    const words = normalized.match(/[\p{L}\p{N}_-]+/gu) || [];
+    const add = (token) => {
+        if (!counts.has(token) && counts.size >= MAX_TOKENS_PER_DOCUMENT)
+            return false;
+        counts.set(token, (counts.get(token) || 0) + 1);
+        return true;
+    };
+    for (const word of words) {
+        if (!add(word))
+            break;
+        if (word.length < 2)
+            continue;
+        for (let index = 0; index < word.length - 1 && counts.size < MAX_TOKENS_PER_DOCUMENT; index += 1) {
+            const gram = word.slice(index, index + 2);
+            add(gram);
+        }
+    }
+    return counts;
+}
 function excerpt(text, query, maxChars) {
     const compact = text.replace(/\s+/g, ' ').trim();
     const position = normalize(compact).indexOf(normalize(query));
@@ -30,6 +53,7 @@ function excerpt(text, query, maxChars) {
  */
 export class McpVaultClientSearchIndex {
     documents = new Map();
+    postings = new Map();
     searchCache = new Map();
     maxDocuments;
     constructor(options = {}) {
@@ -39,22 +63,34 @@ export class McpVaultClientSearchIndex {
         this.maxDocuments = maxDocuments;
     }
     upsert(note) {
+        this.unindex(note.path);
         const content = `${note.path}\n${note.content || ''}\n${note.frontmatter ? JSON.stringify(note.frontmatter) : ''}`;
-        this.documents.set(note.path, {
+        const document = {
             note: { ...note, ...(note.frontmatter && { frontmatter: { ...note.frontmatter } }) },
-            searchable: normalize(content),
             title: normalize(note.path.split('/').pop()?.replace(/\.(?:md|markdown|txt)$/i, '') || note.path),
-        });
+            tokenCounts: tokenCounts(content),
+        };
+        this.documents.set(note.path, document);
+        for (const [token, count] of document.tokenCounts) {
+            const posting = this.postings.get(token) || new Map();
+            posting.set(note.path, count);
+            this.postings.set(token, posting);
+        }
         this.searchCache.clear();
-        while (this.documents.size > this.maxDocuments)
-            this.documents.delete(this.documents.keys().next().value);
+        while (this.documents.size > this.maxDocuments) {
+            const oldestPath = this.documents.keys().next().value;
+            this.unindex(oldestPath);
+            this.documents.delete(oldestPath);
+        }
     }
     remove(path) {
+        this.unindex(path);
         this.documents.delete(path);
         this.searchCache.clear();
     }
     clear() {
         this.documents.clear();
+        this.postings.clear();
         this.searchCache.clear();
     }
     size() {
@@ -119,25 +155,29 @@ export class McpVaultClientSearchIndex {
             return { complete: false, indexedDocuments: this.documents.size, results: [] };
         const limit = Math.min(Math.max(Math.floor(options.limit ?? 5), 1), MAX_RESULT_LIMIT);
         const maxChars = Math.min(Math.max(Math.floor(options.maxChars ?? 240), 80), 2000);
+        const candidatePaths = new Set();
+        for (const term of queryTerms) {
+            for (const path of this.postings.get(term)?.keys() || [])
+                candidatePaths.add(path);
+        }
         const ranked = [];
-        for (const document of this.documents.values()) {
+        for (const path of candidatePaths) {
+            const document = this.documents.get(path);
+            if (!document)
+                continue;
+            const searchable = normalize(`${document.note.path}\n${document.note.content || ''}\n${document.note.frontmatter ? JSON.stringify(document.note.frontmatter) : ''}`);
             let score = 0;
             for (const term of queryTerms) {
-                let position = 0;
-                let count = 0;
-                while ((position = document.searchable.indexOf(term, position)) !== -1) {
-                    count += 1;
-                    position += term.length;
-                }
+                const count = document.tokenCounts.get(term) || 0;
                 score += count;
                 if (document.title.includes(term))
                     score += 5;
             }
-            if (document.searchable.includes(normalize(normalizedQuery)))
+            if (searchable.includes(normalize(normalizedQuery)))
                 score += 4;
             if (score === 0)
                 continue;
-            ranked.push({ path: document.note.path, score, excerpt: excerpt(document.note.content || document.searchable, normalizedQuery, maxChars), revision: document.note.revision });
+            ranked.push({ path: document.note.path, score, excerpt: excerpt(document.note.content || searchable, normalizedQuery, maxChars), revision: document.note.revision });
         }
         ranked.sort((left, right) => right.score - left.score || left.path.localeCompare(right.path));
         const result = { complete: false, indexedDocuments: this.documents.size, results: ranked.slice(0, limit) };
@@ -145,6 +185,17 @@ export class McpVaultClientSearchIndex {
         while (this.searchCache.size > 128)
             this.searchCache.delete(this.searchCache.keys().next().value);
         return result;
+    }
+    unindex(path) {
+        const document = this.documents.get(path);
+        if (!document)
+            return;
+        for (const token of document.tokenCounts.keys()) {
+            const posting = this.postings.get(token);
+            posting?.delete(path);
+            if (posting && posting.size === 0)
+                this.postings.delete(token);
+        }
     }
 }
 function cloneSearchResponse(value) {

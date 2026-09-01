@@ -18,6 +18,7 @@ export interface ClientSearchResponse {
  */
 export declare class McpVaultClientSearchIndex {
     private readonly documents;
+    private readonly postings;
     private readonly searchCache;
     private readonly maxDocuments;
     constructor(options?: {
@@ -36,5 +37,6 @@ export declare class McpVaultClientSearchIndex {
         limit?: number;
         maxChars?: number;
     }): ClientSearchResponse;
+    private unindex;
 }
 //# sourceMappingURL=client-search.d.ts.map

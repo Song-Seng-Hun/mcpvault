@@ -24,6 +24,15 @@ test('updates and removes cached documents', () => {
   expect(index.size()).toBe(0);
 });
 
+test('updates the local inverted index for Korean candidates', () => {
+  const index = new McpVaultClientSearchIndex();
+  index.upsert({ path: 'korean.md', revision: 'a'.repeat(64), content: '한국어 검색 후보' });
+  index.upsert({ path: 'english.md', revision: 'b'.repeat(64), content: 'unrelated content' });
+  expect(index.search('한국어').results.map(result => result.path)).toEqual(['korean.md']);
+  index.remove('korean.md');
+  expect(index.search('한국어').results).toHaveLength(0);
+});
+
 test('persists and restores a bounded local search index', () => {
   const values = new Map<string, string>();
   const store: ClientKeyValueStore = {
