@@ -199,6 +199,75 @@ function buildPublicSnapshotIndex(snapshot: PublicSnapshot): PublicSnapshotIndex
   return index;
 }
 
+function reindexPublicCollection(index: PublicSnapshotIndex, collection: PublicCollection): PublicSnapshotIndex {
+  if (collection === 'posts') {
+    const postsByPostId = new Map<string, QueryNote[]>();
+    const postsBySeriesId = new Map<string, QueryNote[]>();
+    const postsByAuthor = new Map<string, QueryNote[]>();
+    const postsByTag = new Map<string, QueryNote[]>();
+    const postsByMention = new Map<string, QueryNote[]>();
+    const postTitles = new Map<string, string>();
+    const seriesFirstSeen = new Map<string, { createdAt: string; path: string }>();
+    for (const note of index.posts) {
+      addToIndex(postsByPostId, note.frontmatter.post_id, note);
+      addToIndex(postsBySeriesId, note.frontmatter.series_id, note);
+      addToIndex(postsByAuthor, note.frontmatter.author, note);
+      addMentions(postsByMention, note);
+      if (Array.isArray(note.frontmatter.tags)) for (const tag of note.frontmatter.tags) addToIndex(postsByTag, tag, note);
+      const postId = text(note.frontmatter.post_id);
+      if (postId) postTitles.set(postId, text(note.frontmatter.title, postId));
+      const seriesId = text(note.frontmatter.series_id);
+      if (seriesId && !isModerationHidden(note.frontmatter)) {
+        const seen = seriesFirstSeen.get(seriesId);
+        const candidate = { createdAt: text(note.frontmatter.created_at), path: note.path };
+        if (!seen || candidate.createdAt < seen.createdAt || (candidate.createdAt === seen.createdAt && candidate.path < seen.path)) seriesFirstSeen.set(seriesId, candidate);
+      }
+    }
+    return {
+      ...index,
+      postsByPostId,
+      postsBySeriesId,
+      postsByAuthor,
+      postsByTag,
+      postsByMention,
+      postTitles,
+      seriesOrder: [...seriesFirstSeen.entries()].sort((a, b) => a[1].createdAt.localeCompare(b[1].createdAt) || a[1].path.localeCompare(b[1].path)).map(([seriesId]) => seriesId),
+    };
+  }
+  if (collection === 'comments') {
+    const commentsByPostId = new Map<string, QueryNote[]>();
+    const commentsByCommentId = new Map<string, QueryNote[]>();
+    const commentsByAuthor = new Map<string, QueryNote[]>();
+    const commentsByMention = new Map<string, QueryNote[]>();
+    const commentsByReplyTo = new Map<string, QueryNote[]>();
+    for (const note of index.comments) {
+      addToIndex(commentsByPostId, note.frontmatter.post_id, note);
+      addToIndex(commentsByCommentId, note.frontmatter.comment_id, note);
+      addToIndex(commentsByAuthor, note.frontmatter.author, note);
+      addMentions(commentsByMention, note);
+      addToIndex(commentsByReplyTo, note.frontmatter.reply_to, note);
+    }
+    return { ...index, commentsByPostId, commentsByCommentId, commentsByAuthor, commentsByMention, commentsByReplyTo };
+  }
+  if (collection === 'messages') {
+    const messagesByMessageId = new Map<string, QueryNote[]>();
+    const messagesByMention = new Map<string, QueryNote[]>();
+    const messagesByReplyTo = new Map<string, QueryNote[]>();
+    for (const note of index.messages) {
+      addToIndex(messagesByMessageId, note.frontmatter.message_id, note);
+      addMentions(messagesByMention, note);
+      addToIndex(messagesByReplyTo, note.frontmatter.reply_to, note);
+    }
+    return { ...index, messagesByMessageId, messagesByMention, messagesByReplyTo };
+  }
+  const roomTitles = new Map<string, string>();
+  for (const note of index.rooms) {
+    const roomId = text(note.frontmatter.room_id);
+    if (roomId) roomTitles.set(roomId, text(note.frontmatter.title, roomId));
+  }
+  return { ...index, roomTitles };
+}
+
 export class NotificationService {
   private readonly eventCache = new Map<string, { expiresAt: number; events: NotificationEvent[] }>();
   private readonly eventInFlight = new Map<string, Promise<NotificationEvent[]>>();
@@ -276,19 +345,15 @@ export class NotificationService {
       this.publicSnapshotCache = undefined;
       return;
     }
-    const next: PublicSnapshot = {
-      posts: cached.value.posts.filter(note => note.path !== path),
-      comments: cached.value.comments.filter(note => note.path !== path),
-      messages: cached.value.messages.filter(note => note.path !== path),
-      rooms: cached.value.rooms.filter(note => note.path !== path),
-    };
+    const nextCollection = cached.value[collection].filter(note => note.path !== path);
     if (kind !== 'delete') {
       const note = await this.fileSystem.readNote(path);
       const metadata: QueryNote = { path: normalizePath(path), frontmatter: compactPublicNote({ path, frontmatter: note.frontmatter }, collection).frontmatter };
-      if (belongsInPublicCollection(metadata, collection)) next[collection].push(metadata);
+      if (belongsInPublicCollection(metadata, collection)) nextCollection.push(metadata);
     }
-    sortPublicCollection(next[collection], collection);
-    this.publicSnapshotCache = { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, value: buildPublicSnapshotIndex(next) };
+    sortPublicCollection(nextCollection, collection);
+    const next = { ...cached.value, [collection]: nextCollection } as PublicSnapshotIndex;
+    this.publicSnapshotCache = { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, value: reindexPublicCollection(next, collection) };
   }
 
   private async hydrateNotes(notes: QueryNote[]): Promise<QueryNote[]> {
