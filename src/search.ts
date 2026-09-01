@@ -1,6 +1,7 @@
 import { join, resolve } from 'path';
+import { watch, type FSWatcher } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import type { PathFilter } from './pathfilter.js';
 import type { RankCandidate, SearchParams, SearchResult } from './types.js';
 import { generateObsidianUri } from './uri.js';
@@ -10,10 +11,26 @@ import { isMarkdownModerationHidden } from './moderation-policy.js';
 const WIKI_TYPES = new Set(['schema', 'source', 'knowledge', 'issue']);
 const SEARCH_CACHE_TTL_MS = 5_000;
 const SEARCH_CACHE_MAX_ENTRIES = 128;
+const INDEX_RECONCILE_INTERVAL_MS = 60_000;
+const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
+const INDEX_READ_BATCH_SIZE = 32;
 
 interface SearchCacheEntry {
   expiresAt: number;
   results: SearchResult[];
+}
+
+interface IndexedDocument {
+  fullPath: string;
+  relativePath: string;
+  content: string;
+  body: string;
+  frontmatterText: string;
+  title: string;
+  isWiki: boolean;
+  revision: string;
+  size: number;
+  mtimeMs: number;
 }
 
 function isWikiPath(path: string): boolean {
@@ -50,7 +67,14 @@ export class SearchService {
   private vaultPath: string;
   private readonly cache = new Map<string, SearchCacheEntry>();
   private readonly inFlight = new Map<string, Promise<SearchResult[]>>();
+  private readonly documents = new Map<string, IndexedDocument>();
+  private readonly dirtyDocuments = new Set<string>();
   private cacheGeneration = 0;
+  private indexReady: Promise<void> | undefined;
+  private indexRefresh: Promise<void> | undefined;
+  private watcher: FSWatcher | undefined;
+  private lastIndexReconcileAt = 0;
+  private needsFullReconcile = true;
 
   constructor(
     vaultPath: string,
@@ -64,10 +88,19 @@ export class SearchService {
    * repeated agent lookups. Writers call this immediately after a mutation;
    * the TTL also covers edits made directly in Obsidian.
    */
-  invalidate(): void {
+  invalidate(path?: string, kind: 'upsert' | 'delete' = 'upsert'): void {
     this.cacheGeneration += 1;
     this.cache.clear();
-    this.inFlight.clear();
+    if (path) {
+      const normalized = path.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+      if (kind === 'delete') this.documents.delete(normalized);
+      else this.dirtyDocuments.add(normalized);
+    } else this.needsFullReconcile = true;
+  }
+
+  close(): void {
+    this.watcher?.close();
+    this.watcher = undefined;
   }
 
   async search(params: SearchParams): Promise<SearchResult[]> {
@@ -109,6 +142,7 @@ export class SearchService {
 
     const generation = this.cacheGeneration;
     const computation = (async (): Promise<SearchResult[]> => {
+    await this.ensureIndex();
 
     const normalizedPrefix = pathPrefix ? normalizeSubtree(pathPrefix) : '';
     const normalizedExcludes = (excludePaths || []).map(normalizeSubtree).filter(Boolean);
@@ -125,49 +159,31 @@ export class SearchService {
     const terms = searchQuery.split(/\s+/).filter(t => t.length > 0);
     const scoringTerms = terms.length > 1 ? [...terms, searchQuery] : terms;
 
-    // Recursively find all .md files
-    const markdownFiles = await this.findMarkdownFiles(this.vaultPath);
-
-    // Pre-filter by pathFilter before I/O
+    // The server-owned document index has already performed the filesystem
+    // reads. Search only the visible in-memory documents on this pass.
     const prefixLen = this.vaultPath.length + 1;
-    const allowedFiles: { fullPath: string; relativePath: string }[] = [];
-    for (const fullPath of markdownFiles) {
-      const relativePath = fullPath.substring(prefixLen).replace(/\\/g, '/');
+    const allowedFiles: IndexedDocument[] = [];
+    for (const document of this.documents.values()) {
+      const relativePath = document.fullPath.substring(prefixLen).replace(/\\/g, '/');
       if (!this.pathFilter.isAllowed(relativePath)) continue;
       // Scope to the requested subtree, and skip excluded subtrees, before I/O
       if (normalizedPrefix && !isUnderSubtree(relativePath, normalizedPrefix)) continue;
       if (normalizedExcludes.some(ex => isUnderSubtree(relativePath, ex))) continue;
-      allowedFiles.push({ fullPath, relativePath });
+      allowedFiles.push(document);
     }
 
-    // Read files in parallel batches
-    const BATCH_SIZE = 5;
-    for (let start = 0; start < allowedFiles.length; start += BATCH_SIZE) {
-      const batch = allowedFiles.slice(start, start + BATCH_SIZE);
-      const contents = await Promise.all(
-        batch.map(f => readFile(f.fullPath, 'utf-8').catch(() => null))
-      );
-
-      for (let i = 0; i < batch.length; i++) {
-        const content = contents[i];
-        if (content === null || content === undefined) continue;
-
-        const { relativePath } = batch[i]!;
-        if (isMarkdownModerationHidden(content)) continue;
-        const isWiki = isWikiPath(relativePath) || wikiType(content) !== undefined;
+    for (const document of allowedFiles) {
+        const { relativePath } = document;
+        if (isMarkdownModerationHidden(document.content)) continue;
         let searchableText = '';
 
         // Prepare search text based on options
         if (searchContent && searchFrontmatter) {
-          searchableText = content;
+          searchableText = document.content;
         } else if (searchContent) {
-          // Remove frontmatter from search
-          const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n/);
-          searchableText = frontmatterMatch ? content.slice(frontmatterMatch[0].length) : content;
+          searchableText = document.body;
         } else if (searchFrontmatter) {
-          // Search only frontmatter
-          const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n/);
-          searchableText = frontmatterMatch ? frontmatterMatch[1] || '' : '';
+          searchableText = document.frontmatterText;
         }
 
         const searchIn = caseSensitive ? searchableText : searchableText.toLowerCase();
@@ -251,15 +267,14 @@ export class SearchService {
               mc: matchCount,
               ln: lineNumber,
               uri: generateObsidianUri(this.vaultPath, relativePath),
-              ...(isWiki && { wk: true as const }),
-              ...(params.includeRevisions && { rv: revision(content) }),
+              ...(document.isWiki && { wk: true as const }),
+              ...(params.includeRevisions && { rv: document.revision }),
             },
             termFreqs,
             docLength,
-            wiki: isWiki
+            wiki: document.isWiki
           });
         }
-      }
     }
 
     const results = boundSearchResults(this.rerank(candidates, scoringTerms, termDocFreq, docCount, totalDocLength, maxLimit), maxChars);
@@ -278,6 +293,117 @@ export class SearchService {
       return await computation;
     } finally {
       if (this.inFlight.get(cacheKey) === computation) this.inFlight.delete(cacheKey);
+    }
+  }
+
+  private async ensureIndex(): Promise<void> {
+    this.startWatcher();
+    if (!this.indexReady) this.indexReady = this.refreshAll();
+    await this.indexReady;
+
+    if (this.dirtyDocuments.size > 0) await this.refreshDirty();
+    const interval = this.watcher ? INDEX_RECONCILE_INTERVAL_MS : NO_WATCHER_RECONCILE_INTERVAL_MS;
+    if (this.needsFullReconcile || Date.now() - this.lastIndexReconcileAt >= interval) await this.refreshAll();
+  }
+
+  private startWatcher(): void {
+    if (this.watcher) return;
+    try {
+      this.watcher = watch(this.vaultPath, { recursive: true }, (_event, filename) => {
+        if (!filename) {
+          this.needsFullReconcile = true;
+          return;
+        }
+        const normalized = String(filename).replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+        if (/\.md$/i.test(normalized) && this.pathFilter.isAllowed(normalized)) {
+          this.dirtyDocuments.add(normalized);
+        } else this.needsFullReconcile = true;
+      });
+      this.watcher.on('error', () => {
+        this.watcher?.close();
+        this.watcher = undefined;
+        this.needsFullReconcile = true;
+      });
+      this.watcher.unref?.();
+    } catch {
+      // Network mounts and some Windows filesystems do not support recursive
+      // watchers. The shorter reconciliation interval remains authoritative.
+      this.watcher = undefined;
+    }
+  }
+
+  private async refreshAll(): Promise<void> {
+    if (this.indexRefresh) return this.indexRefresh;
+    this.indexRefresh = (async () => {
+      const paths = await this.findMarkdownFiles(this.vaultPath);
+      const next = new Map<string, IndexedDocument>();
+      for (let start = 0; start < paths.length; start += INDEX_READ_BATCH_SIZE) {
+        const batch = paths.slice(start, start + INDEX_READ_BATCH_SIZE);
+        const documents = await Promise.all(batch.map(fullPath => {
+          const relativePath = fullPath.substring(this.vaultPath.length + 1).replace(/\\/g, '/');
+          return this.readIndexedDocument(fullPath, this.documents.get(relativePath));
+        }));
+        for (const document of documents) {
+          if (document) next.set(document.relativePath, document);
+        }
+      }
+      this.documents.clear();
+      for (const [path, document] of next) this.documents.set(path, document);
+      this.dirtyDocuments.clear();
+      this.needsFullReconcile = false;
+      this.lastIndexReconcileAt = Date.now();
+    })();
+    try {
+      await this.indexRefresh;
+    } finally {
+      this.indexRefresh = undefined;
+    }
+  }
+
+  private async refreshDirty(): Promise<void> {
+    if (this.indexRefresh) return this.indexRefresh;
+    this.indexRefresh = (async () => {
+      const paths = [...this.dirtyDocuments];
+      this.dirtyDocuments.clear();
+      const documents = await Promise.all(paths.map(path => this.readIndexedDocument(join(this.vaultPath, path))));
+      for (let index = 0; index < paths.length; index += 1) {
+        const path = paths[index]!;
+        const document = documents[index];
+        if (document) this.documents.set(path, document);
+        else this.documents.delete(path);
+      }
+    })();
+    try {
+      await this.indexRefresh;
+    } finally {
+      this.indexRefresh = undefined;
+    }
+  }
+
+  private async readIndexedDocument(fullPath: string, existing?: IndexedDocument): Promise<IndexedDocument | undefined> {
+    const relativePath = fullPath.substring(this.vaultPath.length + 1).replace(/\\/g, '/');
+    if (!this.pathFilter.isAllowed(relativePath)) return undefined;
+    try {
+      const info = await stat(fullPath);
+      if (!info.isFile()) return undefined;
+      if (existing && existing.size === info.size && existing.mtimeMs === info.mtimeMs) return existing;
+      const content = await readFile(fullPath, 'utf-8');
+      const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+      const title = relativePath.split('/').pop()?.replace(/\.md$/i, '') || relativePath;
+      return {
+        fullPath,
+        relativePath,
+        content,
+        body: frontmatterMatch ? content.slice(frontmatterMatch[0].length) : content,
+        frontmatterText: frontmatterMatch?.[1] || '',
+        title,
+        isWiki: isWikiPath(relativePath) || wikiType(content) !== undefined,
+        revision: revision(content),
+        size: info.size,
+        mtimeMs: info.mtimeMs,
+      };
+    } catch {
+      return undefined;
     }
   }
 

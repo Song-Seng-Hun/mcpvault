@@ -73,8 +73,8 @@ src/
   vault-index.ts        # Disposable frontmatter/path read model with watcher invalidation
   frontmatter.ts       # FrontmatterHandler — YAML parsing via gray-matter
   pathfilter.ts        # PathFilter — security layer for path validation
-  search.ts            # SearchService — full-text search with token-optimized output
-  semantic-search.ts   # Optional lazy multilingual vector index with isolated fallback
+  search.ts            # SearchService — server-side incremental full-text index with bounded output
+  semantic-search.ts   # Optional lazy multilingual vector index with compressed manifest and isolated fallback
   scopes.ts            # Durable global/model/agent namespaces and collaboration records
   scope-auth.ts        # Persistent hashed accounts and process-local login sessions
   scope-access.ts      # Private-scope path authorization and source immutability boundary
@@ -114,7 +114,7 @@ website-shibumi/       # Bun + Hono + TSX website serving mcpvault.org (separate
 
 ### Core Components
 
-**server.ts** — Entry point. Registers the MCP tool set for notes, collaboration, private scopes, LLM Wiki, social journaling/community, and revision history; handles CLI args (--help, --version, --read-only, vault path), initializes services, and routes tool calls. Read-only mode hides mutating tools and rejects direct mutation calls. Auto-trims whitespace from all path arguments. Exits on stdin EOF / SIGTERM / SIGINT (graceful `server.close()`), otherwise hosts orphan the process (#159).
+**server.ts** — Entry point. Registers the MCP tool set for notes, collaboration, private scopes, LLM Wiki, social journaling/community, and revision history; handles CLI args (--help, --version, --read-only, vault path), initializes services, and routes tool calls through a bounded in-process concurrency gate. Read-only mode hides mutating tools and rejects direct mutation calls. Auto-trims whitespace from all path arguments. Exits on stdin EOF / SIGTERM / SIGINT (graceful `server.close()`), otherwise hosts orphan the process (#159).
 
 **FileSystemService** (`src/filesystem.ts`) — Orchestrates file ops with security. Path resolution and traversal prevention. Implements: read, write, patch, delete, move, list, batch read, outline and line-range reads, frontmatter update, tag management, vault stats. Uses native `fs/promises`. Production `queryNotes` uses the disposable `VaultMetadataIndex` read model when available, filters it through the caller's access predicate, and reads note bodies only for the bounded selected page.
 
@@ -122,7 +122,7 @@ website-shibumi/       # Bun + Hono + TSX website serving mcpvault.org (separate
 
 **PathFilter** (`src/pathfilter.ts`) — Blocks `.obsidian/`, `.git/`, `node_modules/`, system files, dot files. Note tools allow `.md`, `.markdown`, `.txt`; directory listings may include other file types by filename. Checks path components independently.
 
-**SearchService** (`src/search.ts`) — Content and frontmatter search with multi-word matching and BM25 relevance reranking. Returns token-optimized results with minified field names: `{p, t, ex, mc, ln, uri}`. Max 20 results. `semantic-search.ts` adds optional bounded `vs:true` vector matches using `Xenova/multilingual-e5-small`; its cache stores no note text, failures fall back to lexical search, and private scope tables are queried only for authorized principals.
+**SearchService** (`src/search.ts`) — Content and frontmatter search with multi-word matching and BM25 relevance reranking. A process-local document index reads unchanged Markdown once, refreshes changed files from watcher events, and periodically reconciles filesystems where recursive watching is unavailable. Returns token-optimized results with minified field names: `{p, t, ex, mc, ln, uri}`. Max 20 results. `semantic-search.ts` adds optional bounded `vs:true` vector matches using `Xenova/multilingual-e5-small`; its LanceDB data is a disposable binary cache and its compressed manifest stores only path/hash metadata, failures fall back to lexical search, and private scope tables are queried only for authorized principals.
 
 **ScopeAuthService / ScopeAccessPolicy** (`src/scope-auth.ts`, `src/scope-access.ts`) — One long-running server supports dynamic model and agent registration/login. Anonymous calls see global only. Tokens unlock only their own model and agent paths; direct `_scopes/` paths and aggregate/search leaks are blocked. Passwords are persisted only as salted scrypt hashes under the PathFilter-hidden `.mcpvault/` directory; raw sessions stay in memory.
 

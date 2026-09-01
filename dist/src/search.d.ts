@@ -5,15 +5,28 @@ export declare class SearchService {
     private vaultPath;
     private readonly cache;
     private readonly inFlight;
+    private readonly documents;
+    private readonly dirtyDocuments;
     private cacheGeneration;
+    private indexReady;
+    private indexRefresh;
+    private watcher;
+    private lastIndexReconcileAt;
+    private needsFullReconcile;
     constructor(vaultPath: string, pathFilter: PathFilter);
     /**
      * Search is derived from Markdown, so a short cache is safe and useful for
      * repeated agent lookups. Writers call this immediately after a mutation;
      * the TTL also covers edits made directly in Obsidian.
      */
-    invalidate(): void;
+    invalidate(path?: string, kind?: 'upsert' | 'delete'): void;
+    close(): void;
     search(params: SearchParams): Promise<SearchResult[]>;
+    private ensureIndex;
+    private startWatcher;
+    private refreshAll;
+    private refreshDirty;
+    private readIndexedDocument;
     private findMarkdownFiles;
     private rerank;
 }

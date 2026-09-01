@@ -14,6 +14,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  searchService.close();
   try {
     await rm(testVaultPath, { recursive: true });
   } catch {

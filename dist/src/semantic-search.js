@@ -1,13 +1,16 @@
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
-import { mkdir, open, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, open, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { gzip, gunzip } from 'node:zlib';
+import { promisify } from 'node:util';
 import { ScopeAccessPolicy } from './scope-access.js';
 import { boundSearchResults, normalizeSearchLimit, normalizeSearchMaxChars } from './search-limits.js';
 import { generateObsidianUri } from './uri.js';
 const MODEL_ID = 'Xenova/multilingual-e5-small';
 const EMBEDDING_DIMENSIONS = 384;
 const INDEX_DIR = '.mcpvault/semantic-index';
-const MANIFEST_FILE = 'manifest.json';
+const MANIFEST_FILE = 'manifest.snapshot.gz';
+const LEGACY_MANIFEST_FILE = 'manifest.json';
 const WORKER_LOCK_FILE = 'worker.lock';
 const MAX_CHUNK_CHARS = 1200;
 const MAX_CHUNKS_PER_NOTE = 64;
@@ -16,6 +19,8 @@ const IDLE_DELAY_MS = 15_000;
 const UNAVAILABLE_RETRY_MS = 5 * 60_000;
 const SCAN_INTERVAL_MS = 30_000;
 const MAX_PENDING_CHANGES = 5_000;
+const gzipAsync = promisify(gzip);
+const gunzipAsync = promisify(gunzip);
 // One model per Node process, regardless of how many vault/server instances or
 // agent sessions share that process.
 const EMBEDDER_POOL = new Map();
@@ -292,18 +297,32 @@ export class SemanticSearchService {
     }
     async loadManifest() {
         try {
-            const raw = await readFile(this.manifestPath, 'utf8');
-            const parsed = JSON.parse(raw);
+            const compressed = await readFile(this.manifestPath);
+            const raw = await gunzipAsync(compressed);
+            const parsed = JSON.parse(raw.toString('utf8'));
             if (parsed && typeof parsed === 'object')
                 this.manifest = parsed;
         }
         catch {
-            this.manifest = {};
+            try {
+                // Read manifests written by older releases once; the next successful
+                // index update stores the compact binary form.
+                const raw = await readFile(join(this.indexPath, LEGACY_MANIFEST_FILE), 'utf8');
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === 'object')
+                    this.manifest = parsed;
+            }
+            catch {
+                this.manifest = {};
+            }
         }
     }
     async saveManifest() {
         await mkdir(this.indexPath, { recursive: true });
-        await writeFile(this.manifestPath, JSON.stringify(this.manifest), 'utf8');
+        const compressed = await gzipAsync(Buffer.from(JSON.stringify(this.manifest), 'utf8'));
+        const temporaryPath = `${this.manifestPath}.${process.pid}.tmp`;
+        await writeFile(temporaryPath, compressed);
+        await rename(temporaryPath, this.manifestPath);
     }
     scheduleIdleWork() {
         if (this.idleTimer)
