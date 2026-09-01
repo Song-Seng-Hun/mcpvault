@@ -124,6 +124,7 @@ export declare class ModerationService {
         active: boolean;
     }>;
     isBanned(accountId: string): Promise<boolean>;
+    listBannedAccountIds(): Promise<Set<string>>;
 }
 export {};
 //# sourceMappingURL=moderation.d.ts.map

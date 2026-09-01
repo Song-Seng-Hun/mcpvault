@@ -40,17 +40,26 @@ export class ReputationService {
     reputationCache;
     reputationInFlight = new Map();
     cacheGeneration = 0;
+    reputationIndex;
+    reputationIndexInFlight;
+    dirtyPaths = new Set();
     constructor(fileSystem, auth, moderation) {
         this.fileSystem = fileSystem;
         this.auth = auth;
         this.moderation = moderation;
     }
-    invalidate(path) {
+    invalidate(path, _kind = 'upsert') {
         if (path && !/^Community\/(Posts|Comments|Reactions)\//i.test(path.replace(/\\/g, '/')))
             return;
         this.cacheGeneration += 1;
         this.reputationCache = undefined;
         this.reputationInFlight.clear();
+        if (!path) {
+            this.reputationIndex = undefined;
+            this.dirtyPaths.clear();
+            return;
+        }
+        this.dirtyPaths.add(path.replace(/\\/g, '/'));
     }
     async getForPrincipal(principal) {
         return (await this.getMany([identityOf(principal)])).get(identityOf(principal));
@@ -103,70 +112,41 @@ export class ReputationService {
         }
     }
     async computeAll(principals, principalByIdentity) {
+        const index = await this.ensureIndex(principalByIdentity);
+        const principalAccounts = new Map(principals.map(principal => [identityOf(principal), principal.accountId]));
+        const accountsChanged = principalAccounts.size !== index.principalAccounts.size
+            || [...principalAccounts].some(([identity, accountId]) => index.principalAccounts.get(identity) !== accountId);
+        const bannedAccountIds = await this.moderation.listBannedAccountIds();
+        const bansChanged = bannedAccountIds.size !== index.bannedAccountIds.size
+            || [...bannedAccountIds].some(accountId => !index.bannedAccountIds.has(accountId));
+        if (accountsChanged) {
+            index.principalAccounts = principalAccounts;
+            for (const reaction of index.reactionsByPath.values()) {
+                const actorPrincipal = principalByIdentity.get(reaction.actor);
+                if (actorPrincipal)
+                    reaction.actorAccountId = actorPrincipal.accountId;
+                else
+                    delete reaction.actorAccountId;
+            }
+        }
+        if (accountsChanged || bansChanged) {
+            index.bannedAccountIds = bannedAccountIds;
+            this.rebuildCounts(index);
+        }
+        if (this.dirtyPaths.size > 0) {
+            const dirty = [...this.dirtyPaths];
+            this.dirtyPaths.clear();
+            for (const path of dirty)
+                await this.refreshPath(index, path, principalByIdentity);
+            this.rebuildCounts(index);
+        }
         const snapshots = new Map();
         for (const principal of principals) {
             const identity = identityOf(principal);
-            if (identity && !snapshots.has(identity))
-                snapshots.set(identity, { principal, likesReceived: 0, dislikesReceived: 0 });
-        }
-        if (snapshots.size === 0)
-            return new Map();
-        const queryAll = async (params) => {
-            const notes = [];
-            let after;
-            while (true) {
-                const page = await this.fileSystem.queryNotes({ ...params, limit: MAX_SCAN, ...(after ? { after } : {}) });
-                notes.push(...page.notes);
-                if (!page.truncated || page.notes.length === 0 || !page.nextCursor)
-                    return { notes, total: page.total, truncated: false };
-                after = page.nextCursor;
+            if (identity && !snapshots.has(identity)) {
+                const counts = index.counts.get(identity) || { likesReceived: 0, dislikesReceived: 0 };
+                snapshots.set(identity, { principal, ...counts });
             }
-        };
-        const [posts, comments, reactions] = await Promise.all([
-            queryAll({ pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post', status: 'published' } }),
-            queryAll({ pathPrefix: COMMENTS, filters: { mcpvault_type: 'blog_comment' } }),
-            queryAll({ pathPrefix: REACTIONS, filters: { mcpvault_type: 'reaction', active: true } }),
-        ]);
-        const postById = new Map(posts.notes.map(note => [String(note.frontmatter.post_id || ''), note]));
-        const commentByKey = new Map(comments.notes.map(note => [`${note.frontmatter.post_id || ''}:${note.frontmatter.comment_id || ''}`, note]));
-        const commentsById = new Map();
-        for (const note of comments.notes) {
-            const id = String(note.frontmatter.comment_id || '');
-            if (id && !commentsById.has(id))
-                commentsById.set(id, note);
-            else if (id)
-                commentsById.set(id, undefined);
-        }
-        const banned = new Map();
-        for (const reaction of reactions.notes) {
-            const reactionType = String(reaction.frontmatter.reaction || '').toLowerCase();
-            if (reactionType !== 'like' && reactionType !== 'dislike')
-                continue;
-            const actor = String(reaction.frontmatter.actor || '').trim().toLowerCase();
-            const actorPrincipal = principalByIdentity.get(actor);
-            if (!actorPrincipal)
-                continue;
-            if (!banned.has(actorPrincipal.accountId))
-                banned.set(actorPrincipal.accountId, await this.moderation.isBanned(actorPrincipal.accountId));
-            if (banned.get(actorPrincipal.accountId))
-                continue;
-            const targetType = String(reaction.frontmatter.target_type || '').toLowerCase();
-            const targetId = String(reaction.frontmatter.target_id || '');
-            const target = targetType === 'post'
-                ? postById.get(targetId)
-                : targetType === 'comment'
-                    ? commentByKey.get(`${reaction.frontmatter.post_id || ''}:${targetId}`) || commentsById.get(targetId)
-                    : undefined;
-            if (!target || !target.frontmatter || isModerationHidden(target.frontmatter) || String(target.frontmatter.content_status || '') === 'deleted')
-                continue;
-            const author = String(target.frontmatter.author || '').trim().toLowerCase();
-            const snapshot = snapshots.get(author);
-            if (!snapshot || !actor || actor === author)
-                continue;
-            if (reactionType === 'like')
-                snapshot.likesReceived += 1;
-            else
-                snapshot.dislikesReceived += 1;
         }
         return new Map(Array.from(snapshots.entries()).map(([identity, value]) => {
             const xp = value.likesReceived * XP_PER_LIKE + value.dislikesReceived * XP_PER_DISLIKE;
@@ -183,6 +163,179 @@ export class ReputationService {
                     label: labelForLevel(level),
                 }];
         }));
+    }
+    async ensureIndex(principalByIdentity) {
+        if (this.reputationIndex)
+            return this.reputationIndex;
+        if (this.reputationIndexInFlight)
+            return this.reputationIndexInFlight;
+        const computation = (async () => {
+            const queryAll = async (params) => {
+                const notes = [];
+                let after;
+                while (true) {
+                    const page = await this.fileSystem.queryNotes({ ...params, limit: MAX_SCAN, ...(after ? { after } : {}) });
+                    notes.push(...page.notes);
+                    if (!page.truncated || page.notes.length === 0 || !page.nextCursor)
+                        return notes;
+                    after = page.nextCursor;
+                }
+            };
+            const [posts, comments, reactions] = await Promise.all([
+                queryAll({ pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post' } }),
+                queryAll({ pathPrefix: COMMENTS, filters: { mcpvault_type: 'blog_comment' } }),
+                queryAll({ pathPrefix: REACTIONS, filters: { mcpvault_type: 'reaction', active: true } }),
+            ]);
+            const index = {
+                targetsByPath: new Map(),
+                targetsByKey: new Map(),
+                commentKeysById: new Map(),
+                reactionsByPath: new Map(),
+                counts: new Map(),
+                bannedAccountIds: await this.moderation.listBannedAccountIds(),
+                principalAccounts: new Map([...principalByIdentity].map(([identity, principal]) => [identity, principal.accountId])),
+            };
+            for (const note of [...posts, ...comments])
+                this.addTarget(index, note);
+            for (const note of reactions)
+                this.addReaction(index, note, principalByIdentity);
+            this.rebuildCounts(index);
+            return index;
+        })();
+        this.reputationIndexInFlight = computation;
+        try {
+            const index = await computation;
+            this.reputationIndex = index;
+            return index;
+        }
+        finally {
+            if (this.reputationIndexInFlight === computation)
+                this.reputationIndexInFlight = undefined;
+        }
+    }
+    addTarget(index, note) {
+        const fm = note.frontmatter;
+        const type = fm.mcpvault_type === 'blog_post' ? 'post' : fm.mcpvault_type === 'blog_comment' ? 'comment' : undefined;
+        if (!type)
+            return;
+        const id = String(fm[type === 'post' ? 'post_id' : 'comment_id'] || '').trim().toLowerCase();
+        if (!id)
+            return;
+        const postId = type === 'comment' ? String(fm.post_id || '').trim().toLowerCase() : undefined;
+        const key = type === 'post' ? `post:${id}` : `comment:${postId || ''}:${id}`;
+        const target = {
+            path: note.path,
+            key,
+            type,
+            id,
+            ...(postId && { postId }),
+            author: String(fm.author || '').trim().toLowerCase(),
+            published: type === 'post' ? String(fm.status || 'published').toLowerCase() === 'published' : true,
+            hidden: isModerationHidden(fm),
+            deleted: String(fm.content_status || '').toLowerCase() === 'deleted',
+        };
+        this.removeTarget(index, note.path);
+        index.targetsByPath.set(note.path, target);
+        index.targetsByKey.set(key, target);
+        if (type === 'comment') {
+            const keys = index.commentKeysById.get(id) || new Set();
+            keys.add(key);
+            index.commentKeysById.set(id, keys);
+        }
+    }
+    removeTarget(index, path) {
+        const old = index.targetsByPath.get(path);
+        if (!old)
+            return;
+        index.targetsByPath.delete(path);
+        if (index.targetsByKey.get(old.key)?.path === path) {
+            const replacement = [...index.targetsByPath.values()].reverse().find(target => target.key === old.key);
+            if (replacement)
+                index.targetsByKey.set(old.key, replacement);
+            else
+                index.targetsByKey.delete(old.key);
+        }
+        if (old.type === 'comment') {
+            const keys = index.commentKeysById.get(old.id);
+            keys?.delete(old.key);
+            if (keys?.size === 0)
+                index.commentKeysById.delete(old.id);
+        }
+    }
+    addReaction(index, note, principalByIdentity) {
+        const fm = note.frontmatter;
+        const reaction = String(fm.reaction || '').trim().toLowerCase();
+        const targetType = String(fm.target_type || '').trim().toLowerCase();
+        if ((reaction !== 'like' && reaction !== 'dislike') || (targetType !== 'post' && targetType !== 'comment') || fm.active !== true)
+            return;
+        const actor = String(fm.actor || '').trim().toLowerCase();
+        if (!actor)
+            return;
+        this.removeReaction(index, note.path);
+        const actorPrincipal = principalByIdentity.get(actor);
+        index.reactionsByPath.set(note.path, {
+            path: note.path,
+            actor,
+            ...(actorPrincipal && { actorAccountId: actorPrincipal.accountId }),
+            reaction,
+            targetType,
+            targetId: String(fm.target_id || '').trim().toLowerCase(),
+            ...(targetType === 'comment' && fm.post_id && { postId: String(fm.post_id).trim().toLowerCase() }),
+            active: true,
+        });
+    }
+    removeReaction(index, path) {
+        index.reactionsByPath.delete(path);
+    }
+    targetForReaction(index, reaction) {
+        if (reaction.targetType === 'post')
+            return index.targetsByKey.get(`post:${reaction.targetId}`);
+        if (reaction.postId)
+            return index.targetsByKey.get(`comment:${reaction.postId}:${reaction.targetId}`);
+        const keys = index.commentKeysById.get(reaction.targetId);
+        if (!keys || keys.size !== 1)
+            return undefined;
+        return index.targetsByKey.get(keys.values().next().value);
+    }
+    rebuildCounts(index) {
+        index.counts.clear();
+        for (const reaction of index.reactionsByPath.values()) {
+            const target = this.targetForReaction(index, reaction);
+            if (!target || !target.author || !target.published || target.hidden || target.deleted)
+                continue;
+            if (!reaction.actorAccountId || index.bannedAccountIds.has(reaction.actorAccountId) || reaction.actor === target.author)
+                continue;
+            const counts = index.counts.get(target.author) || { likesReceived: 0, dislikesReceived: 0 };
+            if (reaction.reaction === 'like')
+                counts.likesReceived += 1;
+            else
+                counts.dislikesReceived += 1;
+            index.counts.set(target.author, counts);
+        }
+    }
+    async refreshPath(index, path, principalByIdentity) {
+        const normalized = path.replace(/\\/g, '/');
+        if (normalized.startsWith(`${POSTS}/`) || normalized.startsWith(`${COMMENTS}/`)) {
+            this.removeTarget(index, normalized);
+            try {
+                const note = await this.fileSystem.readNote(normalized);
+                this.addTarget(index, { path: normalized, frontmatter: note.frontmatter });
+            }
+            catch {
+                // Deleted or temporarily unreadable targets are absent until the next event.
+            }
+            return;
+        }
+        if (normalized.startsWith(`${REACTIONS}/`)) {
+            this.removeReaction(index, normalized);
+            try {
+                const note = await this.fileSystem.readNote(normalized);
+                this.addReaction(index, { path: normalized, frontmatter: note.frontmatter }, principalByIdentity);
+            }
+            catch {
+                // Deleted or temporarily unreadable reactions no longer contribute.
+            }
+        }
     }
 }
 export { XP_PER_DISLIKE, XP_PER_LIKE, XP_PER_LEVEL };

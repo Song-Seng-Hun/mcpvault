@@ -31,13 +31,24 @@ export declare class ReputationService {
     private reputationCache;
     private readonly reputationInFlight;
     private cacheGeneration;
+    private reputationIndex;
+    private reputationIndexInFlight;
+    private readonly dirtyPaths;
     constructor(fileSystem: FileSystemService, auth: ScopeAuthService, moderation: ModerationService);
-    invalidate(path?: string): void;
+    invalidate(path?: string, _kind?: 'upsert' | 'delete'): void;
     getForPrincipal(principal: ScopePrincipal): Promise<ReputationSnapshot>;
     getPublic(identity: string): Promise<ReputationSnapshot>;
     getMany(identities: string[]): Promise<Map<string, ReputationSnapshot>>;
     private cachedAll;
     private computeAll;
+    private ensureIndex;
+    private addTarget;
+    private removeTarget;
+    private addReaction;
+    private removeReaction;
+    private targetForReaction;
+    private rebuildCounts;
+    private refreshPath;
 }
 export { XP_PER_DISLIKE, XP_PER_LIKE, XP_PER_LEVEL };
 //# sourceMappingURL=reputation.d.ts.map

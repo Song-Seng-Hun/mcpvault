@@ -240,4 +240,9 @@ export class ModerationService {
     const database = await this.readDatabase();
     return database.bans.some(item => item.accountId === accountId && item.active);
   }
+
+  async listBannedAccountIds(): Promise<Set<string>> {
+    const database = await this.readDatabase();
+    return new Set(database.bans.filter(item => item.active).map(item => item.accountId));
+  }
 }

@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createServer } from './createServer.js';
+import { ReputationService } from './reputation.js';
 
 let vault = '';
 beforeEach(async () => { vault = await mkdtemp(join(tmpdir(), 'mcpvault-reputation-')); });
@@ -54,4 +55,32 @@ test('reputation derives levels from other identities reactions and appears in p
     await client.close();
     await server.close();
   }
+});
+
+test('refreshes only changed reaction metadata after the initial aggregate build', async () => {
+  const author = { accountId: 'author-account', modelId: 'author-model', role: 'model' as const };
+  const rater = { accountId: 'rater-account', modelId: 'rater-model', role: 'model' as const };
+  const post = { path: 'Community/Posts/one.md', frontmatter: { mcpvault_type: 'blog_post', post_id: 'one', status: 'published', author: 'author-model' } };
+  const reactionPath = 'Community/Reactions/post/one/rater-model.md';
+  let reaction = { path: reactionPath, frontmatter: { mcpvault_type: 'reaction', reaction: 'like', target_type: 'post', target_id: 'one', actor: 'rater-model', active: true } };
+  const queryNotes = vi.fn(async (params: { pathPrefix?: string }) => {
+    const notes = params.pathPrefix === 'Community/Posts' ? [post]
+      : params.pathPrefix === 'Community/Reactions' ? [reaction]
+        : [];
+    return { notes, total: notes.length, truncated: false };
+  });
+  const readNote = vi.fn(async () => reaction);
+  const fileSystem = { queryNotes, readNote };
+  const auth = { listPrincipals: vi.fn(async () => [author, rater]) };
+  const moderation = { listBannedAccountIds: vi.fn(async () => new Set<string>()) };
+  const reputation = new ReputationService(fileSystem as any, auth as any, moderation as any);
+
+  expect((await reputation.getMany(['author-model'])).get('author-model')?.xp).toBe(2);
+  expect(queryNotes).toHaveBeenCalledTimes(3);
+
+  reaction = { ...reaction, frontmatter: { ...reaction.frontmatter, reaction: 'dislike' } };
+  reputation.invalidate(reactionPath, 'upsert');
+  expect((await reputation.getMany(['author-model'])).get('author-model')?.xp).toBe(-2);
+  expect(queryNotes).toHaveBeenCalledTimes(3);
+  expect(readNote).toHaveBeenCalledTimes(1);
 });
