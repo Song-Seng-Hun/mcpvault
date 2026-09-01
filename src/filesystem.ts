@@ -1983,6 +1983,44 @@ export class FileSystemService {
     const sortBy = params.sortBy || 'path';
     const notes: QueryNote[] = [];
     const filters = params.filters || {};
+    if (this.metadataIndex && params.includeTotal === false) {
+      const page = await this.metadataIndex.listSortedPage({
+        filters,
+        pathPrefix,
+        sortBy,
+        sortOrder,
+        limit,
+        offset: requestedOffset,
+        ...(params.after && { after: params.after }),
+        canAccessPath,
+      });
+      const selected = page.entries.map(entry => ({ path: entry.path, frontmatter: entry.frontmatter }));
+      const nextCursor = page.truncated ? cursorForQueryNote(selected[selected.length - 1]!, sortBy) : undefined;
+      if (params.includeContent) {
+        const withContent = await Promise.all(selected.map(async note => {
+          try {
+            const raw = await readFile(this.resolvePath(note.path), 'utf-8');
+            return { ...note, content: this.frontmatterHandler.parse(raw).content };
+          } catch {
+            return undefined;
+          }
+        }));
+        return {
+          notes: withContent.filter((note): note is QueryNote & { content: string } => note !== undefined),
+          total: -1,
+          totalKnown: false,
+          truncated: page.truncated,
+          ...(nextCursor ? { nextCursor } : {}),
+        };
+      }
+      return {
+        notes: selected,
+        total: -1,
+        totalKnown: false,
+        truncated: page.truncated,
+        ...(nextCursor ? { nextCursor } : {}),
+      };
+    }
     const indexedEntries = this.metadataIndex ? await this.metadataIndex.listSorted(filters, pathPrefix, sortBy, sortOrder) : undefined;
     if (indexedEntries && params.includeTotal === false) {
       const start = params.after ? findCursorStart(indexedEntries, params.after, sortBy, sortOrder) : 0;

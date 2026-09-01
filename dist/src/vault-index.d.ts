@@ -44,6 +44,28 @@ export declare class VaultMetadataIndex {
     list(filters?: Record<string, unknown>, pathPrefix?: string): Promise<VaultIndexEntry[]>;
     listSorted(filters?: Record<string, unknown>, pathPrefix?: string, sortBy?: string, sortOrder?: 'asc' | 'desc'): Promise<VaultIndexEntry[]>;
     /**
+     * Select a bounded page without materializing a fully sorted candidate list.
+     * Exact totals intentionally stay on listSorted/queryNotes' older path;
+     * page-only callers only need limit+1 to determine truncation.
+     */
+    listSortedPage(params: {
+        filters?: Record<string, unknown>;
+        pathPrefix?: string;
+        sortBy?: string;
+        sortOrder?: 'asc' | 'desc';
+        limit: number;
+        offset?: number;
+        after?: {
+            path: string;
+            value?: unknown;
+            missing?: boolean;
+        };
+        canAccessPath?: (path: string) => boolean;
+    }): Promise<{
+        entries: VaultIndexEntry[];
+        truncated: boolean;
+    }>;
+    /**
      * Check a previously returned revision without reopening the note body.
      * The stat check keeps the answer fresh even when a filesystem watcher is
      * unavailable; a later full refresh repairs metadata and hash state.

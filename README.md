@@ -1214,8 +1214,9 @@ Note content is omitted by default and can be requested with
 For large result sets, pass the previous response's `nextCursor` as `after`
 to continue with a stable keyset page; `total` remains the total matching
 count and `truncated` indicates that another page exists. Internal page-only
-readers may set `includeTotal: false`; this returns `total: -1` and avoids
-scanning the remainder once the next-page boundary is known.
+readers may set `includeTotal: false`; this returns `total: -1`, avoids scanning
+the remainder once the next-page boundary is known, and uses bounded top-K page
+selection when the metadata index is active instead of sorting every candidate.
 
 ```json
 {

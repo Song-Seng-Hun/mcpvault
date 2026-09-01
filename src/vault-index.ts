@@ -13,6 +13,7 @@ const QUERY_CACHE_MAX_ENTRIES = 128;
 const QUERY_CACHE_MAX_ROWS = 100_000;
 const SORTED_QUERY_CACHE_MAX_ENTRIES = 64;
 const SORTED_QUERY_CACHE_MAX_ROWS = 100_000;
+const TOP_K_MAX = 1_024;
 const METADATA_SNAPSHOT_FILE = '.mcpvault/metadata-index.snapshot.bin';
 const METADATA_SNAPSHOT_VERSION = 1;
 const METADATA_SNAPSHOT_MAX_ENTRIES = 1_000_000;
@@ -98,6 +99,16 @@ function compareEntries(a: VaultIndexEntry, b: VaultIndexEntry, sortBy: string, 
   const comparison = compareValues(aValue, bValue);
   if (comparison !== 0) return sortOrder === 'asc' ? comparison : -comparison;
   return a.path.localeCompare(b.path);
+}
+
+function compareEntryToCursor(entry: VaultIndexEntry, cursor: { path: string; value?: unknown; missing?: boolean }, sortBy: string, sortOrder: 'asc' | 'desc'): number {
+  const entryValue = sortValue(entry, sortBy);
+  const entryMissing = entryValue === undefined;
+  const cursorMissing = cursor.missing === true;
+  if (entryMissing !== cursorMissing) return entryMissing ? 1 : -1;
+  const comparison = compareValues(entryValue, cursor.value);
+  if (comparison !== 0) return sortOrder === 'asc' ? comparison : -comparison;
+  return entry.path.localeCompare(cursor.path);
 }
 
 function encodeSnapshotString(value: string): Buffer {
@@ -310,6 +321,74 @@ export class VaultMetadataIndex {
       }
     }
     return entries;
+  }
+
+  /**
+   * Select a bounded page without materializing a fully sorted candidate list.
+   * Exact totals intentionally stay on listSorted/queryNotes' older path;
+   * page-only callers only need limit+1 to determine truncation.
+   */
+  async listSortedPage(params: {
+    filters?: Record<string, unknown>;
+    pathPrefix?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+    limit: number;
+    offset?: number;
+    after?: { path: string; value?: unknown; missing?: boolean };
+    canAccessPath?: (path: string) => boolean;
+  }): Promise<{ entries: VaultIndexEntry[]; truncated: boolean }> {
+    const limit = Math.min(Math.max(params.limit, 1), 500);
+    const offset = Math.max(params.offset || 0, 0);
+    const sortBy = params.sortBy || 'path';
+    const sortOrder = params.sortOrder || 'asc';
+    const candidates = await this.list(params.filters || {}, params.pathPrefix || '');
+    const needed = offset + limit + 1;
+    const compare = (a: VaultIndexEntry, b: VaultIndexEntry) => compareEntries(a, b, sortBy, sortOrder);
+    if (needed > TOP_K_MAX) {
+      const eligible = candidates.filter(entry =>
+        this.pathFilter.isAllowed(entry.path)
+        && (!params.canAccessPath || params.canAccessPath(entry.path))
+        && (!params.after || compareEntryToCursor(entry, params.after, sortBy, sortOrder) > 0));
+      const sorted = eligible.sort(compare);
+      return { entries: sorted.slice(offset, offset + limit), truncated: sorted.length > offset + limit };
+    }
+
+    const heap: VaultIndexEntry[] = [];
+    const siftUp = (index: number) => {
+      while (index > 0) {
+        const parent = Math.floor((index - 1) / 2);
+        if (compare(heap[parent]!, heap[index]!) >= 0) break;
+        [heap[parent], heap[index]] = [heap[index]!, heap[parent]!];
+        index = parent;
+      }
+    };
+    const siftDown = (index: number) => {
+      while (true) {
+        const left = index * 2 + 1;
+        const right = left + 1;
+        let worst = index;
+        if (left < heap.length && compare(heap[left]!, heap[worst]!) > 0) worst = left;
+        if (right < heap.length && compare(heap[right]!, heap[worst]!) > 0) worst = right;
+        if (worst === index) break;
+        [heap[index], heap[worst]] = [heap[worst]!, heap[index]!];
+        index = worst;
+      }
+    };
+    for (const entry of candidates) {
+      if (!this.pathFilter.isAllowed(entry.path)
+        || (params.canAccessPath && !params.canAccessPath(entry.path))
+        || (params.after && compareEntryToCursor(entry, params.after, sortBy, sortOrder) <= 0)) continue;
+      if (heap.length < needed) {
+        heap.push(entry);
+        siftUp(heap.length - 1);
+      } else if (compare(entry, heap[0]!) < 0) {
+        heap[0] = entry;
+        siftDown(0);
+      }
+    }
+    const sorted = heap.sort(compare);
+    return { entries: sorted.slice(offset, offset + limit), truncated: heap.length > offset + limit };
   }
 
   /**
