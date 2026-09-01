@@ -91,6 +91,10 @@ export interface ClientHeartbeatBackoffOptions {
   minDelayMs?: number;
   maxDelayMs?: number;
   multiplier?: number;
+  /** Randomized spread around each delay; defaults to 10%. */
+  jitterRatio?: number;
+  /** Injectable random source returning a value in [0, 1) for deterministic tests. */
+  random?: () => number;
 }
 
 /** Calculates a bounded next heartbeat delay; it does not schedule model calls. */
@@ -98,29 +102,35 @@ export class ClientHeartbeatBackoff {
   private readonly minDelayMs: number;
   private readonly maxDelayMs: number;
   private readonly multiplier: number;
+  private readonly jitterRatio: number;
+  private readonly random: () => number;
   private delayMs: number;
 
   constructor(options: ClientHeartbeatBackoffOptions = {}) {
     const minDelayMs = options.minDelayMs ?? 15_000;
     const maxDelayMs = options.maxDelayMs ?? 300_000;
     const multiplier = options.multiplier ?? 2;
+    const jitterRatio = options.jitterRatio ?? 0.1;
     if (!Number.isInteger(minDelayMs) || minDelayMs < 1) throw new Error('minDelayMs must be a positive integer');
     if (!Number.isInteger(maxDelayMs) || maxDelayMs < minDelayMs) throw new Error('maxDelayMs must be at least minDelayMs');
     if (!Number.isFinite(multiplier) || multiplier <= 1) throw new Error('multiplier must be greater than 1');
+    if (!Number.isFinite(jitterRatio) || jitterRatio < 0 || jitterRatio > 0.5) throw new Error('jitterRatio must be between 0 and 0.5');
     this.minDelayMs = minDelayMs;
     this.maxDelayMs = maxDelayMs;
     this.multiplier = multiplier;
+    this.jitterRatio = jitterRatio;
+    this.random = options.random || Math.random;
     this.delayMs = minDelayMs;
   }
 
   next(hasActivity: boolean): number {
     if (hasActivity) {
       this.reset();
-      return this.minDelayMs;
+      return this.withJitter(this.minDelayMs);
     }
     const nextDelay = this.delayMs;
     this.delayMs = Math.min(this.maxDelayMs, Math.ceil(this.delayMs * this.multiplier));
-    return nextDelay;
+    return this.withJitter(nextDelay);
   }
 
   reset(): void {
@@ -129,6 +139,13 @@ export class ClientHeartbeatBackoff {
 
   current(): number {
     return this.delayMs;
+  }
+
+  private withJitter(delay: number): number {
+    if (this.jitterRatio === 0) return delay;
+    const random = Math.min(Math.max(Number(this.random()) || 0, 0), 1);
+    const spread = (random * 2 - 1) * this.jitterRatio;
+    return Math.min(this.maxDelayMs, Math.max(this.minDelayMs, Math.round(delay * (1 + spread))));
   }
 }
 

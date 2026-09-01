@@ -38,10 +38,19 @@ test('isolates capability cache partitions and backs off idle heartbeats', async
   await cache.listActive({}, 'agent-a');
   expect(calls).toBe(3);
 
-  const backoff = new ClientHeartbeatBackoff({ minDelayMs: 10, maxDelayMs: 40, multiplier: 2 });
+  const backoff = new ClientHeartbeatBackoff({ minDelayMs: 10, maxDelayMs: 40, multiplier: 2, jitterRatio: 0 });
   expect(backoff.next(false)).toBe(10);
   expect(backoff.next(false)).toBe(20);
   expect(backoff.next(false)).toBe(40);
   expect(backoff.next(false)).toBe(40);
   expect(backoff.next(true)).toBe(10);
+});
+
+test('spreads heartbeat delays with bounded jitter', () => {
+  const early = new ClientHeartbeatBackoff({ minDelayMs: 100, maxDelayMs: 1000, multiplier: 2, random: () => 0 });
+  const late = new ClientHeartbeatBackoff({ minDelayMs: 100, maxDelayMs: 1000, multiplier: 2, random: () => 1 });
+  expect(early.next(false)).toBe(100);
+  expect(late.next(false)).toBe(110);
+  expect(early.next(false)).toBe(180);
+  expect(late.next(false)).toBe(220);
 });

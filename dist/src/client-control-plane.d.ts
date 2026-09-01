@@ -26,16 +26,23 @@ export interface ClientHeartbeatBackoffOptions {
     minDelayMs?: number;
     maxDelayMs?: number;
     multiplier?: number;
+    /** Randomized spread around each delay; defaults to 10%. */
+    jitterRatio?: number;
+    /** Injectable random source returning a value in [0, 1) for deterministic tests. */
+    random?: () => number;
 }
 /** Calculates a bounded next heartbeat delay; it does not schedule model calls. */
 export declare class ClientHeartbeatBackoff {
     private readonly minDelayMs;
     private readonly maxDelayMs;
     private readonly multiplier;
+    private readonly jitterRatio;
+    private readonly random;
     private delayMs;
     constructor(options?: ClientHeartbeatBackoffOptions);
     next(hasActivity: boolean): number;
     reset(): void;
     current(): number;
+    private withJitter;
 }
 //# sourceMappingURL=client-control-plane.d.ts.map
