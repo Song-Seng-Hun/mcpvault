@@ -7,6 +7,8 @@ import type { PathFilter } from './pathfilter.js';
 
 const FULL_REFRESH_INTERVAL_MS = 60_000;
 const READ_BATCH_SIZE = 32;
+const QUERY_CACHE_TTL_MS = 2_000;
+const QUERY_CACHE_MAX_ENTRIES = 128;
 
 export interface VaultIndexEntry {
   path: string;
@@ -22,6 +24,13 @@ function normalizePath(value: string): string {
 
 function isNote(path: string): boolean {
   return /\.(?:md|markdown|txt)$/i.test(path);
+}
+
+function pathKeys(path: string): string[] {
+  const parts = path.split('/');
+  const keys = [''];
+  for (let index = 1; index <= parts.length; index += 1) keys.push(parts.slice(0, index).join('/'));
+  return keys;
 }
 
 function revision(content: string): string {
@@ -63,6 +72,8 @@ export class VaultMetadataIndex {
   private readonly vaultPath: string;
   private readonly entries = new Map<string, VaultIndexEntry>();
   private readonly filterIndex = new Map<string, Map<string, Set<string>>>();
+  private readonly pathIndex = new Map<string, Set<string>>();
+  private readonly queryCache = new Map<string, { expiresAt: number; paths: string[] }>();
   private readonly dirty = new Set<string>();
   private ready: Promise<void>;
   private refreshPromise: Promise<void> | undefined;
@@ -83,15 +94,17 @@ export class VaultMetadataIndex {
   invalidate(path: string, kind: 'upsert' | 'delete'): void {
     const normalized = normalizePath(path);
     if (!isNote(normalized) || !this.pathFilter.isAllowed(normalized)) return;
+    this.queryCache.clear();
     if (kind === 'delete') {
       const existing = this.entries.get(normalized);
       if (existing) this.removeFilterEntry(existing);
+      if (existing) this.removePathEntry(existing);
       this.entries.delete(normalized);
     }
     this.dirty.add(normalized);
   }
 
-  async list(filters?: Record<string, unknown>): Promise<VaultIndexEntry[]> {
+  async list(filters?: Record<string, unknown>, pathPrefix = ''): Promise<VaultIndexEntry[]> {
     await this.ready;
     this.startWatcher();
     // The server may have been constructed before Obsidian or a direct
@@ -108,9 +121,32 @@ export class VaultMetadataIndex {
     if (this.dirty.size > 0) {
       await this.refreshDirty();
     }
-    const candidates = filters && Object.keys(filters).length > 0 ? this.filterCandidates(filters) : undefined;
+    const hasFilters = Boolean(filters && Object.keys(filters).length > 0);
+    const normalizedPrefix = normalizePath(pathPrefix);
+    if (!hasFilters && !normalizedPrefix) return [...this.entries.values()];
+    const cacheKey = JSON.stringify([normalizedPrefix, filters || {}]);
+    const cached = this.queryCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      this.queryCache.delete(cacheKey);
+      this.queryCache.set(cacheKey, cached);
+      return cached.paths.map(path => this.entries.get(path)).filter((entry): entry is VaultIndexEntry => entry !== undefined);
+    }
+    if (cached) this.queryCache.delete(cacheKey);
+
+    const filterCandidates = hasFilters ? this.filterCandidates(filters!) : undefined;
+    const prefixCandidates = normalizedPrefix ? this.pathIndex.get(normalizedPrefix) : undefined;
+    let candidates: Set<string> | undefined;
+    if (filterCandidates && prefixCandidates) {
+      candidates = new Set(filterCandidates);
+      for (const path of candidates) if (!prefixCandidates.has(path)) candidates.delete(path);
+    } else {
+      candidates = filterCandidates || prefixCandidates;
+    }
     if (!candidates) return [...this.entries.values()];
-    return [...candidates].map(path => this.entries.get(path)).filter((entry): entry is VaultIndexEntry => entry !== undefined);
+    const paths = [...candidates];
+    this.queryCache.set(cacheKey, { expiresAt: Date.now() + QUERY_CACHE_TTL_MS, paths });
+    while (this.queryCache.size > QUERY_CACHE_MAX_ENTRIES) this.queryCache.delete(this.queryCache.keys().next().value!);
+    return paths.map(path => this.entries.get(path)).filter((entry): entry is VaultIndexEntry => entry !== undefined);
   }
 
   /**
@@ -146,10 +182,12 @@ export class VaultMetadataIndex {
     try {
       this.watcher = watch(this.vaultPath, { recursive: true }, (_event, filename) => {
         if (!filename) {
+          this.queryCache.clear();
           this.needsFullRefresh = true;
           return;
         }
         const normalized = normalizePath(String(filename));
+        this.queryCache.clear();
         if (isNote(normalized) && this.pathFilter.isAllowed(normalized)) this.dirty.add(normalized);
         else this.needsFullRefresh = true;
       });
@@ -181,6 +219,8 @@ export class VaultMetadataIndex {
       this.entries.clear();
       for (const [path, entry] of next) this.entries.set(path, entry);
       this.rebuildFilterIndex();
+      this.rebuildPathIndex();
+      this.queryCache.clear();
       this.lastFullRefreshAt = Date.now();
     })();
     try {
@@ -195,15 +235,18 @@ export class VaultMetadataIndex {
     this.refreshPromise = (async () => {
       const paths = [...this.dirty];
       this.dirty.clear();
+      this.queryCache.clear();
       const metadata = await Promise.all(paths.map(path => this.readEntry(path)));
       for (let index = 0; index < paths.length; index += 1) {
         const path = paths[index]!;
         const entry = metadata[index];
         const previous = this.entries.get(path);
         if (previous) this.removeFilterEntry(previous);
+        if (previous) this.removePathEntry(previous);
         if (entry) this.entries.set(path, entry);
         else this.entries.delete(path);
         if (entry) this.addFilterEntry(entry);
+        if (entry) this.addPathEntry(entry);
       }
     })();
     try {
@@ -240,6 +283,30 @@ export class VaultMetadataIndex {
   private rebuildFilterIndex(): void {
     this.filterIndex.clear();
     for (const entry of this.entries.values()) this.addFilterEntry(entry);
+  }
+
+  private rebuildPathIndex(): void {
+    this.pathIndex.clear();
+    for (const entry of this.entries.values()) this.addPathEntry(entry);
+  }
+
+  private addPathEntry(entry: VaultIndexEntry): void {
+    for (const key of pathKeys(entry.path)) {
+      let paths = this.pathIndex.get(key);
+      if (!paths) {
+        paths = new Set<string>();
+        this.pathIndex.set(key, paths);
+      }
+      paths.add(entry.path);
+    }
+  }
+
+  private removePathEntry(entry: VaultIndexEntry): void {
+    for (const key of pathKeys(entry.path)) {
+      const paths = this.pathIndex.get(key);
+      paths?.delete(entry.path);
+      if (paths && paths.size === 0) this.pathIndex.delete(key);
+    }
   }
 
   private addFilterEntry(entry: VaultIndexEntry): void {
