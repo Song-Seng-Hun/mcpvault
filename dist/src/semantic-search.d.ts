@@ -37,6 +37,7 @@ export declare class SemanticSearchService {
     private readonly catalog?;
     private readonly vaultIo;
     private readonly vaultPath;
+    private readonly queryCacheOwner;
     private readonly queryCache;
     private queryGeneration;
     private readonly indexPath;
@@ -65,6 +66,7 @@ export declare class SemanticSearchService {
     constructor(vaultPath: string, pathFilter: PathFilter, accessPolicy?: ScopeAccessPolicy, catalog?: VaultFileCatalog | undefined, vaultIo?: VaultIoCoordinator);
     notifyChange(path: string, kind: ChangeKind): void;
     close(): void;
+    private clearQueryCache;
     search(params: SemanticSearchParams): Promise<SemanticSearchOutcome>;
     status(): SemanticIndexStatus;
     private indexedCount;

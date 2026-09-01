@@ -201,12 +201,12 @@ state per path. This keeps an Obsidian save or NAS event burst from triggering
 duplicate read-model refreshes; periodic reconciliation remains the fallback
 when recursive watching is unavailable.
 
-Read-model content loads share an in-flight read coordinator. If search,
-metadata, graph, and semantic indexing request the same note concurrently, one
-disk/NAS read satisfies them all; the completed content is released rather than
-kept in a second long-lived content cache. Foreground requests take priority,
-and the scheduler lowers or raises read concurrency from observed latency and
-errors.
+Note content loads share an in-flight read coordinator. If a user read,
+Obsidian moderation check, search, metadata, graph, and semantic indexing
+request the same note concurrently, one disk/NAS read satisfies them all; the
+completed content is released rather than kept in a second long-lived content
+cache. Foreground requests take priority, and the scheduler lowers or raises
+read concurrency from observed latency and errors.
 
 Community discovery uses the same bounded approach: author activity and
 popular-post candidates are streamed through top-K selection instead of first

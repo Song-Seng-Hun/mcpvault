@@ -4,6 +4,7 @@ import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, D
 import { type DailyDateInput } from './daily.js';
 import type { VaultMetadataIndex } from './vault-index.js';
 import type { VaultGraphIndex } from './vault-graph.js';
+import { VaultIoCoordinator } from './vault-io.js';
 /**
  * Map a filesystem write failure to a clear, accurate Error.
  *
@@ -19,13 +20,14 @@ export declare class FileSystemService {
     private onNoteChanged?;
     private readonly metadataIndex?;
     private readonly graphIndex?;
+    private readonly vaultIo;
     private frontmatterHandler;
     private pathFilter;
     private mutationTails;
     private notifyNoteChanged;
     private revision;
     private withMutationLock;
-    constructor(vaultPath: string, pathFilter?: PathFilter, frontmatterHandler?: FrontmatterHandler, onNoteChanged?: ((path: string, kind: 'upsert' | 'delete') => void | Promise<void>) | undefined, metadataIndex?: VaultMetadataIndex | undefined, graphIndex?: VaultGraphIndex | undefined);
+    constructor(vaultPath: string, pathFilter?: PathFilter, frontmatterHandler?: FrontmatterHandler, onNoteChanged?: ((path: string, kind: 'upsert' | 'delete') => void | Promise<void>) | undefined, metadataIndex?: VaultMetadataIndex | undefined, graphIndex?: VaultGraphIndex | undefined, vaultIo?: VaultIoCoordinator);
     /**
      * Normalize an incoming path to be vault-relative. Strips leading slashes
      * and the vault path prefix when a caller accidentally passes an absolute path

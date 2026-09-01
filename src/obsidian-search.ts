@@ -1,5 +1,4 @@
 import { execFile } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type { PathFilter } from './pathfilter.js';
@@ -7,6 +6,7 @@ import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import { isMarkdownModerationHidden } from './moderation-policy.js';
 import { boundSearchResults, normalizeSearchMaxChars } from './search-limits.js';
+import { VaultIoCoordinator } from './vault-io.js';
 
 const execFileAsync = promisify(execFile);
 const OBSIDIAN_CACHE_TTL_MS = 2_000;
@@ -60,6 +60,7 @@ export class ObsidianSearchService {
     private readonly vaultPath: string,
     private readonly pathFilter: PathFilter,
     private readonly access: ScopeAccessPolicy,
+    private readonly vaultIo = new VaultIoCoordinator(),
   ) {}
 
   async search(params: { query: string; pathPrefix?: string; limit?: number; maxChars?: number; context?: boolean; caseSensitive?: boolean; principal?: ScopePrincipal }) {
@@ -136,7 +137,7 @@ export class ObsidianSearchService {
       if (seen.has(key)) continue;
       seen.add(key);
       try {
-        const markdown = await readFile(join(this.vaultPath, path), 'utf8');
+        const markdown = await this.vaultIo.readUtf8(join(this.vaultPath, path));
         if (isMarkdownModerationHidden(markdown)) continue;
       } catch {
         // The CLI result may race with a deleted or inaccessible note. Do not

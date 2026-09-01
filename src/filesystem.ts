@@ -12,6 +12,7 @@ import { extractWikiLinkOccurrences, findBacklinkMatches, findUnresolvedLinkMatc
 import { buildDailyNotePath, resolveDailyDate, type DailyDateInput } from './daily.js';
 import type { VaultMetadataIndex } from './vault-index.js';
 import type { VaultGraphIndex } from './vault-graph.js';
+import { VaultIoCoordinator } from './vault-io.js';
 
 function getFrontmatterValue(frontmatter: Record<string, any>, key: string): { found: boolean; value?: unknown } {
   let current: unknown = frontmatter;
@@ -245,6 +246,7 @@ export class FileSystemService {
     private onNoteChanged?: (path: string, kind: 'upsert' | 'delete') => void | Promise<void>,
     private readonly metadataIndex?: VaultMetadataIndex,
     private readonly graphIndex?: VaultGraphIndex,
+    private readonly vaultIo = new VaultIoCoordinator(),
   ) {
     const resolved = resolve(vaultPath);
     try {
@@ -349,7 +351,7 @@ export class FileSystemService {
     }
 
     try {
-      const content = await readFile(fullPath, 'utf-8');
+      const content = await this.vaultIo.readUtf8(fullPath);
       return { ...this.frontmatterHandler.parse(content), revision: this.revision(content) };
     } catch (error) {
       if (error instanceof Error && 'code' in error) {
@@ -2010,7 +2012,7 @@ export class FileSystemService {
       if (params.includeContent) {
         const withContent = await Promise.all(selected.map(async note => {
           try {
-            const raw = await readFile(this.resolvePath(note.path), 'utf-8');
+            const raw = await this.vaultIo.readUtf8(this.resolvePath(note.path));
             return { ...note, content: this.frontmatterHandler.parse(raw).content };
           } catch {
             return undefined;
@@ -2059,7 +2061,7 @@ export class FileSystemService {
       if (params.includeContent) {
         const withContent = await Promise.all(selected.map(async note => {
           try {
-            const raw = await readFile(this.resolvePath(note.path), 'utf-8');
+            const raw = await this.vaultIo.readUtf8(this.resolvePath(note.path));
             return { ...note, content: this.frontmatterHandler.parse(raw).content };
           } catch {
             return undefined;
@@ -2127,7 +2129,7 @@ export class FileSystemService {
     if (params.includeContent && indexedEntries) {
       const withContent = await Promise.all(selected.map(async note => {
         try {
-          const raw = await readFile(this.resolvePath(note.path), 'utf-8');
+            const raw = await this.vaultIo.readUtf8(this.resolvePath(note.path));
           return { ...note, content: this.frontmatterHandler.parse(raw).content };
         } catch {
           return undefined;

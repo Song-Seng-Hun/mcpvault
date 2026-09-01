@@ -217,21 +217,6 @@ export class ReputationService {
     if (this.reputationIndex) return this.reputationIndex;
     if (this.reputationIndexInFlight) return this.reputationIndexInFlight;
     const computation = (async () => {
-      const queryAll = async (params: Parameters<FileSystemService['queryNotes']>[0]) => {
-        const notes: ReputationNote[] = [];
-        let after: Awaited<ReturnType<FileSystemService['queryNotes']>>['nextCursor'];
-        while (true) {
-          const page = await this.fileSystem.queryNotes({ ...params, limit: MAX_SCAN, ...(after ? { after } : {}) });
-          notes.push(...page.notes);
-          if (!page.truncated || page.notes.length === 0 || !page.nextCursor) return notes;
-          after = page.nextCursor;
-        }
-      };
-      const [posts, comments, reactions] = await Promise.all([
-        queryAll({ pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post' } }),
-        queryAll({ pathPrefix: COMMENTS, filters: { mcpvault_type: 'blog_comment' } }),
-        queryAll({ pathPrefix: REACTIONS, filters: { mcpvault_type: 'reaction', active: true } }),
-      ]);
       const index: ReputationIndex = {
         targetsByPath: new Map(),
         targetsByKey: new Map(),
@@ -241,8 +226,23 @@ export class ReputationService {
         bannedAccountIds: await this.moderation.listBannedAccountIds(),
         principalAccounts: new Map([...principalByIdentity].map(([identity, principal]) => [identity, principal.accountId])),
       };
-      for (const note of [...posts, ...comments]) this.addTarget(index, note);
-      for (const note of reactions) this.addReaction(index, note, principalByIdentity);
+      const scan = async (
+        params: Parameters<FileSystemService['queryNotes']>[0],
+        consume: (note: ReputationNote) => void,
+      ) => {
+        let after: Awaited<ReturnType<FileSystemService['queryNotes']>>['nextCursor'];
+        while (true) {
+          const page = await this.fileSystem.queryNotes({ ...params, limit: MAX_SCAN, ...(after ? { after } : {}) });
+          for (const note of page.notes) consume(note);
+          if (!page.truncated || page.notes.length === 0 || !page.nextCursor) return;
+          after = page.nextCursor;
+        }
+      };
+      await Promise.all([
+        scan({ pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post' } }, note => this.addTarget(index, note)),
+        scan({ pathPrefix: COMMENTS, filters: { mcpvault_type: 'blog_comment' } }, note => this.addTarget(index, note)),
+        scan({ pathPrefix: REACTIONS, filters: { mcpvault_type: 'reaction', active: true } }, note => this.addReaction(index, note, principalByIdentity)),
+      ]);
       this.rebuildCounts(index);
       return index;
     })();

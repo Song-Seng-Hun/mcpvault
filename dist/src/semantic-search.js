@@ -7,6 +7,7 @@ import { ScopeAccessPolicy } from './scope-access.js';
 import { boundSearchResults, normalizeSearchLimit, normalizeSearchMaxChars } from './search-limits.js';
 import { generateObsidianUri } from './uri.js';
 import { VaultIoCoordinator } from './vault-io.js';
+import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 const MODEL_ID = 'Xenova/multilingual-e5-small';
 const EMBEDDING_DIMENSIONS = 384;
 const INDEX_DIR = '.mcpvault/semantic-index';
@@ -182,6 +183,7 @@ export class SemanticSearchService {
     catalog;
     vaultIo;
     vaultPath;
+    queryCacheOwner = createDerivedCacheOwner('semantic.results');
     queryCache = new Map();
     queryGeneration = 0;
     indexPath;
@@ -224,7 +226,7 @@ export class SemanticSearchService {
                 else {
                     this.lastScanAt = 0;
                     this.queryGeneration += 1;
-                    this.queryCache.clear();
+                    this.clearQueryCache();
                     if (this.semanticActive)
                         this.scheduleIdleWork();
                 }
@@ -236,7 +238,7 @@ export class SemanticSearchService {
         if (!isMarkdown(normalized) || !this.pathFilter.isAllowed(normalized))
             return;
         this.queryGeneration += 1;
-        this.queryCache.clear();
+        this.clearQueryCache();
         if (this.pending.size < MAX_PENDING_CHANGES || this.pending.has(normalized)) {
             this.pending.set(normalized, { kind });
         }
@@ -251,7 +253,11 @@ export class SemanticSearchService {
             clearTimeout(this.unloadTimer);
         this.idleTimer = undefined;
         this.unloadTimer = undefined;
+        this.clearQueryCache();
+    }
+    clearQueryCache() {
         this.queryCache.clear();
+        derivedCacheBudget.clearOwner(this.queryCacheOwner);
     }
     async search(params) {
         const limit = normalizeSearchLimit(params.limit);
@@ -276,6 +282,7 @@ export class SemanticSearchService {
         if (cached && cached.generation === this.queryGeneration && cached.expiresAt > Date.now()) {
             this.queryCache.delete(cacheKey);
             this.queryCache.set(cacheKey, cached);
+            derivedCacheBudget.touch(this.queryCacheOwner, cacheKey);
             return {
                 results: cached.results.map(result => ({ ...result })),
                 available: true,
@@ -283,8 +290,10 @@ export class SemanticSearchService {
                 pending: this.pending.size,
             };
         }
-        if (cached)
+        if (cached) {
             this.queryCache.delete(cacheKey);
+            derivedCacheBudget.remove(this.queryCacheOwner, cacheKey);
+        }
         if (Date.now() < this.unavailableUntil) {
             return { results: [], available: false, indexed: this.indexedCount(), pending: this.pending.size, error: this.lastError };
         }
@@ -333,11 +342,13 @@ export class SemanticSearchService {
                 generation: this.queryGeneration,
                 results: results.map(result => ({ ...result })),
             });
+            derivedCacheBudget.register(this.queryCacheOwner, cacheKey, estimateCacheBytes(results) + Buffer.byteLength(cacheKey, 'utf8') + 128, () => this.queryCache.delete(cacheKey));
             while (this.queryCache.size > SEMANTIC_QUERY_CACHE_MAX_ENTRIES) {
                 const oldest = this.queryCache.keys().next();
                 if (oldest.done)
                     break;
                 this.queryCache.delete(oldest.value);
+                derivedCacheBudget.remove(this.queryCacheOwner, oldest.value);
             }
             return {
                 results,
@@ -764,7 +775,7 @@ export class SemanticSearchService {
             };
         }
         this.queryGeneration += 1;
-        this.queryCache.clear();
+        this.clearQueryCache();
     }
     pathIsVisible(path, params) {
         if (!this.accessPolicy.canAccessPhysicalPath(path, params.principal))

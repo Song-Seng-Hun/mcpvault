@@ -9,6 +9,7 @@ import { PathFilter } from './pathfilter.js';
 import { generateObsidianUri } from './uri.js';
 import { extractWikiLinkOccurrences, findBacklinkMatches, findUnresolvedLinkMatches, resolveWikiLinkTargets } from './backlinks.js';
 import { buildDailyNotePath, resolveDailyDate } from './daily.js';
+import { VaultIoCoordinator } from './vault-io.js';
 function getFrontmatterValue(frontmatter, key) {
     let current = frontmatter;
     for (const segment of key.split('.')) {
@@ -205,6 +206,7 @@ export class FileSystemService {
     onNoteChanged;
     metadataIndex;
     graphIndex;
+    vaultIo;
     frontmatterHandler;
     pathFilter;
     mutationTails = new Map();
@@ -240,11 +242,12 @@ export class FileSystemService {
                 this.mutationTails.delete(path);
         }
     }
-    constructor(vaultPath, pathFilter, frontmatterHandler, onNoteChanged, metadataIndex, graphIndex) {
+    constructor(vaultPath, pathFilter, frontmatterHandler, onNoteChanged, metadataIndex, graphIndex, vaultIo = new VaultIoCoordinator()) {
         this.vaultPath = vaultPath;
         this.onNoteChanged = onNoteChanged;
         this.metadataIndex = metadataIndex;
         this.graphIndex = graphIndex;
+        this.vaultIo = vaultIo;
         const resolved = resolve(vaultPath);
         try {
             this.vaultPath = realpathSync(resolved);
@@ -348,7 +351,7 @@ export class FileSystemService {
             throw new Error(`Cannot read directory as file: ${path}. Use list_directory tool instead.`);
         }
         try {
-            const content = await readFile(fullPath, 'utf-8');
+            const content = await this.vaultIo.readUtf8(fullPath);
             return { ...this.frontmatterHandler.parse(content), revision: this.revision(content) };
         }
         catch (error) {
@@ -1856,7 +1859,7 @@ export class FileSystemService {
             if (params.includeContent) {
                 const withContent = await Promise.all(selected.map(async (note) => {
                     try {
-                        const raw = await readFile(this.resolvePath(note.path), 'utf-8');
+                        const raw = await this.vaultIo.readUtf8(this.resolvePath(note.path));
                         return { ...note, content: this.frontmatterHandler.parse(raw).content };
                     }
                     catch {
@@ -1910,7 +1913,7 @@ export class FileSystemService {
             if (params.includeContent) {
                 const withContent = await Promise.all(selected.map(async (note) => {
                     try {
-                        const raw = await readFile(this.resolvePath(note.path), 'utf-8');
+                        const raw = await this.vaultIo.readUtf8(this.resolvePath(note.path));
                         return { ...note, content: this.frontmatterHandler.parse(raw).content };
                     }
                     catch {
@@ -1982,7 +1985,7 @@ export class FileSystemService {
         if (params.includeContent && indexedEntries) {
             const withContent = await Promise.all(selected.map(async (note) => {
                 try {
-                    const raw = await readFile(this.resolvePath(note.path), 'utf-8');
+                    const raw = await this.vaultIo.readUtf8(this.resolvePath(note.path));
                     return { ...note, content: this.frontmatterHandler.parse(raw).content };
                 }
                 catch {

@@ -1,9 +1,9 @@
 import { execFile } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { isMarkdownModerationHidden } from './moderation-policy.js';
 import { boundSearchResults, normalizeSearchMaxChars } from './search-limits.js';
+import { VaultIoCoordinator } from './vault-io.js';
 const execFileAsync = promisify(execFile);
 const OBSIDIAN_CACHE_TTL_MS = 2_000;
 const OBSIDIAN_CACHE_MAX_ENTRIES = 64;
@@ -40,12 +40,14 @@ export class ObsidianSearchService {
     vaultPath;
     pathFilter;
     access;
+    vaultIo;
     cache = new Map();
     inFlight = new Map();
-    constructor(vaultPath, pathFilter, access) {
+    constructor(vaultPath, pathFilter, access, vaultIo = new VaultIoCoordinator()) {
         this.vaultPath = vaultPath;
         this.pathFilter = pathFilter;
         this.access = access;
+        this.vaultIo = vaultIo;
     }
     async search(params) {
         // Enforce the public-only boundary before consulting the cache. Otherwise
@@ -135,7 +137,7 @@ export class ObsidianSearchService {
                 continue;
             seen.add(key);
             try {
-                const markdown = await readFile(join(this.vaultPath, path), 'utf8');
+                const markdown = await this.vaultIo.readUtf8(join(this.vaultPath, path));
                 if (isMarkdownModerationHidden(markdown))
                     continue;
             }

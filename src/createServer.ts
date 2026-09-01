@@ -281,6 +281,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     },
     metadataIndex,
     graphIndex,
+    vaultIo,
   );
   const gitHistory = new GitHistoryService(resolvedVaultPath, pathFilter);
   const collaboration = new CollaborationService(fileSystem, searchService);
@@ -301,7 +302,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const agentTasks = new AgentTaskService(fileSystem, references, scopeAuth);
   const communityFeatures = new CommunityFeaturesService(fileSystem, scopeAccess, scopeAuth, reputation, resolvedVaultPath, notifications);
   communityFeaturesCache = communityFeatures;
-  const obsidianSearch = new ObsidianSearchService(resolvedVaultPath, pathFilter, scopeAccess);
+  const obsidianSearch = new ObsidianSearchService(resolvedVaultPath, pathFilter, scopeAccess, vaultIo);
   const context = new ContextService(social, chat);
   const continuity = new ContinuityService(fileSystem);
   const agentPulse = new AgentPulseService(notifications, social, chat, agentTasks, continuity, reputation);
