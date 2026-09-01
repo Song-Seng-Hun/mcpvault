@@ -216,6 +216,53 @@ function wikiType(content: string): string | undefined {
   return value && WIKI_TYPES.has(value) ? value : undefined;
 }
 
+function searchableTextFor(document: IndexedDocument, searchContent: boolean, searchFrontmatter: boolean): string {
+  if (searchContent && searchFrontmatter) return `${document.frontmatterText || ''}\n${document.body || ''}`;
+  if (searchContent) return document.body || '';
+  if (searchFrontmatter) return document.frontmatterText || '';
+  return '';
+}
+
+function rankCandidateFor(
+  document: IndexedDocument,
+  documentId: number,
+  terms: string[],
+  scoringTerms: string[],
+  searchContent: boolean,
+  searchFrontmatter: boolean,
+  caseSensitive: boolean,
+): RankCandidate | undefined {
+  const searchableText = searchableTextFor(document, searchContent, searchFrontmatter);
+  const searchIn = caseSensitive ? searchableText : searchableText.toLowerCase();
+  const title = document.relativePath.split('/').pop()?.replace(/\.md$/, '') || document.relativePath;
+  const filenameToSearch = caseSensitive ? title : title.toLowerCase();
+  const filenameMatch = terms.some(term => filenameToSearch.includes(term));
+  const termIndices = terms.map(term => searchIn.indexOf(term));
+  const matchedIndices = termIndices.filter(index => index !== -1);
+  const firstIndex = matchedIndices.length > 0 ? Math.min(...matchedIndices) : -1;
+  if (firstIndex === -1 && !filenameMatch) return undefined;
+  const termFreqs = new Map<string, number>();
+  for (const term of scoringTerms) {
+    let count = 0;
+    let searchIndex = 0;
+    while ((searchIndex = searchIn.indexOf(term, searchIndex)) !== -1) {
+      count += 1;
+      searchIndex += term.length;
+    }
+    termFreqs.set(term, count);
+  }
+  return {
+    documentId,
+    title,
+    firstIndex,
+    firstTermIndex: firstIndex === -1 ? -1 : termIndices.indexOf(firstIndex),
+    filenameMatch,
+    termFreqs,
+    docLength: (searchContent ? document.bodyLength : 0) + (searchFrontmatter ? document.frontmatterLength : 0),
+    wiki: document.isWiki,
+  };
+}
+
 /** Normalize a subtree path: forward slashes, no leading/trailing slashes. */
 function normalizeSubtree(p: string): string {
   return p.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
@@ -477,7 +524,6 @@ export class SearchService {
     // Corpus stats for reranking. Lengths are prepared during indexing, and
     // the bounded cache lets different queries reuse the same scope stats.
     const termDocFreq = new Map<string, number>();
-    const candidates: RankCandidate[] = [];
     const searchQuery = caseSensitive ? normalizedQuery : normalizedQuery.toLowerCase();
     const terms = searchQuery.split(/\s+/).filter(t => t.length > 0);
     const scoringTerms = terms.length > 1 ? [...terms, searchQuery] : terms;
@@ -488,77 +534,30 @@ export class SearchService {
     const corpusStats = this.getCorpusStats(scopedDocumentIds, searchContent, searchFrontmatter, normalizedPrefix, normalizedExcludes);
     const { totalDocLength, docCount } = corpusStats;
     const candidateIds = this.candidateIds(terms, searchContent, searchFrontmatter, caseSensitive, scopedDocumentIds);
+    // First pass loads text only as needed and computes corpus document
+    // frequencies. Candidate objects are deliberately not retained yet.
     for (const documentId of candidateIds) {
       const document = this.documentsById.get(documentId);
       if (!document || !this.pathFilter.isAllowed(document.relativePath)) continue;
       if (document.moderationHidden) continue;
-      const { relativePath } = document;
-        let searchableText = '';
-
-        // Prepare search text based on options
-        if (searchContent || searchFrontmatter) await this.loadText(document);
-        if (searchContent && searchFrontmatter) {
-          searchableText = `${document.frontmatterText || ''}\n${document.body || ''}`;
-        } else if (searchContent) {
-          searchableText = document.body || '';
-        } else if (searchFrontmatter) {
-          searchableText = document.frontmatterText || '';
-        }
-
-        const searchIn = caseSensitive ? searchableText : searchableText.toLowerCase();
-        const docLength = (searchContent ? document.bodyLength : 0)
-          + (searchFrontmatter ? document.frontmatterLength : 0);
-
-        // The n-gram candidate index is conservative; this exact check keeps
-        // the previous substring matching behavior and supplies document
-        // frequencies only for real matches.
-        for (const term of scoringTerms) {
-          if (searchIn.includes(term)) {
-            termDocFreq.set(term, (termDocFreq.get(term) || 0) + 1);
-          }
-        }
-
-        // Extract title from filename
-        const title = relativePath.split('/').pop()?.replace(/\.md$/, '') || relativePath;
-
-        // Check filename match (any term)
-        const filenameToSearch = caseSensitive ? title : title.toLowerCase();
-        const filenameMatch = terms.some(term => filenameToSearch.includes(term));
-
-        // Check content match (any term)
-        const termIndices = terms.map(term => searchIn.indexOf(term));
-        const anyTermFound = termIndices.some(idx => idx !== -1);
-        const firstIndex = anyTermFound
-          ? Math.min(...termIndices.filter(idx => idx !== -1))
-          : -1;
-
-        if (firstIndex !== -1 || filenameMatch) {
-          const termFreqs = new Map<string, number>();
-          // Keep only scoring data here. Excerpts, match counts, and line
-          // numbers are materialized after Top-K ranking so a broad query does
-          // not allocate result payloads for every matching document.
-          for (const term of scoringTerms) {
-            let count = 0;
-            let searchIndex = 0;
-            while ((searchIndex = searchIn.indexOf(term, searchIndex)) !== -1) {
-              count++;
-              searchIndex += term.length;
-            }
-            termFreqs.set(term, count);
-          }
-          candidates.push({
-            documentId,
-            title,
-            firstIndex,
-            firstTermIndex: firstIndex === -1 ? -1 : termIndices.indexOf(firstIndex),
-            filenameMatch,
-            termFreqs,
-            docLength,
-            wiki: document.isWiki
-          });
-        }
+      if (searchContent || searchFrontmatter) await this.loadText(document);
+      const searchIn = caseSensitive
+        ? searchableTextFor(document, searchContent, searchFrontmatter)
+        : searchableTextFor(document, searchContent, searchFrontmatter).toLowerCase();
+      for (const term of scoringTerms) {
+        if (searchIn.includes(term)) termDocFreq.set(term, (termDocFreq.get(term) || 0) + 1);
+      }
     }
 
+    const service = this;
+    const candidates = (function* (): IterableIterator<RankCandidate> {
+      for (const documentId of candidateIds) {
+        const document = service.documentsById.get(documentId);
+        if (!document || !service.pathFilter.isAllowed(document.relativePath) || document.moderationHidden) continue;
+        const candidate = rankCandidateFor(document, documentId, terms, scoringTerms, searchContent, searchFrontmatter, caseSensitive);
+        if (candidate) yield candidate;
+      }
+    })();
     const ranked = this.rerank(candidates, scoringTerms, termDocFreq, docCount, totalDocLength, maxLimit);
     const results = boundSearchResults(ranked.map(candidate => this.materializeResult(candidate, terms, scoringTerms, searchContent, searchFrontmatter, caseSensitive, params.includeRevisions === true)), maxChars);
     if (generation === this.cacheGeneration) {
@@ -1085,7 +1084,7 @@ export class SearchService {
   }
 
   private rerank(
-    candidates: RankCandidate[],
+    candidates: Iterable<RankCandidate>,
     terms: string[],
     termDocFreq: Map<string, number>,
     docCount: number,

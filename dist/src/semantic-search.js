@@ -21,6 +21,7 @@ const MAX_EXCERPT_CHARS = 600;
 const IDLE_DELAY_MS = 15_000;
 const UNAVAILABLE_RETRY_MS = 5 * 60_000;
 const SCAN_INTERVAL_MS = 30_000;
+const SCAN_BATCH_SIZE = 16;
 const MAX_PENDING_CHANGES = 5_000;
 const EMBED_BATCH_SIZE = 8;
 const SEMANTIC_QUERY_CACHE_TTL_MS = 5_000;
@@ -541,33 +542,39 @@ export class SemanticSearchService {
             const paths = this.catalog
                 ? (await this.catalog.notePathsSnapshot()).filter(path => isMarkdown(path))
                 : await this.findMarkdownFiles(this.vaultPath);
-            for (const path of paths) {
-                const normalized = normalizePath(path);
-                seen.add(normalized);
-                if (!this.pathFilter.isAllowed(normalized))
-                    continue;
-                const fullPath = join(this.vaultPath, normalized);
-                const info = await stat(fullPath).catch(() => undefined);
-                if (!info?.isFile())
-                    continue;
-                const entry = this.manifest[normalized];
-                if (entry && entry.size === info.size && entry.mtimeMs === info.mtimeMs)
-                    continue;
-                const content = await this.vaultIo.readUtf8(fullPath, 'background').catch(() => undefined);
-                if (content === undefined)
-                    continue;
-                const hash = hashContent(content);
-                if ((!entry || entry.hash !== hash) && (this.pending.size < MAX_PENDING_CHANGES || this.pending.has(normalized))) {
-                    // Preserve an in-flight retry's backoff. Re-scanning the catalog must
-                    // not turn one failing note into a hot loop by resetting its attempt.
-                    if (!this.pending.has(normalized))
-                        this.pending.set(normalized, { kind: 'upsert' });
-                }
-                else if (entry) {
-                    // Timestamp-only changes do not require a new embedding. Persist the
-                    // refreshed metadata so future scans stay stat-only.
-                    this.manifest[normalized] = { ...entry, size: info.size, mtimeMs: info.mtimeMs };
-                    manifestChanged = true;
+            for (let start = 0; start < paths.length; start += SCAN_BATCH_SIZE) {
+                const batch = paths.slice(start, start + SCAN_BATCH_SIZE);
+                const observations = await Promise.all(batch.map(async (path) => {
+                    const normalized = normalizePath(path);
+                    if (!this.pathFilter.isAllowed(normalized))
+                        return { normalized };
+                    const fullPath = join(this.vaultPath, normalized);
+                    const info = await stat(fullPath).catch(() => undefined);
+                    if (!info?.isFile())
+                        return { normalized };
+                    const entry = this.manifest[normalized];
+                    if (entry && entry.size === info.size && entry.mtimeMs === info.mtimeMs)
+                        return { normalized, info, entry };
+                    const content = await this.vaultIo.readUtf8(fullPath, 'background').catch(() => undefined);
+                    return content === undefined ? { normalized, info, entry } : { normalized, info, entry, hash: hashContent(content) };
+                }));
+                for (const observation of observations) {
+                    seen.add(observation.normalized);
+                    if (!observation.info?.isFile() || !observation.hash)
+                        continue;
+                    const { normalized, info, entry, hash } = observation;
+                    if ((!entry || entry.hash !== hash) && (this.pending.size < MAX_PENDING_CHANGES || this.pending.has(normalized))) {
+                        // Preserve an in-flight retry's backoff. Re-scanning the catalog must
+                        // not turn one failing note into a hot loop by resetting its attempt.
+                        if (!this.pending.has(normalized))
+                            this.pending.set(normalized, { kind: 'upsert' });
+                    }
+                    else if (entry) {
+                        // Timestamp-only changes do not require a new embedding. Persist the
+                        // refreshed metadata so future scans stay stat-only.
+                        this.manifest[normalized] = { ...entry, size: info.size, mtimeMs: info.mtimeMs };
+                        manifestChanged = true;
+                    }
                 }
             }
             for (const path of Object.keys(this.manifest)) {

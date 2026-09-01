@@ -9,6 +9,7 @@ export const DEFAULT_DERIVED_CACHE_BUDGET_BYTES = 32 * 1024 * 1024;
 let ownerSequence = 0;
 
 interface BudgetEntry {
+  owner: string;
   bytes: number;
   lastUsed: number;
   allowOversized: boolean;
@@ -28,6 +29,7 @@ export interface DerivedCacheRegistrationOptions {
 
 export class DerivedCacheBudget {
   private readonly entries = new Map<string, BudgetEntry>();
+  private readonly entriesByOwner = new Map<string, Set<string>>();
   private readonly lruHeap: LruHeapNode[] = [];
   private totalBytes = 0;
   private clock = 0;
@@ -40,8 +42,14 @@ export class DerivedCacheBudget {
     const id = this.id(owner, key);
     this.removeById(id);
     const boundedBytes = Math.max(0, Math.ceil(bytes));
-    const entry: BudgetEntry = { bytes: boundedBytes, lastUsed: ++this.clock, allowOversized: options.allowOversized === true, onEvict, heapIndex: this.lruHeap.length };
+    const entry: BudgetEntry = { owner, bytes: boundedBytes, lastUsed: ++this.clock, allowOversized: options.allowOversized === true, onEvict, heapIndex: this.lruHeap.length };
     this.entries.set(id, entry);
+    let ownerEntries = this.entriesByOwner.get(owner);
+    if (!ownerEntries) {
+      ownerEntries = new Set();
+      this.entriesByOwner.set(owner, ownerEntries);
+    }
+    ownerEntries.add(id);
     this.lruHeap.push({ id, lastUsed: entry.lastUsed });
     this.heapMoveUp(entry.heapIndex);
     this.totalBytes += boundedBytes;
@@ -62,10 +70,9 @@ export class DerivedCacheBudget {
   }
 
   clearOwner(owner: string): void {
-    const prefix = `${owner}\u0000`;
-    for (const id of [...this.entries.keys()]) {
-      if (id.startsWith(prefix)) this.removeById(id);
-    }
+    const ownerEntries = this.entriesByOwner.get(owner);
+    if (!ownerEntries) return;
+    for (const id of [...ownerEntries]) this.removeById(id);
   }
 
   snapshot(): { maxBytes: number; totalBytes: number; entries: number } {
@@ -80,6 +87,9 @@ export class DerivedCacheBudget {
     const entry = this.entries.get(id);
     if (!entry) return;
     this.entries.delete(id);
+    const ownerEntries = this.entriesByOwner.get(entry.owner);
+    ownerEntries?.delete(id);
+    if (ownerEntries?.size === 0) this.entriesByOwner.delete(entry.owner);
     this.totalBytes -= entry.bytes;
     const lastIndex = this.lruHeap.length - 1;
     if (entry.heapIndex !== lastIndex) {

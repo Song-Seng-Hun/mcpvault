@@ -13,6 +13,7 @@ export interface DerivedCacheRegistrationOptions {
 export declare class DerivedCacheBudget {
     readonly maxBytes: number;
     private readonly entries;
+    private readonly entriesByOwner;
     private readonly lruHeap;
     private totalBytes;
     private clock;
