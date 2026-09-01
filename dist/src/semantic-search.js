@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import { ScopeAccessPolicy } from './scope-access.js';
 import { boundSearchResults, normalizeSearchLimit, normalizeSearchMaxChars } from './search-limits.js';
 import { generateObsidianUri } from './uri.js';
+import { VaultIoCoordinator } from './vault-io.js';
 const MODEL_ID = 'Xenova/multilingual-e5-small';
 const EMBEDDING_DIMENSIONS = 384;
 const INDEX_DIR = '.mcpvault/semantic-index';
@@ -20,6 +21,8 @@ const UNAVAILABLE_RETRY_MS = 5 * 60_000;
 const SCAN_INTERVAL_MS = 30_000;
 const MAX_PENDING_CHANGES = 5_000;
 const EMBED_BATCH_SIZE = 8;
+const SEMANTIC_QUERY_CACHE_TTL_MS = 5_000;
+const SEMANTIC_QUERY_CACHE_MAX_ENTRIES = 64;
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
 // One model per Node process, regardless of how many vault/server instances or
@@ -145,10 +148,10 @@ function chunkNote(path, content) {
     }
     return chunks;
 }
-async function resultFromRow(row, vaultPath, includeRevision) {
+async function resultFromRow(row, vaultPath, includeRevision, vaultIo) {
     let excerpt = '';
     try {
-        const content = stripFrontmatter(await readFile(join(vaultPath, row.path), 'utf8'));
+        const content = stripFrontmatter(await (vaultIo ? vaultIo.readUtf8(join(vaultPath, row.path)) : readFile(join(vaultPath, row.path), 'utf8')));
         const lines = content.split(/\r?\n/);
         const start = Math.max(0, row.line - 2);
         excerpt = compactExcerpt(lines.slice(start, start + 3).join(' '));
@@ -177,7 +180,10 @@ export class SemanticSearchService {
     pathFilter;
     accessPolicy;
     catalog;
+    vaultIo;
     vaultPath;
+    queryCache = new Map();
+    queryGeneration = 0;
     indexPath;
     manifestPath;
     workerLockPath;
@@ -201,10 +207,11 @@ export class SemanticSearchService {
     unavailableUntil = 0;
     lastError;
     catalogUnsubscribe;
-    constructor(vaultPath, pathFilter, accessPolicy = new ScopeAccessPolicy(), catalog) {
+    constructor(vaultPath, pathFilter, accessPolicy = new ScopeAccessPolicy(), catalog, vaultIo = new VaultIoCoordinator()) {
         this.pathFilter = pathFilter;
         this.accessPolicy = accessPolicy;
         this.catalog = catalog;
+        this.vaultIo = vaultIo;
         this.vaultPath = resolve(vaultPath);
         this.indexPath = join(this.vaultPath, INDEX_DIR);
         this.manifestPath = join(this.indexPath, MANIFEST_FILE);
@@ -216,6 +223,8 @@ export class SemanticSearchService {
                     this.notifyChange(path, kind);
                 else {
                     this.lastScanAt = 0;
+                    this.queryGeneration += 1;
+                    this.queryCache.clear();
                     if (this.semanticActive)
                         this.scheduleIdleWork();
                 }
@@ -226,6 +235,8 @@ export class SemanticSearchService {
         const normalized = normalizePath(path);
         if (!isMarkdown(normalized) || !this.pathFilter.isAllowed(normalized))
             return;
+        this.queryGeneration += 1;
+        this.queryCache.clear();
         if (this.pending.size < MAX_PENDING_CHANGES || this.pending.has(normalized)) {
             this.pending.set(normalized, { kind });
         }
@@ -240,12 +251,40 @@ export class SemanticSearchService {
             clearTimeout(this.unloadTimer);
         this.idleTimer = undefined;
         this.unloadTimer = undefined;
+        this.queryCache.clear();
     }
     async search(params) {
         const limit = normalizeSearchLimit(params.limit);
         const maxChars = normalizeSearchMaxChars(params.maxChars);
         if (!params.query?.trim())
             throw new Error('Search query cannot be empty');
+        const cacheKey = JSON.stringify({
+            query: params.query.trim(),
+            limit,
+            maxChars,
+            includeRevision: params.includeRevisions === true,
+            pathPrefix: params.pathPrefix || '',
+            excludePaths: params.excludePaths || [],
+            principal: params.principal ? {
+                accountId: params.principal.accountId,
+                modelId: params.principal.modelId,
+                agentId: params.principal.agentId,
+                role: params.principal.role,
+            } : null,
+        });
+        const cached = this.queryCache.get(cacheKey);
+        if (cached && cached.generation === this.queryGeneration && cached.expiresAt > Date.now()) {
+            this.queryCache.delete(cacheKey);
+            this.queryCache.set(cacheKey, cached);
+            return {
+                results: cached.results.map(result => ({ ...result })),
+                available: true,
+                indexed: this.indexedCount(),
+                pending: this.pending.size,
+            };
+        }
+        if (cached)
+            this.queryCache.delete(cacheKey);
         if (Date.now() < this.unavailableUntil) {
             return { results: [], available: false, indexed: this.indexedCount(), pending: this.pending.size, error: this.lastError };
         }
@@ -288,9 +327,20 @@ export class SemanticSearchService {
                 .sort((a, b) => a.distance - b.distance)
                 .slice(0, limit)
                 .map(item => item.row);
-            const orderedResults = await Promise.all(ordered.map(row => resultFromRow(row, this.vaultPath, params.includeRevisions === true)));
+            const results = boundSearchResults(await Promise.all(ordered.map(row => resultFromRow(row, this.vaultPath, params.includeRevisions === true, this.vaultIo))), maxChars);
+            this.queryCache.set(cacheKey, {
+                expiresAt: Date.now() + SEMANTIC_QUERY_CACHE_TTL_MS,
+                generation: this.queryGeneration,
+                results: results.map(result => ({ ...result })),
+            });
+            while (this.queryCache.size > SEMANTIC_QUERY_CACHE_MAX_ENTRIES) {
+                const oldest = this.queryCache.keys().next();
+                if (oldest.done)
+                    break;
+                this.queryCache.delete(oldest.value);
+            }
             return {
-                results: boundSearchResults(orderedResults, maxChars),
+                results,
                 available: true,
                 indexed: this.indexedCount(),
                 pending: this.pending.size,
@@ -396,7 +446,7 @@ export class SemanticSearchService {
                 const entry = this.manifest[normalized];
                 if (entry && entry.size === info.size && entry.mtimeMs === info.mtimeMs)
                     continue;
-                const content = await readFile(fullPath, 'utf8').catch(() => undefined);
+                const content = await this.vaultIo.readUtf8(fullPath, 'background').catch(() => undefined);
                 if (content === undefined)
                     continue;
                 const hash = hashContent(content);
@@ -625,7 +675,7 @@ export class SemanticSearchService {
     }
     async prepareIndex(path) {
         const fullPath = join(this.vaultPath, path);
-        const content = await readFile(fullPath, 'utf8');
+        const content = await this.vaultIo.readUtf8(fullPath, 'background');
         const info = await stat(fullPath);
         const contentHash = hashContent(content);
         const scope = scopeForPath(path);
@@ -713,6 +763,8 @@ export class SemanticSearchService {
                 mtimeMs: item.mtimeMs,
             };
         }
+        this.queryGeneration += 1;
+        this.queryCache.clear();
     }
     pathIsVisible(path, params) {
         if (!this.accessPolicy.canAccessPhysicalPath(path, params.principal))

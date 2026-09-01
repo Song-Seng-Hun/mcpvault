@@ -1,9 +1,11 @@
 import type { PathFilter } from './pathfilter.js';
 import type { SearchParams, SearchResult } from './types.js';
 import type { VaultFileCatalog } from './vault-catalog.js';
+import { VaultIoCoordinator } from './vault-io.js';
 export declare class SearchService {
     private pathFilter;
     private readonly catalog?;
+    private readonly vaultIo;
     private readonly cacheOwner;
     private vaultPath;
     private readonly cache;
@@ -31,7 +33,7 @@ export declare class SearchService {
     private readonly catalogUnsubscribe;
     private lastIndexReconcileAt;
     private needsFullReconcile;
-    constructor(vaultPath: string, pathFilter: PathFilter, catalog?: VaultFileCatalog | undefined);
+    constructor(vaultPath: string, pathFilter: PathFilter, catalog?: VaultFileCatalog | undefined, vaultIo?: VaultIoCoordinator);
     /**
      * Search is derived from Markdown, so a short cache is safe and useful for
      * repeated agent lookups. Writers call this immediately after a mutation;

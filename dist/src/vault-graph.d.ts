@@ -2,6 +2,7 @@ import type { BacklinkMatch, OrphanNotesResult, UnresolvedLinksResult } from './
 import type { FrontmatterHandler } from './frontmatter.js';
 import type { PathFilter } from './pathfilter.js';
 import type { VaultFileCatalog, VaultCatalogChangeKind } from './vault-catalog.js';
+import { VaultIoCoordinator } from './vault-io.js';
 /**
  * Incremental Obsidian graph read model for backlinks, tags, unresolved links,
  * and orphan notes. It stores only parsed link/tag metadata and refreshes a
@@ -11,6 +12,7 @@ export declare class VaultGraphIndex {
     private readonly pathFilter;
     private readonly frontmatter;
     private readonly catalog?;
+    private readonly vaultIo;
     private readonly vaultPath;
     private readonly entries;
     private allPaths;
@@ -23,7 +25,7 @@ export declare class VaultGraphIndex {
     private lastFullRefreshAt;
     private changeGeneration;
     private readonly catalogUnsubscribe;
-    constructor(vaultPath: string, pathFilter: PathFilter, frontmatter: FrontmatterHandler, catalog?: VaultFileCatalog | undefined);
+    constructor(vaultPath: string, pathFilter: PathFilter, frontmatter: FrontmatterHandler, catalog?: VaultFileCatalog | undefined, vaultIo?: VaultIoCoordinator);
     invalidate(path?: string, kind?: VaultCatalogChangeKind): void;
     close(): void;
     getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean): Promise<{

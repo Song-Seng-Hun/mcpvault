@@ -1,0 +1,33 @@
+export type VaultIoPriority = 'foreground' | 'background';
+export interface VaultIoCoordinatorOptions {
+    minConcurrency?: number;
+    maxConcurrency?: number;
+    initialConcurrency?: number;
+    reader?: (path: string) => Promise<string>;
+}
+/**
+ * Deduplicates concurrent note reads and applies adaptive backpressure to
+ * derived read-model work. It intentionally retains no content after a read
+ * finishes: Markdown remains authoritative and memory use stays bounded.
+ */
+export declare class VaultIoCoordinator {
+    private readonly reader;
+    private readonly minConcurrency;
+    private readonly maxConcurrency;
+    private targetConcurrency;
+    private active;
+    private readonly queue;
+    private readonly inFlight;
+    private latencyEmaMs;
+    constructor(options?: VaultIoCoordinatorOptions);
+    readUtf8(path: string, priority?: VaultIoPriority): Promise<string>;
+    status(): {
+        active: number;
+        queued: number;
+        targetConcurrency: number;
+        latencyEmaMs: number;
+    };
+    private pump;
+    private finish;
+}
+//# sourceMappingURL=vault-io.d.ts.map

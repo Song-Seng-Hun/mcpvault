@@ -11,7 +11,13 @@ let ownerSequence = 0;
 interface BudgetEntry {
   bytes: number;
   lastUsed: number;
+  allowOversized: boolean;
   onEvict: () => void;
+}
+
+export interface DerivedCacheRegistrationOptions {
+  /** Keep one bounded-but-large snapshot resident instead of rebuilding it per request. */
+  allowOversized?: boolean;
 }
 
 export class DerivedCacheBudget {
@@ -23,11 +29,11 @@ export class DerivedCacheBudget {
     if (!Number.isFinite(maxBytes) || maxBytes <= 0) throw new Error('maxBytes must be a positive finite number');
   }
 
-  register(owner: string, key: string, bytes: number, onEvict: () => void): void {
+  register(owner: string, key: string, bytes: number, onEvict: () => void, options: DerivedCacheRegistrationOptions = {}): void {
     const id = this.id(owner, key);
     this.removeById(id);
     const boundedBytes = Math.max(0, Math.ceil(bytes));
-    this.entries.set(id, { bytes: boundedBytes, lastUsed: ++this.clock, onEvict });
+    this.entries.set(id, { bytes: boundedBytes, lastUsed: ++this.clock, allowOversized: options.allowOversized === true, onEvict });
     this.totalBytes += boundedBytes;
     this.enforce();
   }
@@ -75,6 +81,7 @@ export class DerivedCacheBudget {
       }
       if (!oldestId) break;
       const entry = this.entries.get(oldestId);
+      if (this.entries.size === 1 && entry?.allowOversized) break;
       this.removeById(oldestId);
       try {
         entry?.onEvict();

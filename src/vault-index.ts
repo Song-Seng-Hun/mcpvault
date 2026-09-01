@@ -5,6 +5,7 @@ import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promi
 import type { FrontmatterHandler } from './frontmatter.js';
 import type { PathFilter } from './pathfilter.js';
 import type { VaultFileCatalog } from './vault-catalog.js';
+import { VaultIoCoordinator } from './vault-io.js';
 
 const FULL_REFRESH_INTERVAL_MS = 60_000;
 const READ_BATCH_SIZE = 32;
@@ -208,6 +209,7 @@ export class VaultMetadataIndex {
     private readonly pathFilter: PathFilter,
     private readonly frontmatter: FrontmatterHandler,
     private readonly catalog?: VaultFileCatalog,
+    private readonly vaultIo = new VaultIoCoordinator(),
   ) {
     this.vaultPath = resolve(vaultPath);
     this.snapshotReady = this.loadSnapshot();
@@ -532,7 +534,7 @@ export class VaultMetadataIndex {
       // This keeps repeated pulse/community reads from reopening and reparsing
       // the whole vault while preserving the existing metadata object.
       if (existing && existing.size === info.size && existing.mtimeMs === info.mtimeMs) return existing;
-      const raw = await readFile(fullPath, 'utf8');
+      const raw = await this.vaultIo.readUtf8(fullPath);
       return {
         path: normalized,
         frontmatter: this.frontmatter.parse(raw).frontmatter,

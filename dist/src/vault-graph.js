@@ -1,7 +1,8 @@
 import { watch } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
 import { extractWikiLinkOccurrences } from './backlinks.js';
+import { VaultIoCoordinator } from './vault-io.js';
 const GRAPH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
 const NOTE_PATTERN = /\.(?:md|markdown|txt)$/i;
@@ -95,6 +96,7 @@ export class VaultGraphIndex {
     pathFilter;
     frontmatter;
     catalog;
+    vaultIo;
     vaultPath;
     entries = new Map();
     allPaths = new Set();
@@ -107,10 +109,11 @@ export class VaultGraphIndex {
     lastFullRefreshAt = 0;
     changeGeneration = 0;
     catalogUnsubscribe;
-    constructor(vaultPath, pathFilter, frontmatter, catalog) {
+    constructor(vaultPath, pathFilter, frontmatter, catalog, vaultIo = new VaultIoCoordinator()) {
         this.pathFilter = pathFilter;
         this.frontmatter = frontmatter;
         this.catalog = catalog;
+        this.vaultIo = vaultIo;
         this.vaultPath = resolve(vaultPath);
         if (catalog) {
             this.catalogUnsubscribe = catalog.subscribe((path, kind) => {
@@ -334,7 +337,7 @@ export class VaultGraphIndex {
                 return undefined;
             if (existing && existing.size === info.size && existing.mtimeMs === info.mtimeMs)
                 return existing;
-            const raw = await readFile(fullPath, 'utf8');
+            const raw = await this.vaultIo.readUtf8(fullPath);
             const parsed = this.frontmatter.parse(raw);
             const tags = [];
             if (Array.isArray(parsed.frontmatter.tags)) {

@@ -8,6 +8,7 @@ import { generateObsidianUri } from './uri.js';
 import { boundSearchResults, boundedTopK, normalizeSearchLimit, normalizeSearchMaxChars } from './search-limits.js';
 import { isMarkdownModerationHidden } from './moderation-policy.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
+import { VaultIoCoordinator } from './vault-io.js';
 const WIKI_TYPES = new Set(['schema', 'source', 'knowledge', 'issue']);
 const SEARCH_CACHE_TTL_MS = 5_000;
 const SEARCH_CACHE_MAX_ENTRIES = 128;
@@ -162,6 +163,7 @@ function normalizeSubtree(p) {
 export class SearchService {
     pathFilter;
     catalog;
+    vaultIo;
     cacheOwner = createDerivedCacheOwner('search.results');
     vaultPath;
     cache = new Map();
@@ -189,9 +191,10 @@ export class SearchService {
     catalogUnsubscribe;
     lastIndexReconcileAt = 0;
     needsFullReconcile = true;
-    constructor(vaultPath, pathFilter, catalog) {
+    constructor(vaultPath, pathFilter, catalog, vaultIo = new VaultIoCoordinator()) {
         this.pathFilter = pathFilter;
         this.catalog = catalog;
+        this.vaultIo = vaultIo;
         this.vaultPath = resolve(vaultPath);
         this.snapshotReady = this.loadSnapshot();
         if (catalog) {
@@ -647,7 +650,7 @@ export class SearchService {
                 return undefined;
             if (existing && existing.size === info.size && existing.mtimeMs === info.mtimeMs)
                 return existing;
-            const content = await readFile(fullPath, 'utf-8');
+            const content = await this.vaultIo.readUtf8(fullPath);
             const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
             const body = frontmatterMatch ? content.slice(frontmatterMatch[0].length) : content;
             const frontmatterText = frontmatterMatch?.[1] || '';

@@ -571,7 +571,7 @@ export class NotificationService {
         const bytes = estimateCacheBytes({ posts: value.posts, comments: value.comments, messages: value.messages, rooms: value.rooms }) + 256;
         derivedCacheBudget.register(this.publicSnapshotCacheOwner, 'current', bytes, () => {
             this.publicSnapshotCache = undefined;
-        });
+        }, { allowOversized: true });
     }
     invalidate(path, kind = 'upsert') {
         this.clearCandidateCache();

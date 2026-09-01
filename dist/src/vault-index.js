@@ -2,6 +2,7 @@ import { watch } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join, relative, resolve } from 'node:path';
 import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { VaultIoCoordinator } from './vault-io.js';
 const FULL_REFRESH_INTERVAL_MS = 60_000;
 const READ_BATCH_SIZE = 32;
 const QUERY_CACHE_TTL_MS = 2_000;
@@ -177,6 +178,7 @@ export class VaultMetadataIndex {
     pathFilter;
     frontmatter;
     catalog;
+    vaultIo;
     vaultPath;
     entries = new Map();
     filterIndex = new Map();
@@ -198,10 +200,11 @@ export class VaultMetadataIndex {
     needsFullRefresh = true;
     lastFullRefreshAt = 0;
     firstList = true;
-    constructor(vaultPath, pathFilter, frontmatter, catalog) {
+    constructor(vaultPath, pathFilter, frontmatter, catalog, vaultIo = new VaultIoCoordinator()) {
         this.pathFilter = pathFilter;
         this.frontmatter = frontmatter;
         this.catalog = catalog;
+        this.vaultIo = vaultIo;
         this.vaultPath = resolve(vaultPath);
         this.snapshotReady = this.loadSnapshot();
         this.ready = this.initialize();
@@ -539,7 +542,7 @@ export class VaultMetadataIndex {
             // the whole vault while preserving the existing metadata object.
             if (existing && existing.size === info.size && existing.mtimeMs === info.mtimeMs)
                 return existing;
-            const raw = await readFile(fullPath, 'utf8');
+            const raw = await this.vaultIo.readUtf8(fullPath);
             return {
                 path: normalized,
                 frontmatter: this.frontmatter.parse(raw).frontmatter,

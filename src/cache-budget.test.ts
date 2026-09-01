@@ -37,4 +37,11 @@ describe('DerivedCacheBudget', () => {
     expect(evictions).toBe(1);
     expect(budget.snapshot()).toEqual({ maxBytes: 10, totalBytes: 0, entries: 0 });
   });
+
+  test('can keep one bounded oversized snapshot without cache thrashing', () => {
+    const budget = new DerivedCacheBudget(10);
+    budget.register('public', 'snapshot', 11, () => { throw new Error('must stay resident'); }, { allowOversized: true });
+
+    expect(budget.snapshot()).toEqual({ maxBytes: 10, totalBytes: 11, entries: 1 });
+  });
 });

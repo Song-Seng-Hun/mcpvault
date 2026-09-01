@@ -1,6 +1,7 @@
 import type { FrontmatterHandler } from './frontmatter.js';
 import type { PathFilter } from './pathfilter.js';
 import type { VaultFileCatalog } from './vault-catalog.js';
+import { VaultIoCoordinator } from './vault-io.js';
 export interface VaultIndexEntry {
     path: string;
     frontmatter: Record<string, any>;
@@ -17,6 +18,7 @@ export declare class VaultMetadataIndex {
     private readonly pathFilter;
     private readonly frontmatter;
     private readonly catalog?;
+    private readonly vaultIo;
     private readonly vaultPath;
     private readonly entries;
     private readonly filterIndex;
@@ -38,7 +40,7 @@ export declare class VaultMetadataIndex {
     private needsFullRefresh;
     private lastFullRefreshAt;
     private firstList;
-    constructor(vaultPath: string, pathFilter: PathFilter, frontmatter: FrontmatterHandler, catalog?: VaultFileCatalog | undefined);
+    constructor(vaultPath: string, pathFilter: PathFilter, frontmatter: FrontmatterHandler, catalog?: VaultFileCatalog | undefined, vaultIo?: VaultIoCoordinator);
     invalidate(path: string, kind: 'upsert' | 'delete'): void;
     private clearQueryCaches;
     list(filters?: Record<string, unknown>, pathPrefix?: string): Promise<VaultIndexEntry[]>;

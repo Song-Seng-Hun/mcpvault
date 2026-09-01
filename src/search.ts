@@ -11,6 +11,7 @@ import { boundSearchResults, boundedTopK, normalizeSearchLimit, normalizeSearchM
 import { isMarkdownModerationHidden } from './moderation-policy.js';
 import type { VaultFileCatalog } from './vault-catalog.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
+import { VaultIoCoordinator } from './vault-io.js';
 
 const WIKI_TYPES = new Set(['schema', 'source', 'knowledge', 'issue']);
 const SEARCH_CACHE_TTL_MS = 5_000;
@@ -250,6 +251,7 @@ export class SearchService {
     vaultPath: string,
     private pathFilter: PathFilter,
     private readonly catalog?: VaultFileCatalog,
+    private readonly vaultIo = new VaultIoCoordinator(),
   ) {
     this.vaultPath = resolve(vaultPath);
     this.snapshotReady = this.loadSnapshot();
@@ -703,7 +705,7 @@ export class SearchService {
       const info = await stat(fullPath);
       if (!info.isFile()) return undefined;
       if (existing && existing.size === info.size && existing.mtimeMs === info.mtimeMs) return existing;
-      const content = await readFile(fullPath, 'utf-8');
+      const content = await this.vaultIo.readUtf8(fullPath);
       const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
       const body = frontmatterMatch ? content.slice(frontmatterMatch[0].length) : content;
       const frontmatterText = frontmatterMatch?.[1] || '';

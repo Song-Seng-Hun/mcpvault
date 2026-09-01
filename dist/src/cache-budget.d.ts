@@ -6,13 +6,17 @@
  * cannot change the visible data or search semantics.
  */
 export declare const DEFAULT_DERIVED_CACHE_BUDGET_BYTES: number;
+export interface DerivedCacheRegistrationOptions {
+    /** Keep one bounded-but-large snapshot resident instead of rebuilding it per request. */
+    allowOversized?: boolean;
+}
 export declare class DerivedCacheBudget {
     readonly maxBytes: number;
     private readonly entries;
     private totalBytes;
     private clock;
     constructor(maxBytes?: number);
-    register(owner: string, key: string, bytes: number, onEvict: () => void): void;
+    register(owner: string, key: string, bytes: number, onEvict: () => void, options?: DerivedCacheRegistrationOptions): void;
     touch(owner: string, key: string): void;
     remove(owner: string, key: string): void;
     clearOwner(owner: string): void;
