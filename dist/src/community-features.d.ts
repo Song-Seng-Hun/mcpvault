@@ -52,7 +52,7 @@ export declare class CommunityFeaturesService {
     private targetPath;
     private reactionRoot;
     private invalidateReactionAggregates;
-    invalidate(): void;
+    invalidate(path?: string): void;
     private reactionFiles;
     private loadReactionSnapshot;
     private saveReactionSnapshot;

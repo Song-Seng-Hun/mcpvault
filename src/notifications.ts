@@ -94,6 +94,34 @@ function addMentions(index: Map<string, QueryNote[]>, note: QueryNote): void {
   for (const mention of note.frontmatter.mentions) addToIndex(index, mention, note);
 }
 
+type PublicCollection = keyof PublicSnapshot;
+
+function normalizePath(path: string): string {
+  return path.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+}
+
+function publicCollectionForPath(path: string): PublicCollection | undefined {
+  const normalized = normalizePath(path);
+  if (normalized.startsWith('Community/Posts/')) return 'posts';
+  if (normalized.startsWith('Community/Comments/')) return 'comments';
+  if (normalized.startsWith('Community/ChatMessages/')) return 'messages';
+  if (normalized.startsWith('Community/ChatRooms/')) return 'rooms';
+  return undefined;
+}
+
+function belongsInPublicCollection(note: QueryNote, collection: PublicCollection): boolean {
+  const type = text(note.frontmatter.mcpvault_type).toLowerCase();
+  if (collection === 'posts') return type === 'blog_post' && text(note.frontmatter.status).toLowerCase() === 'published';
+  if (collection === 'comments') return type === 'blog_comment';
+  if (collection === 'messages') return type === 'chat_message';
+  return type === 'chat_room';
+}
+
+function sortPublicCollection(notes: QueryNote[], collection: PublicCollection): QueryNote[] {
+  if (collection === 'rooms') return notes.sort((a, b) => a.path.localeCompare(b.path));
+  return notes.sort((a, b) => String(b.frontmatter.created_at || '').localeCompare(String(a.frontmatter.created_at || '')) || a.path.localeCompare(b.path));
+}
+
 function buildPublicSnapshotIndex(snapshot: PublicSnapshot): PublicSnapshotIndex {
   const index: PublicSnapshotIndex = {
     ...snapshot,
@@ -148,17 +176,30 @@ export class NotificationService {
   private readonly eventInFlight = new Map<string, Promise<NotificationEvent[]>>();
   private publicSnapshotCache: { expiresAt: number; value: PublicSnapshotIndex } | undefined;
   private publicSnapshotInFlight: Promise<PublicSnapshotIndex> | undefined;
+  private publicSnapshotUpdate: Promise<void> | undefined;
 
   constructor(private readonly fileSystem: FileSystemService, private readonly reputation: ReputationService) {}
 
-  invalidate(): void {
+  invalidate(path?: string, kind: 'upsert' | 'delete' = 'upsert'): void {
     this.eventCache.clear();
     this.eventInFlight.clear();
-    this.publicSnapshotCache = undefined;
-    this.publicSnapshotInFlight = undefined;
+    const collection = path ? publicCollectionForPath(path) : undefined;
+    if (!path || !collection) {
+      if (!path) this.publicSnapshotCache = undefined;
+      return;
+    }
+    const previous = this.publicSnapshotUpdate || Promise.resolve();
+    const update = previous.then(() => this.updatePublicSnapshot(path, kind, collection)).catch(() => {
+      this.publicSnapshotCache = undefined;
+    });
+    this.publicSnapshotUpdate = update;
+    void update.finally(() => {
+      if (this.publicSnapshotUpdate === update) this.publicSnapshotUpdate = undefined;
+    });
   }
 
   private async cachedPublicSnapshot(): Promise<PublicSnapshotIndex> {
+    while (this.publicSnapshotUpdate) await this.publicSnapshotUpdate;
     const cached = this.publicSnapshotCache;
     if (cached && cached.expiresAt > Date.now()) return cached.value;
     if (this.publicSnapshotInFlight) return this.publicSnapshotInFlight;
@@ -176,6 +217,28 @@ export class NotificationService {
     } finally {
       if (this.publicSnapshotInFlight === computation) this.publicSnapshotInFlight = undefined;
     }
+  }
+
+  private async updatePublicSnapshot(path: string, kind: 'upsert' | 'delete', collection: PublicCollection): Promise<void> {
+    if (this.publicSnapshotInFlight) await this.publicSnapshotInFlight;
+    const cached = this.publicSnapshotCache;
+    if (!cached || cached.expiresAt <= Date.now()) {
+      this.publicSnapshotCache = undefined;
+      return;
+    }
+    const next: PublicSnapshot = {
+      posts: cached.value.posts.filter(note => note.path !== path),
+      comments: cached.value.comments.filter(note => note.path !== path),
+      messages: cached.value.messages.filter(note => note.path !== path),
+      rooms: cached.value.rooms.filter(note => note.path !== path),
+    };
+    if (kind !== 'delete') {
+      const note = await this.fileSystem.readNote(path);
+      const metadata: QueryNote = { path: normalizePath(path), frontmatter: note.frontmatter };
+      if (belongsInPublicCollection(metadata, collection)) next[collection].push(metadata);
+    }
+    sortPublicCollection(next[collection], collection);
+    this.publicSnapshotCache = { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, value: buildPublicSnapshotIndex(next) };
   }
 
   private async hydrateNotes(notes: QueryNote[]): Promise<QueryNote[]> {

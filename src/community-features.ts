@@ -210,7 +210,8 @@ export class CommunityFeaturesService {
     this.reactionAggregateCache = undefined;
   }
 
-  invalidate(): void {
+  invalidate(path?: string): void {
+    if (path && !/^Community\/Reactions\//i.test(path.replace(/\\/g, '/'))) return;
     this.invalidateReactionAggregates();
   }
 

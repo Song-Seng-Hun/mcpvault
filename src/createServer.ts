@@ -265,9 +265,9 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       metadataIndex.invalidate(path, kind);
       searchService.invalidate(path, kind);
       semanticSearch.notifyChange(path, kind);
-      reputationCache?.invalidate();
-      notificationsCache?.invalidate();
-      communityFeaturesCache?.invalidate();
+      reputationCache?.invalidate(path);
+      notificationsCache?.invalidate(path, kind);
+      communityFeaturesCache?.invalidate(path);
     },
     metadataIndex,
   );

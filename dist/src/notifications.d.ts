@@ -23,9 +23,11 @@ export declare class NotificationService {
     private readonly eventInFlight;
     private publicSnapshotCache;
     private publicSnapshotInFlight;
+    private publicSnapshotUpdate;
     constructor(fileSystem: FileSystemService, reputation: ReputationService);
-    invalidate(): void;
+    invalidate(path?: string, kind?: 'upsert' | 'delete'): void;
     private cachedPublicSnapshot;
+    private updatePublicSnapshot;
     private hydrateNotes;
     private cachedPublicEvents;
     private lastReadAt;

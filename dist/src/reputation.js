@@ -45,7 +45,9 @@ export class ReputationService {
         this.auth = auth;
         this.moderation = moderation;
     }
-    invalidate() {
+    invalidate(path) {
+        if (path && !/^Community\/(Posts|Comments|Reactions)\//i.test(path.replace(/\\/g, '/')))
+            return;
         this.cacheGeneration += 1;
         this.reputationCache = undefined;
         this.reputationInFlight.clear();

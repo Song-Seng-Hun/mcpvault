@@ -44,6 +44,36 @@ function addMentions(index, note) {
     for (const mention of note.frontmatter.mentions)
         addToIndex(index, mention, note);
 }
+function normalizePath(path) {
+    return path.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+}
+function publicCollectionForPath(path) {
+    const normalized = normalizePath(path);
+    if (normalized.startsWith('Community/Posts/'))
+        return 'posts';
+    if (normalized.startsWith('Community/Comments/'))
+        return 'comments';
+    if (normalized.startsWith('Community/ChatMessages/'))
+        return 'messages';
+    if (normalized.startsWith('Community/ChatRooms/'))
+        return 'rooms';
+    return undefined;
+}
+function belongsInPublicCollection(note, collection) {
+    const type = text(note.frontmatter.mcpvault_type).toLowerCase();
+    if (collection === 'posts')
+        return type === 'blog_post' && text(note.frontmatter.status).toLowerCase() === 'published';
+    if (collection === 'comments')
+        return type === 'blog_comment';
+    if (collection === 'messages')
+        return type === 'chat_message';
+    return type === 'chat_room';
+}
+function sortPublicCollection(notes, collection) {
+    if (collection === 'rooms')
+        return notes.sort((a, b) => a.path.localeCompare(b.path));
+    return notes.sort((a, b) => String(b.frontmatter.created_at || '').localeCompare(String(a.frontmatter.created_at || '')) || a.path.localeCompare(b.path));
+}
 function buildPublicSnapshotIndex(snapshot) {
     const index = {
         ...snapshot,
@@ -102,17 +132,33 @@ export class NotificationService {
     eventInFlight = new Map();
     publicSnapshotCache;
     publicSnapshotInFlight;
+    publicSnapshotUpdate;
     constructor(fileSystem, reputation) {
         this.fileSystem = fileSystem;
         this.reputation = reputation;
     }
-    invalidate() {
+    invalidate(path, kind = 'upsert') {
         this.eventCache.clear();
         this.eventInFlight.clear();
-        this.publicSnapshotCache = undefined;
-        this.publicSnapshotInFlight = undefined;
+        const collection = path ? publicCollectionForPath(path) : undefined;
+        if (!path || !collection) {
+            if (!path)
+                this.publicSnapshotCache = undefined;
+            return;
+        }
+        const previous = this.publicSnapshotUpdate || Promise.resolve();
+        const update = previous.then(() => this.updatePublicSnapshot(path, kind, collection)).catch(() => {
+            this.publicSnapshotCache = undefined;
+        });
+        this.publicSnapshotUpdate = update;
+        void update.finally(() => {
+            if (this.publicSnapshotUpdate === update)
+                this.publicSnapshotUpdate = undefined;
+        });
     }
     async cachedPublicSnapshot() {
+        while (this.publicSnapshotUpdate)
+            await this.publicSnapshotUpdate;
         const cached = this.publicSnapshotCache;
         if (cached && cached.expiresAt > Date.now())
             return cached.value;
@@ -134,6 +180,29 @@ export class NotificationService {
             if (this.publicSnapshotInFlight === computation)
                 this.publicSnapshotInFlight = undefined;
         }
+    }
+    async updatePublicSnapshot(path, kind, collection) {
+        if (this.publicSnapshotInFlight)
+            await this.publicSnapshotInFlight;
+        const cached = this.publicSnapshotCache;
+        if (!cached || cached.expiresAt <= Date.now()) {
+            this.publicSnapshotCache = undefined;
+            return;
+        }
+        const next = {
+            posts: cached.value.posts.filter(note => note.path !== path),
+            comments: cached.value.comments.filter(note => note.path !== path),
+            messages: cached.value.messages.filter(note => note.path !== path),
+            rooms: cached.value.rooms.filter(note => note.path !== path),
+        };
+        if (kind !== 'delete') {
+            const note = await this.fileSystem.readNote(path);
+            const metadata = { path: normalizePath(path), frontmatter: note.frontmatter };
+            if (belongsInPublicCollection(metadata, collection))
+                next[collection].push(metadata);
+        }
+        sortPublicCollection(next[collection], collection);
+        this.publicSnapshotCache = { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, value: buildPublicSnapshotIndex(next) };
     }
     async hydrateNotes(notes) {
         const unique = [...new Map(notes.map(note => [note.path, note])).values()];

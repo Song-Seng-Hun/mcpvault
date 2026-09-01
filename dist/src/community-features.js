@@ -200,7 +200,9 @@ export class CommunityFeaturesService {
         this.reactionAggregateGeneration += 1;
         this.reactionAggregateCache = undefined;
     }
-    invalidate() {
+    invalidate(path) {
+        if (path && !/^Community\/Reactions\//i.test(path.replace(/\\/g, '/')))
+            return;
         this.invalidateReactionAggregates();
     }
     async reactionFiles() {

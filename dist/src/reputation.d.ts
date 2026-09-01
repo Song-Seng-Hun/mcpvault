@@ -32,7 +32,7 @@ export declare class ReputationService {
     private readonly reputationInFlight;
     private cacheGeneration;
     constructor(fileSystem: FileSystemService, auth: ScopeAuthService, moderation: ModerationService);
-    invalidate(): void;
+    invalidate(path?: string): void;
     getForPrincipal(principal: ScopePrincipal): Promise<ReputationSnapshot>;
     getPublic(identity: string): Promise<ReputationSnapshot>;
     getMany(identities: string[]): Promise<Map<string, ReputationSnapshot>>;

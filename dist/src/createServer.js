@@ -223,9 +223,9 @@ export function createServer(vaultPath, options = {}) {
         metadataIndex.invalidate(path, kind);
         searchService.invalidate(path, kind);
         semanticSearch.notifyChange(path, kind);
-        reputationCache?.invalidate();
-        notificationsCache?.invalidate();
-        communityFeaturesCache?.invalidate();
+        reputationCache?.invalidate(path);
+        notificationsCache?.invalidate(path, kind);
+        communityFeaturesCache?.invalidate(path);
     }, metadataIndex);
     const gitHistory = new GitHistoryService(resolvedVaultPath, pathFilter);
     const collaboration = new CollaborationService(fileSystem, searchService);

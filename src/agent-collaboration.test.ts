@@ -38,6 +38,7 @@ test('profiles, durable notifications, tasks, and capability revocation compose 
     expect(publicProfiles.value.profiles[0]).toMatchObject({ identity: 'researcher', capabilities: expect.arrayContaining(['journal']) });
 
     const post = await json(client, 'publish_blog_post', { slug: 'coordination', title: 'Coordination', content: 'Public work queue.', expectedRevision: 'missing', accessToken: ownerToken });
+    await json(client, 'list_notifications', { accessToken: ownerToken, includeRead: true, limit: 10 });
     const comment = await json(client, 'comment_on_blog_post', { slug: 'coordination', content: '@codex I found supporting evidence.', accessToken: agentToken });
     expect(comment.value.success).toBe(true);
     const notifications = await json(client, 'list_notifications', { accessToken: ownerToken, limit: 10 });
