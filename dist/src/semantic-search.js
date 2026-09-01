@@ -244,7 +244,7 @@ export class SemanticSearchService {
             }
             const vector = await this.embed(params.query, 'query');
             const scopes = this.accessPolicy.scopeRoots(params.principal).map(root => root.kind === 'global' ? 'global' : `${root.kind}:${root.root.split('/').pop()}`);
-            const results = [];
+            const bestByPath = new Map();
             for (const scope of scopes) {
                 const name = tableName(scope);
                 if (!names.has(name))
@@ -255,21 +255,19 @@ export class SemanticSearchService {
                     const path = normalizePath(row.path);
                     if (!this.pathIsVisible(path, params))
                         continue;
-                    results.push({ result: await resultFromRow(row, this.vaultPath, params.includeRevisions === true), distance: Number(row._distance ?? 1) });
+                    const distance = Number(row._distance ?? 1);
+                    const old = bestByPath.get(path);
+                    if (!old || distance < old.distance)
+                        bestByPath.set(path, { row, distance });
                 }
-            }
-            const bestByPath = new Map();
-            for (const item of results) {
-                const old = bestByPath.get(item.result.p);
-                if (!old || item.distance < old.distance)
-                    bestByPath.set(item.result.p, item);
             }
             const ordered = [...bestByPath.values()]
                 .sort((a, b) => a.distance - b.distance)
                 .slice(0, limit)
-                .map(item => item.result);
+                .map(item => item.row);
+            const orderedResults = await Promise.all(ordered.map(row => resultFromRow(row, this.vaultPath, params.includeRevisions === true)));
             return {
-                results: boundSearchResults(ordered, maxChars),
+                results: boundSearchResults(orderedResults, maxChars),
                 available: true,
                 indexed: this.indexedCount(),
                 pending: this.pending.size,

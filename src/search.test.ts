@@ -64,6 +64,7 @@ describe("SearchService", () => {
   test("restores the derived index snapshot after a server restart", async () => {
     await writeNote("restartable.md", "# Restartable\n\nSnapshot candidate.");
     expect(await searchService.search({ query: "candidate" })).toHaveLength(1);
+    await new Promise(resolve => setTimeout(resolve, 1_100));
     const snapshot = await readFile(join(testVaultPath, ".mcpvault", "search-index.snapshot.bin"));
     expect(snapshot.subarray(0, 8).toString("ascii")).toBe("MCPVSRCH");
 

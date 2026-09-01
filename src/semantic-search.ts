@@ -324,7 +324,7 @@ export class SemanticSearchService {
       }
       const vector = await this.embed(params.query, 'query');
       const scopes = this.accessPolicy.scopeRoots(params.principal).map(root => root.kind === 'global' ? 'global' : `${root.kind}:${root.root.split('/').pop()}`);
-      const results: Array<{ result: SearchResult; distance: number }> = [];
+      const bestByPath = new Map<string, { row: IndexRow; distance: number }>();
       for (const scope of scopes) {
         const name = tableName(scope);
         if (!names.has(name)) continue;
@@ -333,21 +333,19 @@ export class SemanticSearchService {
         for (const row of rows as Array<IndexRow & { _distance?: number }>) {
           const path = normalizePath(row.path);
           if (!this.pathIsVisible(path, params)) continue;
-          results.push({ result: await resultFromRow(row, this.vaultPath, params.includeRevisions === true), distance: Number(row._distance ?? 1) });
+          const distance = Number(row._distance ?? 1);
+          const old = bestByPath.get(path);
+          if (!old || distance < old.distance) bestByPath.set(path, { row, distance });
         }
       }
 
-      const bestByPath = new Map<string, { result: SearchResult; distance: number }>();
-      for (const item of results) {
-        const old = bestByPath.get(item.result.p);
-        if (!old || item.distance < old.distance) bestByPath.set(item.result.p, item);
-      }
       const ordered = [...bestByPath.values()]
         .sort((a, b) => a.distance - b.distance)
         .slice(0, limit)
-        .map(item => item.result);
+        .map(item => item.row);
+      const orderedResults = await Promise.all(ordered.map(row => resultFromRow(row, this.vaultPath, params.includeRevisions === true)));
       return {
-        results: boundSearchResults(ordered, maxChars),
+        results: boundSearchResults(orderedResults, maxChars),
         available: true,
         indexed: this.indexedCount(),
         pending: this.pending.size,

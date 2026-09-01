@@ -18,6 +18,7 @@ const NGRAM_SIZE = 3;
 const SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.bin';
 const LEGACY_SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.gz';
 const SEARCH_SNAPSHOT_VERSION = 1;
+const SNAPSHOT_SAVE_DEBOUNCE_MS = 1_000;
 const gunzipAsync = promisify(gunzip);
 const SNAPSHOT_MAGIC = Buffer.from('MCPVSRCH', 'ascii');
 const MAX_SNAPSHOT_ENTRIES = 1_000_000;
@@ -157,6 +158,9 @@ export class SearchService {
     indexReady;
     snapshotReady;
     indexRefresh;
+    snapshotTimer;
+    snapshotWrite;
+    snapshotPending = false;
     watcher;
     lastIndexReconcileAt = 0;
     needsFullReconcile = true;
@@ -244,7 +248,22 @@ export class SearchService {
             this.setDocument(document);
         }
     }
-    async saveSnapshot() {
+    scheduleSnapshotSave() {
+        this.snapshotPending = true;
+        if (this.snapshotTimer)
+            return;
+        this.snapshotTimer = setTimeout(() => {
+            this.snapshotTimer = undefined;
+            void this.flushSnapshot();
+        }, SNAPSHOT_SAVE_DEBOUNCE_MS);
+        this.snapshotTimer.unref?.();
+    }
+    async flushSnapshot() {
+        if (this.snapshotWrite)
+            return;
+        if (!this.snapshotPending)
+            return;
+        this.snapshotPending = false;
         const snapshot = {
             version: SEARCH_SNAPSHOT_VERSION,
             documents: [...this.documents.values()].map(document => ({
@@ -263,17 +282,24 @@ export class SearchService {
                 titleGrams: [...document.titleGrams],
             })),
         };
-        try {
+        this.snapshotWrite = (async () => {
             const snapshotPath = join(this.vaultPath, SEARCH_SNAPSHOT_FILE);
             await mkdir(join(this.vaultPath, '.mcpvault'), { recursive: true });
             const encoded = encodeSnapshot(snapshot);
             const temporaryPath = `${snapshotPath}.${process.pid}.tmp`;
             await writeFile(temporaryPath, encoded);
             await rename(temporaryPath, snapshotPath);
-        }
-        catch {
+        })().catch(() => {
             // The snapshot is an optional acceleration cache. Search correctness
             // must never depend on being able to write it (for example on NAS).
+        });
+        try {
+            await this.snapshotWrite;
+        }
+        finally {
+            this.snapshotWrite = undefined;
+            if (this.snapshotPending)
+                this.scheduleSnapshotSave();
         }
     }
     async search(params) {
@@ -529,7 +555,7 @@ export class SearchService {
             this.needsFullReconcile = false;
             this.lastIndexReconcileAt = Date.now();
             this.trimTextCache();
-            await this.saveSnapshot();
+            this.scheduleSnapshotSave();
         })();
         try {
             await this.indexRefresh;
@@ -554,7 +580,7 @@ export class SearchService {
                     this.removeDocument(path);
             }
             this.trimTextCache();
-            await this.saveSnapshot();
+            this.scheduleSnapshotSave();
         })();
         try {
             await this.indexRefresh;

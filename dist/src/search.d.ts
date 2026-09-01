@@ -14,6 +14,9 @@ export declare class SearchService {
     private indexReady;
     private readonly snapshotReady;
     private indexRefresh;
+    private snapshotTimer;
+    private snapshotWrite;
+    private snapshotPending;
     private watcher;
     private lastIndexReconcileAt;
     private needsFullReconcile;
@@ -27,7 +30,8 @@ export declare class SearchService {
     close(): void;
     private loadSnapshot;
     private restoreSnapshot;
-    private saveSnapshot;
+    private scheduleSnapshotSave;
+    private flushSnapshot;
     search(params: SearchParams): Promise<SearchResult[]>;
     private ensureIndex;
     private startWatcher;
