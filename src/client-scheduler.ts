@@ -76,7 +76,7 @@ export class ClientRequestScheduler {
       rejectTask = reject;
     });
     this.inFlight.set(normalizedKey, promise as Promise<unknown>);
-    this.queue.push({
+    queuePush(this.queue, {
       key: normalizedKey,
       priority: options.priority ?? 0,
       sequence: this.sequence++,
@@ -104,8 +104,7 @@ export class ClientRequestScheduler {
 
   private pump(): void {
     while (this.active < this.concurrency && this.queue.length > 0) {
-      this.queue.sort((left, right) => right.priority - left.priority || left.sequence - right.sequence);
-      const item = this.queue.shift()!;
+      const item = queuePop(this.queue)!;
       if (item.signal?.aborted) {
         item.reject(new Error('scheduled task was aborted'));
         this.inFlight.delete(item.key);
@@ -142,6 +141,40 @@ export class ClientRequestScheduler {
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && /abort/i.test(error.message);
+}
+
+function queueCompare(left: QueueItem, right: QueueItem): number {
+  return right.priority - left.priority || left.sequence - right.sequence;
+}
+
+function queuePush(queue: QueueItem[], item: QueueItem): void {
+  queue.push(item);
+  let index = queue.length - 1;
+  while (index > 0) {
+    const parent = Math.floor((index - 1) / 2);
+    if (queueCompare(queue[index]!, queue[parent]!) >= 0) break;
+    [queue[index], queue[parent]] = [queue[parent]!, queue[index]!];
+    index = parent;
+  }
+}
+
+function queuePop(queue: QueueItem[]): QueueItem | undefined {
+  const first = queue[0];
+  if (!first) return undefined;
+  const last = queue.pop()!;
+  if (queue.length === 0) return first;
+  queue[0] = last;
+  let index = 0;
+  while (true) {
+    const left = index * 2 + 1;
+    const right = left + 1;
+    let best = index;
+    if (left < queue.length && queueCompare(queue[left]!, queue[best]!) < 0) best = left;
+    if (right < queue.length && queueCompare(queue[right]!, queue[best]!) < 0) best = right;
+    if (best === index) return first;
+    [queue[index], queue[best]] = [queue[best]!, queue[index]!];
+    index = best;
+  }
 }
 
 async function waitForAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {

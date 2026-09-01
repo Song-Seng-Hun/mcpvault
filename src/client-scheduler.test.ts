@@ -93,3 +93,17 @@ test('adapts concurrency to latency while keeping a hard bound', async () => {
   await expect(scheduler.run('failed', async () => { throw new Error('server overloaded'); })).rejects.toThrow('overloaded');
   expect(scheduler.currentConcurrency()).toBe(1);
 });
+
+test('keeps priority ordering with a large heap-backed queue', async () => {
+  const scheduler = new ClientRequestScheduler(1);
+  const order: string[] = [];
+  let release!: () => void;
+  const first = scheduler.run('first', async () => new Promise<void>(resolve => { release = resolve; }));
+  const queued = Array.from({ length: 50 }, (_, index) => scheduler.run(`low-${index}`, async () => { order.push(`low-${index}`); }, { priority: index % 3 }));
+  const high = scheduler.run('high', async () => { order.push('high'); }, { priority: 100 });
+  await Promise.resolve();
+  release();
+  await Promise.all([first, high, ...queued]);
+  expect(order[0]).toBe('high');
+  expect(order).toHaveLength(51);
+});
