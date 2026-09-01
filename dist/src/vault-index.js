@@ -520,7 +520,8 @@ export class VaultMetadataIndex {
             const paths = this.catalog ? await this.catalog.notePathsSnapshot() : await this.findNotePaths(this.vaultPath);
             for (let start = 0; start < paths.length; start += READ_BATCH_SIZE) {
                 const batch = paths.slice(start, start + READ_BATCH_SIZE);
-                const metadata = await Promise.all(batch.map(path => this.readEntry(path, this.entries.get(path))));
+                const sharedStats = this.catalog ? await this.catalog.statPaths(batch) : undefined;
+                const metadata = await Promise.all(batch.map(path => this.readEntry(path, this.entries.get(path), sharedStats?.get(path))));
                 for (const entry of metadata) {
                     if (entry)
                         next.set(entry.path, entry);
@@ -576,27 +577,37 @@ export class VaultMetadataIndex {
             this.refreshPromise = undefined;
         }
     }
-    async readEntry(path, existing) {
+    async readEntry(path, existing, sharedStat) {
         const normalized = normalizePath(path);
         if (!isNote(normalized) || !this.pathFilter.isAllowed(normalized))
             return undefined;
         try {
             const fullPath = join(this.vaultPath, normalized);
-            const info = await stat(fullPath);
-            if (!info.isFile())
-                return undefined;
+            let size;
+            let mtimeMs;
+            if (sharedStat) {
+                size = sharedStat.size;
+                mtimeMs = sharedStat.mtimeMs;
+            }
+            else {
+                const info = await stat(fullPath);
+                if (!info.isFile())
+                    return undefined;
+                size = info.size;
+                mtimeMs = info.mtimeMs;
+            }
             // Full reconciliation is intentionally stat-only for unchanged notes.
             // This keeps repeated pulse/community reads from reopening and reparsing
             // the whole vault while preserving the existing metadata object.
-            if (existing && existing.size === info.size && existing.mtimeMs === info.mtimeMs)
+            if (existing && existing.size === size && existing.mtimeMs === mtimeMs)
                 return existing;
             const raw = await this.vaultIo.readUtf8(fullPath);
             return {
                 path: normalized,
                 frontmatter: this.frontmatter.parse(raw).frontmatter,
                 revision: revision(raw),
-                size: info.size,
-                mtimeMs: info.mtimeMs,
+                size,
+                mtimeMs,
             };
         }
         catch {

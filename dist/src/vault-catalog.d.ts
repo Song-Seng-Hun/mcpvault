@@ -4,6 +4,10 @@ export interface VaultCatalogChange {
     path: string;
     kind: VaultCatalogChangeKind;
 }
+export interface VaultCatalogFileStat {
+    size: number;
+    mtimeMs: number;
+}
 export type VaultCatalogListener = (path?: string, kind?: VaultCatalogChangeKind) => void;
 export type VaultCatalogBatchListener = (changes?: readonly VaultCatalogChange[]) => void;
 /**
@@ -34,6 +38,7 @@ export declare class VaultFileCatalog {
     private closed;
     private readonly directoryCache;
     private readonly dirtyDirectories;
+    private readonly statInFlight;
     constructor(vaultPath: string, pathFilter: PathFilter);
     subscribe(listener: VaultCatalogListener): () => void;
     /** Subscribe to coalesced watcher changes so read models invalidate once per batch. */
@@ -46,8 +51,11 @@ export declare class VaultFileCatalog {
     listAllPaths(): Promise<string[]>;
     /** Return the current immutable-by-convention all-path snapshot for read models. */
     allPathsSnapshot(): Promise<readonly string[]>;
+    /** Share concurrent file stat calls between read models without retaining file metadata. */
+    statPaths(paths: readonly string[]): Promise<ReadonlyMap<string, VaultCatalogFileStat>>;
     private listInventory;
     close(): void;
+    private statPath;
     private startWatcher;
     private onFilesystemEvent;
     private queueFullRefreshEvent;

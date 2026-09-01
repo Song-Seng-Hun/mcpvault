@@ -591,11 +591,23 @@ export class CommunityFeaturesService {
       await this.fileSystem.writeNote({ path, content: `${content}\n`, frontmatter: { mcpvault_type: 'guestbook_entry', guestbook_owner: owner, entry_id: entryId, author: identity(params.principal), author_role: params.principal.role, mentions: extractMentions(content), ...(params.replyTo && { reply_to: normalizeScopeId(params.replyTo, 'replyTo') }), content_status: 'published', created_at: now(), updated_at: now() }, expectedRevision: 'missing' });
       return { success: true, entryId, owner, path };
     }
-    const result = await queryAllNotes(this.fileSystem, { pathPrefix: pathRoot, filters: { mcpvault_type: 'guestbook_entry', content_status: 'published' }, sortBy: 'created_at', sortOrder: 'asc' });
     const limit = positive(params.limit, 20, 100);
-    const cursor = params.afterEntryId ? result.notes.findIndex(n => n.frontmatter.entry_id === normalizeScopeId(params.afterEntryId!, 'afterEntryId')) : -1;
-    if (params.afterEntryId && cursor < 0) throw new Error('afterEntryId was not found');
-    const selected = result.notes.slice(cursor >= 0 ? cursor + 1 : Math.max(0, result.notes.length - limit), cursor >= 0 ? cursor + 1 + limit : undefined);
+    const filters = { mcpvault_type: 'guestbook_entry', content_status: 'published' };
+    const total = await this.fileSystem.countNotes({ pathPrefix: pathRoot, filters });
+    let selected: Array<{ path: string; frontmatter: Record<string, any> }> = [];
+    let windowTruncated = false;
+    if (params.afterEntryId) {
+      const afterEntryId = normalizeScopeId(params.afterEntryId, 'afterEntryId');
+      const cursorNote = await this.fileSystem.readNote(`${pathRoot}/${afterEntryId}.md`).catch(() => undefined);
+      if (!cursorNote || cursorNote.frontmatter.entry_id !== afterEntryId) throw new Error('afterEntryId was not found');
+      const window = await queryWindow(this.fileSystem, { pathPrefix: pathRoot, filters, sortBy: 'created_at', sortOrder: 'asc', limit, after: { path: `${pathRoot}/${afterEntryId}.md`, value: cursorNote.frontmatter.created_at } });
+      selected = window.notes;
+      windowTruncated = window.truncated;
+    } else {
+      const window = await queryWindow(this.fileSystem, { pathPrefix: pathRoot, filters, sortBy: 'created_at', sortOrder: 'desc', limit });
+      selected = window.notes.reverse();
+      windowTruncated = window.truncated;
+    }
     const hydrated = await Promise.all(selected.map(async n => {
       try {
         const note = await this.fileSystem.readNote(n.path);
@@ -605,7 +617,7 @@ export class CommunityFeaturesService {
       }
     }));
     const bounded = boundItems(hydrated.filter((entry): entry is NonNullable<typeof entry> => entry !== undefined), positive(params.maxChars, 6000, 20000));
-    return { owner, entries: bounded.items, total: result.total, truncated: result.truncated || selected.length < result.total || bounded.truncated, nextCursor: bounded.items.at(-1)?.entryId };
+    return { owner, entries: bounded.items, total, truncated: windowTruncated || selected.length < total || bounded.truncated, nextCursor: bounded.items.at(-1)?.entryId };
   }
 
   private ownerRoot(principal: ScopePrincipal, kind: 'subscriptions' | 'saves') {

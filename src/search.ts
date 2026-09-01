@@ -9,7 +9,7 @@ import type { RankCandidate, SearchParams, SearchResult } from './types.js';
 import { generateObsidianUri } from './uri.js';
 import { boundSearchResults, boundedTopK, normalizeSearchLimit, normalizeSearchMaxChars } from './search-limits.js';
 import { isMarkdownModerationHidden } from './moderation-policy.js';
-import type { VaultCatalogChange, VaultFileCatalog } from './vault-catalog.js';
+import type { VaultCatalogChange, VaultCatalogFileStat, VaultFileCatalog } from './vault-catalog.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 import { VaultIoCoordinator } from './vault-io.js';
 
@@ -638,9 +638,10 @@ export class SearchService {
       const next = new Map<string, IndexedDocument>();
       for (let start = 0; start < paths.length; start += INDEX_READ_BATCH_SIZE) {
         const batch = paths.slice(start, start + INDEX_READ_BATCH_SIZE);
+        const sharedStats = this.catalog ? await this.catalog.statPaths(batch.map(fullPath => fullPath.substring(this.vaultPath.length + 1).replace(/\\/g, '/'))) : undefined;
         const documents = await Promise.all(batch.map(fullPath => {
           const relativePath = fullPath.substring(this.vaultPath.length + 1).replace(/\\/g, '/');
-          return this.readIndexedDocument(fullPath, this.documents.get(relativePath));
+          return this.readIndexedDocument(fullPath, this.documents.get(relativePath), sharedStats?.get(relativePath));
         }));
         for (const document of documents) {
           if (document) next.set(document.relativePath, document);
@@ -687,13 +688,22 @@ export class SearchService {
     }
   }
 
-  private async readIndexedDocument(fullPath: string, existing?: IndexedDocument): Promise<IndexedDocument | undefined> {
+  private async readIndexedDocument(fullPath: string, existing?: IndexedDocument, sharedStat?: VaultCatalogFileStat): Promise<IndexedDocument | undefined> {
     const relativePath = fullPath.substring(this.vaultPath.length + 1).replace(/\\/g, '/');
     if (!this.pathFilter.isAllowed(relativePath)) return undefined;
     try {
-      const info = await stat(fullPath);
-      if (!info.isFile()) return undefined;
-      if (existing && existing.size === info.size && existing.mtimeMs === info.mtimeMs) return existing;
+      let size: number;
+      let mtimeMs: number;
+      if (sharedStat) {
+        size = sharedStat.size;
+        mtimeMs = sharedStat.mtimeMs;
+      } else {
+        const info = await stat(fullPath);
+        if (!info.isFile()) return undefined;
+        size = info.size;
+        mtimeMs = info.mtimeMs;
+      }
+      if (existing && existing.size === size && existing.mtimeMs === mtimeMs) return existing;
       const content = await this.vaultIo.readUtf8(fullPath);
       const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
       const body = frontmatterMatch ? content.slice(frontmatterMatch[0].length) : content;
@@ -708,8 +718,8 @@ export class SearchService {
         isWiki: isWikiPath(relativePath) || wikiType(content) !== undefined,
         moderationHidden: isMarkdownModerationHidden(content),
         revision: revision(content),
-        size: info.size,
-        mtimeMs: info.mtimeMs,
+        size,
+        mtimeMs,
         bodyLength: countWords(body),
         frontmatterLength: countWords(frontmatterText),
         textBytes: Buffer.byteLength(content, 'utf8'),
@@ -1172,7 +1182,17 @@ export class SearchService {
 }
 
 function countWords(value: string): number {
-  return value.split(/\s+/).filter(Boolean).length;
+  let count = 0;
+  let inWord = false;
+  for (const character of value) {
+    if (/\s/.test(character)) {
+      inWord = false;
+    } else if (!inWord) {
+      inWord = true;
+      count += 1;
+    }
+  }
+  return count;
 }
 
 function grams(value: string): Set<string> {

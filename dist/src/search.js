@@ -585,9 +585,10 @@ export class SearchService {
             const next = new Map();
             for (let start = 0; start < paths.length; start += INDEX_READ_BATCH_SIZE) {
                 const batch = paths.slice(start, start + INDEX_READ_BATCH_SIZE);
+                const sharedStats = this.catalog ? await this.catalog.statPaths(batch.map(fullPath => fullPath.substring(this.vaultPath.length + 1).replace(/\\/g, '/'))) : undefined;
                 const documents = await Promise.all(batch.map(fullPath => {
                     const relativePath = fullPath.substring(this.vaultPath.length + 1).replace(/\\/g, '/');
-                    return this.readIndexedDocument(fullPath, this.documents.get(relativePath));
+                    return this.readIndexedDocument(fullPath, this.documents.get(relativePath), sharedStats?.get(relativePath));
                 }));
                 for (const document of documents) {
                     if (document)
@@ -640,15 +641,25 @@ export class SearchService {
             this.indexRefresh = undefined;
         }
     }
-    async readIndexedDocument(fullPath, existing) {
+    async readIndexedDocument(fullPath, existing, sharedStat) {
         const relativePath = fullPath.substring(this.vaultPath.length + 1).replace(/\\/g, '/');
         if (!this.pathFilter.isAllowed(relativePath))
             return undefined;
         try {
-            const info = await stat(fullPath);
-            if (!info.isFile())
-                return undefined;
-            if (existing && existing.size === info.size && existing.mtimeMs === info.mtimeMs)
+            let size;
+            let mtimeMs;
+            if (sharedStat) {
+                size = sharedStat.size;
+                mtimeMs = sharedStat.mtimeMs;
+            }
+            else {
+                const info = await stat(fullPath);
+                if (!info.isFile())
+                    return undefined;
+                size = info.size;
+                mtimeMs = info.mtimeMs;
+            }
+            if (existing && existing.size === size && existing.mtimeMs === mtimeMs)
                 return existing;
             const content = await this.vaultIo.readUtf8(fullPath);
             const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
@@ -664,8 +675,8 @@ export class SearchService {
                 isWiki: isWikiPath(relativePath) || wikiType(content) !== undefined,
                 moderationHidden: isMarkdownModerationHidden(content),
                 revision: revision(content),
-                size: info.size,
-                mtimeMs: info.mtimeMs,
+                size,
+                mtimeMs,
                 bodyLength: countWords(body),
                 frontmatterLength: countWords(frontmatterText),
                 textBytes: Buffer.byteLength(content, 'utf8'),
@@ -1116,7 +1127,18 @@ export class SearchService {
     }
 }
 function countWords(value) {
-    return value.split(/\s+/).filter(Boolean).length;
+    let count = 0;
+    let inWord = false;
+    for (const character of value) {
+        if (/\s/.test(character)) {
+            inWord = false;
+        }
+        else if (!inWord) {
+            inWord = true;
+            count += 1;
+        }
+    }
+    return count;
 }
 function grams(value) {
     const output = new Set();

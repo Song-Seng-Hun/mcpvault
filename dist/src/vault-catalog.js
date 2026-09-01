@@ -42,6 +42,7 @@ export class VaultFileCatalog {
     closed = false;
     directoryCache = new Map();
     dirtyDirectories = new Set();
+    statInFlight = new Map();
     constructor(vaultPath, pathFilter) {
         this.pathFilter = pathFilter;
         this.vaultPath = resolve(vaultPath);
@@ -86,6 +87,21 @@ export class VaultFileCatalog {
     async allPathsSnapshot() {
         return (await this.listInventory()).all;
     }
+    /** Share concurrent file stat calls between read models without retaining file metadata. */
+    async statPaths(paths) {
+        const unique = [...new Set(paths.map(normalizePath).filter(path => path && this.pathFilter.isAllowed(path)))];
+        const result = new Map();
+        for (let start = 0; start < unique.length; start += WATCH_EVENT_STAT_BATCH_SIZE) {
+            const batch = unique.slice(start, start + WATCH_EVENT_STAT_BATCH_SIZE);
+            const stats = await Promise.all(batch.map(path => this.statPath(path)));
+            for (let index = 0; index < batch.length; index += 1) {
+                const info = stats[index];
+                if (info)
+                    result.set(batch[index], info);
+            }
+        }
+        return result;
+    }
     async listInventory() {
         this.startWatcher();
         const interval = this.watcher ? WATCH_RECONCILE_INTERVAL_MS : NO_WATCHER_RECONCILE_INTERVAL_MS;
@@ -117,7 +133,23 @@ export class VaultFileCatalog {
         this.refreshPromise = undefined;
         this.directoryCache.clear();
         this.dirtyDirectories.clear();
+        this.statInFlight.clear();
         derivedCacheBudget.clearOwner(this.cacheOwner);
+    }
+    statPath(path) {
+        const normalized = normalizePath(path);
+        const running = this.statInFlight.get(normalized);
+        if (running)
+            return running;
+        const computation = stat(join(this.vaultPath, normalized))
+            .then(info => info.isFile() ? { size: info.size, mtimeMs: info.mtimeMs } : undefined)
+            .catch(() => undefined);
+        this.statInFlight.set(normalized, computation);
+        void computation.finally(() => {
+            if (this.statInFlight.get(normalized) === computation)
+                this.statInFlight.delete(normalized);
+        });
+        return computation;
     }
     startWatcher() {
         if (this.watcherStarted)

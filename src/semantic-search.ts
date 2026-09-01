@@ -630,12 +630,13 @@ export class SemanticSearchService {
         : await this.findMarkdownFiles(this.vaultPath);
       for (let start = 0; start < paths.length; start += SCAN_BATCH_SIZE) {
         const batch = paths.slice(start, start + SCAN_BATCH_SIZE);
+        const sharedStats = this.catalog ? await this.catalog.statPaths(batch) : undefined;
         const observations = await Promise.all(batch.map(async path => {
           const normalized = normalizePath(path);
           if (!this.pathFilter.isAllowed(normalized)) return { normalized };
           const fullPath = join(this.vaultPath, normalized);
-          const info = await stat(fullPath).catch(() => undefined);
-          if (!info?.isFile()) return { normalized };
+          const info = sharedStats?.get(normalized) || await stat(fullPath).catch(() => undefined);
+          if (!info) return { normalized };
           const entry = this.manifest[normalized];
           if (entry && entry.size === info.size && entry.mtimeMs === info.mtimeMs) return { normalized, info, entry };
           const content = await this.vaultIo.readUtf8(fullPath, 'background').catch(() => undefined);
@@ -643,7 +644,7 @@ export class SemanticSearchService {
         }));
         for (const observation of observations) {
           seen.add(observation.normalized);
-          if (!observation.info?.isFile() || !observation.hash) continue;
+          if (!observation.info || !observation.hash) continue;
           const { normalized, info, entry, hash } = observation;
           if ((!entry || entry.hash !== hash) && (this.pending.size < MAX_PENDING_CHANGES || this.pending.has(normalized))) {
             // Preserve an in-flight retry's backoff. Re-scanning the catalog must
