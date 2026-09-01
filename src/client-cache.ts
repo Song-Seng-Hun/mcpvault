@@ -2,6 +2,11 @@ export interface ClientEndpointCaller {
   callEndpoint(endpointId: string, arguments_: Record<string, unknown>): Promise<unknown>;
 }
 
+export interface ClientKeyValueStore {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}
+
 export interface CachedNote {
   path: string;
   revision: string;
@@ -69,6 +74,44 @@ export class McpVaultClientCache {
     this.entries.delete(path);
     this.entries.set(path, cached);
     return cloneNote(cached);
+  }
+
+  values(): CachedNote[] {
+    return [...this.entries.values()].map(cloneNote);
+  }
+
+  snapshot(): string {
+    return JSON.stringify(this.values());
+  }
+
+  restore(snapshot: string): number {
+    let parsed: unknown;
+    try { parsed = JSON.parse(snapshot); } catch { return 0; }
+    if (!Array.isArray(parsed)) return 0;
+    let restored = 0;
+    for (const value of parsed) {
+      if (!value || typeof value !== 'object') continue;
+      const item = value as Partial<CachedNote>;
+      if (typeof item.path !== 'string' || !item.path || typeof item.revision !== 'string' || !item.revision) continue;
+      this.put({
+        path: item.path,
+        revision: item.revision,
+        ...(typeof item.content === 'string' && { content: item.content }),
+        ...(item.frontmatter && typeof item.frontmatter === 'object' && { frontmatter: item.frontmatter as Record<string, unknown> }),
+        ...(typeof item.obsidianUri === 'string' && { obsidianUri: item.obsidianUri }),
+      });
+      restored += 1;
+    }
+    return restored;
+  }
+
+  persist(store: ClientKeyValueStore, key: string): void {
+    store.setItem(key, this.snapshot());
+  }
+
+  hydrate(store: ClientKeyValueStore, key: string): number {
+    const snapshot = store.getItem(key);
+    return snapshot ? this.restore(snapshot) : 0;
   }
 
   invalidate(path?: string): void {

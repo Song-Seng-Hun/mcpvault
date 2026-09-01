@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { McpVaultClientCache, type ClientEndpointCaller } from './client-cache.js';
+import { McpVaultClientCache, type ClientEndpointCaller, type ClientKeyValueStore } from './client-cache.js';
 
 test('client cache performs a first read, then conditional reuse and refresh', async () => {
   let revision = 'a'.repeat(64);
@@ -59,4 +59,26 @@ test('client cache coalesces identical concurrent reads', async () => {
   const [first, second] = await Promise.all([cache.readNotes(['same.md']), cache.readNotes(['same.md'])]);
   expect(calls).toBe(1);
   expect(first.notes[0]!.content).toBe(second.notes[0]!.content);
+});
+
+test('client cache can persist and restore through a host-provided store', async () => {
+  const values = new Map<string, string>();
+  const store: ClientKeyValueStore = {
+    getItem: key => values.get(key) || null,
+    setItem: (key, value) => { values.set(key, value); },
+  };
+  const caller: ClientEndpointCaller = {
+    async callEndpoint(_endpointId, arguments_) {
+      const path = (arguments_.paths as string[])[0]!;
+      return { ok: [{ path, revision: 'd'.repeat(64), content: 'persisted' }], err: [] };
+    },
+  };
+  const original = new McpVaultClientCache(caller);
+  await original.readNotes(['persisted.md']);
+  original.persist(store, 'mcpvault-cache');
+
+  const restored = new McpVaultClientCache(caller);
+  expect(restored.hydrate(store, 'mcpvault-cache')).toBe(1);
+  expect(restored.get('persisted.md')!.content).toBe('persisted');
+  expect(restored.values()).toHaveLength(1);
 });

@@ -36,6 +36,47 @@ export class McpVaultClientCache {
         this.entries.set(path, cached);
         return cloneNote(cached);
     }
+    values() {
+        return [...this.entries.values()].map(cloneNote);
+    }
+    snapshot() {
+        return JSON.stringify(this.values());
+    }
+    restore(snapshot) {
+        let parsed;
+        try {
+            parsed = JSON.parse(snapshot);
+        }
+        catch {
+            return 0;
+        }
+        if (!Array.isArray(parsed))
+            return 0;
+        let restored = 0;
+        for (const value of parsed) {
+            if (!value || typeof value !== 'object')
+                continue;
+            const item = value;
+            if (typeof item.path !== 'string' || !item.path || typeof item.revision !== 'string' || !item.revision)
+                continue;
+            this.put({
+                path: item.path,
+                revision: item.revision,
+                ...(typeof item.content === 'string' && { content: item.content }),
+                ...(item.frontmatter && typeof item.frontmatter === 'object' && { frontmatter: item.frontmatter }),
+                ...(typeof item.obsidianUri === 'string' && { obsidianUri: item.obsidianUri }),
+            });
+            restored += 1;
+        }
+        return restored;
+    }
+    persist(store, key) {
+        store.setItem(key, this.snapshot());
+    }
+    hydrate(store, key) {
+        const snapshot = store.getItem(key);
+        return snapshot ? this.restore(snapshot) : 0;
+    }
     invalidate(path) {
         if (path === undefined)
             this.entries.clear();
