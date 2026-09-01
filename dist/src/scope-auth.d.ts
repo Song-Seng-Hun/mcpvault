@@ -18,6 +18,8 @@ export declare class ScopeAuthService {
     private readonly loginFailures;
     private readonly dummySalt;
     private mutationQueue;
+    private databaseCache;
+    private databaseInFlight;
     constructor(vaultPath: string, options?: {
         moderatorAccounts?: string[];
     });

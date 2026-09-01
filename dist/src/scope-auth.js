@@ -9,6 +9,7 @@ const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_MIN_LENGTH = 12;
 const MAX_LOGIN_FAILURES = 5;
 const LOGIN_BLOCK_MS = 30_000;
+const AUTH_DATABASE_CACHE_TTL_MS = 1_000;
 export const SCOPE_CAPABILITIES = ['write', 'publish', 'comment', 'chat', 'status', 'whisper', 'task', 'profile', 'journal', 'moderate'];
 const DEFAULT_MODEL_CAPABILITIES = ['write', 'publish', 'comment', 'chat', 'status', 'whisper', 'task', 'profile'];
 const DEFAULT_AGENT_CAPABILITIES = [...DEFAULT_MODEL_CAPABILITIES, 'journal'];
@@ -37,6 +38,8 @@ export class ScopeAuthService {
     loginFailures = new Map();
     dummySalt = randomBytes(16);
     mutationQueue = Promise.resolve();
+    databaseCache;
+    databaseInFlight;
     constructor(vaultPath, options = {}) {
         this.authPath = join(resolve(vaultPath), '.mcpvault', 'scope-auth.json');
         const configured = options.moderatorAccounts || String(process.env.MCPVAULT_MODERATOR_ACCOUNTS || '').split(',');
@@ -49,18 +52,35 @@ export class ScopeAuthService {
         return Array.from(new Set(capabilities));
     }
     async readDatabase() {
+        const cached = this.databaseCache;
+        if (cached && cached.expiresAt > Date.now())
+            return cached.value;
+        if (this.databaseInFlight)
+            return this.databaseInFlight;
+        const computation = (async () => {
+            try {
+                const parsed = JSON.parse(await readFile(this.authPath, 'utf8'));
+                if (parsed.version !== AUTH_VERSION || !Array.isArray(parsed.accounts)) {
+                    throw new Error('Unsupported or corrupt scope authentication database');
+                }
+                return { version: AUTH_VERSION, accounts: parsed.accounts };
+            }
+            catch (error) {
+                if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+                    return { version: AUTH_VERSION, accounts: [] };
+                }
+                throw error;
+            }
+        })();
+        this.databaseInFlight = computation;
         try {
-            const parsed = JSON.parse(await readFile(this.authPath, 'utf8'));
-            if (parsed.version !== AUTH_VERSION || !Array.isArray(parsed.accounts)) {
-                throw new Error('Unsupported or corrupt scope authentication database');
-            }
-            return { version: AUTH_VERSION, accounts: parsed.accounts };
+            const database = await computation;
+            this.databaseCache = { expiresAt: Date.now() + AUTH_DATABASE_CACHE_TTL_MS, value: database };
+            return database;
         }
-        catch (error) {
-            if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-                return { version: AUTH_VERSION, accounts: [] };
-            }
-            throw error;
+        finally {
+            if (this.databaseInFlight === computation)
+                this.databaseInFlight = undefined;
         }
     }
     async writeDatabase(database) {
@@ -69,6 +89,7 @@ export class ScopeAuthService {
         const temporary = `${this.authPath}.${randomBytes(8).toString('hex')}.tmp`;
         await writeFile(temporary, `${JSON.stringify(database, null, 2)}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
         await rename(temporary, this.authPath);
+        this.databaseCache = { expiresAt: Date.now() + AUTH_DATABASE_CACHE_TTL_MS, value: database };
         // Windows may ignore POSIX modes; on Unix this narrows permissions even
         // when the directory already existed with a permissive umask.
         await Promise.allSettled([chmod(directory, 0o700), chmod(this.authPath, 0o600)]);
@@ -139,13 +160,13 @@ export class ScopeAuthService {
                 role: agentId ? 'agent' : 'model',
                 capabilities: this.defaultCapabilities(agentId ? 'agent' : 'model'),
             };
-            database.accounts.push({
+            const account = {
                 ...principal,
                 salt: salt.toString('base64'),
                 passwordHash: hash.toString('base64'),
                 createdAt: new Date().toISOString(),
-            });
-            await this.writeDatabase(database);
+            };
+            await this.writeDatabase({ ...database, accounts: [...database.accounts, account] });
             return principal;
         });
         // Registration is also the first login. Returning a live session removes
@@ -249,8 +270,10 @@ export class ScopeAuthService {
             const account = database.accounts.find(candidate => candidate.agentId === agentId);
             if (!account || account.modelId !== sponsor.modelId)
                 throw new Error(`Agent account '${agentId}' does not belong to this model scope`);
-            account.capabilities = capabilities;
-            await this.writeDatabase(database);
+            await this.writeDatabase({
+                ...database,
+                accounts: database.accounts.map(candidate => candidate === account ? { ...candidate, capabilities } : candidate),
+            });
             for (const [key, session] of this.sessions) {
                 if (session.principal.agentId === agentId)
                     this.sessions.delete(key);
@@ -278,9 +301,13 @@ export class ScopeAuthService {
                 throw new Error('Current password is incorrect');
             }
             const salt = randomBytes(16);
-            account.salt = salt.toString('base64');
-            account.passwordHash = (await passwordDigest(newPassword, salt)).toString('base64');
-            await this.writeDatabase(database);
+            const passwordHash = (await passwordDigest(newPassword, salt)).toString('base64');
+            await this.writeDatabase({
+                ...database,
+                accounts: database.accounts.map(candidate => candidate === account
+                    ? { ...candidate, salt: salt.toString('base64'), passwordHash }
+                    : candidate),
+            });
         });
         for (const [key, session] of this.sessions) {
             if (session.principal.accountId === principal.accountId)

@@ -1282,7 +1282,9 @@ server:
 
 Raw passwords are never stored. A salted scrypt hash is persisted in
 `.mcpvault/scope-auth.json`, a hidden path excluded from MCP note access and
-Git revision commits. Keep the raw password only in the host secret store or
+Git revision commits. The long-running server briefly caches the parsed
+authentication database and coalesces concurrent reads; account and capability
+updates refresh that cache immediately. Keep the raw password only in the host secret store or
 the current agent's host-provided private sandbox. Raw session tokens live only in server memory, so a
 server restart requires login again but does not require account recreation.
 Use a unique password because MCP tool arguments may be visible to the client
