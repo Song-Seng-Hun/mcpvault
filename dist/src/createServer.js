@@ -223,6 +223,7 @@ export function createServer(vaultPath, options = {}) {
     let reputationCache;
     let notificationsCache;
     let communityFeaturesCache;
+    let llmWikiCache;
     const fileSystem = new FileSystemService(resolvedVaultPath, pathFilter, frontmatterHandler, (path, kind) => {
         fileCatalog.invalidate(path);
         metadataIndex.invalidate(path, kind);
@@ -231,12 +232,14 @@ export function createServer(vaultPath, options = {}) {
         reputationCache?.invalidate(path, kind);
         notificationsCache?.invalidate(path, kind);
         communityFeaturesCache?.invalidate(path);
+        llmWikiCache?.invalidate();
         graphIndex.invalidate(path, kind);
     }, metadataIndex, graphIndex);
     const gitHistory = new GitHistoryService(resolvedVaultPath, pathFilter);
     const collaboration = new CollaborationService(fileSystem, searchService);
     const references = new ReferenceService(fileSystem, scopeAccess);
     const llmWiki = new LlmWikiService(fileSystem, scopeAccess, references);
+    llmWikiCache = llmWiki;
     const moderation = new ModerationService(resolvedVaultPath, fileSystem, scopeAuth);
     const reputation = new ReputationService(fileSystem, scopeAuth, moderation);
     reputationCache = reputation;

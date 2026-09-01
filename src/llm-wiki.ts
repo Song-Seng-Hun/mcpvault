@@ -13,6 +13,21 @@ const ISSUE_KINDS = new Set(['contradiction', 'unsupported_claim', 'stale', 'bro
 const WELCOME_NOTE_PATH = '환영합니다!.md';
 const PUBLIC_SCHEMA_PATH = '_wiki/SCHEMA.md';
 
+interface WikiLintIssue {
+  severity: 'error' | 'warning';
+  code: string;
+  path: string;
+  detail: string;
+}
+
+interface WikiLintResult {
+  healthy: boolean;
+  errors: number;
+  warnings: number;
+  issues: WikiLintIssue[];
+  truncated: boolean;
+}
+
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const now = () => new Date().toISOString();
 const joinRoot = (root: string, path: string) => root ? `${root}/${path}` : path;
@@ -83,11 +98,29 @@ strongest counterargument, and leave a concise trail that compounds over time.
 `;
 
 export class LlmWikiService {
+  private generation = 0;
+  private readonly catalogSummaryCache = new Map<string, { generation: number; value: any }>();
+  private readonly catalogSummaryInFlight = new Map<string, Promise<any>>();
+  private readonly lintCache = new Map<string, { generation: number; value: WikiLintResult }>();
+  private readonly lintInFlight = new Map<string, Promise<WikiLintResult>>();
+
   constructor(
     private readonly fileSystem: FileSystemService,
     private readonly access: ScopeAccessPolicy,
     private readonly references: ReferenceService,
   ) {}
+
+  invalidate(): void {
+    this.generation += 1;
+    this.catalogSummaryCache.clear();
+    this.catalogSummaryInFlight.clear();
+    this.lintCache.clear();
+    this.lintInFlight.clear();
+  }
+
+  private principalKey(principal?: ScopePrincipal): string {
+    return JSON.stringify(principal ? [principal.accountId, principal.modelId, principal.agentId || '', principal.role] : ['anonymous']);
+  }
 
   async initialize(scopeRoot: string, actor: string) {
     const schemaPath = joinRoot(scopeRoot, '_wiki/SCHEMA.md');
@@ -231,6 +264,25 @@ export class LlmWikiService {
   }
 
   async catalog(principal?: ScopePrincipal, options: { summaryOnly?: boolean } = {}) {
+    if (!options.summaryOnly) return this.computeCatalog(principal);
+    const key = this.principalKey(principal);
+    const cached = this.catalogSummaryCache.get(key);
+    if (cached?.generation === this.generation) return cached.value;
+    const running = this.catalogSummaryInFlight.get(key);
+    if (running) return running;
+    const generation = this.generation;
+    const computation = this.computeCatalog(principal, { summaryOnly: true });
+    this.catalogSummaryInFlight.set(key, computation);
+    try {
+      const value = await computation;
+      if (this.generation === generation) this.catalogSummaryCache.set(key, { generation, value });
+      return value;
+    } finally {
+      if (this.catalogSummaryInFlight.get(key) === computation) this.catalogSummaryInFlight.delete(key);
+    }
+  }
+
+  private async computeCatalog(principal?: ScopePrincipal, options: { summaryOnly?: boolean } = {}) {
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
     const entries: Array<Record<string, unknown>> = [];
     const counts: Record<string, number> = {};
@@ -412,8 +464,27 @@ export class LlmWikiService {
   }
 
   async lint(principal?: ScopePrincipal, limit: number = 200) {
+    const normalizedLimit = Math.max(0, Number(limit));
+    const key = `${this.principalKey(principal)}|${normalizedLimit}`;
+    const cached = this.lintCache.get(key);
+    if (cached?.generation === this.generation) return cached.value;
+    const running = this.lintInFlight.get(key);
+    if (running) return running;
+    const generation = this.generation;
+    const computation = this.computeLint(principal, normalizedLimit);
+    this.lintInFlight.set(key, computation);
+    try {
+      const value = await computation;
+      if (this.generation === generation) this.lintCache.set(key, { generation, value });
+      return value;
+    } finally {
+      if (this.lintInFlight.get(key) === computation) this.lintInFlight.delete(key);
+    }
+  }
+
+  private async computeLint(principal?: ScopePrincipal, limit: number = 200): Promise<WikiLintResult> {
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
-    const issues: Array<{ severity: 'error' | 'warning'; code: string; path: string; detail: string }> = [];
+    const issues: WikiLintIssue[] = [];
     let totalIssues = 0;
     let errors = 0;
     let warnings = 0;

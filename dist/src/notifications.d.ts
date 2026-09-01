@@ -39,6 +39,7 @@ export interface PublicSnapshotIndex extends PublicSnapshot {
     messagesByReplyTo: Map<string, QueryNote[]>;
     postTitles: Map<string, string>;
     roomTitles: Map<string, string>;
+    seriesOrder: string[];
 }
 export declare class NotificationService {
     private readonly fileSystem;

@@ -2,11 +2,31 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ReferenceService } from './references.js';
+interface WikiLintIssue {
+    severity: 'error' | 'warning';
+    code: string;
+    path: string;
+    detail: string;
+}
+interface WikiLintResult {
+    healthy: boolean;
+    errors: number;
+    warnings: number;
+    issues: WikiLintIssue[];
+    truncated: boolean;
+}
 export declare class LlmWikiService {
     private readonly fileSystem;
     private readonly access;
     private readonly references;
+    private generation;
+    private readonly catalogSummaryCache;
+    private readonly catalogSummaryInFlight;
+    private readonly lintCache;
+    private readonly lintInFlight;
     constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, references: ReferenceService);
+    invalidate(): void;
+    private principalKey;
     initialize(scopeRoot: string, actor: string): Promise<{
         success: boolean;
         created: boolean;
@@ -49,13 +69,8 @@ export declare class LlmWikiService {
     }>;
     catalog(principal?: ScopePrincipal, options?: {
         summaryOnly?: boolean;
-    }): Promise<{
-        counts: Record<string, number>;
-        entries: Record<string, unknown>[];
-        total: number;
-        truncated: boolean;
-        schemaPresent: boolean;
-    }>;
+    }): Promise<any>;
+    private computeCatalog;
     orient(principal?: ScopePrincipal): Promise<{
         protocol: string;
         purpose: string;
@@ -102,25 +117,8 @@ export declare class LlmWikiService {
             note: string;
         };
         invariants: string[];
-        catalog: {
-            counts: Record<string, number>;
-            entries: Record<string, unknown>[];
-            total: number;
-            truncated: boolean;
-            schemaPresent: boolean;
-        };
-        lint: {
-            healthy: boolean;
-            errors: number;
-            warnings: number;
-            issues: {
-                severity: 'error' | 'warning';
-                code: string;
-                path: string;
-                detail: string;
-            }[];
-            truncated: boolean;
-        };
+        catalog: any;
+        lint: WikiLintResult;
         nextActions: {
             tool: string;
             arguments?: Record<string, string>;
@@ -133,18 +131,8 @@ export declare class LlmWikiService {
         errors: number;
         warnings: number;
     }>;
-    lint(principal?: ScopePrincipal, limit?: number): Promise<{
-        healthy: boolean;
-        errors: number;
-        warnings: number;
-        issues: {
-            severity: 'error' | 'warning';
-            code: string;
-            path: string;
-            detail: string;
-        }[];
-        truncated: boolean;
-    }>;
+    lint(principal?: ScopePrincipal, limit?: number): Promise<WikiLintResult>;
+    private computeLint;
     reportIssue(params: {
         scopeRoot: string;
         issueId?: string;
@@ -172,4 +160,5 @@ export declare class LlmWikiService {
         revision: string;
     }>;
 }
+export {};
 //# sourceMappingURL=llm-wiki.d.ts.map

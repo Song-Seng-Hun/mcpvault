@@ -71,6 +71,18 @@ function belongsInPublicCollection(note, collection) {
         return type === 'chat_message';
     return type === 'chat_room';
 }
+const PUBLIC_METADATA_FIELDS = {
+    posts: ['mcpvault_type', 'status', 'post_id', 'title', 'author', 'category', 'tags', 'mentions', 'series_id', 'series_title', 'series_order', 'related_posts', 'duplicate_of', 'created_at', 'updated_at', 'workflow_status', 'workflow_status_by', 'workflow_status_reason', 'workflow_status_updated_at', 'moderation_status', 'moderation_reason', 'moderated_by', 'moderated_at'],
+    comments: ['mcpvault_type', 'post_id', 'comment_id', 'author', 'mentions', 'reply_to', 'created_at', 'updated_at', 'workflow_status', 'workflow_status_by', 'workflow_status_reason', 'workflow_status_updated_at', 'moderation_status', 'moderation_reason', 'moderated_by', 'moderated_at', 'content_status'],
+    messages: ['mcpvault_type', 'room_id', 'message_id', 'author', 'mentions', 'reply_to', 'created_at', 'updated_at', 'workflow_status', 'workflow_status_by', 'workflow_status_reason', 'workflow_status_updated_at', 'moderation_status', 'moderation_reason', 'moderated_by', 'moderated_at', 'content_status'],
+    rooms: ['mcpvault_type', 'room_id', 'title', 'creator', 'created_at', 'updated_at', 'archived', 'workflow_status', 'moderation_status'],
+};
+function compactPublicNote(note, collection) {
+    const frontmatter = Object.fromEntries(PUBLIC_METADATA_FIELDS[collection]
+        .filter(field => Object.prototype.hasOwnProperty.call(note.frontmatter, field))
+        .map(field => [field, note.frontmatter[field]]));
+    return { path: note.path, frontmatter };
+}
 function sortPublicCollection(notes, collection) {
     if (collection === 'rooms')
         return notes.sort((a, b) => a.path.localeCompare(b.path));
@@ -94,11 +106,20 @@ function buildPublicSnapshotIndex(snapshot) {
         messagesByReplyTo: new Map(),
         postTitles: new Map(),
         roomTitles: new Map(),
+        seriesOrder: [],
     };
+    const seriesFirstSeen = new Map();
     for (const note of snapshot.posts) {
         addToIndex(index.postsByPostId, note.frontmatter.post_id, note);
         addToIndex(index.postsBySeriesId, note.frontmatter.series_id, note);
         addToIndex(index.postsByAuthor, note.frontmatter.author, note);
+        const seriesId = text(note.frontmatter.series_id);
+        if (seriesId && !isModerationHidden(note.frontmatter)) {
+            const seen = seriesFirstSeen.get(seriesId);
+            const candidate = { createdAt: text(note.frontmatter.created_at), path: note.path };
+            if (!seen || candidate.createdAt < seen.createdAt || (candidate.createdAt === seen.createdAt && candidate.path < seen.path))
+                seriesFirstSeen.set(seriesId, candidate);
+        }
         addMentions(index.postsByMention, note);
         if (Array.isArray(note.frontmatter.tags)) {
             for (const tag of note.frontmatter.tags)
@@ -125,6 +146,9 @@ function buildPublicSnapshotIndex(snapshot) {
         if (roomId)
             index.roomTitles.set(roomId, text(note.frontmatter.title, roomId));
     }
+    index.seriesOrder = [...seriesFirstSeen.entries()]
+        .sort((a, b) => a[1].createdAt.localeCompare(b[1].createdAt) || a[1].path.localeCompare(b[1].path))
+        .map(([seriesId]) => seriesId);
     return index;
 }
 export class NotificationService {
@@ -190,7 +214,7 @@ export class NotificationService {
             for await (const note of iterateNotes(this.fileSystem)) {
                 const collection = publicCollectionForPath(note.path);
                 if (collection && belongsInPublicCollection(note, collection))
-                    snapshot[collection].push(note);
+                    snapshot[collection].push(compactPublicNote(note, collection));
             }
             for (const collection of ['posts', 'comments', 'messages', 'rooms'])
                 sortPublicCollection(snapshot[collection], collection);
@@ -223,7 +247,7 @@ export class NotificationService {
         };
         if (kind !== 'delete') {
             const note = await this.fileSystem.readNote(path);
-            const metadata = { path: normalizePath(path), frontmatter: note.frontmatter };
+            const metadata = { path: normalizePath(path), frontmatter: compactPublicNote({ path, frontmatter: note.frontmatter }, collection).frontmatter };
             if (belongsInPublicCollection(metadata, collection))
                 next[collection].push(metadata);
         }

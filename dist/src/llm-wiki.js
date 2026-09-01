@@ -77,10 +77,25 @@ export class LlmWikiService {
     fileSystem;
     access;
     references;
+    generation = 0;
+    catalogSummaryCache = new Map();
+    catalogSummaryInFlight = new Map();
+    lintCache = new Map();
+    lintInFlight = new Map();
     constructor(fileSystem, access, references) {
         this.fileSystem = fileSystem;
         this.access = access;
         this.references = references;
+    }
+    invalidate() {
+        this.generation += 1;
+        this.catalogSummaryCache.clear();
+        this.catalogSummaryInFlight.clear();
+        this.lintCache.clear();
+        this.lintInFlight.clear();
+    }
+    principalKey(principal) {
+        return JSON.stringify(principal ? [principal.accountId, principal.modelId, principal.agentId || '', principal.role] : ['anonymous']);
     }
     async initialize(scopeRoot, actor) {
         const schemaPath = joinRoot(scopeRoot, '_wiki/SCHEMA.md');
@@ -204,6 +219,30 @@ export class LlmWikiService {
         };
     }
     async catalog(principal, options = {}) {
+        if (!options.summaryOnly)
+            return this.computeCatalog(principal);
+        const key = this.principalKey(principal);
+        const cached = this.catalogSummaryCache.get(key);
+        if (cached?.generation === this.generation)
+            return cached.value;
+        const running = this.catalogSummaryInFlight.get(key);
+        if (running)
+            return running;
+        const generation = this.generation;
+        const computation = this.computeCatalog(principal, { summaryOnly: true });
+        this.catalogSummaryInFlight.set(key, computation);
+        try {
+            const value = await computation;
+            if (this.generation === generation)
+                this.catalogSummaryCache.set(key, { generation, value });
+            return value;
+        }
+        finally {
+            if (this.catalogSummaryInFlight.get(key) === computation)
+                this.catalogSummaryInFlight.delete(key);
+        }
+    }
+    async computeCatalog(principal, options = {}) {
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
         const entries = [];
         const counts = {};
@@ -386,6 +425,29 @@ export class LlmWikiService {
         return { checked: true, relevantPaths: Array.from(relevant), errors: lint.errors, warnings: lint.warnings };
     }
     async lint(principal, limit = 200) {
+        const normalizedLimit = Math.max(0, Number(limit));
+        const key = `${this.principalKey(principal)}|${normalizedLimit}`;
+        const cached = this.lintCache.get(key);
+        if (cached?.generation === this.generation)
+            return cached.value;
+        const running = this.lintInFlight.get(key);
+        if (running)
+            return running;
+        const generation = this.generation;
+        const computation = this.computeLint(principal, normalizedLimit);
+        this.lintInFlight.set(key, computation);
+        try {
+            const value = await computation;
+            if (this.generation === generation)
+                this.lintCache.set(key, { generation, value });
+            return value;
+        }
+        finally {
+            if (this.lintInFlight.get(key) === computation)
+                this.lintInFlight.delete(key);
+        }
+    }
+    async computeLint(principal, limit = 200) {
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
         const issues = [];
         let totalIssues = 0;

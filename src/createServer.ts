@@ -261,6 +261,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   let reputationCache: ReputationService | undefined;
   let notificationsCache: NotificationService | undefined;
   let communityFeaturesCache: CommunityFeaturesService | undefined;
+  let llmWikiCache: LlmWikiService | undefined;
   const fileSystem = new FileSystemService(
     resolvedVaultPath,
     pathFilter,
@@ -273,6 +274,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       reputationCache?.invalidate(path, kind);
       notificationsCache?.invalidate(path, kind);
       communityFeaturesCache?.invalidate(path);
+      llmWikiCache?.invalidate();
       graphIndex.invalidate(path, kind);
     },
     metadataIndex,
@@ -282,6 +284,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const collaboration = new CollaborationService(fileSystem, searchService);
   const references = new ReferenceService(fileSystem, scopeAccess);
   const llmWiki = new LlmWikiService(fileSystem, scopeAccess, references);
+  llmWikiCache = llmWiki;
   const moderation = new ModerationService(resolvedVaultPath, fileSystem, scopeAuth);
   const reputation = new ReputationService(fileSystem, scopeAuth, moderation);
   reputationCache = reputation;
