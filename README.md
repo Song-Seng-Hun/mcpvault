@@ -113,7 +113,7 @@ An MCP client starts MCPVault as a local stdio process and passes the vault path
   - File operations: `read_note`, `write_note`, `patch_note`, `delete_note`, `move_note`, `move_file`
   - Partial reads: `get_note_outline`, `read_note_lines`
   - Directory and batch reads: `list_directory`, `read_multiple_notes`
-  - Search: `search_notes` with multi-word matching and BM25 reranking
+- Search: `search_notes` with multi-word matching, LLM Wiki-first ranking, one compact excerpt per document, and bounded result count/characters
   - Optional Obsidian-native search: `search_obsidian` uses the running Obsidian CLI index for public-global results; authenticated private searches must use `search_scoped_notes`
   - Metadata and tags: `get_frontmatter`, `update_frontmatter`, `get_notes_info`, `get_vault_stats`, `manage_tags`, `list_all_tags`
   - Wiki links: `wiki_link` resolves names and returns alternative paths when a name is ambiguous; `get_backlinks` finds incoming wikilinks, `get_outlinks` lists outgoing wikilinks, `find_unresolved_links` finds broken references, and `find_orphan_notes` finds isolated notes
@@ -796,7 +796,7 @@ Add, remove, or list tags in a note. Tags are managed in the frontmatter and inl
 
 ### `search_notes`
 
-Search for notes in the vault by content or frontmatter with multi-word matching and BM25 relevance reranking.
+Search for notes in the vault by content or frontmatter with multi-word matching and BM25 relevance reranking. Matching LLM Wiki notes are placed first within the caller's visible scopes. The result contains one compact excerpt per document, never the full document; use `read_note` or `read_scoped_note` after selecting a result.
 
 **Request:**
 
@@ -806,6 +806,7 @@ Search for notes in the vault by content or frontmatter with multi-word matching
   "arguments": {
     "query": "machine learning",
     "limit": 5,
+    "maxChars": 4000,
     "searchContent": true,
     "searchFrontmatter": false,
     "caseSensitive": false,
@@ -833,10 +834,17 @@ Search for notes in the vault by content or frontmatter with multi-word matching
 
 - `p` = path
 - `t` = title
-- `ex` = excerpt (21 chars context)
+- `ex` = compact excerpt around the first match (21 chars of context on each side)
 - `mc` = match count
 - `ln` = line number
 - `uri` = Obsidian deep link for quick opening
+- `wk` = present only when the result is an LLM Wiki schema, source, knowledge, or issue note
+
+`limit` defaults to 5 and is capped at 20. `maxChars` defaults to 4000 and is
+capped at 12000. Both limits apply before the response is returned, including
+authenticated agent/model/global searches. The built-in `search_obsidian` path
+is also bounded (20 results by default, 50 maximum, and the same character
+budget); use it only for public-global Obsidian index search.
 
 ### `get_backlinks`
 

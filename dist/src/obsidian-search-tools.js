@@ -3,13 +3,14 @@ const accessToken = { type: 'string', description: 'Do not provide this for publ
 export function getObsidianSearchTools() {
     return [{
             name: 'search_obsidian',
-            description: 'Run Obsidian built-in indexed search through its CLI and return matching public vault paths. This is public-global only because Obsidian does not understand MCPVault private scopes; authenticated callers must use search_scoped_notes. Set context=true for matching line context. Requires Obsidian to be running with CLI enabled.',
+            description: 'Run Obsidian built-in indexed search through its CLI and return bounded matching public paths. This is public-global only because Obsidian does not understand MCPVault private scopes; authenticated callers must use search_scoped_notes. Set context=true for matching line context. Requires Obsidian to be running with CLI enabled.',
             inputSchema: { type: 'object', properties: {
                     query: { type: 'string', description: 'Text or Obsidian search query' },
                     pathPrefix: { type: 'string', description: 'Optional relative vault folder' },
                     context: { type: 'boolean', description: 'Use search:context for matching lines', default: false },
                     caseSensitive: { type: 'boolean', default: false },
-                    limit: { type: 'integer', minimum: 1, maximum: 500, default: 50 },
+                    limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 },
+                    maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000, description: 'Maximum compact JSON characters returned' },
                     accessToken, prettyPrint,
                 }, required: ['query'] },
         }];

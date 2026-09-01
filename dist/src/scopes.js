@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { boundSearchResults, normalizeSearchLimit, normalizeSearchMaxChars } from './search-limits.js';
 const ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const DISCUSSION_STATUSES = new Set(['open', 'resolved', 'rejected', 'superseded']);
 const DISCUSSION_STANCES = new Set(['support', 'challenge', 'alternative', 'question']);
@@ -170,7 +171,8 @@ export class CollaborationService {
         throw new Error(`Scoped note not found in ${candidates.map(item => item.scope).join(' > ')} precedence: ${logical}`);
     }
     async searchScopedNotes(params) {
-        const limit = Math.min(Math.max(Number(params.limit || 10), 1), 20);
+        const limit = normalizeSearchLimit(params.limit);
+        const maxChars = normalizeSearchMaxChars(params.maxChars);
         const modelId = await this.inferModelId(params.agentId, params.modelId);
         const scopes = [];
         if (params.agentId)
@@ -193,12 +195,16 @@ export class CollaborationService {
                 if (found.has(logicalPath))
                     continue;
                 found.add(logicalPath);
-                merged.push({ ...result, p: logicalPath, physicalPath: result.p, scope: item.scope });
-                if (merged.length >= limit)
-                    return merged;
+                merged.push({
+                    value: { ...result, p: logicalPath, physicalPath: result.p, scope: item.scope },
+                    wiki: result.wk === true,
+                    scopeRank: scopes.indexOf(item),
+                    order: merged.length,
+                });
             }
         }
-        return merged;
+        merged.sort((a, b) => Number(b.wiki) - Number(a.wiki) || a.scopeRank - b.scopeRank || a.order - b.order);
+        return boundSearchResults(merged.slice(0, limit).map(item => item.value), maxChars);
     }
     async createDiscussion(params) {
         const title = String(params.title || '').trim();

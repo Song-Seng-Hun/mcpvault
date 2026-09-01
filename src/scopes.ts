@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FileSystemService } from './filesystem.js';
 import type { SearchService } from './search.js';
+import { boundSearchResults, normalizeSearchLimit, normalizeSearchMaxChars } from './search-limits.js';
 
 export type ScopeKind = 'global' | 'model' | 'agent';
 
@@ -167,15 +168,16 @@ export class CollaborationService {
     throw new Error(`Scoped note not found in ${candidates.map(item => item.scope).join(' > ')} precedence: ${logical}`);
   }
 
-  async searchScopedNotes(params: { query: string; modelId?: string; agentId?: string; limit?: number; searchContent?: boolean; searchFrontmatter?: boolean; caseSensitive?: boolean }) {
-    const limit = Math.min(Math.max(Number(params.limit || 10), 1), 20);
+  async searchScopedNotes(params: { query: string; modelId?: string; agentId?: string; limit?: number; maxChars?: number; searchContent?: boolean; searchFrontmatter?: boolean; caseSensitive?: boolean }) {
+    const limit = normalizeSearchLimit(params.limit);
+    const maxChars = normalizeSearchMaxChars(params.maxChars);
     const modelId = await this.inferModelId(params.agentId, params.modelId);
     const scopes: Array<{ scope: ScopeKind; root: string }> = [];
     if (params.agentId) scopes.push({ scope: 'agent', root: scopeRoot('agent', params.agentId) });
     if (modelId) scopes.push({ scope: 'model', root: scopeRoot('model', modelId) });
     scopes.push({ scope: 'global', root: '' });
     const found = new Set<string>();
-    const merged: any[] = [];
+    const merged: Array<{ value: any; wiki: boolean; scopeRank: number; order: number }> = [];
     for (const item of scopes) {
       const results = await this.searchService.search({
         query: params.query, limit: 20,
@@ -188,11 +190,16 @@ export class CollaborationService {
         const logicalPath = item.root ? result.p.slice(item.root.length + 1) : result.p;
         if (found.has(logicalPath)) continue;
         found.add(logicalPath);
-        merged.push({ ...result, p: logicalPath, physicalPath: result.p, scope: item.scope });
-        if (merged.length >= limit) return merged;
+        merged.push({
+          value: { ...result, p: logicalPath, physicalPath: result.p, scope: item.scope },
+          wiki: result.wk === true,
+          scopeRank: scopes.indexOf(item),
+          order: merged.length,
+        });
       }
     }
-    return merged;
+    merged.sort((a, b) => Number(b.wiki) - Number(a.wiki) || a.scopeRank - b.scopeRank || a.order - b.order);
+    return boundSearchResults(merged.slice(0, limit).map(item => item.value), maxChars);
   }
 
   async createDiscussion(params: { discussionId?: string; title: string; createdBy: string; subjectPath?: string; initialPosition: string; evidence?: string[] }) {

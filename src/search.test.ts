@@ -248,6 +248,27 @@ describe("SearchService", () => {
     expect(results[0]!.ex).toContain("target");
   });
 
+  test("prioritizes matching LLM Wiki notes and marks them", async () => {
+    await writeNote("ordinary.md", "# Ordinary\n\nneedle needle needle needle needle.");
+    await writeNote("_wiki/knowledge.md", "---\nllm_wiki_type: knowledge\n---\n\n# Knowledge\n\nneedle once.");
+
+    const results = await searchService.search({ query: "needle", limit: 10 });
+
+    expect(results[0]!.p).toBe("_wiki/knowledge.md");
+    expect(results[0]!.wk).toBe(true);
+  });
+
+  test("respects the compact character budget", async () => {
+    for (let i = 0; i < 10; i++) {
+      await writeNote(`notes/note-${i}.md`, `# Note ${i}\n\nkeyword appears here.`);
+    }
+
+    const results = await searchService.search({ query: "keyword", limit: 20, maxChars: 512 });
+
+    expect(JSON.stringify(results).length).toBeLessThanOrEqual(512);
+    expect(results.length).toBeLessThan(10);
+  });
+
   // ============================================================================
   // PATH FILTERING
   // ============================================================================

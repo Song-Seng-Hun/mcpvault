@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import type { PathFilter } from './pathfilter.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
+import { boundSearchResults, normalizeSearchMaxChars } from './search-limits.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -15,9 +16,9 @@ function cleanRelativePath(value: string): string {
 }
 
 function limitNumber(value: unknown): number {
-  const parsed = value === undefined ? 50 : Number(value);
+  const parsed = value === undefined ? 20 : Number(value);
   if (!Number.isInteger(parsed) || parsed < 1) throw new Error('limit must be a positive integer');
-  return Math.min(parsed, 500);
+  return Math.min(parsed, 50);
 }
 
 function extractEntries(value: unknown): Array<{ path: string; line?: number; text?: string }> {
@@ -41,7 +42,7 @@ export class ObsidianSearchService {
     private readonly access: ScopeAccessPolicy,
   ) {}
 
-  async search(params: { query: string; pathPrefix?: string; limit?: number; context?: boolean; caseSensitive?: boolean; principal?: ScopePrincipal }) {
+  async search(params: { query: string; pathPrefix?: string; limit?: number; maxChars?: number; context?: boolean; caseSensitive?: boolean; principal?: ScopePrincipal }) {
     // Obsidian's index has no concept of MCPVault model/agent scopes. Never
     // run it for an authenticated caller, because its output could reveal a
     // private file before the MCP scope layer gets a chance to filter it.
@@ -50,6 +51,7 @@ export class ObsidianSearchService {
     if (!query) throw new Error('query is required');
     if (query.length > 500) throw new Error('query is too long');
     const limit = limitNumber(params.limit);
+    const maxChars = normalizeSearchMaxChars(params.maxChars);
     const pathPrefix = params.pathPrefix ? cleanRelativePath(params.pathPrefix) : undefined;
     if (pathPrefix && !this.pathFilter.isAllowed(pathPrefix)) throw new Error('pathPrefix is restricted');
     const command = params.context ? 'search:context' : 'search';
@@ -71,7 +73,7 @@ export class ObsidianSearchService {
       }).filter(entry => entry.path);
     }
     const seen = new Set<string>();
-    const results = entries.filter(entry => {
+    const results = boundSearchResults(entries.filter(entry => {
       const path = entry.path.replace(/\\/g, '/').replace(/^\.\//, '').trim();
       if (!path || !this.pathFilter.isAllowed(path) || !this.access.canAccessPhysicalPath(path)) return false;
       if (pathPrefix && path !== pathPrefix && !path.startsWith(`${pathPrefix}/`)) return false;
@@ -82,7 +84,7 @@ export class ObsidianSearchService {
       p: entry.path.replace(/\\/g, '/').replace(/^\.\//, ''),
       ...(entry.line !== undefined && { ln: entry.line }),
       ...(entry.text !== undefined && { ex: entry.text }),
-    }));
+    })), maxChars);
     return { backend: 'obsidian', query, context: params.context === true, results, total: results.length, truncated: entries.length > results.length };
   }
 }

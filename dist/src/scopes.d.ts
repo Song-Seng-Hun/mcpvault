@@ -93,6 +93,7 @@ export declare class CollaborationService {
         modelId?: string;
         agentId?: string;
         limit?: number;
+        maxChars?: number;
         searchContent?: boolean;
         searchFrontmatter?: boolean;
         caseSensitive?: boolean;

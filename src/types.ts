@@ -66,6 +66,8 @@ export interface PathFilterConfig {
 export interface SearchParams {
   query: string;
   limit?: number;
+  /** Maximum compact JSON characters returned by the search payload. */
+  maxChars?: number;
   searchContent?: boolean;
   searchFrontmatter?: boolean;
   caseSensitive?: boolean;
@@ -82,12 +84,15 @@ export interface SearchResult {
   mc: number;       // matchCount
   ln?: number;      // lineNumber
   uri?: string;     // obsidianUri
+  /** Present only for LLM Wiki notes so clients can explain the priority. */
+  wk?: true;
 }
 
 export interface RankCandidate {
   result: SearchResult;
   termFreqs: Map<string, number>;
   docLength: number;
+  wiki: boolean;
 }
 
 // Move types

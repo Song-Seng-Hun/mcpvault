@@ -10,6 +10,7 @@ export declare class ObsidianSearchService {
         query: string;
         pathPrefix?: string;
         limit?: number;
+        maxChars?: number;
         context?: boolean;
         caseSensitive?: boolean;
         principal?: ScopePrincipal;

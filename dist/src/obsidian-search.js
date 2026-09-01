@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { boundSearchResults, normalizeSearchMaxChars } from './search-limits.js';
 const execFileAsync = promisify(execFile);
 function cleanRelativePath(value) {
     const normalized = value.trim().replace(/\\/g, '/').replace(/^\.\//, '');
@@ -9,10 +10,10 @@ function cleanRelativePath(value) {
     return normalized.replace(/^\/|\/$/g, '');
 }
 function limitNumber(value) {
-    const parsed = value === undefined ? 50 : Number(value);
+    const parsed = value === undefined ? 20 : Number(value);
     if (!Number.isInteger(parsed) || parsed < 1)
         throw new Error('limit must be a positive integer');
-    return Math.min(parsed, 500);
+    return Math.min(parsed, 50);
 }
 function extractEntries(value) {
     if (Array.isArray(value))
@@ -51,6 +52,7 @@ export class ObsidianSearchService {
         if (query.length > 500)
             throw new Error('query is too long');
         const limit = limitNumber(params.limit);
+        const maxChars = normalizeSearchMaxChars(params.maxChars);
         const pathPrefix = params.pathPrefix ? cleanRelativePath(params.pathPrefix) : undefined;
         if (pathPrefix && !this.pathFilter.isAllowed(pathPrefix))
             throw new Error('pathPrefix is restricted');
@@ -75,7 +77,7 @@ export class ObsidianSearchService {
             }).filter(entry => entry.path);
         }
         const seen = new Set();
-        const results = entries.filter(entry => {
+        const results = boundSearchResults(entries.filter(entry => {
             const path = entry.path.replace(/\\/g, '/').replace(/^\.\//, '').trim();
             if (!path || !this.pathFilter.isAllowed(path) || !this.access.canAccessPhysicalPath(path))
                 return false;
@@ -89,7 +91,7 @@ export class ObsidianSearchService {
             p: entry.path.replace(/\\/g, '/').replace(/^\.\//, ''),
             ...(entry.line !== undefined && { ln: entry.line }),
             ...(entry.text !== undefined && { ex: entry.text }),
-        }));
+        })), maxChars);
         return { backend: 'obsidian', query, context: params.context === true, results, total: results.length, truncated: entries.length > results.length };
     }
 }

@@ -225,12 +225,13 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "search_notes",
-          description: "Search for notes in the vault by content or frontmatter",
+          description: "Search visible notes and return one compact excerpt per matching document. Matching LLM Wiki notes are prioritized; use read_note or read_scoped_note for the selected document.",
           inputSchema: {
             type: "object",
             properties: {
               query: { type: "string", description: "Search query text" },
-              limit: { type: "number", description: "Maximum number of results (default: 5, max: 20)", default: 5 },
+              limit: { type: "number", description: "Maximum number of documents (default: 5, max: 20)", default: 5 },
+              maxChars: { type: "integer", minimum: 512, maximum: 12000, description: "Maximum compact JSON characters returned (default: 4000)", default: 4000 },
               searchContent: { type: "boolean", description: "Search in note content (default: true)", default: true },
               searchFrontmatter: { type: "boolean", description: "Search in frontmatter (default: false)", default: false },
               caseSensitive: { type: "boolean", description: "Case sensitive search (default: false)", default: false },
@@ -1090,6 +1091,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             ? (await searchService.search({
                 query: trimmedArgs.query,
                 limit: trimmedArgs.limit,
+                maxChars: trimmedArgs.maxChars,
                 searchContent: trimmedArgs.searchContent,
                 searchFrontmatter: trimmedArgs.searchFrontmatter,
                 caseSensitive: trimmedArgs.caseSensitive,
@@ -1099,6 +1101,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             : await collaboration.searchScopedNotes({
                 query: trimmedArgs.query,
                 limit: trimmedArgs.limit,
+                maxChars: trimmedArgs.maxChars,
                 searchContent: trimmedArgs.searchContent,
                 searchFrontmatter: trimmedArgs.searchFrontmatter,
                 caseSensitive: trimmedArgs.caseSensitive,

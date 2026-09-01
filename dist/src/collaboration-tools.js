@@ -43,10 +43,10 @@ export function getCollaborationTools() {
         },
         {
             name: 'search_scoped_notes',
-            description: 'Search the authenticated agent, its model, then global scope and deduplicate overridden logical paths. Without login, searches global only.',
+            description: 'Search the authenticated agent, its model, then global scope and deduplicate overridden logical paths. Matching LLM Wiki notes are shown first. Returns compact excerpts only; use read_scoped_note for the selected note. Without login, searches global only.',
             inputSchema: { type: 'object', properties: {
                     query: { type: 'string' },
-                    limit: { type: 'integer', minimum: 1, maximum: 20, default: 10 }, searchContent: { type: 'boolean', default: true },
+                    limit: { type: 'integer', minimum: 1, maximum: 20, default: 5 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000, description: 'Maximum compact JSON characters returned' }, searchContent: { type: 'boolean', default: true },
                     searchFrontmatter: { type: 'boolean', default: false }, caseSensitive: { type: 'boolean', default: false }, prettyPrint,
                 }, required: ['query'] },
         },

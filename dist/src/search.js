@@ -1,6 +1,21 @@
 import { join, resolve } from 'path';
 import { readFile, readdir } from 'node:fs/promises';
 import { generateObsidianUri } from './uri.js';
+import { boundSearchResults, normalizeSearchLimit, normalizeSearchMaxChars } from './search-limits.js';
+const WIKI_TYPES = new Set(['schema', 'source', 'knowledge', 'issue']);
+function isWikiPath(path) {
+    const normalized = path.toLowerCase();
+    return normalized === '_wiki'
+        || normalized.startsWith('_wiki/')
+        || normalized === '_sources'
+        || normalized.startsWith('_sources/')
+        || /^_scopes\/(models|agents)\/[^/]+\/(?:_wiki|_sources)(?:\/|$)/.test(normalized);
+}
+function wikiType(content) {
+    const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)?.[1];
+    const value = frontmatter?.match(/^\s*llm_wiki_type\s*:\s*['"]?([a-z_-]+)['"]?\s*$/im)?.[1]?.toLowerCase();
+    return value && WIKI_TYPES.has(value) ? value : undefined;
+}
 /** Normalize a subtree path: forward slashes, no leading/trailing slashes. */
 function normalizeSubtree(p) {
     return p.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
@@ -25,7 +40,8 @@ export class SearchService {
         }
         const normalizedPrefix = pathPrefix ? normalizeSubtree(pathPrefix) : '';
         const normalizedExcludes = (excludePaths || []).map(normalizeSubtree).filter(Boolean);
-        const maxLimit = Math.min(limit, 20);
+        const maxLimit = normalizeSearchLimit(limit);
+        const maxChars = normalizeSearchMaxChars(params.maxChars);
         // Corpus stats for reranking
         let totalDocLength = 0;
         let docCount = 0;
@@ -60,6 +76,7 @@ export class SearchService {
                 if (content === null || content === undefined)
                     continue;
                 const { relativePath } = batch[i];
+                const isWiki = isWikiPath(relativePath) || wikiType(content) !== undefined;
                 let searchableText = '';
                 // Prepare search text based on options
                 if (searchContent && searchFrontmatter) {
@@ -147,16 +164,18 @@ export class SearchService {
                             ex: excerpt,
                             mc: matchCount,
                             ln: lineNumber,
-                            uri: generateObsidianUri(this.vaultPath, relativePath)
+                            uri: generateObsidianUri(this.vaultPath, relativePath),
+                            ...(isWiki && { wk: true })
                         },
                         termFreqs,
-                        docLength
+                        docLength,
+                        wiki: isWiki
                     });
                 }
             }
         }
         const results = this.rerank(candidates, scoringTerms, termDocFreq, docCount, totalDocLength, maxLimit);
-        return results;
+        return boundSearchResults(results, maxChars);
     }
     async findMarkdownFiles(dirPath) {
         const markdownFiles = [];
@@ -191,9 +210,9 @@ export class SearchService {
                 const idf = Math.log(1 + (docCount - df + 0.5) / (df + 0.5));
                 score += idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * c.docLength / avgdl));
             }
-            return { score, result: c.result };
+            return { score, result: c.result, wiki: c.wiki };
         });
-        scored.sort((a, b) => b.score - a.score);
+        scored.sort((a, b) => Number(b.wiki) - Number(a.wiki) || b.score - a.score);
         return scored.slice(0, maxLimit).map(s => s.result);
     }
 }

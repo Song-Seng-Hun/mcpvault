@@ -195,6 +195,24 @@ async function connectClient() {
   return { server, client };
 }
 
+test("search_notes bounds output and prioritizes Wiki notes", async () => {
+  const { server, client } = await connectClient();
+  try {
+    await mkdir(join(testVaultPath, "_wiki"), { recursive: true });
+    await writeFile(join(testVaultPath, "ordinary.md"), "# Ordinary\n\nneedle needle needle needle.");
+    await writeFile(join(testVaultPath, "_wiki", "knowledge.md"), "---\nllm_wiki_type: knowledge\n---\n\n# Knowledge\n\nneedle once.");
+
+    const result = await client.callTool({ name: "search_notes", arguments: { query: "needle", limit: 20, maxChars: 512 } });
+    const text = (result.content as any)[0].text as string;
+    const parsed = JSON.parse(text);
+    expect(parsed[0]).toMatchObject({ p: "_wiki/knowledge.md", wk: true });
+    expect(text.length).toBeLessThanOrEqual(512);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test("wiki_link returns isError on invalid syntax (backslash in parsed)", async () => {
   const { server, client } = await connectClient();
   try {
