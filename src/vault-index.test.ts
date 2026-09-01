@@ -49,4 +49,23 @@ describe('VaultMetadataIndex', () => {
     expect(await index.matchesRevision('Stable.md', entry.revision)).toBe(true);
     expect(await index.matchesRevision('Stable.md', 'wrong-revision')).toBe(false);
   });
+
+  test('streams filtered page and count candidates without changing ordering', async () => {
+    vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-index-'));
+    await writeNote('Community/one.md', '---\nstatus: published\nrank: 1\n---\none');
+    await writeNote('Community/two.md', '---\nstatus: published\nrank: 2\n---\ntwo');
+    await writeNote('Community/draft.md', '---\nstatus: draft\nrank: 3\n---\ndraft');
+    const index = new VaultMetadataIndex(vaultPath, new PathFilter(), new FrontmatterHandler());
+
+    const page = await index.listSortedPage({
+      filters: { status: 'published' },
+      pathPrefix: 'Community',
+      sortBy: 'rank',
+      limit: 1,
+    });
+
+    expect(page.entries.map(entry => entry.path)).toEqual(['Community/one.md']);
+    expect(page.truncated).toBe(true);
+    expect(await index.count({ status: 'published' }, 'Community')).toBe(2);
+  });
 });

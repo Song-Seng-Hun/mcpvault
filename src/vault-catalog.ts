@@ -2,6 +2,7 @@ import { watch, type FSWatcher } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
 import type { PathFilter } from './pathfilter.js';
+import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 
 const WATCH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
@@ -35,6 +36,7 @@ function isNote(path: string): boolean {
  * indexing would otherwise each maintain independently.
  */
 export class VaultFileCatalog {
+  private readonly cacheOwner = createDerivedCacheOwner('vault.directories');
   private readonly vaultPath: string;
   private readonly listeners = new Set<VaultCatalogListener>();
   private paths: string[] | undefined;
@@ -72,6 +74,7 @@ export class VaultFileCatalog {
     else {
       this.directoryCache.clear();
       this.dirtyDirectories.clear();
+      derivedCacheBudget.clearOwner(this.cacheOwner);
     }
   }
 
@@ -113,6 +116,7 @@ export class VaultFileCatalog {
     this.refreshPromise = undefined;
     this.directoryCache.clear();
     this.dirtyDirectories.clear();
+    derivedCacheBudget.clearOwner(this.cacheOwner);
   }
 
   private startWatcher(): void {
@@ -161,6 +165,7 @@ export class VaultFileCatalog {
     this.pendingChanges.clear();
     this.directoryCache.clear();
     this.dirtyDirectories.clear();
+    derivedCacheBudget.clearOwner(this.cacheOwner);
     this.scheduleFlush();
   }
 
@@ -272,6 +277,7 @@ export class VaultFileCatalog {
     if (!this.dirtyDirectories.has(directory) && cached && cached.mtimeMs === info.mtimeMs && cached.size === info.size) {
       this.directoryCache.delete(directory);
       this.directoryCache.set(directory, cached);
+      derivedCacheBudget.touch(this.cacheOwner, directory);
       return cached.entries;
     }
     let entries: Array<{ name: string; directory: boolean; file: boolean }>;
@@ -282,8 +288,18 @@ export class VaultFileCatalog {
       return [];
     }
     this.dirtyDirectories.delete(directory);
-    this.directoryCache.set(directory, { mtimeMs: info.mtimeMs, size: info.size, entries });
-    while (this.directoryCache.size > DIRECTORY_CACHE_MAX_ENTRIES) this.directoryCache.delete(this.directoryCache.keys().next().value!);
+    const cacheEntry: DirectoryCacheEntry = { mtimeMs: info.mtimeMs, size: info.size, entries };
+    this.directoryCache.set(directory, cacheEntry);
+    derivedCacheBudget.register(this.cacheOwner, directory, estimateCacheBytes(cacheEntry) + 64, () => {
+      if (this.directoryCache.get(directory) !== cacheEntry) return;
+      this.directoryCache.delete(directory);
+    });
+    while (this.directoryCache.size > DIRECTORY_CACHE_MAX_ENTRIES) {
+      const oldest = this.directoryCache.keys().next();
+      if (oldest.done) break;
+      this.directoryCache.delete(oldest.value);
+      derivedCacheBudget.remove(this.cacheOwner, oldest.value);
+    }
     return entries;
   }
 

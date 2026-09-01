@@ -1,6 +1,7 @@
 import { watch } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
+import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 const WATCH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
 const WATCH_EVENT_BATCH_DELAY_MS = 50;
@@ -22,6 +23,7 @@ function isNote(path) {
  */
 export class VaultFileCatalog {
     pathFilter;
+    cacheOwner = createDerivedCacheOwner('vault.directories');
     vaultPath;
     listeners = new Set();
     paths;
@@ -58,6 +60,7 @@ export class VaultFileCatalog {
         else {
             this.directoryCache.clear();
             this.dirtyDirectories.clear();
+            derivedCacheBudget.clearOwner(this.cacheOwner);
         }
     }
     async listNotePaths() {
@@ -98,6 +101,7 @@ export class VaultFileCatalog {
         this.refreshPromise = undefined;
         this.directoryCache.clear();
         this.dirtyDirectories.clear();
+        derivedCacheBudget.clearOwner(this.cacheOwner);
     }
     startWatcher() {
         if (this.watcherStarted)
@@ -146,6 +150,7 @@ export class VaultFileCatalog {
         this.pendingChanges.clear();
         this.directoryCache.clear();
         this.dirtyDirectories.clear();
+        derivedCacheBudget.clearOwner(this.cacheOwner);
         this.scheduleFlush();
     }
     scheduleFlush() {
@@ -260,6 +265,7 @@ export class VaultFileCatalog {
         if (!this.dirtyDirectories.has(directory) && cached && cached.mtimeMs === info.mtimeMs && cached.size === info.size) {
             this.directoryCache.delete(directory);
             this.directoryCache.set(directory, cached);
+            derivedCacheBudget.touch(this.cacheOwner, directory);
             return cached.entries;
         }
         let entries;
@@ -271,9 +277,20 @@ export class VaultFileCatalog {
             return [];
         }
         this.dirtyDirectories.delete(directory);
-        this.directoryCache.set(directory, { mtimeMs: info.mtimeMs, size: info.size, entries });
-        while (this.directoryCache.size > DIRECTORY_CACHE_MAX_ENTRIES)
-            this.directoryCache.delete(this.directoryCache.keys().next().value);
+        const cacheEntry = { mtimeMs: info.mtimeMs, size: info.size, entries };
+        this.directoryCache.set(directory, cacheEntry);
+        derivedCacheBudget.register(this.cacheOwner, directory, estimateCacheBytes(cacheEntry) + 64, () => {
+            if (this.directoryCache.get(directory) !== cacheEntry)
+                return;
+            this.directoryCache.delete(directory);
+        });
+        while (this.directoryCache.size > DIRECTORY_CACHE_MAX_ENTRIES) {
+            const oldest = this.directoryCache.keys().next();
+            if (oldest.done)
+                break;
+            this.directoryCache.delete(oldest.value);
+            derivedCacheBudget.remove(this.cacheOwner, oldest.value);
+        }
         return entries;
     }
     markDirtyDirectories(path) {

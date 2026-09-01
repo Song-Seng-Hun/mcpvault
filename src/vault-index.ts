@@ -6,6 +6,7 @@ import type { FrontmatterHandler } from './frontmatter.js';
 import type { PathFilter } from './pathfilter.js';
 import type { VaultFileCatalog } from './vault-catalog.js';
 import { VaultIoCoordinator } from './vault-io.js';
+import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 
 const FULL_REFRESH_INTERVAL_MS = 60_000;
 const READ_BATCH_SIZE = 32;
@@ -183,6 +184,7 @@ function decodeMetadataSnapshot(buffer: Buffer): VaultIndexEntry[] | undefined {
  */
 export class VaultMetadataIndex {
   private readonly vaultPath: string;
+  private readonly cacheOwner = createDerivedCacheOwner('metadata.queries');
   private readonly entries = new Map<string, VaultIndexEntry>();
   private readonly filterIndex = new Map<string, Map<string, Set<string>>>();
   private readonly pathIndex = new Map<string, Set<string>>();
@@ -243,25 +245,11 @@ export class VaultMetadataIndex {
     this.sortedQueryCache.clear();
     this.queryCacheRows = 0;
     this.sortedQueryCacheRows = 0;
+    derivedCacheBudget.clearOwner(this.cacheOwner);
   }
 
   async list(filters?: Record<string, unknown>, pathPrefix = ''): Promise<VaultIndexEntry[]> {
-    await this.ready;
-    this.startWatcher();
-    // The server may have been constructed before Obsidian or a direct
-    // filesystem writer created notes. Reconcile once at first use so the
-    // initial async refresh cannot produce a false empty result.
-    if (this.firstList) {
-      this.firstList = false;
-      this.needsFullRefresh = true;
-    }
-    if (this.refreshPromise) await this.refreshPromise;
-    if (this.needsFullRefresh || Date.now() - this.lastFullRefreshAt >= FULL_REFRESH_INTERVAL_MS) {
-      await this.refreshAll();
-    }
-    if (this.dirty.size > 0) {
-      await this.refreshDirty();
-    }
+    await this.ensureFresh();
     const hasFilters = Boolean(filters && Object.keys(filters).length > 0);
     const normalizedPrefix = normalizePath(pathPrefix);
     if (!hasFilters && !normalizedPrefix) return [...this.entries.values()];
@@ -270,33 +258,34 @@ export class VaultMetadataIndex {
     if (cached && cached.expiresAt > Date.now()) {
       this.queryCache.delete(cacheKey);
       this.queryCache.set(cacheKey, cached);
+      derivedCacheBudget.touch(this.cacheOwner, `query:${cacheKey}`);
       return cached.paths.map(path => this.entries.get(path)).filter((entry): entry is VaultIndexEntry => entry !== undefined);
     }
     if (cached) {
       this.queryCache.delete(cacheKey);
       this.queryCacheRows -= cached.paths.length;
+      derivedCacheBudget.remove(this.cacheOwner, `query:${cacheKey}`);
     }
 
-    const filterCandidates = hasFilters ? this.filterCandidates(filters!) : undefined;
-    const prefixCandidates = normalizedPrefix ? this.pathIndex.get(normalizedPrefix) : undefined;
-    let candidates: Set<string> | undefined;
-    if (filterCandidates && prefixCandidates) {
-      candidates = new Set(filterCandidates);
-      for (const path of candidates) if (!prefixCandidates.has(path)) candidates.delete(path);
-    } else {
-      candidates = filterCandidates || prefixCandidates;
-    }
+    const candidates = this.candidatePaths(filters || {}, normalizedPrefix);
     if (!candidates) return [...this.entries.values()];
     const paths = [...candidates];
     if (paths.length <= QUERY_CACHE_MAX_ROWS) {
-      this.queryCache.set(cacheKey, { expiresAt: Date.now() + QUERY_CACHE_TTL_MS, paths });
+      const entry = { expiresAt: Date.now() + QUERY_CACHE_TTL_MS, paths };
+      this.queryCache.set(cacheKey, entry);
       this.queryCacheRows += paths.length;
+      derivedCacheBudget.register(this.cacheOwner, `query:${cacheKey}`, estimateCacheBytes(entry) + 64, () => {
+        if (this.queryCache.get(cacheKey) !== entry) return;
+        this.queryCache.delete(cacheKey);
+        this.queryCacheRows -= paths.length;
+      });
       while (this.queryCache.size > QUERY_CACHE_MAX_ENTRIES || this.queryCacheRows > QUERY_CACHE_MAX_ROWS) {
         const oldest = this.queryCache.keys().next();
         if (oldest.done) break;
         const removed = this.queryCache.get(oldest.value);
         this.queryCache.delete(oldest.value);
         this.queryCacheRows -= removed?.paths.length || 0;
+        derivedCacheBudget.remove(this.cacheOwner, `query:${oldest.value}`);
       }
     }
     return paths.map(path => this.entries.get(path)).filter((entry): entry is VaultIndexEntry => entry !== undefined);
@@ -309,32 +298,41 @@ export class VaultMetadataIndex {
     canAccessPath: (path: string) => boolean = () => true,
     predicate: (entry: VaultIndexEntry) => boolean = () => true,
   ): Promise<number> {
-    const candidates = await this.list(filters, pathPrefix);
+    await this.ensureFresh();
+    const candidates = this.candidatePaths(filters, normalizePath(pathPrefix));
     let count = 0;
-    for (const entry of candidates) {
+    for (const entry of this.iterateCandidateEntries(candidates)) {
       if (canAccessPath(entry.path) && predicate(entry)) count += 1;
     }
     return count;
   }
 
   async listSorted(filters: Record<string, unknown> = {}, pathPrefix = '', sortBy = 'path', sortOrder: 'asc' | 'desc' = 'asc'): Promise<VaultIndexEntry[]> {
+    await this.ensureFresh();
     const cacheKey = JSON.stringify([pathPrefix, filters, sortBy, sortOrder]);
     const cached = this.sortedQueryCache.get(cacheKey);
     if (cached) {
       this.sortedQueryCache.delete(cacheKey);
       this.sortedQueryCache.set(cacheKey, cached);
+      derivedCacheBudget.touch(this.cacheOwner, `sorted:${cacheKey}`);
       return cached;
     }
     const entries = [...await this.list(filters, pathPrefix)].sort((a, b) => compareEntries(a, b, sortBy, sortOrder));
     if (entries.length <= SORTED_QUERY_CACHE_MAX_ROWS) {
       this.sortedQueryCache.set(cacheKey, entries);
       this.sortedQueryCacheRows += entries.length;
+      derivedCacheBudget.register(this.cacheOwner, `sorted:${cacheKey}`, estimateCacheBytes(entries) + 64, () => {
+        if (this.sortedQueryCache.get(cacheKey) !== entries) return;
+        this.sortedQueryCache.delete(cacheKey);
+        this.sortedQueryCacheRows -= entries.length;
+      });
       while (this.sortedQueryCache.size > SORTED_QUERY_CACHE_MAX_ENTRIES || this.sortedQueryCacheRows > SORTED_QUERY_CACHE_MAX_ROWS) {
         const oldest = this.sortedQueryCache.keys().next();
         if (oldest.done) break;
         const removed = this.sortedQueryCache.get(oldest.value);
         this.sortedQueryCache.delete(oldest.value);
         this.sortedQueryCacheRows -= removed?.length || 0;
+        derivedCacheBudget.remove(this.cacheOwner, `sorted:${oldest.value}`);
       }
     }
     return entries;
@@ -355,18 +353,21 @@ export class VaultMetadataIndex {
     after?: { path: string; value?: unknown; missing?: boolean };
     canAccessPath?: (path: string) => boolean;
   }): Promise<{ entries: VaultIndexEntry[]; truncated: boolean }> {
+    await this.ensureFresh();
     const limit = Math.min(Math.max(params.limit, 1), 500);
     const offset = Math.max(params.offset || 0, 0);
     const sortBy = params.sortBy || 'path';
     const sortOrder = params.sortOrder || 'asc';
-    const candidates = await this.list(params.filters || {}, params.pathPrefix || '');
+    const candidates = this.candidatePaths(params.filters || {}, normalizePath(params.pathPrefix || ''));
     const needed = offset + limit + 1;
     const compare = (a: VaultIndexEntry, b: VaultIndexEntry) => compareEntries(a, b, sortBy, sortOrder);
     if (needed > TOP_K_MAX) {
-      const eligible = candidates.filter(entry =>
-        this.pathFilter.isAllowed(entry.path)
-        && (!params.canAccessPath || params.canAccessPath(entry.path))
-        && (!params.after || compareEntryToCursor(entry, params.after, sortBy, sortOrder) > 0));
+      const eligible: VaultIndexEntry[] = [];
+      for (const entry of this.iterateCandidateEntries(candidates)) {
+        if (this.pathFilter.isAllowed(entry.path)
+          && (!params.canAccessPath || params.canAccessPath(entry.path))
+          && (!params.after || compareEntryToCursor(entry, params.after, sortBy, sortOrder) > 0)) eligible.push(entry);
+      }
       const sorted = eligible.sort(compare);
       return { entries: sorted.slice(offset, offset + limit), truncated: sorted.length > offset + limit };
     }
@@ -392,7 +393,7 @@ export class VaultMetadataIndex {
         index = worst;
       }
     };
-    for (const entry of candidates) {
+    for (const entry of this.iterateCandidateEntries(candidates)) {
       if (!this.pathFilter.isAllowed(entry.path)
         || (params.canAccessPath && !params.canAccessPath(entry.path))
         || (params.after && compareEntryToCursor(entry, params.after, sortBy, sortOrder) <= 0)) continue;
@@ -438,6 +439,45 @@ export class VaultMetadataIndex {
     this.watcher = undefined;
     if (this.snapshotTimer) clearTimeout(this.snapshotTimer);
     this.snapshotTimer = undefined;
+    derivedCacheBudget.clearOwner(this.cacheOwner);
+  }
+
+  private async ensureFresh(): Promise<void> {
+    await this.ready;
+    this.startWatcher();
+    // The server may have been constructed before Obsidian or a direct
+    // filesystem writer created notes. Reconcile once at first use so the
+    // initial async refresh cannot produce a false empty result.
+    if (this.firstList) {
+      this.firstList = false;
+      this.needsFullRefresh = true;
+    }
+    if (this.refreshPromise) await this.refreshPromise;
+    if (this.needsFullRefresh || Date.now() - this.lastFullRefreshAt >= FULL_REFRESH_INTERVAL_MS) await this.refreshAll();
+    if (this.dirty.size > 0) await this.refreshDirty();
+  }
+
+  private candidatePaths(filters: Record<string, unknown>, normalizedPrefix: string): Iterable<string> | undefined {
+    const hasFilters = Object.keys(filters).length > 0;
+    const filterCandidates = hasFilters ? this.filterCandidates(filters) : undefined;
+    const prefixCandidates = normalizedPrefix ? this.pathIndex.get(normalizedPrefix) : undefined;
+    if (filterCandidates && prefixCandidates) {
+      const intersection = new Set(filterCandidates);
+      for (const path of intersection) if (!prefixCandidates.has(path)) intersection.delete(path);
+      return intersection;
+    }
+    return filterCandidates || prefixCandidates;
+  }
+
+  private *iterateCandidateEntries(candidates: Iterable<string> | undefined): Iterable<VaultIndexEntry> {
+    if (!candidates) {
+      yield* this.entries.values();
+      return;
+    }
+    for (const path of candidates) {
+      const entry = this.entries.get(path);
+      if (entry) yield entry;
+    }
   }
 
   private startWatcher(): void {

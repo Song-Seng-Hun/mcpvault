@@ -10,6 +10,7 @@ export type VaultCatalogListener = (path?: string, kind?: VaultCatalogChangeKind
  */
 export declare class VaultFileCatalog {
     private readonly pathFilter;
+    private readonly cacheOwner;
     private readonly vaultPath;
     private readonly listeners;
     private paths;

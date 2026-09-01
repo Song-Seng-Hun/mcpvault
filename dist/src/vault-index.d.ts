@@ -20,6 +20,7 @@ export declare class VaultMetadataIndex {
     private readonly catalog?;
     private readonly vaultIo;
     private readonly vaultPath;
+    private readonly cacheOwner;
     private readonly entries;
     private readonly filterIndex;
     private readonly pathIndex;
@@ -76,6 +77,9 @@ export declare class VaultMetadataIndex {
      */
     matchesRevision(path: string, expectedRevision: string): Promise<boolean>;
     close(): void;
+    private ensureFresh;
+    private candidatePaths;
+    private iterateCandidateEntries;
     private startWatcher;
     private refreshAll;
     private refreshDirty;
