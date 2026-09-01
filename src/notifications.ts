@@ -2,11 +2,13 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import { normalizeScopeId } from './scopes.js';
 import type { ReputationService } from './reputation.js';
+import type { QueryNote } from './types.js';
 
 const READ_STATE_ROOT = '_notifications';
 const MAX_SCAN = 500;
 const EVENT_CACHE_TTL_MS = 2_000;
 const EVENT_CACHE_MAX_ENTRIES = 64;
+const HYDRATE_BATCH_SIZE = 32;
 
 type NotificationKind = 'mention' | 'reply' | 'activity' | 'watch';
 
@@ -23,6 +25,13 @@ export interface NotificationEvent {
   authorLevel?: number;
   authorLevelLabel?: string;
   unread: boolean;
+}
+
+interface PublicSnapshot {
+  posts: QueryNote[];
+  comments: QueryNote[];
+  messages: QueryNote[];
+  rooms: QueryNote[];
 }
 
 function identity(principal: ScopePrincipal): string {
@@ -57,12 +66,54 @@ function text(value: unknown, fallback = ''): string {
 export class NotificationService {
   private readonly eventCache = new Map<string, { expiresAt: number; events: NotificationEvent[] }>();
   private readonly eventInFlight = new Map<string, Promise<NotificationEvent[]>>();
+  private publicSnapshotCache: { expiresAt: number; value: PublicSnapshot } | undefined;
+  private publicSnapshotInFlight: Promise<PublicSnapshot> | undefined;
 
   constructor(private readonly fileSystem: FileSystemService, private readonly reputation: ReputationService) {}
 
   invalidate(): void {
     this.eventCache.clear();
     this.eventInFlight.clear();
+    this.publicSnapshotCache = undefined;
+    this.publicSnapshotInFlight = undefined;
+  }
+
+  private async cachedPublicSnapshot(): Promise<PublicSnapshot> {
+    const cached = this.publicSnapshotCache;
+    if (cached && cached.expiresAt > Date.now()) return cached.value;
+    if (this.publicSnapshotInFlight) return this.publicSnapshotInFlight;
+    const computation = Promise.all([
+      this.fileSystem.queryNotes({ pathPrefix: 'Community/Posts', filters: { mcpvault_type: 'blog_post', status: 'published' }, sortBy: 'created_at', sortOrder: 'desc', limit: MAX_SCAN }),
+      this.fileSystem.queryNotes({ pathPrefix: 'Community/Comments', filters: { mcpvault_type: 'blog_comment' }, sortBy: 'created_at', sortOrder: 'desc', limit: MAX_SCAN }),
+      this.fileSystem.queryNotes({ pathPrefix: 'Community/ChatMessages', filters: { mcpvault_type: 'chat_message' }, sortBy: 'created_at', sortOrder: 'desc', limit: MAX_SCAN }),
+      this.fileSystem.queryNotes({ pathPrefix: 'Community/ChatRooms', filters: { mcpvault_type: 'chat_room' }, limit: MAX_SCAN }),
+    ]).then(([posts, comments, messages, rooms]) => ({ posts: posts.notes, comments: comments.notes, messages: messages.notes, rooms: rooms.notes }));
+    this.publicSnapshotInFlight = computation;
+    try {
+      const value = await computation;
+      this.publicSnapshotCache = { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, value };
+      return value;
+    } finally {
+      if (this.publicSnapshotInFlight === computation) this.publicSnapshotInFlight = undefined;
+    }
+  }
+
+  private async hydrateNotes(notes: QueryNote[]): Promise<QueryNote[]> {
+    const unique = [...new Map(notes.map(note => [note.path, note])).values()];
+    const hydrated: QueryNote[] = [];
+    for (let start = 0; start < unique.length; start += HYDRATE_BATCH_SIZE) {
+      const batch = unique.slice(start, start + HYDRATE_BATCH_SIZE);
+      const results = await Promise.all(batch.map(async note => {
+        try {
+          const parsed = await this.fileSystem.readNote(note.path);
+          return { ...note, frontmatter: parsed.frontmatter, content: parsed.content };
+        } catch {
+          return undefined;
+        }
+      }));
+      hydrated.push(...results.filter((note): note is QueryNote & { content: string } => note !== undefined));
+    }
+    return hydrated;
   }
 
   private async cachedPublicEvents(principal: ScopePrincipal): Promise<NotificationEvent[]> {
@@ -97,22 +148,75 @@ export class NotificationService {
 
   private async publicEvents(principal: ScopePrincipal): Promise<NotificationEvent[]> {
     const target = identity(principal);
-    const [posts, comments, messages, rooms] = await Promise.all([
-      this.fileSystem.queryNotes({ pathPrefix: 'Community/Posts', filters: { mcpvault_type: 'blog_post', status: 'published' }, sortBy: 'created_at', sortOrder: 'desc', limit: MAX_SCAN, includeContent: true }),
-      this.fileSystem.queryNotes({ pathPrefix: 'Community/Comments', filters: { mcpvault_type: 'blog_comment' }, sortBy: 'created_at', sortOrder: 'desc', limit: MAX_SCAN, includeContent: true }),
-      this.fileSystem.queryNotes({ pathPrefix: 'Community/ChatMessages', filters: { mcpvault_type: 'chat_message' }, sortBy: 'created_at', sortOrder: 'desc', limit: MAX_SCAN, includeContent: true }),
-      this.fileSystem.queryNotes({ pathPrefix: 'Community/ChatRooms', filters: { mcpvault_type: 'chat_room' }, limit: MAX_SCAN }),
+    const ownerRoot = principal.agentId
+      ? `_scopes/agents/${normalizeScopeId(principal.agentId, 'agentId')}/_subscriptions`
+      : `_scopes/models/${normalizeScopeId(principal.modelId, 'modelId')}/_subscriptions`;
+    const [snapshot, subscriptions] = await Promise.all([
+      this.cachedPublicSnapshot(),
+      this.fileSystem.queryNotes({ pathPrefix: ownerRoot, filters: { mcpvault_type: 'subscription', active: true }, limit: 500 }),
     ]);
+    const { posts, comments, messages, rooms } = snapshot;
 
-    const ownedPostIds = new Set(posts.notes.filter(note => note.frontmatter.author === target).map(note => text(note.frontmatter.post_id)));
-    const ownedCommentIds = new Set(comments.notes.filter(note => note.frontmatter.author === target).map(note => text(note.frontmatter.comment_id)));
-    const ownedMessageIds = new Set(messages.notes.filter(note => note.frontmatter.author === target).map(note => text(note.frontmatter.message_id)));
-    const postTitles = new Map(posts.notes.map(note => [text(note.frontmatter.post_id), text(note.frontmatter.title, text(note.frontmatter.post_id))]));
-    const roomTitles = new Map(rooms.notes.map(note => [text(note.frontmatter.room_id), text(note.frontmatter.title, text(note.frontmatter.room_id))]));
-    const commentBodies = new Map(comments.notes.map(note => [text(note.frontmatter.comment_id), text(note.content).trim()]));
-    const messageBodies = new Map(messages.notes.map(note => [text(note.frontmatter.message_id), text(note.content).trim()]));
+    const ownedPostIds = new Set(posts.filter(note => note.frontmatter.author === target).map(note => text(note.frontmatter.post_id)));
+    const ownedCommentIds = new Set(comments.filter(note => note.frontmatter.author === target).map(note => text(note.frontmatter.comment_id)));
+    const ownedMessageIds = new Set(messages.filter(note => note.frontmatter.author === target).map(note => text(note.frontmatter.message_id)));
+    const postTitles = new Map(posts.map(note => [text(note.frontmatter.post_id), text(note.frontmatter.title, text(note.frontmatter.post_id))]));
+    const roomTitles = new Map(rooms.map(note => [text(note.frontmatter.room_id), text(note.frontmatter.title, text(note.frontmatter.room_id))]));
+
+    const watchedPostIds = new Set<string>();
+    const watchedSeriesIds = new Set<string>();
+    const watchedAuthors = new Set<string>();
+    const watchedTags = new Set<string>();
+    for (const subscription of subscriptions.notes) {
+      const type = text(subscription.frontmatter.target_type).toLowerCase();
+      const value = text(subscription.frontmatter.target_id).toLowerCase();
+      if (!value) continue;
+      if (type === 'post') watchedPostIds.add(value);
+      else if (type === 'series') watchedSeriesIds.add(value);
+      else if (type === 'author') watchedAuthors.add(value);
+      else if (type === 'tag') watchedTags.add(value);
+    }
+    const hasMention = (note: QueryNote): boolean => Array.isArray(note.frontmatter.mentions)
+      && note.frontmatter.mentions.map(String).some(value => value.toLowerCase() === target.toLowerCase());
+    const watchedPost = (note: QueryNote): boolean => {
+      const postId = text(note.frontmatter.post_id).toLowerCase();
+      const author = text(note.frontmatter.author).toLowerCase();
+      const tags = Array.isArray(note.frontmatter.tags) ? note.frontmatter.tags.map(String).map(value => value.toLowerCase()) : [];
+      return watchedPostIds.has(postId)
+        || watchedSeriesIds.has(text(note.frontmatter.series_id).toLowerCase())
+        || watchedAuthors.has(author)
+        || tags.some(tag => watchedTags.has(tag));
+    };
+    const relevantComment = (note: QueryNote): boolean => {
+      const author = text(note.frontmatter.author);
+      const replyTo = text(note.frontmatter.reply_to);
+      const activity = ownedPostIds.has(text(note.frontmatter.post_id));
+      const watched = watchedPostIds.has(text(note.frontmatter.post_id).toLowerCase())
+        || watchedAuthors.has(author.toLowerCase());
+      return author !== target && (hasMention(note) || ownedCommentIds.has(replyTo) || activity || watched);
+    };
+    const relevantMessage = (note: QueryNote): boolean => {
+      const author = text(note.frontmatter.author);
+      return author !== target && (hasMention(note) || ownedMessageIds.has(text(note.frontmatter.reply_to)));
+    };
+    const relevantPosts = posts.filter(note => text(note.frontmatter.author) !== target && (hasMention(note) || watchedPost(note)));
+    const relevantComments = comments.filter(relevantComment);
+    const relevantMessages = messages.filter(relevantMessage);
+    const parentCommentIds = new Set(relevantComments.map(note => text(note.frontmatter.reply_to)).filter(Boolean));
+    const parentMessageIds = new Set(relevantMessages.map(note => text(note.frontmatter.reply_to)).filter(Boolean));
+    const hydratedPosts = await this.hydrateNotes(relevantPosts);
+    const hydratedComments = await this.hydrateNotes([
+      ...relevantComments,
+      ...comments.filter(note => parentCommentIds.has(text(note.frontmatter.comment_id))),
+    ]);
+    const hydratedMessages = await this.hydrateNotes([
+      ...relevantMessages,
+      ...messages.filter(note => parentMessageIds.has(text(note.frontmatter.message_id))),
+    ]);
+    const commentBodies = new Map(hydratedComments.map(note => [text(note.frontmatter.comment_id), text(note.content).trim()]));
+    const messageBodies = new Map(hydratedMessages.map(note => [text(note.frontmatter.message_id), text(note.content).trim()]));
     const events: NotificationEvent[] = [];
-    const reputations = await this.reputation.getMany([...comments.notes, ...messages.notes, ...posts.notes].map(note => text(note.frontmatter.author)));
+    const reputations = await this.reputation.getMany([...comments, ...messages, ...posts].map(note => text(note.frontmatter.author)));
 
     const add = (note: { path: string; frontmatter: Record<string, any>; content?: string }, kind: NotificationKind, sourceId: string) => {
       const author = text(note.frontmatter.author);
@@ -146,26 +250,22 @@ export class NotificationService {
       });
     };
 
-    for (const note of comments.notes) add(note, 'activity', text(note.frontmatter.comment_id));
-    for (const note of messages.notes) add(note, 'activity', text(note.frontmatter.message_id));
+    for (const note of hydratedComments) add(note, 'activity', text(note.frontmatter.comment_id));
+    for (const note of hydratedMessages) add(note, 'activity', text(note.frontmatter.message_id));
     // A post mention is useful too, while comments on a post are handled above.
-    for (const note of posts.notes) add(note, 'activity', text(note.frontmatter.post_id));
-    const ownerRoot = principal.agentId
-      ? `_scopes/agents/${normalizeScopeId(principal.agentId, 'agentId')}/_subscriptions`
-      : `_scopes/models/${normalizeScopeId(principal.modelId, 'modelId')}/_subscriptions`;
-    const subscriptions = await this.fileSystem.queryNotes({ pathPrefix: ownerRoot, filters: { mcpvault_type: 'subscription', active: true }, limit: 500 });
+    for (const note of hydratedPosts) add(note, 'activity', text(note.frontmatter.post_id));
     const watchedEvents = new Set<string>();
     for (const subscription of subscriptions.notes) {
       const type = text(subscription.frontmatter.target_type);
       const target = text(subscription.frontmatter.target_id).toLowerCase();
       const sources = type === 'post'
-        ? [...posts.notes.filter(note => text(note.frontmatter.post_id).toLowerCase() === target), ...comments.notes.filter(note => text(note.frontmatter.post_id).toLowerCase() === target)]
+        ? [...hydratedPosts.filter(note => text(note.frontmatter.post_id).toLowerCase() === target), ...hydratedComments.filter(note => text(note.frontmatter.post_id).toLowerCase() === target)]
         : type === 'series'
-          ? posts.notes.filter(note => text(note.frontmatter.series_id).toLowerCase() === target)
+          ? hydratedPosts.filter(note => text(note.frontmatter.series_id).toLowerCase() === target)
           : type === 'author'
-            ? [...posts.notes, ...comments.notes].filter(note => text(note.frontmatter.author).toLowerCase() === target)
+            ? [...hydratedPosts, ...hydratedComments].filter(note => text(note.frontmatter.author).toLowerCase() === target)
             : type === 'tag'
-              ? posts.notes.filter(note => Array.isArray(note.frontmatter.tags) && note.frontmatter.tags.some((tag: unknown) => String(tag).toLowerCase() === target))
+              ? hydratedPosts.filter(note => Array.isArray(note.frontmatter.tags) && note.frontmatter.tags.some((tag: unknown) => String(tag).toLowerCase() === target))
               : [];
       for (const note of sources) {
         const sourceId = text(note.frontmatter.post_id || note.frontmatter.comment_id);
