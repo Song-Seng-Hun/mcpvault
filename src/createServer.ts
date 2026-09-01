@@ -254,6 +254,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const semanticSearch = new SemanticSearchService(resolvedVaultPath, pathFilter, scopeAccess);
   const searchService = new SearchService(resolvedVaultPath, pathFilter);
   const metadataIndex = new VaultMetadataIndex(resolvedVaultPath, pathFilter, frontmatterHandler);
+  let reputationCache: ReputationService | undefined;
   const fileSystem = new FileSystemService(
     resolvedVaultPath,
     pathFilter,
@@ -262,6 +263,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       metadataIndex.invalidate(path, kind);
       searchService.invalidate(path, kind);
       semanticSearch.notifyChange(path, kind);
+      reputationCache?.invalidate();
     },
     metadataIndex,
   );
@@ -271,6 +273,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const llmWiki = new LlmWikiService(fileSystem, scopeAccess, references);
   const moderation = new ModerationService(resolvedVaultPath, fileSystem, scopeAuth);
   const reputation = new ReputationService(fileSystem, scopeAuth, moderation);
+  reputationCache = reputation;
   const social = new SocialService(fileSystem, scopeAccess, references, reputation);
   const chat = new ChatService(fileSystem, references, reputation);
   const whispers = new WhisperService(fileSystem, references);

@@ -10,6 +10,7 @@ const MAX_SCAN = 500;
 const XP_PER_LIKE = 2;
 const XP_PER_DISLIKE = -2;
 const XP_PER_LEVEL = 10;
+const REPUTATION_CACHE_TTL_MS = 2_000;
 
 export interface ReputationSnapshot {
   identity: string;
@@ -24,6 +25,12 @@ export interface ReputationSnapshot {
 }
 
 const identityOf = (principal: ScopePrincipal) => principal.agentId || principal.modelId;
+
+interface ReputationCache {
+  principalKey: string;
+  expiresAt: number;
+  snapshots: Map<string, ReputationSnapshot>;
+}
 
 /**
  * Levels are deliberately derived from public Markdown reactions rather than
@@ -47,11 +54,21 @@ export function labelForLevel(level: number): string {
 }
 
 export class ReputationService {
+  private reputationCache: ReputationCache | undefined;
+  private readonly reputationInFlight = new Map<string, Promise<Map<string, ReputationSnapshot>>>();
+  private cacheGeneration = 0;
+
   constructor(
     private readonly fileSystem: FileSystemService,
     private readonly auth: ScopeAuthService,
     private readonly moderation: ModerationService,
   ) {}
+
+  invalidate(): void {
+    this.cacheGeneration += 1;
+    this.reputationCache = undefined;
+    this.reputationInFlight.clear();
+  }
 
   async getForPrincipal(principal: ScopePrincipal): Promise<ReputationSnapshot> {
     return (await this.getMany([identityOf(principal)])).get(identityOf(principal))!;
@@ -66,13 +83,44 @@ export class ReputationService {
   }
 
   async getMany(identities: string[]): Promise<Map<string, ReputationSnapshot>> {
+    const requested = Array.from(new Set(identities.map(value => String(value || '').trim().toLowerCase()).filter(Boolean)));
+    if (requested.length === 0) return new Map();
     const principals = await this.auth.listPrincipals();
     const principalByIdentity = new Map(principals.map(principal => [identityOf(principal), principal]));
-    const requested = Array.from(new Set(identities.map(value => String(value || '').trim().toLowerCase()).filter(Boolean)));
+    const requestedKnown = requested.filter(identity => principalByIdentity.has(identity));
+    if (requestedKnown.length === 0) return new Map();
+    const principalKey = JSON.stringify(principals.map(principal => [identityOf(principal), principal.accountId]).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))));
+    const all = await this.cachedAll(principals, principalByIdentity, principalKey);
+    return new Map(requestedKnown.flatMap(identity => {
+      const snapshot = all.get(identity);
+      return snapshot ? [[identity, { ...snapshot }] as const] : [];
+    }));
+  }
+
+  private async cachedAll(principals: ScopePrincipal[], principalByIdentity: Map<string, ScopePrincipal>, principalKey: string): Promise<Map<string, ReputationSnapshot>> {
+    const cached = this.reputationCache;
+    if (cached && cached.principalKey === principalKey && cached.expiresAt > Date.now()) return cached.snapshots;
+    const running = this.reputationInFlight.get(principalKey);
+    if (running) return running;
+    const generation = this.cacheGeneration;
+    const computation = this.computeAll(principals, principalByIdentity);
+    this.reputationInFlight.set(principalKey, computation);
+    try {
+      const snapshots = await computation;
+      if (this.cacheGeneration === generation) {
+        this.reputationCache = { principalKey, expiresAt: Date.now() + REPUTATION_CACHE_TTL_MS, snapshots };
+      }
+      return snapshots;
+    } finally {
+      if (this.reputationInFlight.get(principalKey) === computation) this.reputationInFlight.delete(principalKey);
+    }
+  }
+
+  private async computeAll(principals: ScopePrincipal[], principalByIdentity: Map<string, ScopePrincipal>): Promise<Map<string, ReputationSnapshot>> {
     const snapshots = new Map<string, { principal: ScopePrincipal; likesReceived: number; dislikesReceived: number }>();
-    for (const identity of requested) {
-      const principal = principalByIdentity.get(identity);
-      if (principal) snapshots.set(identity, { principal, likesReceived: 0, dislikesReceived: 0 });
+    for (const principal of principals) {
+      const identity = identityOf(principal);
+      if (identity && !snapshots.has(identity)) snapshots.set(identity, { principal, likesReceived: 0, dislikesReceived: 0 });
     }
     if (snapshots.size === 0) return new Map();
 

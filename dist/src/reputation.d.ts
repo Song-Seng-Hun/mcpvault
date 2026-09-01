@@ -28,10 +28,16 @@ export declare class ReputationService {
     private readonly fileSystem;
     private readonly auth;
     private readonly moderation;
+    private reputationCache;
+    private readonly reputationInFlight;
+    private cacheGeneration;
     constructor(fileSystem: FileSystemService, auth: ScopeAuthService, moderation: ModerationService);
+    invalidate(): void;
     getForPrincipal(principal: ScopePrincipal): Promise<ReputationSnapshot>;
     getPublic(identity: string): Promise<ReputationSnapshot>;
     getMany(identities: string[]): Promise<Map<string, ReputationSnapshot>>;
+    private cachedAll;
+    private computeAll;
 }
 export { XP_PER_DISLIKE, XP_PER_LIKE, XP_PER_LEVEL };
 //# sourceMappingURL=reputation.d.ts.map

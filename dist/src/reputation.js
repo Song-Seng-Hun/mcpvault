@@ -6,6 +6,7 @@ const MAX_SCAN = 500;
 const XP_PER_LIKE = 2;
 const XP_PER_DISLIKE = -2;
 const XP_PER_LEVEL = 10;
+const REPUTATION_CACHE_TTL_MS = 2_000;
 const identityOf = (principal) => principal.agentId || principal.modelId;
 /**
  * Levels are deliberately derived from public Markdown reactions rather than
@@ -36,10 +37,18 @@ export class ReputationService {
     fileSystem;
     auth;
     moderation;
+    reputationCache;
+    reputationInFlight = new Map();
+    cacheGeneration = 0;
     constructor(fileSystem, auth, moderation) {
         this.fileSystem = fileSystem;
         this.auth = auth;
         this.moderation = moderation;
+    }
+    invalidate() {
+        this.cacheGeneration += 1;
+        this.reputationCache = undefined;
+        this.reputationInFlight.clear();
     }
     async getForPrincipal(principal) {
         return (await this.getMany([identityOf(principal)])).get(identityOf(principal));
@@ -54,13 +63,48 @@ export class ReputationService {
         return (await this.getMany([normalized])).get(normalized);
     }
     async getMany(identities) {
+        const requested = Array.from(new Set(identities.map(value => String(value || '').trim().toLowerCase()).filter(Boolean)));
+        if (requested.length === 0)
+            return new Map();
         const principals = await this.auth.listPrincipals();
         const principalByIdentity = new Map(principals.map(principal => [identityOf(principal), principal]));
-        const requested = Array.from(new Set(identities.map(value => String(value || '').trim().toLowerCase()).filter(Boolean)));
+        const requestedKnown = requested.filter(identity => principalByIdentity.has(identity));
+        if (requestedKnown.length === 0)
+            return new Map();
+        const principalKey = JSON.stringify(principals.map(principal => [identityOf(principal), principal.accountId]).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))));
+        const all = await this.cachedAll(principals, principalByIdentity, principalKey);
+        return new Map(requestedKnown.flatMap(identity => {
+            const snapshot = all.get(identity);
+            return snapshot ? [[identity, { ...snapshot }]] : [];
+        }));
+    }
+    async cachedAll(principals, principalByIdentity, principalKey) {
+        const cached = this.reputationCache;
+        if (cached && cached.principalKey === principalKey && cached.expiresAt > Date.now())
+            return cached.snapshots;
+        const running = this.reputationInFlight.get(principalKey);
+        if (running)
+            return running;
+        const generation = this.cacheGeneration;
+        const computation = this.computeAll(principals, principalByIdentity);
+        this.reputationInFlight.set(principalKey, computation);
+        try {
+            const snapshots = await computation;
+            if (this.cacheGeneration === generation) {
+                this.reputationCache = { principalKey, expiresAt: Date.now() + REPUTATION_CACHE_TTL_MS, snapshots };
+            }
+            return snapshots;
+        }
+        finally {
+            if (this.reputationInFlight.get(principalKey) === computation)
+                this.reputationInFlight.delete(principalKey);
+        }
+    }
+    async computeAll(principals, principalByIdentity) {
         const snapshots = new Map();
-        for (const identity of requested) {
-            const principal = principalByIdentity.get(identity);
-            if (principal)
+        for (const principal of principals) {
+            const identity = identityOf(principal);
+            if (identity && !snapshots.has(identity))
                 snapshots.set(identity, { principal, likesReceived: 0, dislikesReceived: 0 });
         }
         if (snapshots.size === 0)
