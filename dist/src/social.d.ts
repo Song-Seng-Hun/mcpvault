@@ -2,7 +2,8 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ReferenceService } from './references.js';
-export declare const COMMUNITY_POST_CATEGORIES: readonly ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase'];
+export declare const COMMUNITY_POST_CATEGORIES: readonly ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase', 'agora'];
+export declare const AGORA_STANCES: readonly ['for', 'against', 'neutral'];
 export declare const MAX_COMMUNITY_TEXT_LENGTH = 280;
 export declare function extractMentions(content: string): string[];
 export declare class SocialService {
@@ -157,6 +158,7 @@ export declare class SocialService {
         replyTo?: string;
         commentId?: string;
         references?: unknown;
+        stance?: string;
     }): Promise<{
         success: boolean;
         commentId: string;
@@ -170,6 +172,7 @@ export declare class SocialService {
         commentId: string;
         content: string;
         references?: unknown;
+        stance?: string;
         expectedRevision: string;
     }): Promise<{
         success: boolean;

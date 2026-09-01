@@ -1,7 +1,7 @@
 import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopeAuthService, ScopePrincipal } from './scope-auth.js';
-declare const CATEGORIES: readonly ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase'];
+declare const CATEGORIES: readonly ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase', 'agora'];
 type TargetType = 'post' | 'comment';
 export declare class CommunityFeaturesService {
     private readonly fileSystem;

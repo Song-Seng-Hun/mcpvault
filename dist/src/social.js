@@ -6,7 +6,8 @@ const BLOG_ROOT = 'Community/Posts';
 const COMMENTS_ROOT = 'Community/Comments';
 const JOURNAL_KINDS = new Set(['diary', 'log', 'reflection']);
 const POST_STATUSES = new Set(['draft', 'published', 'archived']);
-export const COMMUNITY_POST_CATEGORIES = ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase'];
+export const COMMUNITY_POST_CATEGORIES = ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase', 'agora'];
+export const AGORA_STANCES = ['for', 'against', 'neutral'];
 export const MAX_COMMUNITY_TEXT_LENGTH = 280;
 const now = () => new Date().toISOString();
 const today = () => now().slice(0, 10);
@@ -58,6 +59,19 @@ function requirePublisher(principal) {
     if (!principal)
         throw new Error('Login is required to publish or comment in the public community');
     return principal;
+}
+function debateStance(value, isAgora) {
+    if (value === undefined || value === null || String(value).trim() === '') {
+        if (isAgora)
+            throw new Error("Agora comments require stance='for', 'against', or 'neutral'");
+        return undefined;
+    }
+    const stance = String(value).trim().toLowerCase();
+    if (!AGORA_STANCES.includes(stance))
+        throw new Error("stance must be for, against, or neutral");
+    if (!isAgora)
+        throw new Error("stance is only available on Agora topics");
+    return stance;
 }
 function validateDate(value) {
     const date = String(value || today()).trim();
@@ -326,6 +340,7 @@ export class SocialService {
         if (post.note.frontmatter.status !== 'published')
             throw new Error('Comments are available only on published posts');
         const content = requireShortCommunityText(params.content);
+        const stance = debateStance(params.stance, post.note.frontmatter.category === 'agora');
         const commentId = params.commentId ? normalizeScopeId(params.commentId, 'commentId') : `comment-${randomUUID().slice(0, 10)}`;
         if (params.replyTo) {
             await this.fileSystem.readNote(commentPath(slug, params.replyTo));
@@ -342,6 +357,7 @@ export class SocialService {
                 mentions: extractMentions(content),
                 references,
                 workflow_status: 'open',
+                ...(stance && { stance }),
                 ...(params.replyTo && { reply_to: normalizeScopeId(params.replyTo, 'replyTo') }),
             },
             expectedRevision: 'missing',
@@ -362,8 +378,10 @@ export class SocialService {
         if (!params.expectedRevision)
             throw new Error('expectedRevision is required; read the comment first');
         const text = requireShortCommunityText(params.content);
+        const post = await this.readBlogPost(slug);
+        const stance = debateStance(params.stance ?? note.frontmatter.stance, post.note.frontmatter.category === 'agora');
         const references = await this.references.validateAndNormalize(params.references ?? note.frontmatter.references, path, principal, text);
-        await this.fileSystem.writeNote({ path, content: `${text}\n`, frontmatter: { ...note.frontmatter, content_status: 'published', mentions: extractMentions(text), references, updated_at: now() }, expectedRevision: params.expectedRevision });
+        await this.fileSystem.writeNote({ path, content: `${text}\n`, frontmatter: { ...note.frontmatter, content_status: 'published', mentions: extractMentions(text), references, ...(stance ? { stance } : {}), updated_at: now() }, expectedRevision: params.expectedRevision });
         const updated = await this.fileSystem.readNote(path);
         return { success: true, commentId, postId: slug, revision: updated.revision };
     }
@@ -422,6 +440,7 @@ export class SocialService {
                 content,
                 revision,
                 references: note.frontmatter.references || [],
+                stance: note.frontmatter.stance,
                 workflowStatus: workflowStatus(note.frontmatter),
                 workflowStatusBy: note.frontmatter.workflow_status_by,
                 workflowStatusReason: note.frontmatter.workflow_status_reason,

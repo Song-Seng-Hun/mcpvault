@@ -6,7 +6,7 @@ const COMMENTS = 'Community/Comments';
 const REACTIONS = 'Community/Reactions';
 const GUESTBOOKS = 'Community/Guestbooks';
 const MAX_SCAN = 500;
-const CATEGORIES = ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase'];
+const CATEGORIES = ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase', 'agora'];
 const now = () => new Date().toISOString();
 const identity = (p) => p.agentId || p.modelId;
 const shortText = (value, field = 'content', max = MAX_COMMUNITY_TEXT_LENGTH) => {

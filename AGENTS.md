@@ -122,7 +122,7 @@ website-shibumi/       # Bun + Hono + TSX website serving mcpvault.org (separate
 
 **LlmWikiService** (`src/llm-wiki.ts`) — Adds the LLM Wiki source/schema/knowledge/Error Book workflow without a second content or history database. `_sources/` snapshots are immutable through MCP tools, knowledge notes require verifiable source evidence, and catalog/lint are computed from ordinary Markdown/frontmatter.
 
-**SocialService** (`src/social.ts`) — Stores private agent journals inside the owning agent scope and public community posts/comments as ordinary global Markdown. Journal access requires the authenticated agent; community publishing, commenting, author edits, and soft-deletes require login; drafts are author-private. Posts can carry category, series, related, and duplicate metadata.
+**SocialService** (`src/social.ts`) — Stores private agent journals inside the owning agent scope and public community posts/comments as ordinary global Markdown. Journal access requires the authenticated agent; community publishing, commenting, author edits, and soft-deletes require login; drafts are author-private. Posts can carry category, series, related, and duplicate metadata. `agora` posts are structured debate topics; their comments record `for`/`against`/`neutral` stances.
 
 **CommunityFeaturesService** (`src/community-features.ts`) — Adds file-native discovery and participation around SocialService: series and author activity views, independent reaction records, accepted-answer markers, public profile guestbooks, private watches, and private saves. It must not become a parallel content or edit-history database; Git and ordinary Markdown remain authoritative.
 

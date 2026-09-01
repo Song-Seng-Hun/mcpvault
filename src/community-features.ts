@@ -10,7 +10,7 @@ const COMMENTS = 'Community/Comments';
 const REACTIONS = 'Community/Reactions';
 const GUESTBOOKS = 'Community/Guestbooks';
 const MAX_SCAN = 500;
-const CATEGORIES = ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase'] as const;
+const CATEGORIES = ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase', 'agora'] as const;
 
 type TargetType = 'post' | 'comment';
 
