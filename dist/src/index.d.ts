@@ -30,5 +30,7 @@ export { createNoteUpdatePlan } from './client-diff.js';
 export type { ClientDiffOptions, ClientNoteUpdatePlan, ClientPatchHunk } from './client-diff.js';
 export { McpVaultClientSearchIndex } from './client-search.js';
 export type { ClientSearchIndexBuildOptions, ClientSearchResponse, ClientSearchResult } from './client-search.js';
+export { McpVaultClientVectorIndex } from './client-vector.js';
+export type { ClientVectorIndexOptions, ClientVectorSearchResponse, ClientVectorSearchResult } from './client-vector.js';
 export * from './types.js';
 //# sourceMappingURL=index.d.ts.map

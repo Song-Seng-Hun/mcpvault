@@ -17,4 +17,5 @@ export { ClientTimelineCache } from './client-timeline.js';
 export { ClientCapabilityCatalogCache, ClientHeartbeatBackoff } from './client-control-plane.js';
 export { createNoteUpdatePlan } from './client-diff.js';
 export { McpVaultClientSearchIndex } from './client-search.js';
+export { McpVaultClientVectorIndex } from './client-vector.js';
 export * from './types.js';
