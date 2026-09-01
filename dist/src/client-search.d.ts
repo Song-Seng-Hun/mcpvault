@@ -11,6 +11,14 @@ export interface ClientSearchResponse {
     indexedDocuments: number;
     results: ClientSearchResult[];
 }
+export interface ClientSearchIndexBuildOptions {
+    /** Number of notes indexed before yielding to the host; defaults to 16. */
+    batchSize?: number;
+    /** Cancel a background indexing pass without affecting existing entries. */
+    signal?: AbortSignal;
+    /** Host-provided idle hook, such as a requestIdleCallback wrapper. */
+    yield?: () => Promise<void>;
+}
 /**
  * Lightweight host-side first-pass search over explicitly cached notes. It is
  * an optimization only: callers must use the server search/revision contract
@@ -26,6 +34,12 @@ export declare class McpVaultClientSearchIndex {
         maxDocuments?: number;
     });
     upsert(note: CachedNote): void;
+    /**
+     * Builds or refreshes an index in bounded batches. The default macrotask
+     * yield keeps a browser/agent host responsive; hosts can inject a stronger
+     * idle callback or a worker bridge through `yield`.
+     */
+    upsertMany(notes: CachedNote[], options?: ClientSearchIndexBuildOptions): Promise<void>;
     remove(path: string): void;
     clear(): void;
     size(): number;

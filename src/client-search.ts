@@ -14,6 +14,15 @@ export interface ClientSearchResponse {
   results: ClientSearchResult[];
 }
 
+export interface ClientSearchIndexBuildOptions {
+  /** Number of notes indexed before yielding to the host; defaults to 16. */
+  batchSize?: number;
+  /** Cancel a background indexing pass without affecting existing entries. */
+  signal?: AbortSignal;
+  /** Host-provided idle hook, such as a requestIdleCallback wrapper. */
+  yield?: () => Promise<void>;
+}
+
 interface IndexedDocument {
   note: CachedNote;
   title: string;
@@ -29,6 +38,8 @@ const MAX_QUERY_CHARS = 500;
 const MAX_RESULT_LIMIT = 50;
 const MAX_INDEXED_DOCUMENTS = 5_000;
 const MAX_TOKENS_PER_DOCUMENT = 4_096;
+const DEFAULT_INDEX_BUILD_BATCH_SIZE = 16;
+const MAX_INDEX_BUILD_BATCH_SIZE = 128;
 
 type SearchCacheEntry = ClientSearchResponse;
 
@@ -150,6 +161,23 @@ export class McpVaultClientSearchIndex {
       const oldestPath = this.documents.keys().next().value!;
       this.unindex(oldestPath);
       this.documents.delete(oldestPath);
+    }
+  }
+
+  /**
+   * Builds or refreshes an index in bounded batches. The default macrotask
+   * yield keeps a browser/agent host responsive; hosts can inject a stronger
+   * idle callback or a worker bridge through `yield`.
+   */
+  async upsertMany(notes: CachedNote[], options: ClientSearchIndexBuildOptions = {}): Promise<void> {
+    const batchSize = options.batchSize ?? DEFAULT_INDEX_BUILD_BATCH_SIZE;
+    if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > MAX_INDEX_BUILD_BATCH_SIZE) {
+      throw new Error(`batchSize must be between 1 and ${MAX_INDEX_BUILD_BATCH_SIZE}`);
+    }
+    for (let start = 0; start < notes.length; start += batchSize) {
+      if (options.signal?.aborted) throw new Error('search index build was aborted');
+      for (const note of notes.slice(start, start + batchSize)) this.upsert(note);
+      if (start + batchSize < notes.length) await (options.yield || yieldToHost)();
     }
   }
 
@@ -350,6 +378,10 @@ export class McpVaultClientSearchIndex {
 
 function cloneSearchResponse(value: ClientSearchResponse): ClientSearchResponse {
   return { ...value, results: value.results.map(result => ({ ...result })) };
+}
+
+function yieldToHost(): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, 0));
 }
 
 function searchDocumentStorageKey(key: string, path: string): string {

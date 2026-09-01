@@ -104,3 +104,24 @@ test('supports asynchronous incremental search-index persistence', async () => {
   await expect(restored.hydrateIncrementalAsync(store, 'async-index')).resolves.toBe(1);
   expect(restored.search('async').results[0]!.path).toBe('async.md');
 });
+
+test('builds the local search index in yielding batches and can abort idle work', async () => {
+  const index = new McpVaultClientSearchIndex();
+  const controller = new AbortController();
+  let yields = 0;
+  const notes = Array.from({ length: 5 }, (_, index) => ({
+    path: `idle-${index}.md`,
+    revision: String(index).repeat(64),
+    content: `idle note ${index}`,
+  }));
+  await expect(index.upsertMany(notes, {
+    batchSize: 2,
+    yield: async () => {
+      yields += 1;
+      if (yields === 2) controller.abort();
+    },
+    signal: controller.signal,
+  })).rejects.toThrow('aborted');
+  expect(yields).toBe(2);
+  expect(index.size()).toBe(4);
+});
