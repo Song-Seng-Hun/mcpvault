@@ -52,6 +52,7 @@ export interface PublicSnapshotIndex extends PublicSnapshot {
   messagesByReplyTo: Map<string, QueryNote[]>;
   postTitles: Map<string, string>;
   roomTitles: Map<string, string>;
+  seriesFirstSeen: Map<string, { createdAt: string; path: string }>;
   seriesOrder: string[];
 }
 
@@ -157,6 +158,7 @@ function buildPublicSnapshotIndex(snapshot: PublicSnapshot): PublicSnapshotIndex
     messagesByReplyTo: new Map(),
     postTitles: new Map(),
     roomTitles: new Map(),
+    seriesFirstSeen: new Map(),
     seriesOrder: [],
   };
   const seriesFirstSeen = new Map<string, { createdAt: string; path: string }>();
@@ -164,7 +166,7 @@ function buildPublicSnapshotIndex(snapshot: PublicSnapshot): PublicSnapshotIndex
     addToIndex(index.postsByPostId, note.frontmatter.post_id, note);
     addToIndex(index.postsBySeriesId, note.frontmatter.series_id, note);
     addToIndex(index.postsByAuthor, note.frontmatter.author, note);
-    const seriesId = text(note.frontmatter.series_id);
+    const seriesId = text(note.frontmatter.series_id).toLowerCase();
     if (seriesId && !isModerationHidden(note.frontmatter)) {
       const seen = seriesFirstSeen.get(seriesId);
       const candidate = { createdAt: text(note.frontmatter.created_at), path: note.path };
@@ -196,76 +198,159 @@ function buildPublicSnapshotIndex(snapshot: PublicSnapshot): PublicSnapshotIndex
   index.seriesOrder = [...seriesFirstSeen.entries()]
     .sort((a, b) => a[1].createdAt.localeCompare(b[1].createdAt) || a[1].path.localeCompare(b[1].path))
     .map(([seriesId]) => seriesId);
+  index.seriesFirstSeen = seriesFirstSeen;
   return index;
 }
 
-function reindexPublicCollection(index: PublicSnapshotIndex, collection: PublicCollection): PublicSnapshotIndex {
+function cloneCollectionIndex(index: PublicSnapshotIndex, collection: PublicCollection, notes: QueryNote[]): PublicSnapshotIndex {
+  const next = { ...index, [collection]: notes } as PublicSnapshotIndex;
   if (collection === 'posts') {
-    const postsByPostId = new Map<string, QueryNote[]>();
-    const postsBySeriesId = new Map<string, QueryNote[]>();
-    const postsByAuthor = new Map<string, QueryNote[]>();
-    const postsByTag = new Map<string, QueryNote[]>();
-    const postsByMention = new Map<string, QueryNote[]>();
-    const postTitles = new Map<string, string>();
-    const seriesFirstSeen = new Map<string, { createdAt: string; path: string }>();
-    for (const note of index.posts) {
-      addToIndex(postsByPostId, note.frontmatter.post_id, note);
-      addToIndex(postsBySeriesId, note.frontmatter.series_id, note);
-      addToIndex(postsByAuthor, note.frontmatter.author, note);
-      addMentions(postsByMention, note);
-      if (Array.isArray(note.frontmatter.tags)) for (const tag of note.frontmatter.tags) addToIndex(postsByTag, tag, note);
-      const postId = text(note.frontmatter.post_id);
-      if (postId) postTitles.set(postId, text(note.frontmatter.title, postId));
-      const seriesId = text(note.frontmatter.series_id);
-      if (seriesId && !isModerationHidden(note.frontmatter)) {
-        const seen = seriesFirstSeen.get(seriesId);
-        const candidate = { createdAt: text(note.frontmatter.created_at), path: note.path };
-        if (!seen || candidate.createdAt < seen.createdAt || (candidate.createdAt === seen.createdAt && candidate.path < seen.path)) seriesFirstSeen.set(seriesId, candidate);
-      }
-    }
     return {
-      ...index,
-      postsByPostId,
-      postsBySeriesId,
-      postsByAuthor,
-      postsByTag,
-      postsByMention,
-      postTitles,
-      seriesOrder: [...seriesFirstSeen.entries()].sort((a, b) => a[1].createdAt.localeCompare(b[1].createdAt) || a[1].path.localeCompare(b[1].path)).map(([seriesId]) => seriesId),
+      ...next,
+      postsByPostId: new Map(index.postsByPostId),
+      postsBySeriesId: new Map(index.postsBySeriesId),
+      postsByAuthor: new Map(index.postsByAuthor),
+      postsByTag: new Map(index.postsByTag),
+      postsByMention: new Map(index.postsByMention),
+      postTitles: new Map(index.postTitles),
+      seriesFirstSeen: new Map(index.seriesFirstSeen),
+      seriesOrder: index.seriesOrder.slice(),
     };
   }
   if (collection === 'comments') {
-    const commentsByPostId = new Map<string, QueryNote[]>();
-    const commentsByCommentId = new Map<string, QueryNote[]>();
-    const commentsByAuthor = new Map<string, QueryNote[]>();
-    const commentsByMention = new Map<string, QueryNote[]>();
-    const commentsByReplyTo = new Map<string, QueryNote[]>();
-    for (const note of index.comments) {
-      addToIndex(commentsByPostId, note.frontmatter.post_id, note);
-      addToIndex(commentsByCommentId, note.frontmatter.comment_id, note);
-      addToIndex(commentsByAuthor, note.frontmatter.author, note);
-      addMentions(commentsByMention, note);
-      addToIndex(commentsByReplyTo, note.frontmatter.reply_to, note);
-    }
-    return { ...index, commentsByPostId, commentsByCommentId, commentsByAuthor, commentsByMention, commentsByReplyTo };
+    return {
+      ...next,
+      commentsByPostId: new Map(index.commentsByPostId),
+      commentsByCommentId: new Map(index.commentsByCommentId),
+      commentsByAuthor: new Map(index.commentsByAuthor),
+      commentsByMention: new Map(index.commentsByMention),
+      commentsByReplyTo: new Map(index.commentsByReplyTo),
+    };
   }
   if (collection === 'messages') {
-    const messagesByMessageId = new Map<string, QueryNote[]>();
-    const messagesByMention = new Map<string, QueryNote[]>();
-    const messagesByReplyTo = new Map<string, QueryNote[]>();
-    for (const note of index.messages) {
-      addToIndex(messagesByMessageId, note.frontmatter.message_id, note);
-      addMentions(messagesByMention, note);
-      addToIndex(messagesByReplyTo, note.frontmatter.reply_to, note);
-    }
-    return { ...index, messagesByMessageId, messagesByMention, messagesByReplyTo };
+    return {
+      ...next,
+      messagesByMessageId: new Map(index.messagesByMessageId),
+      messagesByMention: new Map(index.messagesByMention),
+      messagesByReplyTo: new Map(index.messagesByReplyTo),
+    };
   }
-  const roomTitles = new Map<string, string>();
-  for (const note of index.rooms) {
+  return { ...next, roomTitles: new Map(index.roomTitles) };
+}
+
+function removeIndexedValue(index: Map<string, QueryNote[]>, key: unknown, path: string): void {
+  const normalized = text(key).toLowerCase();
+  if (!normalized) return;
+  const bucket = index.get(normalized);
+  if (!bucket) return;
+  const next = bucket.filter(note => note.path !== path);
+  if (next.length) index.set(normalized, next);
+  else index.delete(normalized);
+}
+
+function addIndexedValue(index: Map<string, QueryNote[]>, key: unknown, note: QueryNote): void {
+  const normalized = text(key).toLowerCase();
+  if (!normalized) return;
+  const bucket = index.get(normalized);
+  if (bucket) index.set(normalized, [...bucket, note]);
+  else index.set(normalized, [note]);
+}
+
+function removeIndexedMentions(index: Map<string, QueryNote[]>, note: QueryNote): void {
+  if (!Array.isArray(note.frontmatter.mentions)) return;
+  for (const mention of note.frontmatter.mentions) removeIndexedValue(index, mention, note.path);
+}
+
+function addIndexedMentions(index: Map<string, QueryNote[]>, note: QueryNote): void {
+  if (!Array.isArray(note.frontmatter.mentions)) return;
+  for (const mention of note.frontmatter.mentions) addIndexedValue(index, mention, note);
+}
+
+function removeFromCollectionIndex(index: PublicSnapshotIndex, collection: PublicCollection, note: QueryNote): Set<string> {
+  const affectedSeries = new Set<string>();
+  if (collection === 'posts') {
+    removeIndexedValue(index.postsByPostId, note.frontmatter.post_id, note.path);
+    removeIndexedValue(index.postsBySeriesId, note.frontmatter.series_id, note.path);
+    removeIndexedValue(index.postsByAuthor, note.frontmatter.author, note.path);
+    removeIndexedMentions(index.postsByMention, note);
+    if (Array.isArray(note.frontmatter.tags)) for (const tag of note.frontmatter.tags) removeIndexedValue(index.postsByTag, tag, note.path);
+    const postId = text(note.frontmatter.post_id);
+    if (postId) index.postTitles.delete(postId);
+    const seriesId = text(note.frontmatter.series_id).toLowerCase();
+    if (seriesId) affectedSeries.add(seriesId);
+  } else if (collection === 'comments') {
+    removeIndexedValue(index.commentsByPostId, note.frontmatter.post_id, note.path);
+    removeIndexedValue(index.commentsByCommentId, note.frontmatter.comment_id, note.path);
+    removeIndexedValue(index.commentsByAuthor, note.frontmatter.author, note.path);
+    removeIndexedMentions(index.commentsByMention, note);
+    removeIndexedValue(index.commentsByReplyTo, note.frontmatter.reply_to, note.path);
+  } else if (collection === 'messages') {
+    removeIndexedValue(index.messagesByMessageId, note.frontmatter.message_id, note.path);
+    removeIndexedMentions(index.messagesByMention, note);
+    removeIndexedValue(index.messagesByReplyTo, note.frontmatter.reply_to, note.path);
+  } else {
     const roomId = text(note.frontmatter.room_id);
-    if (roomId) roomTitles.set(roomId, text(note.frontmatter.title, roomId));
+    if (roomId) index.roomTitles.delete(roomId);
   }
-  return { ...index, roomTitles };
+  return affectedSeries;
+}
+
+function addToCollectionIndex(index: PublicSnapshotIndex, collection: PublicCollection, note: QueryNote): Set<string> {
+  const affectedSeries = new Set<string>();
+  if (collection === 'posts') {
+    addIndexedValue(index.postsByPostId, note.frontmatter.post_id, note);
+    addIndexedValue(index.postsBySeriesId, note.frontmatter.series_id, note);
+    addIndexedValue(index.postsByAuthor, note.frontmatter.author, note);
+    addIndexedMentions(index.postsByMention, note);
+    if (Array.isArray(note.frontmatter.tags)) for (const tag of note.frontmatter.tags) addIndexedValue(index.postsByTag, tag, note);
+    const postId = text(note.frontmatter.post_id);
+    if (postId) index.postTitles.set(postId, text(note.frontmatter.title, postId));
+    const seriesId = text(note.frontmatter.series_id).toLowerCase();
+    if (seriesId) affectedSeries.add(seriesId);
+  } else if (collection === 'comments') {
+    addIndexedValue(index.commentsByPostId, note.frontmatter.post_id, note);
+    addIndexedValue(index.commentsByCommentId, note.frontmatter.comment_id, note);
+    addIndexedValue(index.commentsByAuthor, note.frontmatter.author, note);
+    addIndexedMentions(index.commentsByMention, note);
+    addIndexedValue(index.commentsByReplyTo, note.frontmatter.reply_to, note);
+  } else if (collection === 'messages') {
+    addIndexedValue(index.messagesByMessageId, note.frontmatter.message_id, note);
+    addIndexedMentions(index.messagesByMention, note);
+    addIndexedValue(index.messagesByReplyTo, note.frontmatter.reply_to, note);
+  } else {
+    const roomId = text(note.frontmatter.room_id);
+    if (roomId) index.roomTitles.set(roomId, text(note.frontmatter.title, roomId));
+  }
+  return affectedSeries;
+}
+
+function refreshSeriesOrder(index: PublicSnapshotIndex, seriesIds: Set<string>): void {
+  for (const seriesId of seriesIds) {
+    const candidates = (index.postsBySeriesId.get(seriesId) || []).filter(note => !isModerationHidden(note.frontmatter));
+    if (!candidates.length) {
+      index.seriesFirstSeen.delete(seriesId);
+      continue;
+    }
+    let first = candidates[0]!;
+    for (const candidate of candidates.slice(1)) {
+      const candidateCreatedAt = text(candidate.frontmatter.created_at);
+      const firstCreatedAt = text(first.frontmatter.created_at);
+      if (candidateCreatedAt < firstCreatedAt || (candidateCreatedAt === firstCreatedAt && candidate.path < first.path)) first = candidate;
+    }
+    index.seriesFirstSeen.set(seriesId, { createdAt: text(first.frontmatter.created_at), path: first.path });
+  }
+  index.seriesOrder = [...index.seriesFirstSeen.entries()]
+    .sort((a, b) => a[1].createdAt.localeCompare(b[1].createdAt) || a[1].path.localeCompare(b[1].path))
+    .map(([seriesId]) => seriesId);
+}
+
+function patchPublicSnapshotIndex(index: PublicSnapshotIndex, collection: PublicCollection, notes: QueryNote[], previous: QueryNote | undefined, nextNote: QueryNote | undefined): PublicSnapshotIndex {
+  const next = cloneCollectionIndex(index, collection, notes);
+  const affectedSeries = new Set<string>();
+  if (previous) for (const seriesId of removeFromCollectionIndex(next, collection, previous)) affectedSeries.add(seriesId);
+  if (nextNote) for (const seriesId of addToCollectionIndex(next, collection, nextNote)) affectedSeries.add(seriesId);
+  if (collection === 'posts') refreshSeriesOrder(next, affectedSeries);
+  return next;
 }
 
 export class NotificationService {
@@ -345,15 +430,19 @@ export class NotificationService {
       this.publicSnapshotCache = undefined;
       return;
     }
+    const previous = cached.value[collection].find(note => note.path === path);
     const nextCollection = cached.value[collection].filter(note => note.path !== path);
+    let nextNote: QueryNote | undefined;
     if (kind !== 'delete') {
       const note = await this.fileSystem.readNote(path);
       const metadata: QueryNote = { path: normalizePath(path), frontmatter: compactPublicNote({ path, frontmatter: note.frontmatter }, collection).frontmatter };
-      if (belongsInPublicCollection(metadata, collection)) nextCollection.push(metadata);
+      if (belongsInPublicCollection(metadata, collection)) {
+        nextNote = metadata;
+        nextCollection.push(metadata);
+      }
     }
     sortPublicCollection(nextCollection, collection);
-    const next = { ...cached.value, [collection]: nextCollection } as PublicSnapshotIndex;
-    this.publicSnapshotCache = { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, value: reindexPublicCollection(next, collection) };
+    this.publicSnapshotCache = { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, value: patchPublicSnapshotIndex(cached.value, collection, nextCollection, previous, nextNote) };
   }
 
   private async hydrateNotes(notes: QueryNote[]): Promise<QueryNote[]> {
