@@ -462,7 +462,10 @@ export class SemanticSearchService {
                     continue;
                 const hash = hashContent(content);
                 if ((!entry || entry.hash !== hash) && (this.pending.size < MAX_PENDING_CHANGES || this.pending.has(normalized))) {
-                    this.pending.set(normalized, { kind: 'upsert' });
+                    // Preserve an in-flight retry's backoff. Re-scanning the catalog must
+                    // not turn one failing note into a hot loop by resetting its attempt.
+                    if (!this.pending.has(normalized))
+                        this.pending.set(normalized, { kind: 'upsert' });
                 }
                 else if (entry) {
                     // Timestamp-only changes do not require a new embedding. Persist the
@@ -511,8 +514,9 @@ export class SemanticSearchService {
             return this.syncPromise;
         this.syncPromise = (async () => {
             const batch = [];
+            const now = Date.now();
             while (this.pending.size > 0 && batch.length < maxFiles) {
-                const first = this.pending.entries().next().value;
+                const first = [...this.pending.entries()].find(([, change]) => !change.retryAt || change.retryAt <= now);
                 if (!first)
                     break;
                 this.pending.delete(first[0]);
@@ -537,8 +541,11 @@ export class SemanticSearchService {
                 for (const [path, change] of batch) {
                     // A watcher may have queued a newer change while this batch was
                     // preparing or writing. Preserve that newer event for the retry.
-                    if (!this.pending.has(path))
-                        this.pending.set(path, change);
+                    if (!this.pending.has(path)) {
+                        const attempt = Math.min((change.attempt || 0) + 1, 8);
+                        const retryDelay = Math.min(UNAVAILABLE_RETRY_MS, 1_000 * 2 ** (attempt - 1));
+                        this.pending.set(path, { kind: change.kind, attempt, retryAt: Date.now() + retryDelay });
+                    }
                 }
                 throw error;
             }

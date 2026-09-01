@@ -7,6 +7,7 @@ const WATCH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
 const WATCH_EVENT_BATCH_DELAY_MS = 50;
 const WATCH_EVENT_STAT_BATCH_SIZE = 32;
+const DIRECTORY_SCAN_BATCH_SIZE = 8;
 
 export type VaultCatalogChangeKind = 'upsert' | 'delete';
 export type VaultCatalogListener = (path?: string, kind?: VaultCatalogChangeKind) => void;
@@ -193,6 +194,8 @@ export class VaultFileCatalog {
   private async refresh(): Promise<{ notes: string[]; all: string[] }> {
     const generation = this.changeGeneration;
     const inventory = await this.findPaths(this.vaultPath);
+    inventory.notes.sort((a, b) => a.localeCompare(b));
+    inventory.all.sort((a, b) => a.localeCompare(b));
     if (generation === this.changeGeneration) {
       this.paths = inventory.notes;
       this.allPaths = inventory.all;
@@ -211,22 +214,27 @@ export class VaultFileCatalog {
     } catch {
       return { notes, all };
     }
+    const directories: Array<{ fullPath: string; relativePath: string }> = [];
     for (const entry of entries) {
       const fullPath = join(directory, entry.name);
       const relativePath = normalizePath(relative(this.vaultPath, fullPath));
       if (entry.isDirectory()) {
         if (this.pathFilter.isAllowedForListing(relativePath)) {
-          const nested = await this.findPaths(fullPath);
-          notes.push(...nested.notes);
-          all.push(...nested.all);
+          directories.push({ fullPath, relativePath });
         }
       } else if (entry.isFile() && this.pathFilter.isAllowedForListing(relativePath)) {
         all.push(relativePath);
         if (isNote(relativePath) && this.pathFilter.isAllowed(relativePath)) notes.push(relativePath);
       }
     }
-    notes.sort((a, b) => a.localeCompare(b));
-    all.sort((a, b) => a.localeCompare(b));
+    for (let start = 0; start < directories.length; start += DIRECTORY_SCAN_BATCH_SIZE) {
+      const batch = directories.slice(start, start + DIRECTORY_SCAN_BATCH_SIZE);
+      const nested = await Promise.all(batch.map(item => this.findPaths(item.fullPath)));
+      for (const result of nested) {
+        notes.push(...result.notes);
+        all.push(...result.all);
+      }
+    }
     return { notes, all };
   }
 }

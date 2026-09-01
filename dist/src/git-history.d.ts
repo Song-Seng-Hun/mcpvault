@@ -9,11 +9,14 @@ interface CommitChangesParams {
 export declare class GitHistoryService {
     private readonly pathFilter;
     private readonly vaultPath;
+    private statusCache;
+    private statusPromise;
     constructor(vaultPath: string, pathFilter?: PathFilter);
     private runGit;
     private pathsEqual;
     private repoRoot;
     private requireRepo;
+    private clearStatusCache;
     private normalizeVaultPath;
     private parseStatus;
     private pendingChanges;
@@ -23,6 +26,7 @@ export declare class GitHistoryService {
     resolveRevision(input: string): Promise<string>;
     initialize(): Promise<InitializeRevisionResult>;
     status(): Promise<RevisionStatus>;
+    private readStatus;
     commitChanges(params: CommitChangesParams): Promise<CommitChangesResult>;
     noteHistory(pathInput: string, limit?: number): Promise<RevisionEntry[]>;
     compareNoteRevisions(pathInput: string, fromInput: string, toInput?: string, maxChars?: number): Promise<RevisionDiffResult>;

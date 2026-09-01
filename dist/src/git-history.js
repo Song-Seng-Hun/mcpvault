@@ -3,9 +3,12 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { PathFilter } from './pathfilter.js';
+const STATUS_CACHE_TTL_MS = 300;
 export class GitHistoryService {
     pathFilter;
     vaultPath;
+    statusCache;
+    statusPromise;
     constructor(vaultPath, pathFilter = new PathFilter()) {
         this.pathFilter = pathFilter;
         this.vaultPath = resolve(vaultPath);
@@ -59,6 +62,9 @@ export class GitHistoryService {
             throw new Error('Revision history is not initialized for this vault. Call initialize_revision_history first.');
         }
         return root;
+    }
+    clearStatusCache() {
+        this.statusCache = undefined;
     }
     normalizeVaultPath(input, noteOnly = false) {
         if (typeof input !== 'string' || !input.trim()) {
@@ -168,9 +174,28 @@ export class GitHistoryService {
             await rm(emptyTemplate, { recursive: true, force: true });
         }
         await this.requireRepo();
+        this.clearStatusCache();
         return { success: true, initialized: true, message: 'Initialized Git revision history for the vault. Use commit_changes to create the first revision.' };
     }
     async status() {
+        const cached = this.statusCache;
+        if (cached && cached.expiresAt > Date.now())
+            return cloneRevisionStatus(cached.value);
+        if (this.statusPromise)
+            return cloneRevisionStatus(await this.statusPromise);
+        const computation = this.readStatus();
+        this.statusPromise = computation;
+        try {
+            const value = await computation;
+            this.statusCache = { expiresAt: Date.now() + STATUS_CACHE_TTL_MS, value };
+            return cloneRevisionStatus(value);
+        }
+        finally {
+            if (this.statusPromise === computation)
+                this.statusPromise = undefined;
+        }
+    }
+    async readStatus() {
         const root = await this.repoRoot();
         if (!root) {
             return {
@@ -194,6 +219,7 @@ export class GitHistoryService {
     }
     async commitChanges(params) {
         await this.requireRepo();
+        this.clearStatusCache();
         const reason = params.reason?.trim();
         if (!reason)
             throw new Error('reason is required and must describe why the vault changed');
@@ -249,6 +275,7 @@ export class GitHistoryService {
             await rm(emptyHooks, { recursive: true, force: true });
         }
         const revision = (await this.runGit(['rev-parse', '--verify', 'HEAD'])).stdout.trim();
+        this.clearStatusCache();
         return {
             success: true,
             committed: true,
@@ -314,4 +341,7 @@ export class GitHistoryService {
         const pending = await this.pendingChanges();
         return pending.some(change => change.path === path || change.previousPath === path);
     }
+}
+function cloneRevisionStatus(value) {
+    return { ...value, pending: value.pending.map(change => ({ ...change })) };
 }
