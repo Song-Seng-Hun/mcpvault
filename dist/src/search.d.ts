@@ -8,6 +8,9 @@ export declare class SearchService {
     private readonly documents;
     private readonly dirtyDocuments;
     private readonly postings;
+    private readonly gramIds;
+    private readonly gramsById;
+    private readonly directoryCache;
     private nextDocumentId;
     private indexedTextBytes;
     private cacheGeneration;
@@ -38,6 +41,7 @@ export declare class SearchService {
     private refreshAll;
     private refreshDirty;
     private readIndexedDocument;
+    private gramIdsForText;
     private postingKey;
     private updatePostings;
     private setDocument;

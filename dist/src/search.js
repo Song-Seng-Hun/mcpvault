@@ -17,8 +17,9 @@ const MAX_INDEXED_TEXT_BYTES = 64 * 1024 * 1024;
 const NGRAM_SIZE = 3;
 const SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.bin';
 const LEGACY_SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.gz';
-const SEARCH_SNAPSHOT_VERSION = 1;
+const SEARCH_SNAPSHOT_VERSION = 2;
 const SNAPSHOT_SAVE_DEBOUNCE_MS = 1_000;
+const DIRECTORY_CACHE_TTL_MS = 5_000;
 const gunzipAsync = promisify(gunzip);
 const SNAPSHOT_MAGIC = Buffer.from('MCPVSRCH', 'ascii');
 const MAX_SNAPSHOT_ENTRIES = 1_000_000;
@@ -30,10 +31,13 @@ function encodeSnapshotString(value) {
 }
 function encodeSnapshot(snapshot) {
     const chunks = [SNAPSHOT_MAGIC];
-    const header = Buffer.allocUnsafe(8);
+    const header = Buffer.allocUnsafe(12);
     header.writeUInt32LE(SEARCH_SNAPSHOT_VERSION, 0);
     header.writeUInt32LE(snapshot.documents.length, 4);
+    header.writeUInt32LE(snapshot.grams.length, 8);
     chunks.push(header);
+    for (const value of snapshot.grams)
+        chunks.push(encodeSnapshotString(value));
     for (const document of snapshot.documents) {
         chunks.push(encodeSnapshotString(document.relativePath));
         chunks.push(encodeSnapshotString(document.title));
@@ -45,24 +49,27 @@ function encodeSnapshot(snapshot) {
         numbers.writeUInt32LE(document.bodyLength, 16);
         numbers.writeUInt32LE(document.frontmatterLength, 20);
         numbers.writeUInt32LE(document.textBytes, 24);
-        numbers.writeUInt32LE(document.bodyGrams.length, 28);
-        numbers.writeUInt32LE(document.frontmatterGrams.length, 32);
-        numbers.writeUInt32LE(document.titleGrams.length, 36);
+        numbers.writeUInt32LE(document.bodyGramIds.length, 28);
+        numbers.writeUInt32LE(document.frontmatterGramIds.length, 32);
+        numbers.writeUInt32LE(document.titleGramIds.length, 36);
         chunks.push(numbers);
-        for (const values of [document.bodyGrams, document.frontmatterGrams, document.titleGrams]) {
-            for (const value of values)
-                chunks.push(encodeSnapshotString(value));
+        for (const values of [document.bodyGramIds, document.frontmatterGramIds, document.titleGramIds]) {
+            const encodedValues = Buffer.allocUnsafe(values.length * 4);
+            values.forEach((value, index) => encodedValues.writeUInt32LE(value, index * 4));
+            chunks.push(encodedValues);
         }
     }
     return Buffer.concat(chunks);
 }
 function decodeSnapshot(buffer) {
-    if (buffer.length < SNAPSHOT_MAGIC.length + 8 || !buffer.subarray(0, SNAPSHOT_MAGIC.length).equals(SNAPSHOT_MAGIC))
+    if (buffer.length < SNAPSHOT_MAGIC.length + 12 || !buffer.subarray(0, SNAPSHOT_MAGIC.length).equals(SNAPSHOT_MAGIC))
         return undefined;
     let offset = SNAPSHOT_MAGIC.length;
     const version = buffer.readUInt32LE(offset);
     offset += 4;
     const count = buffer.readUInt32LE(offset);
+    offset += 4;
+    const gramCount = buffer.readUInt32LE(offset);
     offset += 4;
     if (version !== SEARCH_SNAPSHOT_VERSION || count > MAX_SNAPSHOT_ENTRIES)
         return undefined;
@@ -77,13 +84,25 @@ function decodeSnapshot(buffer) {
         offset += length;
         return value;
     };
-    const readGrams = (count) => {
+    const grams = [];
+    if (gramCount > MAX_SNAPSHOT_ENTRIES)
+        return undefined;
+    for (let index = 0; index < gramCount; index += 1) {
+        const value = readString();
+        if (value === undefined)
+            return undefined;
+        grams.push(value);
+    }
+    const readGramIds = (count) => {
         if (count > MAX_SNAPSHOT_ENTRIES)
+            return undefined;
+        if (offset + count * 4 > buffer.length)
             return undefined;
         const values = [];
         for (let index = 0; index < count; index += 1) {
-            const value = readString();
-            if (value === undefined)
+            const value = buffer.readUInt32LE(offset);
+            offset += 4;
+            if (value === 0 || value > grams.length)
                 return undefined;
             values.push(value);
         }
@@ -109,14 +128,14 @@ function decodeSnapshot(buffer) {
         const frontmatterGramCount = buffer.readUInt32LE(offset + 32);
         const titleGramCount = buffer.readUInt32LE(offset + 36);
         offset += 40;
-        const bodyGrams = readGrams(bodyGramCount);
-        const frontmatterGrams = readGrams(frontmatterGramCount);
-        const titleGrams = readGrams(titleGramCount);
-        if (!bodyGrams || !frontmatterGrams || !titleGrams)
+        const bodyGramIds = readGramIds(bodyGramCount);
+        const frontmatterGramIds = readGramIds(frontmatterGramCount);
+        const titleGramIds = readGramIds(titleGramCount);
+        if (!bodyGramIds || !frontmatterGramIds || !titleGramIds)
             return undefined;
-        documents.push({ relativePath, title, isWiki: (flags & 1) !== 0, moderationHidden: (flags & 2) !== 0, revision: revisionValue, size, mtimeMs, bodyLength, frontmatterLength, textBytes, bodyGrams, frontmatterGrams, titleGrams });
+        documents.push({ relativePath, title, isWiki: (flags & 1) !== 0, moderationHidden: (flags & 2) !== 0, revision: revisionValue, size, mtimeMs, bodyLength, frontmatterLength, textBytes, bodyGramIds, frontmatterGramIds, titleGramIds });
     }
-    return offset === buffer.length ? { version, documents } : undefined;
+    return offset === buffer.length ? { version, grams, documents } : undefined;
 }
 function isWikiPath(path) {
     const normalized = path.toLowerCase();
@@ -152,6 +171,9 @@ export class SearchService {
     documents = new Map();
     dirtyDocuments = new Set();
     postings = new Map();
+    gramIds = new Map();
+    gramsById = [''];
+    directoryCache = new Map();
     nextDocumentId = 1;
     indexedTextBytes = 0;
     cacheGeneration = 0;
@@ -177,6 +199,7 @@ export class SearchService {
     invalidate(path, kind = 'upsert') {
         this.cacheGeneration += 1;
         this.cache.clear();
+        this.directoryCache.clear();
         if (path) {
             const normalized = path.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
             if (kind === 'delete')
@@ -190,6 +213,7 @@ export class SearchService {
     close() {
         this.watcher?.close();
         this.watcher = undefined;
+        this.directoryCache.clear();
     }
     async loadSnapshot() {
         try {
@@ -216,13 +240,20 @@ export class SearchService {
     restoreSnapshot(snapshot) {
         if (snapshot.documents.length > MAX_SNAPSHOT_ENTRIES)
             return;
+        for (const value of snapshot.grams) {
+            if (typeof value !== 'string' || value.length === 0 || this.gramIds.has(value))
+                continue;
+            const id = this.gramsById.length;
+            this.gramIds.set(value, id);
+            this.gramsById.push(value);
+        }
         for (const item of snapshot.documents) {
             if (!item || typeof item !== 'object')
                 continue;
             const relativePath = normalizeSubtree(String(item.relativePath || ''));
             if (!relativePath || !this.pathFilter.isAllowed(relativePath))
                 continue;
-            if (!Array.isArray(item.bodyGrams) || !Array.isArray(item.frontmatterGrams) || !Array.isArray(item.titleGrams))
+            if (!Array.isArray(item.bodyGramIds) || !Array.isArray(item.frontmatterGramIds) || !Array.isArray(item.titleGramIds))
                 continue;
             if (![item.size, item.mtimeMs, item.bodyLength, item.frontmatterLength, item.textBytes].every(value => typeof value === 'number' && Number.isFinite(value)))
                 continue;
@@ -241,9 +272,9 @@ export class SearchService {
                 textBytes: item.textBytes,
                 textCached: false,
                 lastAccessAt: 0,
-                bodyGrams: new Set(item.bodyGrams.filter(value => typeof value === 'string')),
-                frontmatterGrams: new Set(item.frontmatterGrams.filter(value => typeof value === 'string')),
-                titleGrams: new Set(item.titleGrams.filter(value => typeof value === 'string')),
+                bodyGrams: new Set(item.bodyGramIds.filter(value => Number.isInteger(value) && value > 0 && value < this.gramsById.length)),
+                frontmatterGrams: new Set(item.frontmatterGramIds.filter(value => Number.isInteger(value) && value > 0 && value < this.gramsById.length)),
+                titleGrams: new Set(item.titleGramIds.filter(value => Number.isInteger(value) && value > 0 && value < this.gramsById.length)),
             };
             this.setDocument(document);
         }
@@ -277,10 +308,11 @@ export class SearchService {
                 bodyLength: document.bodyLength,
                 frontmatterLength: document.frontmatterLength,
                 textBytes: document.textBytes,
-                bodyGrams: [...document.bodyGrams],
-                frontmatterGrams: [...document.frontmatterGrams],
-                titleGrams: [...document.titleGrams],
+                bodyGramIds: [...document.bodyGrams],
+                frontmatterGramIds: [...document.frontmatterGrams],
+                titleGramIds: [...document.titleGrams],
             })),
+            grams: this.gramsById.slice(1),
         };
         this.snapshotWrite = (async () => {
             const snapshotPath = join(this.vaultPath, SEARCH_SNAPSHOT_FILE);
@@ -504,6 +536,7 @@ export class SearchService {
             return;
         try {
             this.watcher = watch(this.vaultPath, { recursive: true }, (_event, filename) => {
+                this.directoryCache.clear();
                 if (!filename) {
                     this.needsFullReconcile = true;
                     return;
@@ -621,14 +654,27 @@ export class SearchService {
                 textBytes: Buffer.byteLength(content, 'utf8'),
                 textCached: true,
                 lastAccessAt: Date.now(),
-                bodyGrams: grams(body.toLowerCase()),
-                frontmatterGrams: grams(frontmatterText.toLowerCase()),
-                titleGrams: grams(title.toLowerCase()),
+                bodyGrams: this.gramIdsForText(body.toLowerCase()),
+                frontmatterGrams: this.gramIdsForText(frontmatterText.toLowerCase()),
+                titleGrams: this.gramIdsForText(title.toLowerCase()),
             };
         }
         catch {
             return undefined;
         }
+    }
+    gramIdsForText(value) {
+        const output = new Set();
+        for (const gram of grams(value)) {
+            let id = this.gramIds.get(gram);
+            if (id === undefined) {
+                id = this.gramsById.length;
+                this.gramIds.set(gram, id);
+                this.gramsById.push(gram);
+            }
+            output.add(id);
+        }
+        return output;
     }
     postingKey(field, gram) {
         return `${field}\u0000${gram}`;
@@ -749,12 +795,15 @@ export class SearchService {
         return output;
     }
     postingCandidates(field, term) {
-        const termGrams = grams(term);
-        const postings = [...termGrams]
+        const termGramIds = [...grams(term)]
+            .map(value => this.gramIds.get(value));
+        if (termGramIds.some(value => value === undefined))
+            return new Set();
+        const postings = termGramIds
             .map(value => this.postings.get(this.postingKey(field, value)))
             .filter((value) => Boolean(value))
             .sort((a, b) => a.size - b.size);
-        if (postings.length !== termGrams.size || !postings[0])
+        if (postings.length !== termGramIds.length || !postings[0])
             return new Set();
         const output = new Set(postings[0]);
         for (const paths of postings.slice(1)) {
@@ -765,6 +814,11 @@ export class SearchService {
         return output;
     }
     async findMarkdownFiles(dirPath) {
+        const cached = this.directoryCache.get(dirPath);
+        if (cached && cached.expiresAt > Date.now())
+            return cached.paths;
+        if (cached)
+            this.directoryCache.delete(dirPath);
         const markdownFiles = [];
         try {
             const entries = await readdir(dirPath, { withFileTypes: true });
@@ -783,6 +837,7 @@ export class SearchService {
         catch (error) {
             // Skip directories that can't be read
         }
+        this.directoryCache.set(dirPath, { expiresAt: Date.now() + DIRECTORY_CACHE_TTL_MS, paths: markdownFiles });
         return markdownFiles;
     }
     rerank(candidates, terms, termDocFreq, docCount, totalDocLength, maxLimit) {
