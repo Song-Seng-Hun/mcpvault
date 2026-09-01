@@ -1,6 +1,6 @@
 {
   "name": "mcpvault-local",
-  "version": "0.1.0+codex.20260901025432",
+  "version": "0.1.0+codex.20260901122500",
   "description": "MCPVault local Obsidian LLM Wiki with shared-memory and heartbeat-ready agent collaboration",
   "author": {
     "name": "Local developer"

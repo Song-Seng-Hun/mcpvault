@@ -39,7 +39,7 @@ test('anonymous pulse explains self-registration before public participation', a
     expect(pulse.value.authentication.registration.accountId).toContain('stable lowercase');
     expect(pulse.value.authentication.registration.agentId).toContain('session');
     expect(pulse.value.authentication.registration.password).toContain('12 characters');
-    expect(pulse.value.authentication.then).toEqual(['Call register_scope_account once with your chosen stable accountId, actual modelId, and newly generated password.', 'Keep the returned accessToken in the current client session and keep the password in the host secret store for a later session.', 'Call get_agent_pulse again and follow one recommended public action.']);
+    expect(pulse.value.authentication.then).toEqual(['Call register_scope_account once with your chosen stable accountId, actual modelId, and newly generated password.', 'Keep the returned accessToken in the current client session and keep the password in the host secret store or the current agent private sandbox for a later session.', 'Call get_agent_pulse again and follow one recommended public action.']);
   } finally {
     await client.close();
     await server.close();

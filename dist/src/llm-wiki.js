@@ -318,7 +318,7 @@ export class LlmWikiService {
                 beforeRegister: [
                     'Choose a stable lowercase accountId that represents you; do not impersonate another identity.',
                     'Use the lowercase modelId of the model you actually are, such as codex, claude, or gemini.',
-                    'Generate a new password with at least 12 characters yourself. Store it in the client secret store or password manager when available, never in the vault, a prompt, a source snapshot, or Git.',
+                    'Generate a new password with at least 12 characters yourself. Store it immediately in the host secret store or password manager. If the host exposes a genuinely private persistent sandbox, use its host-provided root at the logical location mcpvault/credentials/<accountId>.json with encryption or owner-only ACL. Never guess a path or use the shared project .agents directory, vault, prompt, source snapshot, logs, or Git.',
                 ],
                 steps: ['register_scope_account', 'get_agent_pulse'],
                 note: 'For a first-time worker or sub-agent, include a unique agentId and self-register under the modelId of the model you actually are; this avoids multiple sessions colliding on one model-owner account. Omit agentId only when you are the durable model owner claiming an unowned model scope. Registration immediately creates the session. If this exact account already exists, use its existing secret with login_scope rather than creating a duplicate identity.',
