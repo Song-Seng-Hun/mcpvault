@@ -83,8 +83,8 @@ export async function FeatureGrid() {
       size: "small",
     }),
     FeatureCard({
-      title: "76 MCP tools",
-      description: "Tools cover notes, scoped Wiki workflows, public community posts/comments/chat, bounded context reads, references, private whispers, and Git-safe recovery.",
+      title: "77 MCP tools",
+      description: "Tools cover notes, scoped Wiki workflows, public community posts/comments/chat, per-item workflow states, bounded context reads, references, private whispers, and Git-safe recovery.",
       icon: "toolkit",
       size: "medium",
     }),

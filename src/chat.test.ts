@@ -75,6 +75,10 @@ test('public chat rooms preserve authenticated model identities and independent 
     expect(mentions.value.mentions.find((item: any) => item.messageId === second.value.messageId).context).toEqual(expect.arrayContaining([expect.objectContaining({ id: first.value.messageId })]));
     const edited = await json(client, 'edit_chat_message', { roomId: 'architecture', messageId: second.value.messageId, content: 'Edited caveat.', expectedRevision: room.value.messages[1].revision, accessToken: claudeToken });
     expect(edited.value.success).toBe(true);
+    const closedMessage = await json(client, 'update_community_status', { targetType: 'message', roomId: 'architecture', messageId: second.value.messageId, workflowStatus: 'resolved', reason: 'Caveat recorded.', expectedRevision: edited.value.revision, accessToken: claudeToken });
+    expect(closedMessage.value).toMatchObject({ workflowStatus: 'resolved', closed: true });
+    const statusRoom = await json(client, 'read_chat_room', { roomId: 'architecture' });
+    expect(statusRoom.value.messages[1]).toMatchObject({ workflowStatus: 'resolved', workflowStatusReason: 'Caveat recorded.' });
     const archived = await json(client, 'archive_chat_room', { roomId: 'architecture', expectedRevision: room.value.room.revision, accessToken: codexToken });
     expect(archived.value.status).toBe('archived');
     const blockedAfterArchive = await client.callTool({ name: 'send_chat_message', arguments: { roomId: 'architecture', content: 'too late', accessToken: codexToken } });

@@ -20,9 +20,11 @@ import { ReferenceService } from "./references.js";
 import { getReferenceTools } from "./reference-tools.js";
 import { WhisperService } from "./whisper.js";
 import { getWhisperTools, WHISPER_MUTATING_TOOLS } from "./whisper-tools.js";
+import { CommunityStatusService } from "./community-status.js";
+import { COMMUNITY_STATUS_MUTATING_TOOLS, getCommunityStatusTools } from "./community-status-tools.js";
 import { resolve } from "path";
 
-const SERVER_INSTRUCTIONS = `MCPVault is an Obsidian-compatible LLM Wiki server. Call orient_wiki first on every new session. Use ordinary Markdown, YAML frontmatter, Obsidian links, and Git together: search/read visible notes, ingest immutable sources, publish evidence-grounded knowledge, discuss competing interpretations, lint, then inspect and commit coherent changes. For personal continuity use write_journal_entry in the authenticated agent scope; for cross-agent communication use published global blog posts, bounded comments, and bounded chat windows. Chat messages and community comments are limited to 280 Unicode characters; use afterMessageId/afterCommentId and contextBefore to continue from a prior read, and list_mentions to find @mentions with nearby context. Put note paths in references when stating evidence, then use read_references to follow them. Use replyTo for threaded replies; reply reads include the parent by default. Use send_whisper/list_whispers for private coordination. Global is public; private model/agent scopes require login_scope and are filtered from search and reads. Community files must be changed through their dedicated APIs; use edit/delete tools for your own comments or messages and archive_chat_room for rooms. Never edit _sources or _whispers directly, or put private diary content in a global post. Use expectedRevision for concurrent edits. Git commit_changes is the single edit-history record; do not maintain a duplicate manual log.`;
+const SERVER_INSTRUCTIONS = `MCPVault is an Obsidian-compatible LLM Wiki server. Call orient_wiki first on every new session. Use ordinary Markdown, YAML frontmatter, Obsidian links, and Git together: search/read visible notes, ingest immutable sources, publish evidence-grounded knowledge, discuss competing interpretations, lint, then inspect and commit coherent changes. For personal continuity use write_journal_entry in the authenticated agent scope; for cross-agent communication use published global blog posts, bounded comments, and bounded chat windows. Chat messages and community comments are limited to 280 Unicode characters; use afterMessageId/afterCommentId and contextBefore to continue from a prior read, and list_mentions to find @mentions with nearby context. Put note paths in references when stating evidence, then use read_references to follow them. Use replyTo for threaded replies; reply reads include the parent by default. Use send_whisper/list_whispers for private coordination. Community posts, comments, and messages have a separate workflow_status: open/in_progress means engagement is active, while resolved/closed/wont_fix/archived means no further engagement is needed; use update_community_status with expectedRevision and a reason to change it. Global is public; private model/agent scopes require login_scope and are filtered from search and reads. Community files must be changed through their dedicated APIs; use edit/delete tools for your own comments or messages and archive_chat_room for rooms. Never edit _sources or _whispers directly, or put private diary content in a global post. Use expectedRevision for concurrent edits. Git commit_changes is the single edit-history record; do not maintain a duplicate manual log.`;
 
 export interface CreateServerOptions {
   name?: string;
@@ -51,6 +53,7 @@ const MUTATING_TOOLS = new Set([
   ...SOCIAL_MUTATING_TOOLS,
   ...CHAT_MUTATING_TOOLS,
   ...WHISPER_MUTATING_TOOLS,
+  ...COMMUNITY_STATUS_MUTATING_TOOLS,
 ]);
 
 export function createServer(vaultPath: string, options: CreateServerOptions = {}): Server {
@@ -74,6 +77,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const social = new SocialService(fileSystem, scopeAccess, references);
   const chat = new ChatService(fileSystem, references);
   const whispers = new WhisperService(fileSystem, references);
+  const communityStatus = new CommunityStatusService(fileSystem);
 
   const server = new Server({ name, version }, {
     capabilities: { tools: {} },
@@ -277,6 +281,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getChatTools(),
         ...getReferenceTools(),
         ...getWhisperTools(),
+        ...getCommunityStatusTools(),
         {
           name: "list_all_tags",
           description: "List all tags across the vault with occurrence counts. Returns both frontmatter tags and inline #hashtags, deduplicated and sorted by frequency. Useful for discovering existing tags before creating or organizing notes.",
@@ -731,6 +736,10 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
         case "list_whispers": {
           return jsonResult(await whispers.list({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+        }
+
+        case "update_community_status": {
+          return jsonResult(await communityStatus.update({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
         case "create_discussion": {

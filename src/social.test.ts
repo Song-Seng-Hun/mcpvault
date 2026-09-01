@@ -83,9 +83,15 @@ test('published posts and comments are public while drafts remain author-private
     expect(anonymousComment.isError).toBe(true);
     const comment = await json(client, 'comment_on_blog_post', { slug: 'hello-agents', content: 'Useful idea. @claude', accessToken: publisherToken });
     expect(comment.value).toMatchObject({ success: true, postId: 'hello-agents' });
+    const closedComment = await json(client, 'update_community_status', { targetType: 'comment', slug: 'hello-agents', commentId: comment.value.commentId, workflowStatus: 'resolved', reason: 'The point has been incorporated.', expectedRevision: comment.value.revision, accessToken: publisherToken });
+    expect(closedComment.value).toMatchObject({ workflowStatus: 'resolved', closed: true, reason: 'The point has been incorporated.' });
     const comments = await json(client, 'list_blog_comments', { slug: 'hello-agents' });
     expect(comments.value.comments).toHaveLength(1);
-    expect(comments.value.comments[0].content).toContain('Useful idea.');
+    expect(comments.value.comments[0]).toMatchObject({ workflowStatus: 'resolved', workflowStatusReason: 'The point has been incorporated.' });
+    const activeComments = await json(client, 'list_blog_comments', { slug: 'hello-agents', workflowStatus: 'active' });
+    expect(activeComments.value.comments).toHaveLength(0);
+    const reopened = await json(client, 'update_community_status', { targetType: 'comment', slug: 'hello-agents', commentId: comment.value.commentId, workflowStatus: 'open', reason: 'A follow-up is still welcome.', expectedRevision: comments.value.comments[0].revision, accessToken: publisherToken });
+    expect(reopened.value).toMatchObject({ workflowStatus: 'open', closed: false });
     const reply = await json(client, 'comment_on_blog_post', { slug: 'hello-agents', content: 'Following up on that point.', replyTo: comment.value.commentId, accessToken: publisherToken });
     const threaded = await json(client, 'list_blog_comments', { slug: 'hello-agents' });
     expect(threaded.value.comments[1]).toMatchObject({ commentId: reply.value.commentId, replyTo: comment.value.commentId });
@@ -98,6 +104,10 @@ test('published posts and comments are public while drafts remain author-private
     expect(edited.value.success).toBe(true);
     const deleted = await json(client, 'delete_blog_comment', { slug: 'hello-agents', commentId: reply.value.commentId, expectedRevision: threaded.value.comments[1].revision, accessToken: publisherToken });
     expect(deleted.value.deleted).toBe(true);
+    const closedPost = await json(client, 'update_community_status', { targetType: 'post', slug: 'hello-agents', workflowStatus: 'closed', reason: 'Discussion is complete.', expectedRevision: publicPost.value.revision, accessToken: publisherToken });
+    expect(closedPost.value).toMatchObject({ workflowStatus: 'closed', closed: true });
+    expect((await json(client, 'list_blog_posts', {})).value.posts).toHaveLength(0);
+    expect((await json(client, 'list_blog_posts', { workflowStatus: 'all' })).value.posts[0]).toMatchObject({ slug: 'hello-agents', workflowStatus: 'closed' });
   } finally {
     await client.close();
     await server.close();

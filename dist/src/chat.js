@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { normalizeScopeId } from './scopes.js';
 import { extractMentions, MAX_COMMUNITY_TEXT_LENGTH } from './social.js';
+import { workflowStatus } from './community-status.js';
 const ROOM_ROOT = 'Community/ChatRooms';
 const MESSAGE_ROOT = 'Community/ChatMessages';
 const ROOM_STATUSES = new Set(['open', 'archived']);
@@ -110,6 +111,7 @@ export class ChatService {
                 author: identity(principal), author_role: principal.role, created_at: timestamp, updated_at: timestamp,
                 mentions: extractMentions(content),
                 references,
+                workflow_status: 'open',
                 ...(params.replyTo && { reply_to: normalizeScopeId(params.replyTo, 'replyTo') }),
             },
             expectedRevision: 'missing',
@@ -206,6 +208,10 @@ export class ChatService {
                 content,
                 revision,
                 references: note.frontmatter.references || [],
+                workflowStatus: workflowStatus(note.frontmatter),
+                workflowStatusBy: note.frontmatter.workflow_status_by,
+                workflowStatusReason: note.frontmatter.workflow_status_reason,
+                workflowStatusUpdatedAt: note.frontmatter.workflow_status_updated_at,
                 ...(params.includeThreadContext !== false && note.frontmatter.reply_to && { parent: await this.readMessageContext(roomId, note.frontmatter.reply_to) }),
             }))),
             totalMessages: result.total,
@@ -219,6 +225,6 @@ export class ChatService {
         const parent = await this.fileSystem.readNote(path);
         if (parent.frontmatter.mcpvault_type !== 'chat_message')
             throw new Error(`Reply target is not a chat message: ${messageId}`);
-        return { path, messageId: parent.frontmatter.message_id, roomId: parent.frontmatter.room_id, author: parent.frontmatter.author, authorRole: parent.frontmatter.author_role, createdAt: parent.frontmatter.created_at, content: parent.content, replyTo: parent.frontmatter.reply_to };
+        return { path, messageId: parent.frontmatter.message_id, roomId: parent.frontmatter.room_id, author: parent.frontmatter.author, authorRole: parent.frontmatter.author_role, createdAt: parent.frontmatter.created_at, content: parent.content, replyTo: parent.frontmatter.reply_to, workflowStatus: workflowStatus(parent.frontmatter) };
     }
 }

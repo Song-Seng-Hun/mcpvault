@@ -35,8 +35,8 @@ export function getSocialTools() {
         },
         {
             name: 'list_blog_posts',
-            description: 'List public community posts. The default published view excludes private drafts and is readable without authentication. Set includeExcerpt to receive a small content preview.',
-            inputSchema: { type: 'object', properties: { status: { type: 'string', enum: ['published', 'draft', 'archived', 'all'], default: 'published' }, limit: { type: 'integer', minimum: 1, maximum: 500, default: 50 }, includeExcerpt: { type: 'boolean', default: false }, excerptMaxChars: { type: 'integer', minimum: 1, maximum: 1000, default: 280 }, accessToken, prettyPrint } },
+            description: 'List public community posts. The default published view excludes private drafts and workflow-closed items, so agents can focus on work that still needs engagement. Use workflowStatus=all to include resolved/closed items, and includeExcerpt for a small content preview.',
+            inputSchema: { type: 'object', properties: { status: { type: 'string', enum: ['published', 'draft', 'archived', 'all'], default: 'published' }, workflowStatus: { type: 'string', enum: ['active', 'all', 'open', 'in_progress', 'resolved', 'closed', 'wont_fix', 'archived'], default: 'active', description: 'Workflow filter; active means open or in_progress' }, limit: { type: 'integer', minimum: 1, maximum: 500, default: 50 }, includeExcerpt: { type: 'boolean', default: false }, excerptMaxChars: { type: 'integer', minimum: 1, maximum: 1000, default: 280 }, accessToken, prettyPrint } },
         },
         {
             name: 'read_blog_post',
@@ -60,13 +60,13 @@ export function getSocialTools() {
         },
         {
             name: 'list_blog_comments',
-            description: 'Read a bounded chronological comment window. Use afterCommentId to continue from the last read position, contextBefore for overlap, and replyTo/parent to understand threads.',
-            inputSchema: { type: 'object', properties: { slug: { type: 'string' }, afterCommentId: { type: 'string', description: 'Last comment previously read; the response includes a small context window before it and newer comments' }, contextBefore: { type: 'integer', minimum: 1, maximum: 20, default: 2 }, includeThreadContext: { type: 'boolean', description: 'Include the parent comment for replies', default: true }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 1, maximum: 20000, default: 6000 }, accessToken, prettyPrint }, required: ['slug'] },
+            description: 'Read a bounded chronological comment window. Use afterCommentId to continue from the last read position, contextBefore for overlap, workflowStatus=active to focus on unresolved discussion, and replyTo/parent to understand threads.',
+            inputSchema: { type: 'object', properties: { slug: { type: 'string' }, afterCommentId: { type: 'string', description: 'Last comment previously read; the response includes a small context window before it and newer comments' }, contextBefore: { type: 'integer', minimum: 1, maximum: 20, default: 2 }, workflowStatus: { type: 'string', enum: ['all', 'active', 'open', 'in_progress', 'resolved', 'closed', 'wont_fix', 'archived'], default: 'all', description: 'Workflow filter for comments' }, includeThreadContext: { type: 'boolean', description: 'Include the parent comment for replies', default: true }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 1, maximum: 20000, default: 6000 }, accessToken, prettyPrint }, required: ['slug'] },
         },
         {
             name: 'list_mentions',
-            description: 'List recent public chat messages and community comments that mention the authenticated model or agent with @identity. Results are bounded and can continue older than a cursor with nearby context.',
-            inputSchema: { type: 'object', properties: { afterMentionId: { type: 'string', description: 'Last mention id previously read; continues with older matching mentions' }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 1, maximum: 20000, default: 6000 }, contextBefore: { type: 'integer', minimum: 0, maximum: 3, default: 1 }, contextAfter: { type: 'integer', minimum: 0, maximum: 3, default: 1 }, accessToken, prettyPrint } },
+            description: 'List recent public chat messages and community comments that mention the authenticated model or agent with @identity. Closed items are excluded by default; set includeClosed to inspect completed discussions. Results are bounded and can continue older than a cursor with nearby context.',
+            inputSchema: { type: 'object', properties: { afterMentionId: { type: 'string', description: 'Last mention id previously read; continues with older matching mentions' }, includeClosed: { type: 'boolean', default: false, description: 'Include mentions on resolved, closed, wont_fix, or archived items' }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 1, maximum: 20000, default: 6000 }, contextBefore: { type: 'integer', minimum: 0, maximum: 3, default: 1 }, contextAfter: { type: 'integer', minimum: 0, maximum: 3, default: 1 }, accessToken, prettyPrint } },
         },
     ];
 }

@@ -25,7 +25,7 @@ test("createServer returns a Server instance", () => {
   expect(typeof server.connect).toBe("function");
 });
 
-test("server registers 76 tools", async () => {
+test("server registers 77 tools", async () => {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -37,7 +37,7 @@ test("server registers 76 tools", async () => {
   ]);
 
   const result = await client.listTools();
-  expect(result.tools).toHaveLength(76);
+  expect(result.tools).toHaveLength(77);
 
   const toolNames = result.tools.map((t) => t.name).sort();
   expect(toolNames).toEqual([
@@ -111,6 +111,7 @@ test("server registers 76 tools", async () => {
     "search_scoped_notes",
     "send_chat_message",
     "send_whisper",
+    "update_community_status",
     "update_discussion_status",
     "update_frontmatter",
     "whoami_scope",
@@ -366,6 +367,7 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
       { name: "delete_chat_message", arguments: { roomId: "blocked", messageId: "blocked", expectedRevision: "blocked" } },
       { name: "archive_chat_room", arguments: { roomId: "blocked", expectedRevision: "blocked" } },
       { name: "send_whisper", arguments: { to: "blocked", content: "blocked" } },
+      { name: "update_community_status", arguments: { targetType: "post", slug: "blocked", workflowStatus: "resolved", expectedRevision: "missing" } },
     ];
 
     for (const mutation of mutations) {

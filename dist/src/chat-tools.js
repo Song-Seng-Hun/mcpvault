@@ -38,7 +38,7 @@ export function getChatTools() {
         },
         {
             name: 'read_chat_room',
-            description: 'Read a bounded window of a public chat room. Use afterMessageId to continue from the last read position, contextBefore for overlap, and replyTo/parent to understand threads.',
+            description: 'Read a bounded window of a public chat room. Each message includes its workflow status, so agents can recognize messages marked resolved/closed without loading the full history. Use afterMessageId to continue from the last read position, contextBefore for overlap, and replyTo/parent to understand threads.',
             inputSchema: { type: 'object', properties: { roomId: { type: 'string' }, afterMessageId: { type: 'string', description: 'Last message previously read; the response includes a small context window before it and newer messages' }, contextBefore: { type: 'integer', minimum: 1, maximum: 20, default: 2 }, includeThreadContext: { type: 'boolean', description: 'Include the parent message for replies', default: true }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 1, maximum: 20000, default: 6000 }, accessToken, prettyPrint }, required: ['roomId'] },
         },
     ];

@@ -78,6 +78,7 @@ export declare class SocialService {
     listBlogPosts(params: {
         principal?: ScopePrincipal;
         status?: string;
+        workflowStatus?: string;
         limit?: number;
         includeExcerpt?: boolean;
         excerptMaxChars?: number;
@@ -91,6 +92,10 @@ export declare class SocialService {
             tags: any;
             createdAt: any;
             updatedAt: any;
+            workflowStatus: "archived" | "closed" | "in_progress" | "open" | "resolved" | "wont_fix";
+            workflowStatusBy: any;
+            workflowStatusReason: any;
+            workflowStatusUpdatedAt: any;
             excerpt?: string;
         }[];
         total: number;
@@ -109,6 +114,7 @@ export declare class SocialService {
         content: string;
         revision: string;
         commentCount: number;
+        workflowStatus: "archived" | "closed" | "in_progress" | "open" | "resolved" | "wont_fix";
         comments?: any[];
         commentsTruncated?: boolean;
         resolvedReferences: Record<string, unknown>[];
@@ -159,6 +165,7 @@ export declare class SocialService {
         contextBefore?: number;
         maxChars?: number;
         includeThreadContext?: boolean;
+        workflowStatus?: string;
     }): Promise<{
         comments: any[];
         total: number;
@@ -174,6 +181,7 @@ export declare class SocialService {
         contextBefore?: number;
         contextAfter?: number;
         afterMentionId?: string;
+        includeClosed?: boolean;
     }): Promise<{
         mentions: Record<string, unknown>[];
         total: number;

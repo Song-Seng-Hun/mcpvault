@@ -4,6 +4,7 @@ import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import { normalizeScopeId } from './scopes.js';
 import type { ReferenceService } from './references.js';
+import { isClosedWorkflowStatus, matchesWorkflowFilter, workflowStatus } from './community-status.js';
 
 const JOURNAL_ROOT = '_journal/entries';
 const BLOG_ROOT = 'Community/Posts';
@@ -219,6 +220,7 @@ export class SocialService {
           ? await this.references.validateAndNormalize(params.references, path, principal)
           : (existing?.note.frontmatter.references || []),
         ...(existing ? { updated_at: timestamp } : { created_at: timestamp, updated_at: timestamp }),
+        ...(!existing && { workflow_status: 'open' }),
       },
       expectedRevision: params.expectedRevision,
     });
@@ -226,7 +228,7 @@ export class SocialService {
     return { success: true, created: !existing, slug, path, status, revision: written.revision };
   }
 
-  async listBlogPosts(params: { principal?: ScopePrincipal; status?: string; limit?: number; includeExcerpt?: boolean; excerptMaxChars?: number }) {
+  async listBlogPosts(params: { principal?: ScopePrincipal; status?: string; workflowStatus?: string; limit?: number; includeExcerpt?: boolean; excerptMaxChars?: number }) {
     const requestedStatus = String(params.status || 'published').trim().toLowerCase();
     if (requestedStatus !== 'all' && !POST_STATUSES.has(requestedStatus)) throw new Error('status must be published, draft, archived, or all');
     const result = await this.fileSystem.queryNotes({
@@ -237,7 +239,8 @@ export class SocialService {
     const entries = result.notes.filter(note => {
       const status = String(note.frontmatter.status || 'published');
       if (requestedStatus !== 'all' && status !== requestedStatus) return false;
-      return status !== 'draft' || caller === note.frontmatter.author;
+      if (status === 'draft' && caller !== note.frontmatter.author) return false;
+      return matchesWorkflowFilter(note.frontmatter, params.workflowStatus || 'active');
     }).map(note => ({
       path: note.path,
       slug: note.frontmatter.post_id,
@@ -247,6 +250,10 @@ export class SocialService {
       tags: note.frontmatter.tags || [],
       createdAt: note.frontmatter.created_at,
       updatedAt: note.frontmatter.updated_at,
+      workflowStatus: workflowStatus(note.frontmatter),
+      workflowStatusBy: note.frontmatter.workflow_status_by,
+      workflowStatusReason: note.frontmatter.workflow_status_reason,
+      workflowStatusUpdatedAt: note.frontmatter.workflow_status_updated_at,
       ...(params.includeExcerpt && { excerpt: String(note.content || '').slice(0, Math.min(Math.max(Number(params.excerptMaxChars ?? 280), 1), 1000)) }),
     }));
     const limit = Math.min(Math.max(Number(params.limit || 50), 1), 500);
@@ -261,6 +268,7 @@ export class SocialService {
     }
     const comments = await this.listBlogComments({ slug: params.slug, limit: params.includeComments ? (params.commentLimit ?? 10) : 1, maxChars: params.commentMaxChars ?? 4000, includeThreadContext: params.includeThreadContext !== false });
     return { path, fm: note.frontmatter, content: note.content, revision: note.revision, commentCount: comments.total,
+      workflowStatus: workflowStatus(note.frontmatter),
       ...(params.includeComments && { comments: comments.comments, commentsTruncated: comments.truncated }),
       resolvedReferences: await this.references.resolve(note.frontmatter.references, params.principal), };
   }
@@ -287,6 +295,7 @@ export class SocialService {
         author: identity(principal), author_role: principal.role, created_at: timestamp, updated_at: timestamp,
         mentions: extractMentions(content),
         references,
+        workflow_status: 'open',
         ...(params.replyTo && { reply_to: normalizeScopeId(params.replyTo, 'replyTo') }),
       },
       expectedRevision: 'missing',
@@ -327,24 +336,25 @@ export class SocialService {
     return { success: true, commentId, postId: slug, deleted: true, revision: updated.revision };
   }
 
-  async listBlogComments(params: { slug: string; limit?: number; afterCommentId?: string; contextBefore?: number; maxChars?: number; includeThreadContext?: boolean }) {
+  async listBlogComments(params: { slug: string; limit?: number; afterCommentId?: string; contextBefore?: number; maxChars?: number; includeThreadContext?: boolean; workflowStatus?: string }) {
     const slug = normalizeScopeId(params.slug, 'slug');
     const result = await this.fileSystem.queryNotes({
       pathPrefix: commentsRoot(slug), filters: { mcpvault_type: 'blog_comment' },
       sortBy: 'created_at', sortOrder: 'asc', limit: 500,
     });
+    const notes = result.notes.filter(note => matchesWorkflowFilter(note.frontmatter, params.workflowStatus || 'all'));
     const limit = windowNumber(params.limit, 20, 100);
     const maxChars = windowNumber(params.maxChars, 6000, 20000);
     const contextBefore = windowNumber(params.contextBefore, 2, 20) - 1;
     const cursorIndex = params.afterCommentId
-      ? result.notes.findIndex(note => note.frontmatter.comment_id === normalizeScopeId(params.afterCommentId!, 'afterCommentId'))
+      ? notes.findIndex(note => note.frontmatter.comment_id === normalizeScopeId(params.afterCommentId!, 'afterCommentId'))
       : -1;
     if (params.afterCommentId && cursorIndex < 0) throw new Error(`afterCommentId was not found in post: ${params.afterCommentId}`);
-    const start = cursorIndex >= 0 ? Math.max(0, cursorIndex - contextBefore) : Math.max(0, result.notes.length - limit);
+    const start = cursorIndex >= 0 ? Math.max(0, cursorIndex - contextBefore) : Math.max(0, notes.length - limit);
     const selected: Array<{ note: typeof result.notes[number]; content: string; revision: string }> = [];
     let usedChars = 0;
-    for (let index = start; index < result.notes.length && selected.length < limit; index += 1) {
-      const note = result.notes[index]!;
+    for (let index = start; index < notes.length && selected.length < limit; index += 1) {
+      const note = notes[index]!;
       const full = await this.fileSystem.readNote(note.path);
       const contentLength = Array.from(full.content).length;
       if (selected.length > 0 && usedChars + contentLength > maxChars) break;
@@ -363,10 +373,14 @@ export class SocialService {
         content,
         revision,
         references: note.frontmatter.references || [],
+        workflowStatus: workflowStatus(note.frontmatter),
+        workflowStatusBy: note.frontmatter.workflow_status_by,
+        workflowStatusReason: note.frontmatter.workflow_status_reason,
+        workflowStatusUpdatedAt: note.frontmatter.workflow_status_updated_at,
         ...(params.includeThreadContext !== false && note.frontmatter.reply_to && { parent: await this.readCommentContext(slug, note.frontmatter.reply_to) }),
       }))),
-      total: result.total,
-      truncated: start > 0 || result.truncated || start + selected.length < result.notes.length,
+      total: notes.length,
+      truncated: start > 0 || result.truncated || start + selected.length < notes.length,
       nextCursor: last,
       contextBefore: cursorIndex >= 0 ? contextBefore + 1 : 0,
     };
@@ -376,10 +390,10 @@ export class SocialService {
     const path = commentPath(slug, commentId);
     const parent = await this.fileSystem.readNote(path);
     if (parent.frontmatter.mcpvault_type !== 'blog_comment') throw new Error(`Reply target is not a blog comment: ${commentId}`);
-    return { path, commentId: parent.frontmatter.comment_id, postId: parent.frontmatter.post_id, author: parent.frontmatter.author, createdAt: parent.frontmatter.created_at, content: parent.content, replyTo: parent.frontmatter.reply_to };
+    return { path, commentId: parent.frontmatter.comment_id, postId: parent.frontmatter.post_id, author: parent.frontmatter.author, createdAt: parent.frontmatter.created_at, content: parent.content, replyTo: parent.frontmatter.reply_to, workflowStatus: workflowStatus(parent.frontmatter) };
   }
 
-  async listMentions(params: { principal?: ScopePrincipal; limit?: number; maxChars?: number; contextBefore?: number; contextAfter?: number; afterMentionId?: string }) {
+  async listMentions(params: { principal?: ScopePrincipal; limit?: number; maxChars?: number; contextBefore?: number; contextAfter?: number; afterMentionId?: string; includeClosed?: boolean }) {
     const principal = requirePublisher(params.principal);
     const targets = new Set([identity(principal), principal.modelId, ...(principal.agentId ? [principal.agentId] : [])]);
     const [comments, messages] = await Promise.all([
@@ -387,7 +401,8 @@ export class SocialService {
       this.fileSystem.queryNotes({ pathPrefix: 'Community/ChatMessages', filters: { mcpvault_type: 'chat_message' }, sortBy: 'created_at', sortOrder: 'desc', limit: 500 }),
     ]);
     const notes = [...comments.notes, ...messages.notes]
-      .filter(note => Array.isArray(note.frontmatter.mentions) && note.frontmatter.mentions.some((mention: unknown) => targets.has(String(mention).toLowerCase())))
+      .filter(note => (params.includeClosed === true || !isClosedWorkflowStatus(note.frontmatter.workflow_status))
+        && Array.isArray(note.frontmatter.mentions) && note.frontmatter.mentions.some((mention: unknown) => targets.has(String(mention).toLowerCase())))
       .sort((a, b) => String(b.frontmatter.created_at).localeCompare(String(a.frontmatter.created_at)));
     const limit = windowNumber(params.limit, 20, 100);
     const maxChars = windowNumber(params.maxChars, 6000, 20000);
@@ -413,6 +428,10 @@ export class SocialService {
         content: full.content,
         revision: full.revision,
         references: note.frontmatter.references || [],
+        workflowStatus: workflowStatus(note.frontmatter),
+        workflowStatusBy: note.frontmatter.workflow_status_by,
+        workflowStatusReason: note.frontmatter.workflow_status_reason,
+        workflowStatusUpdatedAt: note.frontmatter.workflow_status_updated_at,
       };
       const contextBefore = Math.min(Math.max(Number(params.contextBefore ?? 1), 0), 3);
       const contextAfter = Math.min(Math.max(Number(params.contextAfter ?? 1), 0), 3);

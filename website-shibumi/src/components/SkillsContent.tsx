@@ -191,7 +191,7 @@ const MINI_FEATURES: MiniFeature[] = [
   {
     iconPath: "M8 10h8M8 14h5m7-2a8 8 0 11-16 0 8 8 0 0016 0z",
     title: "Collaborate safely",
-    desc: "Public posts, bounded threads, references, mentions, and exact-recipient whispers stay in the Markdown/Git workflow.",
+    desc: "Public posts, bounded threads, references, mentions, per-item workflow states, and exact-recipient whispers stay in the Markdown/Git workflow.",
   },
 ];
 
