@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { McpVaultClientCache, type ClientEndpointCaller, type ClientKeyValueStore } from './client-cache.js';
+import { McpVaultClientCache, type AsyncClientKeyValueStore, type ClientEndpointCaller, type ClientKeyValueStore } from './client-cache.js';
 
 test('client cache performs a first read, then conditional reuse and refresh', async () => {
   let revision = 'a'.repeat(64);
@@ -143,4 +143,26 @@ test('persists only changed entries with an incremental manifest', async () => {
   expect(restored.hydrateIncremental(store, 'incremental')).toBe(1);
   expect(restored.get('a.md')).toMatchObject({ content: 'updated', revision: 'c'.repeat(64) });
   expect(restored.get('b.md')).toBeUndefined();
+});
+
+test('supports asynchronous incremental persistence for IndexedDB-like stores', async () => {
+  const values = new Map<string, string>();
+  const store: AsyncClientKeyValueStore = {
+    getItem: async key => values.get(key) || null,
+    setItem: async (key, value) => { values.set(key, value); },
+    removeItem: async key => { values.delete(key); },
+  };
+  const caller: ClientEndpointCaller = {
+    async callEndpoint(_endpointId, arguments_) {
+      const path = (arguments_.paths as string[])[0]!;
+      return { ok: [{ path, revision: 'e'.repeat(64), content: 'async persisted' }], err: [] };
+    },
+  };
+  const original = new McpVaultClientCache(caller);
+  await original.readNotes(['async.md']);
+  await original.persistIncrementalAsync(store, 'async-cache');
+
+  const restored = new McpVaultClientCache(caller);
+  await expect(restored.hydrateIncrementalAsync(store, 'async-cache')).resolves.toBe(1);
+  expect(restored.get('async.md')).toMatchObject({ content: 'async persisted' });
 });

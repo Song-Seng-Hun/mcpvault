@@ -8,6 +8,12 @@ export interface ClientKeyValueStore {
   removeItem?(key: string): void;
 }
 
+export interface AsyncClientKeyValueStore {
+  getItem(key: string): Promise<string | null>;
+  setItem(key: string, value: string): Promise<void>;
+  removeItem?(key: string): Promise<void>;
+}
+
 export interface CachedNote {
   path: string;
   revision: string;
@@ -139,6 +145,22 @@ export class McpVaultClientCache {
     this.dirtyPaths.clear();
   }
 
+  async persistIncrementalAsync(store: AsyncClientKeyValueStore, key: string): Promise<void> {
+    const previous = readManifest(await store.getItem(key));
+    const currentPaths = [...this.entries.keys()];
+    const previousPaths = new Set(previous?.paths || []);
+    for (const path of currentPaths) {
+      if (!this.dirtyPaths.has(path) && previousPaths.has(path)) continue;
+      const note = this.entries.get(path);
+      if (note) await store.setItem(noteStorageKey(key, path), JSON.stringify(note));
+    }
+    for (const path of previous?.paths || []) {
+      if (!this.entries.has(path)) await store.removeItem?.(noteStorageKey(key, path));
+    }
+    await store.setItem(key, JSON.stringify({ version: 1, paths: currentPaths } satisfies IncrementalCacheManifest));
+    this.dirtyPaths.clear();
+  }
+
   hydrate(store: ClientKeyValueStore, key: string): number {
     const snapshot = store.getItem(key);
     return snapshot ? this.restore(snapshot) : 0;
@@ -150,6 +172,32 @@ export class McpVaultClientCache {
     let restored = 0;
     for (const path of manifest.paths) {
       const snapshot = store.getItem(noteStorageKey(key, path));
+      if (!snapshot) continue;
+      try {
+        const value = JSON.parse(snapshot) as Partial<CachedNote>;
+        if (typeof value.path !== 'string' || value.path !== path || typeof value.revision !== 'string' || !value.revision) continue;
+        this.put({
+          path,
+          revision: value.revision,
+          ...(typeof value.content === 'string' && { content: value.content }),
+          ...(value.frontmatter && typeof value.frontmatter === 'object' && { frontmatter: value.frontmatter as Record<string, unknown> }),
+          ...(typeof value.obsidianUri === 'string' && { obsidianUri: value.obsidianUri }),
+        });
+        restored += 1;
+      } catch {
+        // Ignore one corrupt entry and keep the remaining cache usable.
+      }
+    }
+    this.dirtyPaths.clear();
+    return restored;
+  }
+
+  async hydrateIncrementalAsync(store: AsyncClientKeyValueStore, key: string): Promise<number> {
+    const manifest = readManifest(await store.getItem(key));
+    if (!manifest) return 0;
+    let restored = 0;
+    for (const path of manifest.paths) {
+      const snapshot = await store.getItem(noteStorageKey(key, path));
       if (!snapshot) continue;
       try {
         const value = JSON.parse(snapshot) as Partial<CachedNote>;

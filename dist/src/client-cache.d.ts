@@ -6,6 +6,11 @@ export interface ClientKeyValueStore {
     setItem(key: string, value: string): void;
     removeItem?(key: string): void;
 }
+export interface AsyncClientKeyValueStore {
+    getItem(key: string): Promise<string | null>;
+    setItem(key: string, value: string): Promise<void>;
+    removeItem?(key: string): Promise<void>;
+}
 export interface CachedNote {
     path: string;
     revision: string;
@@ -53,8 +58,10 @@ export declare class McpVaultClientCache {
     restore(snapshot: string): number;
     persist(store: ClientKeyValueStore, key: string): void;
     persistIncremental(store: ClientKeyValueStore, key: string): void;
+    persistIncrementalAsync(store: AsyncClientKeyValueStore, key: string): Promise<void>;
     hydrate(store: ClientKeyValueStore, key: string): number;
     hydrateIncremental(store: ClientKeyValueStore, key: string): number;
+    hydrateIncrementalAsync(store: AsyncClientKeyValueStore, key: string): Promise<number>;
     invalidate(path?: string): void;
     knownRevisions(paths: string[]): Record<string, string>;
     readNotes(paths: string[], options?: ClientReadNotesOptions): Promise<ClientReadNotesResult>;
