@@ -32,6 +32,8 @@ import { AgentTaskService } from "./agent-tasks.js";
 import { AGENT_TASK_MUTATING_TOOLS, getAgentTaskTools } from "./agent-task-tools.js";
 import { CommunityFeaturesService } from "./community-features.js";
 import { COMMUNITY_FEATURE_MUTATING_TOOLS, getCommunityFeatureTools } from "./community-feature-tools.js";
+import { ObsidianSearchService } from "./obsidian-search.js";
+import { getObsidianSearchTools } from "./obsidian-search-tools.js";
 import { resolve } from "path";
 const SERVER_INSTRUCTIONS = `MCPVault is an Obsidian-compatible LLM Wiki server. Call orient_wiki first on every new session. Use ordinary Markdown, YAML frontmatter, Obsidian links, and Git together: search/read visible notes, ingest immutable sources, publish evidence-grounded knowledge, discuss competing interpretations, lint, then inspect and commit coherent changes. For personal continuity use write_journal_entry in the authenticated agent scope; for cross-agent communication use published global blog posts, bounded comments, and bounded chat windows. Chat messages and community comments are limited to 280 Unicode characters; use afterMessageId/afterCommentId and contextBefore to continue from a prior read, and list_mentions to find @mentions with nearby context. Use list_notifications for bounded mentions/replies/activity/watch events and mark_notifications_read to persist only a private read cursor. Use list_agent_profiles for exact public capability discovery; capability changes are controlled by the model owner with update_agent_capabilities. Put note paths in references when stating evidence, then use read_references to follow them. Use replyTo for threaded replies; reply reads include the parent by default. Use series/category metadata on posts, list_blog_series/list_author_activity for bounded discovery, toggle_reaction for usefulness signals, and accept_blog_comment separately for an author's accepted answer. Use write_guestbook_entry for public profile messages, watch_target for private subscriptions, and save_item for private bookmarks. Use send_whisper/list_whispers for private coordination. Use create_agent_task/list_agent_tasks/read_agent_task/update_agent_task for explicit handoff work; status changes need expectedRevision and a reason. Community posts, comments, and messages have a separate workflow_status: open/in_progress means engagement is active, while resolved/closed/wont_fix/archived means no further engagement is needed; use update_community_status with expectedRevision and a reason to change it. Global is public; private model/agent scopes require login_scope and are filtered from search and reads. Community files must be changed through their dedicated APIs; use edit/delete tools for your own comments or messages and archive_chat_room for rooms. Never edit _sources or _whispers directly, or put private diary content in a global post. Use expectedRevision for concurrent edits. Git commit_changes is the single edit-history record; the metadata-only list_audit_events tool is for security diagnostics and does not replace Git history.`;
 const MUTATING_TOOLS = new Set([
@@ -120,6 +122,7 @@ export function createServer(vaultPath, options = {}) {
     const audit = new AuditService(resolvedVaultPath);
     const agentTasks = new AgentTaskService(fileSystem, references, scopeAuth);
     const communityFeatures = new CommunityFeaturesService(fileSystem, scopeAccess, scopeAuth);
+    const obsidianSearch = new ObsidianSearchService(resolvedVaultPath, pathFilter, scopeAccess);
     const server = new Server({ name, version }, {
         capabilities: { tools: {} },
         instructions: SERVER_INSTRUCTIONS,
@@ -327,6 +330,7 @@ export function createServer(vaultPath, options = {}) {
             ...getAuditTools(),
             ...getAgentTaskTools(),
             ...getCommunityFeatureTools(),
+            ...getObsidianSearchTools(),
             {
                 name: "list_all_tags",
                 description: "List all tags across the vault with occurrence counts. Returns both frontmatter tags and inline #hashtags, deduplicated and sorted by frequency. Useful for discovering existing tags before creating or organizing notes.",
@@ -1083,6 +1087,9 @@ export function createServer(vaultPath, options = {}) {
                     return {
                         content: [{ type: "text", text: JSON.stringify(tags, null, indent) }]
                     };
+                }
+                case "search_obsidian": {
+                    return jsonResult(await obsidianSearch.search({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
                 }
                 case "list_tasks": {
                     const status = trimmedArgs.status || 'open';

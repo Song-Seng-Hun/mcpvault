@@ -20,6 +20,7 @@ test('community discovery, reactions, guestbook, watches, and saves work through
     const registered = value(await client.callTool({ name: 'register_scope_account', arguments: { accountId: 'model-user', password: 'a-strong-password-123', modelId: 'gpt' } }));
     const token = value(await client.callTool({ name: 'login_scope', arguments: { accountId: 'model-user', password: 'a-strong-password-123' } })).accessToken;
     const auth = { accessToken: token };
+    expect((await client.callTool({ name: 'search_obsidian', arguments: { ...auth, query: 'private' } })).isError).toBe(true);
     await client.callTool({ name: 'publish_blog_post', arguments: { ...auth, slug: 'first-post', title: 'First', content: 'one', category: 'research', seriesId: 'series-a', seriesTitle: 'A series', seriesOrder: 1, expectedRevision: 'missing' } });
     await client.callTool({ name: 'publish_blog_post', arguments: { ...auth, slug: 'second-post', title: 'Second', content: 'two', category: 'research', seriesId: 'series-a', seriesTitle: 'A series', seriesOrder: 2, expectedRevision: 'missing' } });
     const series = value(await client.callTool({ name: 'list_blog_series', arguments: {} }));

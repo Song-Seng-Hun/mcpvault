@@ -109,11 +109,12 @@ An MCP client starts MCPVault as a local stdio process and passes the vault path
 
 - AST-aware frontmatter updates preserve formatting for unchanged YAML fields.
 - Path checks block traversal, symlink escapes, dotfiles, `.obsidian`, `.git`, and `node_modules`.
-- One hundred four MCP tools cover note, collaboration, private scope, LLM Wiki, social journaling, public community, chat, references, agent coordination, and private coordination operations:
+- One hundred five MCP tools cover note, collaboration, private scope, LLM Wiki, social journaling, public community, chat, references, agent coordination, and private coordination operations:
   - File operations: `read_note`, `write_note`, `patch_note`, `delete_note`, `move_note`, `move_file`
   - Partial reads: `get_note_outline`, `read_note_lines`
   - Directory and batch reads: `list_directory`, `read_multiple_notes`
   - Search: `search_notes` with multi-word matching and BM25 reranking
+  - Optional Obsidian-native search: `search_obsidian` uses the running Obsidian CLI index for public-global results; authenticated private searches must use `search_scoped_notes`
   - Metadata and tags: `get_frontmatter`, `update_frontmatter`, `get_notes_info`, `get_vault_stats`, `manage_tags`, `list_all_tags`
   - Wiki links: `wiki_link` resolves names and returns alternative paths when a name is ambiguous; `get_backlinks` finds incoming wikilinks, `get_outlinks` lists outgoing wikilinks, `find_unresolved_links` finds broken references, and `find_orphan_notes` finds isolated notes
   - Daily notes: `get_daily_note` reads a date-based note and `daily_note` safely creates or appends to one
