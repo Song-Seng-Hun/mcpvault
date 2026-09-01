@@ -15,14 +15,22 @@ export function normalizeSearchMaxChars(value: unknown, defaultValue = DEFAULT_S
   return Math.min(parsed, MAX_SEARCH_MAX_CHARS);
 }
 
+function serializedArrayItemLength<T>(item: T): number {
+  // Wrapping the item preserves JSON.stringify's array semantics for values
+  // such as undefined, while avoiding serialization of the accumulated array.
+  return JSON.stringify([item])!.length - 2;
+}
+
 /** Keep the compact JSON payload within the requested context budget. */
 export function boundSearchResults<T>(results: T[], maxChars: number): T[] {
   const bounded: T[] = [];
+  let serializedLength = 2; // []
   for (const result of results) {
-    const candidate = [...bounded, result];
-    if (bounded.length > 0 && JSON.stringify(candidate).length > maxChars) break;
+    const candidateLength = serializedLength + (bounded.length > 0 ? 1 : 0) + serializedArrayItemLength(result);
+    if (bounded.length > 0 && candidateLength > maxChars) break;
     bounded.push(result);
-    if (JSON.stringify(bounded).length >= maxChars) break;
+    serializedLength = candidateLength;
+    if (serializedLength >= maxChars) break;
   }
   return bounded;
 }
@@ -30,13 +38,15 @@ export function boundSearchResults<T>(results: T[], maxChars: number): T[] {
 /** Bound metadata/list responses without cutting JSON in the middle. */
 export function boundItems<T>(items: T[], maxChars: number): { items: T[]; truncated: boolean } {
   const bounded: T[] = [];
+  let serializedLength = 2; // []
   for (const item of items) {
-    const candidate = [...bounded, item];
-    if (bounded.length > 0 && JSON.stringify(candidate).length > maxChars) {
+    const candidateLength = serializedLength + (bounded.length > 0 ? 1 : 0) + serializedArrayItemLength(item);
+    if (bounded.length > 0 && candidateLength > maxChars) {
       return { items: bounded, truncated: true };
     }
     bounded.push(item);
-    if (JSON.stringify(bounded).length >= maxChars) {
+    serializedLength = candidateLength;
+    if (serializedLength >= maxChars) {
       return { items: bounded, truncated: bounded.length < items.length };
     }
   }
