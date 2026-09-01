@@ -23,6 +23,7 @@ export interface ClientVectorIndexOptions {
  */
 export declare class McpVaultClientVectorIndex {
     private readonly entries;
+    private readonly dirtyPaths;
     private readonly maxDocuments;
     private readonly configuredDimension;
     private dimension;
@@ -41,6 +42,10 @@ export declare class McpVaultClientVectorIndex {
     hydrate(store: ClientKeyValueStore, key: string): number;
     persistAsync(store: AsyncClientKeyValueStore, key: string): Promise<void>;
     hydrateAsync(store: AsyncClientKeyValueStore, key: string): Promise<number>;
+    persistIncremental(store: ClientKeyValueStore, key: string): void;
+    persistIncrementalAsync(store: AsyncClientKeyValueStore, key: string): Promise<void>;
+    hydrateIncremental(store: ClientKeyValueStore, key: string): number;
+    hydrateIncrementalAsync(store: AsyncClientKeyValueStore, key: string): Promise<number>;
     private assertDimension;
 }
 //# sourceMappingURL=client-vector.d.ts.map

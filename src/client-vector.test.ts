@@ -50,3 +50,46 @@ test('supports async vector persistence for host stores', async () => {
   await expect(restored.hydrateAsync(store, 'async-vectors')).resolves.toBe(1);
   expect(restored.size()).toBe(1);
 });
+
+test('persists only changed vectors incrementally', () => {
+  const values = new Map<string, string>();
+  const writes: string[] = [];
+  const store: ClientKeyValueStore = {
+    getItem: key => values.get(key) || null,
+    setItem: (key, value) => { writes.push(key); values.set(key, value); },
+    removeItem: key => { values.delete(key); },
+  };
+  const index = new McpVaultClientVectorIndex({ dimension: 2 });
+  index.upsert('one.md', '1'.repeat(64), [1, 0]);
+  index.upsert('two.md', '2'.repeat(64), [0, 1]);
+  index.persistIncremental(store, 'vectors');
+  writes.length = 0;
+  index.upsert('two.md', '3'.repeat(64), [1, 1]);
+  index.persistIncremental(store, 'vectors');
+  expect(writes).toEqual(['vectors:vector:two.md', 'vectors']);
+
+  writes.length = 0;
+  index.remove('one.md');
+  index.persistIncremental(store, 'vectors');
+  expect(writes).toEqual(['vectors']);
+  expect(values.has('vectors:vector:one.md')).toBe(false);
+
+  const restored = new McpVaultClientVectorIndex();
+  expect(restored.hydrateIncremental(store, 'vectors')).toBe(1);
+  expect(restored.search([1, 1]).results[0]!.path).toBe('two.md');
+});
+
+test('supports asynchronous incremental vector persistence', async () => {
+  const values = new Map<string, string>();
+  const store: AsyncClientKeyValueStore = {
+    getItem: async key => values.get(key) || null,
+    setItem: async (key, value) => { values.set(key, value); },
+    removeItem: async key => { values.delete(key); },
+  };
+  const original = new McpVaultClientVectorIndex({ dimension: 2 });
+  original.upsert('async.md', 'a'.repeat(64), [1, 1]);
+  await original.persistIncrementalAsync(store, 'async-vectors');
+  const restored = new McpVaultClientVectorIndex();
+  await expect(restored.hydrateIncrementalAsync(store, 'async-vectors')).resolves.toBe(1);
+  expect(restored.search([1, 1]).results[0]!.path).toBe('async.md');
+});

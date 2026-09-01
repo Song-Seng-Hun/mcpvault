@@ -8,6 +8,7 @@ const MAX_RESULT_LIMIT = 50;
  */
 export class McpVaultClientVectorIndex {
     entries = new Map();
+    dirtyPaths = new Set();
     maxDocuments;
     configuredDimension;
     dimension = 0;
@@ -32,13 +33,20 @@ export class McpVaultClientVectorIndex {
         this.assertDimension(normalizedVector.length);
         this.entries.delete(normalizedPath);
         this.entries.set(normalizedPath, { path: normalizedPath, revision: normalizedRevision, vector: normalizedVector });
+        this.dirtyPaths.add(normalizedPath);
         while (this.entries.size > this.maxDocuments)
             this.entries.delete(this.entries.keys().next().value);
     }
     remove(path) {
-        return this.entries.delete(String(path || '').trim());
+        const normalizedPath = String(path || '').trim();
+        const removed = this.entries.delete(normalizedPath);
+        if (removed)
+            this.dirtyPaths.add(normalizedPath);
+        return removed;
     }
     clear() {
+        for (const path of this.entries.keys())
+            this.dirtyPaths.add(path);
         this.entries.clear();
     }
     size() {
@@ -111,6 +119,88 @@ export class McpVaultClientVectorIndex {
         const snapshot = await store.getItem(key);
         return snapshot ? this.restore(snapshot) : 0;
     }
+    persistIncremental(store, key) {
+        const previous = readIncrementalManifest(store.getItem(key));
+        const currentPaths = [...this.entries.keys()];
+        const previousPaths = new Set(previous?.paths || []);
+        for (const path of currentPaths) {
+            if (!this.dirtyPaths.has(path) && previousPaths.has(path))
+                continue;
+            const entry = this.entries.get(path);
+            if (entry)
+                store.setItem(vectorStorageKey(key, path), JSON.stringify({ path: entry.path, revision: entry.revision, vector: [...entry.vector] }));
+        }
+        for (const path of previous?.paths || []) {
+            if (!this.entries.has(path))
+                store.removeItem?.(vectorStorageKey(key, path));
+        }
+        store.setItem(key, JSON.stringify({ version: 1, paths: currentPaths }));
+        this.dirtyPaths.clear();
+    }
+    async persistIncrementalAsync(store, key) {
+        const previous = readIncrementalManifest(await store.getItem(key));
+        const currentPaths = [...this.entries.keys()];
+        const previousPaths = new Set(previous?.paths || []);
+        for (const path of currentPaths) {
+            if (!this.dirtyPaths.has(path) && previousPaths.has(path))
+                continue;
+            const entry = this.entries.get(path);
+            if (entry)
+                await store.setItem(vectorStorageKey(key, path), JSON.stringify({ path: entry.path, revision: entry.revision, vector: [...entry.vector] }));
+        }
+        for (const path of previous?.paths || []) {
+            if (!this.entries.has(path))
+                await store.removeItem?.(vectorStorageKey(key, path));
+        }
+        await store.setItem(key, JSON.stringify({ version: 1, paths: currentPaths }));
+        this.dirtyPaths.clear();
+    }
+    hydrateIncremental(store, key) {
+        const manifest = readIncrementalManifest(store.getItem(key));
+        if (!manifest)
+            return 0;
+        let restored = 0;
+        for (const path of manifest.paths) {
+            const snapshot = store.getItem(vectorStorageKey(key, path));
+            if (!snapshot)
+                continue;
+            try {
+                const value = JSON.parse(snapshot);
+                if (typeof value.path !== 'string' || value.path !== path || typeof value.revision !== 'string' || !Array.isArray(value.vector))
+                    continue;
+                this.upsert(value.path, value.revision, value.vector);
+                restored += 1;
+            }
+            catch {
+                // Ignore one corrupt vector and keep the remaining index usable.
+            }
+        }
+        this.dirtyPaths.clear();
+        return restored;
+    }
+    async hydrateIncrementalAsync(store, key) {
+        const manifest = readIncrementalManifest(await store.getItem(key));
+        if (!manifest)
+            return 0;
+        let restored = 0;
+        for (const path of manifest.paths) {
+            const snapshot = await store.getItem(vectorStorageKey(key, path));
+            if (!snapshot)
+                continue;
+            try {
+                const value = JSON.parse(snapshot);
+                if (typeof value.path !== 'string' || value.path !== path || typeof value.revision !== 'string' || !Array.isArray(value.vector))
+                    continue;
+                this.upsert(value.path, value.revision, value.vector);
+                restored += 1;
+            }
+            catch {
+                // Ignore one corrupt vector and keep the remaining index usable.
+            }
+        }
+        this.dirtyPaths.clear();
+        return restored;
+    }
     assertDimension(dimension) {
         if (this.configuredDimension !== undefined && dimension !== this.configuredDimension)
             throw new Error(`vector dimension must be ${this.configuredDimension}`);
@@ -177,5 +267,22 @@ function siftDown(heap, index) {
             return;
         [heap[index], heap[worst]] = [heap[worst], heap[index]];
         index = worst;
+    }
+}
+function vectorStorageKey(key, path) {
+    return `${key}:vector:${encodeURIComponent(path)}`;
+}
+function readIncrementalManifest(value) {
+    if (!value)
+        return undefined;
+    try {
+        const parsed = JSON.parse(value);
+        if (parsed.version !== 1 || !Array.isArray(parsed.paths))
+            return undefined;
+        const paths = parsed.paths.filter((path) => typeof path === 'string' && path.length > 0);
+        return { version: 1, paths: [...new Set(paths)] };
+    }
+    catch {
+        return undefined;
     }
 }
