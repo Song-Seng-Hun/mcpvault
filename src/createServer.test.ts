@@ -25,7 +25,7 @@ test("createServer returns a Server instance", () => {
   expect(typeof server.connect).toBe("function");
 });
 
-test("server registers 88 tools", async () => {
+test("server registers 104 tools", async () => {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -37,10 +37,11 @@ test("server registers 88 tools", async () => {
   ]);
 
   const result = await client.listTools();
-  expect(result.tools).toHaveLength(88);
+  expect(result.tools).toHaveLength(104);
 
   const toolNames = result.tools.map((t) => t.name).sort();
   expect(toolNames).toEqual([
+    "accept_blog_comment",
     "add_discussion_argument",
     "archive_chat_room",
     "change_scope_password",
@@ -54,6 +55,7 @@ test("server registers 88 tools", async () => {
     "daily_note",
     "delete_blog_comment",
     "delete_chat_message",
+    "delete_guestbook_entry",
     "delete_note",
     "edit_blog_comment",
     "edit_chat_message",
@@ -81,14 +83,21 @@ test("server registers 88 tools", async () => {
     "list_agent_tasks",
     "list_all_tags",
     "list_audit_events",
+    "list_author_activity",
     "list_blog_comments",
     "list_blog_posts",
+    "list_blog_series",
     "list_chat_rooms",
     "list_directory",
+    "list_guestbook",
     "list_journal_entries",
     "list_mentions",
     "list_notifications",
+    "list_popular_posts",
+    "list_reactions",
+    "list_saved_items",
     "list_tasks",
+    "list_watched_targets",
     "list_whispers",
     "login_scope",
     "logout_scope",
@@ -115,18 +124,25 @@ test("server registers 88 tools", async () => {
     "resolve_wiki_issue",
     "restore_note_revision",
     "resume_agent_scope",
+    "save_item",
     "search_notes",
     "search_scoped_notes",
     "send_chat_message",
     "send_whisper",
+    "toggle_reaction",
+    "unaccept_blog_comment",
+    "unsave_item",
+    "unwatch_target",
     "update_agent_capabilities",
     "update_agent_profile",
     "update_agent_task",
     "update_community_status",
     "update_discussion_status",
     "update_frontmatter",
+    "watch_target",
     "whoami_scope",
     "wiki_link",
+    "write_guestbook_entry",
     "write_journal_entry",
     "write_note",
   ]);
@@ -313,7 +329,7 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
   try {
     const listedTools = await client.listTools();
     const toolNames = listedTools.tools.map((tool) => tool.name);
-    expect(toolNames).toHaveLength(47);
+    expect(toolNames).toHaveLength(54);
     expect(toolNames).toContain("read_note");
     expect(toolNames).toContain("search_notes");
     expect(toolNames).not.toContain("write_note");

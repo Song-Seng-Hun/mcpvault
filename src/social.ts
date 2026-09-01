@@ -11,12 +11,18 @@ const BLOG_ROOT = 'Community/Posts';
 const COMMENTS_ROOT = 'Community/Comments';
 const JOURNAL_KINDS = new Set(['diary', 'log', 'reflection']);
 const POST_STATUSES = new Set(['draft', 'published', 'archived']);
+export const COMMUNITY_POST_CATEGORIES = ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase'] as const;
 export const MAX_COMMUNITY_TEXT_LENGTH = 280;
 
 const now = () => new Date().toISOString();
 const today = () => now().slice(0, 10);
 const agentJournalRoot = (agentId: string) => `_scopes/agents/${normalizeScopeId(agentId, 'agentId')}/${JOURNAL_ROOT}`;
 const blogPath = (slug: string) => `${BLOG_ROOT}/${normalizeScopeId(slug, 'slug')}.md`;
+function publicPostReference(value: string): string {
+  const raw = String(value || '').trim().replace(/\\/g, '/');
+  const match = new RegExp(`^${BLOG_ROOT}/([^/]+)\\.md$`, 'i').exec(raw);
+  return match ? blogPath(match[1]!) : blogPath(raw);
+}
 const commentsRoot = (slug: string) => `${COMMENTS_ROOT}/${normalizeScopeId(slug, 'slug')}`;
 const commentPath = (slug: string, commentId: string) => `${commentsRoot(slug)}/${normalizeScopeId(commentId, 'commentId')}.md`;
 
@@ -192,6 +198,12 @@ export class SocialService {
     status?: string;
     tags?: unknown;
     references?: unknown;
+    category?: string;
+    seriesId?: string;
+    seriesTitle?: string;
+    seriesOrder?: number;
+    relatedPosts?: unknown;
+    duplicateOf?: string;
     expectedRevision: string;
   }) {
     const principal = requirePublisher(params.principal);
@@ -208,6 +220,21 @@ export class SocialService {
     if (existing && existing.note.frontmatter.author !== identity(principal)) {
       throw new Error('Only the original post author can update this post');
     }
+    const category = String(params.category ?? existing?.note.frontmatter.category ?? 'discussion').trim().toLowerCase();
+    if (!(COMMUNITY_POST_CATEGORIES as readonly string[]).includes(category)) throw new Error(`category must be one of: ${COMMUNITY_POST_CATEGORIES.join(', ')}`);
+    const seriesId = params.seriesId === undefined ? existing?.note.frontmatter.series_id : (params.seriesId ? normalizeScopeId(params.seriesId, 'seriesId') : undefined);
+    const seriesOrder = params.seriesOrder === undefined ? existing?.note.frontmatter.series_order : Number(params.seriesOrder);
+    if (seriesId && (!Number.isInteger(seriesOrder) || Number(seriesOrder) < 1)) throw new Error('seriesOrder must be a positive integer when seriesId is set');
+    const relatedPosts = params.relatedPosts === undefined ? (existing?.note.frontmatter.related_posts || []) : (Array.isArray(params.relatedPosts) ? params.relatedPosts.map(value => publicPostReference(String(value))) : []);
+    const duplicateOf = params.duplicateOf === undefined ? existing?.note.frontmatter.duplicate_of : (params.duplicateOf ? publicPostReference(params.duplicateOf) : undefined);
+    for (const related of relatedPosts) {
+      const relatedNote = await this.fileSystem.readNote(String(related));
+      if (relatedNote.frontmatter.mcpvault_type !== 'blog_post') throw new Error(`related post is not a community post: ${related}`);
+    }
+    if (duplicateOf) {
+      const duplicateNote = await this.fileSystem.readNote(String(duplicateOf));
+      if (duplicateNote.frontmatter.mcpvault_type !== 'blog_post') throw new Error(`duplicateOf is not a community post: ${duplicateOf}`);
+    }
     const timestamp = now();
     await this.fileSystem.writeNote({
       path,
@@ -216,6 +243,11 @@ export class SocialService {
         ...(existing?.note.frontmatter || {}), mcpvault_type: 'blog_post', post_id: slug, title,
         author: existing?.note.frontmatter.author || identity(principal), author_role: existing?.note.frontmatter.author_role || principal.role,
         status, tags: cleanTags(params.tags ?? existing?.note.frontmatter.tags),
+        category,
+        ...(seriesId && { series_id: seriesId, ...(params.seriesTitle || existing?.note.frontmatter.series_title ? { series_title: String(params.seriesTitle || existing?.note.frontmatter.series_title).trim().slice(0, 180) } : {}), series_order: Number(seriesOrder) }),
+        ...(!seriesId && existing?.note.frontmatter.series_id && { series_id: null, series_title: null, series_order: null }),
+        related_posts: relatedPosts,
+        ...(duplicateOf ? { duplicate_of: duplicateOf } : {}),
         references: params.references !== undefined
           ? await this.references.validateAndNormalize(params.references, path, principal)
           : (existing?.note.frontmatter.references || []),
@@ -228,7 +260,7 @@ export class SocialService {
     return { success: true, created: !existing, slug, path, status, revision: written.revision };
   }
 
-  async listBlogPosts(params: { principal?: ScopePrincipal; status?: string; workflowStatus?: string; limit?: number; includeExcerpt?: boolean; excerptMaxChars?: number }) {
+  async listBlogPosts(params: { principal?: ScopePrincipal; status?: string; workflowStatus?: string; author?: string; category?: string; seriesId?: string; limit?: number; includeExcerpt?: boolean; excerptMaxChars?: number }) {
     const requestedStatus = String(params.status || 'published').trim().toLowerCase();
     if (requestedStatus !== 'all' && !POST_STATUSES.has(requestedStatus)) throw new Error('status must be published, draft, archived, or all');
     const result = await this.fileSystem.queryNotes({
@@ -240,6 +272,9 @@ export class SocialService {
       const status = String(note.frontmatter.status || 'published');
       if (requestedStatus !== 'all' && status !== requestedStatus) return false;
       if (status === 'draft' && caller !== note.frontmatter.author) return false;
+      if (params.author && String(note.frontmatter.author).toLowerCase() !== String(params.author).trim().toLowerCase()) return false;
+      if (params.category && String(note.frontmatter.category || 'discussion').toLowerCase() !== String(params.category).trim().toLowerCase()) return false;
+      if (params.seriesId && String(note.frontmatter.series_id || '') !== normalizeScopeId(params.seriesId, 'seriesId')) return false;
       return matchesWorkflowFilter(note.frontmatter, params.workflowStatus || 'active');
     }).map(note => ({
       path: note.path,
@@ -248,6 +283,12 @@ export class SocialService {
       author: note.frontmatter.author,
       status: note.frontmatter.status,
       tags: note.frontmatter.tags || [],
+      category: note.frontmatter.category || 'discussion',
+      seriesId: note.frontmatter.series_id,
+      seriesTitle: note.frontmatter.series_title,
+      seriesOrder: note.frontmatter.series_order,
+      relatedPosts: note.frontmatter.related_posts || [],
+      duplicateOf: note.frontmatter.duplicate_of,
       createdAt: note.frontmatter.created_at,
       updatedAt: note.frontmatter.updated_at,
       workflowStatus: workflowStatus(note.frontmatter),
@@ -278,8 +319,7 @@ export class SocialService {
     const slug = normalizeScopeId(params.slug, 'slug');
     const post = await this.readBlogPost(slug);
     if (post.note.frontmatter.status !== 'published') throw new Error('Comments are available only on published posts');
-    const content = String(params.content ?? '').trim();
-    if (!content) throw new Error('content is required');
+    const content = requireShortCommunityText(params.content);
     const commentId = params.commentId ? normalizeScopeId(params.commentId, 'commentId') : `comment-${randomUUID().slice(0, 10)}`;
     if (params.replyTo) {
       await this.fileSystem.readNote(commentPath(slug, params.replyTo));

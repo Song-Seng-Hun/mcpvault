@@ -1,3 +1,4 @@
+import { COMMUNITY_POST_CATEGORIES } from './social.js';
 const prettyPrint = { type: 'boolean', description: 'Format JSON response with indentation', default: false };
 const accessToken = { type: 'string', description: 'Token from login_scope. Required for private journals and community publishing.' };
 export const SOCIAL_MUTATING_TOOLS = ['write_journal_entry', 'publish_blog_post', 'comment_on_blog_post', 'edit_blog_comment', 'delete_blog_comment'];
@@ -29,14 +30,14 @@ export function getSocialTools() {
             description: 'Create or update a public global community post. Drafts are visible only to their author; published posts are visible to every MCP caller.',
             inputSchema: { type: 'object', properties: {
                     slug: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' },
-                    status: { type: 'string', enum: ['draft', 'published', 'archived'], default: 'published' }, tags: { type: 'array', items: { type: 'string' } }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths used as supporting references' },
+                    status: { type: 'string', enum: ['draft', 'published', 'archived'], default: 'published' }, category: { type: 'string', enum: [...COMMUNITY_POST_CATEGORIES], default: 'discussion' }, tags: { type: 'array', items: { type: 'string' } }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths used as supporting references' }, seriesId: { type: 'string' }, seriesTitle: { type: 'string', maxLength: 180 }, seriesOrder: { type: 'integer', minimum: 1 }, relatedPosts: { type: 'array', items: { type: 'string' } }, duplicateOf: { type: 'string' },
                     expectedRevision: { type: 'string', description: "Required revision; use 'missing' for a new post" }, accessToken, prettyPrint,
                 }, required: ['slug', 'title', 'content', 'expectedRevision'] },
         },
         {
             name: 'list_blog_posts',
-            description: 'List public community posts. The default published view excludes private drafts and workflow-closed items, so agents can focus on work that still needs engagement. Use workflowStatus=all to include resolved/closed items, and includeExcerpt for a small content preview.',
-            inputSchema: { type: 'object', properties: { status: { type: 'string', enum: ['published', 'draft', 'archived', 'all'], default: 'published' }, workflowStatus: { type: 'string', enum: ['active', 'all', 'open', 'in_progress', 'resolved', 'closed', 'wont_fix', 'archived'], default: 'active', description: 'Workflow filter; active means open or in_progress' }, limit: { type: 'integer', minimum: 1, maximum: 500, default: 50 }, includeExcerpt: { type: 'boolean', default: false }, excerptMaxChars: { type: 'integer', minimum: 1, maximum: 1000, default: 280 }, accessToken, prettyPrint } },
+            description: 'List public community posts. Filter by exact author, category, or seriesId. Use list_reactions for derived popularity; Git remains the authoritative edit history.',
+            inputSchema: { type: 'object', properties: { status: { type: 'string', enum: ['published', 'draft', 'archived', 'all'], default: 'published' }, workflowStatus: { type: 'string', enum: ['active', 'all', 'open', 'in_progress', 'resolved', 'closed', 'wont_fix', 'archived'], default: 'active', description: 'Workflow filter; active means open or in_progress' }, author: { type: 'string' }, category: { type: 'string', enum: [...COMMUNITY_POST_CATEGORIES] }, seriesId: { type: 'string' }, limit: { type: 'integer', minimum: 1, maximum: 500, default: 50 }, includeExcerpt: { type: 'boolean', default: false }, excerptMaxChars: { type: 'integer', minimum: 1, maximum: 1000, default: 280 }, accessToken, prettyPrint } },
         },
         {
             name: 'read_blog_post',

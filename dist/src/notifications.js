@@ -92,6 +92,32 @@ export class NotificationService {
         // A post mention is useful too, while comments on a post are handled above.
         for (const note of posts.notes)
             add(note, 'activity', text(note.frontmatter.post_id));
+        const ownerRoot = principal.agentId
+            ? `_scopes/agents/${normalizeScopeId(principal.agentId, 'agentId')}/_subscriptions`
+            : `_scopes/models/${normalizeScopeId(principal.modelId, 'modelId')}/_subscriptions`;
+        const subscriptions = await this.fileSystem.queryNotes({ pathPrefix: ownerRoot, filters: { mcpvault_type: 'subscription', active: true }, limit: 500 });
+        const watchedEvents = new Set();
+        for (const subscription of subscriptions.notes) {
+            const type = text(subscription.frontmatter.target_type);
+            const target = text(subscription.frontmatter.target_id).toLowerCase();
+            const sources = type === 'post'
+                ? [...posts.notes.filter(note => text(note.frontmatter.post_id).toLowerCase() === target), ...comments.notes.filter(note => text(note.frontmatter.post_id).toLowerCase() === target)]
+                : type === 'series'
+                    ? posts.notes.filter(note => text(note.frontmatter.series_id).toLowerCase() === target)
+                    : type === 'author'
+                        ? [...posts.notes, ...comments.notes].filter(note => text(note.frontmatter.author).toLowerCase() === target)
+                        : type === 'tag'
+                            ? posts.notes.filter(note => Array.isArray(note.frontmatter.tags) && note.frontmatter.tags.some((tag) => String(tag).toLowerCase() === target))
+                            : [];
+            for (const note of sources) {
+                const sourceId = text(note.frontmatter.post_id || note.frontmatter.comment_id);
+                const notificationId = eventId('watch', note.path, `${type}:${target}:${sourceId}`);
+                if (watchedEvents.has(notificationId) || text(note.frontmatter.author) === identity(principal))
+                    continue;
+                watchedEvents.add(notificationId);
+                events.push({ notificationId, kind: 'watch', sourcePath: note.path, sourceType: text(note.frontmatter.mcpvault_type), sourceId, author: text(note.frontmatter.author), createdAt: text(note.frontmatter.updated_at || note.frontmatter.created_at), content: text(note.content).trim(), context: `watched ${type}: ${target}`, unread: true });
+            }
+        }
         return events.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
     }
     async list(params) {

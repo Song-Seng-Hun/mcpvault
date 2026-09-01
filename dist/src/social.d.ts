@@ -2,6 +2,7 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ReferenceService } from './references.js';
+export declare const COMMUNITY_POST_CATEGORIES: readonly ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase'];
 export declare const MAX_COMMUNITY_TEXT_LENGTH = 280;
 export declare function extractMentions(content: string): string[];
 export declare class SocialService {
@@ -66,6 +67,12 @@ export declare class SocialService {
         status?: string;
         tags?: unknown;
         references?: unknown;
+        category?: string;
+        seriesId?: string;
+        seriesTitle?: string;
+        seriesOrder?: number;
+        relatedPosts?: unknown;
+        duplicateOf?: string;
         expectedRevision: string;
     }): Promise<{
         success: boolean;
@@ -79,6 +86,9 @@ export declare class SocialService {
         principal?: ScopePrincipal;
         status?: string;
         workflowStatus?: string;
+        author?: string;
+        category?: string;
+        seriesId?: string;
         limit?: number;
         includeExcerpt?: boolean;
         excerptMaxChars?: number;
@@ -90,6 +100,12 @@ export declare class SocialService {
             author: any;
             status: any;
             tags: any;
+            category: any;
+            seriesId: any;
+            seriesTitle: any;
+            seriesOrder: any;
+            relatedPosts: any;
+            duplicateOf: any;
             createdAt: any;
             updatedAt: any;
             workflowStatus: "archived" | "closed" | "in_progress" | "open" | "resolved" | "wont_fix";
