@@ -1,4 +1,5 @@
 import { join, resolve } from 'path';
+import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import type { PathFilter } from './pathfilter.js';
 import type { RankCandidate, SearchParams, SearchResult } from './types.js';
@@ -22,6 +23,10 @@ function isWikiPath(path: string): boolean {
     || normalized === '_sources'
     || normalized.startsWith('_sources/')
     || /^_scopes\/(models|agents)\/[^/]+\/(?:_wiki|_sources)(?:\/|$)/.test(normalized);
+}
+
+function revision(content: string): string {
+  return createHash('sha256').update(content, 'utf8').digest('hex');
 }
 
 function wikiType(content: string): string | undefined {
@@ -89,6 +94,7 @@ export class SearchService {
       pathPrefix: params.pathPrefix || '',
       excludePaths: params.excludePaths || [],
       maxChars: params.maxChars,
+      includeRevisions: params.includeRevisions === true,
     });
     const cached = this.cache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
@@ -245,7 +251,8 @@ export class SearchService {
               mc: matchCount,
               ln: lineNumber,
               uri: generateObsidianUri(this.vaultPath, relativePath),
-              ...(isWiki && { wk: true as const })
+              ...(isWiki && { wk: true as const }),
+              ...(params.includeRevisions && { rv: revision(content) }),
             },
             termFreqs,
             docLength,

@@ -296,6 +296,7 @@ export function createServer(vaultPath, options = {}) {
                     pathPrefix: { type: "string", description: "Restrict the search to a vault subtree, e.g. \"Projects/2026\" (directory prefix)" },
                     excludePaths: { type: "array", items: { type: "string" }, description: "Skip files under these subtrees, e.g. [\"Archive\", \"meta\"] (directory prefixes)" },
                     semantic: { type: "boolean", description: "Add bounded semantic/vector matches using the optional multilingual index (default: false)" },
+                    includeRevisions: { type: "boolean", description: "Include each result's source revision (rv) so clients can cache results and use knownRevision on later reads (default: false)" },
                     queryVector: { type: "array", minItems: 384, maxItems: 384, items: { type: "number" }, description: "Optional 384-dimensional query embedding computed by the client with Xenova/multilingual-e5-small; supplying it avoids loading the embedding model in this server process" },
                     prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
                 },
@@ -848,6 +849,7 @@ export function createServer(vaultPath, options = {}) {
                         searchContent: trimmedArgs.searchContent,
                         searchFrontmatter: trimmedArgs.searchFrontmatter,
                         caseSensitive: trimmedArgs.caseSensitive,
+                        includeRevisions: trimmedArgs.includeRevisions === true,
                         ...(principal?.modelId && { modelId: principal.modelId }),
                         ...(principal?.agentId && { agentId: principal.agentId }),
                     }), trimmedArgs.prettyPrint);
@@ -1191,6 +1193,7 @@ export function createServer(vaultPath, options = {}) {
                             caseSensitive: trimmedArgs.caseSensitive,
                             pathPrefix: trimmedArgs.pathPrefix,
                             excludePaths: trimmedArgs.excludePaths,
+                            includeRevisions: trimmedArgs.includeRevisions === true,
                         })).filter(result => canAccessPath(result.p))
                         : await collaboration.searchScopedNotes({
                             query: trimmedArgs.query,
@@ -1199,6 +1202,7 @@ export function createServer(vaultPath, options = {}) {
                             searchContent: trimmedArgs.searchContent,
                             searchFrontmatter: trimmedArgs.searchFrontmatter,
                             caseSensitive: trimmedArgs.caseSensitive,
+                            includeRevisions: trimmedArgs.includeRevisions === true,
                             ...(principal?.modelId && { modelId: principal.modelId }),
                             ...(principal?.agentId && { agentId: principal.agentId }),
                         });
@@ -1210,6 +1214,7 @@ export function createServer(vaultPath, options = {}) {
                             maxChars: trimmedArgs.maxChars,
                             pathPrefix: trimmedArgs.pathPrefix,
                             excludePaths: trimmedArgs.excludePaths,
+                            includeRevisions: trimmedArgs.includeRevisions === true,
                             queryVector: Array.isArray(trimmedArgs.queryVector) ? trimmedArgs.queryVector : undefined,
                             principal,
                         });

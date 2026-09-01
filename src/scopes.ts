@@ -168,7 +168,7 @@ export class CollaborationService {
     throw new Error(`Scoped note not found in ${candidates.map(item => item.scope).join(' > ')} precedence: ${logical}`);
   }
 
-  async searchScopedNotes(params: { query: string; modelId?: string; agentId?: string; limit?: number; maxChars?: number; searchContent?: boolean; searchFrontmatter?: boolean; caseSensitive?: boolean }) {
+  async searchScopedNotes(params: { query: string; modelId?: string; agentId?: string; limit?: number; maxChars?: number; searchContent?: boolean; searchFrontmatter?: boolean; caseSensitive?: boolean; includeRevisions?: boolean }) {
     const limit = normalizeSearchLimit(params.limit);
     const maxChars = normalizeSearchMaxChars(params.maxChars);
     const modelId = await this.inferModelId(params.agentId, params.modelId);
@@ -184,6 +184,7 @@ export class CollaborationService {
         ...(params.searchContent !== undefined && { searchContent: params.searchContent }),
         ...(params.searchFrontmatter !== undefined && { searchFrontmatter: params.searchFrontmatter }),
         ...(params.caseSensitive !== undefined && { caseSensitive: params.caseSensitive }),
+        ...(params.includeRevisions !== undefined && { includeRevisions: params.includeRevisions }),
         ...(item.root ? { pathPrefix: item.root } : { excludePaths: ['_scopes', '_collaboration', '_whispers'] }),
       });
       for (const result of results) {

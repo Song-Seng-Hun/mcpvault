@@ -94,6 +94,8 @@ export interface SearchParams {
   semantic?: boolean;
   /** Optional client-computed query vector using the configured semantic model. */
   queryVector?: number[];
+  /** Include the source revision on each result for client-side caching. */
+  includeRevisions?: boolean;
 }
 
 export interface SearchResult {
@@ -107,6 +109,8 @@ export interface SearchResult {
   wk?: true;
   /** Present when this result was found or reinforced by the semantic index. */
   vs?: true;
+  /** SHA-256 of the source note, included only when requested by the client. */
+  rv?: string;
 }
 
 export interface RankCandidate {

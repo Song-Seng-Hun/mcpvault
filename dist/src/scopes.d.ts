@@ -97,6 +97,7 @@ export declare class CollaborationService {
         searchContent?: boolean;
         searchFrontmatter?: boolean;
         caseSensitive?: boolean;
+        includeRevisions?: boolean;
     }): Promise<any[]>;
     createDiscussion(params: {
         discussionId?: string;

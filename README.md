@@ -186,6 +186,7 @@ is included in `Vary`, and mutating/error responses are never cacheable.
 - `delete_note` and `move_file` require matching confirmation paths.
 - Path arguments are trimmed before validation.
 - Search and batch tools return compact fields by default; set `prettyPrint: true` for expanded output.
+- Search results omit revision hashes by default to save context; set `includeRevisions: true` when a client wants to cache a result and validate it later with `read_note` and `knownRevision`.
 - The package exports TypeScript declarations and public types.
 - MCPVault requires no Obsidian plugin.
 

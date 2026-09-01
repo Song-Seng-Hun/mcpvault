@@ -227,7 +227,7 @@ function chunkNote(path: string, content: string): SemanticChunk[] {
   return chunks;
 }
 
-async function resultFromRow(row: IndexRow, vaultPath: string): Promise<SearchResult> {
+async function resultFromRow(row: IndexRow, vaultPath: string, includeRevision: boolean): Promise<SearchResult> {
   let excerpt = '';
   try {
     const content = stripFrontmatter(await readFile(join(vaultPath, row.path), 'utf8'));
@@ -246,6 +246,7 @@ async function resultFromRow(row: IndexRow, vaultPath: string): Promise<SearchRe
     uri: generateObsidianUri(vaultPath, row.path),
     ...(row.wiki && { wk: true as const }),
     vs: true,
+    ...(includeRevision && { rv: row.hash }),
   };
 }
 
@@ -346,7 +347,7 @@ export class SemanticSearchService {
         for (const row of rows as Array<IndexRow & { _distance?: number }>) {
           const path = normalizePath(row.path);
           if (!this.pathIsVisible(path, params)) continue;
-          results.push({ result: await resultFromRow(row, this.vaultPath), distance: Number(row._distance ?? 1) });
+          results.push({ result: await resultFromRow(row, this.vaultPath, params.includeRevisions === true), distance: Number(row._distance ?? 1) });
         }
       }
 

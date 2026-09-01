@@ -142,7 +142,7 @@ function chunkNote(path, content) {
     }
     return chunks;
 }
-async function resultFromRow(row, vaultPath) {
+async function resultFromRow(row, vaultPath, includeRevision) {
     let excerpt = '';
     try {
         const content = stripFrontmatter(await readFile(join(vaultPath, row.path), 'utf8'));
@@ -162,6 +162,7 @@ async function resultFromRow(row, vaultPath) {
         uri: generateObsidianUri(vaultPath, row.path),
         ...(row.wiki && { wk: true }),
         vs: true,
+        ...(includeRevision && { rv: row.hash }),
     };
 }
 /**
@@ -264,7 +265,7 @@ export class SemanticSearchService {
                     const path = normalizePath(row.path);
                     if (!this.pathIsVisible(path, params))
                         continue;
-                    results.push({ result: await resultFromRow(row, this.vaultPath), distance: Number(row._distance ?? 1) });
+                    results.push({ result: await resultFromRow(row, this.vaultPath, params.includeRevisions === true), distance: Number(row._distance ?? 1) });
                 }
             }
             const bestByPath = new Map();

@@ -252,6 +252,15 @@ describe("SearchService", () => {
     expect(r.uri).toMatch(/^obsidian:\/\//);
   });
 
+  test("can include source revisions for client-side reuse", async () => {
+    await writeNote("revision.md", "# Revision\n\nSome content with target word.");
+
+    const results = await searchService.search({ query: "target", limit: 10, includeRevisions: true });
+
+    expect(results).toHaveLength(1);
+    expect(results[0]!.rv).toMatch(/^[a-f0-9]{64}$/);
+  });
+
   test("excerpt contains context around match", async () => {
     await writeNote("note.md", "# Note\n\nSome words before target some words after.");
 
