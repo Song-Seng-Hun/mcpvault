@@ -4,6 +4,32 @@ import type { QueryNotesParams, QueryNotesResult } from './types.js';
 const PAGE_SIZE = 500;
 
 /**
+ * Stream matching metadata pages without retaining the complete collection.
+ * Callers that need a response window should prefer queryWindow; this helper
+ * is for bounded-memory scans such as linting and derived-index rebuilds.
+ */
+export async function* iterateNotes(
+  fileSystem: FileSystemService,
+  params: QueryNotesParams = {},
+  canAccessPath: (path: string) => boolean = () => true,
+): AsyncGenerator<QueryNotesResult['notes'][number], void, void> {
+  const { offset: _offset, after: initialAfter, ...baseParams } = params;
+  let after = initialAfter;
+  while (true) {
+    const page = await fileSystem.queryNotes({
+      ...baseParams,
+      limit: PAGE_SIZE,
+      ...(after ? { after } : {}),
+      includeContent: params.includeContent === true,
+      includeTotal: false,
+    }, canAccessPath);
+    for (const note of page.notes) yield note;
+    if (!page.truncated || page.notes.length === 0 || !page.nextCursor) return;
+    after = page.nextCursor;
+  }
+}
+
+/**
  * Read only enough metadata rows to fill a bounded response window. A
  * predicate may discard hidden or workflow-closed rows; the helper advances
  * by keyset cursor until the requested visible page is full.

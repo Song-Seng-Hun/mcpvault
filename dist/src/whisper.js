@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { extractMentions, MAX_COMMUNITY_TEXT_LENGTH } from './social.js';
-import { queryAllNotes } from './paged-query.js';
+import { queryWindow } from './paged-query.js';
+import { normalizeScopeId } from './scopes.js';
 const WHISPER_ROOT = '_whispers';
 const now = () => new Date().toISOString();
 function identity(principal) {
@@ -57,18 +58,27 @@ export class WhisperService {
     async list(params) {
         const principal = requirePrincipal(params.principal);
         const me = identity(principal);
-        const result = await queryAllNotes(this.fileSystem, { pathPrefix: WHISPER_ROOT, filters: { mcpvault_type: 'whisper' }, sortBy: 'created_at', sortOrder: 'desc' });
         const limit = Math.min(Math.max(Number(params.limit ?? 20), 1), 100);
         const maxChars = Math.min(Math.max(Number(params.maxChars ?? 6000), 1), 20000);
-        const visible = result.notes.filter(note => note.frontmatter.to === me || note.frontmatter.from === me);
-        const cursor = params.afterWhisperId
-            ? visible.findIndex(note => note.frontmatter.whisper_id === params.afterWhisperId)
-            : -1;
-        if (params.afterWhisperId && cursor < 0)
+        const cursorNote = params.afterWhisperId
+            ? (await this.fileSystem.queryNotes({ pathPrefix: WHISPER_ROOT, filters: { mcpvault_type: 'whisper', whisper_id: normalizeScopeId(params.afterWhisperId, 'afterWhisperId') }, limit: 1, includeTotal: false })).notes[0]
+            : undefined;
+        if (params.afterWhisperId && (!cursorNote || (cursorNote.frontmatter.from !== me && cursorNote.frontmatter.to !== me)))
             throw new Error(`afterWhisperId was not found in whispers: ${params.afterWhisperId}`);
+        const after = cursorNote ? { path: cursorNote.path, value: cursorNote.frontmatter.created_at } : undefined;
+        const baseFilters = { pathPrefix: WHISPER_ROOT, sortBy: 'created_at', sortOrder: 'desc', limit, ...(after ? { after } : {}) };
+        const [fromWindow, toWindow, fromTotal, toTotal, bothTotal] = await Promise.all([
+            queryWindow(this.fileSystem, { ...baseFilters, filters: { mcpvault_type: 'whisper', from: me } }),
+            queryWindow(this.fileSystem, { ...baseFilters, filters: { mcpvault_type: 'whisper', to: me } }),
+            this.fileSystem.countNotes({ pathPrefix: WHISPER_ROOT, filters: { mcpvault_type: 'whisper', from: me } }),
+            this.fileSystem.countNotes({ pathPrefix: WHISPER_ROOT, filters: { mcpvault_type: 'whisper', to: me } }),
+            this.fileSystem.countNotes({ pathPrefix: WHISPER_ROOT, filters: { mcpvault_type: 'whisper', from: me, to: me } }),
+        ]);
+        const visible = Array.from(new Map([...fromWindow.notes, ...toWindow.notes].map(note => [note.path, note])).values())
+            .sort((a, b) => String(b.frontmatter.created_at || '').localeCompare(String(a.frontmatter.created_at || '')) || a.path.localeCompare(b.path));
         const whispers = [];
         let usedChars = 0;
-        for (const note of visible.slice(cursor >= 0 ? cursor + 1 : 0)) {
+        for (const note of visible) {
             if (whispers.length >= limit)
                 break;
             const full = await this.fileSystem.readNote(note.path);
@@ -78,6 +88,7 @@ export class WhisperService {
             whispers.push({ whisperId: note.frontmatter.whisper_id, from: note.frontmatter.from, to: note.frontmatter.to, roomId: note.frontmatter.room_id, createdAt: note.frontmatter.created_at, content: full.content, references: note.frontmatter.references || [], revision: full.revision });
             usedChars += length;
         }
-        return { whispers, total: visible.length, truncated: cursor >= 0 || visible.length > whispers.length || result.truncated, nextCursor: whispers.at(-1)?.whisperId };
+        const total = fromTotal + toTotal - bothTotal;
+        return { whispers, total, truncated: Boolean(after) || total > whispers.length || fromWindow.truncated || toWindow.truncated, nextCursor: whispers.at(-1)?.whisperId };
     }
 }

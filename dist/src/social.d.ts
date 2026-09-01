@@ -3,6 +3,7 @@ import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ReferenceService } from './references.js';
 import type { ReputationService } from './reputation.js';
+import type { NotificationService } from './notifications.js';
 export declare const COMMUNITY_POST_CATEGORIES: readonly ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase', 'agora'];
 export declare const AGORA_STANCES: readonly ['for', 'against', 'neutral'];
 export declare const MAX_COMMUNITY_TEXT_LENGTH = 280;
@@ -12,7 +13,8 @@ export declare class SocialService {
     private readonly access;
     private readonly references;
     private readonly reputation;
-    constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, references: ReferenceService, reputation: ReputationService);
+    private readonly notifications?;
+    constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, references: ReferenceService, reputation: ReputationService, notifications?: NotificationService | undefined);
     private findJournalEntry;
     writeJournalEntry(params: {
         principal?: ScopePrincipal;

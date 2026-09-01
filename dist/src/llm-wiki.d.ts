@@ -47,18 +47,14 @@ export declare class LlmWikiService {
         evidencePaths: string[];
         revision: string;
     }>;
-    catalog(principal?: ScopePrincipal): Promise<{
+    catalog(principal?: ScopePrincipal, options?: {
+        summaryOnly?: boolean;
+    }): Promise<{
         counts: Record<string, number>;
-        entries: {
-            path: string;
-            type: any;
-            title: any;
-            status: any;
-            confidence: any;
-            updatedAt: any;
-        }[];
+        entries: Record<string, unknown>[];
         total: number;
         truncated: boolean;
+        schemaPresent: boolean;
     }>;
     orient(principal?: ScopePrincipal): Promise<{
         protocol: string;
@@ -108,16 +104,10 @@ export declare class LlmWikiService {
         invariants: string[];
         catalog: {
             counts: Record<string, number>;
-            entries: {
-                path: string;
-                type: any;
-                title: any;
-                status: any;
-                confidence: any;
-                updatedAt: any;
-            }[];
+            entries: Record<string, unknown>[];
             total: number;
             truncated: boolean;
+            schemaPresent: boolean;
         };
         lint: {
             healthy: boolean;

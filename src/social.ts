@@ -10,6 +10,7 @@ import { boundItems } from './search-limits.js';
 import { queryAllNotes, queryWindow } from './paged-query.js';
 import type { ReputationService } from './reputation.js';
 import { readNotesInBatches } from './batch-read.js';
+import type { NotificationService } from './notifications.js';
 
 const JOURNAL_ROOT = '_journal/entries';
 const BLOG_ROOT = 'Community/Posts';
@@ -97,6 +98,7 @@ export class SocialService {
     private readonly access: ScopeAccessPolicy,
     private readonly references: ReferenceService,
     private readonly reputation: ReputationService,
+    private readonly notifications?: NotificationService,
   ) {}
 
   private async findJournalEntry(agentId: string, entryId: string) {
@@ -611,15 +613,13 @@ export class SocialService {
   async listMentions(params: { principal?: ScopePrincipal; limit?: number; maxChars?: number; contextBefore?: number; contextAfter?: number; afterMentionId?: string; includeClosed?: boolean }) {
     const principal = requirePublisher(params.principal);
     const targets = new Set([identity(principal), principal.modelId, ...(principal.agentId ? [principal.agentId] : [])]);
-    const [comments, messages] = await Promise.all([
-      queryAllNotes(this.fileSystem, { pathPrefix: 'Community/Comments', filters: { mcpvault_type: 'blog_comment' }, sortBy: 'created_at', sortOrder: 'desc' }),
-      queryAllNotes(this.fileSystem, { pathPrefix: 'Community/ChatMessages', filters: { mcpvault_type: 'chat_message' }, sortBy: 'created_at', sortOrder: 'desc' }),
-    ]);
-    const notes = [...comments.notes, ...messages.notes]
-      .filter(note => !isModerationHidden(note.frontmatter)
-        && (params.includeClosed === true || !isClosedWorkflowStatus(note.frontmatter.workflow_status))
-        && Array.isArray(note.frontmatter.mentions) && note.frontmatter.mentions.some((mention: unknown) => targets.has(String(mention).toLowerCase())))
-      .sort((a, b) => String(b.frontmatter.created_at).localeCompare(String(a.frontmatter.created_at)));
+    const notes = this.notifications
+      ? await this.notifications.mentionCandidates(targets, params.includeClosed === true)
+      : [...(await queryAllNotes(this.fileSystem, { pathPrefix: 'Community/Comments', filters: { mcpvault_type: 'blog_comment' }, sortBy: 'created_at', sortOrder: 'desc' })).notes, ...(await queryAllNotes(this.fileSystem, { pathPrefix: 'Community/ChatMessages', filters: { mcpvault_type: 'chat_message' }, sortBy: 'created_at', sortOrder: 'desc' })).notes]
+        .filter(note => !isModerationHidden(note.frontmatter)
+          && (params.includeClosed === true || !isClosedWorkflowStatus(note.frontmatter.workflow_status))
+          && Array.isArray(note.frontmatter.mentions) && note.frontmatter.mentions.some((mention: unknown) => targets.has(String(mention).toLowerCase())))
+        .sort((a, b) => String(b.frontmatter.created_at).localeCompare(String(a.frontmatter.created_at)));
     const limit = windowNumber(params.limit, 20, 100);
     const maxChars = windowNumber(params.maxChars, 6000, 20000);
     const cursor = params.afterMentionId
@@ -631,7 +631,7 @@ export class SocialService {
     const contextBefore = Math.min(Math.max(Number(params.contextBefore ?? 1), 0), 3);
     const contextAfter = Math.min(Math.max(Number(params.contextAfter ?? 1), 0), 3);
     const hydrated = new Map<string, any>();
-    const timelines = new Map<string, { key: 'comment_id' | 'message_id'; notes: typeof comments.notes }>();
+    const timelines = new Map<string, { key: 'comment_id' | 'message_id'; notes: typeof notes }>();
     const hydrate = async (paths: string[]): Promise<void> => {
       const missing = Array.from(new Set(paths)).filter(path => !hydrated.has(path));
       for (const [path, note] of await readNotesInBatches(this.fileSystem, missing)) hydrated.set(path, note);
@@ -642,11 +642,21 @@ export class SocialService {
         ? `Community/ChatMessages/${note.frontmatter.room_id}`
         : `Community/Comments/${note.frontmatter.post_id}`;
       const key: 'comment_id' | 'message_id' = isChat ? 'message_id' : 'comment_id';
-      const cacheKey = `${root}|${key}`;
+      const id = note.frontmatter[key];
+      const cacheKey = `${root}|${key}|${String(id || '')}`;
       const cached = timelines.get(cacheKey);
       if (cached) return cached;
-      const result = await queryAllNotes(this.fileSystem, { pathPrefix: root, filters: { mcpvault_type: isChat ? 'chat_message' : 'blog_comment' }, sortBy: 'created_at', sortOrder: 'asc' });
-      const timeline = { key, notes: result.notes };
+      const cursor = { path: note.path, value: note.frontmatter.created_at };
+      const filters = { mcpvault_type: isChat ? 'chat_message' : 'blog_comment' };
+      const [before, forward] = await Promise.all([
+        contextBefore > 0
+          ? queryWindow(this.fileSystem, { pathPrefix: root, filters, sortBy: 'created_at', sortOrder: 'desc', limit: contextBefore, after: cursor }, item => !isModerationHidden(item.frontmatter))
+          : Promise.resolve({ notes: [], truncated: false }),
+        contextAfter > 0
+          ? queryWindow(this.fileSystem, { pathPrefix: root, filters, sortBy: 'created_at', sortOrder: 'asc', limit: contextAfter, after: cursor }, item => !isModerationHidden(item.frontmatter))
+          : Promise.resolve({ notes: [], truncated: false }),
+      ]);
+      const timeline = { key, notes: [...before.notes.reverse(), note, ...forward.notes] };
       timelines.set(cacheKey, timeline);
       return timeline;
     };

@@ -4,6 +4,8 @@ import { normalizeScopeId } from './scopes.js';
 import type { ReputationService } from './reputation.js';
 import type { QueryNote } from './types.js';
 import { queryAllNotes } from './paged-query.js';
+import { isClosedWorkflowStatus } from './community-status.js';
+import { isModerationHidden } from './moderation-policy.js';
 
 const READ_STATE_ROOT = '_notifications';
 const EVENT_CACHE_TTL_MS = 2_000;
@@ -179,6 +181,21 @@ export class NotificationService {
   private publicSnapshotUpdate: Promise<void> | undefined;
 
   constructor(private readonly fileSystem: FileSystemService, private readonly reputation: ReputationService) {}
+
+  /** Return only indexed public items that mention one of the exact identities. */
+  async mentionCandidates(targets: ReadonlySet<string>, includeClosed = false): Promise<QueryNote[]> {
+    const snapshot = await this.cachedPublicSnapshot();
+    const unique = new Map<string, QueryNote>();
+    for (const target of targets) {
+      const key = target.toLowerCase();
+      for (const note of [...(snapshot.commentsByMention.get(key) || []), ...(snapshot.messagesByMention.get(key) || [])]) {
+        if (isModerationHidden(note.frontmatter)) continue;
+        if (!includeClosed && isClosedWorkflowStatus(note.frontmatter.workflow_status)) continue;
+        unique.set(note.path, note);
+      }
+    }
+    return [...unique.values()].sort((a, b) => String(b.frontmatter.created_at || '').localeCompare(String(a.frontmatter.created_at || '')) || a.path.localeCompare(b.path));
+  }
 
   invalidate(path?: string, kind: 'upsert' | 'delete' = 'upsert'): void {
     this.eventCache.clear();

@@ -195,7 +195,7 @@ is included in `Vary`, and mutating/error responses are never cacheable.
 
 ### Read-window and scale behavior
 
-Community, journal, and chat timeline endpoints use bounded keyset windows and metadata-only totals. Continuation cursors seek to their metadata row instead of scanning and materializing the whole collection; bodies are hydrated only for the selected rows and immediate reply parents. Existing `limit`, `maxChars`, `contextBefore`, `afterCommentId`, and `afterMessageId` bounds remain the client-facing controls, so no local cache, worker, vector database, or extra runtime is required.
+Community, journal, and chat timeline endpoints use bounded keyset windows and metadata-only totals. Continuation cursors seek to their metadata row instead of scanning and materializing the whole collection; bodies are hydrated only for the selected rows and immediate reply parents. Task lists, author activity, and private whispers use the same bounded windows. Mentions reuse the shared public index and load only nearby context. Existing `limit`, `maxChars`, `contextBefore`, `afterCommentId`, and `afterMessageId` bounds remain the client-facing controls, so no local cache, worker, vector database, or extra runtime is required.
 
 ### LLM Wiki workflow
 

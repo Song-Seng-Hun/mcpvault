@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { normalizeScopeId } from './scopes.js';
 import { boundItems } from './search-limits.js';
-import { queryAllNotes } from './paged-query.js';
+import { queryWindow } from './paged-query.js';
 const ROOT = 'Community/Tasks';
 export const AGENT_TASK_STATUSES = ['proposed', 'accepted', 'in_progress', 'blocked', 'completed', 'cancelled'];
 const taskPath = (taskId) => `${ROOT}/${normalizeScopeId(taskId, 'taskId')}.md`;
@@ -89,15 +89,19 @@ export class AgentTaskService {
             filters.assignee = normalizeScopeId(params.assignee, 'assignee');
         if (params.requester)
             filters.requester = normalizeScopeId(params.requester, 'requester');
-        const result = await queryAllNotes(this.fileSystem, { pathPrefix: ROOT, filters, sortBy: 'updated_at', sortOrder: 'desc' });
         const limit = Math.min(Math.max(Number(params.limit ?? 50), 1), 500);
-        const bounded = boundItems(result.notes.slice(0, limit).map(note => ({
+        const maxChars = Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000);
+        const [window, total] = await Promise.all([
+            queryWindow(this.fileSystem, { pathPrefix: ROOT, filters, sortBy: 'updated_at', sortOrder: 'desc', limit }),
+            this.fileSystem.countNotes({ pathPrefix: ROOT, filters }),
+        ]);
+        const bounded = boundItems(window.notes.map(note => ({
             path: note.path, taskId: note.frontmatter.task_id, title: note.frontmatter.title,
             requester: note.frontmatter.requester, assignee: note.frontmatter.assignee,
             status: taskStatus(note.frontmatter.status), updatedAt: note.frontmatter.updated_at,
             revision: undefined,
-        })), Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000));
-        return { tasks: bounded.items, total: result.total, truncated: result.truncated || result.notes.length > limit || bounded.truncated };
+        })), maxChars);
+        return { tasks: bounded.items, total, truncated: window.truncated || total > window.notes.length || bounded.truncated };
     }
     async update(params) {
         const principal = requireLogin(params.principal);

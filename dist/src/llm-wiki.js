@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { normalizeScopeId } from './scopes.js';
 import { endpointIdForTool } from './endpoint-registry.js';
-import { queryAllNotes } from './paged-query.js';
+import { iterateNotes } from './paged-query.js';
 const KNOWLEDGE_STATUSES = new Set(['draft', 'verified', 'disputed', 'superseded']);
 const CONFIDENCE_LEVELS = new Set(['low', 'medium', 'high']);
 const ISSUE_KINDS = new Set(['contradiction', 'unsupported_claim', 'stale', 'broken_link', 'missing_context', 'other']);
@@ -203,28 +203,36 @@ export class LlmWikiService {
             revision: updated.revision,
         };
     }
-    async catalog(principal) {
+    async catalog(principal, options = {}) {
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
-        const result = await queryAllNotes(this.fileSystem, {}, canAccess);
-        const entries = result.notes
-            .filter(note => typeof note.frontmatter.llm_wiki_type === 'string')
-            .map(note => ({
-            path: this.access.toPublicPath(note.path),
-            type: note.frontmatter.llm_wiki_type,
-            title: note.frontmatter.title,
-            status: note.frontmatter.knowledge_status || note.frontmatter.status,
-            confidence: note.frontmatter.confidence,
-            updatedAt: note.frontmatter.updated_at || note.frontmatter.captured_at,
-        }));
-        const counts = entries.reduce((acc, entry) => {
-            acc[entry.type] = (acc[entry.type] || 0) + 1;
-            return acc;
-        }, {});
-        return { counts, entries, total: entries.length, truncated: result.truncated };
+        const entries = [];
+        const counts = {};
+        let total = 0;
+        let schemaPresent = false;
+        for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+            const type = note.frontmatter.llm_wiki_type;
+            if (typeof type !== 'string')
+                continue;
+            total += 1;
+            counts[type] = (counts[type] || 0) + 1;
+            if (normalizePath(note.path).toLowerCase() === PUBLIC_SCHEMA_PATH.toLowerCase())
+                schemaPresent = true;
+            if (options.summaryOnly)
+                continue;
+            entries.push({
+                path: this.access.toPublicPath(note.path),
+                type,
+                title: note.frontmatter.title,
+                status: note.frontmatter.knowledge_status || note.frontmatter.status,
+                confidence: note.frontmatter.confidence,
+                updatedAt: note.frontmatter.updated_at || note.frontmatter.captured_at,
+            });
+        }
+        return { counts, entries, total, truncated: false, schemaPresent };
     }
     async orient(principal) {
         const [catalog, lint, welcomeExists] = await Promise.all([
-            this.catalog(principal),
+            this.catalog(principal, { summaryOnly: true }),
             this.lint(principal, 200),
             this.fileSystem.noteExists(WELCOME_NOTE_PATH),
         ]);
@@ -241,7 +249,7 @@ export class LlmWikiService {
                 reason: 'Read the stable public welcome note first. It explains the shared purpose and the behavior expected from every new agent; it remains addressable even as the vault grows.',
             });
         }
-        if (catalog.entries.some(entry => entry.type === 'schema' && entry.path === PUBLIC_SCHEMA_PATH)) {
+        if (catalog.schemaPresent) {
             nextActions.push({
                 tool: endpointIdForTool('read_note'),
                 arguments: { path: PUBLIC_SCHEMA_PATH },
@@ -320,7 +328,7 @@ export class LlmWikiService {
             },
             publicOnboarding: {
                 welcomePath: WELCOME_NOTE_PATH,
-                schemaPath: catalog.entries.some(entry => entry.type === 'schema' && entry.path === PUBLIC_SCHEMA_PATH) ? PUBLIC_SCHEMA_PATH : null,
+                schemaPath: catalog.schemaPresent ? PUBLIC_SCHEMA_PATH : null,
                 readableWithoutLogin: true,
                 note: 'These global onboarding documents are public by design. Private model and agent scope documents remain hidden until the exact authorized token is supplied.',
             },
@@ -379,31 +387,46 @@ export class LlmWikiService {
     }
     async lint(principal, limit = 200) {
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
-        const result = await queryAllNotes(this.fileSystem, { includeContent: true }, canAccess);
         const issues = [];
-        for (const note of result.notes) {
+        let totalIssues = 0;
+        let errors = 0;
+        let warnings = 0;
+        const addIssue = (issue) => {
+            totalIssues += 1;
+            if (issue.severity === 'error')
+                errors += 1;
+            else
+                warnings += 1;
+            issues.push(issue);
+            issues.sort((a, b) => a.path.localeCompare(b.path) || a.code.localeCompare(b.code));
+            if (issues.length > limit)
+                issues.pop();
+        };
+        const sourceCache = new Map();
+        for await (const note of iterateNotes(this.fileSystem, { includeContent: true }, canAccess)) {
             const type = note.frontmatter.llm_wiki_type;
             if (type === 'source') {
                 if (note.frontmatter.immutable !== true) {
-                    issues.push({ severity: 'error', code: 'source_not_immutable', path: this.access.toPublicPath(note.path), detail: 'Source metadata must set immutable: true.' });
+                    addIssue({ severity: 'error', code: 'source_not_immutable', path: this.access.toPublicPath(note.path), detail: 'Source metadata must set immutable: true.' });
                 }
                 if (note.frontmatter.content_sha256 !== hash(note.content || '')) {
-                    issues.push({ severity: 'error', code: 'source_hash_mismatch', path: this.access.toPublicPath(note.path), detail: 'Source content differs from its captured SHA-256 hash.' });
+                    addIssue({ severity: 'error', code: 'source_hash_mismatch', path: this.access.toPublicPath(note.path), detail: 'Source content differs from its captured SHA-256 hash.' });
                 }
             }
             if (type === 'knowledge') {
                 const evidence = Array.isArray(note.frontmatter.evidence_paths) ? note.frontmatter.evidence_paths.filter((item) => typeof item === 'string') : [];
                 if (evidence.length === 0) {
-                    issues.push({ severity: 'error', code: 'knowledge_without_evidence', path: this.access.toPublicPath(note.path), detail: 'Knowledge note has no immutable source evidence.' });
+                    addIssue({ severity: 'error', code: 'knowledge_without_evidence', path: this.access.toPublicPath(note.path), detail: 'Knowledge note has no immutable source evidence.' });
                 }
                 for (const evidencePath of evidence) {
                     if (!canAccess(evidencePath) || !await this.fileSystem.noteExists(evidencePath)) {
-                        issues.push({ severity: 'error', code: 'missing_evidence', path: this.access.toPublicPath(note.path), detail: `Missing or inaccessible evidence: ${this.access.toPublicPath(evidencePath)}` });
+                        addIssue({ severity: 'error', code: 'missing_evidence', path: this.access.toPublicPath(note.path), detail: `Missing or inaccessible evidence: ${this.access.toPublicPath(evidencePath)}` });
                         continue;
                     }
-                    const source = await this.fileSystem.readNote(evidencePath);
+                    const source = sourceCache.get(evidencePath) || await this.fileSystem.readNote(evidencePath);
+                    sourceCache.set(evidencePath, source);
                     if (source.frontmatter.llm_wiki_type !== 'source') {
-                        issues.push({ severity: 'error', code: 'invalid_evidence_type', path: this.access.toPublicPath(note.path), detail: `Evidence is not a source snapshot: ${this.access.toPublicPath(evidencePath)}` });
+                        addIssue({ severity: 'error', code: 'invalid_evidence_type', path: this.access.toPublicPath(note.path), detail: `Evidence is not a source snapshot: ${this.access.toPublicPath(evidencePath)}` });
                     }
                 }
             }
@@ -414,21 +437,20 @@ export class LlmWikiService {
                 if (!this.access.canReferenceFrom(note.path, reference)
                     || !canAccess(reference)
                     || !await this.fileSystem.noteExists(reference)) {
-                    issues.push({ severity: 'error', code: 'invalid_reference', path: this.access.toPublicPath(note.path), detail: `Missing, inaccessible, or too-private reference: ${this.access.toPublicPath(reference)}` });
+                    addIssue({ severity: 'error', code: 'invalid_reference', path: this.access.toPublicPath(note.path), detail: `Missing, inaccessible, or too-private reference: ${this.access.toPublicPath(reference)}` });
                 }
             }
         }
         const unresolved = await this.fileSystem.findUnresolvedLinks(limit, canAccess);
         for (const link of unresolved.unresolved) {
-            issues.push({ severity: 'warning', code: 'broken_wikilink', path: this.access.toPublicPath(link.path), detail: `${link.link} at line ${link.line}` });
+            addIssue({ severity: 'warning', code: 'broken_wikilink', path: this.access.toPublicPath(link.path), detail: `${link.link} at line ${link.line}` });
         }
-        const ordered = issues.sort((a, b) => a.path.localeCompare(b.path) || a.code.localeCompare(b.code));
         return {
-            healthy: ordered.every(issue => issue.severity !== 'error'),
-            errors: ordered.filter(issue => issue.severity === 'error').length,
-            warnings: ordered.filter(issue => issue.severity === 'warning').length,
-            issues: ordered.slice(0, limit),
-            truncated: ordered.length > limit || result.truncated || unresolved.truncated,
+            healthy: errors === 0,
+            errors,
+            warnings,
+            issues,
+            truncated: totalIssues > limit || unresolved.truncated,
         };
     }
     async reportIssue(params) {

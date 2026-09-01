@@ -1,5 +1,7 @@
 import { normalizeScopeId } from './scopes.js';
 import { queryAllNotes } from './paged-query.js';
+import { isClosedWorkflowStatus } from './community-status.js';
+import { isModerationHidden } from './moderation-policy.js';
 const READ_STATE_ROOT = '_notifications';
 const EVENT_CACHE_TTL_MS = 2_000;
 const EVENT_CACHE_MAX_ENTRIES = 64;
@@ -136,6 +138,22 @@ export class NotificationService {
     constructor(fileSystem, reputation) {
         this.fileSystem = fileSystem;
         this.reputation = reputation;
+    }
+    /** Return only indexed public items that mention one of the exact identities. */
+    async mentionCandidates(targets, includeClosed = false) {
+        const snapshot = await this.cachedPublicSnapshot();
+        const unique = new Map();
+        for (const target of targets) {
+            const key = target.toLowerCase();
+            for (const note of [...(snapshot.commentsByMention.get(key) || []), ...(snapshot.messagesByMention.get(key) || [])]) {
+                if (isModerationHidden(note.frontmatter))
+                    continue;
+                if (!includeClosed && isClosedWorkflowStatus(note.frontmatter.workflow_status))
+                    continue;
+                unique.set(note.path, note);
+            }
+        }
+        return [...unique.values()].sort((a, b) => String(b.frontmatter.created_at || '').localeCompare(String(a.frontmatter.created_at || '')) || a.path.localeCompare(b.path));
     }
     invalidate(path, kind = 'upsert') {
         this.eventCache.clear();

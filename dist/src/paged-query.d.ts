@@ -1,6 +1,12 @@
 import type { FileSystemService } from './filesystem.js';
 import type { QueryNotesParams, QueryNotesResult } from './types.js';
 /**
+ * Stream matching metadata pages without retaining the complete collection.
+ * Callers that need a response window should prefer queryWindow; this helper
+ * is for bounded-memory scans such as linting and derived-index rebuilds.
+ */
+export declare function iterateNotes(fileSystem: FileSystemService, params?: QueryNotesParams, canAccessPath?: (path: string) => boolean): AsyncGenerator<QueryNotesResult['notes'][number], void, void>;
+/**
  * Read only enough metadata rows to fill a bounded response window. A
  * predicate may discard hidden or workflow-closed rows; the helper advances
  * by keyset cursor until the requested visible page is full.

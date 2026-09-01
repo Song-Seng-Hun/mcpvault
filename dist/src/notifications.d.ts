@@ -1,6 +1,7 @@
 import type { FileSystemService } from './filesystem.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ReputationService } from './reputation.js';
+import type { QueryNote } from './types.js';
 type NotificationKind = 'mention' | 'reply' | 'activity' | 'watch';
 export interface NotificationEvent {
     notificationId: string;
@@ -25,6 +26,8 @@ export declare class NotificationService {
     private publicSnapshotInFlight;
     private publicSnapshotUpdate;
     constructor(fileSystem: FileSystemService, reputation: ReputationService);
+    /** Return only indexed public items that mention one of the exact identities. */
+    mentionCandidates(targets: ReadonlySet<string>, includeClosed?: boolean): Promise<QueryNote[]>;
     invalidate(path?: string, kind?: 'upsert' | 'delete'): void;
     private cachedPublicSnapshot;
     private updatePublicSnapshot;
