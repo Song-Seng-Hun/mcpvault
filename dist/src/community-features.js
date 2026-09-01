@@ -8,6 +8,7 @@ const COMMENTS = 'Community/Comments';
 const REACTIONS = 'Community/Reactions';
 const GUESTBOOKS = 'Community/Guestbooks';
 const MAX_SCAN = 500;
+const REACTION_CACHE_TTL_MS = 2_000;
 const CATEGORIES = ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase', 'agora'];
 const now = () => new Date().toISOString();
 const identity = (p) => p.agentId || p.modelId;
@@ -34,6 +35,9 @@ export class CommunityFeaturesService {
     access;
     auth;
     reputation;
+    reactionAggregateCache;
+    reactionAggregateInFlight;
+    reactionAggregateGeneration = 0;
     constructor(fileSystem, access, auth, reputation) {
         this.fileSystem = fileSystem;
         this.access = access;
@@ -100,6 +104,60 @@ export class CommunityFeaturesService {
         return path;
     }
     reactionRoot(type, id) { return `${REACTIONS}/${type}/${actorPath(id, 'targetId')}`; }
+    invalidateReactionAggregates() {
+        this.reactionAggregateGeneration += 1;
+        this.reactionAggregateCache = undefined;
+    }
+    async postReactionAggregates() {
+        const cached = this.reactionAggregateCache;
+        if (cached && cached.expiresAt > Date.now())
+            return cached;
+        if (this.reactionAggregateInFlight)
+            return this.reactionAggregateInFlight;
+        const generation = this.reactionAggregateGeneration;
+        const computation = (async () => {
+            const counts = new Map();
+            let offset = 0;
+            let incomplete = false;
+            while (true) {
+                const page = await this.fileSystem.queryNotes({
+                    pathPrefix: REACTIONS,
+                    filters: { mcpvault_type: 'reaction', active: true, target_type: 'post' },
+                    limit: MAX_SCAN,
+                    offset,
+                });
+                for (const reaction of page.notes) {
+                    const postId = String(reaction.frontmatter.target_id || '').toLowerCase();
+                    if (!postId)
+                        continue;
+                    const current = counts.get(postId) || { likeCount: 0, dislikeCount: 0 };
+                    if (reaction.frontmatter.reaction === 'like')
+                        current.likeCount += 1;
+                    else if (reaction.frontmatter.reaction === 'dislike')
+                        current.dislikeCount += 1;
+                    counts.set(postId, current);
+                }
+                offset += page.notes.length;
+                if (!page.truncated || page.notes.length === 0 || offset >= page.total) {
+                    incomplete = page.truncated && offset < page.total;
+                    break;
+                }
+            }
+            return { counts, incomplete };
+        })();
+        this.reactionAggregateInFlight = computation;
+        try {
+            const value = await computation;
+            if (this.reactionAggregateGeneration === generation) {
+                this.reactionAggregateCache = { expiresAt: Date.now() + REACTION_CACHE_TTL_MS, ...value };
+            }
+            return value;
+        }
+        finally {
+            if (this.reactionAggregateInFlight === computation)
+                this.reactionAggregateInFlight = undefined;
+        }
+    }
     async toggleReaction(params) {
         if (!params.principal)
             throw new Error('Login is required to react');
@@ -118,6 +176,8 @@ export class CommunityFeaturesService {
             const old = exists ? await this.fileSystem.readNote(path) : undefined;
             await this.fileSystem.writeNote({ path, content: `${reaction}\n`, frontmatter: { mcpvault_type: 'reaction', reaction, target_type: params.targetType, target_id: params.targetId, ...(params.targetType === 'comment' && params.postId && { post_id: normalizeScopeId(params.postId, 'postId') }), actor: identity(params.principal), actor_role: params.principal.role, active: true, ...(old ? { created_at: old.frontmatter.created_at } : { created_at: now() }), updated_at: now() }, expectedRevision: old?.revision || 'missing' });
         }
+        if (params.targetType === 'post')
+            this.invalidateReactionAggregates();
         return { success: true, active: params.active !== false, reaction, targetType: params.targetType, targetId: params.targetId, actor: identity(params.principal) };
     }
     async listReactions(params) {
@@ -131,43 +191,18 @@ export class CommunityFeaturesService {
         const result = await this.fileSystem.queryNotes({ pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post', status: 'published' }, sortBy: 'updated_at', sortOrder: 'desc', limit: MAX_SCAN });
         const visibleNotes = result.notes.filter(note => !isModerationHidden(note.frontmatter)).filter(note => !params.category || String(note.frontmatter.category || 'discussion').toLowerCase() === String(params.category).toLowerCase());
         const reputations = await this.reputation.getMany(visibleNotes.map(note => String(note.frontmatter.author || '')));
-        const visiblePostIds = new Set(visibleNotes.map(note => String(note.frontmatter.post_id || '').toLowerCase()));
-        const reactionCounts = new Map();
-        let reactionOffset = 0;
-        let reactionScanIncomplete = false;
-        while (true) {
-            const reactions = await this.fileSystem.queryNotes({
-                pathPrefix: REACTIONS,
-                filters: { mcpvault_type: 'reaction', active: true, target_type: 'post' },
-                limit: MAX_SCAN,
-                offset: reactionOffset,
-            });
-            for (const reaction of reactions.notes) {
-                const postId = String(reaction.frontmatter.target_id || '').toLowerCase();
-                if (!visiblePostIds.has(postId))
-                    continue;
-                const counts = reactionCounts.get(postId) || { likeCount: 0, dislikeCount: 0 };
-                if (reaction.frontmatter.reaction === 'like')
-                    counts.likeCount += 1;
-                else if (reaction.frontmatter.reaction === 'dislike')
-                    counts.dislikeCount += 1;
-                reactionCounts.set(postId, counts);
-            }
-            reactionOffset += reactions.notes.length;
-            if (!reactions.truncated || reactions.notes.length === 0 || reactionOffset >= reactions.total) {
-                reactionScanIncomplete = reactions.truncated && reactionOffset < reactions.total;
-                break;
-            }
-        }
+        const reactionAggregates = await this.postReactionAggregates();
+        const reactionCounts = reactionAggregates.counts;
         const posts = visibleNotes.map(note => {
-            const counts = reactionCounts.get(String(note.frontmatter.post_id || '').toLowerCase()) || { likeCount: 0, dislikeCount: 0 };
+            const postId = String(note.frontmatter.post_id || '').toLowerCase();
+            const counts = reactionCounts.get(postId) || { likeCount: 0, dislikeCount: 0 };
             const authorReputation = reputations.get(String(note.frontmatter.author || '').toLowerCase());
             return { path: note.path, slug: note.frontmatter.post_id, title: note.frontmatter.title, author: note.frontmatter.author, authorLevel: authorReputation?.level ?? 0, authorLevelLabel: authorReputation?.label ?? '뉴비', category: note.frontmatter.category || 'discussion', tags: note.frontmatter.tags || [], likeCount: counts.likeCount, dislikeCount: counts.dislikeCount, moderationStatus: moderationStatus(note.frontmatter), createdAt: note.frontmatter.created_at, updatedAt: note.frontmatter.updated_at };
         });
         posts.sort((a, b) => b.likeCount - a.likeCount || String(b.updatedAt).localeCompare(String(a.updatedAt)));
         const limit = positive(params.limit, 50, 500);
         const bounded = boundItems(posts.slice(0, limit), positive(params.maxChars, 6000, 20000));
-        return { posts: bounded.items, total: posts.length, truncated: result.truncated || reactionScanIncomplete || posts.length > limit || bounded.truncated };
+        return { posts: bounded.items, total: posts.length, truncated: result.truncated || reactionAggregates.incomplete || posts.length > limit || bounded.truncated };
     }
     async acceptComment(params) {
         if (!params.principal)

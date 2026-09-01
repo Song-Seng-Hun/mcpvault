@@ -9,6 +9,9 @@ export declare class CommunityFeaturesService {
     private readonly access;
     private readonly auth;
     private readonly reputation;
+    private reactionAggregateCache;
+    private reactionAggregateInFlight;
+    private reactionAggregateGeneration;
     constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, auth: ScopeAuthService, reputation: ReputationService);
     private assertKnownIdentity;
     listSeries(params: {
@@ -55,6 +58,8 @@ export declare class CommunityFeaturesService {
     }>;
     private targetPath;
     private reactionRoot;
+    private invalidateReactionAggregates;
+    private postReactionAggregates;
     toggleReaction(params: {
         principal?: ScopePrincipal;
         targetType: TargetType;
