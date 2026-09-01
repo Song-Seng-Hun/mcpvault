@@ -109,6 +109,7 @@ function stripAtxClosingSequence(text) {
 export class FileSystemService {
     vaultPath;
     onNoteChanged;
+    metadataIndex;
     frontmatterHandler;
     pathFilter;
     mutationTails = new Map();
@@ -144,9 +145,10 @@ export class FileSystemService {
                 this.mutationTails.delete(path);
         }
     }
-    constructor(vaultPath, pathFilter, frontmatterHandler, onNoteChanged) {
+    constructor(vaultPath, pathFilter, frontmatterHandler, onNoteChanged, metadataIndex) {
         this.vaultPath = vaultPath;
         this.onNoteChanged = onNoteChanged;
+        this.metadataIndex = metadataIndex;
         const resolved = resolve(vaultPath);
         try {
             this.vaultPath = realpathSync(resolved);
@@ -1715,33 +1717,45 @@ export class FileSystemService {
         }
         const pathPrefix = this.resolvePathPrefix(params.pathPrefix);
         const notes = [];
-        const notePaths = (await this.collectVaultFiles())
-            .filter(path => this.pathFilter.isAllowed(path))
-            .filter(canAccessPath)
-            .filter(path => /\.(?:md|markdown|txt)$/i.test(path))
-            .filter(path => !pathPrefix || path === pathPrefix || path.startsWith(`${pathPrefix}/`))
-            .sort((a, b) => a.localeCompare(b));
-        for (const path of notePaths) {
-            let raw;
-            try {
-                raw = await readFile(this.resolvePath(path), 'utf-8');
+        const filters = params.filters || {};
+        const indexedEntries = this.metadataIndex ? await this.metadataIndex.list() : undefined;
+        if (indexedEntries) {
+            for (const entry of indexedEntries) {
+                if (!this.pathFilter.isAllowed(entry.path) || !canAccessPath(entry.path))
+                    continue;
+                if (pathPrefix && entry.path !== pathPrefix && !entry.path.startsWith(`${pathPrefix}/`))
+                    continue;
+                const matches = Object.entries(filters).every(([key, expected]) => {
+                    const actual = getFrontmatterValue(entry.frontmatter, key);
+                    return actual.found && frontmatterValuesEqual(actual.value, expected);
+                });
+                if (matches)
+                    notes.push({ path: entry.path, frontmatter: entry.frontmatter });
             }
-            catch {
-                continue;
+        }
+        else {
+            const notePaths = (await this.collectVaultFiles())
+                .filter(path => this.pathFilter.isAllowed(path))
+                .filter(canAccessPath)
+                .filter(path => /\.(?:md|markdown|txt)$/i.test(path))
+                .filter(path => !pathPrefix || path === pathPrefix || path.startsWith(`${pathPrefix}/`))
+                .sort((a, b) => a.localeCompare(b));
+            for (const path of notePaths) {
+                let raw;
+                try {
+                    raw = await readFile(this.resolvePath(path), 'utf-8');
+                }
+                catch {
+                    continue;
+                }
+                const parsed = this.frontmatterHandler.parse(raw);
+                const matches = Object.entries(filters).every(([key, expected]) => {
+                    const actual = getFrontmatterValue(parsed.frontmatter, key);
+                    return actual.found && frontmatterValuesEqual(actual.value, expected);
+                });
+                if (matches)
+                    notes.push({ path, frontmatter: parsed.frontmatter, ...(params.includeContent && { content: parsed.content }) });
             }
-            const parsed = this.frontmatterHandler.parse(raw);
-            const filters = params.filters || {};
-            const matches = Object.entries(filters).every(([key, expected]) => {
-                const actual = getFrontmatterValue(parsed.frontmatter, key);
-                return actual.found && frontmatterValuesEqual(actual.value, expected);
-            });
-            if (!matches)
-                continue;
-            notes.push({
-                path,
-                frontmatter: parsed.frontmatter,
-                ...(params.includeContent && { content: parsed.content }),
-            });
         }
         const sortBy = params.sortBy || 'path';
         notes.sort((a, b) => {
@@ -1756,8 +1770,25 @@ export class FileSystemService {
                 return sortOrder === 'asc' ? comparison : -comparison;
             return a.path.localeCompare(b.path);
         });
+        const selected = notes.slice(requestedOffset, requestedOffset + limit);
+        if (params.includeContent && indexedEntries) {
+            const withContent = await Promise.all(selected.map(async (note) => {
+                try {
+                    const raw = await readFile(this.resolvePath(note.path), 'utf-8');
+                    return { ...note, content: this.frontmatterHandler.parse(raw).content };
+                }
+                catch {
+                    return undefined;
+                }
+            }));
+            return {
+                notes: withContent.filter((note) => note !== undefined),
+                total: notes.length,
+                truncated: requestedOffset + limit < notes.length,
+            };
+        }
         return {
-            notes: notes.slice(requestedOffset, requestedOffset + limit),
+            notes: selected,
             total: notes.length,
             truncated: requestedOffset + limit < notes.length,
         };

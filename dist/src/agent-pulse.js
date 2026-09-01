@@ -42,6 +42,7 @@ export class AgentPulseService {
     tasks;
     continuity;
     reputation;
+    inFlight = new Map();
     constructor(notifications, social, chat, tasks, continuity, reputation) {
         this.notifications = notifications;
         this.social = social;
@@ -51,6 +52,23 @@ export class AgentPulseService {
         this.reputation = reputation;
     }
     async get(params) {
+        if (!params.principal)
+            return this.getUncached(params);
+        const key = JSON.stringify({ accountId: params.principal.accountId, modelId: params.principal.modelId, agentId: params.principal.agentId, role: params.principal.role, limit: params.limit, maxChars: params.maxChars });
+        const running = this.inFlight.get(key);
+        if (running)
+            return running;
+        const computation = this.getUncached(params);
+        this.inFlight.set(key, computation);
+        try {
+            return await computation;
+        }
+        finally {
+            if (this.inFlight.get(key) === computation)
+                this.inFlight.delete(key);
+        }
+    }
+    async getUncached(params) {
         const limit = positiveLimit(params.limit, 5, 20);
         const maxChars = positiveLimit(params.maxChars, 5000, 12000);
         if (!params.principal) {

@@ -1,6 +1,8 @@
 import { normalizeScopeId } from './scopes.js';
 const READ_STATE_ROOT = '_notifications';
 const MAX_SCAN = 500;
+const EVENT_CACHE_TTL_MS = 2_000;
+const EVENT_CACHE_MAX_ENTRIES = 64;
 function identity(principal) {
     return principal.agentId || principal.modelId;
 }
@@ -28,9 +30,43 @@ function text(value, fallback = '') {
 export class NotificationService {
     fileSystem;
     reputation;
+    eventCache = new Map();
+    eventInFlight = new Map();
     constructor(fileSystem, reputation) {
         this.fileSystem = fileSystem;
         this.reputation = reputation;
+    }
+    invalidate() {
+        this.eventCache.clear();
+        this.eventInFlight.clear();
+    }
+    async cachedPublicEvents(principal) {
+        const key = JSON.stringify({ accountId: principal.accountId, modelId: principal.modelId, agentId: principal.agentId, role: principal.role });
+        const cached = this.eventCache.get(key);
+        if (cached && cached.expiresAt > Date.now())
+            return cached.events.map(event => ({ ...event }));
+        if (cached)
+            this.eventCache.delete(key);
+        const running = this.eventInFlight.get(key);
+        if (running)
+            return (await running).map(event => ({ ...event }));
+        const computation = this.publicEvents(principal);
+        this.eventInFlight.set(key, computation);
+        try {
+            const events = await computation;
+            this.eventCache.set(key, { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, events: events.map(event => ({ ...event })) });
+            while (this.eventCache.size > EVENT_CACHE_MAX_ENTRIES) {
+                const oldest = this.eventCache.keys().next();
+                if (oldest.done)
+                    break;
+                this.eventCache.delete(oldest.value);
+            }
+            return events;
+        }
+        finally {
+            if (this.eventInFlight.get(key) === computation)
+                this.eventInFlight.delete(key);
+        }
     }
     async lastReadAt(principal) {
         const path = readStatePath(principal);
@@ -131,7 +167,7 @@ export class NotificationService {
             throw new Error('Login is required to read notifications');
         const state = await this.lastReadAt(params.principal);
         const cutoff = state.value || '';
-        let events = await this.publicEvents(params.principal);
+        let events = await this.cachedPublicEvents(params.principal);
         events = events.map(event => ({ ...event, unread: !cutoff || event.createdAt > cutoff }));
         if (!params.includeRead)
             events = events.filter(event => event.unread);

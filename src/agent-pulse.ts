@@ -46,6 +46,8 @@ function targetFromNotification(notification: Record<string, any>) {
  * index or history database. The caller still decides whether to act.
  */
 export class AgentPulseService {
+  private readonly inFlight = new Map<string, Promise<Record<string, unknown>>>();
+
   constructor(
     private readonly notifications: NotificationService,
     private readonly social: SocialService,
@@ -56,6 +58,20 @@ export class AgentPulseService {
   ) {}
 
   async get(params: { principal?: ScopePrincipal; limit?: number; maxChars?: number }) {
+    if (!params.principal) return this.getUncached(params);
+    const key = JSON.stringify({ accountId: params.principal.accountId, modelId: params.principal.modelId, agentId: params.principal.agentId, role: params.principal.role, limit: params.limit, maxChars: params.maxChars });
+    const running = this.inFlight.get(key);
+    if (running) return running;
+    const computation = this.getUncached(params);
+    this.inFlight.set(key, computation);
+    try {
+      return await computation;
+    } finally {
+      if (this.inFlight.get(key) === computation) this.inFlight.delete(key);
+    }
+  }
+
+  private async getUncached(params: { principal?: ScopePrincipal; limit?: number; maxChars?: number }): Promise<Record<string, unknown>> {
     const limit = positiveLimit(params.limit, 5, 20);
     const maxChars = positiveLimit(params.maxChars, 5000, 12000);
 

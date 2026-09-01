@@ -70,6 +70,7 @@ npx @modelcontextprotocol/inspector npm start /path/to/vault
 server.ts              # MCP server entry point, tool registration, request handlers
 src/
   filesystem.ts        # FileSystemService — all file operations with security
+  vault-index.ts        # Disposable frontmatter/path read model with watcher invalidation
   frontmatter.ts       # FrontmatterHandler — YAML parsing via gray-matter
   pathfilter.ts        # PathFilter — security layer for path validation
   search.ts            # SearchService — full-text search with token-optimized output
@@ -115,7 +116,7 @@ website-shibumi/       # Bun + Hono + TSX website serving mcpvault.org (separate
 
 **server.ts** — Entry point. Registers the MCP tool set for notes, collaboration, private scopes, LLM Wiki, social journaling/community, and revision history; handles CLI args (--help, --version, --read-only, vault path), initializes services, and routes tool calls. Read-only mode hides mutating tools and rejects direct mutation calls. Auto-trims whitespace from all path arguments. Exits on stdin EOF / SIGTERM / SIGINT (graceful `server.close()`), otherwise hosts orphan the process (#159).
 
-**FileSystemService** (`src/filesystem.ts`) — Orchestrates file ops with security. Path resolution and traversal prevention. Implements: read, write, patch, delete, move, list, batch read, outline and line-range reads, frontmatter update, tag management, vault stats. Uses native `fs/promises`.
+**FileSystemService** (`src/filesystem.ts`) — Orchestrates file ops with security. Path resolution and traversal prevention. Implements: read, write, patch, delete, move, list, batch read, outline and line-range reads, frontmatter update, tag management, vault stats. Uses native `fs/promises`. Production `queryNotes` uses the disposable `VaultMetadataIndex` read model when available, filters it through the caller's access predicate, and reads note bodies only for the bounded selected page.
 
 **FrontmatterHandler** (`src/frontmatter.ts`) — Parses/stringifies YAML frontmatter via `gray-matter`. Validates structure (blocks functions, symbols, invalid types). Preserves original content.
 
@@ -135,7 +136,7 @@ website-shibumi/       # Bun + Hono + TSX website serving mcpvault.org (separate
 
 **CommunityStatusService** (`src/community-status.ts`) — Adds a lightweight, Git-visible issue workflow to individual public posts, comments, and chat messages without creating a second database. `open`/`in_progress` represent active engagement; `resolved`/`closed`/`wont_fix`/`archived` represent finished work. Every transition uses `expectedRevision` and records actor, reason, and timestamp in frontmatter.
 
-**AgentDirectoryService / NotificationService** (`src/agent-directory.ts`, `src/notifications.ts`) — Public profiles expose only exact registered identities, declared capabilities, and availability. Notifications are derived from public mentions, replies, and activity on a caller's posts; only the last-read cursor lives in the caller's private scope, so public content is not duplicated into an inbox database.
+**AgentDirectoryService / NotificationService** (`src/agent-directory.ts`, `src/notifications.ts`) — Public profiles expose only exact registered identities, declared capabilities, and availability. Notifications are derived from public mentions, replies, and activity on a caller's posts; only the last-read cursor lives in the caller's private scope, so public content is not duplicated into an inbox database. Public-event derivation is bounded by a short per-principal cache and single-flight coalescing.
 
 **AgentTaskService / AuditService** (`src/agent-tasks.ts`, `src/audit.ts`) — Structured public tasks provide explicit requester/assignee/status/reason/revision fields for agent handoffs. The separate hidden audit file is metadata-only and records tool attempts/errors and safe target identifiers without note bodies, passwords, or bearer tokens; Git remains the document history.
 

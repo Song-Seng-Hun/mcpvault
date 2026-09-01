@@ -10,6 +10,7 @@ import { generateObsidianUri } from './uri.js';
 import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, MoveNoteParams, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult, DailyNoteResult, ListTasksParams, ListTasksResult, TaskItem, QueryNotesParams, QueryNotesResult, QueryNote } from './types.js';
 import { extractWikiLinkOccurrences, findBacklinkMatches, findUnresolvedLinkMatches, resolveWikiLinkTargets } from './backlinks.js';
 import { buildDailyNotePath, resolveDailyDate, type DailyDateInput } from './daily.js';
+import type { VaultMetadataIndex } from './vault-index.js';
 
 function getFrontmatterValue(frontmatter: Record<string, any>, key: string): { found: boolean; value?: unknown } {
   let current: unknown = frontmatter;
@@ -151,7 +152,8 @@ export class FileSystemService {
     private vaultPath: string,
     pathFilter?: PathFilter,
     frontmatterHandler?: FrontmatterHandler,
-    private onNoteChanged?: (path: string, kind: 'upsert' | 'delete') => void | Promise<void>
+    private onNoteChanged?: (path: string, kind: 'upsert' | 'delete') => void | Promise<void>,
+    private readonly metadataIndex?: VaultMetadataIndex,
   ) {
     const resolved = resolve(vaultPath);
     try {
@@ -1876,34 +1878,41 @@ export class FileSystemService {
 
     const pathPrefix = this.resolvePathPrefix(params.pathPrefix);
     const notes: QueryNote[] = [];
-    const notePaths = (await this.collectVaultFiles())
-      .filter(path => this.pathFilter.isAllowed(path))
-      .filter(canAccessPath)
-      .filter(path => /\.(?:md|markdown|txt)$/i.test(path))
-      .filter(path => !pathPrefix || path === pathPrefix || path.startsWith(`${pathPrefix}/`))
-      .sort((a, b) => a.localeCompare(b));
-
-    for (const path of notePaths) {
-      let raw: string;
-      try {
-        raw = await readFile(this.resolvePath(path), 'utf-8');
-      } catch {
-        continue;
+    const filters = params.filters || {};
+    const indexedEntries = this.metadataIndex ? await this.metadataIndex.list() : undefined;
+    if (indexedEntries) {
+      for (const entry of indexedEntries) {
+        if (!this.pathFilter.isAllowed(entry.path) || !canAccessPath(entry.path)) continue;
+        if (pathPrefix && entry.path !== pathPrefix && !entry.path.startsWith(`${pathPrefix}/`)) continue;
+        const matches = Object.entries(filters).every(([key, expected]) => {
+          const actual = getFrontmatterValue(entry.frontmatter, key);
+          return actual.found && frontmatterValuesEqual(actual.value, expected);
+        });
+        if (matches) notes.push({ path: entry.path, frontmatter: entry.frontmatter });
       }
+    } else {
+      const notePaths = (await this.collectVaultFiles())
+        .filter(path => this.pathFilter.isAllowed(path))
+        .filter(canAccessPath)
+        .filter(path => /\.(?:md|markdown|txt)$/i.test(path))
+        .filter(path => !pathPrefix || path === pathPrefix || path.startsWith(`${pathPrefix}/`))
+        .sort((a, b) => a.localeCompare(b));
 
-      const parsed = this.frontmatterHandler.parse(raw);
-      const filters = params.filters || {};
-      const matches = Object.entries(filters).every(([key, expected]) => {
-        const actual = getFrontmatterValue(parsed.frontmatter, key);
-        return actual.found && frontmatterValuesEqual(actual.value, expected);
-      });
-      if (!matches) continue;
+      for (const path of notePaths) {
+        let raw: string;
+        try {
+          raw = await readFile(this.resolvePath(path), 'utf-8');
+        } catch {
+          continue;
+        }
 
-      notes.push({
-        path,
-        frontmatter: parsed.frontmatter,
-        ...(params.includeContent && { content: parsed.content }),
-      });
+        const parsed = this.frontmatterHandler.parse(raw);
+        const matches = Object.entries(filters).every(([key, expected]) => {
+          const actual = getFrontmatterValue(parsed.frontmatter, key);
+          return actual.found && frontmatterValuesEqual(actual.value, expected);
+        });
+        if (matches) notes.push({ path, frontmatter: parsed.frontmatter, ...(params.includeContent && { content: parsed.content }) });
+      }
     }
 
     const sortBy = params.sortBy || 'path';
@@ -1918,8 +1927,24 @@ export class FileSystemService {
       return a.path.localeCompare(b.path);
     });
 
+    const selected = notes.slice(requestedOffset, requestedOffset + limit);
+    if (params.includeContent && indexedEntries) {
+      const withContent = await Promise.all(selected.map(async note => {
+        try {
+          const raw = await readFile(this.resolvePath(note.path), 'utf-8');
+          return { ...note, content: this.frontmatterHandler.parse(raw).content };
+        } catch {
+          return undefined;
+        }
+      }));
+      return {
+        notes: withContent.filter((note): note is QueryNote & { content: string } => note !== undefined),
+        total: notes.length,
+        truncated: requestedOffset + limit < notes.length,
+      };
+    }
     return {
-      notes: notes.slice(requestedOffset, requestedOffset + limit),
+      notes: selected,
       total: notes.length,
       truncated: requestedOffset + limit < notes.length,
     };

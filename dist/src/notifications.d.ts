@@ -19,7 +19,11 @@ export interface NotificationEvent {
 export declare class NotificationService {
     private readonly fileSystem;
     private readonly reputation;
+    private readonly eventCache;
+    private readonly eventInFlight;
     constructor(fileSystem: FileSystemService, reputation: ReputationService);
+    invalidate(): void;
+    private cachedPublicEvents;
     private lastReadAt;
     private publicEvents;
     list(params: {
