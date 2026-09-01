@@ -27,6 +27,7 @@ const SEMANTIC_QUERY_CACHE_TTL_MS = 5_000;
 const SEMANTIC_QUERY_CACHE_MAX_ENTRIES = 64;
 const SEMANTIC_VECTOR_CACHE_TTL_MS = 60_000;
 const SEMANTIC_VECTOR_CACHE_MAX_ENTRIES = 32;
+const TABLE_CACHE_MAX_ENTRIES = 32;
 const FALLBACK_SCAN_BATCH_SIZE = 8;
 const PENDING_SNAPSHOT_DEBOUNCE_MS = 1_000;
 const gzipAsync = promisify(gzip);
@@ -202,6 +203,7 @@ export class SemanticSearchService {
     pendingReady;
     db;
     tableCache = new Map();
+    tableLastUsed = new Map();
     tableOpening = new Map();
     embedder;
     embedderLease;
@@ -280,6 +282,7 @@ export class SemanticSearchService {
         this.clearVectorCache();
         this.vectorInFlight.clear();
         this.tableCache.clear();
+        this.tableLastUsed.clear();
         this.tableOpening.clear();
     }
     clearQueryCache() {
@@ -676,8 +679,11 @@ export class SemanticSearchService {
     }
     async getTable(name) {
         const cached = this.tableCache.get(name);
-        if (cached)
+        if (cached) {
+            this.tableLastUsed.delete(name);
+            this.tableLastUsed.set(name, Date.now());
             return cached;
+        }
         const opening = this.tableOpening.get(name);
         if (opening)
             return opening;
@@ -686,6 +692,14 @@ export class SemanticSearchService {
         try {
             const table = await promise;
             this.tableCache.set(name, table);
+            this.tableLastUsed.set(name, Date.now());
+            while (this.tableCache.size > TABLE_CACHE_MAX_ENTRIES) {
+                const oldest = this.tableLastUsed.keys().next();
+                if (oldest.done)
+                    break;
+                this.tableLastUsed.delete(oldest.value);
+                this.tableCache.delete(oldest.value);
+            }
             return table;
         }
         finally {
@@ -770,6 +784,7 @@ export class SemanticSearchService {
             this.tableNamesCache = undefined;
             this.tableNamesCachedAt = 0;
             this.tableCache.clear();
+            this.tableLastUsed.clear();
             this.tableOpening.clear();
             this.unloadTimer = undefined;
         }, IDLE_DELAY_MS * 4);

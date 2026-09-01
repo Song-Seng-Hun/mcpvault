@@ -33,6 +33,10 @@ describe('VaultFileCatalog', () => {
     expect(first).toEqual(['Wiki/one.md', 'Wiki/two.markdown']);
     expect(second).toEqual(first);
 
+    const sharedFirst = await catalog.notePathsSnapshot();
+    const sharedSecond = await catalog.notePathsSnapshot();
+    expect(sharedSecond).toBe(sharedFirst);
+
     await writeNote('Wiki/three.txt', 'three');
     catalog.invalidate('Wiki/three.txt');
     expect(await catalog.listNotePaths()).toEqual(['Wiki/one.md', 'Wiki/three.txt', 'Wiki/two.markdown']);

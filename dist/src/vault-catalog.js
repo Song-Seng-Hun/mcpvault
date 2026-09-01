@@ -222,6 +222,26 @@ export class VaultFileCatalog {
         return inventory;
     }
     async findPaths(directory) {
+        if (this.watcher) {
+            try {
+                const info = await stat(directory);
+                const cached = this.directoryCache.get(directory);
+                if (!this.dirtyDirectories.has(directory)
+                    && cached
+                    && cached.notes
+                    && cached.all
+                    && cached.mtimeMs === info.mtimeMs
+                    && cached.size === info.size) {
+                    this.directoryCache.delete(directory);
+                    this.directoryCache.set(directory, cached);
+                    derivedCacheBudget.touch(this.cacheOwner, directory);
+                    return { notes: cached.notes, all: cached.all };
+                }
+            }
+            catch {
+                return { notes: [], all: [] };
+            }
+        }
         const notes = [];
         const all = [];
         const entries = await this.readDirectoryEntries(directory);
@@ -247,6 +267,14 @@ export class VaultFileCatalog {
                 notes.push(...result.notes);
                 all.push(...result.all);
             }
+        }
+        const cached = this.directoryCache.get(directory);
+        if (this.watcher && cached) {
+            cached.notes = notes;
+            cached.all = all;
+            this.directoryCache.delete(directory);
+            this.directoryCache.set(directory, cached);
+            derivedCacheBudget.touch(this.cacheOwner, directory);
         }
         return { notes, all };
     }

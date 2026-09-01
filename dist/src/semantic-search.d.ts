@@ -51,6 +51,7 @@ export declare class SemanticSearchService {
     private pendingReady;
     private db;
     private readonly tableCache;
+    private readonly tableLastUsed;
     private readonly tableOpening;
     private embedder;
     private embedderLease;

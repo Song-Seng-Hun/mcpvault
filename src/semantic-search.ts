@@ -33,6 +33,7 @@ const SEMANTIC_QUERY_CACHE_TTL_MS = 5_000;
 const SEMANTIC_QUERY_CACHE_MAX_ENTRIES = 64;
 const SEMANTIC_VECTOR_CACHE_TTL_MS = 60_000;
 const SEMANTIC_VECTOR_CACHE_MAX_ENTRIES = 32;
+const TABLE_CACHE_MAX_ENTRIES = 32;
 const FALLBACK_SCAN_BATCH_SIZE = 8;
 const PENDING_SNAPSHOT_DEBOUNCE_MS = 1_000;
 const gzipAsync = promisify(gzip);
@@ -292,6 +293,7 @@ export class SemanticSearchService {
   private pendingReady: Promise<void>;
   private db: any;
   private readonly tableCache = new Map<string, any>();
+  private readonly tableLastUsed = new Map<string, number>();
   private readonly tableOpening = new Map<string, Promise<any>>();
   private embedder: Embedder | undefined;
   private embedderLease: SharedEmbedderLease | undefined;
@@ -368,6 +370,7 @@ export class SemanticSearchService {
     this.clearVectorCache();
     this.vectorInFlight.clear();
     this.tableCache.clear();
+    this.tableLastUsed.clear();
     this.tableOpening.clear();
   }
 
@@ -743,7 +746,11 @@ export class SemanticSearchService {
 
   private async getTable(name: string): Promise<any> {
     const cached = this.tableCache.get(name);
-    if (cached) return cached;
+    if (cached) {
+      this.tableLastUsed.delete(name);
+      this.tableLastUsed.set(name, Date.now());
+      return cached;
+    }
     const opening = this.tableOpening.get(name);
     if (opening) return opening;
     const promise = this.getDb().then(db => db.openTable(name));
@@ -751,6 +758,13 @@ export class SemanticSearchService {
     try {
       const table = await promise;
       this.tableCache.set(name, table);
+      this.tableLastUsed.set(name, Date.now());
+      while (this.tableCache.size > TABLE_CACHE_MAX_ENTRIES) {
+        const oldest = this.tableLastUsed.keys().next();
+        if (oldest.done) break;
+        this.tableLastUsed.delete(oldest.value);
+        this.tableCache.delete(oldest.value);
+      }
       return table;
     } finally {
       if (this.tableOpening.get(name) === promise) this.tableOpening.delete(name);
@@ -827,6 +841,7 @@ export class SemanticSearchService {
       this.tableNamesCache = undefined;
       this.tableNamesCachedAt = 0;
       this.tableCache.clear();
+      this.tableLastUsed.clear();
       this.tableOpening.clear();
       this.unloadTimer = undefined;
     }, IDLE_DELAY_MS * 4);

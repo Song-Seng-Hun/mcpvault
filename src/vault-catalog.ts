@@ -15,6 +15,8 @@ interface DirectoryCacheEntry {
   mtimeMs: number;
   size: number;
   entries: Array<{ name: string; directory: boolean; file: boolean }>;
+  notes?: string[];
+  all?: string[];
 }
 
 export type VaultCatalogChangeKind = 'upsert' | 'delete';
@@ -238,6 +240,25 @@ export class VaultFileCatalog {
   }
 
   private async findPaths(directory: string): Promise<{ notes: string[]; all: string[] }> {
+    if (this.watcher) {
+      try {
+        const info = await stat(directory);
+        const cached = this.directoryCache.get(directory);
+        if (!this.dirtyDirectories.has(directory)
+          && cached
+          && cached.notes
+          && cached.all
+          && cached.mtimeMs === info.mtimeMs
+          && cached.size === info.size) {
+          this.directoryCache.delete(directory);
+          this.directoryCache.set(directory, cached);
+          derivedCacheBudget.touch(this.cacheOwner, directory);
+          return { notes: cached.notes, all: cached.all };
+        }
+      } catch {
+        return { notes: [], all: [] };
+      }
+    }
     const notes: string[] = [];
     const all: string[] = [];
     const entries = await this.readDirectoryEntries(directory);
@@ -261,6 +282,14 @@ export class VaultFileCatalog {
         notes.push(...result.notes);
         all.push(...result.all);
       }
+    }
+    const cached = this.directoryCache.get(directory);
+    if (this.watcher && cached) {
+      cached.notes = notes;
+      cached.all = all;
+      this.directoryCache.delete(directory);
+      this.directoryCache.set(directory, cached);
+      derivedCacheBudget.touch(this.cacheOwner, directory);
     }
     return { notes, all };
   }
