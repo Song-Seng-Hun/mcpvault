@@ -104,8 +104,11 @@ test('published posts and comments are public while drafts remain author-private
     expect(threaded.value.comments[1].parent).toMatchObject({ commentId: comment.value.commentId, content: expect.stringContaining('Useful idea [[Evidence]]') });
     const withComments = await json(client, 'read_blog_post', { slug: 'hello-agents', includeComments: true, commentLimit: 5, accessToken: publisherToken });
     expect(withComments.value.comments).toHaveLength(2);
+    await json(client, 'comment_on_blog_post', { slug: 'hello-agents', content: 'Another mention @claude', accessToken: publisherToken });
     const mentions = await json(client, 'list_mentions', { accessToken: publisherToken });
-    expect(mentions.value.mentions).toEqual(expect.arrayContaining([expect.objectContaining({ commentId: comment.value.commentId, kind: 'blog_comment' })]));
+    const originalMention = mentions.value.mentions.find((item: any) => item.commentId === comment.value.commentId);
+    expect(originalMention).toMatchObject({ commentId: comment.value.commentId, kind: 'blog_comment' });
+    expect(originalMention.context).toEqual(expect.arrayContaining([expect.objectContaining({ content: expect.stringContaining('Following up on that point.') })]));
     const edited = await json(client, 'edit_blog_comment', { slug: 'hello-agents', commentId: comment.value.commentId, content: 'Edited useful idea.', expectedRevision: threaded.value.comments[0].revision, accessToken: publisherToken });
     expect(edited.value.success).toBe(true);
     const deleted = await json(client, 'delete_blog_comment', { slug: 'hello-agents', commentId: reply.value.commentId, expectedRevision: threaded.value.comments[1].revision, accessToken: publisherToken });

@@ -521,9 +521,36 @@ export class SocialService {
     if (params.afterMentionId && cursor < 0) throw new Error(`afterMentionId was not found in mention results: ${params.afterMentionId}`);
     const mentions: Array<Record<string, unknown>> = [];
     let usedChars = 0;
+    const contextBefore = Math.min(Math.max(Number(params.contextBefore ?? 1), 0), 3);
+    const contextAfter = Math.min(Math.max(Number(params.contextAfter ?? 1), 0), 3);
+    const hydrated = new Map<string, any>();
+    const timelines = new Map<string, { key: 'comment_id' | 'message_id'; notes: typeof comments.notes }>();
+    const hydrate = async (paths: string[]): Promise<void> => {
+      const missing = Array.from(new Set(paths)).filter(path => !hydrated.has(path));
+      for (let start = 0; start < missing.length; start += 10) {
+        const batch = await this.fileSystem.readMultipleNotes({ paths: missing.slice(start, start + 10), includeContent: true, includeFrontmatter: true, knownRevisions: {} });
+        for (const note of batch.successful) hydrated.set(note.path, note);
+        if (batch.failed.length > 0) throw new Error(batch.failed[0]!.error);
+      }
+    };
+    const timelineFor = async (note: any) => {
+      const isChat = note.frontmatter.mcpvault_type === 'chat_message';
+      const root = isChat
+        ? `Community/ChatMessages/${note.frontmatter.room_id}`
+        : `Community/Comments/${note.frontmatter.post_id}`;
+      const key: 'comment_id' | 'message_id' = isChat ? 'message_id' : 'comment_id';
+      const cacheKey = `${root}|${key}`;
+      const cached = timelines.get(cacheKey);
+      if (cached) return cached;
+      const result = await this.fileSystem.queryNotes({ pathPrefix: root, filters: { mcpvault_type: isChat ? 'chat_message' : 'blog_comment' }, sortBy: 'created_at', sortOrder: 'asc', limit: 500 });
+      const timeline = { key, notes: result.notes };
+      timelines.set(cacheKey, timeline);
+      return timeline;
+    };
     for (const note of notes.slice(cursor >= 0 ? cursor + 1 : 0)) {
       if (mentions.length >= limit) break;
-      const full = await this.fileSystem.readNote(note.path);
+      const full = hydrated.get(note.path) || await this.fileSystem.readNote(note.path);
+      hydrated.set(note.path, full);
       const length = Array.from(full.content).length;
       const item: Record<string, unknown> = {
         path: note.path,
@@ -542,22 +569,21 @@ export class SocialService {
         workflowStatusReason: note.frontmatter.workflow_status_reason,
         workflowStatusUpdatedAt: note.frontmatter.workflow_status_updated_at,
       };
-      const contextBefore = Math.min(Math.max(Number(params.contextBefore ?? 1), 0), 3);
-      const contextAfter = Math.min(Math.max(Number(params.contextAfter ?? 1), 0), 3);
       if (contextBefore || contextAfter) {
-        const isChat = note.frontmatter.mcpvault_type === 'chat_message';
-        const root = isChat
-          ? `Community/ChatMessages/${note.frontmatter.room_id}`
-          : `Community/Comments/${note.frontmatter.post_id}`;
-        const key = isChat ? 'message_id' : 'comment_id';
-        const id = note.frontmatter[key];
-        const timeline = await this.fileSystem.queryNotes({ pathPrefix: root, filters: { mcpvault_type: isChat ? 'chat_message' : 'blog_comment' }, sortBy: 'created_at', sortOrder: 'asc', limit: 500 });
-        const at = timeline.notes.findIndex(item => item.frontmatter[key] === id);
+        const timeline = await timelineFor(note);
+        const id = note.frontmatter[timeline.key];
+        const at = timeline.notes.findIndex(item => item.frontmatter[timeline.key] === id);
+        const neighborPaths: string[] = [];
+        for (let index = Math.max(0, at - contextBefore); index <= Math.min(timeline.notes.length - 1, at + contextAfter); index += 1) {
+          if (index !== at) neighborPaths.push(timeline.notes[index]!.path);
+        }
+        await hydrate(neighborPaths);
         const context: Array<Record<string, unknown>> = [];
         for (let index = Math.max(0, at - contextBefore); index <= Math.min(timeline.notes.length - 1, at + contextAfter); index += 1) {
           if (index === at || context.length >= contextBefore + contextAfter) continue;
-          const neighbor = await this.fileSystem.readNote(timeline.notes[index]!.path);
-          context.push({ path: timeline.notes[index]!.path, id: neighbor.frontmatter[key], author: neighbor.frontmatter.author, createdAt: neighbor.frontmatter.created_at, content: neighbor.content });
+          const neighbor = hydrated.get(timeline.notes[index]!.path);
+          if (!neighbor) continue;
+          context.push({ path: timeline.notes[index]!.path, id: neighbor.frontmatter[timeline.key], author: neighbor.frontmatter.author, createdAt: neighbor.frontmatter.created_at, content: neighbor.content });
         }
         item.context = context;
       }
