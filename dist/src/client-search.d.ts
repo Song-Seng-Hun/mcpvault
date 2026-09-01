@@ -1,4 +1,4 @@
-import type { CachedNote } from './client-cache.js';
+import type { CachedNote, ClientKeyValueStore } from './client-cache.js';
 export interface ClientSearchResult {
     path: string;
     score: number;
@@ -18,10 +18,20 @@ export interface ClientSearchResponse {
  */
 export declare class McpVaultClientSearchIndex {
     private readonly documents;
+    private readonly searchCache;
+    private readonly maxDocuments;
+    constructor(options?: {
+        maxDocuments?: number;
+    });
     upsert(note: CachedNote): void;
     remove(path: string): void;
     clear(): void;
     size(): number;
+    values(): CachedNote[];
+    snapshot(): string;
+    restore(snapshot: string): number;
+    persist(store: ClientKeyValueStore, key: string): void;
+    hydrate(store: ClientKeyValueStore, key: string): number;
     search(query: string, options?: {
         limit?: number;
         maxChars?: number;

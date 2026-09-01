@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
 import { McpVaultClientSearchIndex } from './client-search.js';
+import type { ClientKeyValueStore } from './client-cache.js';
 
 test('searches only cached notes and ranks title matches', () => {
   const index = new McpVaultClientSearchIndex();
@@ -21,4 +22,23 @@ test('updates and removes cached documents', () => {
   expect(index.search('new').results[0]!.revision).toBe('b'.repeat(64));
   index.remove('note.md');
   expect(index.size()).toBe(0);
+});
+
+test('persists and restores a bounded local search index', () => {
+  const values = new Map<string, string>();
+  const store: ClientKeyValueStore = {
+    getItem: key => values.get(key) || null,
+    setItem: (key, value) => { values.set(key, value); },
+  };
+  const original = new McpVaultClientSearchIndex({ maxDocuments: 2 });
+  original.upsert({ path: 'one.md', revision: '1'.repeat(64), content: 'alpha' });
+  original.upsert({ path: 'two.md', revision: '2'.repeat(64), content: 'beta' });
+  original.persist(store, 'search-index');
+
+  const restored = new McpVaultClientSearchIndex({ maxDocuments: 2 });
+  expect(restored.hydrate(store, 'search-index')).toBe(2);
+  expect(restored.search('alpha').results[0]!.path).toBe('one.md');
+  original.upsert({ path: 'three.md', revision: '3'.repeat(64), content: 'gamma' });
+  expect(original.size()).toBe(2);
+  expect(original.search('alpha').results).toHaveLength(0);
 });
