@@ -7,6 +7,13 @@ import { boundSearchResults, normalizeSearchLimit, normalizeSearchMaxChars } fro
 import { isMarkdownModerationHidden } from './moderation-policy.js';
 
 const WIKI_TYPES = new Set(['schema', 'source', 'knowledge', 'issue']);
+const SEARCH_CACHE_TTL_MS = 5_000;
+const SEARCH_CACHE_MAX_ENTRIES = 128;
+
+interface SearchCacheEntry {
+  expiresAt: number;
+  results: SearchResult[];
+}
 
 function isWikiPath(path: string): boolean {
   const normalized = path.toLowerCase();
@@ -36,12 +43,26 @@ function isUnderSubtree(relativePath: string, subtree: string): boolean {
 
 export class SearchService {
   private vaultPath: string;
+  private readonly cache = new Map<string, SearchCacheEntry>();
+  private readonly inFlight = new Map<string, Promise<SearchResult[]>>();
+  private cacheGeneration = 0;
 
   constructor(
     vaultPath: string,
     private pathFilter: PathFilter
   ) {
     this.vaultPath = resolve(vaultPath);
+  }
+
+  /**
+   * Search is derived from Markdown, so a short cache is safe and useful for
+   * repeated agent lookups. Writers call this immediately after a mutation;
+   * the TTL also covers edits made directly in Obsidian.
+   */
+  invalidate(): void {
+    this.cacheGeneration += 1;
+    this.cache.clear();
+    this.inFlight.clear();
   }
 
   async search(params: SearchParams): Promise<SearchResult[]> {
@@ -58,6 +79,30 @@ export class SearchService {
     if (!query || query.trim().length === 0) {
       throw new Error('Search query cannot be empty');
     }
+
+    const cacheKey = JSON.stringify({
+      query,
+      limit,
+      searchContent,
+      searchFrontmatter,
+      caseSensitive,
+      pathPrefix: params.pathPrefix || '',
+      excludePaths: params.excludePaths || [],
+      maxChars: params.maxChars,
+    });
+    const cached = this.cache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      this.cache.delete(cacheKey);
+      this.cache.set(cacheKey, cached);
+      return cached.results.map(result => ({ ...result }));
+    }
+    if (cached) this.cache.delete(cacheKey);
+
+    const running = this.inFlight.get(cacheKey);
+    if (running) return (await running).map(result => ({ ...result }));
+
+    const generation = this.cacheGeneration;
+    const computation = (async (): Promise<SearchResult[]> => {
 
     const normalizedPrefix = pathPrefix ? normalizeSubtree(pathPrefix) : '';
     const normalizedExcludes = (excludePaths || []).map(normalizeSubtree).filter(Boolean);
@@ -210,8 +255,23 @@ export class SearchService {
       }
     }
 
-    const results: SearchResult[] = this.rerank(candidates, scoringTerms, termDocFreq, docCount, totalDocLength, maxLimit);
-    return boundSearchResults(results, maxChars);
+    const results = boundSearchResults(this.rerank(candidates, scoringTerms, termDocFreq, docCount, totalDocLength, maxLimit), maxChars);
+    if (generation === this.cacheGeneration) {
+      this.cache.set(cacheKey, { expiresAt: Date.now() + SEARCH_CACHE_TTL_MS, results: results.map(result => ({ ...result })) });
+      while (this.cache.size > SEARCH_CACHE_MAX_ENTRIES) {
+        const oldest = this.cache.keys().next();
+        if (oldest.done) break;
+        this.cache.delete(oldest.value);
+      }
+    }
+    return results;
+    })();
+    this.inFlight.set(cacheKey, computation);
+    try {
+      return await computation;
+    } finally {
+      if (this.inFlight.get(cacheKey) === computation) this.inFlight.delete(cacheKey);
+    }
   }
 
   private async findMarkdownFiles(dirPath: string): Promise<string[]> {

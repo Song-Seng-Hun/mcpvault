@@ -19,6 +19,12 @@ export interface SemanticIndexStatus {
     available: boolean;
     indexed: number;
     pending: number;
+    worker: 'process-shared';
+    indexWorker: 'leader' | 'standby' | 'client';
+    indexingActive: boolean;
+    queryVectorCacheEntries: number;
+    queryVectorCacheHits: number;
+    queryVectorCacheMisses: number;
     lastError?: string | undefined;
 }
 /**
@@ -32,14 +38,27 @@ export declare class SemanticSearchService {
     private readonly vaultPath;
     private readonly indexPath;
     private readonly manifestPath;
+    private readonly workerLockPath;
     private manifest;
     private manifestReady;
     private db;
     private embedder;
+    private embedderLease;
     private pending;
+    private readonly queryVectorCache;
+    private queryVectorCacheHits;
+    private queryVectorCacheMisses;
     private idleTimer;
     private unloadTimer;
     private syncPromise;
+    private scanPromise;
+    private dbPromise;
+    private semanticActive;
+    private indexLease;
+    private indexWorker;
+    private lastScanAt;
+    private tableNamesCache;
+    private tableNamesCachedAt;
     private unavailableUntil;
     private lastError;
     constructor(vaultPath: string, pathFilter: PathFilter, accessPolicy?: ScopeAccessPolicy);
@@ -55,10 +74,18 @@ export declare class SemanticSearchService {
     private findMarkdownFiles;
     private drain;
     private getDb;
+    /**
+     * Coordinate document indexing across separately spawned MCP processes.
+     * The first process that opts into server-side semantic search becomes the
+     * leader. Other processes can still query the derived LanceDB cache with a
+     * client-provided vector, but never start a second indexing model.
+     */
+    private acquireIndexLease;
     private getTableNames;
     private getEmbedder;
     private embed;
     private embedQuery;
+    private validateVector;
     private indexPathContent;
     private removePath;
     private pathIsVisible;

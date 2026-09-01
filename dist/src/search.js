@@ -4,6 +4,8 @@ import { generateObsidianUri } from './uri.js';
 import { boundSearchResults, normalizeSearchLimit, normalizeSearchMaxChars } from './search-limits.js';
 import { isMarkdownModerationHidden } from './moderation-policy.js';
 const WIKI_TYPES = new Set(['schema', 'source', 'knowledge', 'issue']);
+const SEARCH_CACHE_TTL_MS = 5_000;
+const SEARCH_CACHE_MAX_ENTRIES = 128;
 function isWikiPath(path) {
     const normalized = path.toLowerCase();
     return normalized === '_wiki'
@@ -30,155 +32,209 @@ function isUnderSubtree(relativePath, subtree) {
 export class SearchService {
     pathFilter;
     vaultPath;
+    cache = new Map();
+    inFlight = new Map();
+    cacheGeneration = 0;
     constructor(vaultPath, pathFilter) {
         this.pathFilter = pathFilter;
         this.vaultPath = resolve(vaultPath);
+    }
+    /**
+     * Search is derived from Markdown, so a short cache is safe and useful for
+     * repeated agent lookups. Writers call this immediately after a mutation;
+     * the TTL also covers edits made directly in Obsidian.
+     */
+    invalidate() {
+        this.cacheGeneration += 1;
+        this.cache.clear();
+        this.inFlight.clear();
     }
     async search(params) {
         const { query, limit = 5, searchContent = true, searchFrontmatter = false, caseSensitive = false, pathPrefix, excludePaths } = params;
         if (!query || query.trim().length === 0) {
             throw new Error('Search query cannot be empty');
         }
-        const normalizedPrefix = pathPrefix ? normalizeSubtree(pathPrefix) : '';
-        const normalizedExcludes = (excludePaths || []).map(normalizeSubtree).filter(Boolean);
-        const maxLimit = normalizeSearchLimit(limit);
-        const maxChars = normalizeSearchMaxChars(params.maxChars);
-        // Corpus stats for reranking
-        let totalDocLength = 0;
-        let docCount = 0;
-        const termDocFreq = new Map();
-        const candidates = [];
-        const searchQuery = caseSensitive ? query : query.toLowerCase();
-        const terms = searchQuery.split(/\s+/).filter(t => t.length > 0);
-        const scoringTerms = terms.length > 1 ? [...terms, searchQuery] : terms;
-        // Recursively find all .md files
-        const markdownFiles = await this.findMarkdownFiles(this.vaultPath);
-        // Pre-filter by pathFilter before I/O
-        const prefixLen = this.vaultPath.length + 1;
-        const allowedFiles = [];
-        for (const fullPath of markdownFiles) {
-            const relativePath = fullPath.substring(prefixLen).replace(/\\/g, '/');
-            if (!this.pathFilter.isAllowed(relativePath))
-                continue;
-            // Scope to the requested subtree, and skip excluded subtrees, before I/O
-            if (normalizedPrefix && !isUnderSubtree(relativePath, normalizedPrefix))
-                continue;
-            if (normalizedExcludes.some(ex => isUnderSubtree(relativePath, ex)))
-                continue;
-            allowedFiles.push({ fullPath, relativePath });
+        const cacheKey = JSON.stringify({
+            query,
+            limit,
+            searchContent,
+            searchFrontmatter,
+            caseSensitive,
+            pathPrefix: params.pathPrefix || '',
+            excludePaths: params.excludePaths || [],
+            maxChars: params.maxChars,
+        });
+        const cached = this.cache.get(cacheKey);
+        if (cached && cached.expiresAt > Date.now()) {
+            this.cache.delete(cacheKey);
+            this.cache.set(cacheKey, cached);
+            return cached.results.map(result => ({ ...result }));
         }
-        // Read files in parallel batches
-        const BATCH_SIZE = 5;
-        for (let start = 0; start < allowedFiles.length; start += BATCH_SIZE) {
-            const batch = allowedFiles.slice(start, start + BATCH_SIZE);
-            const contents = await Promise.all(batch.map(f => readFile(f.fullPath, 'utf-8').catch(() => null)));
-            for (let i = 0; i < batch.length; i++) {
-                const content = contents[i];
-                if (content === null || content === undefined)
+        if (cached)
+            this.cache.delete(cacheKey);
+        const running = this.inFlight.get(cacheKey);
+        if (running)
+            return (await running).map(result => ({ ...result }));
+        const generation = this.cacheGeneration;
+        const computation = (async () => {
+            const normalizedPrefix = pathPrefix ? normalizeSubtree(pathPrefix) : '';
+            const normalizedExcludes = (excludePaths || []).map(normalizeSubtree).filter(Boolean);
+            const maxLimit = normalizeSearchLimit(limit);
+            const maxChars = normalizeSearchMaxChars(params.maxChars);
+            // Corpus stats for reranking
+            let totalDocLength = 0;
+            let docCount = 0;
+            const termDocFreq = new Map();
+            const candidates = [];
+            const searchQuery = caseSensitive ? query : query.toLowerCase();
+            const terms = searchQuery.split(/\s+/).filter(t => t.length > 0);
+            const scoringTerms = terms.length > 1 ? [...terms, searchQuery] : terms;
+            // Recursively find all .md files
+            const markdownFiles = await this.findMarkdownFiles(this.vaultPath);
+            // Pre-filter by pathFilter before I/O
+            const prefixLen = this.vaultPath.length + 1;
+            const allowedFiles = [];
+            for (const fullPath of markdownFiles) {
+                const relativePath = fullPath.substring(prefixLen).replace(/\\/g, '/');
+                if (!this.pathFilter.isAllowed(relativePath))
                     continue;
-                const { relativePath } = batch[i];
-                if (isMarkdownModerationHidden(content))
+                // Scope to the requested subtree, and skip excluded subtrees, before I/O
+                if (normalizedPrefix && !isUnderSubtree(relativePath, normalizedPrefix))
                     continue;
-                const isWiki = isWikiPath(relativePath) || wikiType(content) !== undefined;
-                let searchableText = '';
-                // Prepare search text based on options
-                if (searchContent && searchFrontmatter) {
-                    searchableText = content;
-                }
-                else if (searchContent) {
-                    // Remove frontmatter from search
-                    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n/);
-                    searchableText = frontmatterMatch ? content.slice(frontmatterMatch[0].length) : content;
-                }
-                else if (searchFrontmatter) {
-                    // Search only frontmatter
-                    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n/);
-                    searchableText = frontmatterMatch ? frontmatterMatch[1] || '' : '';
-                }
-                const searchIn = caseSensitive ? searchableText : searchableText.toLowerCase();
-                // Collect corpus stats for reranking
-                const docLength = searchIn.split(/\s+/).filter(w => w.length > 0).length;
-                totalDocLength += docLength;
-                docCount++;
-                for (const term of scoringTerms) {
-                    if (searchIn.includes(term)) {
-                        termDocFreq.set(term, (termDocFreq.get(term) || 0) + 1);
+                if (normalizedExcludes.some(ex => isUnderSubtree(relativePath, ex)))
+                    continue;
+                allowedFiles.push({ fullPath, relativePath });
+            }
+            // Read files in parallel batches
+            const BATCH_SIZE = 5;
+            for (let start = 0; start < allowedFiles.length; start += BATCH_SIZE) {
+                const batch = allowedFiles.slice(start, start + BATCH_SIZE);
+                const contents = await Promise.all(batch.map(f => readFile(f.fullPath, 'utf-8').catch(() => null)));
+                for (let i = 0; i < batch.length; i++) {
+                    const content = contents[i];
+                    if (content === null || content === undefined)
+                        continue;
+                    const { relativePath } = batch[i];
+                    if (isMarkdownModerationHidden(content))
+                        continue;
+                    const isWiki = isWikiPath(relativePath) || wikiType(content) !== undefined;
+                    let searchableText = '';
+                    // Prepare search text based on options
+                    if (searchContent && searchFrontmatter) {
+                        searchableText = content;
                     }
-                }
-                // Extract title from filename
-                const title = relativePath.split('/').pop()?.replace(/\.md$/, '') || relativePath;
-                // Check filename match (any term)
-                const filenameToSearch = caseSensitive ? title : title.toLowerCase();
-                const filenameMatch = terms.some(term => filenameToSearch.includes(term));
-                // Check content match (any term)
-                const termIndices = terms.map(term => searchIn.indexOf(term));
-                const anyTermFound = termIndices.some(idx => idx !== -1);
-                const firstIndex = anyTermFound
-                    ? Math.min(...termIndices.filter(idx => idx !== -1))
-                    : -1;
-                if (firstIndex !== -1 || filenameMatch) {
-                    let excerpt;
-                    let matchCount = 0;
-                    let lineNumber = 0;
-                    const termFreqs = new Map();
-                    if (firstIndex !== -1) {
-                        // Find the term that matched first for excerpt
-                        const firstTermIdx = termIndices.indexOf(firstIndex);
-                        const firstTerm = terms[firstTermIdx];
-                        // Extract excerpt around first content match
-                        const excerptStart = Math.max(0, firstIndex - 21);
-                        const excerptEnd = Math.min(searchableText.length, firstIndex + firstTerm.length + 21);
-                        excerpt = searchableText.slice(excerptStart, excerptEnd).trim();
-                        // Add ellipsis if excerpt is truncated
-                        if (excerptStart > 0)
-                            excerpt = '...' + excerpt;
-                        if (excerptEnd < searchableText.length)
-                            excerpt = excerpt + '...';
-                        // Count total content matches across all terms
-                        for (const term of scoringTerms) {
-                            let count = 0;
-                            let searchIndex = 0;
-                            while ((searchIndex = searchIn.indexOf(term, searchIndex)) !== -1) {
-                                count++;
-                                searchIndex += term.length;
-                            }
-                            termFreqs.set(term, count);
-                            matchCount += count;
+                    else if (searchContent) {
+                        // Remove frontmatter from search
+                        const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n/);
+                        searchableText = frontmatterMatch ? content.slice(frontmatterMatch[0].length) : content;
+                    }
+                    else if (searchFrontmatter) {
+                        // Search only frontmatter
+                        const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n/);
+                        searchableText = frontmatterMatch ? frontmatterMatch[1] || '' : '';
+                    }
+                    const searchIn = caseSensitive ? searchableText : searchableText.toLowerCase();
+                    // Collect corpus stats for reranking
+                    const docLength = searchIn.split(/\s+/).filter(w => w.length > 0).length;
+                    totalDocLength += docLength;
+                    docCount++;
+                    for (const term of scoringTerms) {
+                        if (searchIn.includes(term)) {
+                            termDocFreq.set(term, (termDocFreq.get(term) || 0) + 1);
                         }
-                        // Find line number of first match
-                        const lines = searchableText.slice(0, firstIndex).split('\n');
-                        lineNumber = lines.length;
                     }
-                    else {
-                        // Filename-only match: use beginning of content as excerpt
-                        excerpt = searchableText.slice(0, 50).trim();
-                        if (searchableText.length > 50)
-                            excerpt = excerpt + '...';
-                        matchCount = 0;
-                        lineNumber = 0;
+                    // Extract title from filename
+                    const title = relativePath.split('/').pop()?.replace(/\.md$/, '') || relativePath;
+                    // Check filename match (any term)
+                    const filenameToSearch = caseSensitive ? title : title.toLowerCase();
+                    const filenameMatch = terms.some(term => filenameToSearch.includes(term));
+                    // Check content match (any term)
+                    const termIndices = terms.map(term => searchIn.indexOf(term));
+                    const anyTermFound = termIndices.some(idx => idx !== -1);
+                    const firstIndex = anyTermFound
+                        ? Math.min(...termIndices.filter(idx => idx !== -1))
+                        : -1;
+                    if (firstIndex !== -1 || filenameMatch) {
+                        let excerpt;
+                        let matchCount = 0;
+                        let lineNumber = 0;
+                        const termFreqs = new Map();
+                        if (firstIndex !== -1) {
+                            // Find the term that matched first for excerpt
+                            const firstTermIdx = termIndices.indexOf(firstIndex);
+                            const firstTerm = terms[firstTermIdx];
+                            // Extract excerpt around first content match
+                            const excerptStart = Math.max(0, firstIndex - 21);
+                            const excerptEnd = Math.min(searchableText.length, firstIndex + firstTerm.length + 21);
+                            excerpt = searchableText.slice(excerptStart, excerptEnd).trim();
+                            // Add ellipsis if excerpt is truncated
+                            if (excerptStart > 0)
+                                excerpt = '...' + excerpt;
+                            if (excerptEnd < searchableText.length)
+                                excerpt = excerpt + '...';
+                            // Count total content matches across all terms
+                            for (const term of scoringTerms) {
+                                let count = 0;
+                                let searchIndex = 0;
+                                while ((searchIndex = searchIn.indexOf(term, searchIndex)) !== -1) {
+                                    count++;
+                                    searchIndex += term.length;
+                                }
+                                termFreqs.set(term, count);
+                                matchCount += count;
+                            }
+                            // Find line number of first match
+                            const lines = searchableText.slice(0, firstIndex).split('\n');
+                            lineNumber = lines.length;
+                        }
+                        else {
+                            // Filename-only match: use beginning of content as excerpt
+                            excerpt = searchableText.slice(0, 50).trim();
+                            if (searchableText.length > 50)
+                                excerpt = excerpt + '...';
+                            matchCount = 0;
+                            lineNumber = 0;
+                        }
+                        // Add filename match to count
+                        if (filenameMatch)
+                            matchCount++;
+                        candidates.push({
+                            result: {
+                                p: relativePath,
+                                t: title,
+                                ex: excerpt,
+                                mc: matchCount,
+                                ln: lineNumber,
+                                uri: generateObsidianUri(this.vaultPath, relativePath),
+                                ...(isWiki && { wk: true })
+                            },
+                            termFreqs,
+                            docLength,
+                            wiki: isWiki
+                        });
                     }
-                    // Add filename match to count
-                    if (filenameMatch)
-                        matchCount++;
-                    candidates.push({
-                        result: {
-                            p: relativePath,
-                            t: title,
-                            ex: excerpt,
-                            mc: matchCount,
-                            ln: lineNumber,
-                            uri: generateObsidianUri(this.vaultPath, relativePath),
-                            ...(isWiki && { wk: true })
-                        },
-                        termFreqs,
-                        docLength,
-                        wiki: isWiki
-                    });
                 }
             }
+            const results = boundSearchResults(this.rerank(candidates, scoringTerms, termDocFreq, docCount, totalDocLength, maxLimit), maxChars);
+            if (generation === this.cacheGeneration) {
+                this.cache.set(cacheKey, { expiresAt: Date.now() + SEARCH_CACHE_TTL_MS, results: results.map(result => ({ ...result })) });
+                while (this.cache.size > SEARCH_CACHE_MAX_ENTRIES) {
+                    const oldest = this.cache.keys().next();
+                    if (oldest.done)
+                        break;
+                    this.cache.delete(oldest.value);
+                }
+            }
+            return results;
+        })();
+        this.inFlight.set(cacheKey, computation);
+        try {
+            return await computation;
         }
-        const results = this.rerank(candidates, scoringTerms, termDocFreq, docCount, totalDocLength, maxLimit);
-        return boundSearchResults(results, maxChars);
+        finally {
+            if (this.inFlight.get(cacheKey) === computation)
+                this.inFlight.delete(cacheKey);
+        }
     }
     async findMarkdownFiles(dirPath) {
         const markdownFiles = [];

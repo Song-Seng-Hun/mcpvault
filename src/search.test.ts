@@ -60,6 +60,18 @@ describe("SearchService", () => {
     expect(results).toHaveLength(0);
   });
 
+  test("invalidates the bounded cache when a caller reports a direct edit", async () => {
+    await writeNote("changing.md", "# Changing\n\noldneedle.");
+    expect((await searchService.search({ query: "oldneedle" }))).toHaveLength(1);
+
+    await writeNote("changing.md", "# Changing\n\nnewneedle.");
+    expect((await searchService.search({ query: "oldneedle" }))).toHaveLength(1);
+
+    searchService.invalidate();
+    expect((await searchService.search({ query: "oldneedle" }))).toHaveLength(0);
+    expect((await searchService.search({ query: "newneedle" }))).toHaveLength(1);
+  });
+
   test("throws on empty query", async () => {
     await expect(searchService.search({ query: "" }))
       .rejects.toThrow(/empty/);

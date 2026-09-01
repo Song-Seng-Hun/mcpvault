@@ -149,7 +149,7 @@ adapter is opt-in and binds to `127.0.0.1` by default.
   - Partial reads: `get_note_outline`, `read_note_lines`
   - Directory and batch reads: `list_directory`, `read_multiple_notes`
 - Search: `search_notes` with multi-word matching, LLM Wiki-first ranking, one compact excerpt per document, and bounded result count/characters
-  - Optional semantic search: pass `semantic: true` to add Korean-capable `multilingual-e5-small` vector matches. The model and LanceDB cache load lazily, are processed in small idle batches, and are unloaded after inactivity; if either dependency or its local index fails, `search_notes` returns the normal lexical results. `semantic_search_status` reports cache health. The cache stores no note text—only vectors and derived path/hash/line metadata; bounded excerpts are read from the authorized Markdown source at query time. Markdown/Git remain authoritative.
+  - Optional semantic search: pass `semantic: true` to add Korean-capable `multilingual-e5-small` vector matches. The model and LanceDB cache load lazily, are processed by one bounded idle worker, and are unloaded after inactivity; concurrent server instances in one Node process share one embedder. A client that already has a compatible 384-dimensional query vector can pass `queryVector` and avoid loading an embedding model in that server process. If either dependency or its local index fails, `search_notes` returns the normal lexical results. `semantic_search_status` reports cache health. The cache stores no note text—only vectors and derived path/hash/line metadata; bounded excerpts are read from the authorized Markdown source at query time. Markdown/Git remain authoritative.
   - Optional Obsidian-native search: `search_obsidian` uses the running Obsidian CLI index for public-global results; authenticated private searches must use `search_scoped_notes`
   - Metadata and tags: `get_frontmatter`, `update_frontmatter`, `get_notes_info`, `get_vault_stats`, `manage_tags`, `list_all_tags`
   - Wiki links: `wiki_link` resolves names and returns alternative paths when a name is ambiguous; `get_backlinks` finds incoming wikilinks, `get_outlinks` lists outgoing wikilinks, `find_unresolved_links` finds broken references, and `find_orphan_notes` finds isolated notes
@@ -954,13 +954,34 @@ The semantic index is a disposable derived cache under the hidden
 `.mcpvault/semantic-index/` directory. It is never the source of truth and is
 not required for startup or ordinary search. New and changed Markdown notes
 are queued by the file service, then embedded in small background batches when
-the server is idle. The default model is `Xenova/multilingual-e5-small`, which
-uses E5's `query:`/`passage:` prefixes and 384-dimensional normalized vectors.
+the server is idle after that process opts into server-side semantic search; a
+semantic query never starts a full-vault scan or performs foreground indexing.
+The queue and per-note chunk count are bounded so a burst
+of edits or one very large note cannot monopolize the process. The default
+model is `Xenova/multilingual-e5-small`, which uses E5's `query:`/`passage:`
+prefixes and 384-dimensional normalized vectors. Search results use a short
+in-memory lexical cache, while query embeddings use a bounded five-minute
+cache. Both are invalidated after MCP writes and naturally expire for edits
+made directly in Obsidian.
+`semantic_search_status` exposes whether this process is the indexing leader,
+waiting behind another process, or acting as a client-only vector consumer.
 The cache contains no raw Markdown excerpts: only vectors, hashes, paths, and
 line metadata are persisted. The short result excerpt is read from the source
 note only after the caller's scope predicate passes. Only scopes visible to the
 current caller are queried; private scope tables are never included for
 anonymous callers or other agents.
+
+Clients may offload query embedding by computing the same E5 `query:` vector
+locally and sending it as `queryVector` with `semantic: true`. The server still
+owns the LanceDB index, applies the caller's scope/path predicate, reads the
+excerpt from the authorized Markdown source, and bounds the response. A client
+vector is therefore a performance hint, never an authorization or result
+override. For several agents on one machine, prefer one long-running MCPVault
+process per vault so the process-shared model and index worker are reused; if
+separate processes are unavoidable, client-computed query vectors prevent each
+process from loading its own embedding model. Use server-side semantic search
+in one designated process to opt that process into background document
+indexing; vector-only clients remain read-only consumers of that shared index.
 
 ### `get_backlinks`
 

@@ -173,8 +173,11 @@ export function createServer(vaultPath, options = {}) {
     const scopeAuth = new ScopeAuthService(resolvedVaultPath, moderatorAccounts === undefined ? {} : { moderatorAccounts });
     const scopeAccess = new ScopeAccessPolicy();
     const semanticSearch = new SemanticSearchService(resolvedVaultPath, pathFilter, scopeAccess);
-    const fileSystem = new FileSystemService(resolvedVaultPath, pathFilter, frontmatterHandler, (path, kind) => semanticSearch.notifyChange(path, kind));
     const searchService = new SearchService(resolvedVaultPath, pathFilter);
+    const fileSystem = new FileSystemService(resolvedVaultPath, pathFilter, frontmatterHandler, (path, kind) => {
+        searchService.invalidate();
+        semanticSearch.notifyChange(path, kind);
+    });
     const gitHistory = new GitHistoryService(resolvedVaultPath, pathFilter);
     const collaboration = new CollaborationService(fileSystem, searchService);
     const references = new ReferenceService(fileSystem, scopeAccess);
@@ -289,6 +292,7 @@ export function createServer(vaultPath, options = {}) {
                     pathPrefix: { type: "string", description: "Restrict the search to a vault subtree, e.g. \"Projects/2026\" (directory prefix)" },
                     excludePaths: { type: "array", items: { type: "string" }, description: "Skip files under these subtrees, e.g. [\"Archive\", \"meta\"] (directory prefixes)" },
                     semantic: { type: "boolean", description: "Add bounded semantic/vector matches using the optional multilingual index (default: false)" },
+                    queryVector: { type: "array", minItems: 384, maxItems: 384, items: { type: "number" }, description: "Optional 384-dimensional query embedding computed by the client with Xenova/multilingual-e5-small; supplying it avoids loading the embedding model in this server process" },
                     prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
                 },
                 required: ["query"]
@@ -1194,6 +1198,7 @@ export function createServer(vaultPath, options = {}) {
                             maxChars: trimmedArgs.maxChars,
                             pathPrefix: trimmedArgs.pathPrefix,
                             excludePaths: trimmedArgs.excludePaths,
+                            queryVector: Array.isArray(trimmedArgs.queryVector) ? trimmedArgs.queryVector : undefined,
                             principal,
                         });
                         const byPath = new Map(lexicalResults.map(result => [result.p, result]));

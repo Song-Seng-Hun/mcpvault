@@ -1,16 +1,80 @@
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, open, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { ScopeAccessPolicy } from './scope-access.js';
 import { boundSearchResults, normalizeSearchLimit, normalizeSearchMaxChars } from './search-limits.js';
 import { generateObsidianUri } from './uri.js';
 const MODEL_ID = 'Xenova/multilingual-e5-small';
+const EMBEDDING_DIMENSIONS = 384;
 const INDEX_DIR = '.mcpvault/semantic-index';
 const MANIFEST_FILE = 'manifest.json';
+const WORKER_LOCK_FILE = 'worker.lock';
 const MAX_CHUNK_CHARS = 1200;
+const MAX_CHUNKS_PER_NOTE = 64;
 const MAX_EXCERPT_CHARS = 600;
 const IDLE_DELAY_MS = 15_000;
 const UNAVAILABLE_RETRY_MS = 5 * 60_000;
+const SCAN_INTERVAL_MS = 30_000;
+const MAX_PENDING_CHANGES = 5_000;
+const QUERY_VECTOR_CACHE_TTL_MS = 5 * 60_000;
+const QUERY_VECTOR_CACHE_MAX_ENTRIES = 256;
+// One model per Node process, regardless of how many vault/server instances or
+// agent sessions share that process. Separate server processes can still use
+// client-computed queryVector to avoid loading a model in every process.
+const EMBEDDER_POOL = new Map();
+async function acquireSharedEmbedder() {
+    let entry = EMBEDDER_POOL.get(MODEL_ID);
+    if (!entry) {
+        entry = { embedder: undefined, loading: undefined, users: 0, disposeTimer: undefined };
+        EMBEDDER_POOL.set(MODEL_ID, entry);
+    }
+    if (entry.disposeTimer) {
+        clearTimeout(entry.disposeTimer);
+        entry.disposeTimer = undefined;
+    }
+    if (!entry.embedder) {
+        if (!entry.loading) {
+            entry.loading = (async () => {
+                const module = await import('@huggingface/transformers');
+                const pipeline = module.pipeline;
+                return pipeline('feature-extraction', MODEL_ID, { dtype: 'q8' });
+            })().then(embedder => {
+                entry.embedder = embedder;
+                return embedder;
+            }).catch(error => {
+                if (EMBEDDER_POOL.get(MODEL_ID) === entry)
+                    EMBEDDER_POOL.delete(MODEL_ID);
+                throw error;
+            });
+        }
+        await entry.loading;
+    }
+    const embedder = entry.embedder;
+    if (!embedder)
+        throw new Error('Embedding model did not initialize');
+    entry.users += 1;
+    return {
+        embedder,
+        release: () => {
+            if (entry.users > 0)
+                entry.users -= 1;
+            if (entry.users !== 0 || entry.disposeTimer)
+                return;
+            entry.disposeTimer = setTimeout(() => {
+                entry.disposeTimer = undefined;
+                if (entry.users !== 0 || !entry.embedder)
+                    return;
+                const current = entry.embedder;
+                entry.embedder = undefined;
+                entry.loading = undefined;
+                if (EMBEDDER_POOL.get(MODEL_ID) === entry)
+                    EMBEDDER_POOL.delete(MODEL_ID);
+                void Promise.resolve(current.dispose?.()).catch(() => undefined);
+            }, IDLE_DELAY_MS * 4);
+            entry.disposeTimer.unref?.();
+        },
+    };
+}
 function normalizePath(value) {
     return String(value || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
 }
@@ -65,7 +129,7 @@ function chunkNote(path, content) {
             offset += paragraph.length + 2;
             continue;
         }
-        for (let start = 0; start < trimmed.length; start += MAX_CHUNK_CHARS) {
+        for (let start = 0; start < trimmed.length && chunks.length < MAX_CHUNKS_PER_NOTE; start += MAX_CHUNK_CHARS) {
             const text = trimmed.slice(start, start + MAX_CHUNK_CHARS);
             const id = `${path}#${chunks.length}`;
             chunks.push({
@@ -111,14 +175,27 @@ export class SemanticSearchService {
     vaultPath;
     indexPath;
     manifestPath;
+    workerLockPath;
     manifest = {};
     manifestReady;
     db;
     embedder;
+    embedderLease;
     pending = new Map();
+    queryVectorCache = new Map();
+    queryVectorCacheHits = 0;
+    queryVectorCacheMisses = 0;
     idleTimer;
     unloadTimer;
     syncPromise;
+    scanPromise;
+    dbPromise;
+    semanticActive = false;
+    indexLease;
+    indexWorker = 'standby';
+    lastScanAt = 0;
+    tableNamesCache;
+    tableNamesCachedAt = 0;
     unavailableUntil = 0;
     lastError;
     constructor(vaultPath, pathFilter, accessPolicy = new ScopeAccessPolicy()) {
@@ -127,32 +204,56 @@ export class SemanticSearchService {
         this.vaultPath = resolve(vaultPath);
         this.indexPath = join(this.vaultPath, INDEX_DIR);
         this.manifestPath = join(this.indexPath, MANIFEST_FILE);
+        this.workerLockPath = join(this.indexPath, WORKER_LOCK_FILE);
         this.manifestReady = this.loadManifest();
-        this.scheduleIdleWork();
     }
     notifyChange(path, kind) {
         const normalized = normalizePath(path);
         if (!isMarkdown(normalized) || !this.pathFilter.isAllowed(normalized))
             return;
-        this.pending.set(normalized, { kind });
-        this.scheduleIdleWork();
+        this.queryVectorCache.clear();
+        if (this.pending.size < MAX_PENDING_CHANGES || this.pending.has(normalized)) {
+            this.pending.set(normalized, { kind });
+        }
+        if (this.semanticActive)
+            this.scheduleIdleWork();
     }
     async search(params) {
         const limit = normalizeSearchLimit(params.limit);
         const maxChars = normalizeSearchMaxChars(params.maxChars);
         if (!params.query?.trim())
             throw new Error('Search query cannot be empty');
+        const clientVector = params.queryVector;
+        if (clientVector !== undefined)
+            this.validateVector(clientVector);
         if (Date.now() < this.unavailableUntil) {
             return { results: [], available: false, indexed: this.indexedCount(), pending: this.pending.size, error: this.lastError };
         }
         try {
             await this.manifestReady;
-            await this.scanForChanges();
-            await this.drain(Math.max(4, Math.min(limit, 8)));
-            const vector = await this.embedQuery(params.query);
+            // Only a server-side semantic query opts this process into background
+            // indexing. A client-vector query remains a read-only cache consumer,
+            // which lets separate agent processes avoid an embedding model entirely.
+            if (clientVector === undefined) {
+                if (!await this.acquireIndexLease()) {
+                    return { results: [], available: false, indexed: this.indexedCount(), pending: this.pending.size, error: 'Another MCPVault process owns semantic indexing; provide a client-computed queryVector or use lexical search.' };
+                }
+                this.semanticActive = true;
+                this.scheduleIdleWork();
+            }
+            else if (!this.indexLease) {
+                this.indexWorker = 'client';
+            }
+            // Semantic search must not turn a user query into a full-vault indexing
+            // job. The bounded idle worker discovers and indexes changes separately;
+            // this request only queries the currently available derived cache.
+            const names = await this.getTableNames();
+            if (names.size === 0) {
+                return { results: [], available: true, indexed: this.indexedCount(), pending: this.pending.size };
+            }
+            const vector = clientVector || await this.embedQuery(params.query);
             const scopes = this.accessPolicy.scopeRoots(params.principal).map(root => root.kind === 'global' ? 'global' : `${root.kind}:${root.root.split('/').pop()}`);
             const results = [];
-            const names = await this.getTableNames();
             for (const scope of scopes) {
                 const name = tableName(scope);
                 if (!names.has(name))
@@ -195,6 +296,12 @@ export class SemanticSearchService {
             available: Date.now() >= this.unavailableUntil,
             indexed: this.indexedCount(),
             pending: this.pending.size,
+            worker: 'process-shared',
+            indexWorker: this.indexWorker,
+            indexingActive: this.semanticActive,
+            queryVectorCacheEntries: this.queryVectorCache.size,
+            queryVectorCacheHits: this.queryVectorCacheHits,
+            queryVectorCacheMisses: this.queryVectorCacheMisses,
             ...(this.lastError && { lastError: this.lastError }),
         };
     }
@@ -226,6 +333,10 @@ export class SemanticSearchService {
         this.idleTimer.unref?.();
     }
     async runIdleWork() {
+        if (!this.semanticActive)
+            return;
+        if (!this.indexLease && !await this.acquireIndexLease())
+            return;
         try {
             await this.manifestReady;
             await this.scanForChanges();
@@ -240,24 +351,38 @@ export class SemanticSearchService {
         }
     }
     async scanForChanges() {
-        const seen = new Set();
-        for (const path of await this.findMarkdownFiles(this.vaultPath)) {
-            const normalized = normalizePath(path);
-            seen.add(normalized);
-            if (!this.pathFilter.isAllowed(normalized))
-                continue;
-            const fullPath = join(this.vaultPath, normalized);
-            const content = await readFile(fullPath, 'utf8').catch(() => undefined);
-            if (content === undefined)
-                continue;
-            const hash = hashContent(content);
-            const entry = this.manifest[normalized];
-            if (!entry || entry.hash !== hash)
-                this.pending.set(normalized, { kind: 'upsert' });
+        if (this.scanPromise)
+            return this.scanPromise;
+        if (Date.now() - this.lastScanAt < SCAN_INTERVAL_MS)
+            return;
+        this.scanPromise = (async () => {
+            const seen = new Set();
+            for (const path of await this.findMarkdownFiles(this.vaultPath)) {
+                const normalized = normalizePath(path);
+                seen.add(normalized);
+                if (!this.pathFilter.isAllowed(normalized))
+                    continue;
+                const fullPath = join(this.vaultPath, normalized);
+                const content = await readFile(fullPath, 'utf8').catch(() => undefined);
+                if (content === undefined)
+                    continue;
+                const hash = hashContent(content);
+                const entry = this.manifest[normalized];
+                if ((!entry || entry.hash !== hash) && (this.pending.size < MAX_PENDING_CHANGES || this.pending.has(normalized))) {
+                    this.pending.set(normalized, { kind: 'upsert' });
+                }
+            }
+            for (const path of Object.keys(this.manifest)) {
+                if (!seen.has(path) && (this.pending.size < MAX_PENDING_CHANGES || this.pending.has(path)))
+                    this.pending.set(path, { kind: 'delete' });
+            }
+            this.lastScanAt = Date.now();
+        })();
+        try {
+            await this.scanPromise;
         }
-        for (const path of Object.keys(this.manifest)) {
-            if (!seen.has(path))
-                this.pending.set(path, { kind: 'delete' });
+        finally {
+            this.scanPromise = undefined;
         }
     }
     async findMarkdownFiles(dir) {
@@ -314,29 +439,90 @@ export class SemanticSearchService {
         }
     }
     async getDb() {
-        if (!this.db) {
-            const module = await import('@lancedb/lancedb');
-            await mkdir(this.indexPath, { recursive: true });
-            this.db = await module.connect(this.indexPath);
+        if (this.db)
+            return this.db;
+        if (!this.dbPromise) {
+            this.dbPromise = (async () => {
+                const module = await import('@lancedb/lancedb');
+                await mkdir(this.indexPath, { recursive: true });
+                this.db = await module.connect(this.indexPath);
+                return this.db;
+            })();
         }
-        return this.db;
+        try {
+            return await this.dbPromise;
+        }
+        finally {
+            this.dbPromise = undefined;
+        }
+    }
+    /**
+     * Coordinate document indexing across separately spawned MCP processes.
+     * The first process that opts into server-side semantic search becomes the
+     * leader. Other processes can still query the derived LanceDB cache with a
+     * client-provided vector, but never start a second indexing model.
+     */
+    async acquireIndexLease() {
+        if (this.indexLease)
+            return true;
+        await mkdir(this.indexPath, { recursive: true });
+        const createLease = async () => {
+            try {
+                const handle = await open(this.workerLockPath, 'wx');
+                await handle.writeFile(JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }), 'utf8');
+                this.indexLease = handle;
+                this.indexWorker = 'leader';
+                return true;
+            }
+            catch (error) {
+                if (!(error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST'))
+                    throw error;
+                return false;
+            }
+        };
+        if (await createLease())
+            return true;
+        const owner = await readFile(this.workerLockPath, 'utf8').catch(() => '');
+        const pid = Number(/\"pid\"\s*:\s*(\d+)/.exec(owner)?.[1] || 0);
+        let alive = false;
+        if (Number.isInteger(pid) && pid > 0) {
+            try {
+                process.kill(pid, 0);
+                alive = true;
+            }
+            catch {
+                alive = false;
+            }
+        }
+        if (alive) {
+            this.indexWorker = 'standby';
+            return false;
+        }
+        await unlink(this.workerLockPath).catch(() => undefined);
+        const acquired = await createLease();
+        if (!acquired)
+            this.indexWorker = 'standby';
+        return acquired;
     }
     async getTableNames() {
+        if (this.tableNamesCache && Date.now() - this.tableNamesCachedAt < SCAN_INTERVAL_MS)
+            return this.tableNamesCache;
         const db = await this.getDb();
-        return new Set(await db.tableNames());
+        this.tableNamesCache = new Set(await db.tableNames());
+        this.tableNamesCachedAt = Date.now();
+        return this.tableNamesCache;
     }
     async getEmbedder() {
         if (!this.embedder) {
-            const module = await import('@huggingface/transformers');
-            const pipeline = module.pipeline;
-            this.embedder = await pipeline('feature-extraction', MODEL_ID, { dtype: 'q8' });
+            this.embedderLease = await acquireSharedEmbedder();
+            this.embedder = this.embedderLease.embedder;
         }
         if (this.unloadTimer)
             clearTimeout(this.unloadTimer);
         this.unloadTimer = setTimeout(() => {
-            const embedder = this.embedder;
             this.embedder = undefined;
-            void Promise.resolve(embedder?.dispose?.()).catch(() => undefined);
+            this.embedderLease?.release();
+            this.embedderLease = undefined;
             try {
                 this.db?.close?.();
             }
@@ -344,6 +530,8 @@ export class SemanticSearchService {
                 // Releasing the disposable cache is best-effort.
             }
             this.db = undefined;
+            this.tableNamesCache = undefined;
+            this.tableNamesCachedAt = 0;
             this.unloadTimer = undefined;
         }, IDLE_DELAY_MS * 4);
         this.unloadTimer.unref?.();
@@ -355,12 +543,36 @@ export class SemanticSearchService {
         const values = output.tolist();
         const valueList = values;
         const row = Array.isArray(valueList?.[0]) ? valueList[0] : values;
-        if (!Array.isArray(row) || row.length === 0 || !row.every(value => typeof value === 'number'))
-            throw new Error('Embedding model returned an invalid vector');
+        if (!Array.isArray(row) || row.length !== EMBEDDING_DIMENSIONS || !row.every(value => typeof value === 'number' && Number.isFinite(value)))
+            throw new Error(`Embedding model returned an invalid ${EMBEDDING_DIMENSIONS}-dimensional vector`);
         return row;
     }
     async embedQuery(query) {
-        return this.embed(query, 'query');
+        const key = query.trim();
+        const cached = this.queryVectorCache.get(key);
+        if (cached && cached.expiresAt > Date.now()) {
+            this.queryVectorCacheHits += 1;
+            this.queryVectorCache.delete(key);
+            this.queryVectorCache.set(key, cached);
+            return [...cached.vector];
+        }
+        if (cached)
+            this.queryVectorCache.delete(key);
+        this.queryVectorCacheMisses += 1;
+        const vector = await this.embed(query, 'query');
+        this.queryVectorCache.set(key, { expiresAt: Date.now() + QUERY_VECTOR_CACHE_TTL_MS, vector: [...vector] });
+        while (this.queryVectorCache.size > QUERY_VECTOR_CACHE_MAX_ENTRIES) {
+            const oldest = this.queryVectorCache.keys().next();
+            if (oldest.done)
+                break;
+            this.queryVectorCache.delete(oldest.value);
+        }
+        return vector;
+    }
+    validateVector(vector) {
+        if (!Array.isArray(vector) || vector.length !== EMBEDDING_DIMENSIONS || !vector.every(value => typeof value === 'number' && Number.isFinite(value))) {
+            throw new Error(`queryVector must be a finite numeric vector with exactly ${EMBEDDING_DIMENSIONS} dimensions`);
+        }
     }
     async indexPathContent(path) {
         const fullPath = join(this.vaultPath, path);
@@ -393,6 +605,7 @@ export class SemanticSearchService {
             table = table || await db.createTable(name, rows);
             if (names.has(name))
                 await table.add(rows);
+            this.tableNamesCache?.add(name);
         }
         this.manifest[path] = { hash: contentHash, scope };
     }

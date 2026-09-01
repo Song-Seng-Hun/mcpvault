@@ -102,6 +102,8 @@ export interface SearchParams {
     excludePaths?: string[];
     /** Add bounded semantic/vector matches to the lexical search results. */
     semantic?: boolean;
+    /** Optional client-computed query vector using the configured semantic model. */
+    queryVector?: number[];
 }
 export interface SearchResult {
     p: string;
