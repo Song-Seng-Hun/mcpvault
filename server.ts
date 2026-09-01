@@ -3,16 +3,22 @@
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { createServer } from "./src/createServer.js";
 import { parseCliArgs } from "./src/cli.js";
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join, resolve } from "path";
 
 // Get package.json version
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const packageJson = JSON.parse(
-  readFileSync(join(__dirname, "../package.json"), "utf-8")
-);
+// `npm start` runs this file from the repository root through tsx, while a
+// packaged build runs `dist/server.js`. Resolve both layouts so the local
+// Codex plugin can start the same server without a tunnel.
+const packagePath = [join(__dirname, "package.json"), join(__dirname, "../package.json")]
+  .find((candidate) => existsSync(candidate));
+if (!packagePath) {
+  throw new Error(`Unable to locate package.json from ${__dirname}`);
+}
+const packageJson = JSON.parse(readFileSync(packagePath, "utf-8"));
 const VERSION = packageJson.version;
 
 // Handle --version and --help flags
