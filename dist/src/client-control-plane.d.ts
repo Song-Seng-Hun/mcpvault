@@ -1,5 +1,7 @@
 export interface ClientMcpCaller {
-    callTool(toolName: string, arguments_: Record<string, unknown>): Promise<unknown>;
+    callTool(toolName: string, arguments_: Record<string, unknown>, options?: {
+        signal?: AbortSignal;
+    }): Promise<unknown>;
 }
 export interface ClientCapabilityCatalogCacheOptions {
     maxEntries?: number;
@@ -15,8 +17,8 @@ export declare class ClientCapabilityCatalogCache {
     private readonly ttlMs;
     private readonly now;
     constructor(caller: ClientMcpCaller, options?: ClientCapabilityCatalogCacheOptions);
-    listActive(arguments_?: Record<string, unknown>, cachePartition?: string): Promise<unknown>;
-    search(arguments_: Record<string, unknown>, cachePartition?: string): Promise<unknown>;
+    listActive(arguments_?: Record<string, unknown>, cachePartition?: string, signal?: AbortSignal): Promise<unknown>;
+    search(arguments_: Record<string, unknown>, cachePartition?: string, signal?: AbortSignal): Promise<unknown>;
     invalidate(cachePartition?: string): void;
     clear(): void;
     size(): number;

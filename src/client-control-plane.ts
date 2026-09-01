@@ -1,5 +1,5 @@
 export interface ClientMcpCaller {
-  callTool(toolName: string, arguments_: Record<string, unknown>): Promise<unknown>;
+  callTool(toolName: string, arguments_: Record<string, unknown>, options?: { signal?: AbortSignal }): Promise<unknown>;
 }
 
 export interface ClientCapabilityCatalogCacheOptions {
@@ -35,12 +35,12 @@ export class ClientCapabilityCatalogCache {
     this.now = options.now || Date.now;
   }
 
-  listActive(arguments_: Record<string, unknown> = {}, cachePartition = 'public'): Promise<unknown> {
-    return this.read('list_active_capabilities', arguments_, cachePartition);
+  listActive(arguments_: Record<string, unknown> = {}, cachePartition = 'public', signal?: AbortSignal): Promise<unknown> {
+    return this.read('list_active_capabilities', arguments_, cachePartition, signal);
   }
 
-  search(arguments_: Record<string, unknown>, cachePartition = 'public'): Promise<unknown> {
-    return this.read('search_capabilities', arguments_, cachePartition);
+  search(arguments_: Record<string, unknown>, cachePartition = 'public', signal?: AbortSignal): Promise<unknown> {
+    return this.read('search_capabilities', arguments_, cachePartition, signal);
   }
 
   invalidate(cachePartition?: string): void {
@@ -59,7 +59,8 @@ export class ClientCapabilityCatalogCache {
     return this.entries.size;
   }
 
-  private async read(toolName: string, arguments_: Record<string, unknown>, cachePartition: string): Promise<unknown> {
+  private async read(toolName: string, arguments_: Record<string, unknown>, cachePartition: string, signal?: AbortSignal): Promise<unknown> {
+    if (signal?.aborted) throw new Error('capability request was aborted');
     const partition = String(cachePartition || 'public');
     const key = JSON.stringify({ toolName, arguments: sortRecord(arguments_), partition });
     const cached = this.entries.get(key);
@@ -70,8 +71,10 @@ export class ClientCapabilityCatalogCache {
     }
     if (cached) this.entries.delete(key);
     const running = this.inFlight.get(key);
-    if (running) return cloneJson(await running);
-    const computation = this.caller.callTool(toolName, arguments_).then(value => {
+    if (running) return cloneJson(await waitForAbort(running, signal));
+    const computation = (signal
+      ? this.caller.callTool(toolName, arguments_, { signal })
+      : this.caller.callTool(toolName, arguments_)).then(value => {
       if (!isErrorResult(value)) {
         this.entries.set(key, { partition, value: cloneJson(value), expiresAt: this.now() + this.ttlMs });
         while (this.entries.size > this.maxEntries) this.entries.delete(this.entries.keys().next().value!);
@@ -80,11 +83,30 @@ export class ClientCapabilityCatalogCache {
     });
     this.inFlight.set(key, computation);
     try {
-      return cloneJson(await computation);
+      return cloneJson(await waitForAbort(computation, signal));
     } finally {
       if (this.inFlight.get(key) === computation) this.inFlight.delete(key);
     }
   }
+}
+
+async function waitForAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) throw new Error('capability request was aborted');
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new Error('capability request was aborted'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      value => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      error => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
 }
 
 export interface ClientHeartbeatBackoffOptions {

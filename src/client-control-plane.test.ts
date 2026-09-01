@@ -54,3 +54,20 @@ test('spreads heartbeat delays with bounded jitter', () => {
   expect(early.next(false)).toBe(180);
   expect(late.next(false)).toBe(220);
 });
+
+test('cancels obsolete capability waits and forwards the signal', async () => {
+  const controller = new AbortController();
+  let received: AbortSignal | undefined;
+  const caller: ClientMcpCaller = {
+    async callTool(_toolName, _arguments, options) {
+      received = options?.signal;
+      await new Promise<void>((_resolve, reject) => options?.signal?.addEventListener('abort', () => reject(new Error('transport aborted')), { once: true }));
+      return {};
+    },
+  };
+  const cache = new ClientCapabilityCatalogCache(caller);
+  const pending = cache.search({ query: 'obsolete' }, 'public', controller.signal);
+  controller.abort();
+  await expect(pending).rejects.toThrow('aborted');
+  expect(received).toBe(controller.signal);
+});

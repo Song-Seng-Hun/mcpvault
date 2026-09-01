@@ -7,6 +7,7 @@ export interface ClientReferenceReadOptions {
   accessToken?: string;
   /** Use a stable per-principal value when one cache instance serves private sessions. */
   cachePartition?: string;
+  signal?: AbortSignal;
 }
 
 export interface ClientReferenceCacheOptions {
@@ -66,11 +67,18 @@ export class ClientReferenceCache {
       return cloneValue(cached.value);
     }
     const running = this.inFlight.get(key);
-    if (running) return cloneValue(await running);
-    const computation = this.readUncached(key, normalizedPath, normalizedRevision, partition, { includeContent, limit, maxChars, ...(options.accessToken && { accessToken: options.accessToken }) });
+    if (options.signal?.aborted) throw new Error('reference request was aborted');
+    if (running) return cloneValue(await waitForAbort(running, options.signal));
+    const computation = this.readUncached(key, normalizedPath, normalizedRevision, partition, {
+      includeContent,
+      limit,
+      maxChars,
+      ...(options.accessToken && { accessToken: options.accessToken }),
+      ...(options.signal && { signal: options.signal }),
+    });
     this.inFlight.set(key, computation);
     try {
-      return cloneValue(await computation);
+      return cloneValue(await waitForAbort(computation, options.signal));
     } finally {
       if (this.inFlight.get(key) === computation) this.inFlight.delete(key);
     }
@@ -98,7 +106,7 @@ export class ClientReferenceCache {
     path: string,
     revision: string,
     partition: string,
-    options: { includeContent: boolean; limit: number; maxChars: number; accessToken?: string },
+    options: { includeContent: boolean; limit: number; maxChars: number; accessToken?: string; signal?: AbortSignal },
   ): Promise<Record<string, unknown>> {
     const arguments_: Record<string, unknown> = {
       path,
@@ -107,12 +115,33 @@ export class ClientReferenceCache {
       maxChars: options.maxChars,
       ...(options.accessToken && { accessToken: options.accessToken }),
     };
-    const value = decodeEndpointResult(await this.caller.callEndpoint('mcp.read_references', arguments_));
+    const value = decodeEndpointResult(options.signal
+      ? await this.caller.callEndpoint('mcp.read_references', arguments_, { signal: options.signal })
+      : await this.caller.callEndpoint('mcp.read_references', arguments_));
     this.entries.delete(key);
     this.entries.set(key, { path, revision, partition, value: cloneValue(value) });
     while (this.entries.size > this.maxEntries) this.entries.delete(this.entries.keys().next().value!);
     return value;
   }
+}
+
+async function waitForAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) throw new Error('reference request was aborted');
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new Error('reference request was aborted'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      value => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      error => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
 }
 
 function cloneValue<T extends Record<string, unknown>>(value: T): T {

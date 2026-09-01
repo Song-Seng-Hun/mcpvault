@@ -37,3 +37,20 @@ test('coalesces concurrent private reads without sharing cache partitions', asyn
   await cache.read('scope://agent/a/note.md', 'a', { cachePartition: 'agent-b' });
   expect(calls).toBe(2);
 });
+
+test('cancels obsolete reference waits and forwards the signal', async () => {
+  const controller = new AbortController();
+  let received: AbortSignal | undefined;
+  const caller: ClientEndpointCaller = {
+    async callEndpoint(_endpointId, _arguments, options) {
+      received = options?.signal;
+      await new Promise<void>((_resolve, reject) => options?.signal?.addEventListener('abort', () => reject(new Error('transport aborted')), { once: true }));
+      return {};
+    },
+  };
+  const cache = new ClientReferenceCache(caller);
+  const pending = cache.read('note.md', 'a'.repeat(64), { signal: controller.signal });
+  controller.abort();
+  await expect(pending).rejects.toThrow('aborted');
+  expect(received).toBe(controller.signal);
+});

@@ -48,12 +48,20 @@ export class ClientReferenceCache {
             return cloneValue(cached.value);
         }
         const running = this.inFlight.get(key);
+        if (options.signal?.aborted)
+            throw new Error('reference request was aborted');
         if (running)
-            return cloneValue(await running);
-        const computation = this.readUncached(key, normalizedPath, normalizedRevision, partition, { includeContent, limit, maxChars, ...(options.accessToken && { accessToken: options.accessToken }) });
+            return cloneValue(await waitForAbort(running, options.signal));
+        const computation = this.readUncached(key, normalizedPath, normalizedRevision, partition, {
+            includeContent,
+            limit,
+            maxChars,
+            ...(options.accessToken && { accessToken: options.accessToken }),
+            ...(options.signal && { signal: options.signal }),
+        });
         this.inFlight.set(key, computation);
         try {
-            return cloneValue(await computation);
+            return cloneValue(await waitForAbort(computation, options.signal));
         }
         finally {
             if (this.inFlight.get(key) === computation)
@@ -84,13 +92,32 @@ export class ClientReferenceCache {
             maxChars: options.maxChars,
             ...(options.accessToken && { accessToken: options.accessToken }),
         };
-        const value = decodeEndpointResult(await this.caller.callEndpoint('mcp.read_references', arguments_));
+        const value = decodeEndpointResult(options.signal
+            ? await this.caller.callEndpoint('mcp.read_references', arguments_, { signal: options.signal })
+            : await this.caller.callEndpoint('mcp.read_references', arguments_));
         this.entries.delete(key);
         this.entries.set(key, { path, revision, partition, value: cloneValue(value) });
         while (this.entries.size > this.maxEntries)
             this.entries.delete(this.entries.keys().next().value);
         return value;
     }
+}
+async function waitForAbort(promise, signal) {
+    if (!signal)
+        return promise;
+    if (signal.aborted)
+        throw new Error('reference request was aborted');
+    return new Promise((resolve, reject) => {
+        const onAbort = () => reject(new Error('reference request was aborted'));
+        signal.addEventListener('abort', onAbort, { once: true });
+        promise.then(value => {
+            signal.removeEventListener('abort', onAbort);
+            resolve(value);
+        }, error => {
+            signal.removeEventListener('abort', onAbort);
+            reject(error);
+        });
+    });
 }
 function cloneValue(value) {
     return JSON.parse(JSON.stringify(value));

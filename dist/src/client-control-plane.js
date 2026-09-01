@@ -20,11 +20,11 @@ export class ClientCapabilityCatalogCache {
         this.ttlMs = ttlMs;
         this.now = options.now || Date.now;
     }
-    listActive(arguments_ = {}, cachePartition = 'public') {
-        return this.read('list_active_capabilities', arguments_, cachePartition);
+    listActive(arguments_ = {}, cachePartition = 'public', signal) {
+        return this.read('list_active_capabilities', arguments_, cachePartition, signal);
     }
-    search(arguments_, cachePartition = 'public') {
-        return this.read('search_capabilities', arguments_, cachePartition);
+    search(arguments_, cachePartition = 'public', signal) {
+        return this.read('search_capabilities', arguments_, cachePartition, signal);
     }
     invalidate(cachePartition) {
         if (cachePartition === undefined) {
@@ -41,7 +41,9 @@ export class ClientCapabilityCatalogCache {
     size() {
         return this.entries.size;
     }
-    async read(toolName, arguments_, cachePartition) {
+    async read(toolName, arguments_, cachePartition, signal) {
+        if (signal?.aborted)
+            throw new Error('capability request was aborted');
         const partition = String(cachePartition || 'public');
         const key = JSON.stringify({ toolName, arguments: sortRecord(arguments_), partition });
         const cached = this.entries.get(key);
@@ -54,8 +56,10 @@ export class ClientCapabilityCatalogCache {
             this.entries.delete(key);
         const running = this.inFlight.get(key);
         if (running)
-            return cloneJson(await running);
-        const computation = this.caller.callTool(toolName, arguments_).then(value => {
+            return cloneJson(await waitForAbort(running, signal));
+        const computation = (signal
+            ? this.caller.callTool(toolName, arguments_, { signal })
+            : this.caller.callTool(toolName, arguments_)).then(value => {
             if (!isErrorResult(value)) {
                 this.entries.set(key, { partition, value: cloneJson(value), expiresAt: this.now() + this.ttlMs });
                 while (this.entries.size > this.maxEntries)
@@ -65,13 +69,30 @@ export class ClientCapabilityCatalogCache {
         });
         this.inFlight.set(key, computation);
         try {
-            return cloneJson(await computation);
+            return cloneJson(await waitForAbort(computation, signal));
         }
         finally {
             if (this.inFlight.get(key) === computation)
                 this.inFlight.delete(key);
         }
     }
+}
+async function waitForAbort(promise, signal) {
+    if (!signal)
+        return promise;
+    if (signal.aborted)
+        throw new Error('capability request was aborted');
+    return new Promise((resolve, reject) => {
+        const onAbort = () => reject(new Error('capability request was aborted'));
+        signal.addEventListener('abort', onAbort, { once: true });
+        promise.then(value => {
+            signal.removeEventListener('abort', onAbort);
+            resolve(value);
+        }, error => {
+            signal.removeEventListener('abort', onAbort);
+            reject(error);
+        });
+    });
 }
 /** Calculates a bounded next heartbeat delay; it does not schedule model calls. */
 export class ClientHeartbeatBackoff {

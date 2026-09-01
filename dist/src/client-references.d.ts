@@ -6,6 +6,7 @@ export interface ClientReferenceReadOptions {
     accessToken?: string;
     /** Use a stable per-principal value when one cache instance serves private sessions. */
     cachePartition?: string;
+    signal?: AbortSignal;
 }
 export interface ClientReferenceCacheOptions {
     maxEntries?: number;
