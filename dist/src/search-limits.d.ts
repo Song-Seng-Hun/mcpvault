@@ -11,4 +11,10 @@ export declare function boundItems<T>(items: T[], maxChars: number): {
     items: T[];
     truncated: boolean;
 };
+/**
+ * Keep only the best K items while iterating a large result set. `compare`
+ * follows Array#sort semantics: negative means the first item is better.
+ * The returned items are sorted with the same comparator.
+ */
+export declare function boundedTopK<T>(items: Iterable<T>, limit: number, compare: (a: T, b: T) => number): T[];
 //# sourceMappingURL=search-limits.d.ts.map

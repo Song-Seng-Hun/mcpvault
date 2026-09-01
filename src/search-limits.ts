@@ -42,3 +42,51 @@ export function boundItems<T>(items: T[], maxChars: number): { items: T[]; trunc
   }
   return { items: bounded, truncated: false };
 }
+
+/**
+ * Keep only the best K items while iterating a large result set. `compare`
+ * follows Array#sort semantics: negative means the first item is better.
+ * The returned items are sorted with the same comparator.
+ */
+export function boundedTopK<T>(items: Iterable<T>, limit: number, compare: (a: T, b: T) => number): T[] {
+  if (!Number.isInteger(limit) || limit < 1) throw new Error('limit must be a positive integer');
+  const heap: T[] = [];
+  const worseThan = (a: T, b: T) => compare(a, b) > 0;
+  const swap = (a: number, b: number) => {
+    const value = heap[a]!;
+    heap[a] = heap[b]!;
+    heap[b] = value;
+  };
+  const moveUp = (index: number) => {
+    let child = index;
+    while (child > 0) {
+      const parent = Math.floor((child - 1) / 2);
+      if (!worseThan(heap[child]!, heap[parent]!)) break;
+      swap(child, parent);
+      child = parent;
+    }
+  };
+  const moveDown = (index: number) => {
+    let parent = index;
+    while (true) {
+      const left = parent * 2 + 1;
+      const right = left + 1;
+      let worst = parent;
+      if (left < heap.length && worseThan(heap[left]!, heap[worst]!)) worst = left;
+      if (right < heap.length && worseThan(heap[right]!, heap[worst]!)) worst = right;
+      if (worst === parent) break;
+      swap(parent, worst);
+      parent = worst;
+    }
+  };
+  for (const item of items) {
+    if (heap.length < limit) {
+      heap.push(item);
+      moveUp(heap.length - 1);
+    } else if (compare(item, heap[0]!) < 0) {
+      heap[0] = item;
+      moveDown(0);
+    }
+  }
+  return heap.sort(compare);
+}

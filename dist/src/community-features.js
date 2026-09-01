@@ -3,7 +3,7 @@ import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promi
 import { join } from 'node:path';
 import { isModerationHidden, moderationStatus } from './moderation-policy.js';
 import { normalizeScopeId } from './scopes.js';
-import { boundItems } from './search-limits.js';
+import { boundItems, boundedTopK } from './search-limits.js';
 import { MAX_COMMUNITY_TEXT_LENGTH, extractMentions } from './social.js';
 import { queryAllNotes } from './paged-query.js';
 const POSTS = 'Community/Posts';
@@ -169,9 +169,11 @@ export class CommunityFeaturesService {
             queryAllNotes(this.fileSystem, { pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post', author }, sortBy: 'updated_at', sortOrder: 'desc' }),
             queryAllNotes(this.fileSystem, { pathPrefix: COMMENTS, filters: { mcpvault_type: 'blog_comment', author }, sortBy: 'created_at', sortOrder: 'desc' }),
         ]);
-        const authorReputations = await this.reputation.getMany([...posts.notes, ...comments.notes].map(note => String(note.frontmatter.author || '')));
-        const items = [...posts.notes.filter(n => !isModerationHidden(n.frontmatter)).map(n => ({ type: 'post', id: n.frontmatter.post_id, path: n.path, title: n.frontmatter.title, authorLevel: authorReputations.get(String(n.frontmatter.author || '').toLowerCase())?.level ?? 0, authorLevelLabel: authorReputations.get(String(n.frontmatter.author || '').toLowerCase())?.label ?? '뉴비', createdAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at })), ...comments.notes.filter(n => !isModerationHidden(n.frontmatter)).map(n => ({ type: 'comment', id: n.frontmatter.comment_id, postId: n.frontmatter.post_id, path: n.path, authorLevel: authorReputations.get(String(n.frontmatter.author || '').toLowerCase())?.level ?? 0, authorLevelLabel: authorReputations.get(String(n.frontmatter.author || '').toLowerCase())?.label ?? '뉴비', createdAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at }))].sort((a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)));
-        return { author, items: items.slice(0, limit), postCount: posts.notes.length, commentCount: comments.notes.length, total: items.length, truncated: items.length > limit || posts.truncated || comments.truncated, maxChars };
+        const candidates = [...posts.notes.filter(n => !isModerationHidden(n.frontmatter)).map(n => ({ type: 'post', note: n, id: n.frontmatter.post_id, path: n.path, title: n.frontmatter.title, postId: undefined, createdAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at })), ...comments.notes.filter(n => !isModerationHidden(n.frontmatter)).map(n => ({ type: 'comment', note: n, id: n.frontmatter.comment_id, title: undefined, postId: n.frontmatter.post_id, path: n.path, createdAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at }))];
+        const selected = boundedTopK(candidates, limit, (a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)) || a.path.localeCompare(b.path));
+        const authorReputations = await this.reputation.getMany(selected.map(item => String(item.note.frontmatter.author || '')));
+        const items = selected.map(item => ({ type: item.type, id: item.id, path: item.path, ...(item.title !== undefined && { title: item.title }), ...(item.postId !== undefined && { postId: item.postId }), authorLevel: authorReputations.get(String(item.note.frontmatter.author || '').toLowerCase())?.level ?? 0, authorLevelLabel: authorReputations.get(String(item.note.frontmatter.author || '').toLowerCase())?.label ?? '뉴비', createdAt: item.createdAt, updatedAt: item.updatedAt }));
+        return { author, items, postCount: posts.notes.length, commentCount: comments.notes.length, total: candidates.length, truncated: candidates.length > limit || posts.truncated || comments.truncated, maxChars };
     }
     async targetPath(targetType, targetId, postId) {
         if (targetType === 'post') {
@@ -365,19 +367,22 @@ export class CommunityFeaturesService {
     async listPopularPosts(params) {
         const result = await queryAllNotes(this.fileSystem, { pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post', status: 'published' }, sortBy: 'updated_at', sortOrder: 'desc' });
         const visibleNotes = result.notes.filter(note => !isModerationHidden(note.frontmatter)).filter(note => !params.category || String(note.frontmatter.category || 'discussion').toLowerCase() === String(params.category).toLowerCase());
-        const reputations = await this.reputation.getMany(visibleNotes.map(note => String(note.frontmatter.author || '')));
         const reactionAggregates = await this.postReactionAggregates();
         const reactionCounts = reactionAggregates.counts;
-        const posts = visibleNotes.map(note => {
+        const limit = positive(params.limit, 50, 500);
+        const selected = boundedTopK(visibleNotes.map(note => {
             const postId = String(note.frontmatter.post_id || '').toLowerCase();
             const counts = reactionCounts.get(postId) || { likeCount: 0, dislikeCount: 0 };
+            return { note, likeCount: counts.likeCount, dislikeCount: counts.dislikeCount };
+        }), limit, (a, b) => b.likeCount - a.likeCount || String(b.note.frontmatter.updated_at || '').localeCompare(String(a.note.frontmatter.updated_at || '')) || a.note.path.localeCompare(b.note.path));
+        const reputations = await this.reputation.getMany(selected.map(item => String(item.note.frontmatter.author || '')));
+        const posts = selected.map(item => {
+            const note = item.note;
             const authorReputation = reputations.get(String(note.frontmatter.author || '').toLowerCase());
-            return { path: note.path, slug: note.frontmatter.post_id, title: note.frontmatter.title, author: note.frontmatter.author, authorLevel: authorReputation?.level ?? 0, authorLevelLabel: authorReputation?.label ?? '뉴비', category: note.frontmatter.category || 'discussion', tags: note.frontmatter.tags || [], likeCount: counts.likeCount, dislikeCount: counts.dislikeCount, moderationStatus: moderationStatus(note.frontmatter), createdAt: note.frontmatter.created_at, updatedAt: note.frontmatter.updated_at };
+            return { path: note.path, slug: note.frontmatter.post_id, title: note.frontmatter.title, author: note.frontmatter.author, authorLevel: authorReputation?.level ?? 0, authorLevelLabel: authorReputation?.label ?? '뉴비', category: note.frontmatter.category || 'discussion', tags: note.frontmatter.tags || [], likeCount: item.likeCount, dislikeCount: item.dislikeCount, moderationStatus: moderationStatus(note.frontmatter), createdAt: note.frontmatter.created_at, updatedAt: note.frontmatter.updated_at };
         });
-        posts.sort((a, b) => b.likeCount - a.likeCount || String(b.updatedAt).localeCompare(String(a.updatedAt)));
-        const limit = positive(params.limit, 50, 500);
-        const bounded = boundItems(posts.slice(0, limit), positive(params.maxChars, 6000, 20000));
-        return { posts: bounded.items, total: posts.length, truncated: result.truncated || reactionAggregates.incomplete || posts.length > limit || bounded.truncated };
+        const bounded = boundItems(posts, positive(params.maxChars, 6000, 20000));
+        return { posts: bounded.items, total: visibleNotes.length, truncated: result.truncated || reactionAggregates.incomplete || visibleNotes.length > limit || bounded.truncated };
     }
     async acceptComment(params) {
         if (!params.principal)

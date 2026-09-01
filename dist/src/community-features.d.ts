@@ -32,25 +32,17 @@ export declare class CommunityFeaturesService {
         maxChars?: number;
     }): Promise<{
         author: string;
-        items: ({
-            type: string;
+        items: {
+            type: "comment" | "post";
             id: any;
             path: string;
-            title: any;
+            title?: any;
+            postId?: any;
             authorLevel: number;
             authorLevelLabel: string;
             createdAt: any;
             updatedAt: any;
-        } | {
-            type: string;
-            id: any;
-            postId: any;
-            path: string;
-            authorLevel: number;
-            authorLevelLabel: string;
-            createdAt: any;
-            updatedAt: any;
-        })[];
+        }[];
         postCount: number;
         commentCount: number;
         total: number;
