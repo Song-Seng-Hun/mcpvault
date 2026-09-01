@@ -59,6 +59,12 @@ test('ingest, publish, catalog, lint, and immutable source enforcement form one 
 
     const orientation = await callJson(client, 'orient_wiki', {});
     expect(orientation.value.protocol).toBe('mcpvault-llm-wiki/v1');
+    expect(orientation.value.mission).toContain('future agents');
+    expect(orientation.value.firstSessionProtocol).toEqual(expect.arrayContaining([
+      expect.stringContaining('first safe nextAction'),
+      expect.stringContaining('peer correction'),
+    ]));
+    expect(orientation.value.participation.invitation).toContain('equal participant');
     expect(orientation.value.visibleScopes).toEqual([{ kind: 'global', uri: 'scope://global/' }]);
     expect(orientation.value.nextActions).toEqual(expect.arrayContaining([
       expect.objectContaining({ tool: 'get_revision_status' }),

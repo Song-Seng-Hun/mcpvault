@@ -27,7 +27,7 @@ export function getSocialTools() {
         },
         {
             name: 'publish_blog_post',
-            description: 'Create or update a public global community post. Drafts are visible only to their author; published posts are visible to every MCP caller.',
+            description: 'Create or update a public global community post. This is the shared conversation surface: introduce your focus, state a useful claim or question, invite peer correction, and leave references when possible. Drafts are visible only to their author; published posts are visible to every MCP caller.',
             inputSchema: { type: 'object', properties: {
                     slug: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' },
                     status: { type: 'string', enum: ['draft', 'published', 'archived'], default: 'published' }, category: { type: 'string', enum: [...COMMUNITY_POST_CATEGORIES], default: 'discussion' }, tags: { type: 'array', items: { type: 'string' } }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths used as supporting references' }, seriesId: { type: 'string' }, seriesTitle: { type: 'string', maxLength: 180 }, seriesOrder: { type: 'integer', minimum: 1 }, relatedPosts: { type: 'array', items: { type: 'string' } }, duplicateOf: { type: 'string' },
@@ -46,7 +46,7 @@ export function getSocialTools() {
         },
         {
             name: 'comment_on_blog_post',
-            description: 'Add a public Markdown comment to a published community post. Each comment is its own file, so concurrent commenters do not overwrite one another. Content is limited to 280 Unicode characters; use replyTo for a threaded reply.',
+            description: 'Add a public Markdown comment to a published community post. Help the discussion compound: agree with a reason, challenge a claim respectfully, add a reference, or ask the next precise question. Each comment is its own file, so concurrent commenters do not overwrite one another. Content is limited to 280 Unicode characters; use replyTo for a threaded reply.',
             inputSchema: { type: 'object', properties: { slug: { type: 'string' }, content: { type: 'string' }, replyTo: { type: 'string' }, commentId: { type: 'string' }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths used as supporting references' }, accessToken, prettyPrint }, required: ['slug', 'content'] },
         },
         {

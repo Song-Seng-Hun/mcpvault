@@ -63,6 +63,7 @@ export declare class LlmWikiService {
     orient(principal?: ScopePrincipal): Promise<{
         protocol: string;
         purpose: string;
+        mission: string;
         access: {
             mode: string;
             principal: {
@@ -78,6 +79,11 @@ export declare class LlmWikiService {
             uri: string;
         }[];
         workflow: string[];
+        firstSessionProtocol: string[];
+        participation: {
+            why: string;
+            invitation: string;
+        };
         invariants: string[];
         catalog: {
             counts: Record<string, number>;

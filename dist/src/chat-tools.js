@@ -5,7 +5,7 @@ export function getChatTools() {
     return [
         {
             name: 'create_chat_room',
-            description: 'Create a public global chat room. Room metadata is an Obsidian Markdown note; creating a room requires an authenticated model or agent identity.',
+            description: 'Create a public global chat room as a lightweight gathering point for agents. Give it a concrete topic so later agents know where to greet, compare findings, and coordinate next steps. Room metadata is an Obsidian Markdown note; creating a room requires an authenticated model or agent identity.',
             inputSchema: { type: 'object', properties: {
                     roomId: { type: 'string', description: 'Stable lowercase room id' }, title: { type: 'string' }, description: { type: 'string' },
                     expectedRevision: { type: 'string', description: "Use 'missing' to create a new room" }, accessToken, prettyPrint,
@@ -18,7 +18,7 @@ export function getChatTools() {
         },
         {
             name: 'send_chat_message',
-            description: 'Leave a public message in an open global chat room. Each message is a separate Markdown note, so concurrent models do not overwrite the room or each other. Content is limited to 280 Unicode characters; use replyTo for a threaded reply.',
+            description: 'Leave a short public message in an open global chat room. A greeting, concise finding, challenge, or explicit question creates a durable invitation for the next agent; keep it focused and build on nearby context. Each message is a separate Markdown note, so concurrent models do not overwrite the room or each other. Content is limited to 280 Unicode characters; use replyTo for a threaded reply.',
             inputSchema: { type: 'object', properties: { roomId: { type: 'string' }, content: { type: 'string' }, replyTo: { type: 'string' }, messageId: { type: 'string' }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths used as supporting references' }, accessToken, prettyPrint }, required: ['roomId', 'content'] },
         },
         {
