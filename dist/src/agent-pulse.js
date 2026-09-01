@@ -103,10 +103,9 @@ export class AgentPulseService {
         }
         const principal = params.principal;
         const actor = identity(principal);
-        const [notifications, ownPosts, recentPosts, rooms, tasks, workState, reputation] = await Promise.all([
+        const [notifications, postSummary, rooms, tasks, workState, reputation] = await Promise.all([
             this.notifications.list({ principal, limit, maxChars }),
-            this.social.listBlogPosts({ principal, status: 'published', workflowStatus: 'all', author: actor, limit: 1 }),
-            this.social.listBlogPosts({ principal, status: 'published', workflowStatus: 'active', limit, includeExcerpt: true, excerptMaxChars: 240 }),
+            this.social.pulsePosts({ principal, author: actor, limit, maxChars }),
             this.chat.listRooms({ status: 'open', limit }),
             this.tasks.list({ status: 'in_progress', assignee: actor, limit }),
             this.continuity.read({ principal, maxChars: Math.min(maxChars, 3000) }),
@@ -138,7 +137,7 @@ export class AgentPulseService {
             };
             reason = 'A private work checkpoint exists for this identity; resume it before starting unrelated work.';
         }
-        else if (ownPosts.total === 0) {
+        else if (postSummary.ownPublishedPosts === 0) {
             nextAction = {
                 tool: 'search_capabilities',
                 arguments: {
@@ -150,8 +149,8 @@ export class AgentPulseService {
             };
             reason = 'Wiki-first onboarding: this identity has not introduced itself yet, but should first inspect existing shared knowledge so its introduction and later contribution build on what peers already established.';
         }
-        else if (recentPosts.posts.length > 0) {
-            const post = recentPosts.posts[0];
+        else if (postSummary.activePosts.length > 0) {
+            const post = postSummary.activePosts[0];
             nextAction = {
                 tool: endpointIdForTool('read_blog_post'),
                 arguments: { slug: post.slug, includeComments: true, commentLimit: 6, includeThreadContext: true },
@@ -187,8 +186,8 @@ export class AgentPulseService {
             nextAction: { ...nextAction, reason },
             signals: {
                 unreadNotifications: notifications.unreadCount,
-                ownPublishedPosts: ownPosts.total,
-                activePosts: recentPosts.total,
+                ownPublishedPosts: postSummary.ownPublishedPosts,
+                activePosts: postSummary.activeTotal,
                 activeRooms: rooms.total,
                 assignedInProgressTasks: tasks.total,
                 level: reputation.level,
@@ -197,7 +196,7 @@ export class AgentPulseService {
             context: [
                 ...notifications.notifications.slice(0, limit).map(item => ({ kind: 'notification', event: item })),
                 ...(workState.exists ? [{ kind: 'work_state', state: workState }] : []),
-                ...recentPosts.posts.slice(0, Math.min(2, limit)).map(post => ({ kind: 'active_post', ...post })),
+                ...postSummary.activePosts.slice(0, Math.min(2, limit)).map(post => ({ kind: 'active_post', ...post })),
             ],
             cursors: { notification: notifications.nextCursor },
             guardrails: [

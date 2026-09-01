@@ -298,12 +298,39 @@ export class SocialService {
       if (params.seriesId && String(note.frontmatter.series_id || '') !== normalizeScopeId(params.seriesId, 'seriesId')) return false;
       return matchesWorkflowFilter(note.frontmatter, params.workflowStatus || 'active');
     });
+    return this.formatBlogPosts(visibleNotes, params, result.truncated);
+  }
+
+  /** Read the published post set once for pulse's own-post and active-post signals. */
+  async pulsePosts(params: { principal: ScopePrincipal; author: string; limit: number; maxChars: number }) {
+    const result = await queryAllNotes(this.fileSystem, {
+      pathPrefix: BLOG_ROOT, filters: { mcpvault_type: 'blog_post', status: 'published' },
+      sortBy: 'updated_at', sortOrder: 'desc',
+    });
+    const visibleNotes = result.notes.filter(note => !isModerationHidden(note.frontmatter) && String(note.frontmatter.status || 'published') === 'published');
+    const ownNotes = visibleNotes.filter(note => String(note.frontmatter.author || '').toLowerCase() === params.author.toLowerCase());
+    const activeNotes = visibleNotes.filter(note => matchesWorkflowFilter(note.frontmatter, 'active'));
+    const active = await this.formatBlogPosts(activeNotes, {
+      principal: params.principal,
+      limit: params.limit,
+      maxChars: Math.min(params.maxChars, 6000),
+      includeExcerpt: true,
+      excerptMaxChars: 240,
+    }, result.truncated);
+    return { ownPublishedPosts: ownNotes.length, activePosts: active.posts, activeTotal: active.total, activeTruncated: active.truncated };
+  }
+
+  private async formatBlogPosts(
+    visibleNotes: Array<{ path: string; frontmatter: Record<string, any> }>,
+    params: { principal?: ScopePrincipal; limit?: number; maxChars?: number; includeExcerpt?: boolean; excerptMaxChars?: number },
+    queryTruncated: boolean,
+  ) {
     const limit = Math.min(Math.max(Number(params.limit || 50), 1), 500);
+    const selectedNotes = visibleNotes.slice(0, limit);
     const excerptByPath = new Map<string, string>();
     if (params.includeExcerpt) {
       const excerptLength = Math.min(Math.max(Number(params.excerptMaxChars ?? 280), 1), 1000);
-      const selected = visibleNotes.slice(0, limit);
-      const excerpts = await Promise.all(selected.map(async note => {
+      const excerpts = await Promise.all(selectedNotes.map(async note => {
         try {
           const full = await this.fileSystem.readNote(note.path);
           return [note.path, full.content.slice(0, excerptLength)] as const;
@@ -313,9 +340,9 @@ export class SocialService {
       }));
       for (const [path, excerpt] of excerpts) excerptByPath.set(path, excerpt);
     }
-    const reputations = await this.reputation.getMany(visibleNotes.map(note => String(note.frontmatter.author || '')));
+    const reputations = await this.reputation.getMany(selectedNotes.map(note => String(note.frontmatter.author || '')));
     const viewerReputation = params.principal ? await this.reputation.getForPrincipal(params.principal) : undefined;
-    const entries = visibleNotes.map(note => ({
+    const entries = selectedNotes.map(note => ({
       path: note.path,
       slug: note.frontmatter.post_id,
       title: note.frontmatter.title,
@@ -339,8 +366,8 @@ export class SocialService {
       authorLevelLabel: reputations.get(String(note.frontmatter.author || '').toLowerCase())?.label ?? '뉴비',
       ...(params.includeExcerpt && { excerpt: excerptByPath.get(note.path) || '' }),
     }));
-    const bounded = boundItems(entries.slice(0, limit), Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000));
-    return { posts: bounded.items, ...(viewerReputation && { viewerLevel: viewerReputation.level, viewerXp: viewerReputation.xp, viewerLevelLabel: viewerReputation.label }), total: entries.length, truncated: result.truncated || entries.length > limit || bounded.truncated };
+    const bounded = boundItems(entries, Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000));
+    return { posts: bounded.items, ...(viewerReputation && { viewerLevel: viewerReputation.level, viewerXp: viewerReputation.xp, viewerLevelLabel: viewerReputation.label }), total: visibleNotes.length, truncated: queryTruncated || visibleNotes.length > limit || bounded.truncated };
   }
 
   async getBlogPost(params: { principal?: ScopePrincipal; slug: string; includeComments?: boolean; commentLimit?: number; commentMaxChars?: number; includeThreadContext?: boolean }) {

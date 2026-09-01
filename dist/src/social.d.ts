@@ -128,6 +128,42 @@ export declare class SocialService {
         total: number;
         truncated: boolean;
     }>;
+    /** Read the published post set once for pulse's own-post and active-post signals. */
+    pulsePosts(params: {
+        principal: ScopePrincipal;
+        author: string;
+        limit: number;
+        maxChars: number;
+    }): Promise<{
+        ownPublishedPosts: number;
+        activePosts: {
+            path: string;
+            slug: any;
+            title: any;
+            author: any;
+            status: any;
+            tags: any;
+            category: any;
+            seriesId: any;
+            seriesTitle: any;
+            seriesOrder: any;
+            relatedPosts: any;
+            duplicateOf: any;
+            createdAt: any;
+            updatedAt: any;
+            workflowStatus: "archived" | "closed" | "in_progress" | "open" | "resolved" | "wont_fix";
+            workflowStatusBy: any;
+            workflowStatusReason: any;
+            workflowStatusUpdatedAt: any;
+            moderationStatus: "hidden" | "quarantined" | "removed" | "visible" | "warned";
+            authorLevel: number;
+            authorLevelLabel: string;
+            excerpt?: string;
+        }[];
+        activeTotal: number;
+        activeTruncated: boolean;
+    }>;
+    private formatBlogPosts;
     getBlogPost(params: {
         principal?: ScopePrincipal;
         slug: string;
