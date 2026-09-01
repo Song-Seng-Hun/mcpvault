@@ -47,6 +47,67 @@ test("patch note with single occurrence", async () => {
   expect(updatedNote.content).not.toContain("old content");
 });
 
+test("patch note supports dry-run, line-scoped matching, and revision chaining", async () => {
+  const testPath = "scoped-patch.md";
+  await writeFile(join(testVaultPath, testPath), "# Heading\n\nTODO: first\nTODO: second\n\nTail\n");
+  const before = await fileSystem.readNote(testPath);
+
+  const preview = await fileSystem.patchNote({
+    path: testPath,
+    oldString: "TODO: second",
+    newString: "DONE: second",
+    startLine: 4,
+    endLine: 4,
+    expectedRevision: before.revision,
+    dryRun: true,
+  });
+  expect(preview.success).toBe(true);
+  expect(preview.dryRun).toBe(true);
+  expect(preview.revision).toBeTruthy();
+  expect(preview.preview?.after.text).toContain("DONE: second");
+  expect((await fileSystem.readNote(testPath)).revision).toBe(before.revision);
+
+  const applied = await fileSystem.patchNote({
+    path: testPath,
+    oldString: "TODO: second",
+    newString: "DONE: second",
+    startLine: 4,
+    endLine: 4,
+    expectedRevision: before.revision,
+  });
+  expect(applied.success).toBe(true);
+  expect(applied.revision).toBe((await fileSystem.readNote(testPath)).revision);
+  expect((await fileSystem.readNote(testPath)).content).toContain("TODO: first");
+});
+
+test("patch note applies multiple hunks atomically", async () => {
+  const testPath = "multi-patch.md";
+  await writeFile(join(testVaultPath, testPath), "Alpha\nBeta\nGamma\n");
+  const before = await fileSystem.readNote(testPath);
+  const result = await fileSystem.patchNote({
+    path: testPath,
+    expectedRevision: before.revision,
+    patches: [
+      { oldString: "Alpha", newString: "A" },
+      { oldString: "Gamma", newString: "G" },
+    ],
+  });
+  expect(result.success).toBe(true);
+  expect(result.matchCount).toBe(2);
+  expect((await fileSystem.readNote(testPath)).content).toBe("A\nBeta\nG\n");
+});
+
+test("patch note rejects a stale revision without changing the note", async () => {
+  const testPath = "stale-patch.md";
+  await writeFile(join(testVaultPath, testPath), "Original\n");
+  const before = await fileSystem.readNote(testPath);
+  await writeFile(join(testVaultPath, testPath), "Changed elsewhere\n");
+  const result = await fileSystem.patchNote({ path: testPath, oldString: "Original", newString: "Updated", expectedRevision: before.revision });
+  expect(result.success).toBe(false);
+  expect(result.message).toContain("Revision conflict");
+  expect((await fileSystem.readNote(testPath)).content).toContain("Changed elsewhere");
+});
+
 test("patch note with multiple occurrences requires replaceAll", async () => {
   const testPath = "test-note.md";
   const content = "# Test\n\nrepeat word repeat word repeat";

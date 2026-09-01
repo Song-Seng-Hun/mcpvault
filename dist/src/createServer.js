@@ -225,9 +225,17 @@ export function createServer(vaultPath, options = {}) {
                     oldString: { type: "string", description: "The exact string to replace. Must match exactly including whitespace and line breaks." },
                     newString: { type: "string", description: "The new string to insert in place of oldString" },
                     replaceAll: { type: "boolean", description: "If true, replace all occurrences. If false (default), the operation will fail if multiple matches are found to prevent unintended replacements.", default: false },
-                    expectedRevision: { type: "string", description: "Optional revision from read_note; rejects stale updates" }
+                    startLine: { type: "integer", minimum: 1, description: "Optional first line of the allowed match region (1-indexed); provide with endLine" },
+                    endLine: { type: "integer", minimum: 1, description: "Optional last line of the allowed match region (inclusive); provide with startLine" },
+                    patches: { type: "array", maxItems: 50, description: "Optional ordered exact hunks for one transaction", items: { type: "object", properties: {
+                                oldString: { type: "string" }, newString: { type: "string" }, replaceAll: { type: "boolean", default: false },
+                                startLine: { type: "integer", minimum: 1 }, endLine: { type: "integer", minimum: 1 },
+                            }, required: ["oldString", "newString"] } },
+                    dryRun: { type: "boolean", description: "Validate and preview the patch without writing the note", default: false },
+                    previewMaxChars: { type: "integer", minimum: 200, maximum: 5000, description: "Maximum characters per before/after preview", default: 1200 },
+                    expectedRevision: { type: "string", description: "Revision from read_note; strongly recommended to reject stale updates" }
                 },
-                required: ["path", "oldString", "newString"]
+                required: ["path"]
             }
         },
         {
@@ -1084,10 +1092,15 @@ export function createServer(vaultPath, options = {}) {
                 case "patch_note": {
                     const result = await fileSystem.patchNote({
                         path: trimmedArgs.path,
-                        oldString: trimmedArgs.oldString,
-                        newString: trimmedArgs.newString,
-                        replaceAll: trimmedArgs.replaceAll,
-                        expectedRevision: trimmedArgs.expectedRevision,
+                        ...(trimmedArgs.oldString !== undefined && { oldString: trimmedArgs.oldString }),
+                        ...(trimmedArgs.newString !== undefined && { newString: trimmedArgs.newString }),
+                        ...(trimmedArgs.replaceAll !== undefined && { replaceAll: trimmedArgs.replaceAll }),
+                        ...(trimmedArgs.startLine !== undefined && { startLine: trimmedArgs.startLine }),
+                        ...(trimmedArgs.endLine !== undefined && { endLine: trimmedArgs.endLine }),
+                        ...(trimmedArgs.patches !== undefined && { patches: trimmedArgs.patches }),
+                        ...(trimmedArgs.dryRun !== undefined && { dryRun: trimmedArgs.dryRun }),
+                        ...(trimmedArgs.previewMaxChars !== undefined && { previewMaxChars: trimmedArgs.previewMaxChars }),
+                        ...(trimmedArgs.expectedRevision !== undefined && { expectedRevision: trimmedArgs.expectedRevision }),
                     });
                     return {
                         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],

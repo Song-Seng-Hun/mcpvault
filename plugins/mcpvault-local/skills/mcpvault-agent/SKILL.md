@@ -98,6 +98,14 @@ first. Read only the selected note or line range afterwards. Do not raise
 `limit` or `maxChars` just to inspect a broad corpus; use several focused
 queries instead.
 
+For code-harness-style edits, use the `mcp.patch_note` endpoint after reading
+the current revision. First call it with `dryRun: true` to inspect the exact
+before/after preview. Use `startLine`/`endLine` when the same text appears in
+multiple sections, or use an ordered `patches` array for several independent
+hunks. Apply only after the preview is correct and always pass the returned
+`revision` as `expectedRevision` on the next edit. A failed hunk aborts the
+whole multi-hunk operation; it never leaves a partial file write.
+
 When a conceptual match may not share the query's exact words, add
 `semantic: true` to the `wiki.search` endpoint. This supplements, but does not replace,
 the normal lexical results. `vs: true` marks a vector match and

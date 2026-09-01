@@ -18,9 +18,24 @@ export interface NoteWriteParams {
 }
 export interface PatchNoteParams {
     path: string;
-    oldString: string;
-    newString: string;
+    /** One hunk. Omit when patches contains one or more hunks. */
+    oldString?: string;
+    newString?: string;
     replaceAll?: boolean;
+    /** Restrict the hunk match to this inclusive 1-indexed line range. */
+    startLine?: number;
+    endLine?: number;
+    /** Apply several exact hunks sequentially as one locked operation. */
+    patches?: Array<{
+        oldString: string;
+        newString: string;
+        replaceAll?: boolean;
+        startLine?: number;
+        endLine?: number;
+    }>;
+    /** Inspect the proposed result without writing it. */
+    dryRun?: boolean;
+    previewMaxChars?: number;
     expectedRevision?: string;
 }
 export interface PatchNoteResult {
@@ -28,6 +43,27 @@ export interface PatchNoteResult {
     path: string;
     message: string;
     matchCount?: number;
+    revision?: string;
+    previousRevision?: string;
+    dryRun?: boolean;
+    wouldChange?: boolean;
+    patches?: Array<{
+        matchCount: number;
+        startLine?: number;
+        endLine?: number;
+    }>;
+    preview?: {
+        before: {
+            startLine: number;
+            endLine: number;
+            text: string;
+        };
+        after: {
+            startLine: number;
+            endLine: number;
+            text: string;
+        };
+    };
 }
 export interface DeleteNoteParams {
     path: string;

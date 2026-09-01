@@ -660,7 +660,11 @@ Write a note to the vault with optional frontmatter and write mode.
 
 ### `patch_note`
 
-Replace an exact string inside an existing note without rewriting the full file.
+Replace exact text inside an existing note without changing unrelated content.
+For code-harness-style editing, use `dryRun` first, optionally restrict each
+hunk to an inclusive `startLine`/`endLine` range, then apply one or more ordered
+`patches` in a single operation. The response includes before/after previews,
+match counts, and the new SHA-256 `revision` for the next edit.
 
 **Request:**
 
@@ -671,7 +675,9 @@ Replace an exact string inside an existing note without rewriting the full file.
     "path": "meeting-notes.md",
     "oldString": "- Next milestones",
     "newString": "- Next milestones (owner: Alex)",
-    "replaceAll": false
+    "replaceAll": false,
+    "expectedRevision": "revision-returned-by-read_note",
+    "dryRun": false
   }
 }
 ```
@@ -683,9 +689,18 @@ Replace an exact string inside an existing note without rewriting the full file.
   "success": true,
   "path": "meeting-notes.md",
   "message": "Successfully replaced 1 occurrence",
-  "matchCount": 1
+  "matchCount": 1,
+  "previousRevision": "...",
+  "revision": "...",
+  "preview": { "before": { "startLine": 8, "endLine": 12, "text": "..." }, "after": { "startLine": 8, "endLine": 12, "text": "..." } }
 }
 ```
+
+For several independent edits, pass `patches` instead of the top-level
+`oldString`/`newString` pair. All hunks are validated before the file is
+written; if one hunk is ambiguous or missing, the operation fails without a
+partial write. `expectedRevision` is strongly recommended for every real
+edit, while `dryRun` never writes.
 
 **Response (multiple matches with replaceAll=false):**
 

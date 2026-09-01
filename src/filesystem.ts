@@ -44,6 +44,27 @@ function compareQueryValues(a: unknown, b: unknown): number {
   return String(a ?? '').localeCompare(String(b ?? ''), undefined, { numeric: true, sensitivity: 'base' });
 }
 
+function lineStarts(content: string): number[] {
+  const starts = [0];
+  const newline = /\r\n|\n|\r/g;
+  let match: RegExpExecArray | null;
+  while ((match = newline.exec(content))) starts.push(match.index + match[0].length);
+  return starts;
+}
+
+function boundedPreview(content: string, offset: number, contextLines: number, maxChars: number) {
+  const starts = lineStarts(content);
+  let line = 0;
+  for (let index = 0; index < starts.length; index += 1) {
+    if (starts[index]! > offset) break;
+    line = index;
+  }
+  const lines = content.split(/\r\n|\n|\r/);
+  const first = Math.max(0, line - contextLines);
+  const last = Math.min(lines.length, line + contextLines + 1);
+  return { startLine: first + 1, endLine: last, text: lines.slice(first, last).join('\n').slice(0, maxChars) };
+}
+
 /**
  * Map a filesystem write failure to a clear, accurate Error.
  *
@@ -363,10 +384,13 @@ export class FileSystemService {
 
   async patchNote(params: PatchNoteParams): Promise<PatchNoteResult> {
     const path = this.normalizePath(params.path);
-    return this.withMutationLock(path, () => this.patchNoteUnlocked({ ...params, path }));
+    const advanced = params.dryRun === true || params.patches !== undefined || params.startLine !== undefined || params.endLine !== undefined;
+    return this.withMutationLock(path, () => advanced
+      ? this.patchNoteImproved({ ...params, path })
+      : this.patchNoteUnlocked({ ...params, path } as PatchNoteParams & { oldString: string; newString: string }));
   }
 
-  private async patchNoteUnlocked(params: PatchNoteParams): Promise<PatchNoteResult> {
+  private async patchNoteUnlocked(params: PatchNoteParams & { oldString: string; newString: string }): Promise<PatchNoteResult> {
     const { oldString, newString, replaceAll = false, expectedRevision } = params;
     const path = this.normalizePath(params.path);
 
@@ -450,7 +474,15 @@ export class FileSystemService {
         success: true,
         path,
         message: `Successfully replaced ${replaceAll ? occurrences : 1} occurrence${occurrences > 1 ? 's' : ''}`,
-        matchCount: occurrences
+        matchCount: occurrences,
+        previousRevision: note.revision,
+        revision: createHash('sha256').update(updatedContent, 'utf8').digest('hex'),
+        dryRun: false,
+        wouldChange: updatedContent !== fullContent,
+        preview: {
+          before: boundedPreview(fullContent, fullContent.indexOf(oldString), 2, Math.min(Math.max(Number(params.previewMaxChars ?? 1200), 200), 5000)),
+          after: boundedPreview(updatedContent, updatedContent.indexOf(newString), 2, Math.min(Math.max(Number(params.previewMaxChars ?? 1200), 200), 5000)),
+        },
       };
 
     } catch (error) {
@@ -459,6 +491,84 @@ export class FileSystemService {
         path,
         message: `Failed to patch note: ${error instanceof Error ? error.message : 'Unknown error'}`
       };
+    }
+  }
+
+  /** Apply line-scoped or multi-hunk patches as one all-or-nothing operation. */
+  private async patchNoteImproved(params: PatchNoteParams): Promise<PatchNoteResult> {
+    const path = this.normalizePath(params.path);
+    if (!this.pathFilter.isAllowed(path)) return { success: false, path, message: `Access denied: ${path}` };
+    try {
+      await this.assertExpectedRevision(path, params.expectedRevision);
+      const note = await this.readNote(path);
+      const hunks = params.patches || [{
+        oldString: params.oldString || '',
+        newString: params.newString ?? '',
+        replaceAll: params.replaceAll,
+        startLine: params.startLine,
+        endLine: params.endLine,
+      }];
+      if (!hunks.length) throw new Error('patches must contain at least one hunk');
+      if (hunks.length > 50) throw new Error('A single patch request may contain at most 50 hunks');
+      let content = note.originalContent;
+      let totalMatches = 0;
+      let firstOffset = 0;
+      const patchResults: Array<{ matchCount: number; startLine?: number; endLine?: number }> = [];
+
+      for (const hunk of hunks) {
+        const oldString = String(hunk.oldString ?? '');
+        const newString = String(hunk.newString ?? '');
+        if (!oldString || oldString.trim() === '') throw new Error('oldString cannot be empty');
+        if (oldString === newString) throw new Error('oldString and newString must be different');
+        const starts = lineStarts(content);
+        const lineCount = content.split(/\r\n|\n|\r/).length;
+        const hasRange = hunk.startLine !== undefined || hunk.endLine !== undefined;
+        if (hasRange && (hunk.startLine === undefined || hunk.endLine === undefined)) throw new Error('startLine and endLine must be supplied together');
+        let regionStart = 0;
+        let regionEnd = content.length;
+        if (hasRange) {
+          const startLine = Number(hunk.startLine);
+          const endLine = Number(hunk.endLine);
+          if (!Number.isInteger(startLine) || !Number.isInteger(endLine) || startLine < 1 || endLine < startLine || endLine > lineCount) throw new Error(`line range must be between 1 and ${lineCount}, with startLine <= endLine`);
+          regionStart = starts[startLine - 1]!;
+          regionEnd = endLine < lineCount ? starts[endLine]! : content.length;
+        }
+        const region = content.slice(regionStart, regionEnd);
+        const matchCount = region.split(oldString).length - 1;
+        if (!matchCount) throw new Error(`String not found${hasRange ? ` within lines ${hunk.startLine}-${hunk.endLine}` : ''}: "${oldString.slice(0, 50)}${oldString.length > 50 ? '...' : ''}"`);
+        if (!hunk.replaceAll && matchCount > 1) throw new Error(`Found ${matchCount} occurrences; use replaceAll=true or a more specific hunk`);
+        const matchOffset = region.indexOf(oldString);
+        const replaced = hunk.replaceAll ? region.split(oldString).join(newString) : region.replace(oldString, () => newString);
+        content = content.slice(0, regionStart) + replaced + content.slice(regionEnd);
+        totalMatches += matchCount;
+        patchResults.push({ matchCount, ...(hasRange && { startLine: Number(hunk.startLine), endLine: Number(hunk.endLine) }) });
+        if (patchResults.length === 1) {
+          firstOffset = regionStart + matchOffset;
+        }
+      }
+      const previewMaxChars = Math.min(Math.max(Number(params.previewMaxChars ?? 1200), 200), 5000);
+      const revision = createHash('sha256').update(content, 'utf8').digest('hex');
+      const result: PatchNoteResult = {
+        success: true,
+        path,
+        message: params.dryRun ? `Patch preview: ${totalMatches} occurrence${totalMatches === 1 ? '' : 's'} would be replaced` : `Successfully replaced ${totalMatches} occurrence${totalMatches === 1 ? '' : 's'}`,
+        matchCount: totalMatches,
+        previousRevision: note.revision,
+        revision,
+        dryRun: params.dryRun === true,
+        wouldChange: content !== note.originalContent,
+        patches: patchResults,
+        preview: {
+          before: boundedPreview(note.originalContent, firstOffset, 2, previewMaxChars),
+          after: boundedPreview(content, firstOffset, 2, previewMaxChars),
+        },
+      };
+      if (params.dryRun || content === note.originalContent) return result;
+      await writeFile(this.resolvePath(path), content, 'utf-8');
+      this.notifyNoteChanged(path, 'upsert');
+      return result;
+    } catch (error) {
+      return { success: false, path, message: `Failed to patch note: ${error instanceof Error ? error.message : 'Unknown error'}` };
     }
   }
 

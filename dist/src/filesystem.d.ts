@@ -36,6 +36,8 @@ export declare class FileSystemService {
     private writeNoteUnlocked;
     patchNote(params: PatchNoteParams): Promise<PatchNoteResult>;
     private patchNoteUnlocked;
+    /** Apply line-scoped or multi-hunk patches as one all-or-nothing operation. */
+    private patchNoteImproved;
     listDirectory(path?: string): Promise<DirectoryListing>;
     exists(path: string): Promise<boolean>;
     isDirectory(path: string): Promise<boolean>;
