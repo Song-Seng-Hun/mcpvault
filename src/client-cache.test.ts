@@ -82,3 +82,25 @@ test('client cache can persist and restore through a host-provided store', async
   expect(restored.get('persisted.md')!.content).toBe('persisted');
   expect(restored.values()).toHaveLength(1);
 });
+
+test('stale reads return cached notes immediately and refresh by revision', async () => {
+  let revision = 'a'.repeat(64);
+  let content = 'old';
+  const caller: ClientEndpointCaller = {
+    async callEndpoint(_endpointId, arguments_) {
+      const known = (arguments_.knownRevisions as Record<string, string>)['note.md'];
+      if (known === revision) return { ok: [{ path: 'note.md', revision, unchanged: true }], err: [] };
+      return { ok: [{ path: 'note.md', revision, content }], err: [] };
+    },
+  };
+  const cache = new McpVaultClientCache(caller);
+  await cache.readNotes(['note.md']);
+
+  revision = 'b'.repeat(64);
+  content = 'new';
+  const stale = cache.readNotesStale([' note.md ', 'note.md']);
+  expect(stale.immediate.notes).toMatchObject([{ path: 'note.md', content: 'old' }]);
+  expect(stale.immediate.unchanged).toEqual([]);
+  await expect(stale.refresh).resolves.toMatchObject({ notes: [{ path: 'note.md', content: 'new', revision }] });
+  expect(cache.get('note.md')!.content).toBe('new');
+});

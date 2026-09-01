@@ -26,6 +26,12 @@ export interface ClientReadNotesResult {
         error: string;
     }>;
 }
+export interface ClientStaleReadResult {
+    /** Locally cached notes available immediately; they may be stale. */
+    immediate: ClientReadNotesResult;
+    /** Revision-checked refresh. Changed note bodies are fetched by the server. */
+    refresh: Promise<ClientReadNotesResult>;
+}
 /**
  * Small host-side cache for MCPVault note reads. It deliberately knows only
  * the public endpoint contract: authorization and visibility remain inside
@@ -48,6 +54,7 @@ export declare class McpVaultClientCache {
     invalidate(path?: string): void;
     knownRevisions(paths: string[]): Record<string, string>;
     readNotes(paths: string[], options?: ClientReadNotesOptions): Promise<ClientReadNotesResult>;
+    readNotesStale(paths: string[], options?: ClientReadNotesOptions): ClientStaleReadResult;
     private readNotesUncached;
     private put;
 }

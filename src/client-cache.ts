@@ -28,6 +28,13 @@ export interface ClientReadNotesResult {
   errors: Array<{ path: string; error: string }>;
 }
 
+export interface ClientStaleReadResult {
+  /** Locally cached notes available immediately; they may be stale. */
+  immediate: ClientReadNotesResult;
+  /** Revision-checked refresh. Changed note bodies are fetched by the server. */
+  refresh: Promise<ClientReadNotesResult>;
+}
+
 interface BatchNote {
   path: string;
   revision?: string;
@@ -129,16 +136,29 @@ export class McpVaultClientCache {
   }
 
   async readNotes(paths: string[], options: ClientReadNotesOptions = {}): Promise<ClientReadNotesResult> {
-    const key = JSON.stringify({ paths, options });
+    const requested = normalizePaths(paths);
+    const key = JSON.stringify({ paths: requested, options });
     const running = this.inFlight.get(key);
     if (running) return cloneReadNotesResult(await running);
-    const computation = this.readNotesUncached(paths, options);
+    const computation = this.readNotesUncached(requested, options);
     this.inFlight.set(key, computation);
     try {
       return cloneReadNotesResult(await computation);
     } finally {
       if (this.inFlight.get(key) === computation) this.inFlight.delete(key);
     }
+  }
+
+  readNotesStale(paths: string[], options: ClientReadNotesOptions = {}): ClientStaleReadResult {
+    const requested = normalizePaths(paths);
+    const cached = new Map(requested.map(path => [path, this.get(path)]));
+    const immediate: ClientReadNotesResult = {
+      notes: requested.map(path => cached.get(path)).filter((note): note is CachedNote => Boolean(note)).map(cloneNote),
+      unchanged: [],
+      missing: [],
+      errors: [],
+    };
+    return { immediate, refresh: this.readNotes(requested, options) };
   }
 
   private async readNotesUncached(paths: string[], options: ClientReadNotesOptions): Promise<ClientReadNotesResult> {
@@ -216,6 +236,10 @@ export class McpVaultClientCache {
     this.entries.set(note.path, cloneNote(note));
     while (this.entries.size > this.maxEntries) this.entries.delete(this.entries.keys().next().value!);
   }
+}
+
+function normalizePaths(paths: string[]): string[] {
+  return [...new Set(paths.map(path => String(path).trim()).filter(Boolean))];
 }
 
 function cloneReadNotesResult(value: ClientReadNotesResult): ClientReadNotesResult {

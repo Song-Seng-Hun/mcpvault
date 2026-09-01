@@ -93,11 +93,12 @@ export class McpVaultClientCache {
         return known;
     }
     async readNotes(paths, options = {}) {
-        const key = JSON.stringify({ paths, options });
+        const requested = normalizePaths(paths);
+        const key = JSON.stringify({ paths: requested, options });
         const running = this.inFlight.get(key);
         if (running)
             return cloneReadNotesResult(await running);
-        const computation = this.readNotesUncached(paths, options);
+        const computation = this.readNotesUncached(requested, options);
         this.inFlight.set(key, computation);
         try {
             return cloneReadNotesResult(await computation);
@@ -106,6 +107,17 @@ export class McpVaultClientCache {
             if (this.inFlight.get(key) === computation)
                 this.inFlight.delete(key);
         }
+    }
+    readNotesStale(paths, options = {}) {
+        const requested = normalizePaths(paths);
+        const cached = new Map(requested.map(path => [path, this.get(path)]));
+        const immediate = {
+            notes: requested.map(path => cached.get(path)).filter((note) => Boolean(note)).map(cloneNote),
+            unchanged: [],
+            missing: [],
+            errors: [],
+        };
+        return { immediate, refresh: this.readNotes(requested, options) };
     }
     async readNotesUncached(paths, options) {
         const requested = [...new Set(paths.map(path => String(path).trim()).filter(Boolean))];
@@ -185,6 +197,9 @@ export class McpVaultClientCache {
         while (this.entries.size > this.maxEntries)
             this.entries.delete(this.entries.keys().next().value);
     }
+}
+function normalizePaths(paths) {
+    return [...new Set(paths.map(path => String(path).trim()).filter(Boolean))];
 }
 function cloneReadNotesResult(value) {
     return {

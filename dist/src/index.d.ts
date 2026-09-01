@@ -15,7 +15,7 @@ export type { ScopePrincipal } from './scope-auth.js';
 export { ScopeAccessPolicy } from './scope-access.js';
 export { LlmWikiService } from './llm-wiki.js';
 export { McpVaultClientCache } from './client-cache.js';
-export type { CachedNote, ClientEndpointCaller, ClientKeyValueStore, ClientReadNotesOptions, ClientReadNotesResult } from './client-cache.js';
+export type { CachedNote, ClientEndpointCaller, ClientKeyValueStore, ClientReadNotesOptions, ClientReadNotesResult, ClientStaleReadResult } from './client-cache.js';
 export { ContextBudgeter } from './client-context.js';
 export type { ContextFragment, PackedContext, PackedContextFragment } from './client-context.js';
 export { ClientRequestScheduler } from './client-scheduler.js';
