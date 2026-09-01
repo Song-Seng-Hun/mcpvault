@@ -224,6 +224,7 @@ function normalizeSubtree(p: string): string {
 export class SearchService {
   private readonly cacheOwner = createDerivedCacheOwner('search.results');
   private readonly directoryCacheOwner = createDerivedCacheOwner('search.directories');
+  private readonly corpusCacheOwner = createDerivedCacheOwner('search.corpus');
   private vaultPath: string;
   private readonly cache = new Map<string, SearchCacheEntry>();
   private readonly inFlight = new Map<string, Promise<SearchResult[]>>();
@@ -279,6 +280,7 @@ export class SearchService {
     this.cache.clear();
     derivedCacheBudget.clearOwner(this.cacheOwner);
     this.corpusStatsCache.clear();
+    derivedCacheBudget.clearOwner(this.corpusCacheOwner);
     this.directoryCache.clear();
     derivedCacheBudget.clearOwner(this.directoryCacheOwner);
     if (path) {
@@ -297,6 +299,7 @@ export class SearchService {
     this.directoryCache.clear();
     derivedCacheBudget.clearOwner(this.cacheOwner);
     derivedCacheBudget.clearOwner(this.directoryCacheOwner);
+    derivedCacheBudget.clearOwner(this.corpusCacheOwner);
   }
 
   private async loadSnapshot(): Promise<void> {
@@ -425,14 +428,17 @@ export class SearchService {
       throw new Error('Search query cannot be empty');
     }
 
+    const normalizedQuery = query.trim();
+    const normalizedPrefix = pathPrefix ? normalizeSubtree(pathPrefix) : '';
+    const normalizedExcludes = (excludePaths || []).map(normalizeSubtree).filter(Boolean).sort();
     const cacheKey = JSON.stringify({
-      query,
+      query: normalizedQuery,
       limit,
       searchContent,
       searchFrontmatter,
       caseSensitive,
-      pathPrefix: params.pathPrefix || '',
-      excludePaths: params.excludePaths || [],
+      pathPrefix: normalizedPrefix,
+      excludePaths: normalizedExcludes,
       maxChars: params.maxChars,
       includeRevisions: params.includeRevisions === true,
     });
@@ -455,9 +461,6 @@ export class SearchService {
     const computation = (async (): Promise<SearchResult[]> => {
     await this.ensureIndex();
 
-    const normalizedPrefix = pathPrefix ? normalizeSubtree(pathPrefix) : '';
-    const normalizedExcludes = (excludePaths || []).map(normalizeSubtree).filter(Boolean);
-
     const maxLimit = normalizeSearchLimit(limit);
     const maxChars = normalizeSearchMaxChars(params.maxChars);
 
@@ -465,7 +468,7 @@ export class SearchService {
     // the bounded cache lets different queries reuse the same scope stats.
     const termDocFreq = new Map<string, number>();
     const candidates: RankCandidate[] = [];
-    const searchQuery = caseSensitive ? query : query.toLowerCase();
+    const searchQuery = caseSensitive ? normalizedQuery : normalizedQuery.toLowerCase();
     const terms = searchQuery.split(/\s+/).filter(t => t.length > 0);
     const scoringTerms = terms.length > 1 ? [...terms, searchQuery] : terms;
 
@@ -587,12 +590,15 @@ export class SearchService {
     const results = boundSearchResults(this.rerank(candidates, scoringTerms, termDocFreq, docCount, totalDocLength, maxLimit), maxChars);
     if (generation === this.cacheGeneration) {
       const cachedResults = results.map(result => ({ ...result }));
-      this.cache.set(cacheKey, { expiresAt: Date.now() + SEARCH_CACHE_TTL_MS, results: cachedResults });
+      const entry: SearchCacheEntry = { expiresAt: Date.now() + SEARCH_CACHE_TTL_MS, results: cachedResults };
+      this.cache.set(cacheKey, entry);
       derivedCacheBudget.register(
         this.cacheOwner,
         cacheKey,
         estimateCacheBytes(cachedResults) + Buffer.byteLength(cacheKey, 'utf8') + 128,
-        () => this.cache.delete(cacheKey),
+        () => {
+          if (this.cache.get(cacheKey) === entry) this.cache.delete(cacheKey);
+        },
       );
       while (this.cache.size > SEARCH_CACHE_MAX_ENTRIES) {
         const oldest = this.cache.keys().next();
@@ -847,6 +853,7 @@ export class SearchService {
     const old = this.documents.get(document.relativePath);
     if (old === document) return;
     this.corpusStatsCache.clear();
+    derivedCacheBudget.clearOwner(this.corpusCacheOwner);
     if (old) {
       this.updatePostings(old, false);
       this.updateGramUsage(old, false);
@@ -867,6 +874,7 @@ export class SearchService {
     const document = this.documents.get(path);
     if (!document) return;
     this.corpusStatsCache.clear();
+    derivedCacheBudget.clearOwner(this.corpusCacheOwner);
     this.updatePostings(document, false);
     this.updateGramUsage(document, false);
     this.removePathIndex(document);
@@ -930,6 +938,7 @@ export class SearchService {
     if (cached) {
       this.corpusStatsCache.delete(key);
       this.corpusStatsCache.set(key, cached);
+      derivedCacheBudget.touch(this.corpusCacheOwner, key);
       return cached;
     }
     let totalDocLength = 0;
@@ -943,10 +952,15 @@ export class SearchService {
     }
     const stats = { docCount, totalDocLength };
     this.corpusStatsCache.set(key, stats);
+    derivedCacheBudget.register(this.corpusCacheOwner, key, estimateCacheBytes(stats) + Buffer.byteLength(key, 'utf8') + 64, () => {
+      if (this.corpusStatsCache.get(key) !== stats) return;
+      this.corpusStatsCache.delete(key);
+    });
     while (this.corpusStatsCache.size > CORPUS_STATS_CACHE_MAX_ENTRIES) {
       const oldest = this.corpusStatsCache.keys().next();
       if (oldest.done) break;
       this.corpusStatsCache.delete(oldest.value);
+      derivedCacheBudget.remove(this.corpusCacheOwner, oldest.value);
     }
     return stats;
   }

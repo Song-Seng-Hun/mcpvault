@@ -8,6 +8,7 @@ export declare class SearchService {
     private readonly vaultIo;
     private readonly cacheOwner;
     private readonly directoryCacheOwner;
+    private readonly corpusCacheOwner;
     private vaultPath;
     private readonly cache;
     private readonly inFlight;
