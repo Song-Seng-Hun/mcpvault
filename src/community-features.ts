@@ -1,4 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopeAuthService, ScopePrincipal } from './scope-auth.js';
@@ -14,9 +16,23 @@ const REACTIONS = 'Community/Reactions';
 const GUESTBOOKS = 'Community/Guestbooks';
 const MAX_SCAN = 500;
 const REACTION_CACHE_TTL_MS = 2_000;
+const REACTION_SNAPSHOT_VERSION = 1;
+const REACTION_SNAPSHOT_FILE = '.mcpvault/community-reactions.snapshot.bin';
+const MAX_REACTION_SNAPSHOT_ENTRIES = 100_000;
 const CATEGORIES = ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase', 'agora'] as const;
 
 type TargetType = 'post' | 'comment';
+
+interface ReactionSnapshotEntry {
+  path: string;
+  size: number;
+  mtimeMs: number;
+}
+
+interface ReactionSnapshot {
+  entries: ReactionSnapshotEntry[];
+  counts: Array<[string, number, number]>;
+}
 
 const now = () => new Date().toISOString();
 const identity = (p: ScopePrincipal) => p.agentId || p.modelId;
@@ -36,6 +52,75 @@ const publicCommentPath = (slug: string, id: string) => `${COMMENTS}/${normalize
 const actorPath = (value: string, field: string) => normalizeScopeId(value.replace(/[^a-z0-9._-]/gi, '-'), field);
 const stableKey = (value: string) => createHash('sha256').update(value, 'utf8').digest('hex').slice(0, 32);
 
+function encodeSnapshotString(value: string): Buffer {
+  const encoded = Buffer.from(value, 'utf8');
+  const output = Buffer.allocUnsafe(4 + encoded.length);
+  output.writeUInt32LE(encoded.length, 0);
+  encoded.copy(output, 4);
+  return output;
+}
+
+function decodeSnapshotString(buffer: Buffer, offset: number): { value: string; offset: number } {
+  if (offset + 4 > buffer.length) throw new Error('invalid reaction snapshot');
+  const length = buffer.readUInt32LE(offset);
+  const start = offset + 4;
+  const end = start + length;
+  if (end > buffer.length) throw new Error('invalid reaction snapshot');
+  return { value: buffer.subarray(start, end).toString('utf8'), offset: end };
+}
+
+function encodeReactionSnapshot(snapshot: ReactionSnapshot): Buffer {
+  const chunks: Buffer[] = [];
+  const header = Buffer.alloc(16);
+  header.writeUInt32LE(0x4d435052, 0);
+  header.writeUInt32LE(REACTION_SNAPSHOT_VERSION, 4);
+  header.writeUInt32LE(snapshot.entries.length, 8);
+  header.writeUInt32LE(snapshot.counts.length, 12);
+  chunks.push(header);
+  for (const entry of snapshot.entries) {
+    chunks.push(encodeSnapshotString(entry.path));
+    const metadata = Buffer.alloc(16);
+    metadata.writeDoubleLE(entry.size, 0);
+    metadata.writeDoubleLE(entry.mtimeMs, 8);
+    chunks.push(metadata);
+  }
+  for (const [postId, likeCount, dislikeCount] of snapshot.counts) {
+    chunks.push(encodeSnapshotString(postId));
+    const counts = Buffer.alloc(8);
+    counts.writeUInt32LE(likeCount, 0);
+    counts.writeUInt32LE(dislikeCount, 4);
+    chunks.push(counts);
+  }
+  return Buffer.concat(chunks);
+}
+
+function decodeReactionSnapshot(buffer: Buffer): ReactionSnapshot {
+  if (buffer.length < 16 || buffer.readUInt32LE(0) !== 0x4d435052 || buffer.readUInt32LE(4) !== REACTION_SNAPSHOT_VERSION) {
+    throw new Error('unsupported reaction snapshot');
+  }
+  const entryCount = buffer.readUInt32LE(8);
+  const countCount = buffer.readUInt32LE(12);
+  if (entryCount > MAX_REACTION_SNAPSHOT_ENTRIES || countCount > MAX_REACTION_SNAPSHOT_ENTRIES) throw new Error('reaction snapshot is too large');
+  const entries: ReactionSnapshotEntry[] = [];
+  let offset = 16;
+  for (let index = 0; index < entryCount; index += 1) {
+    const path = decodeSnapshotString(buffer, offset);
+    offset = path.offset;
+    if (offset + 16 > buffer.length) throw new Error('invalid reaction snapshot');
+    entries.push({ path: path.value, size: buffer.readDoubleLE(offset), mtimeMs: buffer.readDoubleLE(offset + 8) });
+    offset += 16;
+  }
+  const counts: Array<[string, number, number]> = [];
+  for (let index = 0; index < countCount; index += 1) {
+    const postId = decodeSnapshotString(buffer, offset);
+    offset = postId.offset;
+    if (offset + 8 > buffer.length) throw new Error('invalid reaction snapshot');
+    counts.push([postId.value, buffer.readUInt32LE(offset), buffer.readUInt32LE(offset + 4)]);
+    offset += 8;
+  }
+  return { entries, counts };
+}
+
 export class CommunityFeaturesService {
   private reactionAggregateCache: { expiresAt: number; counts: Map<string, { likeCount: number; dislikeCount: number }>; incomplete: boolean } | undefined;
   private reactionAggregateInFlight: Promise<{ counts: Map<string, { likeCount: number; dislikeCount: number }>; incomplete: boolean }> | undefined;
@@ -46,6 +131,7 @@ export class CommunityFeaturesService {
     private readonly access: ScopeAccessPolicy,
     private readonly auth: ScopeAuthService,
     private readonly reputation: ReputationService,
+    private readonly vaultPath: string,
   ) {}
 
   private async assertKnownIdentity(value: string): Promise<void> {
@@ -110,12 +196,86 @@ export class CommunityFeaturesService {
     this.reactionAggregateCache = undefined;
   }
 
+  invalidate(): void {
+    this.invalidateReactionAggregates();
+  }
+
+  private async reactionFiles(): Promise<ReactionSnapshotEntry[] | undefined> {
+    const root = join(this.vaultPath, REACTIONS, 'post');
+    const entries: ReactionSnapshotEntry[] = [];
+    try {
+      const targets = await readdir(root, { withFileTypes: true });
+      for (const target of targets) {
+        if (!target.isDirectory()) continue;
+        const targetPath = join(root, target.name);
+        const actors = await readdir(targetPath, { withFileTypes: true });
+        for (const actor of actors) {
+          if (!actor.isFile() || !/\.md$/i.test(actor.name)) continue;
+          const relativePath = `${REACTIONS}/post/${target.name}/${actor.name}`.replace(/\\/g, '/');
+          try {
+            const info = await stat(join(targetPath, actor.name));
+            if (!info.isFile()) continue;
+            entries.push({ path: relativePath, size: info.size, mtimeMs: info.mtimeMs });
+          } catch {
+            return undefined;
+          }
+          if (entries.length > MAX_REACTION_SNAPSHOT_ENTRIES) return undefined;
+        }
+      }
+    } catch (error: any) {
+      if (error?.code === 'ENOENT') return [];
+      return undefined;
+    }
+    entries.sort((a, b) => a.path.localeCompare(b.path));
+    return entries;
+  }
+
+  private async loadReactionSnapshot(): Promise<{ counts: Map<string, { likeCount: number; dislikeCount: number }>; incomplete: boolean } | undefined> {
+    try {
+      const snapshot = decodeReactionSnapshot(await readFile(join(this.vaultPath, REACTION_SNAPSHOT_FILE)));
+      const currentEntries = await this.reactionFiles();
+      if (!currentEntries || currentEntries.length !== snapshot.entries.length) return undefined;
+      for (let index = 0; index < currentEntries.length; index += 1) {
+        const current = currentEntries[index]!;
+        const saved = snapshot.entries[index]!;
+        if (current.path !== saved.path || current.size !== saved.size || current.mtimeMs !== saved.mtimeMs) return undefined;
+      }
+      const counts = new Map<string, { likeCount: number; dislikeCount: number }>();
+      for (const [postId, likeCount, dislikeCount] of snapshot.counts) counts.set(postId, { likeCount, dislikeCount });
+      return { counts, incomplete: false };
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async saveReactionSnapshot(counts: Map<string, { likeCount: number; dislikeCount: number }>): Promise<void> {
+    const entries = await this.reactionFiles();
+    if (!entries) return;
+    const snapshot: ReactionSnapshot = {
+      entries,
+      counts: [...counts.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([postId, value]) => [postId, value.likeCount, value.dislikeCount]),
+    };
+    const path = join(this.vaultPath, REACTION_SNAPSHOT_FILE);
+    const temporaryPath = `${path}.${process.pid}.tmp`;
+    try {
+      await mkdir(join(this.vaultPath, '.mcpvault'), { recursive: true });
+      await writeFile(temporaryPath, encodeReactionSnapshot(snapshot));
+      await rename(temporaryPath, path);
+    } catch {
+      // Derived acceleration state is optional; Markdown and Git remain authoritative.
+    }
+  }
+
   private async postReactionAggregates(): Promise<{ counts: Map<string, { likeCount: number; dislikeCount: number }>; incomplete: boolean }> {
     const cached = this.reactionAggregateCache;
     if (cached && cached.expiresAt > Date.now()) return cached;
     if (this.reactionAggregateInFlight) return this.reactionAggregateInFlight;
     const generation = this.reactionAggregateGeneration;
     const computation = (async () => {
+      if (generation === 0) {
+        const snapshot = await this.loadReactionSnapshot();
+        if (snapshot) return snapshot;
+      }
       const counts = new Map<string, { likeCount: number; dislikeCount: number }>();
       let offset = 0;
       let incomplete = false;
@@ -140,6 +300,7 @@ export class CommunityFeaturesService {
           break;
         }
       }
+      void this.saveReactionSnapshot(counts);
       return { counts, incomplete };
     })();
     this.reactionAggregateInFlight = computation;

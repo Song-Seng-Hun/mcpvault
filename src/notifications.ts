@@ -34,6 +34,24 @@ interface PublicSnapshot {
   rooms: QueryNote[];
 }
 
+interface PublicSnapshotIndex extends PublicSnapshot {
+  postsByPostId: Map<string, QueryNote[]>;
+  postsBySeriesId: Map<string, QueryNote[]>;
+  postsByAuthor: Map<string, QueryNote[]>;
+  postsByTag: Map<string, QueryNote[]>;
+  postsByMention: Map<string, QueryNote[]>;
+  commentsByPostId: Map<string, QueryNote[]>;
+  commentsByCommentId: Map<string, QueryNote[]>;
+  commentsByAuthor: Map<string, QueryNote[]>;
+  commentsByMention: Map<string, QueryNote[]>;
+  commentsByReplyTo: Map<string, QueryNote[]>;
+  messagesByMessageId: Map<string, QueryNote[]>;
+  messagesByMention: Map<string, QueryNote[]>;
+  messagesByReplyTo: Map<string, QueryNote[]>;
+  postTitles: Map<string, string>;
+  roomTitles: Map<string, string>;
+}
+
 function identity(principal: ScopePrincipal): string {
   return principal.agentId || principal.modelId;
 }
@@ -63,11 +81,73 @@ function text(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
 }
 
+function addToIndex(index: Map<string, QueryNote[]>, key: unknown, note: QueryNote): void {
+  const normalized = text(key).toLowerCase();
+  if (!normalized) return;
+  const existing = index.get(normalized);
+  if (existing) existing.push(note);
+  else index.set(normalized, [note]);
+}
+
+function addMentions(index: Map<string, QueryNote[]>, note: QueryNote): void {
+  if (!Array.isArray(note.frontmatter.mentions)) return;
+  for (const mention of note.frontmatter.mentions) addToIndex(index, mention, note);
+}
+
+function buildPublicSnapshotIndex(snapshot: PublicSnapshot): PublicSnapshotIndex {
+  const index: PublicSnapshotIndex = {
+    ...snapshot,
+    postsByPostId: new Map(),
+    postsBySeriesId: new Map(),
+    postsByAuthor: new Map(),
+    postsByTag: new Map(),
+    postsByMention: new Map(),
+    commentsByPostId: new Map(),
+    commentsByCommentId: new Map(),
+    commentsByAuthor: new Map(),
+    commentsByMention: new Map(),
+    commentsByReplyTo: new Map(),
+    messagesByMessageId: new Map(),
+    messagesByMention: new Map(),
+    messagesByReplyTo: new Map(),
+    postTitles: new Map(),
+    roomTitles: new Map(),
+  };
+  for (const note of snapshot.posts) {
+    addToIndex(index.postsByPostId, note.frontmatter.post_id, note);
+    addToIndex(index.postsBySeriesId, note.frontmatter.series_id, note);
+    addToIndex(index.postsByAuthor, note.frontmatter.author, note);
+    addMentions(index.postsByMention, note);
+    if (Array.isArray(note.frontmatter.tags)) {
+      for (const tag of note.frontmatter.tags) addToIndex(index.postsByTag, tag, note);
+    }
+    const postId = text(note.frontmatter.post_id);
+    if (postId) index.postTitles.set(postId, text(note.frontmatter.title, postId));
+  }
+  for (const note of snapshot.comments) {
+    addToIndex(index.commentsByPostId, note.frontmatter.post_id, note);
+    addToIndex(index.commentsByCommentId, note.frontmatter.comment_id, note);
+    addToIndex(index.commentsByAuthor, note.frontmatter.author, note);
+    addMentions(index.commentsByMention, note);
+    addToIndex(index.commentsByReplyTo, note.frontmatter.reply_to, note);
+  }
+  for (const note of snapshot.messages) {
+    addToIndex(index.messagesByMessageId, note.frontmatter.message_id, note);
+    addMentions(index.messagesByMention, note);
+    addToIndex(index.messagesByReplyTo, note.frontmatter.reply_to, note);
+  }
+  for (const note of snapshot.rooms) {
+    const roomId = text(note.frontmatter.room_id);
+    if (roomId) index.roomTitles.set(roomId, text(note.frontmatter.title, roomId));
+  }
+  return index;
+}
+
 export class NotificationService {
   private readonly eventCache = new Map<string, { expiresAt: number; events: NotificationEvent[] }>();
   private readonly eventInFlight = new Map<string, Promise<NotificationEvent[]>>();
-  private publicSnapshotCache: { expiresAt: number; value: PublicSnapshot } | undefined;
-  private publicSnapshotInFlight: Promise<PublicSnapshot> | undefined;
+  private publicSnapshotCache: { expiresAt: number; value: PublicSnapshotIndex } | undefined;
+  private publicSnapshotInFlight: Promise<PublicSnapshotIndex> | undefined;
 
   constructor(private readonly fileSystem: FileSystemService, private readonly reputation: ReputationService) {}
 
@@ -78,7 +158,7 @@ export class NotificationService {
     this.publicSnapshotInFlight = undefined;
   }
 
-  private async cachedPublicSnapshot(): Promise<PublicSnapshot> {
+  private async cachedPublicSnapshot(): Promise<PublicSnapshotIndex> {
     const cached = this.publicSnapshotCache;
     if (cached && cached.expiresAt > Date.now()) return cached.value;
     if (this.publicSnapshotInFlight) return this.publicSnapshotInFlight;
@@ -87,7 +167,7 @@ export class NotificationService {
       this.fileSystem.queryNotes({ pathPrefix: 'Community/Comments', filters: { mcpvault_type: 'blog_comment' }, sortBy: 'created_at', sortOrder: 'desc', limit: MAX_SCAN }),
       this.fileSystem.queryNotes({ pathPrefix: 'Community/ChatMessages', filters: { mcpvault_type: 'chat_message' }, sortBy: 'created_at', sortOrder: 'desc', limit: MAX_SCAN }),
       this.fileSystem.queryNotes({ pathPrefix: 'Community/ChatRooms', filters: { mcpvault_type: 'chat_room' }, limit: MAX_SCAN }),
-    ]).then(([posts, comments, messages, rooms]) => ({ posts: posts.notes, comments: comments.notes, messages: messages.notes, rooms: rooms.notes }));
+    ]).then(([posts, comments, messages, rooms]) => buildPublicSnapshotIndex({ posts: posts.notes, comments: comments.notes, messages: messages.notes, rooms: rooms.notes }));
     this.publicSnapshotInFlight = computation;
     try {
       const value = await computation;
@@ -155,13 +235,11 @@ export class NotificationService {
       this.cachedPublicSnapshot(),
       this.fileSystem.queryNotes({ pathPrefix: ownerRoot, filters: { mcpvault_type: 'subscription', active: true }, limit: 500 }),
     ]);
-    const { posts, comments, messages, rooms } = snapshot;
-
-    const ownedPostIds = new Set(posts.filter(note => note.frontmatter.author === target).map(note => text(note.frontmatter.post_id)));
-    const ownedCommentIds = new Set(comments.filter(note => note.frontmatter.author === target).map(note => text(note.frontmatter.comment_id)));
-    const ownedMessageIds = new Set(messages.filter(note => note.frontmatter.author === target).map(note => text(note.frontmatter.message_id)));
-    const postTitles = new Map(posts.map(note => [text(note.frontmatter.post_id), text(note.frontmatter.title, text(note.frontmatter.post_id))]));
-    const roomTitles = new Map(rooms.map(note => [text(note.frontmatter.room_id), text(note.frontmatter.title, text(note.frontmatter.room_id))]));
+    const { messages, postsByPostId, postsBySeriesId, postsByAuthor, postsByTag, postsByMention, commentsByPostId, commentsByCommentId, commentsByAuthor, commentsByMention, commentsByReplyTo, messagesByMessageId, messagesByMention, messagesByReplyTo, postTitles, roomTitles } = snapshot;
+    const targetKey = target.toLowerCase();
+    const ownedPostIds = new Set((postsByAuthor.get(targetKey) || []).map(note => text(note.frontmatter.post_id)));
+    const ownedCommentIds = new Set((commentsByAuthor.get(targetKey) || []).map(note => text(note.frontmatter.comment_id)));
+    const ownedMessageIds = new Set(messages.filter(note => text(note.frontmatter.author).toLowerCase() === targetKey).map(note => text(note.frontmatter.message_id)));
 
     const watchedPostIds = new Set<string>();
     const watchedSeriesIds = new Set<string>();
@@ -176,86 +254,60 @@ export class NotificationService {
       else if (type === 'author') watchedAuthors.add(value);
       else if (type === 'tag') watchedTags.add(value);
     }
-    const hasMention = (note: QueryNote): boolean => Array.isArray(note.frontmatter.mentions)
-      && note.frontmatter.mentions.map(String).some(value => value.toLowerCase() === target.toLowerCase());
-    const watchedPost = (note: QueryNote): boolean => {
-      const postId = text(note.frontmatter.post_id).toLowerCase();
-      const author = text(note.frontmatter.author).toLowerCase();
-      const tags = Array.isArray(note.frontmatter.tags) ? note.frontmatter.tags.map(String).map(value => value.toLowerCase()) : [];
-      return watchedPostIds.has(postId)
-        || watchedSeriesIds.has(text(note.frontmatter.series_id).toLowerCase())
-        || watchedAuthors.has(author)
-        || tags.some(tag => watchedTags.has(tag));
+    const uniqueNotes = (notesToAdd: QueryNote[][]): QueryNote[] => {
+      const unique = new Map<string, QueryNote>();
+      for (const notes of notesToAdd) for (const note of notes) unique.set(note.path, note);
+      return [...unique.values()];
     };
-    const relevantComment = (note: QueryNote): boolean => {
-      const author = text(note.frontmatter.author);
-      const replyTo = text(note.frontmatter.reply_to);
-      const activity = ownedPostIds.has(text(note.frontmatter.post_id));
-      const watched = watchedPostIds.has(text(note.frontmatter.post_id).toLowerCase())
-        || watchedAuthors.has(author.toLowerCase());
-      return author !== target && (hasMention(note) || ownedCommentIds.has(replyTo) || activity || watched);
-    };
-    const relevantMessage = (note: QueryNote): boolean => {
-      const author = text(note.frontmatter.author);
-      return author !== target && (hasMention(note) || ownedMessageIds.has(text(note.frontmatter.reply_to)));
-    };
-    const relevantPosts = posts.filter(note => text(note.frontmatter.author) !== target && (hasMention(note) || watchedPost(note)));
-    const relevantComments = comments.filter(relevantComment);
-    const relevantMessages = messages.filter(relevantMessage);
+    const relevantPosts = uniqueNotes([
+      postsByMention.get(targetKey) || [],
+      ...[...watchedPostIds].map(id => postsByPostId.get(id) || []),
+      ...[...watchedSeriesIds].map(id => postsBySeriesId.get(id) || []),
+      ...[...watchedAuthors].map(id => postsByAuthor.get(id) || []),
+      ...[...watchedTags].map(id => postsByTag.get(id) || []),
+    ]).filter(note => text(note.frontmatter.author).toLowerCase() !== targetKey);
+    const relevantComments = uniqueNotes([
+      commentsByMention.get(targetKey) || [],
+      ...[...ownedCommentIds].map(id => commentsByReplyTo.get(id.toLowerCase()) || []),
+      ...[...ownedPostIds].map(id => commentsByPostId.get(id.toLowerCase()) || []),
+      ...[...watchedPostIds].map(id => commentsByPostId.get(id) || []),
+      ...[...watchedAuthors].map(id => commentsByAuthor.get(id) || []),
+    ]).filter(note => text(note.frontmatter.author).toLowerCase() !== targetKey);
+    const relevantMessages = uniqueNotes([
+      messagesByMention.get(targetKey) || [],
+      ...[...ownedMessageIds].map(id => messagesByReplyTo.get(id.toLowerCase()) || []),
+    ]).filter(note => text(note.frontmatter.author).toLowerCase() !== targetKey);
     const parentCommentIds = new Set(relevantComments.map(note => text(note.frontmatter.reply_to)).filter(Boolean));
     const parentMessageIds = new Set(relevantMessages.map(note => text(note.frontmatter.reply_to)).filter(Boolean));
     const hydratedPosts = await this.hydrateNotes(relevantPosts);
     const hydratedComments = await this.hydrateNotes([
       ...relevantComments,
-      ...comments.filter(note => parentCommentIds.has(text(note.frontmatter.comment_id))),
+      ...[...parentCommentIds].flatMap(id => commentsByCommentId.get(id.toLowerCase()) || []),
     ]);
     const hydratedMessages = await this.hydrateNotes([
       ...relevantMessages,
-      ...messages.filter(note => parentMessageIds.has(text(note.frontmatter.message_id))),
+      ...[...parentMessageIds].flatMap(id => messagesByMessageId.get(id.toLowerCase()) || []),
     ]);
     const commentBodies = new Map(hydratedComments.map(note => [text(note.frontmatter.comment_id), text(note.content).trim()]));
     const messageBodies = new Map(hydratedMessages.map(note => [text(note.frontmatter.message_id), text(note.content).trim()]));
     const events: NotificationEvent[] = [];
-    const reputations = await this.reputation.getMany([...comments, ...messages, ...posts].map(note => text(note.frontmatter.author)));
-    const postsByPostId = new Map<string, QueryNote[]>();
-    const commentsByPostId = new Map<string, QueryNote[]>();
-    const postsBySeriesId = new Map<string, QueryNote[]>();
-    const postsByAuthor = new Map<string, QueryNote[]>();
-    const commentsByAuthor = new Map<string, QueryNote[]>();
-    const postsByTag = new Map<string, QueryNote[]>();
-    const addToIndex = (index: Map<string, QueryNote[]>, key: unknown, note: QueryNote) => {
-      const normalized = text(key).toLowerCase();
-      if (!normalized) return;
-      const existing = index.get(normalized);
-      if (existing) existing.push(note);
-      else index.set(normalized, [note]);
-    };
-    for (const note of hydratedPosts) {
-      addToIndex(postsByPostId, note.frontmatter.post_id, note);
-      addToIndex(postsBySeriesId, note.frontmatter.series_id, note);
-      addToIndex(postsByAuthor, note.frontmatter.author, note);
-      if (Array.isArray(note.frontmatter.tags)) {
-        for (const tag of note.frontmatter.tags) addToIndex(postsByTag, tag, note);
-      }
-    }
-    for (const note of hydratedComments) {
-      addToIndex(commentsByPostId, note.frontmatter.post_id, note);
-      addToIndex(commentsByAuthor, note.frontmatter.author, note);
-    }
+    const reputations = await this.reputation.getMany([...hydratedComments, ...hydratedMessages, ...hydratedPosts].map(note => text(note.frontmatter.author)));
+    const hydratedByPath = new Map([...hydratedPosts, ...hydratedComments, ...hydratedMessages].map(note => [note.path, note]));
     const watchedSourceCache = new Map<string, QueryNote[]>();
     const watchedSources = (type: string, target: string): QueryNote[] => {
       const cacheKey = `${type}:${target}`;
       const cached = watchedSourceCache.get(cacheKey);
       if (cached) return cached;
-      const sources = type === 'post'
+      const metadataSources = type === 'post'
         ? [...(postsByPostId.get(target) || []), ...(commentsByPostId.get(target) || [])]
         : type === 'series'
           ? (postsBySeriesId.get(target) || [])
           : type === 'author'
             ? [...(postsByAuthor.get(target) || []), ...(commentsByAuthor.get(target) || [])]
             : type === 'tag'
-              ? (postsByTag.get(target) || [])
-              : [];
+            ? (postsByTag.get(target) || [])
+            : [];
+      const sources = metadataSources.map(note => hydratedByPath.get(note.path) || note);
       watchedSourceCache.set(cacheKey, sources);
       return sources;
     };

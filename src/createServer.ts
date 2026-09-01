@@ -255,6 +255,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const searchService = new SearchService(resolvedVaultPath, pathFilter);
   const metadataIndex = new VaultMetadataIndex(resolvedVaultPath, pathFilter, frontmatterHandler);
   let reputationCache: ReputationService | undefined;
+  let notificationsCache: NotificationService | undefined;
+  let communityFeaturesCache: CommunityFeaturesService | undefined;
   const fileSystem = new FileSystemService(
     resolvedVaultPath,
     pathFilter,
@@ -264,6 +266,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       searchService.invalidate(path, kind);
       semanticSearch.notifyChange(path, kind);
       reputationCache?.invalidate();
+      notificationsCache?.invalidate();
+      communityFeaturesCache?.invalidate();
     },
     metadataIndex,
   );
@@ -280,9 +284,11 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const communityStatus = new CommunityStatusService(fileSystem);
   const agentDirectory = new AgentDirectoryService(fileSystem, scopeAuth);
   const notifications = new NotificationService(fileSystem, reputation);
+  notificationsCache = notifications;
   const audit = new AuditService(resolvedVaultPath);
   const agentTasks = new AgentTaskService(fileSystem, references, scopeAuth);
-  const communityFeatures = new CommunityFeaturesService(fileSystem, scopeAccess, scopeAuth, reputation);
+  const communityFeatures = new CommunityFeaturesService(fileSystem, scopeAccess, scopeAuth, reputation, resolvedVaultPath);
+  communityFeaturesCache = communityFeatures;
   const obsidianSearch = new ObsidianSearchService(resolvedVaultPath, pathFilter, scopeAccess);
   const context = new ContextService(social, chat);
   const continuity = new ContinuityService(fileSystem);
