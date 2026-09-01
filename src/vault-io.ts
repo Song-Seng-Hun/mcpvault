@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
 export type VaultIoPriority = 'foreground' | 'background';
+const BACKGROUND_MAX_WAIT_MS = 500;
 
 interface IoJob {
   path: string;
@@ -8,6 +9,7 @@ interface IoJob {
   run: () => Promise<string>;
   resolve: (value: string) => void;
   reject: (reason?: unknown) => void;
+  queuedAt: number;
   startedAt?: number;
 }
 
@@ -48,7 +50,7 @@ export class VaultIoCoordinator {
     if (existing) return existing;
 
     const promise = new Promise<string>((resolve, reject) => {
-      this.queue.push({ path, priority, run: () => this.reader(path), resolve, reject });
+      this.queue.push({ path, priority, run: () => this.reader(path), resolve, reject, queuedAt: Date.now() });
       this.pump();
     });
     this.inFlight.set(path, promise);
@@ -70,8 +72,10 @@ export class VaultIoCoordinator {
 
   private pump(): void {
     while (this.active < this.targetConcurrency && this.queue.length > 0) {
+      const now = Date.now();
+      const agedBackgroundIndex = this.queue.findIndex(job => job.priority === 'background' && now - job.queuedAt >= BACKGROUND_MAX_WAIT_MS);
       const foregroundIndex = this.queue.findIndex(job => job.priority === 'foreground');
-      const index = foregroundIndex >= 0 ? foregroundIndex : 0;
+      const index = agedBackgroundIndex >= 0 ? agedBackgroundIndex : foregroundIndex >= 0 ? foregroundIndex : 0;
       const job = this.queue.splice(index, 1)[0]!;
       this.active += 1;
       job.startedAt = Date.now();

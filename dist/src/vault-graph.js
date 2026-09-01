@@ -157,16 +157,24 @@ export class VaultGraphIndex {
     async getBacklinks(path, limit, canAccessPath) {
         await this.ensure();
         const target = normalizePath(path);
-        const targetEntry = [...this.entries.values()].find(entry => normalizedPath(entry.path) === normalizedPath(target));
+        const normalizedTarget = normalizedPath(target);
+        let targetEntry;
+        for (const entry of this.entries.values()) {
+            if (normalizedPath(entry.path) === normalizedTarget) {
+                targetEntry = entry;
+                break;
+            }
+        }
         if (!targetEntry)
             throw new Error(`File not found: ${target}`);
         if (!canAccessPath(targetEntry.path))
             throw new Error(`Access denied: ${target}`);
-        const visible = [...this.entries.values()].filter(entry => normalizedPath(entry.path) !== normalizedPath(target) && canAccessPath(entry.path));
         const backlinks = [];
         let total = 0;
         const compare = (a, b) => a.path.localeCompare(b.path) || a.line - b.line;
-        for (const entry of visible) {
+        for (const entry of this.entries.values()) {
+            if (normalizedPath(entry.path) === normalizedTarget || !canAccessPath(entry.path))
+                continue;
             for (const link of entry.links) {
                 if (!backlinkMatches(link.target, targetEntry.path))
                     continue;

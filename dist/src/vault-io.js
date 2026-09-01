@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+const BACKGROUND_MAX_WAIT_MS = 500;
 /**
  * Deduplicates concurrent note reads and applies adaptive backpressure to
  * derived read-model work. It intentionally retains no content after a read
@@ -24,7 +25,7 @@ export class VaultIoCoordinator {
         if (existing)
             return existing;
         const promise = new Promise((resolve, reject) => {
-            this.queue.push({ path, priority, run: () => this.reader(path), resolve, reject });
+            this.queue.push({ path, priority, run: () => this.reader(path), resolve, reject, queuedAt: Date.now() });
             this.pump();
         });
         this.inFlight.set(path, promise);
@@ -43,8 +44,10 @@ export class VaultIoCoordinator {
     }
     pump() {
         while (this.active < this.targetConcurrency && this.queue.length > 0) {
+            const now = Date.now();
+            const agedBackgroundIndex = this.queue.findIndex(job => job.priority === 'background' && now - job.queuedAt >= BACKGROUND_MAX_WAIT_MS);
             const foregroundIndex = this.queue.findIndex(job => job.priority === 'foreground');
-            const index = foregroundIndex >= 0 ? foregroundIndex : 0;
+            const index = agedBackgroundIndex >= 0 ? agedBackgroundIndex : foregroundIndex >= 0 ? foregroundIndex : 0;
             const job = this.queue.splice(index, 1)[0];
             this.active += 1;
             job.startedAt = Date.now();

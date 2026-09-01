@@ -26,6 +26,7 @@ const LEGACY_SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.gz';
 const SEARCH_SNAPSHOT_VERSION = 2;
 const SNAPSHOT_SAVE_DEBOUNCE_MS = 1_000;
 const DIRECTORY_CACHE_TTL_MS = 5_000;
+const DIRECTORY_CACHE_MAX_ENTRIES = 1_024;
 const CORPUS_STATS_CACHE_MAX_ENTRIES = 64;
 const gunzipAsync = promisify(gunzip);
 const SNAPSHOT_MAGIC = Buffer.from('MCPVSRCH', 'ascii');
@@ -219,6 +220,7 @@ function normalizeSubtree(p: string): string {
 
 export class SearchService {
   private readonly cacheOwner = createDerivedCacheOwner('search.results');
+  private readonly directoryCacheOwner = createDerivedCacheOwner('search.directories');
   private vaultPath: string;
   private readonly cache = new Map<string, SearchCacheEntry>();
   private readonly inFlight = new Map<string, Promise<SearchResult[]>>();
@@ -272,6 +274,7 @@ export class SearchService {
     derivedCacheBudget.clearOwner(this.cacheOwner);
     this.corpusStatsCache.clear();
     this.directoryCache.clear();
+    derivedCacheBudget.clearOwner(this.directoryCacheOwner);
     if (path) {
       const normalized = path.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
       if (kind === 'delete') this.removeDocument(normalized);
@@ -285,6 +288,7 @@ export class SearchService {
     this.watcher = undefined;
     this.directoryCache.clear();
     derivedCacheBudget.clearOwner(this.cacheOwner);
+    derivedCacheBudget.clearOwner(this.directoryCacheOwner);
   }
 
   private async loadSnapshot(): Promise<void> {
@@ -459,17 +463,11 @@ export class SearchService {
     const corpusStats = this.getCorpusStats(scopedDocumentIds, searchContent, searchFrontmatter, normalizedPrefix, normalizedExcludes);
     const { totalDocLength, docCount } = corpusStats;
     const candidateIds = this.candidateIds(terms, searchContent, searchFrontmatter, caseSensitive, scopedDocumentIds);
-    const allowedFiles: IndexedDocument[] = [];
     for (const documentId of candidateIds) {
       const document = this.documentsById.get(documentId);
       if (!document || !this.pathFilter.isAllowed(document.relativePath)) continue;
       if (document.moderationHidden) continue;
-      allowedFiles.push(document);
-    }
-
-    for (const document of allowedFiles) {
-      if (!candidateIds.has(document.documentId)) continue;
-        const { relativePath } = document;
+      const { relativePath } = document;
         let searchableText = '';
 
         // Prepare search text based on options
@@ -618,6 +616,7 @@ export class SearchService {
     try {
       this.watcher = watch(this.vaultPath, { recursive: true }, (_event, filename) => {
         this.directoryCache.clear();
+        derivedCacheBudget.clearOwner(this.directoryCacheOwner);
         if (!filename) {
           this.needsFullReconcile = true;
           return;
@@ -969,8 +968,16 @@ export class SearchService {
 
   private async findMarkdownFiles(dirPath: string): Promise<string[]> {
     const cached = this.directoryCache.get(dirPath);
-    if (cached && cached.expiresAt > Date.now()) return cached.paths;
-    if (cached) this.directoryCache.delete(dirPath);
+    if (cached && cached.expiresAt > Date.now()) {
+      this.directoryCache.delete(dirPath);
+      this.directoryCache.set(dirPath, cached);
+      derivedCacheBudget.touch(this.directoryCacheOwner, dirPath);
+      return cached.paths;
+    }
+    if (cached) {
+      this.directoryCache.delete(dirPath);
+      derivedCacheBudget.remove(this.directoryCacheOwner, dirPath);
+    }
     const markdownFiles: string[] = [];
 
     try {
@@ -991,7 +998,18 @@ export class SearchService {
       // Skip directories that can't be read
     }
 
-    this.directoryCache.set(dirPath, { expiresAt: Date.now() + DIRECTORY_CACHE_TTL_MS, paths: markdownFiles });
+    const entry: DirectoryCacheEntry = { expiresAt: Date.now() + DIRECTORY_CACHE_TTL_MS, paths: markdownFiles };
+    this.directoryCache.set(dirPath, entry);
+    derivedCacheBudget.register(this.directoryCacheOwner, dirPath, estimateCacheBytes(entry) + 64, () => {
+      if (this.directoryCache.get(dirPath) !== entry) return;
+      this.directoryCache.delete(dirPath);
+    });
+    while (this.directoryCache.size > DIRECTORY_CACHE_MAX_ENTRIES) {
+      const oldest = this.directoryCache.keys().next();
+      if (oldest.done) break;
+      this.directoryCache.delete(oldest.value);
+      derivedCacheBudget.remove(this.directoryCacheOwner, oldest.value);
+    }
     return markdownFiles;
   }
 
