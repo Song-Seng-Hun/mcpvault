@@ -7,7 +7,7 @@ const MAX_SCAN = 500;
 
 type NotificationKind = 'mention' | 'reply' | 'activity' | 'watch';
 
-interface NotificationEvent {
+export interface NotificationEvent {
   notificationId: string;
   kind: NotificationKind;
   sourcePath: string;

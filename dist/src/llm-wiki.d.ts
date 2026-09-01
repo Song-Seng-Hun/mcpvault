@@ -84,6 +84,21 @@ export declare class LlmWikiService {
             why: string;
             invitation: string;
         };
+        authentication: {
+            status: string;
+            identity: string;
+            note: string;
+            why?: never;
+            beforeRegister?: never;
+            steps?: never;
+        } | {
+            identity?: never;
+            status: string;
+            why: string;
+            beforeRegister: string[];
+            steps: string[];
+            note: string;
+        };
         invariants: string[];
         catalog: {
             counts: Record<string, number>;
