@@ -5,7 +5,7 @@ import { gunzip } from 'node:zlib';
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { generateObsidianUri } from './uri.js';
-import { boundSearchResults, normalizeSearchLimit, normalizeSearchMaxChars } from './search-limits.js';
+import { boundSearchResults, boundedTopK, normalizeSearchLimit, normalizeSearchMaxChars } from './search-limits.js';
 import { isMarkdownModerationHidden } from './moderation-policy.js';
 const WIKI_TYPES = new Set(['schema', 'source', 'knowledge', 'issue']);
 const SEARCH_CACHE_TTL_MS = 5_000;
@@ -928,7 +928,7 @@ export class SearchService {
         const avgdl = docCount > 0 ? totalDocLength / docCount : 1;
         const k1 = 1.2;
         const b = 0.75;
-        const scored = candidates.map(c => {
+        const scored = candidates.map((c, index) => {
             let score = 0;
             for (const term of terms) {
                 const tf = c.termFreqs.get(term) || 0;
@@ -936,10 +936,13 @@ export class SearchService {
                 const idf = Math.log(1 + (docCount - df + 0.5) / (df + 0.5));
                 score += idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * c.docLength / avgdl));
             }
-            return { score, result: c.result, wiki: c.wiki };
+            return { score, result: c.result, wiki: c.wiki, index };
         });
-        scored.sort((a, b) => Number(b.wiki) - Number(a.wiki) || b.score - a.score);
-        return scored.slice(0, maxLimit).map(s => s.result);
+        const compare = (a, b) => Number(b.wiki) - Number(a.wiki) || b.score - a.score || a.index - b.index;
+        const selected = scored.length > maxLimit
+            ? boundedTopK(scored, maxLimit, compare)
+            : scored.sort(compare);
+        return selected.map(s => s.result);
     }
 }
 function countWords(value) {
