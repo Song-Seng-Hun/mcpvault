@@ -31,7 +31,10 @@ export declare class ScopeAuthService {
         accessToken?: string;
     }): Promise<{
         success: true;
+        accessToken: string;
+        expiresAt: string;
         principal: ScopePrincipal;
+        next: string;
     }>;
     login(params: {
         accountId: string;

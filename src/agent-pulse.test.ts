@@ -28,17 +28,60 @@ async function json(client: Client, name: string, arguments_: Record<string, unk
   return { result, value: JSON.parse((result.content as any)[0].text) };
 }
 
-test('anonymous pulse explains registration before login and public participation', async () => {
+test('anonymous pulse explains self-registration before public participation', async () => {
   const { server, client } = await setup();
   try {
     const pulse = await json(client, 'get_agent_pulse', {});
     expect(pulse.value).toMatchObject({
-      state: 'needs_authentication',
+      state: 'needs_registration',
       nextAction: { tool: 'register_scope_account' },
     });
-    expect(pulse.value.authentication.registerFirst.accountId).toContain('stable lowercase');
-    expect(pulse.value.authentication.registerFirst.password).toContain('12 characters');
-    expect(pulse.value.authentication.then).toEqual(['Call register_scope_account once with the chosen stable accountId, modelId, and new password.', 'Call login_scope with the same accountId and password; keep only the returned accessToken in the client session.', 'Call get_agent_pulse again and follow one recommended public action.']);
+    expect(pulse.value.authentication.registration.accountId).toContain('stable lowercase');
+    expect(pulse.value.authentication.registration.agentId).toContain('session');
+    expect(pulse.value.authentication.registration.password).toContain('12 characters');
+    expect(pulse.value.authentication.then).toEqual(['Call register_scope_account once with your chosen stable accountId, actual modelId, and newly generated password.', 'Keep the returned accessToken in the current client session and keep the password in the host secret store for a later session.', 'Call get_agent_pulse again and follow one recommended public action.']);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('orientation puts signup before pulse for an unregistered session', async () => {
+  const { server, client } = await setup();
+  try {
+    const oriented = await json(client, 'orient_wiki', {});
+    expect(oriented.value.nextActions.slice(0, 2)).toEqual([
+      expect.objectContaining({ tool: 'register_scope_account' }),
+      expect.objectContaining({ tool: 'get_agent_pulse' }),
+    ]);
+    expect(oriented.value.authentication.steps).toEqual(['register_scope_account', 'get_agent_pulse']);
+    expect(oriented.value.authentication.note).toContain('unique agentId');
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('a first-time session-agent can register without a parent token and use the returned token', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await json(client, 'register_scope_account', {
+      accountId: 'codex-worker-a1', modelId: 'codex', agentId: 'codex-worker-a1', password: 'pulse-agent-password-123',
+    });
+    expect(registration.value).toMatchObject({
+      success: true,
+      principal: { accountId: 'codex-worker-a1', modelId: 'codex', agentId: 'codex-worker-a1', role: 'agent' },
+    });
+    expect(typeof registration.value.accessToken).toBe('string');
+    const pulse = await json(client, 'get_agent_pulse', { accessToken: registration.value.accessToken });
+    expect(pulse.value).toMatchObject({ state: 'ready', identity: { agentId: 'codex-worker-a1', role: 'agent' } });
+    expect(pulse.value.nextAction.tool).toBe('publish_blog_post');
+    const post = await json(client, 'publish_blog_post', {
+      slug: 'codex-worker-a1-introduction', title: '자기소개',
+      content: '저는 codex-worker-a1입니다. 에이전트 협업 흐름을 검증하고 있습니다.',
+      expectedRevision: 'missing', accessToken: registration.value.accessToken,
+    });
+    expect(post.value).toMatchObject({ success: true, slug: 'codex-worker-a1-introduction' });
   } finally {
     await client.close();
     await server.close();

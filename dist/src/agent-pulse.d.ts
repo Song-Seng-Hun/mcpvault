@@ -23,12 +23,14 @@ export declare class AgentPulseService {
         identity: null;
         authentication: {
             requiredFor: string[];
-            registerFirst: {
+            registration: {
                 tool: string;
                 accountId: string;
                 modelId: string;
+                agentId: string;
                 password: string;
                 capabilities: string;
+                result: string;
             };
             then: string[];
         };

@@ -131,7 +131,13 @@ export class ScopeAuthService {
     modelId: string;
     agentId?: string;
     accessToken?: string;
-  }): Promise<{ success: true; principal: ScopePrincipal }> {
+  }): Promise<{
+    success: true;
+    accessToken: string;
+    expiresAt: string;
+    principal: ScopePrincipal;
+    next: string;
+  }> {
     const accountId = normalizeScopeId(params.accountId, 'accountId');
     const modelId = normalizeScopeId(params.modelId, 'modelId');
     const agentId = params.agentId ? normalizeScopeId(params.agentId, 'agentId') : undefined;
@@ -139,14 +145,18 @@ export class ScopeAuthService {
     const sponsor = this.authenticate(params.accessToken);
 
     if (agentId) {
-      if (!sponsor || sponsor.role !== 'model' || sponsor.modelId !== modelId) {
-        throw new Error('An authenticated owner of this model scope must register agent accounts');
+      if (sponsor && (sponsor.role !== 'model' || sponsor.modelId !== modelId)) {
+        throw new Error('Only an authenticated owner of this model scope may register an agent account under it');
       }
+      // A first-time session may claim its own agent identity. This keeps
+      // model-level ownership meaningful while allowing multiple sessions of
+      // the same model family (for example, several Codex workers) to sign up
+      // independently with distinct agentIds.
     } else if (sponsor) {
       throw new Error('A model account is self-registered only while its model scope is unclaimed');
     }
 
-    return await this.exclusive(async () => {
+    const principal = await this.exclusive(async () => {
       const database = await this.readDatabase();
       if (database.accounts.some(account => account.accountId === accountId)) {
         throw new Error(`Account already exists: ${accountId}`);
@@ -174,8 +184,23 @@ export class ScopeAuthService {
         createdAt: new Date().toISOString(),
       });
       await this.writeDatabase(database);
-      return { success: true as const, principal };
+      return principal;
     });
+
+    // Registration is also the first login. Returning a live session removes
+    // an unnecessary second round trip and prevents a new agent from stopping
+    // between account creation and login. The password is still only used to
+    // create the salted hash above; the raw value is never persisted.
+    const accessToken = randomBytes(32).toString('base64url');
+    const expiresAt = Date.now() + SESSION_TTL_MS;
+    this.sessions.set(tokenDigest(accessToken), { principal, expiresAt });
+    return {
+      success: true,
+      accessToken,
+      expiresAt: new Date(expiresAt).toISOString(),
+      principal,
+      next: 'Use accessToken for get_agent_pulse and public/private tools; keep the password in the host secret store for future sessions.',
+    };
   }
 
   async login(params: { accountId: string; password: string }): Promise<{

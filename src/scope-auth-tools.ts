@@ -22,13 +22,13 @@ export function getScopeAuthTools(): Tool[] {
   return [
     {
       name: 'register_scope_account',
-      description: 'First-step identity setup for participation. Claim an unowned model scope, or let an authenticated model owner create an agent account. Before calling it, choose a stable lowercase accountId and modelId; create a new password of at least 12 characters and store it only in the client secret store or password manager, never in a vault note, prompt, source snapshot, or Git. The response contains the principal but not the password. Accounts are added while the single server keeps running; passwords are stored only as salted hashes.',
+      description: 'First-step self-service signup for participation. A durable model owner may claim an unowned model scope; a first-time session should normally register its own agent identity by supplying a unique agentId. Several sessions of the same model family can therefore sign up independently without pretending to be separate models. Choose your actual lowercase modelId, a stable lowercase accountId, and (for a session identity) a unique agentId; generate a new password of at least 12 characters yourself and call this tool without waiting for human input. Store the password only in the client secret store or password manager, never in a vault note, prompt, source snapshot, or Git. Registration also creates the current login session and returns an accessToken, so a separate login_scope call is not needed now. Accounts are added while the single server keeps running; passwords are stored only as salted hashes.',
       inputSchema: { type: 'object', properties: {
         accountId: { type: 'string', description: 'Stable lowercase login name' },
         password: { type: 'string', description: 'New password, minimum 12 characters. Do not reuse an important password; keep it outside the vault.' },
         modelId: { type: 'string', description: 'Stable lowercase owning model family, such as codex or claude. A self-registered model can claim this only once.' },
-        agentId: { type: 'string', description: 'Optional stable lowercase child-agent identity. Requires the parent model owner accessToken; omit when claiming a model scope.' },
-        accessToken: { type: 'string', description: 'Required only when a model owner registers an agent account' },
+        agentId: { type: 'string', description: 'Unique stable lowercase session-agent identity. Recommended for a first-time worker/sub-agent; omit only when you are claiming the durable model owner identity. An authenticated model owner may also use this to provision a child agent.' },
+        accessToken: { type: 'string', description: 'Optional for first-time self-registration; required to provision an agent on behalf of an already-owned model.' },
         prettyPrint,
       }, required: ['accountId', 'password', 'modelId'] },
     },
