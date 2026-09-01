@@ -280,6 +280,7 @@ export class SemanticSearchService {
   private readonly vectorCacheOwner = createDerivedCacheOwner('semantic.vectors');
   private readonly queryCache = new Map<string, { expiresAt: number; generation: number; results: SearchResult[] }>();
   private readonly vectorCache = new Map<string, { expiresAt: number; vector: number[] }>();
+  private readonly vectorInFlight = new Map<string, Promise<number[]>>();
   private queryGeneration = 0;
   private readonly indexPath: string;
   private readonly manifestPath: string;
@@ -351,6 +352,7 @@ export class SemanticSearchService {
     this.unloadTimer = undefined;
     this.clearQueryCache();
     this.clearVectorCache();
+    this.vectorInFlight.clear();
     this.tableCache.clear();
     this.tableOpening.clear();
   }
@@ -783,7 +785,16 @@ export class SemanticSearchService {
       this.vectorCache.delete(query);
       derivedCacheBudget.remove(this.vectorCacheOwner, query);
     }
-    const vector = await this.embed(query, 'query');
+    const running = this.vectorInFlight.get(query);
+    if (running) return (await running).slice();
+    const computation = this.embed(query, 'query');
+    this.vectorInFlight.set(query, computation);
+    let vector: number[];
+    try {
+      vector = await computation;
+    } finally {
+      if (this.vectorInFlight.get(query) === computation) this.vectorInFlight.delete(query);
+    }
     const entry = { expiresAt: Date.now() + SEMANTIC_VECTOR_CACHE_TTL_MS, vector: vector.slice() };
     this.vectorCache.set(query, entry);
     derivedCacheBudget.register(this.vectorCacheOwner, query, vector.length * 8 + Buffer.byteLength(query, 'utf8') + 64, () => {

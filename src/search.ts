@@ -37,7 +37,6 @@ interface SearchCacheEntry {
 }
 
 interface IndexedDocument {
-  fullPath: string;
   relativePath: string;
   documentId: number;
   body?: string;
@@ -322,7 +321,6 @@ export class SearchService {
           if (!Array.isArray(item.bodyGramIds) || !Array.isArray(item.frontmatterGramIds) || !Array.isArray(item.titleGramIds)) continue;
         if (![item.size, item.mtimeMs, item.bodyLength, item.frontmatterLength, item.textBytes].every(value => typeof value === 'number' && Number.isFinite(value))) continue;
         const document: IndexedDocument = {
-          fullPath: join(this.vaultPath, relativePath),
           relativePath,
           documentId: this.nextDocumentId++,
           title: String(item.title || relativePath),
@@ -711,7 +709,6 @@ export class SearchService {
       const frontmatterText = frontmatterMatch?.[1] || '';
       const title = relativePath.split('/').pop()?.replace(/\.md$/i, '') || relativePath;
       return {
-        fullPath,
         relativePath,
         documentId: existing?.documentId ?? this.nextDocumentId++,
         body,
@@ -888,7 +885,7 @@ export class SearchService {
       return;
     }
     try {
-      const content = await readFile(document.fullPath, 'utf-8');
+      const content = await readFile(join(this.vaultPath, document.relativePath), 'utf-8');
       const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
       document.body = frontmatterMatch ? content.slice(frontmatterMatch[0].length) : content;
       document.frontmatterText = frontmatterMatch?.[1] || '';

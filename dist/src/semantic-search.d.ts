@@ -41,6 +41,7 @@ export declare class SemanticSearchService {
     private readonly vectorCacheOwner;
     private readonly queryCache;
     private readonly vectorCache;
+    private readonly vectorInFlight;
     private queryGeneration;
     private readonly indexPath;
     private readonly manifestPath;
