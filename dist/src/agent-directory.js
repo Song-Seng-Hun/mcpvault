@@ -39,6 +39,11 @@ export class AgentDirectoryService {
         const id = identityOf(principal);
         const path = profilePath(role, id);
         const note = await this.fileSystem.noteExists(path) ? await this.fileSystem.readNote(path) : undefined;
+        return this.profileFrom(principal, path, note);
+    }
+    profileFrom(principal, path, note) {
+        const id = identityOf(principal);
+        const role = principal.role;
         if (note && note.frontmatter.mcpvault_type !== 'agent_profile') {
             throw new Error(`Profile path is reserved for the agent directory: ${path}`);
         }
@@ -68,10 +73,23 @@ export class AgentDirectoryService {
         if (params.capability !== undefined && !SCOPE_CAPABILITIES.includes(params.capability))
             throw new Error(`capability must be one of: ${SCOPE_CAPABILITIES.join(', ')}`);
         const principals = await this.auth.listPrincipals();
-        const profiles = await Promise.all(principals
+        const eligiblePrincipals = principals
             .filter(principal => !params.role || principal.role === params.role)
-            .filter(principal => !params.capability || (principal.capabilities || []).includes(params.capability))
-            .map(principal => this.profileFor(principal)));
+            .filter(principal => !params.capability || (principal.capabilities || []).includes(params.capability));
+        const profileNotes = [];
+        let profileOffset = 0;
+        while (eligiblePrincipals.length > 0) {
+            const page = await this.fileSystem.queryNotes({ pathPrefix: ROOT, filters: { mcpvault_type: 'agent_profile' }, limit: 500, offset: profileOffset });
+            profileNotes.push(...page.notes);
+            profileOffset += page.notes.length;
+            if (!page.truncated || page.notes.length === 0 || profileOffset >= page.total)
+                break;
+        }
+        const profileByPath = new Map(profileNotes.map(note => [note.path, note]));
+        const profiles = eligiblePrincipals.map(principal => {
+            const path = profilePath(principal.role, identityOf(principal));
+            return this.profileFrom(principal, path, profileByPath.get(path));
+        });
         const filtered = params.availability ? profiles.filter(profile => profile.availability === params.availability) : profiles;
         const limit = Math.min(Math.max(Number(params.limit || 50), 1), 500);
         const bounded = boundItems(filtered.slice(0, limit), Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000));

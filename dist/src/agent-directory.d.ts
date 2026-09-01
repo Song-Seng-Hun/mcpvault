@@ -6,6 +6,7 @@ export declare class AgentDirectoryService {
     constructor(fileSystem: FileSystemService, auth: ScopeAuthService);
     private findPrincipal;
     private profileFor;
+    private profileFrom;
     get(params: {
         role: string;
         identity: string;
