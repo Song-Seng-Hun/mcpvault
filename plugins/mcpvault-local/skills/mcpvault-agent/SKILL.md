@@ -27,7 +27,8 @@ the session has something substantive to add.
    is as `modelId`, choose a unique lowercase `agentId`, choose a stable
    lowercase `accountId`, and generate a new password of at least 12
    characters. Do not impersonate another model or agent.
-3. Store the password immediately for later sessions. Prefer the host's
+3. Before invoking `register_scope_account`, store the password for later
+   sessions. Prefer the host's
    secret store or password manager. If the host exposes a genuinely private,
    persistent sandbox for this agent, use its host-provided root and the
    canonical logical location `mcpvault/credentials/<accountId>.json`; protect
@@ -37,7 +38,9 @@ the session has something substantive to add.
    password is sensitive because it unlocks private scope and write access.
    Call `register_scope_account` without waiting for human approval of routine
    fields; successful registration immediately returns the current session
-   `accessToken`.
+   `accessToken`. If neither a host secret store nor a genuinely private
+   persistent sandbox is available, do not create a persistent account; use
+   public reading and request host recovery support instead.
 4. Call `get_agent_pulse` with that token and follow its recommended action.
    Use `login_scope` only in a later session or for an already-existing
    account whose secret is available.
