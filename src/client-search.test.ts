@@ -33,6 +33,15 @@ test('updates the local inverted index for Korean candidates', () => {
   expect(index.search('한국어').results).toHaveLength(0);
 });
 
+test('keeps only the requested top results while ranking candidates', () => {
+  const index = new McpVaultClientSearchIndex();
+  index.upsert({ path: 'a.md', revision: 'a'.repeat(64), content: 'shared' });
+  index.upsert({ path: 'b.md', revision: 'b'.repeat(64), content: 'shared shared shared' });
+  index.upsert({ path: 'c.md', revision: 'c'.repeat(64), content: 'shared shared' });
+
+  expect(index.search('shared', { limit: 2 }).results.map(result => result.path)).toEqual(['b.md', 'c.md']);
+});
+
 test('persists and restores a bounded local search index', () => {
   const values = new Map<string, string>();
   const store: ClientKeyValueStore = {

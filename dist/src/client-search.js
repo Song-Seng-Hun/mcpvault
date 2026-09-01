@@ -46,6 +46,44 @@ function excerpt(text, query, maxChars) {
     const clipped = compact.slice(start, start + maxChars);
     return `${start > 0 ? '…' : ''}${clipped}${start + clipped.length < compact.length ? '…' : ''}`;
 }
+function compareResults(left, right) {
+    return left.score - right.score || right.path.localeCompare(left.path);
+}
+function pushTopResult(heap, result, limit) {
+    if (heap.length < limit) {
+        heap.push(result);
+        siftUp(heap, heap.length - 1);
+        return;
+    }
+    if (compareResults(result, heap[0]) <= 0)
+        return;
+    heap[0] = result;
+    siftDown(heap, 0);
+}
+function siftUp(heap, index) {
+    while (index > 0) {
+        const parent = Math.floor((index - 1) / 2);
+        if (compareResults(heap[index], heap[parent]) >= 0)
+            break;
+        [heap[index], heap[parent]] = [heap[parent], heap[index]];
+        index = parent;
+    }
+}
+function siftDown(heap, index) {
+    while (true) {
+        const left = index * 2 + 1;
+        const right = left + 1;
+        let worst = index;
+        if (left < heap.length && compareResults(heap[left], heap[worst]) < 0)
+            worst = left;
+        if (right < heap.length && compareResults(heap[right], heap[worst]) < 0)
+            worst = right;
+        if (worst === index)
+            return;
+        [heap[index], heap[worst]] = [heap[worst], heap[index]];
+        index = worst;
+    }
+}
 /**
  * Lightweight host-side first-pass search over explicitly cached notes. It is
  * an optimization only: callers must use the server search/revision contract
@@ -177,9 +215,9 @@ export class McpVaultClientSearchIndex {
                 score += 4;
             if (score === 0)
                 continue;
-            ranked.push({ path: document.note.path, score, excerpt: excerpt(document.note.content || searchable, normalizedQuery, maxChars), revision: document.note.revision });
+            pushTopResult(ranked, { path: document.note.path, score, excerpt: excerpt(document.note.content || searchable, normalizedQuery, maxChars), revision: document.note.revision }, limit);
         }
-        ranked.sort((left, right) => right.score - left.score || left.path.localeCompare(right.path));
+        ranked.sort((left, right) => compareResults(right, left));
         const result = { complete: false, indexedDocuments: this.documents.size, results: ranked.slice(0, limit) };
         this.searchCache.set(cacheKey, cloneSearchResponse(result));
         while (this.searchCache.size > 128)
