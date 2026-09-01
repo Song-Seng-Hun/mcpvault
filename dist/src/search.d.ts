@@ -8,6 +8,7 @@ export declare class SearchService {
     private readonly documents;
     private readonly dirtyDocuments;
     private readonly postings;
+    private nextDocumentId;
     private indexedTextBytes;
     private cacheGeneration;
     private indexReady;
@@ -25,6 +26,7 @@ export declare class SearchService {
     invalidate(path?: string, kind?: 'upsert' | 'delete'): void;
     close(): void;
     private loadSnapshot;
+    private restoreSnapshot;
     private saveSnapshot;
     search(params: SearchParams): Promise<SearchResult[]>;
     private ensureIndex;
@@ -38,7 +40,7 @@ export declare class SearchService {
     private removeDocument;
     private loadText;
     private trimTextCache;
-    private candidatePaths;
+    private candidateIds;
     private matchingPostingCandidates;
     private postingCandidates;
     private findMarkdownFiles;

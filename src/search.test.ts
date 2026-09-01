@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from "vitest";
 import { SearchService } from "./search.js";
 import { PathFilter } from "./pathfilter.js";
-import { writeFile, mkdir, mkdtemp, rm } from "fs/promises";
+import { writeFile, readFile, mkdir, mkdtemp, rm } from "fs/promises";
 import { dirname, join } from "path";
 import { tmpdir } from "os";
 
@@ -64,6 +64,8 @@ describe("SearchService", () => {
   test("restores the derived index snapshot after a server restart", async () => {
     await writeNote("restartable.md", "# Restartable\n\nSnapshot candidate.");
     expect(await searchService.search({ query: "candidate" })).toHaveLength(1);
+    const snapshot = await readFile(join(testVaultPath, ".mcpvault", "search-index.snapshot.bin"));
+    expect(snapshot.subarray(0, 8).toString("ascii")).toBe("MCPVSRCH");
 
     searchService.close();
     const restarted = new SearchService(testVaultPath, new PathFilter());

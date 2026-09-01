@@ -966,7 +966,8 @@ not required for startup or ordinary search. New and changed Markdown notes
 are queued by the file service, then embedded in small background batches when
 the server is idle after the first semantic search request; a
 semantic query never starts a full-vault scan or performs foreground indexing.
-Its path/hash manifest is stored as an atomic gzip snapshot; LanceDB stores the
+Its path/hash/size/mtime manifest is stored as an atomic gzip snapshot; the
+lexical n-gram index is stored as an atomic compressed binary snapshot; LanceDB stores the
 vectors in its own binary tables, so no client-side index or snapshot setup is
 needed.
 The queue and per-note chunk count are bounded so a burst

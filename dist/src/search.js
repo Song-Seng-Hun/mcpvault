@@ -1,7 +1,7 @@
 import { join, resolve } from 'path';
 import { watch } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { gunzip, gzip } from 'node:zlib';
+import { gunzip } from 'node:zlib';
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { generateObsidianUri } from './uri.js';
@@ -15,10 +15,108 @@ const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
 const INDEX_READ_BATCH_SIZE = 32;
 const MAX_INDEXED_TEXT_BYTES = 64 * 1024 * 1024;
 const NGRAM_SIZE = 3;
-const SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.gz';
+const SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.bin';
+const LEGACY_SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.gz';
 const SEARCH_SNAPSHOT_VERSION = 1;
-const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
+const SNAPSHOT_MAGIC = Buffer.from('MCPVSRCH', 'ascii');
+const MAX_SNAPSHOT_ENTRIES = 1_000_000;
+function encodeSnapshotString(value) {
+    const bytes = Buffer.from(value, 'utf8');
+    const length = Buffer.allocUnsafe(4);
+    length.writeUInt32LE(bytes.length, 0);
+    return Buffer.concat([length, bytes]);
+}
+function encodeSnapshot(snapshot) {
+    const chunks = [SNAPSHOT_MAGIC];
+    const header = Buffer.allocUnsafe(8);
+    header.writeUInt32LE(SEARCH_SNAPSHOT_VERSION, 0);
+    header.writeUInt32LE(snapshot.documents.length, 4);
+    chunks.push(header);
+    for (const document of snapshot.documents) {
+        chunks.push(encodeSnapshotString(document.relativePath));
+        chunks.push(encodeSnapshotString(document.title));
+        const flags = Buffer.from([(document.isWiki ? 1 : 0) | (document.moderationHidden ? 2 : 0)]);
+        chunks.push(flags, encodeSnapshotString(document.revision));
+        const numbers = Buffer.allocUnsafe(40);
+        numbers.writeDoubleLE(document.size, 0);
+        numbers.writeDoubleLE(document.mtimeMs, 8);
+        numbers.writeUInt32LE(document.bodyLength, 16);
+        numbers.writeUInt32LE(document.frontmatterLength, 20);
+        numbers.writeUInt32LE(document.textBytes, 24);
+        numbers.writeUInt32LE(document.bodyGrams.length, 28);
+        numbers.writeUInt32LE(document.frontmatterGrams.length, 32);
+        numbers.writeUInt32LE(document.titleGrams.length, 36);
+        chunks.push(numbers);
+        for (const values of [document.bodyGrams, document.frontmatterGrams, document.titleGrams]) {
+            for (const value of values)
+                chunks.push(encodeSnapshotString(value));
+        }
+    }
+    return Buffer.concat(chunks);
+}
+function decodeSnapshot(buffer) {
+    if (buffer.length < SNAPSHOT_MAGIC.length + 8 || !buffer.subarray(0, SNAPSHOT_MAGIC.length).equals(SNAPSHOT_MAGIC))
+        return undefined;
+    let offset = SNAPSHOT_MAGIC.length;
+    const version = buffer.readUInt32LE(offset);
+    offset += 4;
+    const count = buffer.readUInt32LE(offset);
+    offset += 4;
+    if (version !== SEARCH_SNAPSHOT_VERSION || count > MAX_SNAPSHOT_ENTRIES)
+        return undefined;
+    const readString = () => {
+        if (offset + 4 > buffer.length)
+            return undefined;
+        const length = buffer.readUInt32LE(offset);
+        offset += 4;
+        if (length > buffer.length - offset)
+            return undefined;
+        const value = buffer.toString('utf8', offset, offset + length);
+        offset += length;
+        return value;
+    };
+    const readGrams = (count) => {
+        if (count > MAX_SNAPSHOT_ENTRIES)
+            return undefined;
+        const values = [];
+        for (let index = 0; index < count; index += 1) {
+            const value = readString();
+            if (value === undefined)
+                return undefined;
+            values.push(value);
+        }
+        return values;
+    };
+    const documents = [];
+    for (let index = 0; index < count; index += 1) {
+        const relativePath = readString();
+        const title = readString();
+        if (relativePath === undefined || title === undefined || offset + 1 > buffer.length)
+            return undefined;
+        const flags = buffer[offset];
+        offset += 1;
+        const revisionValue = readString();
+        if (revisionValue === undefined || offset + 40 > buffer.length)
+            return undefined;
+        const size = buffer.readDoubleLE(offset);
+        const mtimeMs = buffer.readDoubleLE(offset + 8);
+        const bodyLength = buffer.readUInt32LE(offset + 16);
+        const frontmatterLength = buffer.readUInt32LE(offset + 20);
+        const textBytes = buffer.readUInt32LE(offset + 24);
+        const bodyGramCount = buffer.readUInt32LE(offset + 28);
+        const frontmatterGramCount = buffer.readUInt32LE(offset + 32);
+        const titleGramCount = buffer.readUInt32LE(offset + 36);
+        offset += 40;
+        const bodyGrams = readGrams(bodyGramCount);
+        const frontmatterGrams = readGrams(frontmatterGramCount);
+        const titleGrams = readGrams(titleGramCount);
+        if (!bodyGrams || !frontmatterGrams || !titleGrams)
+            return undefined;
+        documents.push({ relativePath, title, isWiki: (flags & 1) !== 0, moderationHidden: (flags & 2) !== 0, revision: revisionValue, size, mtimeMs, bodyLength, frontmatterLength, textBytes, bodyGrams, frontmatterGrams, titleGrams });
+    }
+    return offset === buffer.length ? { version, documents } : undefined;
+}
 function isWikiPath(path) {
     const normalized = path.toLowerCase();
     return normalized === '_wiki'
@@ -53,6 +151,7 @@ export class SearchService {
     documents = new Map();
     dirtyDocuments = new Set();
     postings = new Map();
+    nextDocumentId = 1;
     indexedTextBytes = 0;
     cacheGeneration = 0;
     indexReady;
@@ -90,44 +189,59 @@ export class SearchService {
     }
     async loadSnapshot() {
         try {
-            const raw = await gunzipAsync(await readFile(join(this.vaultPath, SEARCH_SNAPSHOT_FILE)));
+            const binary = await readFile(join(this.vaultPath, SEARCH_SNAPSHOT_FILE));
+            const parsed = decodeSnapshot(binary);
+            if (parsed)
+                this.restoreSnapshot(parsed);
+            return;
+        }
+        catch {
+            // Try the previous compressed-JSON format for a one-release migration.
+        }
+        try {
+            const raw = await gunzipAsync(await readFile(join(this.vaultPath, LEGACY_SEARCH_SNAPSHOT_FILE)));
             const parsed = JSON.parse(raw.toString('utf8'));
-            if (parsed.version !== SEARCH_SNAPSHOT_VERSION || !Array.isArray(parsed.documents))
-                return;
-            for (const item of parsed.documents) {
-                if (!item || typeof item !== 'object')
-                    continue;
-                const relativePath = normalizeSubtree(String(item.relativePath || ''));
-                if (!relativePath || !this.pathFilter.isAllowed(relativePath))
-                    continue;
-                if (!Array.isArray(item.bodyGrams) || !Array.isArray(item.frontmatterGrams) || !Array.isArray(item.titleGrams))
-                    continue;
-                if (![item.size, item.mtimeMs, item.bodyLength, item.frontmatterLength, item.textBytes].every(value => typeof value === 'number' && Number.isFinite(value)))
-                    continue;
-                const document = {
-                    fullPath: join(this.vaultPath, relativePath),
-                    relativePath,
-                    title: String(item.title || relativePath),
-                    isWiki: item.isWiki === true,
-                    moderationHidden: item.moderationHidden === true,
-                    revision: String(item.revision || ''),
-                    size: item.size,
-                    mtimeMs: item.mtimeMs,
-                    bodyLength: item.bodyLength,
-                    frontmatterLength: item.frontmatterLength,
-                    textBytes: item.textBytes,
-                    textCached: false,
-                    lastAccessAt: 0,
-                    bodyGrams: new Set(item.bodyGrams.filter(value => typeof value === 'string')),
-                    frontmatterGrams: new Set(item.frontmatterGrams.filter(value => typeof value === 'string')),
-                    titleGrams: new Set(item.titleGrams.filter(value => typeof value === 'string')),
-                };
-                this.setDocument(document);
-            }
+            if (parsed.version === SEARCH_SNAPSHOT_VERSION && Array.isArray(parsed.documents))
+                this.restoreSnapshot(parsed);
         }
         catch {
             // A missing, corrupt, or old snapshot is harmless; refreshAll rebuilds
             // the derived index from Markdown and replaces it atomically.
+        }
+    }
+    restoreSnapshot(snapshot) {
+        if (snapshot.documents.length > MAX_SNAPSHOT_ENTRIES)
+            return;
+        for (const item of snapshot.documents) {
+            if (!item || typeof item !== 'object')
+                continue;
+            const relativePath = normalizeSubtree(String(item.relativePath || ''));
+            if (!relativePath || !this.pathFilter.isAllowed(relativePath))
+                continue;
+            if (!Array.isArray(item.bodyGrams) || !Array.isArray(item.frontmatterGrams) || !Array.isArray(item.titleGrams))
+                continue;
+            if (![item.size, item.mtimeMs, item.bodyLength, item.frontmatterLength, item.textBytes].every(value => typeof value === 'number' && Number.isFinite(value)))
+                continue;
+            const document = {
+                fullPath: join(this.vaultPath, relativePath),
+                relativePath,
+                documentId: this.nextDocumentId++,
+                title: String(item.title || relativePath),
+                isWiki: item.isWiki === true,
+                moderationHidden: item.moderationHidden === true,
+                revision: String(item.revision || ''),
+                size: item.size,
+                mtimeMs: item.mtimeMs,
+                bodyLength: item.bodyLength,
+                frontmatterLength: item.frontmatterLength,
+                textBytes: item.textBytes,
+                textCached: false,
+                lastAccessAt: 0,
+                bodyGrams: new Set(item.bodyGrams.filter(value => typeof value === 'string')),
+                frontmatterGrams: new Set(item.frontmatterGrams.filter(value => typeof value === 'string')),
+                titleGrams: new Set(item.titleGrams.filter(value => typeof value === 'string')),
+            };
+            this.setDocument(document);
         }
     }
     async saveSnapshot() {
@@ -152,9 +266,9 @@ export class SearchService {
         try {
             const snapshotPath = join(this.vaultPath, SEARCH_SNAPSHOT_FILE);
             await mkdir(join(this.vaultPath, '.mcpvault'), { recursive: true });
-            const compressed = await gzipAsync(Buffer.from(JSON.stringify(snapshot), 'utf8'));
+            const encoded = encodeSnapshot(snapshot);
             const temporaryPath = `${snapshotPath}.${process.pid}.tmp`;
-            await writeFile(temporaryPath, compressed);
+            await writeFile(temporaryPath, encoded);
             await rename(temporaryPath, snapshotPath);
         }
         catch {
@@ -225,9 +339,9 @@ export class SearchService {
                     + (searchFrontmatter ? document.frontmatterLength : 0);
                 docCount++;
             }
-            const candidatePaths = this.candidatePaths(terms, searchContent, searchFrontmatter, caseSensitive);
+            const candidateIds = this.candidateIds(terms, searchContent, searchFrontmatter, caseSensitive);
             for (const document of allowedFiles) {
-                if (!candidatePaths.has(document.relativePath))
+                if (!candidateIds.has(document.documentId))
                     continue;
                 const { relativePath } = document;
                 let searchableText = '';
@@ -467,6 +581,7 @@ export class SearchService {
             return {
                 fullPath,
                 relativePath,
+                documentId: existing?.documentId ?? this.nextDocumentId++,
                 body,
                 frontmatterText,
                 title,
@@ -507,11 +622,11 @@ export class SearchService {
                         paths = new Set();
                         this.postings.set(key, paths);
                     }
-                    paths.add(document.relativePath);
+                    paths.add(document.documentId);
                 }
                 else {
                     const paths = this.postings.get(key);
-                    paths?.delete(document.relativePath);
+                    paths?.delete(document.documentId);
                     if (paths && paths.size === 0)
                         this.postings.delete(key);
                 }
@@ -579,8 +694,8 @@ export class SearchService {
             this.indexedTextBytes -= document.textBytes;
         }
     }
-    candidatePaths(terms, searchContent, searchFrontmatter, caseSensitive) {
-        const all = new Set(this.documents.keys());
+    candidateIds(terms, searchContent, searchFrontmatter, caseSensitive) {
+        const all = new Set([...this.documents.values()].map(document => document.documentId));
         if (caseSensitive)
             return all;
         if (!searchContent && !searchFrontmatter)

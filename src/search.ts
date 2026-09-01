@@ -1,7 +1,7 @@
 import { join, resolve } from 'path';
 import { watch, type FSWatcher } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { gunzip, gzip } from 'node:zlib';
+import { gunzip } from 'node:zlib';
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import type { PathFilter } from './pathfilter.js';
@@ -18,10 +18,12 @@ const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
 const INDEX_READ_BATCH_SIZE = 32;
 const MAX_INDEXED_TEXT_BYTES = 64 * 1024 * 1024;
 const NGRAM_SIZE = 3;
-const SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.gz';
+const SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.bin';
+const LEGACY_SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.gz';
 const SEARCH_SNAPSHOT_VERSION = 1;
-const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
+const SNAPSHOT_MAGIC = Buffer.from('MCPVSRCH', 'ascii');
+const MAX_SNAPSHOT_ENTRIES = 1_000_000;
 
 interface SearchCacheEntry {
   expiresAt: number;
@@ -31,6 +33,7 @@ interface SearchCacheEntry {
 interface IndexedDocument {
   fullPath: string;
   relativePath: string;
+  documentId: number;
   body?: string;
   frontmatterText?: string;
   title: string;
@@ -70,6 +73,95 @@ interface SearchSnapshot {
   documents: SearchSnapshotDocument[];
 }
 
+function encodeSnapshotString(value: string): Buffer {
+  const bytes = Buffer.from(value, 'utf8');
+  const length = Buffer.allocUnsafe(4);
+  length.writeUInt32LE(bytes.length, 0);
+  return Buffer.concat([length, bytes]);
+}
+
+function encodeSnapshot(snapshot: SearchSnapshot): Buffer {
+  const chunks: Buffer[] = [SNAPSHOT_MAGIC];
+  const header = Buffer.allocUnsafe(8);
+  header.writeUInt32LE(SEARCH_SNAPSHOT_VERSION, 0);
+  header.writeUInt32LE(snapshot.documents.length, 4);
+  chunks.push(header);
+  for (const document of snapshot.documents) {
+    chunks.push(encodeSnapshotString(document.relativePath));
+    chunks.push(encodeSnapshotString(document.title));
+    const flags = Buffer.from([(document.isWiki ? 1 : 0) | (document.moderationHidden ? 2 : 0)]);
+    chunks.push(flags, encodeSnapshotString(document.revision));
+    const numbers = Buffer.allocUnsafe(40);
+    numbers.writeDoubleLE(document.size, 0);
+    numbers.writeDoubleLE(document.mtimeMs, 8);
+    numbers.writeUInt32LE(document.bodyLength, 16);
+    numbers.writeUInt32LE(document.frontmatterLength, 20);
+    numbers.writeUInt32LE(document.textBytes, 24);
+    numbers.writeUInt32LE(document.bodyGrams.length, 28);
+    numbers.writeUInt32LE(document.frontmatterGrams.length, 32);
+    numbers.writeUInt32LE(document.titleGrams.length, 36);
+    chunks.push(numbers);
+    for (const values of [document.bodyGrams, document.frontmatterGrams, document.titleGrams]) {
+      for (const value of values) chunks.push(encodeSnapshotString(value));
+    }
+  }
+  return Buffer.concat(chunks);
+}
+
+function decodeSnapshot(buffer: Buffer): SearchSnapshot | undefined {
+  if (buffer.length < SNAPSHOT_MAGIC.length + 8 || !buffer.subarray(0, SNAPSHOT_MAGIC.length).equals(SNAPSHOT_MAGIC)) return undefined;
+  let offset = SNAPSHOT_MAGIC.length;
+  const version = buffer.readUInt32LE(offset);
+  offset += 4;
+  const count = buffer.readUInt32LE(offset);
+  offset += 4;
+  if (version !== SEARCH_SNAPSHOT_VERSION || count > MAX_SNAPSHOT_ENTRIES) return undefined;
+  const readString = (): string | undefined => {
+    if (offset + 4 > buffer.length) return undefined;
+    const length = buffer.readUInt32LE(offset);
+    offset += 4;
+    if (length > buffer.length - offset) return undefined;
+    const value = buffer.toString('utf8', offset, offset + length);
+    offset += length;
+    return value;
+  };
+  const readGrams = (count: number): string[] | undefined => {
+    if (count > MAX_SNAPSHOT_ENTRIES) return undefined;
+    const values: string[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const value = readString();
+      if (value === undefined) return undefined;
+      values.push(value);
+    }
+    return values;
+  };
+  const documents: SearchSnapshotDocument[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const relativePath = readString();
+    const title = readString();
+    if (relativePath === undefined || title === undefined || offset + 1 > buffer.length) return undefined;
+    const flags = buffer[offset]!;
+    offset += 1;
+    const revisionValue = readString();
+    if (revisionValue === undefined || offset + 40 > buffer.length) return undefined;
+    const size = buffer.readDoubleLE(offset);
+    const mtimeMs = buffer.readDoubleLE(offset + 8);
+    const bodyLength = buffer.readUInt32LE(offset + 16);
+    const frontmatterLength = buffer.readUInt32LE(offset + 20);
+    const textBytes = buffer.readUInt32LE(offset + 24);
+    const bodyGramCount = buffer.readUInt32LE(offset + 28);
+    const frontmatterGramCount = buffer.readUInt32LE(offset + 32);
+    const titleGramCount = buffer.readUInt32LE(offset + 36);
+    offset += 40;
+    const bodyGrams = readGrams(bodyGramCount);
+    const frontmatterGrams = readGrams(frontmatterGramCount);
+    const titleGrams = readGrams(titleGramCount);
+    if (!bodyGrams || !frontmatterGrams || !titleGrams) return undefined;
+    documents.push({ relativePath, title, isWiki: (flags & 1) !== 0, moderationHidden: (flags & 2) !== 0, revision: revisionValue, size, mtimeMs, bodyLength, frontmatterLength, textBytes, bodyGrams, frontmatterGrams, titleGrams });
+  }
+  return offset === buffer.length ? { version, documents } : undefined;
+}
+
 function isWikiPath(path: string): boolean {
   const normalized = path.toLowerCase();
   return normalized === '_wiki'
@@ -106,7 +198,8 @@ export class SearchService {
   private readonly inFlight = new Map<string, Promise<SearchResult[]>>();
   private readonly documents = new Map<string, IndexedDocument>();
   private readonly dirtyDocuments = new Set<string>();
-  private readonly postings = new Map<string, Set<string>>();
+  private readonly postings = new Map<string, Set<number>>();
+  private nextDocumentId = 1;
   private indexedTextBytes = 0;
   private cacheGeneration = 0;
   private indexReady: Promise<void> | undefined;
@@ -146,10 +239,26 @@ export class SearchService {
 
   private async loadSnapshot(): Promise<void> {
     try {
-      const raw = await gunzipAsync(await readFile(join(this.vaultPath, SEARCH_SNAPSHOT_FILE)));
+      const binary = await readFile(join(this.vaultPath, SEARCH_SNAPSHOT_FILE));
+      const parsed = decodeSnapshot(binary);
+      if (parsed) this.restoreSnapshot(parsed);
+      return;
+    } catch {
+      // Try the previous compressed-JSON format for a one-release migration.
+    }
+    try {
+      const raw = await gunzipAsync(await readFile(join(this.vaultPath, LEGACY_SEARCH_SNAPSHOT_FILE)));
       const parsed = JSON.parse(raw.toString('utf8')) as Partial<SearchSnapshot>;
-      if (parsed.version !== SEARCH_SNAPSHOT_VERSION || !Array.isArray(parsed.documents)) return;
-      for (const item of parsed.documents) {
+      if (parsed.version === SEARCH_SNAPSHOT_VERSION && Array.isArray(parsed.documents)) this.restoreSnapshot(parsed as SearchSnapshot);
+    } catch {
+      // A missing, corrupt, or old snapshot is harmless; refreshAll rebuilds
+      // the derived index from Markdown and replaces it atomically.
+    }
+  }
+
+  private restoreSnapshot(snapshot: SearchSnapshot): void {
+    if (snapshot.documents.length > MAX_SNAPSHOT_ENTRIES) return;
+    for (const item of snapshot.documents) {
         if (!item || typeof item !== 'object') continue;
         const relativePath = normalizeSubtree(String(item.relativePath || ''));
         if (!relativePath || !this.pathFilter.isAllowed(relativePath)) continue;
@@ -158,6 +267,7 @@ export class SearchService {
         const document: IndexedDocument = {
           fullPath: join(this.vaultPath, relativePath),
           relativePath,
+          documentId: this.nextDocumentId++,
           title: String(item.title || relativePath),
           isWiki: item.isWiki === true,
           moderationHidden: item.moderationHidden === true,
@@ -174,10 +284,6 @@ export class SearchService {
           titleGrams: new Set(item.titleGrams.filter(value => typeof value === 'string')),
         };
         this.setDocument(document);
-      }
-    } catch {
-      // A missing, corrupt, or old snapshot is harmless; refreshAll rebuilds
-      // the derived index from Markdown and replaces it atomically.
     }
   }
 
@@ -203,9 +309,9 @@ export class SearchService {
     try {
       const snapshotPath = join(this.vaultPath, SEARCH_SNAPSHOT_FILE);
       await mkdir(join(this.vaultPath, '.mcpvault'), { recursive: true });
-      const compressed = await gzipAsync(Buffer.from(JSON.stringify(snapshot), 'utf8'));
+      const encoded = encodeSnapshot(snapshot);
       const temporaryPath = `${snapshotPath}.${process.pid}.tmp`;
-      await writeFile(temporaryPath, compressed);
+      await writeFile(temporaryPath, encoded);
       await rename(temporaryPath, snapshotPath);
     } catch {
       // The snapshot is an optional acceleration cache. Search correctness
@@ -287,9 +393,9 @@ export class SearchService {
       docCount++;
     }
 
-    const candidatePaths = this.candidatePaths(terms, searchContent, searchFrontmatter, caseSensitive);
+    const candidateIds = this.candidateIds(terms, searchContent, searchFrontmatter, caseSensitive);
     for (const document of allowedFiles) {
-      if (!candidatePaths.has(document.relativePath)) continue;
+      if (!candidateIds.has(document.documentId)) continue;
         const { relativePath } = document;
         let searchableText = '';
 
@@ -520,6 +626,7 @@ export class SearchService {
       return {
         fullPath,
         relativePath,
+        documentId: existing?.documentId ?? this.nextDocumentId++,
         body,
         frontmatterText,
         title,
@@ -558,13 +665,13 @@ export class SearchService {
         if (add) {
           let paths = this.postings.get(key);
           if (!paths) {
-            paths = new Set<string>();
+            paths = new Set<number>();
             this.postings.set(key, paths);
           }
-          paths.add(document.relativePath);
+          paths.add(document.documentId);
         } else {
           const paths = this.postings.get(key);
-          paths?.delete(document.relativePath);
+          paths?.delete(document.documentId);
           if (paths && paths.size === 0) this.postings.delete(key);
         }
       }
@@ -628,13 +735,13 @@ export class SearchService {
     }
   }
 
-  private candidatePaths(
+  private candidateIds(
     terms: string[],
     searchContent: boolean,
     searchFrontmatter: boolean,
     caseSensitive: boolean,
-  ): Set<string> {
-    const all = new Set(this.documents.keys());
+  ): Set<number> {
+    const all = new Set([...this.documents.values()].map(document => document.documentId));
     if (caseSensitive) return all;
     if (!searchContent && !searchFrontmatter) return this.matchingPostingCandidates(terms, ['title'], all);
     if (terms.some(term => term.length < NGRAM_SIZE)) return all;
@@ -647,9 +754,9 @@ export class SearchService {
   private matchingPostingCandidates(
     terms: string[],
     fields: Array<'body' | 'frontmatter' | 'title'>,
-    all: Set<string>,
-  ): Set<string> {
-    const output = new Set<string>();
+    all: Set<number>,
+  ): Set<number> {
+    const output = new Set<number>();
     for (const rawTerm of terms) {
       const term = rawTerm.toLowerCase();
       if (term.length < NGRAM_SIZE) return all;
@@ -660,11 +767,11 @@ export class SearchService {
     return output;
   }
 
-  private postingCandidates(field: 'body' | 'frontmatter' | 'title', term: string): Set<string> {
+  private postingCandidates(field: 'body' | 'frontmatter' | 'title', term: string): Set<number> {
     const termGrams = grams(term);
     const postings = [...termGrams]
       .map(value => this.postings.get(this.postingKey(field, value)))
-      .filter((value): value is Set<string> => Boolean(value))
+      .filter((value): value is Set<number> => Boolean(value))
       .sort((a, b) => a.size - b.size);
     if (postings.length !== termGrams.size || !postings[0]) return new Set();
     const output = new Set(postings[0]);
