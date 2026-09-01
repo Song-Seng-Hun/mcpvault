@@ -423,27 +423,38 @@ export class SemanticSearchService {
         if (this.syncPromise)
             return this.syncPromise;
         this.syncPromise = (async () => {
-            let processed = 0;
-            while (this.pending.size > 0 && processed < maxFiles) {
+            const batch = [];
+            while (this.pending.size > 0 && batch.length < maxFiles) {
                 const first = this.pending.entries().next().value;
                 if (!first)
                     break;
                 this.pending.delete(first[0]);
-                try {
-                    if (first[1].kind === 'delete')
-                        await this.removePath(first[0]);
-                    else
-                        await this.indexPathContent(first[0]);
-                    processed++;
-                    this.lastError = undefined;
-                }
-                catch (error) {
-                    this.pending.set(first[0], first[1]);
-                    throw error;
-                }
+                batch.push(first);
             }
-            if (processed > 0)
+            if (batch.length === 0)
+                return;
+            try {
+                const prepared = [];
+                const deleted = [];
+                for (const [path, change] of batch) {
+                    if (change.kind === 'delete')
+                        deleted.push(path);
+                    else
+                        prepared.push(await this.prepareIndex(path));
+                }
+                await this.applyIndexBatch(prepared, deleted);
                 await this.saveManifest();
+                this.lastError = undefined;
+            }
+            catch (error) {
+                for (const [path, change] of batch) {
+                    // A watcher may have queued a newer change while this batch was
+                    // preparing or writing. Preserve that newer event for the retry.
+                    if (!this.pending.has(path))
+                        this.pending.set(path, change);
+                }
+                throw error;
+            }
         })();
         try {
             await this.syncPromise;
@@ -586,18 +597,12 @@ export class SemanticSearchService {
             return rows;
         }
     }
-    async indexPathContent(path) {
+    async prepareIndex(path) {
         const fullPath = join(this.vaultPath, path);
         const content = await readFile(fullPath, 'utf8');
         const info = await stat(fullPath);
         const contentHash = hashContent(content);
         const scope = scopeForPath(path);
-        const db = await this.getDb();
-        const name = tableName(scope);
-        const names = await this.getTableNames();
-        let table = names.has(name) ? await db.openTable(name) : undefined;
-        if (table)
-            await table.delete(`path = '${path.replace(/'/g, "''")}'`);
         const chunks = chunkNote(path, content);
         const title = path.split('/').pop()?.replace(/\.md$/i, '') || path;
         const wiki = isWikiPath(path, content);
@@ -619,25 +624,69 @@ export class SemanticSearchService {
                 });
             }
         }
-        if (rows.length > 0) {
-            table = table || await db.createTable(name, rows);
-            if (names.has(name))
-                await table.add(rows);
-            this.tableNamesCache?.add(name);
-        }
-        this.manifest[path] = { hash: contentHash, scope, size: info.size, mtimeMs: info.mtimeMs };
+        return { path, scope, contentHash, size: info.size, mtimeMs: info.mtimeMs, rows };
     }
-    async removePath(path) {
-        const entry = this.manifest[path];
-        if (entry && this.db) {
-            const names = await this.getTableNames();
-            const name = tableName(entry.scope);
-            if (names.has(name)) {
-                const table = await this.db.openTable(name);
-                await table.delete(`path = '${path.replace(/'/g, "''")}'`);
+    async applyIndexBatch(prepared, deleted) {
+        const effectiveDeleted = deleted.filter(path => this.manifest[path] !== undefined);
+        if (prepared.length === 0 && effectiveDeleted.length === 0)
+            return;
+        const db = await this.getDb();
+        const names = await this.getTableNames();
+        const groups = new Map();
+        const addPath = (scope, path) => {
+            const name = tableName(scope);
+            let group = groups.get(name);
+            if (!group) {
+                group = { paths: new Set(), rows: [] };
+                groups.set(name, group);
+            }
+            group.paths.add(path);
+            return group;
+        };
+        for (const item of prepared) {
+            // A path normally keeps the same scope, but removing the old scope first
+            // makes a moved/renamed scoped note safe as well.
+            const previous = this.manifest[item.path];
+            if (previous && previous.scope !== item.scope)
+                addPath(previous.scope, item.path);
+            addPath(item.scope, item.path).rows.push(...item.rows);
+        }
+        for (const path of effectiveDeleted) {
+            const previous = this.manifest[path];
+            if (previous)
+                addPath(previous.scope, path);
+        }
+        for (const [name, group] of groups) {
+            let table = names.has(name) ? await db.openTable(name) : undefined;
+            if (table && group.paths.size > 0) {
+                const predicate = [...group.paths]
+                    .map(path => `path = '${path.replace(/'/g, "''")}'`)
+                    .join(' OR ');
+                await table.delete(predicate);
+            }
+            if (group.rows.length > 0) {
+                if (table)
+                    await table.add(group.rows);
+                else {
+                    table = await db.createTable(name, group.rows);
+                    names.add(name);
+                }
+                this.tableNamesCache?.add(name);
             }
         }
-        delete this.manifest[path];
+        // The manifest is committed only after every table operation succeeds.
+        // If LanceDB fails midway, drain() requeues the whole batch and a retry is
+        // idempotent because each path is deleted before its replacement is added.
+        for (const path of effectiveDeleted)
+            delete this.manifest[path];
+        for (const item of prepared) {
+            this.manifest[item.path] = {
+                hash: item.contentHash,
+                scope: item.scope,
+                size: item.size,
+                mtimeMs: item.mtimeMs,
+            };
+        }
     }
     pathIsVisible(path, params) {
         if (!this.accessPolicy.canAccessPhysicalPath(path, params.principal))

@@ -79,8 +79,8 @@ export declare class SemanticSearchService {
     private getEmbedder;
     private embed;
     private embedMany;
-    private indexPathContent;
-    private removePath;
+    private prepareIndex;
+    private applyIndexBatch;
     private pathIsVisible;
     private markUnavailable;
 }
