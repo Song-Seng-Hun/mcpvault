@@ -24,6 +24,7 @@ const IDLE_DELAY_MS = 15_000;
 const UNAVAILABLE_RETRY_MS = 5 * 60_000;
 const SCAN_INTERVAL_MS = 30_000;
 const MAX_PENDING_CHANGES = 5_000;
+const EMBED_BATCH_SIZE = 8;
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
 
@@ -80,7 +81,7 @@ type LanceDb = {
   connect(uri: string): Promise<any>;
 };
 
-type Embedder = ((text: string, options?: { pooling?: 'mean'; normalize?: boolean }) => Promise<{ tolist(): unknown }>) & {
+type Embedder = ((text: string | string[], options?: { pooling?: 'mean'; normalize?: boolean }) => Promise<{ tolist(): unknown }>) & {
   dispose?: () => void | Promise<void>;
 };
 
@@ -599,6 +600,28 @@ export class SemanticSearchService {
     return row as number[];
   }
 
+  private async embedMany(texts: string[], prefix: 'query' | 'passage'): Promise<number[][]> {
+    if (texts.length === 0) return [];
+    const embedder = await this.getEmbedder();
+    try {
+      const output = await embedder(texts.map(text => `${prefix}: ${text}`), { pooling: 'mean', normalize: true });
+      const values = output.tolist() as unknown;
+      if (!Array.isArray(values) || values.length !== texts.length) throw new Error('Embedding model returned an invalid batch');
+      const rows = values.map(value => value as unknown[]);
+      if (!rows.every(row => Array.isArray(row) && row.length === EMBEDDING_DIMENSIONS && row.every(item => typeof item === 'number' && Number.isFinite(item)))) {
+        throw new Error(`Embedding model returned an invalid ${EMBEDDING_DIMENSIONS}-dimensional batch`);
+      }
+      return rows as number[][];
+    } catch {
+      // Older transformer runtimes may not implement array input. Keep the
+      // semantic cache optional by falling back to the proven single-input
+      // path instead of failing the whole idle indexing pass.
+      const rows: number[][] = [];
+      for (const text of texts) rows.push(await this.embed(text, prefix));
+      return rows;
+    }
+  }
+
   private async indexPathContent(path: string): Promise<void> {
     const fullPath = join(this.vaultPath, path);
     const content = await readFile(fullPath, 'utf8');
@@ -613,17 +636,22 @@ export class SemanticSearchService {
     const title = path.split('/').pop()?.replace(/\.md$/i, '') || path;
     const wiki = isWikiPath(path, content);
     const rows: IndexRow[] = [];
-    for (const chunk of chunks) {
-      rows.push({
-        id: chunk.id,
-        vector: await this.embed(chunk.text, 'passage'),
-        path,
-        hash: contentHash,
-        title,
-        line: chunk.line,
-        wiki,
-        updatedAt: new Date().toISOString(),
-      });
+    for (let start = 0; start < chunks.length; start += EMBED_BATCH_SIZE) {
+      const batch = chunks.slice(start, start + EMBED_BATCH_SIZE);
+      const vectors = await this.embedMany(batch.map(chunk => chunk.text), 'passage');
+      for (let index = 0; index < batch.length; index += 1) {
+        const chunk = batch[index]!;
+        rows.push({
+          id: chunk.id,
+          vector: vectors[index]!,
+          path,
+          hash: contentHash,
+          title,
+          line: chunk.line,
+          wiki,
+          updatedAt: new Date().toISOString(),
+        });
+      }
     }
     if (rows.length > 0) {
       table = table || await db.createTable(name, rows);

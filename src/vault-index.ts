@@ -140,7 +140,7 @@ export class VaultMetadataIndex {
       const paths = await this.findNotePaths(this.vaultPath);
       for (let start = 0; start < paths.length; start += READ_BATCH_SIZE) {
         const batch = paths.slice(start, start + READ_BATCH_SIZE);
-        const metadata = await Promise.all(batch.map(path => this.readEntry(path)));
+        const metadata = await Promise.all(batch.map(path => this.readEntry(path, this.entries.get(path))));
         for (const entry of metadata) {
           if (entry) next.set(entry.path, entry);
         }
@@ -176,13 +176,18 @@ export class VaultMetadataIndex {
     }
   }
 
-  private async readEntry(path: string): Promise<VaultIndexEntry | undefined> {
+  private async readEntry(path: string, existing?: VaultIndexEntry): Promise<VaultIndexEntry | undefined> {
     const normalized = normalizePath(path);
     if (!isNote(normalized) || !this.pathFilter.isAllowed(normalized)) return undefined;
     try {
       const fullPath = join(this.vaultPath, normalized);
-      const [raw, info] = await Promise.all([readFile(fullPath, 'utf8'), stat(fullPath)]);
+      const info = await stat(fullPath);
       if (!info.isFile()) return undefined;
+      // Full reconciliation is intentionally stat-only for unchanged notes.
+      // This keeps repeated pulse/community reads from reopening and reparsing
+      // the whole vault while preserving the existing metadata object.
+      if (existing && existing.size === info.size && existing.mtimeMs === info.mtimeMs) return existing;
+      const raw = await readFile(fullPath, 'utf8');
       return {
         path: normalized,
         frontmatter: this.frontmatter.parse(raw).frontmatter,

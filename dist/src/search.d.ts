@@ -7,6 +7,8 @@ export declare class SearchService {
     private readonly inFlight;
     private readonly documents;
     private readonly dirtyDocuments;
+    private readonly postings;
+    private indexedTextBytes;
     private cacheGeneration;
     private indexReady;
     private indexRefresh;
@@ -27,6 +29,15 @@ export declare class SearchService {
     private refreshAll;
     private refreshDirty;
     private readIndexedDocument;
+    private postingKey;
+    private updatePostings;
+    private setDocument;
+    private removeDocument;
+    private loadText;
+    private trimTextCache;
+    private candidatePaths;
+    private matchingPostingCandidates;
+    private postingCandidates;
     private findMarkdownFiles;
     private rerank;
 }

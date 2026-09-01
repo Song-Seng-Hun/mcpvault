@@ -14,6 +14,8 @@ const SEARCH_CACHE_MAX_ENTRIES = 128;
 const INDEX_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
 const INDEX_READ_BATCH_SIZE = 32;
+const MAX_INDEXED_TEXT_BYTES = 64 * 1024 * 1024;
+const NGRAM_SIZE = 3;
 
 interface SearchCacheEntry {
   expiresAt: number;
@@ -23,14 +25,21 @@ interface SearchCacheEntry {
 interface IndexedDocument {
   fullPath: string;
   relativePath: string;
-  content: string;
-  body: string;
-  frontmatterText: string;
+  body?: string;
+  frontmatterText?: string;
   title: string;
   isWiki: boolean;
+  moderationHidden: boolean;
   revision: string;
   size: number;
   mtimeMs: number;
+  bodyLength: number;
+  frontmatterLength: number;
+  textBytes: number;
+  lastAccessAt: number;
+  bodyGrams: Set<string>;
+  frontmatterGrams: Set<string>;
+  titleGrams: Set<string>;
 }
 
 function isWikiPath(path: string): boolean {
@@ -69,6 +78,8 @@ export class SearchService {
   private readonly inFlight = new Map<string, Promise<SearchResult[]>>();
   private readonly documents = new Map<string, IndexedDocument>();
   private readonly dirtyDocuments = new Set<string>();
+  private readonly postings = new Map<string, Set<string>>();
+  private indexedTextBytes = 0;
   private cacheGeneration = 0;
   private indexReady: Promise<void> | undefined;
   private indexRefresh: Promise<void> | undefined;
@@ -93,7 +104,7 @@ export class SearchService {
     this.cache.clear();
     if (path) {
       const normalized = path.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-      if (kind === 'delete') this.documents.delete(normalized);
+      if (kind === 'delete') this.removeDocument(normalized);
       else this.dirtyDocuments.add(normalized);
     } else this.needsFullReconcile = true;
   }
@@ -150,7 +161,8 @@ export class SearchService {
     const maxLimit = normalizeSearchLimit(limit);
     const maxChars = normalizeSearchMaxChars(params.maxChars);
 
-    // Corpus stats for reranking
+    // Corpus stats for reranking. Lengths are prepared during indexing, so a
+    // cache miss does not split every note into words again.
     let totalDocLength = 0;
     let docCount = 0;
     const termDocFreq = new Map<string, number>();
@@ -169,29 +181,36 @@ export class SearchService {
       // Scope to the requested subtree, and skip excluded subtrees, before I/O
       if (normalizedPrefix && !isUnderSubtree(relativePath, normalizedPrefix)) continue;
       if (normalizedExcludes.some(ex => isUnderSubtree(relativePath, ex))) continue;
+      if (document.moderationHidden) continue;
       allowedFiles.push(document);
+      totalDocLength += (searchContent ? document.bodyLength : 0)
+        + (searchFrontmatter ? document.frontmatterLength : 0);
+      docCount++;
     }
 
+    const candidatePaths = this.candidatePaths(terms, searchContent, searchFrontmatter, caseSensitive);
     for (const document of allowedFiles) {
+      if (!candidatePaths.has(document.relativePath)) continue;
         const { relativePath } = document;
-        if (isMarkdownModerationHidden(document.content)) continue;
         let searchableText = '';
 
         // Prepare search text based on options
+        if (searchContent || searchFrontmatter) await this.loadText(document);
         if (searchContent && searchFrontmatter) {
-          searchableText = document.content;
+          searchableText = `${document.frontmatterText || ''}\n${document.body || ''}`;
         } else if (searchContent) {
-          searchableText = document.body;
+          searchableText = document.body || '';
         } else if (searchFrontmatter) {
-          searchableText = document.frontmatterText;
+          searchableText = document.frontmatterText || '';
         }
 
         const searchIn = caseSensitive ? searchableText : searchableText.toLowerCase();
+        const docLength = (searchContent ? document.bodyLength : 0)
+          + (searchFrontmatter ? document.frontmatterLength : 0);
 
-        // Collect corpus stats for reranking
-        const docLength = searchIn.split(/\s+/).filter(w => w.length > 0).length;
-        totalDocLength += docLength;
-        docCount++;
+        // The n-gram candidate index is conservative; this exact check keeps
+        // the previous substring matching behavior and supplies document
+        // frequencies only for real matches.
         for (const term of scoringTerms) {
           if (searchIn.includes(term)) {
             termDocFreq.set(term, (termDocFreq.get(term) || 0) + 1);
@@ -347,11 +366,14 @@ export class SearchService {
           if (document) next.set(document.relativePath, document);
         }
       }
-      this.documents.clear();
-      for (const [path, document] of next) this.documents.set(path, document);
+      for (const path of this.documents.keys()) {
+        if (!next.has(path)) this.removeDocument(path);
+      }
+      for (const document of next.values()) this.setDocument(document);
       this.dirtyDocuments.clear();
       this.needsFullReconcile = false;
       this.lastIndexReconcileAt = Date.now();
+      this.trimTextCache();
     })();
     try {
       await this.indexRefresh;
@@ -369,9 +391,10 @@ export class SearchService {
       for (let index = 0; index < paths.length; index += 1) {
         const path = paths[index]!;
         const document = documents[index];
-        if (document) this.documents.set(path, document);
-        else this.documents.delete(path);
+        if (document) this.setDocument(document);
+        else this.removeDocument(path);
       }
+      this.trimTextCache();
     })();
     try {
       await this.indexRefresh;
@@ -389,22 +412,159 @@ export class SearchService {
       if (existing && existing.size === info.size && existing.mtimeMs === info.mtimeMs) return existing;
       const content = await readFile(fullPath, 'utf-8');
       const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+      const body = frontmatterMatch ? content.slice(frontmatterMatch[0].length) : content;
+      const frontmatterText = frontmatterMatch?.[1] || '';
       const title = relativePath.split('/').pop()?.replace(/\.md$/i, '') || relativePath;
       return {
         fullPath,
         relativePath,
-        content,
-        body: frontmatterMatch ? content.slice(frontmatterMatch[0].length) : content,
-        frontmatterText: frontmatterMatch?.[1] || '',
+        body,
+        frontmatterText,
         title,
         isWiki: isWikiPath(relativePath) || wikiType(content) !== undefined,
+        moderationHidden: isMarkdownModerationHidden(content),
         revision: revision(content),
         size: info.size,
         mtimeMs: info.mtimeMs,
+        bodyLength: countWords(body),
+        frontmatterLength: countWords(frontmatterText),
+        textBytes: Buffer.byteLength(content, 'utf8'),
+        lastAccessAt: Date.now(),
+        bodyGrams: grams(body.toLowerCase()),
+        frontmatterGrams: grams(frontmatterText.toLowerCase()),
+        titleGrams: grams(title.toLowerCase()),
       };
     } catch {
       return undefined;
     }
+  }
+
+  private postingKey(field: 'body' | 'frontmatter' | 'title', gram: string): string {
+    return `${field}\u0000${gram}`;
+  }
+
+  private updatePostings(document: IndexedDocument, add: boolean): void {
+    const fields: Array<['body' | 'frontmatter' | 'title', Set<string>]> = [
+      ['body', document.bodyGrams],
+      ['frontmatter', document.frontmatterGrams],
+      ['title', document.titleGrams],
+    ];
+    for (const [field, values] of fields) {
+      for (const value of values) {
+        const key = this.postingKey(field, value);
+        if (add) {
+          let paths = this.postings.get(key);
+          if (!paths) {
+            paths = new Set<string>();
+            this.postings.set(key, paths);
+          }
+          paths.add(document.relativePath);
+        } else {
+          const paths = this.postings.get(key);
+          paths?.delete(document.relativePath);
+          if (paths && paths.size === 0) this.postings.delete(key);
+        }
+      }
+    }
+  }
+
+  private setDocument(document: IndexedDocument): void {
+    const old = this.documents.get(document.relativePath);
+    if (old === document) return;
+    if (old) {
+      this.updatePostings(old, false);
+      this.indexedTextBytes -= old.textBytes;
+    }
+    this.documents.set(document.relativePath, document);
+    this.updatePostings(document, true);
+    this.indexedTextBytes += document.textBytes;
+  }
+
+  private removeDocument(path: string): void {
+    const document = this.documents.get(path);
+    if (!document) return;
+    this.updatePostings(document, false);
+    this.indexedTextBytes -= document.textBytes;
+    this.documents.delete(path);
+  }
+
+  private async loadText(document: IndexedDocument): Promise<void> {
+    if (document.body !== undefined && document.frontmatterText !== undefined) {
+      document.lastAccessAt = Date.now();
+      return;
+    }
+    try {
+      const content = await readFile(document.fullPath, 'utf-8');
+      const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+      document.body = frontmatterMatch ? content.slice(frontmatterMatch[0].length) : content;
+      document.frontmatterText = frontmatterMatch?.[1] || '';
+      this.indexedTextBytes += document.textBytes;
+      document.lastAccessAt = Date.now();
+      this.trimTextCache(document.relativePath);
+    } catch {
+      document.body = '';
+      document.frontmatterText = '';
+    }
+  }
+
+  private trimTextCache(protectedPath?: string): void {
+    if (this.indexedTextBytes <= MAX_INDEXED_TEXT_BYTES) return;
+    const loaded = [...this.documents.values()]
+      .filter(document => document.body !== undefined || document.frontmatterText !== undefined)
+      .filter(document => document.relativePath !== protectedPath)
+      .sort((a, b) => a.lastAccessAt - b.lastAccessAt);
+    for (const document of loaded) {
+      if (this.indexedTextBytes <= MAX_INDEXED_TEXT_BYTES) break;
+      delete document.body;
+      delete document.frontmatterText;
+      this.indexedTextBytes -= document.textBytes;
+    }
+  }
+
+  private candidatePaths(
+    terms: string[],
+    searchContent: boolean,
+    searchFrontmatter: boolean,
+    caseSensitive: boolean,
+  ): Set<string> {
+    const all = new Set(this.documents.keys());
+    if (caseSensitive) return all;
+    if (!searchContent && !searchFrontmatter) return this.matchingPostingCandidates(terms, ['title'], all);
+    if (terms.some(term => term.length < NGRAM_SIZE)) return all;
+    const fields: Array<'body' | 'frontmatter' | 'title'> = ['title'];
+    if (searchContent) fields.push('body');
+    if (searchFrontmatter) fields.push('frontmatter');
+    return this.matchingPostingCandidates(terms, fields, all);
+  }
+
+  private matchingPostingCandidates(
+    terms: string[],
+    fields: Array<'body' | 'frontmatter' | 'title'>,
+    all: Set<string>,
+  ): Set<string> {
+    const output = new Set<string>();
+    for (const rawTerm of terms) {
+      const term = rawTerm.toLowerCase();
+      if (term.length < NGRAM_SIZE) return all;
+      for (const field of fields) {
+        for (const path of this.postingCandidates(field, term)) output.add(path);
+      }
+    }
+    return output;
+  }
+
+  private postingCandidates(field: 'body' | 'frontmatter' | 'title', term: string): Set<string> {
+    const termGrams = grams(term);
+    const postings = [...termGrams]
+      .map(value => this.postings.get(this.postingKey(field, value)))
+      .filter((value): value is Set<string> => Boolean(value))
+      .sort((a, b) => a.size - b.size);
+    if (postings.length !== termGrams.size || !postings[0]) return new Set();
+    const output = new Set(postings[0]);
+    for (const paths of postings.slice(1)) {
+      for (const path of output) if (!paths.has(path)) output.delete(path);
+    }
+    return output;
   }
 
   private async findMarkdownFiles(dirPath: string): Promise<string[]> {
@@ -457,4 +617,16 @@ export class SearchService {
     scored.sort((a, b) => Number(b.wiki) - Number(a.wiki) || b.score - a.score);
     return scored.slice(0, maxLimit).map(s => s.result);
   }
+}
+
+function countWords(value: string): number {
+  return value.split(/\s+/).filter(Boolean).length;
+}
+
+function grams(value: string): Set<string> {
+  const output = new Set<string>();
+  for (let index = 0; index <= value.length - NGRAM_SIZE; index += 1) {
+    output.add(value.slice(index, index + NGRAM_SIZE));
+  }
+  return output;
 }

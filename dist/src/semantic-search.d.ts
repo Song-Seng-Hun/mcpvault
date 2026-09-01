@@ -78,6 +78,7 @@ export declare class SemanticSearchService {
     private getTableNames;
     private getEmbedder;
     private embed;
+    private embedMany;
     private indexPathContent;
     private removePath;
     private pathIsVisible;
