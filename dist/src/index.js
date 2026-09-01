@@ -9,15 +9,4 @@ export { CollaborationService, expandScopePath, parseScopePath, scopeRoot } from
 export { ScopeAuthService } from './scope-auth.js';
 export { ScopeAccessPolicy } from './scope-access.js';
 export { LlmWikiService } from './llm-wiki.js';
-export { McpVaultClientCache } from './client-cache.js';
-export { gzipSnapshotCodec } from './client-compression.js';
-export { ClientReferenceCache } from './client-references.js';
-export { ContextBudgeter } from './client-context.js';
-export { ClientRequestScheduler } from './client-scheduler.js';
-export { ClientTimelineCache } from './client-timeline.js';
-export { ClientCapabilityCatalogCache, ClientHeartbeatBackoff } from './client-control-plane.js';
-export { createNoteUpdatePlan } from './client-diff.js';
-export { McpVaultClientSearchIndex } from './client-search.js';
-export { attachClientSearchWorker, ClientSearchWorkerClient, ClientSearchWorkerPool } from './client-search-worker.js';
-export { McpVaultClientVectorIndex } from './client-vector.js';
 export * from './types.js';

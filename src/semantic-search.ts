@@ -21,8 +21,6 @@ const IDLE_DELAY_MS = 15_000;
 const UNAVAILABLE_RETRY_MS = 5 * 60_000;
 const SCAN_INTERVAL_MS = 30_000;
 const MAX_PENDING_CHANGES = 5_000;
-const QUERY_VECTOR_CACHE_TTL_MS = 5 * 60_000;
-const QUERY_VECTOR_CACHE_MAX_ENTRIES = 256;
 
 type ChangeKind = 'upsert' | 'delete';
 type PendingChange = { kind: ChangeKind };
@@ -53,11 +51,6 @@ interface SemanticSearchParams extends SearchParams {
   principal?: ScopePrincipal | undefined;
 }
 
-interface QueryVectorCacheEntry {
-  expiresAt: number;
-  vector: number[];
-}
-
 export interface SemanticSearchOutcome {
   results: SearchResult[];
   available: boolean;
@@ -73,11 +66,8 @@ export interface SemanticIndexStatus {
   indexed: number;
   pending: number;
   worker: 'process-shared';
-  indexWorker: 'leader' | 'standby' | 'client';
+  indexWorker: 'leader' | 'standby';
   indexingActive: boolean;
-  queryVectorCacheEntries: number;
-  queryVectorCacheHits: number;
-  queryVectorCacheMisses: number;
   lastError?: string | undefined;
 }
 
@@ -102,8 +92,7 @@ interface SharedEmbedderLease {
 }
 
 // One model per Node process, regardless of how many vault/server instances or
-// agent sessions share that process. Separate server processes can still use
-// client-computed queryVector to avoid loading a model in every process.
+// agent sessions share that process.
 const EMBEDDER_POOL = new Map<string, SharedEmbedderEntry>();
 
 async function acquireSharedEmbedder(): Promise<SharedEmbedderLease> {
@@ -266,9 +255,6 @@ export class SemanticSearchService {
   private embedder: Embedder | undefined;
   private embedderLease: SharedEmbedderLease | undefined;
   private pending = new Map<string, PendingChange>();
-  private readonly queryVectorCache = new Map<string, QueryVectorCacheEntry>();
-  private queryVectorCacheHits = 0;
-  private queryVectorCacheMisses = 0;
   private idleTimer: ReturnType<typeof setTimeout> | undefined;
   private unloadTimer: ReturnType<typeof setTimeout> | undefined;
   private syncPromise: Promise<void> | undefined;
@@ -276,7 +262,7 @@ export class SemanticSearchService {
   private dbPromise: Promise<any> | undefined;
   private semanticActive = false;
   private indexLease: FileHandle | undefined;
-  private indexWorker: 'leader' | 'standby' | 'client' = 'standby';
+  private indexWorker: 'leader' | 'standby' = 'standby';
   private lastScanAt = 0;
   private tableNamesCache: Set<string> | undefined;
   private tableNamesCachedAt = 0;
@@ -298,7 +284,6 @@ export class SemanticSearchService {
   notifyChange(path: string, kind: ChangeKind): void {
     const normalized = normalizePath(path);
     if (!isMarkdown(normalized) || !this.pathFilter.isAllowed(normalized)) return;
-    this.queryVectorCache.clear();
     if (this.pending.size < MAX_PENDING_CHANGES || this.pending.has(normalized)) {
       this.pending.set(normalized, { kind });
     }
@@ -309,25 +294,18 @@ export class SemanticSearchService {
     const limit = normalizeSearchLimit(params.limit);
     const maxChars = normalizeSearchMaxChars(params.maxChars);
     if (!params.query?.trim()) throw new Error('Search query cannot be empty');
-    const clientVector = params.queryVector;
-    if (clientVector !== undefined) this.validateVector(clientVector);
     if (Date.now() < this.unavailableUntil) {
       return { results: [], available: false, indexed: this.indexedCount(), pending: this.pending.size, error: this.lastError };
     }
 
     try {
       await this.manifestReady;
-      // Only a server-side semantic query opts this process into background
-      // indexing. A client-vector query remains a read-only cache consumer,
-      // which lets separate agent processes avoid an embedding model entirely.
-      if (clientVector === undefined) {
-        if (!await this.acquireIndexLease()) {
-          return { results: [], available: false, indexed: this.indexedCount(), pending: this.pending.size, error: 'Another MCPVault process owns semantic indexing; provide a client-computed queryVector or use lexical search.' };
-        }
+      // The first server process owns background indexing. Other server
+      // processes may still perform bounded foreground queries against the
+      // shared derived index, but never start a second indexing worker.
+      if (await this.acquireIndexLease()) {
         this.semanticActive = true;
         this.scheduleIdleWork();
-      } else if (!this.indexLease) {
-        this.indexWorker = 'client';
       }
       // Semantic search must not turn a user query into a full-vault indexing
       // job. The bounded idle worker discovers and indexes changes separately;
@@ -336,7 +314,7 @@ export class SemanticSearchService {
       if (names.size === 0) {
         return { results: [], available: true, indexed: this.indexedCount(), pending: this.pending.size };
       }
-      const vector = clientVector || await this.embedQuery(params.query);
+      const vector = await this.embed(params.query, 'query');
       const scopes = this.accessPolicy.scopeRoots(params.principal).map(root => root.kind === 'global' ? 'global' : `${root.kind}:${root.root.split('/').pop()}`);
       const results: Array<{ result: SearchResult; distance: number }> = [];
       for (const scope of scopes) {
@@ -382,9 +360,6 @@ export class SemanticSearchService {
       worker: 'process-shared',
       indexWorker: this.indexWorker,
       indexingActive: this.semanticActive,
-      queryVectorCacheEntries: this.queryVectorCache.size,
-      queryVectorCacheHits: this.queryVectorCacheHits,
-      queryVectorCacheMisses: this.queryVectorCacheMisses,
       ...(this.lastError && { lastError: this.lastError }),
     };
   }
@@ -525,8 +500,8 @@ export class SemanticSearchService {
   /**
    * Coordinate document indexing across separately spawned MCP processes.
    * The first process that opts into server-side semantic search becomes the
-   * leader. Other processes can still query the derived LanceDB cache with a
-   * client-provided vector, but never start a second indexing model.
+   * leader. Other processes can query the shared derived cache, but never
+   * start a second indexing worker.
    */
   private async acquireIndexLease(): Promise<boolean> {
     if (this.indexLease) return true;
@@ -605,33 +580,6 @@ export class SemanticSearchService {
     const row: unknown = Array.isArray(valueList?.[0]) ? valueList[0] : values;
     if (!Array.isArray(row) || row.length !== EMBEDDING_DIMENSIONS || !row.every(value => typeof value === 'number' && Number.isFinite(value))) throw new Error(`Embedding model returned an invalid ${EMBEDDING_DIMENSIONS}-dimensional vector`);
     return row as number[];
-  }
-
-  private async embedQuery(query: string): Promise<number[]> {
-    const key = query.trim();
-    const cached = this.queryVectorCache.get(key);
-    if (cached && cached.expiresAt > Date.now()) {
-      this.queryVectorCacheHits += 1;
-      this.queryVectorCache.delete(key);
-      this.queryVectorCache.set(key, cached);
-      return [...cached.vector];
-    }
-    if (cached) this.queryVectorCache.delete(key);
-    this.queryVectorCacheMisses += 1;
-    const vector = await this.embed(query, 'query');
-    this.queryVectorCache.set(key, { expiresAt: Date.now() + QUERY_VECTOR_CACHE_TTL_MS, vector: [...vector] });
-    while (this.queryVectorCache.size > QUERY_VECTOR_CACHE_MAX_ENTRIES) {
-      const oldest = this.queryVectorCache.keys().next();
-      if (oldest.done) break;
-      this.queryVectorCache.delete(oldest.value);
-    }
-    return vector;
-  }
-
-  private validateVector(vector: number[]): void {
-    if (!Array.isArray(vector) || vector.length !== EMBEDDING_DIMENSIONS || !vector.every(value => typeof value === 'number' && Number.isFinite(value))) {
-      throw new Error(`queryVector must be a finite numeric vector with exactly ${EMBEDDING_DIMENSIONS} dimensions`);
-    }
   }
 
   private async indexPathContent(path: string): Promise<void> {

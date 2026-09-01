@@ -92,9 +92,7 @@ export interface SearchParams {
   excludePaths?: string[];
   /** Add bounded semantic/vector matches to the lexical search results. */
   semantic?: boolean;
-  /** Optional client-computed query vector using the configured semantic model. */
-  queryVector?: number[];
-  /** Include the source revision on each result for client-side caching. */
+  /** Include the source revision so a later bounded read can validate freshness. */
   includeRevisions?: boolean;
 }
 

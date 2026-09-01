@@ -252,7 +252,7 @@ describe("SearchService", () => {
     expect(r.uri).toMatch(/^obsidian:\/\//);
   });
 
-  test("can include source revisions for client-side reuse", async () => {
+  test("can include source revisions for bounded freshness checks", async () => {
     await writeNote("revision.md", "# Revision\n\nSome content with target word.");
 
     const results = await searchService.search({ query: "target", limit: 10, includeRevisions: true });

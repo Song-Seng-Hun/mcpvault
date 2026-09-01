@@ -153,7 +153,7 @@ is included in `Vary`, and mutating/error responses are never cacheable.
   - Partial reads: `get_note_outline`, `read_note_lines`
   - Directory and batch reads: `list_directory`, `read_multiple_notes`
 - Search: `search_notes` with multi-word matching, LLM Wiki-first ranking, one compact excerpt per document, and bounded result count/characters
-  - Optional semantic search: pass `semantic: true` to add Korean-capable `multilingual-e5-small` vector matches. The model and LanceDB cache load lazily, are processed by one bounded idle worker, and are unloaded after inactivity; concurrent server instances in one Node process share one embedder. A client that already has a compatible 384-dimensional query vector can pass `queryVector` and avoid loading an embedding model in that server process. If either dependency or its local index fails, `search_notes` returns the normal lexical results. `semantic_search_status` reports cache health. The cache stores no note text—only vectors and derived path/hash/line metadata; bounded excerpts are read from the authorized Markdown source at query time. Markdown/Git remain authoritative.
+  - Optional semantic search: pass `semantic: true` to add Korean-capable `multilingual-e5-small` vector matches. The model and LanceDB cache load lazily, are processed by one bounded idle worker, and are unloaded after inactivity; concurrent server instances in one Node process share one embedder. The server computes query vectors automatically. If either dependency or its local index fails, `search_notes` returns the normal lexical results. `semantic_search_status` reports cache health. The cache stores no note text—only vectors and derived path/hash/line metadata; bounded excerpts are read from the authorized Markdown source at query time. Markdown/Git remain authoritative.
   - Optional Obsidian-native search: `search_obsidian` uses the running Obsidian CLI index for public-global results; authenticated private searches must use `search_scoped_notes`
   - Metadata and tags: `get_frontmatter`, `update_frontmatter`, `get_notes_info`, `get_vault_stats`, `manage_tags`, `list_all_tags`
   - Wiki links: `wiki_link` resolves names and returns alternative paths when a name is ambiguous; `get_backlinks` finds incoming wikilinks, `get_outlinks` lists outgoing wikilinks, `find_unresolved_links` finds broken references, and `find_orphan_notes` finds isolated notes
@@ -182,30 +182,9 @@ is included in `Vary`, and mutating/error responses are never cacheable.
   - Security diagnostics: `list_audit_events` returns the caller's metadata-only MCP attempts/errors; it excludes note bodies, passwords, and bearer tokens, and does not replace Git history
   - Community safety: authenticated agents can use `report_content` for factual reports of prompt injection, malware, harassment, spam, privacy abuse, or impersonation. Configured moderators can use `list_moderation_reports` and `moderate_content` to warn, hide, quarantine, soft-remove, restore, ban, or unban. Hidden/quarantined/removed community content is excluded from normal reads, search, mentions, and context packets; bans preserve public reading but disable mutations. Reports and moderation reasons are bounded metadata, and all community text remains untrusted data rather than instructions.
 - `read_note` returns a SHA-256 `revision`; pass it as `knownRevision` on a later read to receive a small `notModified` response when the note is unchanged, or pass it as `expectedRevision` to `write_note`, `patch_note`, or `update_frontmatter` to reject stale concurrent edits. Use `"missing"` when creating a note that must not already exist.
-- `sync_note_revisions` accepts up to 200 cached `{path: revision}` entries and returns only `unchanged`, `changed`, or `missing` states from the metadata index; clients can then fetch bodies only for changed/new notes.
-- `read_multiple_notes` accepts an optional `knownRevisions` map for one-round-trip cache reads: unchanged notes return only `{path, revision, unchanged}`, while changed notes return the requested body/frontmatter and their new revision.
-- The package exports `McpVaultClientCache`, a bounded host-side LRU helper that automatically sends `knownRevisions` to `mcp.read_multiple_notes`; use it in a runner or adapter to keep repeated note reads local and fetch only changed bodies. It does not make authorization decisions.
-- `McpVaultClientCache` also supports `snapshot`, `restore`, `persist`, `hydrate`, and `values`. Provide a host-owned `ClientKeyValueStore` backed by IndexedDB, localStorage, or an owner-protected local file to survive client restarts; after hydration, feed `values()` into `McpVaultClientSearchIndex.upsert()`.
-- `McpVaultClientCache.persistIncremental()` and `hydrateIncremental()` store each cached note under a separate bounded key plus a manifest, so later checkpoints rewrite only changed entries and remove evicted entries when the host store supports `removeItem`. This avoids repeatedly serializing the entire cache; the host remains responsible for choosing protected storage.
-- `persistCompressed()`/`hydrateCompressed()` and async variants are available on the note cache, text search index, and vector index. They store a gzip-compressed binary snapshot through `ClientBinaryStore`/`AsyncClientBinaryStore`; the legacy JSON APIs remain available for string-only stores, and browser hosts can inject a codec backed by `CompressionStream`.
-- `persistIncrementalAsync()` and `hydrateIncrementalAsync()` accept the exported `AsyncClientKeyValueStore` contract for IndexedDB-like hosts. Entries are written one at a time to bound main-thread work and avoid a large parallel storage burst.
-- `McpVaultClientCache.readNotesStale()` returns cached notes immediately and a `refresh` promise that performs the normal revision-checked batch read in the background. Use the immediate packet for responsive UI or prompt preparation, then apply the refresh result when it completes; cached data is never authoritative until the refresh succeeds.
-- `readNotes()` accepts an `AbortSignal`; host callers can cancel obsolete reads, and per-path request generations prevent a slower older response from overwriting a newer cache entry. The endpoint caller receives the signal when its transport supports cancellation.
-- `readNotes()` also splits large reads into ten-note batches and runs at most two batches concurrently by default. Hosts can set `maxConcurrentBatches` from 1 to 8 to trade latency against server load; the bound applies before transport calls and does not weaken server authorization.
-- The package also exports `ContextBudgeter`, a deterministic client-side packer that prioritizes required/evidence fragments, clips Unicode-safely to a character budget, deduplicates repeated `source.path + source.revision` fragments (or caller-provided `dedupeKey` values), reports omitted/truncated/deduplicated IDs, and offers a conservative token estimate. Use it after server authorization and before assembling the model prompt.
-- `ClientRequestScheduler` is exported for host adapters that need bounded concurrency, priority ordering, duplicate-request coalescing, and cancellation of obsolete work. A task receives the optional `AbortSignal`; coalesced callers can stop waiting independently while the shared task continues for other callers. The optional `adaptive` mode uses additive increase/multiplicative decrease from observed latency and failures, while `maxConcurrency` remains a hard cap. Use higher priority for mentions/current work and lower priority for prefetch; it is a scheduling helper, not an authorization layer.
-- The scheduler uses a binary heap for queued priorities, so adding or selecting work remains `O(log n)` even when many agents enqueue requests.
-- `ClientTimelineCache` is exported for cursor-paginated chat/comment windows. Configure `getId` with `messageId` or `commentId` and `getRevision` with the server revision; overlapping `contextBefore` windows are merged locally, changed revisions replace the cached item, and the cache evicts old entries at its configured bound.
-- `ClientCapabilityCatalogCache` is exported for the stable `list_active_capabilities` and `search_capabilities` MCP tools. It provides bounded TTL caching, coalesces identical concurrent calls, and supports per-session `cachePartition` invalidation after login, logout, or capability changes. `ClientHeartbeatBackoff` calculates bounded exponential delays with a default 10% randomized jitter for idle client heartbeats and resets immediately when activity is detected; neither helper schedules model calls or changes server authorization.
-- `createNoteUpdatePlan()` is exported for client-side diffing before a note edit. It emits a minimal exact hunk with `expectedRevision` for small replacements/deletions, but deliberately falls back to a full-write plan for insertion-only, oversized, or very large-input changes; the server must still perform authorization, path, and revision checks.
-- `ClientReferenceCache` is exported for authorized `mcp.read_references` calls. It keys results by source path, source revision, request bounds, and cache partition; identical concurrent resolutions coalesce, changed revisions miss naturally, and private sessions must use separate `cachePartition` values when sharing one cache instance. It never replaces server access checks.
-- Capability catalog and reference-cache reads accept an optional `AbortSignal`; obsolete callers can stop waiting and the signal is forwarded to transports that support cancellation, while shared in-flight work remains reusable for other callers.
-- `McpVaultClientSearchIndex` is exported for a bounded local first-pass search over explicitly cached notes, including Korean text and source revisions. It uses an incremental in-memory inverted index so a query evaluates matching candidates instead of scanning every cached note, then keeps only the requested top results in a bounded min-heap instead of sorting the full candidate set; updates and removals only adjust the affected document's postings. It keeps at most 4,096 unique tokens per document, evicts the oldest notes after 5,000 documents, and keeps at most 128 bounded query results in memory; `snapshot`, `restore`, `persist`, and `hydrate` let a host restore the index after restart through an owner-controlled `ClientKeyValueStore`. Its response always declares `complete: false`; clients must still confirm candidates with authoritative server search/revision and scope checks.
-- `McpVaultClientSearchIndex.persistIncremental()`/`hydrateIncremental()` and their async variants store one cached document per key plus a manifest, so an index checkpoint rewrites only changed documents and removes evicted entries. This keeps large local indexes from repeatedly serializing one giant snapshot; the host remains responsible for protected storage.
-- `McpVaultClientSearchIndex.upsertMany()` builds an index in bounded batches and yields between batches (or calls a host-provided idle/worker bridge). Pass an `AbortSignal` to stop a background refresh between notes without discarding already indexed entries; this keeps UI/agent hosts responsive during large cache warmups.
-- `attachClientSearchWorker()` and `ClientSearchWorkerClient` provide a small Worker-compatible protocol for moving local search indexing, snapshotting, and ranking off the host main thread. They accept browser Worker or `worker_threads` adapters exposing `postMessage`/message listeners; if no Worker exists, call `McpVaultClientSearchIndex` directly.
-- `ClientSearchWorkerPool` optionally shards notes across 1–8 Worker clients using a stable path hash, fans out bounded queries, and merges only the requested top-K results. Use one pool per host/user rather than one Worker per agent; the server remains authoritative for access and freshness.
-- `McpVaultClientVectorIndex` is an optional host-side cosine-ranker for embeddings generated by the host or a worker. It stores only bounded normalized vectors plus `{path, revision}`, keeps top-K without sorting every candidate, and supports full or document-level incremental sync/async persistence. Its response is always `complete: false`; confirm candidates with authoritative server search/read and scope checks. Supplying a validated `queryVector` to server semantic search can likewise avoid loading the server embedder.
+- `sync_note_revisions` accepts up to 200 caller-supplied `{path: revision}` entries and returns only `unchanged`, `changed`, or `missing` states from the metadata index; callers can then fetch bodies only for changed/new notes.
+- `read_multiple_notes` accepts an optional `knownRevisions` map for one-round-trip freshness checks: unchanged notes return only `{path, revision, unchanged}`, while changed notes return the requested body/frontmatter and their new revision.
+- `sync_note_revisions` and `read_multiple_notes` are server-side optimizations; clients only need to call the documented endpoints. No local cache, Worker, vector database, compression codec, or additional runtime is required.
 - `write_note` supports overwrite, append, and prepend modes.
 - `delete_note` and `move_file` require matching confirmation paths.
 - Path arguments are trimmed before validation.
@@ -985,34 +964,29 @@ The semantic index is a disposable derived cache under the hidden
 `.mcpvault/semantic-index/` directory. It is never the source of truth and is
 not required for startup or ordinary search. New and changed Markdown notes
 are queued by the file service, then embedded in small background batches when
-the server is idle after that process opts into server-side semantic search; a
+the server is idle after the first semantic search request; a
 semantic query never starts a full-vault scan or performs foreground indexing.
 The queue and per-note chunk count are bounded so a burst
 of edits or one very large note cannot monopolize the process. The default
 model is `Xenova/multilingual-e5-small`, which uses E5's `query:`/`passage:`
 prefixes and 384-dimensional normalized vectors. Search results use a short
-in-memory lexical cache, while query embeddings use a bounded five-minute
-cache. Both are invalidated after MCP writes and naturally expire for edits
-made directly in Obsidian.
+in-memory lexical cache. It is invalidated after MCP writes and naturally
+expires for edits made directly in Obsidian.
 `semantic_search_status` exposes whether this process is the indexing leader,
-waiting behind another process, or acting as a client-only vector consumer.
+or is querying a shared index while another server process owns background
+indexing.
 The cache contains no raw Markdown excerpts: only vectors, hashes, paths, and
 line metadata are persisted. The short result excerpt is read from the source
 note only after the caller's scope predicate passes. Only scopes visible to the
 current caller are queried; private scope tables are never included for
 anonymous callers or other agents.
 
-Clients may offload query embedding by computing the same E5 `query:` vector
-locally and sending it as `queryVector` with `semantic: true`. The server still
-owns the LanceDB index, applies the caller's scope/path predicate, reads the
-excerpt from the authorized Markdown source, and bounds the response. A client
-vector is therefore a performance hint, never an authorization or result
-override. For several agents on one machine, prefer one long-running MCPVault
-process per vault so the process-shared model and index worker are reused; if
-separate processes are unavoidable, client-computed query vectors prevent each
-process from loading its own embedding model. Use server-side semantic search
-in one designated process to opt that process into background document
-indexing; vector-only clients remain read-only consumers of that shared index.
+The server owns query embedding, the derived index, scope filtering, and bounded
+excerpt reads. For several agents on one machine, prefer one long-running
+MCPVault process per vault so the process-shared model and index worker are
+reused. If another server process already owns background indexing, this
+process can still query the shared derived index; only one process performs
+background indexing.
 
 ### `get_backlinks`
 
