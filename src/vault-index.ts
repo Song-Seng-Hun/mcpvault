@@ -300,6 +300,21 @@ export class VaultMetadataIndex {
     return paths.map(path => this.entries.get(path)).filter((entry): entry is VaultIndexEntry => entry !== undefined);
   }
 
+  /** Count metadata candidates without sorting or reading note bodies. */
+  async count(
+    filters: Record<string, unknown> = {},
+    pathPrefix = '',
+    canAccessPath: (path: string) => boolean = () => true,
+    predicate: (entry: VaultIndexEntry) => boolean = () => true,
+  ): Promise<number> {
+    const candidates = await this.list(filters, pathPrefix);
+    let count = 0;
+    for (const entry of candidates) {
+      if (canAccessPath(entry.path) && predicate(entry)) count += 1;
+    }
+    return count;
+  }
+
   async listSorted(filters: Record<string, unknown> = {}, pathPrefix = '', sortBy = 'path', sortOrder: 'asc' | 'desc' = 'asc'): Promise<VaultIndexEntry[]> {
     const cacheKey = JSON.stringify([pathPrefix, filters, sortBy, sortOrder]);
     const cached = this.sortedQueryCache.get(cacheKey);

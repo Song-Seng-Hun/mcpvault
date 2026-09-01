@@ -1,6 +1,6 @@
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
-import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, MoveNoteParams, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult, DailyNoteResult, ListTasksParams, ListTasksResult, QueryNotesParams, QueryNotesResult } from './types.js';
+import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, MoveNoteParams, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult, DailyNoteResult, ListTasksParams, ListTasksResult, QueryNotesParams, QueryNotesResult, QueryNote } from './types.js';
 import { type DailyDateInput } from './daily.js';
 import type { VaultMetadataIndex } from './vault-index.js';
 import type { VaultGraphIndex } from './vault-graph.js';
@@ -94,5 +94,7 @@ export declare class FileSystemService {
     private resolvePathPrefix;
     listTasks(params?: ListTasksParams, canAccessPath?: (path: string) => boolean): Promise<ListTasksResult>;
     queryNotes(params?: QueryNotesParams, canAccessPath?: (path: string) => boolean): Promise<QueryNotesResult>;
+    /** Count metadata rows without reading note bodies; used by bounded windows. */
+    countNotes(params?: QueryNotesParams, canAccessPath?: (path: string) => boolean, predicate?: (note: QueryNote) => boolean): Promise<number>;
 }
 //# sourceMappingURL=filesystem.d.ts.map

@@ -2003,4 +2003,13 @@ export class FileSystemService {
             ...(nextCursor ? { nextCursor } : {}),
         };
     }
+    /** Count metadata rows without reading note bodies; used by bounded windows. */
+    async countNotes(params = {}, canAccessPath = () => true, predicate = () => true) {
+        const pathPrefix = this.resolvePathPrefix(params.pathPrefix);
+        if (this.metadataIndex) {
+            return this.metadataIndex.count(params.filters || {}, pathPrefix, canAccessPath, entry => predicate({ path: entry.path, frontmatter: entry.frontmatter }));
+        }
+        const result = await this.queryNotes({ ...params, limit: 1, includeContent: false, includeTotal: true }, canAccessPath);
+        return result.total;
+    }
 }

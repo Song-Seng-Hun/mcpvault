@@ -7,7 +7,7 @@ import type { ReferenceService } from './references.js';
 import { workflowStatus } from './community-status.js';
 import { isModerationHidden, moderationStatus } from './moderation-policy.js';
 import { boundItems } from './search-limits.js';
-import { queryAllNotes } from './paged-query.js';
+import { queryWindow } from './paged-query.js';
 import type { ReputationService } from './reputation.js';
 import { readNotesInBatches } from './batch-read.js';
 
@@ -71,13 +71,15 @@ export class ChatService {
   async listRooms(params: { status?: string; limit?: number; maxChars?: number }) {
     const requestedStatus = String(params.status || 'open').trim().toLowerCase();
     if (requestedStatus !== 'all' && !ROOM_STATUSES.has(requestedStatus)) throw new Error('status must be open, archived, or all');
-    const result = await queryAllNotes(this.fileSystem, {
+    const filters = { mcpvault_type: 'chat_room', ...(requestedStatus !== 'all' && { status: requestedStatus }) };
+    const limit = Math.min(Math.max(Number(params.limit || 50), 1), 500);
+    const window = await queryWindow(this.fileSystem, {
       pathPrefix: ROOM_ROOT, filters: { mcpvault_type: 'chat_room', ...(requestedStatus !== 'all' && { status: requestedStatus }) },
       sortBy: 'created_at', sortOrder: 'desc',
-    });
-    const visibleRooms = result.notes.filter(note => requestedStatus === 'all' || note.frontmatter.status === requestedStatus);
-    const limit = Math.min(Math.max(Number(params.limit || 50), 1), 500);
-    const selectedRooms = visibleRooms.slice(0, limit);
+      limit,
+    }, note => requestedStatus === 'all' || note.frontmatter.status === requestedStatus);
+    const total = await this.fileSystem.countNotes({ pathPrefix: ROOM_ROOT, filters });
+    const selectedRooms = window.notes;
     const reputations = await this.reputation.getMany(selectedRooms.map(note => String(note.frontmatter.created_by || '')));
     const rooms = selectedRooms.map(note => ({
       path: note.path,
@@ -93,7 +95,7 @@ export class ChatService {
       moderationStatus: moderationStatus(note.frontmatter),
     }));
     const bounded = boundItems(rooms, Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000));
-    return { rooms: bounded.items, total: visibleRooms.length, truncated: result.truncated || visibleRooms.length > limit || bounded.truncated };
+    return { rooms: bounded.items, total, truncated: window.truncated || total > selectedRooms.length || bounded.truncated };
   }
 
   private async readRoom(roomId: string) {
@@ -175,21 +177,50 @@ export class ChatService {
   async readRoomWithMessages(params: { principal?: ScopePrincipal; roomId: string; limit?: number; afterMessageId?: string; contextBefore?: number; maxChars?: number; includeThreadContext?: boolean }) {
     const roomId = normalizeScopeId(params.roomId, 'roomId');
     const room = await this.readRoom(roomId);
-    const result = await queryAllNotes(this.fileSystem, {
-      pathPrefix: messagesRoot(roomId), filters: { mcpvault_type: 'chat_message' },
-      sortBy: 'created_at', sortOrder: 'asc',
-    });
     const limit = windowNumber(params.limit, 20, 100);
     const maxChars = windowNumber(params.maxChars, 6000, 20000);
     const contextBefore = windowNumber(params.contextBefore, 2, 20) - 1;
+    const filters = { mcpvault_type: 'chat_message' };
+    let notes: Array<{ path: string; frontmatter: Record<string, any> }>;
+    let total: number;
+    let queryTruncated: boolean;
+    if (params.afterMessageId) {
+      const messageId = normalizeScopeId(params.afterMessageId, 'afterMessageId');
+      const cursorResult = await this.fileSystem.queryNotes({
+        pathPrefix: messagesRoot(roomId), filters: { ...filters, message_id: messageId },
+        sortBy: 'created_at', sortOrder: 'asc', limit: 1, includeTotal: false,
+      });
+      const cursorNote = cursorResult.notes[0];
+      if (!cursorNote || isModerationHidden(cursorNote.frontmatter)) throw new Error(`afterMessageId was not found in room: ${params.afterMessageId}`);
+      const cursor = cursorNote.frontmatter.created_at === undefined
+        ? { path: cursorNote.path, missing: true }
+        : { path: cursorNote.path, value: cursorNote.frontmatter.created_at };
+      const before = contextBefore > 0
+        ? await queryWindow(this.fileSystem, { pathPrefix: messagesRoot(roomId), filters, sortBy: 'created_at', sortOrder: 'desc', limit: contextBefore, after: cursor }, note => !isModerationHidden(note.frontmatter))
+        : { notes: [], truncated: false };
+      const forwardLimit = Math.max(1, limit - before.notes.length - 1);
+      const forward = await queryWindow(this.fileSystem, { pathPrefix: messagesRoot(roomId), filters, sortBy: 'created_at', sortOrder: 'asc', limit: forwardLimit, after: cursor }, note => !isModerationHidden(note.frontmatter));
+      notes = [...before.notes].reverse();
+      notes.push(cursorNote, ...forward.notes);
+      total = await this.fileSystem.countNotes({ pathPrefix: messagesRoot(roomId), filters }, undefined, note => !isModerationHidden(note.frontmatter));
+      queryTruncated = before.truncated || forward.truncated;
+    } else {
+      const window = await queryWindow(this.fileSystem, {
+        pathPrefix: messagesRoot(roomId), filters,
+        sortBy: 'created_at', sortOrder: 'desc', limit,
+      }, note => !isModerationHidden(note.frontmatter));
+      notes = [...window.notes].reverse();
+      total = await this.fileSystem.countNotes({ pathPrefix: messagesRoot(roomId), filters }, undefined, note => !isModerationHidden(note.frontmatter));
+      queryTruncated = window.truncated;
+    }
     const cursorIndex = params.afterMessageId
-      ? result.notes.findIndex(note => note.frontmatter.message_id === normalizeScopeId(params.afterMessageId!, 'afterMessageId'))
+      ? notes.findIndex(note => note.frontmatter.message_id === normalizeScopeId(params.afterMessageId!, 'afterMessageId'))
       : -1;
     if (params.afterMessageId && cursorIndex < 0) throw new Error(`afterMessageId was not found in room: ${params.afterMessageId}`);
-    const start = cursorIndex >= 0 ? Math.max(0, cursorIndex - contextBefore) : Math.max(0, result.notes.length - limit);
-    const selected: Array<{ note: typeof result.notes[number]; content: string; revision: string }> = [];
+    const start = cursorIndex >= 0 ? Math.max(0, cursorIndex - contextBefore) : Math.max(0, notes.length - limit);
+    const selected: Array<{ note: typeof notes[number]; content: string; revision: string }> = [];
     let usedChars = 0;
-    const candidates = result.notes.slice(start).filter(note => !isModerationHidden(note.frontmatter));
+    const candidates = notes.slice(start).filter(note => !isModerationHidden(note.frontmatter));
     let stop = false;
     for (let batchStart = 0; batchStart < candidates.length && selected.length < limit && !stop; batchStart += 10) {
       const batchNotes = candidates.slice(batchStart, batchStart + 10);
@@ -250,8 +281,8 @@ export class ChatService {
         authorLevelLabel: messageReputations.get(String(note.frontmatter.author || '').toLowerCase())?.label ?? '뉴비',
         ...(params.includeThreadContext !== false && note.frontmatter.reply_to && { parent: this.messageContextFromNote(roomId, String(note.frontmatter.reply_to), parentByPath.get(messagePath(roomId, String(note.frontmatter.reply_to))), messageReputations) }),
       })),
-      totalMessages: result.total,
-      truncated: start > 0 || result.truncated || start + selected.length < result.notes.length,
+      totalMessages: total,
+      truncated: start > 0 || queryTruncated || start + selected.length < notes.length || total > notes.length,
       nextCursor: last,
       contextBefore: cursorIndex >= 0 ? contextBefore + 1 : 0,
     };

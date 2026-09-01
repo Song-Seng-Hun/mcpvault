@@ -299,6 +299,16 @@ export class VaultMetadataIndex {
         }
         return paths.map(path => this.entries.get(path)).filter((entry) => entry !== undefined);
     }
+    /** Count metadata candidates without sorting or reading note bodies. */
+    async count(filters = {}, pathPrefix = '', canAccessPath = () => true, predicate = () => true) {
+        const candidates = await this.list(filters, pathPrefix);
+        let count = 0;
+        for (const entry of candidates) {
+            if (canAccessPath(entry.path) && predicate(entry))
+                count += 1;
+        }
+        return count;
+    }
     async listSorted(filters = {}, pathPrefix = '', sortBy = 'path', sortOrder = 'asc') {
         const cacheKey = JSON.stringify([pathPrefix, filters, sortBy, sortOrder]);
         const cached = this.sortedQueryCache.get(cacheKey);

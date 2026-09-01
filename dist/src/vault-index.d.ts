@@ -42,6 +42,8 @@ export declare class VaultMetadataIndex {
     invalidate(path: string, kind: 'upsert' | 'delete'): void;
     private clearQueryCaches;
     list(filters?: Record<string, unknown>, pathPrefix?: string): Promise<VaultIndexEntry[]>;
+    /** Count metadata candidates without sorting or reading note bodies. */
+    count(filters?: Record<string, unknown>, pathPrefix?: string, canAccessPath?: (path: string) => boolean, predicate?: (entry: VaultIndexEntry) => boolean): Promise<number>;
     listSorted(filters?: Record<string, unknown>, pathPrefix?: string, sortBy?: string, sortOrder?: 'asc' | 'desc'): Promise<VaultIndexEntry[]>;
     /**
      * Select a bounded page without materializing a fully sorted candidate list.

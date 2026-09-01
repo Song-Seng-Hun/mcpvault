@@ -4,6 +4,41 @@ import type { QueryNotesParams, QueryNotesResult } from './types.js';
 const PAGE_SIZE = 500;
 
 /**
+ * Read only enough metadata rows to fill a bounded response window. A
+ * predicate may discard hidden or workflow-closed rows; the helper advances
+ * by keyset cursor until the requested visible page is full.
+ */
+export async function queryWindow(
+  fileSystem: FileSystemService,
+  params: QueryNotesParams & { limit: number },
+  predicate: (note: QueryNotesResult['notes'][number]) => boolean = () => true,
+  canAccessPath: (path: string) => boolean = () => true,
+): Promise<{ notes: QueryNotesResult['notes']; truncated: boolean }> {
+  const notes: QueryNotesResult['notes'] = [];
+  let after = params.after;
+  let truncated = false;
+  while (notes.length < params.limit) {
+    const page = await fileSystem.queryNotes({
+      ...params,
+      limit: Math.max(1, params.limit - notes.length),
+      ...(after ? { after } : {}),
+      includeTotal: false,
+    }, canAccessPath);
+    for (const note of page.notes) {
+      if (predicate(note)) notes.push(note);
+      if (notes.length >= params.limit) break;
+    }
+    if (!page.truncated || !page.nextCursor) {
+      truncated = false;
+      break;
+    }
+    truncated = true;
+    after = page.nextCursor;
+  }
+  return { notes, truncated };
+}
+
+/**
  * Read every matching metadata row in bounded pages. The caller still owns
  * the final response limit; this helper only removes the old silent 500-row
  * ceiling from internal discovery paths. Callers should leave

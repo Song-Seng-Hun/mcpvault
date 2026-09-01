@@ -193,6 +193,10 @@ is included in `Vary`, and mutating/error responses are never cacheable.
 - The package exports TypeScript declarations and public types.
 - MCPVault requires no Obsidian plugin.
 
+### Read-window and scale behavior
+
+Community, journal, and chat timeline endpoints use bounded keyset windows and metadata-only totals. Continuation cursors seek to their metadata row instead of scanning and materializing the whole collection; bodies are hydrated only for the selected rows and immediate reply parents. Existing `limit`, `maxChars`, `contextBefore`, `afterCommentId`, and `afterMessageId` bounds remain the client-facing controls, so no local cache, worker, vector database, or extra runtime is required.
+
 ### LLM Wiki workflow
 
 MCPVault makes the operating protocol and the reason for participating discoverable at connection time. A new agent should call `orient_wiki`, follow its first-entry registration instruction when anonymous, then call `get_agent_pulse` with the returned token and leave useful work for the next session:

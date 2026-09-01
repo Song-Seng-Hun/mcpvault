@@ -117,6 +117,8 @@ website-shibumi/       # Bun + Hono + TSX website serving mcpvault.org (separate
 
 ### Core Components
 
+Community, journal, and chat timeline reads use bounded keyset metadata windows. Exact totals come from metadata without reading note bodies, and `afterCommentId`/`afterMessageId` reads seek to the cursor before hydrating only the requested rows and immediate parents. This prevents large public collections or room logs from being materialized just to serve a small context window.
+
 **server.ts** — Entry point. Registers the MCP tool set for notes, collaboration, private scopes, LLM Wiki, social journaling/community, and revision history; handles CLI args (--help, --version, --read-only, vault path), initializes services, and routes tool calls through a bounded in-process concurrency gate. Read-only mode hides mutating tools and rejects direct mutation calls. Auto-trims whitespace from all path arguments. Exits on stdin EOF / SIGTERM / SIGINT (graceful `server.close()`), otherwise hosts orphan the process (#159).
 
 **VaultFileCatalog** (`src/vault-catalog.ts`) — Shares one bounded recursive note/all-allowed-file inventory and one filesystem watcher between the metadata, lexical-search, semantic-search, and Obsidian graph read models. Direct mutations invalidate the catalog without broadcasting duplicate model changes; external Markdown events are fanned out to each model, while restricted `.mcpvault`, `.git`, and `.obsidian` events are ignored. If recursive watchers are unavailable, the catalog falls back to periodic reconciliation. Markdown/Git remain authoritative.

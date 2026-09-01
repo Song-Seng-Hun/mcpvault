@@ -7,7 +7,7 @@ import type { ReferenceService } from './references.js';
 import { isClosedWorkflowStatus, matchesWorkflowFilter, workflowStatus } from './community-status.js';
 import { isModerationHidden, moderationStatus } from './moderation-policy.js';
 import { boundItems } from './search-limits.js';
-import { queryAllNotes } from './paged-query.js';
+import { queryAllNotes, queryWindow } from './paged-query.js';
 import type { ReputationService } from './reputation.js';
 import { readNotesInBatches } from './batch-read.js';
 
@@ -172,11 +172,14 @@ export class SocialService {
     const principal = requireAgent(params.principal);
     const filters: Record<string, unknown> = { mcpvault_type: 'journal_entry' };
     if (params.date !== undefined) filters.date = validateDate(params.date);
-    const result = await queryAllNotes(this.fileSystem, {
+    const limit = Math.min(Math.max(Number(params.limit ?? 50), 1), 500);
+    const window = await queryWindow(this.fileSystem, {
       pathPrefix: agentJournalRoot(principal.agentId), filters,
       sortBy: 'date', sortOrder: 'desc',
-    }, path => this.access.canAccessPhysicalPath(path, principal));
-    const bounded = boundItems(result.notes.map(note => ({
+      limit,
+    }, () => true, path => this.access.canAccessPhysicalPath(path, principal));
+    const total = await this.fileSystem.countNotes({ pathPrefix: agentJournalRoot(principal.agentId), filters }, path => this.access.canAccessPhysicalPath(path, principal));
+    const bounded = boundItems(window.notes.map(note => ({
         path: this.access.toPublicPath(note.path),
         entryId: note.frontmatter.entry_id,
         date: note.frontmatter.date,
@@ -188,8 +191,8 @@ export class SocialService {
       })), Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000));
     return {
       entries: bounded.items,
-      total: result.total,
-      truncated: result.truncated || bounded.truncated,
+      total,
+      truncated: window.truncated || total > window.notes.length || bounded.truncated,
     };
   }
 
@@ -283,22 +286,29 @@ export class SocialService {
   async listBlogPosts(params: { principal?: ScopePrincipal; status?: string; workflowStatus?: string; author?: string; category?: string; seriesId?: string; limit?: number; maxChars?: number; includeExcerpt?: boolean; excerptMaxChars?: number }) {
     const requestedStatus = String(params.status || 'published').trim().toLowerCase();
     if (requestedStatus !== 'all' && !POST_STATUSES.has(requestedStatus)) throw new Error('status must be published, draft, archived, or all');
-    const result = await queryAllNotes(this.fileSystem, {
-      pathPrefix: BLOG_ROOT, filters: { mcpvault_type: 'blog_post' },
-      sortBy: 'updated_at', sortOrder: 'desc',
-    });
+    const filters: Record<string, unknown> = {
+      mcpvault_type: 'blog_post',
+      ...(requestedStatus !== 'all' && { status: requestedStatus }),
+      ...(params.author && { author: String(params.author).trim().toLowerCase() }),
+      ...(params.category && { category: String(params.category).trim().toLowerCase() }),
+      ...(params.seriesId && { series_id: normalizeScopeId(params.seriesId, 'seriesId') }),
+    };
     const caller = params.principal ? identity(params.principal) : undefined;
-    const visibleNotes = result.notes.filter(note => {
+    const visible = (note: { frontmatter: Record<string, any> }) => {
       if (isModerationHidden(note.frontmatter)) return false;
       const status = String(note.frontmatter.status || 'published');
       if (requestedStatus !== 'all' && status !== requestedStatus) return false;
       if (status === 'draft' && caller !== note.frontmatter.author) return false;
-      if (params.author && String(note.frontmatter.author).toLowerCase() !== String(params.author).trim().toLowerCase()) return false;
-      if (params.category && String(note.frontmatter.category || 'discussion').toLowerCase() !== String(params.category).trim().toLowerCase()) return false;
-      if (params.seriesId && String(note.frontmatter.series_id || '') !== normalizeScopeId(params.seriesId, 'seriesId')) return false;
       return matchesWorkflowFilter(note.frontmatter, params.workflowStatus || 'active');
-    });
-    return this.formatBlogPosts(visibleNotes, params, result.truncated);
+    };
+    const limit = Math.min(Math.max(Number(params.limit || 50), 1), 500);
+    const window = await queryWindow(this.fileSystem, {
+      pathPrefix: BLOG_ROOT, filters,
+      sortBy: 'updated_at', sortOrder: 'desc',
+      limit,
+    }, visible);
+    const total = await this.fileSystem.countNotes({ pathPrefix: BLOG_ROOT, filters }, undefined, visible);
+    return this.formatBlogPosts(window.notes, params, window.truncated || total > window.notes.length, total);
   }
 
   /** Read the published post set once for pulse's own-post and active-post signals. */
@@ -324,6 +334,7 @@ export class SocialService {
     visibleNotes: Array<{ path: string; frontmatter: Record<string, any> }>,
     params: { principal?: ScopePrincipal; limit?: number; maxChars?: number; includeExcerpt?: boolean; excerptMaxChars?: number },
     queryTruncated: boolean,
+    total = visibleNotes.length,
   ) {
     const limit = Math.min(Math.max(Number(params.limit || 50), 1), 500);
     const selectedNotes = visibleNotes.slice(0, limit);
@@ -367,7 +378,7 @@ export class SocialService {
       ...(params.includeExcerpt && { excerpt: excerptByPath.get(note.path) || '' }),
     }));
     const bounded = boundItems(entries, Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000));
-    return { posts: bounded.items, ...(viewerReputation && { viewerLevel: viewerReputation.level, viewerXp: viewerReputation.xp, viewerLevelLabel: viewerReputation.label }), total: visibleNotes.length, truncated: queryTruncated || visibleNotes.length > limit || bounded.truncated };
+    return { posts: bounded.items, ...(viewerReputation && { viewerLevel: viewerReputation.level, viewerXp: viewerReputation.xp, viewerLevelLabel: viewerReputation.label }), total, truncated: queryTruncated || total > visibleNotes.length || bounded.truncated };
   }
 
   async getBlogPost(params: { principal?: ScopePrincipal; slug: string; includeComments?: boolean; commentLimit?: number; commentMaxChars?: number; includeThreadContext?: boolean }) {
@@ -481,22 +492,51 @@ export class SocialService {
 
   async listBlogComments(params: { principal?: ScopePrincipal; slug: string; limit?: number; afterCommentId?: string; contextBefore?: number; maxChars?: number; includeThreadContext?: boolean; workflowStatus?: string }) {
     const slug = normalizeScopeId(params.slug, 'slug');
-    const result = await queryAllNotes(this.fileSystem, {
-      pathPrefix: commentsRoot(slug), filters: { mcpvault_type: 'blog_comment' },
-      sortBy: 'created_at', sortOrder: 'asc',
-    });
-    const notes = result.notes.filter(note => !isModerationHidden(note.frontmatter) && matchesWorkflowFilter(note.frontmatter, params.workflowStatus || 'all'));
-    const reputations = await this.reputation.getMany(notes.map(note => String(note.frontmatter.author || '')));
-    const viewerReputation = params.principal ? await this.reputation.getForPrincipal(params.principal) : undefined;
     const limit = windowNumber(params.limit, 20, 100);
     const maxChars = windowNumber(params.maxChars, 6000, 20000);
     const contextBefore = windowNumber(params.contextBefore, 2, 20) - 1;
+    const filters = { mcpvault_type: 'blog_comment' };
+    const visible = (note: { frontmatter: Record<string, any> }) => !isModerationHidden(note.frontmatter) && matchesWorkflowFilter(note.frontmatter, params.workflowStatus || 'all');
+    let notes: Array<{ path: string; frontmatter: Record<string, any> }>;
+    let total: number;
+    let queryTruncated: boolean;
+    if (params.afterCommentId) {
+      const commentId = normalizeScopeId(params.afterCommentId, 'afterCommentId');
+      const cursorResult = await this.fileSystem.queryNotes({
+        pathPrefix: commentsRoot(slug), filters: { ...filters, comment_id: commentId },
+        sortBy: 'created_at', sortOrder: 'asc', limit: 1, includeTotal: false,
+      });
+      const cursorNote = cursorResult.notes[0];
+      if (!cursorNote || !visible(cursorNote)) throw new Error(`afterCommentId was not found in post: ${params.afterCommentId}`);
+      const cursor = cursorNote.frontmatter.created_at === undefined
+        ? { path: cursorNote.path, missing: true }
+        : { path: cursorNote.path, value: cursorNote.frontmatter.created_at };
+      const before = contextBefore > 0
+        ? await queryWindow(this.fileSystem, { pathPrefix: commentsRoot(slug), filters, sortBy: 'created_at', sortOrder: 'desc', limit: contextBefore, after: cursor }, visible)
+        : { notes: [], truncated: false };
+      const forwardLimit = Math.max(1, limit - before.notes.length - 1);
+      const forward = await queryWindow(this.fileSystem, { pathPrefix: commentsRoot(slug), filters, sortBy: 'created_at', sortOrder: 'asc', limit: forwardLimit, after: cursor }, visible);
+      notes = [...before.notes].reverse();
+      notes.push(cursorNote, ...forward.notes);
+      total = await this.fileSystem.countNotes({ pathPrefix: commentsRoot(slug), filters }, undefined, visible);
+      queryTruncated = before.truncated || forward.truncated;
+    } else {
+      const window = await queryWindow(this.fileSystem, {
+        pathPrefix: commentsRoot(slug), filters,
+        sortBy: 'created_at', sortOrder: 'asc', limit,
+      }, visible);
+      notes = window.notes;
+      total = await this.fileSystem.countNotes({ pathPrefix: commentsRoot(slug), filters }, undefined, visible);
+      queryTruncated = window.truncated;
+    }
+    const reputations = await this.reputation.getMany(notes.map(note => String(note.frontmatter.author || '')));
+    const viewerReputation = params.principal ? await this.reputation.getForPrincipal(params.principal) : undefined;
     const cursorIndex = params.afterCommentId
       ? notes.findIndex(note => note.frontmatter.comment_id === normalizeScopeId(params.afterCommentId!, 'afterCommentId'))
       : -1;
     if (params.afterCommentId && cursorIndex < 0) throw new Error(`afterCommentId was not found in post: ${params.afterCommentId}`);
     const start = cursorIndex >= 0 ? Math.max(0, cursorIndex - contextBefore) : Math.max(0, notes.length - limit);
-    const selected: Array<{ note: typeof result.notes[number]; content: string; revision: string }> = [];
+    const selected: Array<{ note: typeof notes[number]; content: string; revision: string }> = [];
     let usedChars = 0;
     const candidates = notes.slice(start);
     let stop = false;
@@ -553,8 +593,8 @@ export class SocialService {
         ...(params.includeThreadContext !== false && note.frontmatter.reply_to && { parent: this.commentContextFromNote(slug, String(note.frontmatter.reply_to), parentByPath.get(commentPath(slug, String(note.frontmatter.reply_to)))) }),
       })),
       ...(viewerReputation && { viewerLevel: viewerReputation.level, viewerXp: viewerReputation.xp, viewerLevelLabel: viewerReputation.label }),
-      total: notes.length,
-      truncated: start > 0 || result.truncated || start + selected.length < notes.length,
+      total,
+      truncated: start > 0 || queryTruncated || start + selected.length < notes.length || total > notes.length,
       nextCursor: last,
       contextBefore: cursorIndex >= 0 ? contextBefore + 1 : 0,
     };
