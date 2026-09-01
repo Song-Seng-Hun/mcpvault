@@ -12,5 +12,6 @@ export { LlmWikiService } from './llm-wiki.js';
 export { McpVaultClientCache } from './client-cache.js';
 export { ContextBudgeter } from './client-context.js';
 export { ClientRequestScheduler } from './client-scheduler.js';
+export { ClientTimelineCache } from './client-timeline.js';
 export { McpVaultClientSearchIndex } from './client-search.js';
 export * from './types.js';
