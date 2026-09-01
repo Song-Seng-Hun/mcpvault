@@ -36,6 +36,11 @@ interface ReactionSnapshot {
   counts: Array<[string, number, number]>;
 }
 
+interface ReactionRecord {
+  targetId: string;
+  reaction: 'like' | 'dislike';
+}
+
 const now = () => new Date().toISOString();
 const identity = (p: ScopePrincipal) => p.agentId || p.modelId;
 const shortText = (value: unknown, field = 'content', max = MAX_COMMUNITY_TEXT_LENGTH) => {
@@ -127,6 +132,9 @@ export class CommunityFeaturesService {
   private reactionAggregateCache: { expiresAt: number; counts: Map<string, { likeCount: number; dislikeCount: number }>; incomplete: boolean } | undefined;
   private reactionAggregateInFlight: Promise<{ counts: Map<string, { likeCount: number; dislikeCount: number }>; incomplete: boolean }> | undefined;
   private reactionAggregateGeneration = 0;
+  private readonly reactionRecords = new Map<string, ReactionRecord>();
+  private reactionIndexReady = false;
+  private reactionIndexUpdate: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly fileSystem: FileSystemService,
@@ -247,11 +255,55 @@ export class CommunityFeaturesService {
   private invalidateReactionAggregates(): void {
     this.reactionAggregateGeneration += 1;
     this.reactionAggregateCache = undefined;
+    this.reactionIndexReady = false;
+    this.reactionRecords.clear();
   }
 
   invalidate(path?: string): void {
-    if (path && !/^Community\/Reactions\//i.test(path.replace(/\\/g, '/'))) return;
-    this.invalidateReactionAggregates();
+    const normalizedPath = path?.replace(/\\/g, '/');
+    if (normalizedPath && !/^Community\/Reactions\//i.test(normalizedPath)) return;
+    if (!normalizedPath || !this.reactionIndexReady) {
+      this.invalidateReactionAggregates();
+      return;
+    }
+    this.reactionAggregateGeneration += 1;
+    const previous = this.reactionIndexUpdate;
+    const update = previous.then(() => this.refreshReactionRecord(normalizedPath)).catch(() => {
+      this.invalidateReactionAggregates();
+    });
+    this.reactionIndexUpdate = update;
+    void update.finally(() => {
+      if (this.reactionIndexUpdate === update) this.reactionIndexUpdate = Promise.resolve();
+    });
+  }
+
+  private adjustReactionCount(counts: Map<string, { likeCount: number; dislikeCount: number }>, record: ReactionRecord, delta: 1 | -1): void {
+    const current = counts.get(record.targetId) || { likeCount: 0, dislikeCount: 0 };
+    if (record.reaction === 'like') current.likeCount = Math.max(0, current.likeCount + delta);
+    else current.dislikeCount = Math.max(0, current.dislikeCount + delta);
+    if (current.likeCount === 0 && current.dislikeCount === 0) counts.delete(record.targetId);
+    else counts.set(record.targetId, current);
+  }
+
+  private async refreshReactionRecord(path: string): Promise<void> {
+    const previous = this.reactionRecords.get(path);
+    const nextNote = await this.fileSystem.readNote(path).catch((error: any) => {
+      if (error?.code === 'ENOENT') return undefined;
+      throw error;
+    });
+    const nextFrontmatter = nextNote?.frontmatter;
+    const nextReaction = nextFrontmatter?.mcpvault_type === 'reaction'
+      && nextFrontmatter.target_type === 'post'
+      && nextFrontmatter.active === true
+      && (nextFrontmatter.reaction === 'like' || nextFrontmatter.reaction === 'dislike')
+      && String(nextFrontmatter.target_id || '').trim().toLowerCase();
+    const next = nextReaction ? { targetId: String(nextFrontmatter!.target_id).trim().toLowerCase(), reaction: nextFrontmatter!.reaction as 'like' | 'dislike' } : undefined;
+    const cache = this.reactionAggregateCache;
+    if (previous && cache) this.adjustReactionCount(cache.counts, previous, -1);
+    if (next && cache) this.adjustReactionCount(cache.counts, next, 1);
+    if (next) this.reactionRecords.set(path, next);
+    else this.reactionRecords.delete(path);
+    if (cache) this.reactionAggregateCache = { ...cache, expiresAt: Date.now() + REACTION_CACHE_TTL_MS };
   }
 
   private async reactionFiles(): Promise<ReactionSnapshotEntry[] | undefined> {
@@ -321,6 +373,7 @@ export class CommunityFeaturesService {
   }
 
   private async postReactionAggregates(): Promise<{ counts: Map<string, { likeCount: number; dislikeCount: number }>; incomplete: boolean }> {
+    await this.reactionIndexUpdate;
     const cached = this.reactionAggregateCache;
     if (cached && cached.expiresAt > Date.now()) return cached;
     if (this.reactionAggregateInFlight) return this.reactionAggregateInFlight;
@@ -331,6 +384,7 @@ export class CommunityFeaturesService {
         if (snapshot) return snapshot;
       }
       const counts = new Map<string, { likeCount: number; dislikeCount: number }>();
+      const records = new Map<string, ReactionRecord>();
       let after: Awaited<ReturnType<FileSystemService['queryNotes']>>['nextCursor'];
       let incomplete = false;
       while (true) {
@@ -344,6 +398,8 @@ export class CommunityFeaturesService {
         for (const reaction of page.notes) {
           const postId = String(reaction.frontmatter.target_id || '').toLowerCase();
           if (!postId) continue;
+          if (reaction.frontmatter.reaction !== 'like' && reaction.frontmatter.reaction !== 'dislike') continue;
+          records.set(reaction.path, { targetId: postId, reaction: reaction.frontmatter.reaction });
           const current = counts.get(postId) || { likeCount: 0, dislikeCount: 0 };
           if (reaction.frontmatter.reaction === 'like') current.likeCount += 1;
           else if (reaction.frontmatter.reaction === 'dislike') current.dislikeCount += 1;
@@ -354,6 +410,11 @@ export class CommunityFeaturesService {
           break;
         }
         after = page.nextCursor;
+      }
+      if (this.reactionAggregateGeneration === generation) {
+        this.reactionRecords.clear();
+        for (const [path, record] of records) this.reactionRecords.set(path, record);
+        this.reactionIndexReady = true;
       }
       void this.saveReactionSnapshot(counts);
       return { counts, incomplete };
@@ -385,7 +446,7 @@ export class CommunityFeaturesService {
       const old = exists ? await this.fileSystem.readNote(path) : undefined;
       await this.fileSystem.writeNote({ path, content: `${reaction}\n`, frontmatter: { mcpvault_type: 'reaction', reaction, target_type: params.targetType, target_id: params.targetId, ...(params.targetType === 'comment' && params.postId && { post_id: normalizeScopeId(params.postId, 'postId') }), actor: identity(params.principal), actor_role: params.principal.role, active: true, ...(old ? { created_at: old.frontmatter.created_at } : { created_at: now() }), updated_at: now() }, expectedRevision: old?.revision || 'missing' });
     }
-    if (params.targetType === 'post') this.invalidateReactionAggregates();
+    if (params.targetType === 'post') this.invalidate(path);
     return { success: true, active: params.active !== false, reaction, targetType: params.targetType, targetId: params.targetId, actor: identity(params.principal) };
   }
 

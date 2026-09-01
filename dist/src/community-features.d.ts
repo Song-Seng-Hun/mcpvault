@@ -15,6 +15,9 @@ export declare class CommunityFeaturesService {
     private reactionAggregateCache;
     private reactionAggregateInFlight;
     private reactionAggregateGeneration;
+    private readonly reactionRecords;
+    private reactionIndexReady;
+    private reactionIndexUpdate;
     constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, auth: ScopeAuthService, reputation: ReputationService, vaultPath: string, notifications?: NotificationService | undefined);
     private assertKnownIdentity;
     listSeries(params: {
@@ -55,6 +58,8 @@ export declare class CommunityFeaturesService {
     private reactionRoot;
     private invalidateReactionAggregates;
     invalidate(path?: string): void;
+    private adjustReactionCount;
+    private refreshReactionRecord;
     private reactionFiles;
     private loadReactionSnapshot;
     private saveReactionSnapshot;
