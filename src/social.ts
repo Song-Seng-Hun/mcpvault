@@ -8,6 +8,7 @@ import { isClosedWorkflowStatus, matchesWorkflowFilter, workflowStatus } from '.
 import { isModerationHidden, moderationStatus } from './moderation-policy.js';
 import { boundItems } from './search-limits.js';
 import type { ReputationService } from './reputation.js';
+import { readNotesInBatches } from './batch-read.js';
 
 const JOURNAL_ROOT = '_journal/entries';
 const BLOG_ROOT = 'Community/Posts';
@@ -455,13 +456,23 @@ export class SocialService {
     const start = cursorIndex >= 0 ? Math.max(0, cursorIndex - contextBefore) : Math.max(0, notes.length - limit);
     const selected: Array<{ note: typeof result.notes[number]; content: string; revision: string }> = [];
     let usedChars = 0;
-    for (let index = start; index < notes.length && selected.length < limit; index += 1) {
-      const note = notes[index]!;
-      const full = await this.fileSystem.readNote(note.path);
-      const contentLength = Array.from(full.content).length;
-      if (selected.length > 0 && usedChars + contentLength > maxChars) break;
-      selected.push({ note, content: full.content, revision: full.revision });
-      usedChars += contentLength;
+    const candidates = notes.slice(start);
+    let stop = false;
+    for (let batchStart = 0; batchStart < candidates.length && selected.length < limit && !stop; batchStart += 10) {
+      const batchNotes = candidates.slice(batchStart, batchStart + 10);
+      const fullByPath = await readNotesInBatches(this.fileSystem, batchNotes.map(note => note.path));
+      for (const note of batchNotes) {
+        if (selected.length >= limit) break;
+        const full = fullByPath.get(note.path);
+        if (!full) continue;
+        const contentLength = Array.from(full.content).length;
+        if (selected.length > 0 && usedChars + contentLength > maxChars) {
+          stop = true;
+          break;
+        }
+        selected.push({ note, content: full.content, revision: full.revision });
+        usedChars += contentLength;
+      }
     }
     const last = selected.at(-1)?.note.frontmatter.comment_id;
     return {
@@ -527,11 +538,7 @@ export class SocialService {
     const timelines = new Map<string, { key: 'comment_id' | 'message_id'; notes: typeof comments.notes }>();
     const hydrate = async (paths: string[]): Promise<void> => {
       const missing = Array.from(new Set(paths)).filter(path => !hydrated.has(path));
-      for (let start = 0; start < missing.length; start += 10) {
-        const batch = await this.fileSystem.readMultipleNotes({ paths: missing.slice(start, start + 10), includeContent: true, includeFrontmatter: true, knownRevisions: {} });
-        for (const note of batch.successful) hydrated.set(note.path, note);
-        if (batch.failed.length > 0) throw new Error(batch.failed[0]!.error);
-      }
+      for (const [path, note] of await readNotesInBatches(this.fileSystem, missing)) hydrated.set(path, note);
     };
     const timelineFor = async (note: any) => {
       const isChat = note.frontmatter.mcpvault_type === 'chat_message';
