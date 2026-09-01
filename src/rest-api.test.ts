@@ -20,10 +20,17 @@ test('REST adapter uses the same dynamic endpoint registry and dispatcher', asyn
   const api = await startRestApi(server, { port: 0 });
   resources.push({ vault, api, server });
 
-  const capabilities = await fetch(`http://127.0.0.1:${api.port}/api/capabilities?limit=100`);
+  const capabilities = await fetch(`http://127.0.0.1:${api.port}/api/capabilities?limit=100&maxChars=20000`);
   expect(capabilities.status).toBe(200);
   const catalog = await capabilities.json() as any;
   expect(catalog.endpoints.some((endpoint: any) => endpoint.endpointId === 'notes.write')).toBe(true);
+  // The full catalog is itself bounded, so newly added endpoints may be past
+  // the response budget. Probe the generic executor to verify both are
+  // registered without asking it to perform a real read.
+  const contextProbe = await fetch(`http://127.0.0.1:${api.port}/api/endpoint/context.read`);
+  expect(contextProbe.status).toBe(400);
+  const continuityProbe = await fetch(`http://127.0.0.1:${api.port}/api/endpoint/continuity.resume`);
+  expect(continuityProbe.status).toBe(400);
 
   const write = await fetch(`http://127.0.0.1:${api.port}/api/endpoint/notes.write`, {
     method: 'POST',
