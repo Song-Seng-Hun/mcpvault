@@ -19,8 +19,18 @@ export class ContextBudgeter {
         const packed = [];
         const omittedIds = [];
         const truncatedIds = [];
+        const deduplicatedIds = [];
+        const seenKeys = new Set();
         let usedChars = 0;
         for (const { fragment } of ordered) {
+            const dedupeKey = fragment.dedupeKey || (fragment.source ? `${fragment.source.path}\u0000${fragment.source.revision}` : undefined);
+            if (dedupeKey && seenKeys.has(dedupeKey)) {
+                omittedIds.push(fragment.id);
+                deduplicatedIds.push(fragment.id);
+                continue;
+            }
+            if (dedupeKey)
+                seenKeys.add(dedupeKey);
             const text = String(fragment.text || '');
             const separator = packed.length > 0 ? 2 : 0;
             const available = maxChars - usedChars - separator;
@@ -46,6 +56,7 @@ export class ContextBudgeter {
             usedChars,
             omittedIds,
             truncatedIds,
+            deduplicatedIds,
         };
     }
     estimateTokens(text) {

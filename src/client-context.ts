@@ -7,6 +7,10 @@ export interface ContextFragment {
   required?: boolean;
   /** Optional per-fragment cap, in Unicode characters. */
   maxChars?: number;
+  /** Optional authoritative note identity used to avoid duplicate context. */
+  source?: { path: string; revision: string };
+  /** Optional caller-defined identity for non-note fragments. */
+  dedupeKey?: string;
 }
 
 export interface PackedContextFragment {
@@ -21,6 +25,7 @@ export interface PackedContext {
   usedChars: number;
   omittedIds: string[];
   truncatedIds: string[];
+  deduplicatedIds: string[];
 }
 
 function unicodeLength(value: string): number {
@@ -47,8 +52,17 @@ export class ContextBudgeter {
     const packed: PackedContextFragment[] = [];
     const omittedIds: string[] = [];
     const truncatedIds: string[] = [];
+    const deduplicatedIds: string[] = [];
+    const seenKeys = new Set<string>();
     let usedChars = 0;
     for (const { fragment } of ordered) {
+      const dedupeKey = fragment.dedupeKey || (fragment.source ? `${fragment.source.path}\u0000${fragment.source.revision}` : undefined);
+      if (dedupeKey && seenKeys.has(dedupeKey)) {
+        omittedIds.push(fragment.id);
+        deduplicatedIds.push(fragment.id);
+        continue;
+      }
+      if (dedupeKey) seenKeys.add(dedupeKey);
       const text = String(fragment.text || '');
       const separator = packed.length > 0 ? 2 : 0;
       const available = maxChars - usedChars - separator;
@@ -73,6 +87,7 @@ export class ContextBudgeter {
       usedChars,
       omittedIds,
       truncatedIds,
+      deduplicatedIds,
     };
   }
 

@@ -7,6 +7,13 @@ export interface ContextFragment {
     required?: boolean;
     /** Optional per-fragment cap, in Unicode characters. */
     maxChars?: number;
+    /** Optional authoritative note identity used to avoid duplicate context. */
+    source?: {
+        path: string;
+        revision: string;
+    };
+    /** Optional caller-defined identity for non-note fragments. */
+    dedupeKey?: string;
 }
 export interface PackedContextFragment {
     id: string;
@@ -19,6 +26,7 @@ export interface PackedContext {
     usedChars: number;
     omittedIds: string[];
     truncatedIds: string[];
+    deduplicatedIds: string[];
 }
 /**
  * Deterministic client-side context packing. It does not interpret content or

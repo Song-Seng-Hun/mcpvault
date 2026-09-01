@@ -21,3 +21,15 @@ test('does not split surrogate pairs while clipping', () => {
   expect(packed.text).toBe('😀😀');
   expect(new ContextBudgeter().estimateTokens(packed.text)).toBe(1);
 });
+
+test('deduplicates the same note revision before spending context budget', () => {
+  const packed = new ContextBudgeter().pack([
+    { id: 'mention', text: 'mention context', required: true, source: { path: 'note.md', revision: 'a'.repeat(64) } },
+    { id: 'search', text: 'duplicate search context', priority: 10, source: { path: 'note.md', revision: 'a'.repeat(64) } },
+    { id: 'other', text: 'other evidence', source: { path: 'other.md', revision: 'b'.repeat(64) } },
+  ], 1000);
+
+  expect(packed.fragments.map(fragment => fragment.id)).toEqual(['mention', 'other']);
+  expect(packed.deduplicatedIds).toEqual(['search']);
+  expect(packed.omittedIds).toEqual(['search']);
+});
