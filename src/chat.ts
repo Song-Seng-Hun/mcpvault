@@ -7,6 +7,7 @@ import type { ReferenceService } from './references.js';
 import { workflowStatus } from './community-status.js';
 import { isModerationHidden, moderationStatus } from './moderation-policy.js';
 import { boundItems } from './search-limits.js';
+import type { ReputationService } from './reputation.js';
 
 const ROOM_ROOT = 'Community/ChatRooms';
 const MESSAGE_ROOT = 'Community/ChatMessages';
@@ -41,7 +42,7 @@ function requireParticipant(principal?: ScopePrincipal): ScopePrincipal {
 }
 
 export class ChatService {
-  constructor(private readonly fileSystem: FileSystemService, private readonly references: ReferenceService) {}
+  constructor(private readonly fileSystem: FileSystemService, private readonly references: ReferenceService, private readonly reputation: ReputationService) {}
 
   async createRoom(params: { principal?: ScopePrincipal; roomId: string; title: string; description?: string; expectedRevision: string }) {
     const principal = requireParticipant(params.principal);
@@ -72,7 +73,9 @@ export class ChatService {
       pathPrefix: ROOM_ROOT, filters: { mcpvault_type: 'chat_room' },
       sortBy: 'created_at', sortOrder: 'desc', limit: 500,
     });
-    const rooms = result.notes.filter(note => requestedStatus === 'all' || note.frontmatter.status === requestedStatus).map(note => ({
+    const visibleRooms = result.notes.filter(note => requestedStatus === 'all' || note.frontmatter.status === requestedStatus);
+    const reputations = await this.reputation.getMany(visibleRooms.map(note => String(note.frontmatter.created_by || '')));
+    const rooms = visibleRooms.map(note => ({
       path: note.path,
       roomId: note.frontmatter.room_id,
       title: note.frontmatter.title,
@@ -81,6 +84,8 @@ export class ChatService {
       createdBy: note.frontmatter.created_by,
       createdAt: note.frontmatter.created_at,
       updatedAt: note.frontmatter.updated_at,
+      creatorLevel: reputations.get(String(note.frontmatter.created_by || '').toLowerCase())?.level ?? 0,
+      creatorLevelLabel: reputations.get(String(note.frontmatter.created_by || '').toLowerCase())?.label ?? '뉴비',
       moderationStatus: moderationStatus(note.frontmatter),
     }));
     const limit = Math.min(Math.max(Number(params.limit || 50), 1), 500);
@@ -164,7 +169,7 @@ export class ChatService {
     return { success: true, roomId, status: 'archived', revision: updated.revision };
   }
 
-  async readRoomWithMessages(params: { roomId: string; limit?: number; afterMessageId?: string; contextBefore?: number; maxChars?: number; includeThreadContext?: boolean }) {
+  async readRoomWithMessages(params: { principal?: ScopePrincipal; roomId: string; limit?: number; afterMessageId?: string; contextBefore?: number; maxChars?: number; includeThreadContext?: boolean }) {
     const roomId = normalizeScopeId(params.roomId, 'roomId');
     const room = await this.readRoom(roomId);
     const result = await this.fileSystem.queryNotes({
@@ -191,8 +196,11 @@ export class ChatService {
       usedChars += contentLength;
     }
     const last = selected.at(-1)?.note.frontmatter.message_id;
+    const messageReputations = await this.reputation.getMany(selected.map(({ note }) => String(note.frontmatter.author || '')));
+    const viewerReputation = params.principal ? await this.reputation.getForPrincipal(params.principal) : undefined;
     return {
       room: { path: room.path, fm: room.note.frontmatter, content: room.note.content, revision: room.note.revision },
+      ...(viewerReputation && { viewerLevel: viewerReputation.level, viewerXp: viewerReputation.xp, viewerLevelLabel: viewerReputation.label }),
       messages: await Promise.all(selected.map(async ({ note, content, revision }) => ({
         path: note.path,
         messageId: note.frontmatter.message_id,
@@ -209,6 +217,8 @@ export class ChatService {
         workflowStatusReason: note.frontmatter.workflow_status_reason,
         workflowStatusUpdatedAt: note.frontmatter.workflow_status_updated_at,
         moderationStatus: moderationStatus(note.frontmatter),
+        authorLevel: messageReputations.get(String(note.frontmatter.author || '').toLowerCase())?.level ?? 0,
+        authorLevelLabel: messageReputations.get(String(note.frontmatter.author || '').toLowerCase())?.label ?? '뉴비',
         ...(params.includeThreadContext !== false && note.frontmatter.reply_to && { parent: await this.readMessageContext(roomId, note.frontmatter.reply_to) }),
       }))),
       totalMessages: result.total,
@@ -227,6 +237,7 @@ export class ChatService {
     const note = await this.fileSystem.readNote(path);
     if (note.frontmatter.mcpvault_type !== 'chat_message') throw new Error(`Not a chat message: ${messageId}`);
     if (isModerationHidden(note.frontmatter)) throw new Error('This chat message is unavailable because it was hidden by moderation');
+    const authorReputation = (await this.reputation.getMany([String(note.frontmatter.author || '')])).get(String(note.frontmatter.author || '').toLowerCase());
     return {
       path,
       fm: note.frontmatter,
@@ -234,6 +245,8 @@ export class ChatService {
       roomId,
       content: note.content,
       revision: note.revision,
+      authorLevel: authorReputation?.level ?? 0,
+      authorLevelLabel: authorReputation?.label ?? '뉴비',
       ...(params.includeReferences !== false && { resolvedReferences: await this.references.resolve(note.frontmatter.references) }),
     };
   }
@@ -242,7 +255,8 @@ export class ChatService {
     const path = messagePath(roomId, messageId);
     const parent = await this.fileSystem.readNote(path);
     if (parent.frontmatter.mcpvault_type !== 'chat_message') throw new Error(`Reply target is not a chat message: ${messageId}`);
-    if (isModerationHidden(parent.frontmatter)) return { path, messageId: parent.frontmatter.message_id, roomId: parent.frontmatter.room_id, author: parent.frontmatter.author, authorRole: parent.frontmatter.author_role, createdAt: parent.frontmatter.created_at, content: '[moderated]', replyTo: parent.frontmatter.reply_to, workflowStatus: workflowStatus(parent.frontmatter), moderated: true };
-    return { path, messageId: parent.frontmatter.message_id, roomId: parent.frontmatter.room_id, author: parent.frontmatter.author, authorRole: parent.frontmatter.author_role, createdAt: parent.frontmatter.created_at, content: parent.content, replyTo: parent.frontmatter.reply_to, workflowStatus: workflowStatus(parent.frontmatter) };
+    const parentReputation = (await this.reputation.getMany([String(parent.frontmatter.author || '')])).get(String(parent.frontmatter.author || '').toLowerCase());
+    if (isModerationHidden(parent.frontmatter)) return { path, messageId: parent.frontmatter.message_id, roomId: parent.frontmatter.room_id, author: parent.frontmatter.author, authorRole: parent.frontmatter.author_role, authorLevel: parentReputation?.level ?? 0, authorLevelLabel: parentReputation?.label ?? '뉴비', createdAt: parent.frontmatter.created_at, content: '[moderated]', replyTo: parent.frontmatter.reply_to, workflowStatus: workflowStatus(parent.frontmatter), moderated: true };
+    return { path, messageId: parent.frontmatter.message_id, roomId: parent.frontmatter.room_id, author: parent.frontmatter.author, authorRole: parent.frontmatter.author_role, authorLevel: parentReputation?.level ?? 0, authorLevelLabel: parentReputation?.label ?? '뉴비', createdAt: parent.frontmatter.created_at, content: parent.content, replyTo: parent.frontmatter.reply_to, workflowStatus: workflowStatus(parent.frontmatter) };
   }
 }

@@ -1,10 +1,12 @@
 import type { FileSystemService } from './filesystem.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ReferenceService } from './references.js';
+import type { ReputationService } from './reputation.js';
 export declare class ChatService {
     private readonly fileSystem;
     private readonly references;
-    constructor(fileSystem: FileSystemService, references: ReferenceService);
+    private readonly reputation;
+    constructor(fileSystem: FileSystemService, references: ReferenceService, reputation: ReputationService);
     createRoom(params: {
         principal?: ScopePrincipal;
         roomId: string;
@@ -33,6 +35,8 @@ export declare class ChatService {
             createdBy: any;
             createdAt: any;
             updatedAt: any;
+            creatorLevel: number;
+            creatorLevelLabel: string;
             moderationStatus: "hidden" | "quarantined" | "removed" | "visible" | "warned";
         }[];
         total: number;
@@ -89,6 +93,7 @@ export declare class ChatService {
         revision: string;
     }>;
     readRoomWithMessages(params: {
+        principal?: ScopePrincipal;
         roomId: string;
         limit?: number;
         afterMessageId?: string;
@@ -102,6 +107,9 @@ export declare class ChatService {
             content: string;
             revision: string;
         };
+        viewerLevel?: number;
+        viewerXp?: number;
+        viewerLevelLabel?: string;
         messages: any[];
         totalMessages: number;
         truncated: boolean;
@@ -120,6 +128,8 @@ export declare class ChatService {
         roomId: string;
         content: string;
         revision: string;
+        authorLevel: number;
+        authorLevelLabel: string;
         resolvedReferences?: Record<string, unknown>[];
     }>;
     private readMessageContext;

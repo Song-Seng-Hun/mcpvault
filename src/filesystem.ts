@@ -1859,6 +1859,10 @@ export class FileSystemService {
       throw new Error('limit must be a positive integer');
     }
     const limit = Math.min(requestedLimit, 500);
+    const requestedOffset = params.offset ?? 0;
+    if (!Number.isInteger(requestedOffset) || requestedOffset < 0) {
+      throw new Error('offset must be a non-negative integer');
+    }
     const sortOrder = params.sortOrder || 'asc';
     if (sortOrder !== 'asc' && sortOrder !== 'desc') {
       throw new Error('sortOrder must be asc or desc');
@@ -1915,9 +1919,9 @@ export class FileSystemService {
     });
 
     return {
-      notes: notes.slice(0, limit),
+      notes: notes.slice(requestedOffset, requestedOffset + limit),
       total: notes.length,
-      truncated: notes.length > limit,
+      truncated: requestedOffset + limit < notes.length,
     };
   }
 }

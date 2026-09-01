@@ -1,6 +1,7 @@
 import type { FileSystemService } from './filesystem.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import { normalizeScopeId } from './scopes.js';
+import type { ReputationService } from './reputation.js';
 
 const READ_STATE_ROOT = '_notifications';
 const MAX_SCAN = 500;
@@ -17,6 +18,8 @@ export interface NotificationEvent {
   createdAt: string;
   content: string;
   context?: string;
+  authorLevel?: number;
+  authorLevelLabel?: string;
   unread: boolean;
 }
 
@@ -50,7 +53,7 @@ function text(value: unknown, fallback = ''): string {
 }
 
 export class NotificationService {
-  constructor(private readonly fileSystem: FileSystemService) {}
+  constructor(private readonly fileSystem: FileSystemService, private readonly reputation: ReputationService) {}
 
   private async lastReadAt(principal: ScopePrincipal): Promise<{ value?: string; revision?: string }> {
     const path = readStatePath(principal);
@@ -76,6 +79,7 @@ export class NotificationService {
     const commentBodies = new Map(comments.notes.map(note => [text(note.frontmatter.comment_id), text(note.content).trim()]));
     const messageBodies = new Map(messages.notes.map(note => [text(note.frontmatter.message_id), text(note.content).trim()]));
     const events: NotificationEvent[] = [];
+    const reputations = await this.reputation.getMany([...comments.notes, ...messages.notes, ...posts.notes].map(note => text(note.frontmatter.author)));
 
     const add = (note: { path: string; frontmatter: Record<string, any>; content?: string }, kind: NotificationKind, sourceId: string) => {
       const author = text(note.frontmatter.author);
@@ -104,6 +108,7 @@ export class NotificationService {
         createdAt: text(note.frontmatter.created_at),
         content: text(note.content).trim(),
         context: contextParts.join(' | '),
+        ...(reputations.get(author.toLowerCase()) && { authorLevel: reputations.get(author.toLowerCase())!.level, authorLevelLabel: reputations.get(author.toLowerCase())!.label }),
         unread: true,
       });
     };
@@ -134,7 +139,9 @@ export class NotificationService {
         const notificationId = eventId('watch', note.path, `${type}:${target}:${sourceId}`);
         if (watchedEvents.has(notificationId) || text(note.frontmatter.author) === identity(principal)) continue;
         watchedEvents.add(notificationId);
-        events.push({ notificationId, kind: 'watch', sourcePath: note.path, sourceType: text(note.frontmatter.mcpvault_type), sourceId, author: text(note.frontmatter.author), createdAt: text(note.frontmatter.updated_at || note.frontmatter.created_at), content: text(note.content).trim(), context: `watched ${type}: ${target}`, unread: true });
+        const author = text(note.frontmatter.author);
+        const authorReputation = reputations.get(author.toLowerCase());
+        events.push({ notificationId, kind: 'watch', sourcePath: note.path, sourceType: text(note.frontmatter.mcpvault_type), sourceId, author, createdAt: text(note.frontmatter.updated_at || note.frontmatter.created_at), content: text(note.content).trim(), context: `watched ${type}: ${target}`, ...(authorReputation && { authorLevel: authorReputation.level, authorLevelLabel: authorReputation.label }), unread: true });
       }
     }
     return events.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));

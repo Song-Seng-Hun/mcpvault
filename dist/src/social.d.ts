@@ -2,6 +2,7 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ReferenceService } from './references.js';
+import type { ReputationService } from './reputation.js';
 export declare const COMMUNITY_POST_CATEGORIES: readonly ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase', 'agora'];
 export declare const AGORA_STANCES: readonly ['for', 'against', 'neutral'];
 export declare const MAX_COMMUNITY_TEXT_LENGTH = 280;
@@ -10,7 +11,8 @@ export declare class SocialService {
     private readonly fileSystem;
     private readonly access;
     private readonly references;
-    constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, references: ReferenceService);
+    private readonly reputation;
+    constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, references: ReferenceService, reputation: ReputationService);
     private findJournalEntry;
     writeJournalEntry(params: {
         principal?: ScopePrincipal;
@@ -116,8 +118,13 @@ export declare class SocialService {
             workflowStatusReason: any;
             workflowStatusUpdatedAt: any;
             moderationStatus: "hidden" | "quarantined" | "removed" | "visible" | "warned";
+            authorLevel: number;
+            authorLevelLabel: string;
             excerpt?: string;
         }[];
+        viewerLevel?: number;
+        viewerXp?: number;
+        viewerLevelLabel?: string;
         total: number;
         truncated: boolean;
     }>;
@@ -134,6 +141,11 @@ export declare class SocialService {
         content: string;
         revision: string;
         commentCount: number;
+        authorLevel: number;
+        authorLevelLabel: string;
+        viewerLevel?: number;
+        viewerXp?: number;
+        viewerLevelLabel?: string;
         workflowStatus: "archived" | "closed" | "in_progress" | "open" | "resolved" | "wont_fix";
         comments?: any[];
         commentsTruncated?: boolean;
@@ -152,6 +164,8 @@ export declare class SocialService {
         postId: string;
         content: string;
         revision: string;
+        authorLevel: number;
+        authorLevelLabel: string;
         resolvedReferences?: Record<string, unknown>[];
     }>;
     commentOnBlogPost(params: {
@@ -196,6 +210,7 @@ export declare class SocialService {
         revision: string;
     }>;
     listBlogComments(params: {
+        principal?: ScopePrincipal;
         slug: string;
         limit?: number;
         afterCommentId?: string;
@@ -205,6 +220,9 @@ export declare class SocialService {
         workflowStatus?: string;
     }): Promise<{
         comments: any[];
+        viewerLevel?: number;
+        viewerXp?: number;
+        viewerLevelLabel?: string;
         total: number;
         truncated: boolean;
         nextCursor: any;

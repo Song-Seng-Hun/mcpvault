@@ -27,8 +27,10 @@ function text(value, fallback = '') {
 }
 export class NotificationService {
     fileSystem;
-    constructor(fileSystem) {
+    reputation;
+    constructor(fileSystem, reputation) {
         this.fileSystem = fileSystem;
+        this.reputation = reputation;
     }
     async lastReadAt(principal) {
         const path = readStatePath(principal);
@@ -53,6 +55,7 @@ export class NotificationService {
         const commentBodies = new Map(comments.notes.map(note => [text(note.frontmatter.comment_id), text(note.content).trim()]));
         const messageBodies = new Map(messages.notes.map(note => [text(note.frontmatter.message_id), text(note.content).trim()]));
         const events = [];
+        const reputations = await this.reputation.getMany([...comments.notes, ...messages.notes, ...posts.notes].map(note => text(note.frontmatter.author)));
         const add = (note, kind, sourceId) => {
             const author = text(note.frontmatter.author);
             if (!author || author === target)
@@ -82,6 +85,7 @@ export class NotificationService {
                 createdAt: text(note.frontmatter.created_at),
                 content: text(note.content).trim(),
                 context: contextParts.join(' | '),
+                ...(reputations.get(author.toLowerCase()) && { authorLevel: reputations.get(author.toLowerCase()).level, authorLevelLabel: reputations.get(author.toLowerCase()).label }),
                 unread: true,
             });
         };
@@ -115,7 +119,9 @@ export class NotificationService {
                 if (watchedEvents.has(notificationId) || text(note.frontmatter.author) === identity(principal))
                     continue;
                 watchedEvents.add(notificationId);
-                events.push({ notificationId, kind: 'watch', sourcePath: note.path, sourceType: text(note.frontmatter.mcpvault_type), sourceId, author: text(note.frontmatter.author), createdAt: text(note.frontmatter.updated_at || note.frontmatter.created_at), content: text(note.content).trim(), context: `watched ${type}: ${target}`, unread: true });
+                const author = text(note.frontmatter.author);
+                const authorReputation = reputations.get(author.toLowerCase());
+                events.push({ notificationId, kind: 'watch', sourcePath: note.path, sourceType: text(note.frontmatter.mcpvault_type), sourceId, author, createdAt: text(note.frontmatter.updated_at || note.frontmatter.created_at), content: text(note.content).trim(), context: `watched ${type}: ${target}`, ...(authorReputation && { authorLevel: authorReputation.level, authorLevelLabel: authorReputation.label }), unread: true });
             }
         }
         return events.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));

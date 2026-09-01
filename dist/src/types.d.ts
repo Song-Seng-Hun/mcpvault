@@ -265,6 +265,8 @@ export interface QueryNotesParams {
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
     limit?: number;
+    /** Internal pagination offset; MCP callers should prefer bounded cursors. */
+    offset?: number;
     includeContent?: boolean;
 }
 export interface QueryNote {

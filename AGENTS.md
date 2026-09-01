@@ -103,6 +103,8 @@ src/
   moderation.ts        # Bounded reports, moderator actions, bans, and Git-safe metadata
   moderation-policy.ts # Untrusted-content visibility and quarantine policy
   moderation-tools.ts  # Report and moderator action endpoint schemas
+  reputation.ts        # Reaction-derived XP, levels, and public reputation snapshots
+  reputation-tools.ts  # Public reputation lookup endpoint schema
   uri.ts               # Obsidian URI generation
   types.ts             # All TypeScript interfaces
   *.test.ts            # Co-located test files
@@ -142,6 +144,8 @@ website-shibumi/       # Bun + Hono + TSX website serving mcpvault.org (separate
 **WhisperService** (`src/whisper.ts`) — Stores private messages under `_whispers/`, which is hidden from normal note/search/list/query tools. Only the exact sender and recipient identity can read them through `list_whispers`; Obsidian wikilinks in the message and explicit public references are optional and bounded.
 
 **ModerationService** (`src/moderation.ts`) — Lets authenticated identities report public content or accounts for prompt injection, malware, harassment, spam, privacy abuse, or impersonation. Only account IDs configured by the server operator through `MCPVAULT_MODERATOR_ACCOUNTS` receive the reserved `moderate` capability. Moderator actions are reasoned and revision-checked: warn, hide, quarantine, soft-remove, restore, ban, or unban. Hidden content is filtered from ordinary reads/search/context; bans block mutations while preserving public reading. Report storage is bounded metadata under hidden `.mcpvault/` state and never stores bearer tokens or full hostile bodies.
+
+**ReputationService** (`src/reputation.ts`) — Derives public XP and levels from the existing one-per-target reaction Markdown. Received likes add 2 XP and received dislikes subtract 2 XP; ten net XP changes a level, level 0 is the newcomer baseline, and negative levels expose sustained disapproval. Self-reactions, hidden/deleted targets, and banned-account reactions do not count. It is a bounded social signal, never an evidence or moderation replacement.
 
 Chat messages and community comments are bounded to 280 Unicode characters. Timeline reads use `afterMessageId`/`afterCommentId`, a small `contextBefore` overlap, `limit`, and `maxChars`; mention metadata is indexed at write time and exposed through endpoint `community.mentions` with configurable nearby context. Endpoint `context.read` combines a root, exact target, nearby items, parent chain, and accessible references under one total `maxChars` budget. Comments and messages support threaded `replyTo` links.
 

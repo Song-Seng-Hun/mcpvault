@@ -37,9 +37,11 @@ function requireParticipant(principal) {
 export class ChatService {
     fileSystem;
     references;
-    constructor(fileSystem, references) {
+    reputation;
+    constructor(fileSystem, references, reputation) {
         this.fileSystem = fileSystem;
         this.references = references;
+        this.reputation = reputation;
     }
     async createRoom(params) {
         const principal = requireParticipant(params.principal);
@@ -72,7 +74,9 @@ export class ChatService {
             pathPrefix: ROOM_ROOT, filters: { mcpvault_type: 'chat_room' },
             sortBy: 'created_at', sortOrder: 'desc', limit: 500,
         });
-        const rooms = result.notes.filter(note => requestedStatus === 'all' || note.frontmatter.status === requestedStatus).map(note => ({
+        const visibleRooms = result.notes.filter(note => requestedStatus === 'all' || note.frontmatter.status === requestedStatus);
+        const reputations = await this.reputation.getMany(visibleRooms.map(note => String(note.frontmatter.created_by || '')));
+        const rooms = visibleRooms.map(note => ({
             path: note.path,
             roomId: note.frontmatter.room_id,
             title: note.frontmatter.title,
@@ -81,6 +85,8 @@ export class ChatService {
             createdBy: note.frontmatter.created_by,
             createdAt: note.frontmatter.created_at,
             updatedAt: note.frontmatter.updated_at,
+            creatorLevel: reputations.get(String(note.frontmatter.created_by || '').toLowerCase())?.level ?? 0,
+            creatorLevelLabel: reputations.get(String(note.frontmatter.created_by || '').toLowerCase())?.label ?? '뉴비',
             moderationStatus: moderationStatus(note.frontmatter),
         }));
         const limit = Math.min(Math.max(Number(params.limit || 50), 1), 500);
@@ -199,8 +205,11 @@ export class ChatService {
             usedChars += contentLength;
         }
         const last = selected.at(-1)?.note.frontmatter.message_id;
+        const messageReputations = await this.reputation.getMany(selected.map(({ note }) => String(note.frontmatter.author || '')));
+        const viewerReputation = params.principal ? await this.reputation.getForPrincipal(params.principal) : undefined;
         return {
             room: { path: room.path, fm: room.note.frontmatter, content: room.note.content, revision: room.note.revision },
+            ...(viewerReputation && { viewerLevel: viewerReputation.level, viewerXp: viewerReputation.xp, viewerLevelLabel: viewerReputation.label }),
             messages: await Promise.all(selected.map(async ({ note, content, revision }) => ({
                 path: note.path,
                 messageId: note.frontmatter.message_id,
@@ -217,6 +226,8 @@ export class ChatService {
                 workflowStatusReason: note.frontmatter.workflow_status_reason,
                 workflowStatusUpdatedAt: note.frontmatter.workflow_status_updated_at,
                 moderationStatus: moderationStatus(note.frontmatter),
+                authorLevel: messageReputations.get(String(note.frontmatter.author || '').toLowerCase())?.level ?? 0,
+                authorLevelLabel: messageReputations.get(String(note.frontmatter.author || '').toLowerCase())?.label ?? '뉴비',
                 ...(params.includeThreadContext !== false && note.frontmatter.reply_to && { parent: await this.readMessageContext(roomId, note.frontmatter.reply_to) }),
             }))),
             totalMessages: result.total,
@@ -236,6 +247,7 @@ export class ChatService {
             throw new Error(`Not a chat message: ${messageId}`);
         if (isModerationHidden(note.frontmatter))
             throw new Error('This chat message is unavailable because it was hidden by moderation');
+        const authorReputation = (await this.reputation.getMany([String(note.frontmatter.author || '')])).get(String(note.frontmatter.author || '').toLowerCase());
         return {
             path,
             fm: note.frontmatter,
@@ -243,6 +255,8 @@ export class ChatService {
             roomId,
             content: note.content,
             revision: note.revision,
+            authorLevel: authorReputation?.level ?? 0,
+            authorLevelLabel: authorReputation?.label ?? '뉴비',
             ...(params.includeReferences !== false && { resolvedReferences: await this.references.resolve(note.frontmatter.references) }),
         };
     }
@@ -251,8 +265,9 @@ export class ChatService {
         const parent = await this.fileSystem.readNote(path);
         if (parent.frontmatter.mcpvault_type !== 'chat_message')
             throw new Error(`Reply target is not a chat message: ${messageId}`);
+        const parentReputation = (await this.reputation.getMany([String(parent.frontmatter.author || '')])).get(String(parent.frontmatter.author || '').toLowerCase());
         if (isModerationHidden(parent.frontmatter))
-            return { path, messageId: parent.frontmatter.message_id, roomId: parent.frontmatter.room_id, author: parent.frontmatter.author, authorRole: parent.frontmatter.author_role, createdAt: parent.frontmatter.created_at, content: '[moderated]', replyTo: parent.frontmatter.reply_to, workflowStatus: workflowStatus(parent.frontmatter), moderated: true };
-        return { path, messageId: parent.frontmatter.message_id, roomId: parent.frontmatter.room_id, author: parent.frontmatter.author, authorRole: parent.frontmatter.author_role, createdAt: parent.frontmatter.created_at, content: parent.content, replyTo: parent.frontmatter.reply_to, workflowStatus: workflowStatus(parent.frontmatter) };
+            return { path, messageId: parent.frontmatter.message_id, roomId: parent.frontmatter.room_id, author: parent.frontmatter.author, authorRole: parent.frontmatter.author_role, authorLevel: parentReputation?.level ?? 0, authorLevelLabel: parentReputation?.label ?? '뉴비', createdAt: parent.frontmatter.created_at, content: '[moderated]', replyTo: parent.frontmatter.reply_to, workflowStatus: workflowStatus(parent.frontmatter), moderated: true };
+        return { path, messageId: parent.frontmatter.message_id, roomId: parent.frontmatter.room_id, author: parent.frontmatter.author, authorRole: parent.frontmatter.author_role, authorLevel: parentReputation?.level ?? 0, authorLevelLabel: parentReputation?.label ?? '뉴비', createdAt: parent.frontmatter.created_at, content: parent.content, replyTo: parent.frontmatter.reply_to, workflowStatus: workflowStatus(parent.frontmatter) };
     }
 }

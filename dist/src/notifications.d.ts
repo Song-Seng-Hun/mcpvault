@@ -1,5 +1,6 @@
 import type { FileSystemService } from './filesystem.js';
 import type { ScopePrincipal } from './scope-auth.js';
+import type { ReputationService } from './reputation.js';
 type NotificationKind = 'mention' | 'reply' | 'activity' | 'watch';
 export interface NotificationEvent {
     notificationId: string;
@@ -11,11 +12,14 @@ export interface NotificationEvent {
     createdAt: string;
     content: string;
     context?: string;
+    authorLevel?: number;
+    authorLevelLabel?: string;
     unread: boolean;
 }
 export declare class NotificationService {
     private readonly fileSystem;
-    constructor(fileSystem: FileSystemService);
+    private readonly reputation;
+    constructor(fileSystem: FileSystemService, reputation: ReputationService);
     private lastReadAt;
     private publicEvents;
     list(params: {

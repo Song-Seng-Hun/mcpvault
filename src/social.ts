@@ -7,6 +7,7 @@ import type { ReferenceService } from './references.js';
 import { isClosedWorkflowStatus, matchesWorkflowFilter, workflowStatus } from './community-status.js';
 import { isModerationHidden, moderationStatus } from './moderation-policy.js';
 import { boundItems } from './search-limits.js';
+import type { ReputationService } from './reputation.js';
 
 const JOURNAL_ROOT = '_journal/entries';
 const BLOG_ROOT = 'Community/Posts';
@@ -93,6 +94,7 @@ export class SocialService {
     private readonly fileSystem: FileSystemService,
     private readonly access: ScopeAccessPolicy,
     private readonly references: ReferenceService,
+    private readonly reputation: ReputationService,
   ) {}
 
   private async findJournalEntry(agentId: string, entryId: string) {
@@ -284,7 +286,7 @@ export class SocialService {
       sortBy: 'updated_at', sortOrder: 'desc', limit: 500, includeContent: params.includeExcerpt === true,
     });
     const caller = params.principal ? identity(params.principal) : undefined;
-    const entries = result.notes.filter(note => {
+    const visibleNotes = result.notes.filter(note => {
       if (isModerationHidden(note.frontmatter)) return false;
       const status = String(note.frontmatter.status || 'published');
       if (requestedStatus !== 'all' && status !== requestedStatus) return false;
@@ -293,7 +295,10 @@ export class SocialService {
       if (params.category && String(note.frontmatter.category || 'discussion').toLowerCase() !== String(params.category).trim().toLowerCase()) return false;
       if (params.seriesId && String(note.frontmatter.series_id || '') !== normalizeScopeId(params.seriesId, 'seriesId')) return false;
       return matchesWorkflowFilter(note.frontmatter, params.workflowStatus || 'active');
-    }).map(note => ({
+    });
+    const reputations = await this.reputation.getMany(visibleNotes.map(note => String(note.frontmatter.author || '')));
+    const viewerReputation = params.principal ? await this.reputation.getForPrincipal(params.principal) : undefined;
+    const entries = visibleNotes.map(note => ({
       path: note.path,
       slug: note.frontmatter.post_id,
       title: note.frontmatter.title,
@@ -313,11 +318,13 @@ export class SocialService {
       workflowStatusReason: note.frontmatter.workflow_status_reason,
       workflowStatusUpdatedAt: note.frontmatter.workflow_status_updated_at,
       moderationStatus: moderationStatus(note.frontmatter),
+      authorLevel: reputations.get(String(note.frontmatter.author || '').toLowerCase())?.level ?? 0,
+      authorLevelLabel: reputations.get(String(note.frontmatter.author || '').toLowerCase())?.label ?? '뉴비',
       ...(params.includeExcerpt && { excerpt: String(note.content || '').slice(0, Math.min(Math.max(Number(params.excerptMaxChars ?? 280), 1), 1000)) }),
     }));
     const limit = Math.min(Math.max(Number(params.limit || 50), 1), 500);
     const bounded = boundItems(entries.slice(0, limit), Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000));
-    return { posts: bounded.items, total: entries.length, truncated: result.truncated || entries.length > limit || bounded.truncated };
+    return { posts: bounded.items, ...(viewerReputation && { viewerLevel: viewerReputation.level, viewerXp: viewerReputation.xp, viewerLevelLabel: viewerReputation.label }), total: entries.length, truncated: result.truncated || entries.length > limit || bounded.truncated };
   }
 
   async getBlogPost(params: { principal?: ScopePrincipal; slug: string; includeComments?: boolean; commentLimit?: number; commentMaxChars?: number; includeThreadContext?: boolean }) {
@@ -326,8 +333,13 @@ export class SocialService {
     if (note.frontmatter.status === 'draft' && caller !== note.frontmatter.author) {
       throw new Error('This draft is private to its author');
     }
-    const comments = await this.listBlogComments({ slug: params.slug, limit: params.includeComments ? (params.commentLimit ?? 10) : 1, maxChars: params.commentMaxChars ?? 4000, includeThreadContext: params.includeThreadContext !== false });
+    const comments = await this.listBlogComments({ slug: params.slug, ...(params.principal && { principal: params.principal }), limit: params.includeComments ? (params.commentLimit ?? 10) : 1, maxChars: params.commentMaxChars ?? 4000, includeThreadContext: params.includeThreadContext !== false });
+    const authorReputation = (await this.reputation.getMany([String(note.frontmatter.author || '')])).get(String(note.frontmatter.author || '').toLowerCase());
+    const viewerReputation = params.principal ? await this.reputation.getForPrincipal(params.principal) : undefined;
     return { path, fm: note.frontmatter, content: note.content, revision: note.revision, commentCount: comments.total,
+      authorLevel: authorReputation?.level ?? 0,
+      authorLevelLabel: authorReputation?.label ?? '뉴비',
+      ...(viewerReputation && { viewerLevel: viewerReputation.level, viewerXp: viewerReputation.xp, viewerLevelLabel: viewerReputation.label }),
       workflowStatus: workflowStatus(note.frontmatter),
       ...(params.includeComments && { comments: comments.comments, commentsTruncated: comments.truncated }),
       resolvedReferences: await this.references.resolve(note.frontmatter.references, params.principal), };
@@ -346,6 +358,7 @@ export class SocialService {
     const note = await this.fileSystem.readNote(path);
     if (note.frontmatter.mcpvault_type !== 'blog_comment') throw new Error(`Not a blog comment: ${commentId}`);
     if (isModerationHidden(note.frontmatter)) throw new Error('This community comment is unavailable because it was hidden by moderation');
+    const authorReputation = (await this.reputation.getMany([String(note.frontmatter.author || '')])).get(String(note.frontmatter.author || '').toLowerCase());
     return {
       path,
       fm: note.frontmatter,
@@ -353,6 +366,8 @@ export class SocialService {
       postId: slug,
       content: note.content,
       revision: note.revision,
+      authorLevel: authorReputation?.level ?? 0,
+      authorLevelLabel: authorReputation?.label ?? '뉴비',
       ...(params.includeReferences !== false && { resolvedReferences: await this.references.resolve(note.frontmatter.references, params.principal) }),
     };
   }
@@ -421,13 +436,15 @@ export class SocialService {
     return { success: true, commentId, postId: slug, deleted: true, revision: updated.revision };
   }
 
-  async listBlogComments(params: { slug: string; limit?: number; afterCommentId?: string; contextBefore?: number; maxChars?: number; includeThreadContext?: boolean; workflowStatus?: string }) {
+  async listBlogComments(params: { principal?: ScopePrincipal; slug: string; limit?: number; afterCommentId?: string; contextBefore?: number; maxChars?: number; includeThreadContext?: boolean; workflowStatus?: string }) {
     const slug = normalizeScopeId(params.slug, 'slug');
     const result = await this.fileSystem.queryNotes({
       pathPrefix: commentsRoot(slug), filters: { mcpvault_type: 'blog_comment' },
       sortBy: 'created_at', sortOrder: 'asc', limit: 500,
     });
     const notes = result.notes.filter(note => !isModerationHidden(note.frontmatter) && matchesWorkflowFilter(note.frontmatter, params.workflowStatus || 'all'));
+    const reputations = await this.reputation.getMany(notes.map(note => String(note.frontmatter.author || '')));
+    const viewerReputation = params.principal ? await this.reputation.getForPrincipal(params.principal) : undefined;
     const limit = windowNumber(params.limit, 20, 100);
     const maxChars = windowNumber(params.maxChars, 6000, 20000);
     const contextBefore = windowNumber(params.contextBefore, 2, 20) - 1;
@@ -464,8 +481,11 @@ export class SocialService {
         workflowStatusReason: note.frontmatter.workflow_status_reason,
         workflowStatusUpdatedAt: note.frontmatter.workflow_status_updated_at,
         moderationStatus: moderationStatus(note.frontmatter),
+        authorLevel: reputations.get(String(note.frontmatter.author || '').toLowerCase())?.level ?? 0,
+        authorLevelLabel: reputations.get(String(note.frontmatter.author || '').toLowerCase())?.label ?? '뉴비',
         ...(params.includeThreadContext !== false && note.frontmatter.reply_to && { parent: await this.readCommentContext(slug, note.frontmatter.reply_to) }),
       }))),
+      ...(viewerReputation && { viewerLevel: viewerReputation.level, viewerXp: viewerReputation.xp, viewerLevelLabel: viewerReputation.label }),
       total: notes.length,
       truncated: start > 0 || result.truncated || start + selected.length < notes.length,
       nextCursor: last,

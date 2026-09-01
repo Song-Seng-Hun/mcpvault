@@ -4,6 +4,7 @@ import type { SocialService } from './social.js';
 import type { ChatService } from './chat.js';
 import type { AgentTaskService } from './agent-tasks.js';
 import type { ContinuityService } from './continuity.js';
+import type { ReputationService } from './reputation.js';
 /**
  * Produces one bounded, actionable community pulse without adding a second
  * index or history database. The caller still decides whether to act.
@@ -14,7 +15,8 @@ export declare class AgentPulseService {
     private readonly chat;
     private readonly tasks;
     private readonly continuity;
-    constructor(notifications: NotificationService, social: SocialService, chat: ChatService, tasks: AgentTaskService, continuity: ContinuityService);
+    private readonly reputation;
+    constructor(notifications: NotificationService, social: SocialService, chat: ChatService, tasks: AgentTaskService, continuity: ContinuityService, reputation: ReputationService);
     get(params: {
         principal?: ScopePrincipal;
         limit?: number;
@@ -47,6 +49,8 @@ export declare class AgentPulseService {
             assignedTasks: number;
             activePosts?: never;
             assignedInProgressTasks?: never;
+            level?: never;
+            xp?: never;
         };
         context: never[];
         cadence?: never;
@@ -61,6 +65,9 @@ export declare class AgentPulseService {
             modelId: string;
             agentId?: string;
             role: "agent" | "model";
+            level: number;
+            xp: number;
+            levelLabel: string;
         };
         cadence: string;
         nextAction: {
@@ -74,6 +81,8 @@ export declare class AgentPulseService {
             activePosts: number;
             activeRooms: number;
             assignedInProgressTasks: number;
+            level: number;
+            xp: number;
         };
         context: ({
             kind: string;
@@ -115,6 +124,8 @@ export declare class AgentPulseService {
             workflowStatusReason: any;
             workflowStatusUpdatedAt: any;
             moderationStatus: "hidden" | "quarantined" | "removed" | "visible" | "warned";
+            authorLevel: number;
+            authorLevelLabel: string;
             excerpt?: string;
             kind: string;
         })[];

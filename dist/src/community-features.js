@@ -33,10 +33,12 @@ export class CommunityFeaturesService {
     fileSystem;
     access;
     auth;
-    constructor(fileSystem, access, auth) {
+    reputation;
+    constructor(fileSystem, access, auth, reputation) {
         this.fileSystem = fileSystem;
         this.access = access;
         this.auth = auth;
+        this.reputation = reputation;
     }
     async assertKnownIdentity(value) {
         const identities = await this.auth.listPrincipals();
@@ -46,6 +48,7 @@ export class CommunityFeaturesService {
     async listSeries(params) {
         const result = await this.fileSystem.queryNotes({ pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post', status: 'published' }, sortBy: 'created_at', sortOrder: 'asc', limit: MAX_SCAN, includeContent: params.includeExcerpts === true });
         const groups = new Map();
+        const reputations = await this.reputation.getMany(result.notes.map(note => String(note.frontmatter.author || '')));
         for (const note of result.notes) {
             if (isModerationHidden(note.frontmatter))
                 continue;
@@ -53,7 +56,8 @@ export class CommunityFeaturesService {
             if (!id || (params.seriesId && id !== normalizeScopeId(params.seriesId, 'seriesId')))
                 continue;
             const order = Number(note.frontmatter.series_order || 0);
-            const chapter = { slug: note.frontmatter.post_id, title: note.frontmatter.title, author: note.frontmatter.author, order, path: note.path, moderationStatus: moderationStatus(note.frontmatter), ...(params.includeExcerpts && { excerpt: String(note.content || '').slice(0, Math.min(positive(params.excerptMaxChars, 280, 1000), 1000)) }) };
+            const authorReputation = reputations.get(String(note.frontmatter.author || '').toLowerCase());
+            const chapter = { slug: note.frontmatter.post_id, title: note.frontmatter.title, author: note.frontmatter.author, authorLevel: authorReputation?.level ?? 0, authorLevelLabel: authorReputation?.label ?? '뉴비', order, path: note.path, moderationStatus: moderationStatus(note.frontmatter), ...(params.includeExcerpts && { excerpt: String(note.content || '').slice(0, Math.min(positive(params.excerptMaxChars, 280, 1000), 1000)) }) };
             const current = groups.get(id) || { seriesId: id, title: note.frontmatter.series_title || id, chapters: [] };
             current.chapters.push(chapter);
             groups.set(id, current);
@@ -71,7 +75,8 @@ export class CommunityFeaturesService {
             this.fileSystem.queryNotes({ pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post', author }, sortBy: 'updated_at', sortOrder: 'desc', limit: MAX_SCAN }),
             this.fileSystem.queryNotes({ pathPrefix: COMMENTS, filters: { mcpvault_type: 'blog_comment', author }, sortBy: 'created_at', sortOrder: 'desc', limit: MAX_SCAN }),
         ]);
-        const items = [...posts.notes.filter(n => !isModerationHidden(n.frontmatter)).map(n => ({ type: 'post', id: n.frontmatter.post_id, path: n.path, title: n.frontmatter.title, createdAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at })), ...comments.notes.filter(n => !isModerationHidden(n.frontmatter)).map(n => ({ type: 'comment', id: n.frontmatter.comment_id, postId: n.frontmatter.post_id, path: n.path, createdAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at }))].sort((a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)));
+        const authorReputations = await this.reputation.getMany([...posts.notes, ...comments.notes].map(note => String(note.frontmatter.author || '')));
+        const items = [...posts.notes.filter(n => !isModerationHidden(n.frontmatter)).map(n => ({ type: 'post', id: n.frontmatter.post_id, path: n.path, title: n.frontmatter.title, authorLevel: authorReputations.get(String(n.frontmatter.author || '').toLowerCase())?.level ?? 0, authorLevelLabel: authorReputations.get(String(n.frontmatter.author || '').toLowerCase())?.label ?? '뉴비', createdAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at })), ...comments.notes.filter(n => !isModerationHidden(n.frontmatter)).map(n => ({ type: 'comment', id: n.frontmatter.comment_id, postId: n.frontmatter.post_id, path: n.path, authorLevel: authorReputations.get(String(n.frontmatter.author || '').toLowerCase())?.level ?? 0, authorLevelLabel: authorReputations.get(String(n.frontmatter.author || '').toLowerCase())?.label ?? '뉴비', createdAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at }))].sort((a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)));
         return { author, items: items.slice(0, limit), postCount: posts.notes.length, commentCount: comments.notes.length, total: items.length, truncated: items.length > limit || posts.truncated || comments.truncated, maxChars };
     }
     async targetPath(targetType, targetId, postId) {
@@ -111,7 +116,7 @@ export class CommunityFeaturesService {
         }
         else if (params.active !== false) {
             const old = exists ? await this.fileSystem.readNote(path) : undefined;
-            await this.fileSystem.writeNote({ path, content: `${reaction}\n`, frontmatter: { mcpvault_type: 'reaction', reaction, target_type: params.targetType, target_id: params.targetId, actor: identity(params.principal), actor_role: params.principal.role, active: true, ...(old ? { created_at: old.frontmatter.created_at } : { created_at: now() }), updated_at: now() }, expectedRevision: old?.revision || 'missing' });
+            await this.fileSystem.writeNote({ path, content: `${reaction}\n`, frontmatter: { mcpvault_type: 'reaction', reaction, target_type: params.targetType, target_id: params.targetId, ...(params.targetType === 'comment' && params.postId && { post_id: normalizeScopeId(params.postId, 'postId') }), actor: identity(params.principal), actor_role: params.principal.role, active: true, ...(old ? { created_at: old.frontmatter.created_at } : { created_at: now() }), updated_at: now() }, expectedRevision: old?.revision || 'missing' });
         }
         return { success: true, active: params.active !== false, reaction, targetType: params.targetType, targetId: params.targetId, actor: identity(params.principal) };
     }
@@ -124,9 +129,12 @@ export class CommunityFeaturesService {
     }
     async listPopularPosts(params) {
         const result = await this.fileSystem.queryNotes({ pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post', status: 'published' }, sortBy: 'updated_at', sortOrder: 'desc', limit: MAX_SCAN });
-        const posts = await Promise.all(result.notes.filter(note => !isModerationHidden(note.frontmatter)).filter(note => !params.category || String(note.frontmatter.category || 'discussion').toLowerCase() === String(params.category).toLowerCase()).map(async (note) => {
+        const visibleNotes = result.notes.filter(note => !isModerationHidden(note.frontmatter)).filter(note => !params.category || String(note.frontmatter.category || 'discussion').toLowerCase() === String(params.category).toLowerCase());
+        const reputations = await this.reputation.getMany(visibleNotes.map(note => String(note.frontmatter.author || '')));
+        const posts = await Promise.all(visibleNotes.map(async (note) => {
             const reactions = await this.fileSystem.queryNotes({ pathPrefix: this.reactionRoot('post', String(note.frontmatter.post_id)), filters: { mcpvault_type: 'reaction', active: true }, limit: MAX_SCAN });
-            return { path: note.path, slug: note.frontmatter.post_id, title: note.frontmatter.title, author: note.frontmatter.author, category: note.frontmatter.category || 'discussion', tags: note.frontmatter.tags || [], likeCount: reactions.notes.filter(reaction => reaction.frontmatter.reaction === 'like').length, dislikeCount: reactions.notes.filter(reaction => reaction.frontmatter.reaction === 'dislike').length, moderationStatus: moderationStatus(note.frontmatter), createdAt: note.frontmatter.created_at, updatedAt: note.frontmatter.updated_at };
+            const authorReputation = reputations.get(String(note.frontmatter.author || '').toLowerCase());
+            return { path: note.path, slug: note.frontmatter.post_id, title: note.frontmatter.title, author: note.frontmatter.author, authorLevel: authorReputation?.level ?? 0, authorLevelLabel: authorReputation?.label ?? '뉴비', category: note.frontmatter.category || 'discussion', tags: note.frontmatter.tags || [], likeCount: reactions.notes.filter(reaction => reaction.frontmatter.reaction === 'like').length, dislikeCount: reactions.notes.filter(reaction => reaction.frontmatter.reaction === 'dislike').length, moderationStatus: moderationStatus(note.frontmatter), createdAt: note.frontmatter.created_at, updatedAt: note.frontmatter.updated_at };
         }));
         posts.sort((a, b) => b.likeCount - a.likeCount || String(b.updatedAt).localeCompare(String(a.updatedAt)));
         const limit = positive(params.limit, 50, 500);

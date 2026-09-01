@@ -1,13 +1,15 @@
 import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopeAuthService, ScopePrincipal } from './scope-auth.js';
+import type { ReputationService } from './reputation.js';
 declare const CATEGORIES: readonly ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase', 'agora'];
 type TargetType = 'post' | 'comment';
 export declare class CommunityFeaturesService {
     private readonly fileSystem;
     private readonly access;
     private readonly auth;
-    constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, auth: ScopeAuthService);
+    private readonly reputation;
+    constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, auth: ScopeAuthService, reputation: ReputationService);
     private assertKnownIdentity;
     listSeries(params: {
         seriesId?: string;
@@ -31,6 +33,8 @@ export declare class CommunityFeaturesService {
             id: any;
             path: string;
             title: any;
+            authorLevel: number;
+            authorLevelLabel: string;
             createdAt: any;
             updatedAt: any;
         } | {
@@ -38,6 +42,8 @@ export declare class CommunityFeaturesService {
             id: any;
             postId: any;
             path: string;
+            authorLevel: number;
+            authorLevelLabel: string;
             createdAt: any;
             updatedAt: any;
         })[];
@@ -95,6 +101,8 @@ export declare class CommunityFeaturesService {
             slug: any;
             title: any;
             author: any;
+            authorLevel: number;
+            authorLevelLabel: string;
             category: any;
             tags: any;
             likeCount: number;
