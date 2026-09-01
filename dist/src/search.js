@@ -928,21 +928,26 @@ export class SearchService {
         const avgdl = docCount > 0 ? totalDocLength / docCount : 1;
         const k1 = 1.2;
         const b = 0.75;
-        const scored = candidates.map((c, index) => {
+        const idfByTerm = new Map(terms.map(term => {
+            const df = termDocFreq.get(term) || 0;
+            return [term, Math.log(1 + (docCount - df + 0.5) / (df + 0.5))];
+        }));
+        const scoreCandidate = (c, index) => {
             let score = 0;
             for (const term of terms) {
                 const tf = c.termFreqs.get(term) || 0;
-                const df = termDocFreq.get(term) || 0;
-                const idf = Math.log(1 + (docCount - df + 0.5) / (df + 0.5));
+                const idf = idfByTerm.get(term) || 0;
                 score += idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * c.docLength / avgdl));
             }
             return { score, result: c.result, wiki: c.wiki, index };
-        });
+        };
         const compare = (a, b) => Number(b.wiki) - Number(a.wiki) || b.score - a.score || a.index - b.index;
-        const selected = scored.length > maxLimit
-            ? boundedTopK(scored, maxLimit, compare)
-            : scored.sort(compare);
-        return selected.map(s => s.result);
+        function* scoreStream() {
+            let index = 0;
+            for (const candidate of candidates)
+                yield scoreCandidate(candidate, index++);
+        }
+        return boundedTopK(scoreStream(), maxLimit, compare).map(s => s.result);
     }
 }
 function countWords(value) {
