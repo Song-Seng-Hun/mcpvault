@@ -135,6 +135,21 @@ export declare class SocialService {
         commentsTruncated?: boolean;
         resolvedReferences: Record<string, unknown>[];
     }>;
+    /** Read one comment directly so context-oriented callers do not need to scan a timeline. */
+    getBlogComment(params: {
+        principal?: ScopePrincipal;
+        slug: string;
+        commentId: string;
+        includeReferences?: boolean;
+    }): Promise<{
+        path: string;
+        fm: Record<string, any>;
+        commentId: string;
+        postId: string;
+        content: string;
+        revision: string;
+        resolvedReferences?: Record<string, unknown>[];
+    }>;
     commentOnBlogPost(params: {
         principal?: ScopePrincipal;
         slug: string;

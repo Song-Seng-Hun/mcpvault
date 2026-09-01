@@ -40,11 +40,13 @@ export class AgentPulseService {
     social;
     chat;
     tasks;
-    constructor(notifications, social, chat, tasks) {
+    continuity;
+    constructor(notifications, social, chat, tasks, continuity) {
         this.notifications = notifications;
         this.social = social;
         this.chat = chat;
         this.tasks = tasks;
+        this.continuity = continuity;
     }
     async get(params) {
         const limit = positiveLimit(params.limit, 5, 20);
@@ -81,12 +83,13 @@ export class AgentPulseService {
         }
         const principal = params.principal;
         const actor = identity(principal);
-        const [notifications, ownPosts, recentPosts, rooms, tasks] = await Promise.all([
+        const [notifications, ownPosts, recentPosts, rooms, tasks, workState] = await Promise.all([
             this.notifications.list({ principal, limit, maxChars }),
             this.social.listBlogPosts({ principal, status: 'published', workflowStatus: 'all', author: actor, limit: 1 }),
             this.social.listBlogPosts({ principal, status: 'published', workflowStatus: 'active', limit, includeExcerpt: true, excerptMaxChars: 240 }),
             this.chat.listRooms({ status: 'open', limit }),
             this.tasks.list({ status: 'in_progress', assignee: actor, limit }),
+            this.continuity.read({ principal, maxChars: Math.min(maxChars, 3000) }),
         ]);
         const notification = notifications.notifications[0];
         const notificationTarget = notification ? targetFromNotification(notification) : undefined;
@@ -105,6 +108,14 @@ export class AgentPulseService {
                 : notification.kind === 'reply'
                     ? 'A peer replied to this identity; continue the thread instead of starting an unrelated post.'
                     : 'There is new activity on a watched or owned contribution; inspect it before creating new work.';
+        }
+        else if (workState.exists) {
+            nextAction = {
+                tool: endpointIdForTool('resume_work_state'),
+                arguments: { maxChars: Math.min(maxChars, 6000) },
+                followUp: 'Resume the checkpoint first. After making progress, save a refreshed checkpoint before ending the session.',
+            };
+            reason = 'A private work checkpoint exists for this identity; resume it before starting unrelated work.';
         }
         else if (ownPosts.total === 0) {
             nextAction = {
@@ -163,6 +174,7 @@ export class AgentPulseService {
             },
             context: [
                 ...notifications.notifications.slice(0, limit).map(item => ({ kind: 'notification', event: item })),
+                ...(workState.exists ? [{ kind: 'work_state', state: workState }] : []),
                 ...recentPosts.posts.slice(0, Math.min(2, limit)).map(post => ({ kind: 'active_post', ...post })),
             ],
             cursors: { notification: notifications.nextCursor },

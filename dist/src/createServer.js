@@ -36,6 +36,10 @@ import { ObsidianSearchService } from "./obsidian-search.js";
 import { getObsidianSearchTools } from "./obsidian-search-tools.js";
 import { AgentPulseService } from "./agent-pulse.js";
 import { getAgentPulseTools } from "./agent-pulse-tools.js";
+import { ContextService } from "./context.js";
+import { getContextTools } from "./context-tools.js";
+import { ContinuityService } from "./continuity.js";
+import { CONTINUITY_MUTATING_TOOLS, getContinuityTools } from "./continuity-tools.js";
 import { SemanticSearchService } from "./semantic-search.js";
 import { boundSearchResults, normalizeSearchMaxChars } from "./search-limits.js";
 import { EndpointRegistry } from "./endpoint-registry.js";
@@ -66,6 +70,7 @@ const MUTATING_TOOLS = new Set([
     ...NOTIFICATION_MUTATING_TOOLS,
     ...AGENT_TASK_MUTATING_TOOLS,
     ...COMMUNITY_FEATURE_MUTATING_TOOLS,
+    ...CONTINUITY_MUTATING_TOOLS,
 ]);
 const CAPABILITY_FOR_TOOL = {
     write_note: "write",
@@ -108,6 +113,7 @@ const CAPABILITY_FOR_TOOL = {
     update_agent_profile: "profile",
     create_agent_task: "task",
     update_agent_task: "task",
+    save_work_state: "journal",
 };
 const FIXED_MCP_TOOL_NAMES = new Set([
     'orient_wiki',
@@ -173,7 +179,9 @@ export function createServer(vaultPath, options = {}) {
     const agentTasks = new AgentTaskService(fileSystem, references, scopeAuth);
     const communityFeatures = new CommunityFeaturesService(fileSystem, scopeAccess, scopeAuth);
     const obsidianSearch = new ObsidianSearchService(resolvedVaultPath, pathFilter, scopeAccess);
-    const agentPulse = new AgentPulseService(notifications, social, chat, agentTasks);
+    const context = new ContextService(social, chat);
+    const continuity = new ContinuityService(fileSystem);
+    const agentPulse = new AgentPulseService(notifications, social, chat, agentTasks, continuity);
     const endpointRegistry = new EndpointRegistry();
     const server = new Server({ name, version }, {
         capabilities: { tools: {} },
@@ -385,6 +393,8 @@ export function createServer(vaultPath, options = {}) {
         ...getCommunityFeatureTools(),
         ...getObsidianSearchTools(),
         ...getAgentPulseTools(),
+        ...getContextTools(),
+        ...getContinuityTools(),
         {
             name: "list_all_tags",
             description: "List all tags across the vault with occurrence counts. Returns both frontmatter tags and inline #hashtags, deduplicated and sorted by frequency. Useful for discovering existing tags before creating or organizing notes.",
@@ -745,6 +755,38 @@ export function createServer(vaultPath, options = {}) {
                         ...(principal && { principal }),
                         limit: trimmedArgs.limit,
                         maxChars: trimmedArgs.maxChars,
+                    }), trimmedArgs.prettyPrint);
+                }
+                case "read_context": {
+                    return jsonResult(await context.read({
+                        ...(principal && { principal }),
+                        targetType: trimmedArgs.targetType,
+                        ...(typeof trimmedArgs.slug === 'string' && { slug: trimmedArgs.slug }),
+                        ...(typeof trimmedArgs.commentId === 'string' && { commentId: trimmedArgs.commentId }),
+                        ...(typeof trimmedArgs.roomId === 'string' && { roomId: trimmedArgs.roomId }),
+                        ...(typeof trimmedArgs.messageId === 'string' && { messageId: trimmedArgs.messageId }),
+                        ...(trimmedArgs.contextBefore !== undefined && { contextBefore: trimmedArgs.contextBefore }),
+                        ...(trimmedArgs.contextAfter !== undefined && { contextAfter: trimmedArgs.contextAfter }),
+                        ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
+                        ...(trimmedArgs.includeReferences !== undefined && { includeReferences: trimmedArgs.includeReferences }),
+                    }), trimmedArgs.prettyPrint);
+                }
+                case "save_work_state": {
+                    return jsonResult(await continuity.save({
+                        ...(principal && { principal }),
+                        topic: trimmedArgs.topic,
+                        summary: trimmedArgs.summary,
+                        nextAction: trimmedArgs.nextAction,
+                        ...(trimmedArgs.openQuestions !== undefined && { openQuestions: trimmedArgs.openQuestions }),
+                        ...(trimmedArgs.references !== undefined && { references: trimmedArgs.references }),
+                        ...(trimmedArgs.cursors !== undefined && { cursors: trimmedArgs.cursors }),
+                        ...(trimmedArgs.expectedRevision !== undefined && { expectedRevision: trimmedArgs.expectedRevision }),
+                    }), trimmedArgs.prettyPrint);
+                }
+                case "resume_work_state": {
+                    return jsonResult(await continuity.read({
+                        ...(principal && { principal }),
+                        ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
                     }), trimmedArgs.prettyPrint);
                 }
                 case "create_agent_scope": {

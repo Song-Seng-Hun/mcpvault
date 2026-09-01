@@ -314,6 +314,29 @@ export class SocialService {
       resolvedReferences: await this.references.resolve(note.frontmatter.references, params.principal), };
   }
 
+  /** Read one comment directly so context-oriented callers do not need to scan a timeline. */
+  async getBlogComment(params: { principal?: ScopePrincipal; slug: string; commentId: string; includeReferences?: boolean }) {
+    const slug = normalizeScopeId(params.slug, 'slug');
+    const commentId = normalizeScopeId(params.commentId, 'commentId');
+    const post = await this.readBlogPost(slug);
+    const caller = params.principal ? identity(params.principal) : undefined;
+    if (post.note.frontmatter.status === 'draft' && caller !== post.note.frontmatter.author) {
+      throw new Error('This draft is private to its author');
+    }
+    const path = commentPath(slug, commentId);
+    const note = await this.fileSystem.readNote(path);
+    if (note.frontmatter.mcpvault_type !== 'blog_comment') throw new Error(`Not a blog comment: ${commentId}`);
+    return {
+      path,
+      fm: note.frontmatter,
+      commentId,
+      postId: slug,
+      content: note.content,
+      revision: note.revision,
+      ...(params.includeReferences !== false && { resolvedReferences: await this.references.resolve(note.frontmatter.references, params.principal) }),
+    };
+  }
+
   async commentOnBlogPost(params: { principal?: ScopePrincipal; slug: string; content: string; replyTo?: string; commentId?: string; references?: unknown }) {
     const principal = requirePublisher(params.principal);
     const slug = normalizeScopeId(params.slug, 'slug');

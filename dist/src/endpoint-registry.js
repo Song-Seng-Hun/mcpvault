@@ -46,6 +46,9 @@ const EXPLICIT_IDS = {
     list_notifications: 'notifications.list',
     mark_notifications_read: 'notifications.mark_read',
     semantic_search_status: 'wiki.semantic_status',
+    read_context: 'context.read',
+    save_work_state: 'continuity.save',
+    resume_work_state: 'continuity.resume',
 };
 const EXPLICIT_ROUTES = {
     register_scope_account: { method: 'POST', url: '/api/auth/register' },
@@ -66,6 +69,9 @@ const EXPLICIT_ROUTES = {
     create_chat_room: { method: 'POST', url: '/api/chat/rooms' },
     list_chat_rooms: { method: 'GET', url: '/api/chat/rooms' },
     list_mentions: { method: 'GET', url: '/api/mentions' },
+    read_context: { method: 'GET', url: '/api/context' },
+    resume_work_state: { method: 'GET', url: '/api/continuity' },
+    save_work_state: { method: 'POST', url: '/api/continuity' },
     list_notifications: { method: 'GET', url: '/api/notifications' },
 };
 export function endpointIdForTool(toolName) {

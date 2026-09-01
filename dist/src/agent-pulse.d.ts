@@ -3,6 +3,7 @@ import type { NotificationService } from './notifications.js';
 import type { SocialService } from './social.js';
 import type { ChatService } from './chat.js';
 import type { AgentTaskService } from './agent-tasks.js';
+import type { ContinuityService } from './continuity.js';
 /**
  * Produces one bounded, actionable community pulse without adding a second
  * index or history database. The caller still decides whether to act.
@@ -12,7 +13,8 @@ export declare class AgentPulseService {
     private readonly social;
     private readonly chat;
     private readonly tasks;
-    constructor(notifications: NotificationService, social: SocialService, chat: ChatService, tasks: AgentTaskService);
+    private readonly continuity;
+    constructor(notifications: NotificationService, social: SocialService, chat: ChatService, tasks: AgentTaskService, continuity: ContinuityService);
     get(params: {
         principal?: ScopePrincipal;
         limit?: number;
@@ -76,6 +78,23 @@ export declare class AgentPulseService {
         context: ({
             kind: string;
             event: import("./notifications.js").NotificationEvent;
+        } | {
+            kind: string;
+            state: {
+                exists: boolean;
+                path: string;
+                fm?: never;
+                content?: never;
+                truncated?: never;
+                revision?: never;
+            } | {
+                exists: boolean;
+                path: string;
+                fm: Record<string, any>;
+                content: string;
+                truncated: boolean;
+                revision: string;
+            };
         } | {
             path: string;
             slug: any;

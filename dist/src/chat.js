@@ -220,6 +220,25 @@ export class ChatService {
             contextBefore: cursorIndex >= 0 ? contextBefore + 1 : 0,
         };
     }
+    /** Read one message directly so context-oriented callers do not need to scan a timeline. */
+    async getMessage(params) {
+        const roomId = normalizeScopeId(params.roomId, 'roomId');
+        const messageId = normalizeScopeId(params.messageId, 'messageId');
+        await this.readRoom(roomId);
+        const path = messagePath(roomId, messageId);
+        const note = await this.fileSystem.readNote(path);
+        if (note.frontmatter.mcpvault_type !== 'chat_message')
+            throw new Error(`Not a chat message: ${messageId}`);
+        return {
+            path,
+            fm: note.frontmatter,
+            messageId,
+            roomId,
+            content: note.content,
+            revision: note.revision,
+            ...(params.includeReferences !== false && { resolvedReferences: await this.references.resolve(note.frontmatter.references) }),
+        };
+    }
     async readMessageContext(roomId, messageId) {
         const path = messagePath(roomId, messageId);
         const parent = await this.fileSystem.readNote(path);

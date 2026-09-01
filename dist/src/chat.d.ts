@@ -106,6 +106,20 @@ export declare class ChatService {
         nextCursor: any;
         contextBefore: number;
     }>;
+    /** Read one message directly so context-oriented callers do not need to scan a timeline. */
+    getMessage(params: {
+        roomId: string;
+        messageId: string;
+        includeReferences?: boolean;
+    }): Promise<{
+        path: string;
+        fm: Record<string, any>;
+        messageId: string;
+        roomId: string;
+        content: string;
+        revision: string;
+        resolvedReferences?: Record<string, unknown>[];
+    }>;
     private readMessageContext;
 }
 //# sourceMappingURL=chat.d.ts.map
