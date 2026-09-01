@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 import type { PathFilter } from './pathfilter.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import { ScopeAccessPolicy } from './scope-access.js';
+import type { VaultFileCatalog } from './vault-catalog.js';
 import type { SearchParams, SearchResult } from './types.js';
 import { boundSearchResults, normalizeSearchLimit, normalizeSearchMaxChars } from './search-limits.js';
 import { generateObsidianUri } from './uri.js';
@@ -290,17 +291,28 @@ export class SemanticSearchService {
   private tableNamesCachedAt = 0;
   private unavailableUntil = 0;
   private lastError: string | undefined;
+  private readonly catalogUnsubscribe: (() => void) | undefined;
 
   constructor(
     vaultPath: string,
     private readonly pathFilter: PathFilter,
     private readonly accessPolicy = new ScopeAccessPolicy(),
+    private readonly catalog?: VaultFileCatalog,
   ) {
     this.vaultPath = resolve(vaultPath);
     this.indexPath = join(this.vaultPath, INDEX_DIR);
     this.manifestPath = join(this.indexPath, MANIFEST_FILE);
     this.workerLockPath = join(this.indexPath, WORKER_LOCK_FILE);
     this.manifestReady = this.loadManifest();
+    if (catalog) {
+      this.catalogUnsubscribe = catalog.subscribe((path, kind) => {
+        if (path && kind) this.notifyChange(path, kind);
+        else {
+          this.lastScanAt = 0;
+          if (this.semanticActive) this.scheduleIdleWork();
+        }
+      });
+    }
   }
 
   notifyChange(path: string, kind: ChangeKind): void {
@@ -310,6 +322,14 @@ export class SemanticSearchService {
       this.pending.set(normalized, { kind });
     }
     if (this.semanticActive) this.scheduleIdleWork();
+  }
+
+  close(): void {
+    this.catalogUnsubscribe?.();
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    if (this.unloadTimer) clearTimeout(this.unloadTimer);
+    this.idleTimer = undefined;
+    this.unloadTimer = undefined;
   }
 
   async search(params: SemanticSearchParams): Promise<SemanticSearchOutcome> {
@@ -444,7 +464,10 @@ export class SemanticSearchService {
     this.scanPromise = (async () => {
       const seen = new Set<string>();
       let manifestChanged = false;
-      for (const path of await this.findMarkdownFiles(this.vaultPath)) {
+      const paths = this.catalog
+        ? (await this.catalog.listNotePaths()).filter(path => isMarkdown(path))
+        : await this.findMarkdownFiles(this.vaultPath);
+      for (const path of paths) {
         const normalized = normalizePath(path);
         seen.add(normalized);
         if (!this.pathFilter.isAllowed(normalized)) continue;

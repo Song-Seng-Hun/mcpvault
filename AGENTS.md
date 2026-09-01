@@ -70,6 +70,7 @@ npx @modelcontextprotocol/inspector npm start /path/to/vault
 server.ts              # MCP server entry point, tool registration, request handlers
 src/
   filesystem.ts        # FileSystemService — all file operations with security
+  vault-catalog.ts     # Shared note-path inventory and filesystem watcher for read models
   vault-index.ts        # Disposable frontmatter/path read model with watcher invalidation
   frontmatter.ts       # FrontmatterHandler — YAML parsing via gray-matter
   pathfilter.ts        # PathFilter — security layer for path validation
@@ -116,6 +117,8 @@ website-shibumi/       # Bun + Hono + TSX website serving mcpvault.org (separate
 ### Core Components
 
 **server.ts** — Entry point. Registers the MCP tool set for notes, collaboration, private scopes, LLM Wiki, social journaling/community, and revision history; handles CLI args (--help, --version, --read-only, vault path), initializes services, and routes tool calls through a bounded in-process concurrency gate. Read-only mode hides mutating tools and rejects direct mutation calls. Auto-trims whitespace from all path arguments. Exits on stdin EOF / SIGTERM / SIGINT (graceful `server.close()`), otherwise hosts orphan the process (#159).
+
+**VaultFileCatalog** (`src/vault-catalog.ts`) — Shares one bounded recursive note-path inventory and one filesystem watcher between the metadata, lexical-search, and semantic-search read models. Direct mutations invalidate the catalog without broadcasting duplicate model changes; external Markdown events are fanned out to each model, while restricted `.mcpvault`, `.git`, and `.obsidian` events are ignored. If recursive watchers are unavailable, the catalog falls back to periodic reconciliation. Markdown/Git remain authoritative.
 
 **FileSystemService** (`src/filesystem.ts`) — Orchestrates file ops with security. Path resolution and traversal prevention. Implements: read, write, patch, delete, move, list, batch read, outline and line-range reads, frontmatter update, tag management, vault stats. Uses native `fs/promises`. Production `queryNotes` uses the disposable `VaultMetadataIndex` read model when available, narrows exact scalar/array frontmatter filters and path prefixes through in-memory postings, briefly caches shared candidate paths under a total-row budget, reuses cached sorted metadata rows with binary-seek keyset cursors under a total-row budget (while retaining offset compatibility), can skip exact totals for page-only internal reads, and persists only derived metadata in a bounded atomic `.mcpvault/metadata-index.snapshot.bin` cache that is stat-validated on restart. Fallback sorted pages use bounded top-K selection, candidates are filtered through the caller's access predicate, and note bodies are read only for the bounded selected page.
 

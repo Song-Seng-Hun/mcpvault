@@ -164,6 +164,7 @@ function decodeMetadataSnapshot(buffer) {
 export class VaultMetadataIndex {
     pathFilter;
     frontmatter;
+    catalog;
     vaultPath;
     entries = new Map();
     filterIndex = new Map();
@@ -181,15 +182,27 @@ export class VaultMetadataIndex {
     snapshotPending = false;
     watcher;
     watcherStarted = false;
+    catalogUnsubscribe;
     needsFullRefresh = true;
     lastFullRefreshAt = 0;
     firstList = true;
-    constructor(vaultPath, pathFilter, frontmatter) {
+    constructor(vaultPath, pathFilter, frontmatter, catalog) {
         this.pathFilter = pathFilter;
         this.frontmatter = frontmatter;
+        this.catalog = catalog;
         this.vaultPath = resolve(vaultPath);
         this.snapshotReady = this.loadSnapshot();
         this.ready = this.initialize();
+        if (catalog) {
+            this.catalogUnsubscribe = catalog.subscribe((path, kind) => {
+                if (path && kind)
+                    this.invalidate(path, kind);
+                else {
+                    this.clearQueryCaches();
+                    this.needsFullRefresh = true;
+                }
+            });
+        }
     }
     invalidate(path, kind) {
         const normalized = normalizePath(path);
@@ -324,6 +337,7 @@ export class VaultMetadataIndex {
         }
     }
     close() {
+        this.catalogUnsubscribe?.();
         this.watcher?.close();
         this.watcher = undefined;
         if (this.snapshotTimer)
@@ -331,6 +345,8 @@ export class VaultMetadataIndex {
         this.snapshotTimer = undefined;
     }
     startWatcher() {
+        if (this.catalog)
+            return;
         if (this.watcherStarted)
             return;
         this.watcherStarted = true;
@@ -366,7 +382,7 @@ export class VaultMetadataIndex {
             this.dirty.clear();
             this.needsFullRefresh = false;
             const next = new Map();
-            const paths = await this.findNotePaths(this.vaultPath);
+            const paths = this.catalog ? await this.catalog.listNotePaths() : await this.findNotePaths(this.vaultPath);
             for (let start = 0; start < paths.length; start += READ_BATCH_SIZE) {
                 const batch = paths.slice(start, start + READ_BATCH_SIZE);
                 const metadata = await Promise.all(batch.map(path => this.readEntry(path, this.entries.get(path))));

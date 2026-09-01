@@ -9,6 +9,7 @@ import type { RankCandidate, SearchParams, SearchResult } from './types.js';
 import { generateObsidianUri } from './uri.js';
 import { boundSearchResults, normalizeSearchLimit, normalizeSearchMaxChars } from './search-limits.js';
 import { isMarkdownModerationHidden } from './moderation-policy.js';
+import type { VaultFileCatalog } from './vault-catalog.js';
 
 const WIKI_TYPES = new Set(['schema', 'source', 'knowledge', 'issue']);
 const SEARCH_CACHE_TTL_MS = 5_000;
@@ -239,15 +240,22 @@ export class SearchService {
   private snapshotWrite: Promise<void> | undefined;
   private snapshotPending = false;
   private watcher: FSWatcher | undefined;
+  private readonly catalogUnsubscribe: (() => void) | undefined;
   private lastIndexReconcileAt = 0;
   private needsFullReconcile = true;
 
   constructor(
     vaultPath: string,
-    private pathFilter: PathFilter
+    private pathFilter: PathFilter,
+    private readonly catalog?: VaultFileCatalog,
   ) {
     this.vaultPath = resolve(vaultPath);
     this.snapshotReady = this.loadSnapshot();
+    if (catalog) {
+      this.catalogUnsubscribe = catalog.subscribe((path, kind) => {
+        this.invalidate(path, kind);
+      });
+    }
   }
 
   /**
@@ -268,6 +276,7 @@ export class SearchService {
   }
 
   close(): void {
+    this.catalogUnsubscribe?.();
     this.watcher?.close();
     this.watcher = undefined;
     this.directoryCache.clear();
@@ -588,6 +597,7 @@ export class SearchService {
   }
 
   private startWatcher(): void {
+    if (this.catalog) return;
     if (this.watcher) return;
     try {
       this.watcher = watch(this.vaultPath, { recursive: true }, (_event, filename) => {
@@ -617,7 +627,9 @@ export class SearchService {
   private async refreshAll(): Promise<void> {
     if (this.indexRefresh) return this.indexRefresh;
     this.indexRefresh = (async () => {
-      const paths = await this.findMarkdownFiles(this.vaultPath);
+      const paths = this.catalog
+        ? (await this.catalog.listNotePaths()).filter(path => path.toLowerCase().endsWith('.md')).map(path => join(this.vaultPath, path))
+        : await this.findMarkdownFiles(this.vaultPath);
       const next = new Map<string, IndexedDocument>();
       for (let start = 0; start < paths.length; start += INDEX_READ_BATCH_SIZE) {
         const batch = paths.slice(start, start + INDEX_READ_BATCH_SIZE);

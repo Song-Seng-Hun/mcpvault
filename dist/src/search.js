@@ -160,6 +160,7 @@ function normalizeSubtree(p) {
 }
 export class SearchService {
     pathFilter;
+    catalog;
     vaultPath;
     cache = new Map();
     inFlight = new Map();
@@ -183,12 +184,19 @@ export class SearchService {
     snapshotWrite;
     snapshotPending = false;
     watcher;
+    catalogUnsubscribe;
     lastIndexReconcileAt = 0;
     needsFullReconcile = true;
-    constructor(vaultPath, pathFilter) {
+    constructor(vaultPath, pathFilter, catalog) {
         this.pathFilter = pathFilter;
+        this.catalog = catalog;
         this.vaultPath = resolve(vaultPath);
         this.snapshotReady = this.loadSnapshot();
+        if (catalog) {
+            this.catalogUnsubscribe = catalog.subscribe((path, kind) => {
+                this.invalidate(path, kind);
+            });
+        }
     }
     /**
      * Search is derived from Markdown, so a short cache is safe and useful for
@@ -211,6 +219,7 @@ export class SearchService {
             this.needsFullReconcile = true;
     }
     close() {
+        this.catalogUnsubscribe?.();
         this.watcher?.close();
         this.watcher = undefined;
         this.directoryCache.clear();
@@ -524,6 +533,8 @@ export class SearchService {
             await this.refreshAll();
     }
     startWatcher() {
+        if (this.catalog)
+            return;
         if (this.watcher)
             return;
         try {
@@ -557,7 +568,9 @@ export class SearchService {
         if (this.indexRefresh)
             return this.indexRefresh;
         this.indexRefresh = (async () => {
-            const paths = await this.findMarkdownFiles(this.vaultPath);
+            const paths = this.catalog
+                ? (await this.catalog.listNotePaths()).filter(path => path.toLowerCase().endsWith('.md')).map(path => join(this.vaultPath, path))
+                : await this.findMarkdownFiles(this.vaultPath);
             const next = new Map();
             for (let start = 0; start < paths.length; start += INDEX_READ_BATCH_SIZE) {
                 const batch = paths.slice(start, start + INDEX_READ_BATCH_SIZE);

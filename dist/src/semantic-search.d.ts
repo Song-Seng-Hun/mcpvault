@@ -1,6 +1,7 @@
 import type { PathFilter } from './pathfilter.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import { ScopeAccessPolicy } from './scope-access.js';
+import type { VaultFileCatalog } from './vault-catalog.js';
 import type { SearchParams, SearchResult } from './types.js';
 type ChangeKind = 'upsert' | 'delete';
 interface SemanticSearchParams extends SearchParams {
@@ -32,6 +33,7 @@ export interface SemanticIndexStatus {
 export declare class SemanticSearchService {
     private readonly pathFilter;
     private readonly accessPolicy;
+    private readonly catalog?;
     private readonly vaultPath;
     private readonly indexPath;
     private readonly manifestPath;
@@ -55,8 +57,10 @@ export declare class SemanticSearchService {
     private tableNamesCachedAt;
     private unavailableUntil;
     private lastError;
-    constructor(vaultPath: string, pathFilter: PathFilter, accessPolicy?: ScopeAccessPolicy);
+    private readonly catalogUnsubscribe;
+    constructor(vaultPath: string, pathFilter: PathFilter, accessPolicy?: ScopeAccessPolicy, catalog?: VaultFileCatalog | undefined);
     notifyChange(path: string, kind: ChangeKind): void;
+    close(): void;
     search(params: SemanticSearchParams): Promise<SemanticSearchOutcome>;
     status(): SemanticIndexStatus;
     private indexedCount;

@@ -176,6 +176,7 @@ async function resultFromRow(row, vaultPath, includeRevision) {
 export class SemanticSearchService {
     pathFilter;
     accessPolicy;
+    catalog;
     vaultPath;
     indexPath;
     manifestPath;
@@ -199,14 +200,27 @@ export class SemanticSearchService {
     tableNamesCachedAt = 0;
     unavailableUntil = 0;
     lastError;
-    constructor(vaultPath, pathFilter, accessPolicy = new ScopeAccessPolicy()) {
+    catalogUnsubscribe;
+    constructor(vaultPath, pathFilter, accessPolicy = new ScopeAccessPolicy(), catalog) {
         this.pathFilter = pathFilter;
         this.accessPolicy = accessPolicy;
+        this.catalog = catalog;
         this.vaultPath = resolve(vaultPath);
         this.indexPath = join(this.vaultPath, INDEX_DIR);
         this.manifestPath = join(this.indexPath, MANIFEST_FILE);
         this.workerLockPath = join(this.indexPath, WORKER_LOCK_FILE);
         this.manifestReady = this.loadManifest();
+        if (catalog) {
+            this.catalogUnsubscribe = catalog.subscribe((path, kind) => {
+                if (path && kind)
+                    this.notifyChange(path, kind);
+                else {
+                    this.lastScanAt = 0;
+                    if (this.semanticActive)
+                        this.scheduleIdleWork();
+                }
+            });
+        }
     }
     notifyChange(path, kind) {
         const normalized = normalizePath(path);
@@ -217,6 +231,15 @@ export class SemanticSearchService {
         }
         if (this.semanticActive)
             this.scheduleIdleWork();
+    }
+    close() {
+        this.catalogUnsubscribe?.();
+        if (this.idleTimer)
+            clearTimeout(this.idleTimer);
+        if (this.unloadTimer)
+            clearTimeout(this.unloadTimer);
+        this.idleTimer = undefined;
+        this.unloadTimer = undefined;
     }
     async search(params) {
         const limit = normalizeSearchLimit(params.limit);
@@ -358,7 +381,10 @@ export class SemanticSearchService {
         this.scanPromise = (async () => {
             const seen = new Set();
             let manifestChanged = false;
-            for (const path of await this.findMarkdownFiles(this.vaultPath)) {
+            const paths = this.catalog
+                ? (await this.catalog.listNotePaths()).filter(path => isMarkdown(path))
+                : await this.findMarkdownFiles(this.vaultPath);
+            for (const path of paths) {
                 const normalized = normalizePath(path);
                 seen.add(normalized);
                 if (!this.pathFilter.isAllowed(normalized))

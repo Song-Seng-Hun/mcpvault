@@ -4,6 +4,7 @@ import { join, relative, resolve } from 'node:path';
 import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import type { FrontmatterHandler } from './frontmatter.js';
 import type { PathFilter } from './pathfilter.js';
+import type { VaultFileCatalog } from './vault-catalog.js';
 
 const FULL_REFRESH_INTERVAL_MS = 60_000;
 const READ_BATCH_SIZE = 32;
@@ -186,6 +187,7 @@ export class VaultMetadataIndex {
   private snapshotPending = false;
   private watcher: FSWatcher | undefined;
   private watcherStarted = false;
+  private readonly catalogUnsubscribe: (() => void) | undefined;
   private needsFullRefresh = true;
   private lastFullRefreshAt = 0;
   private firstList = true;
@@ -194,10 +196,20 @@ export class VaultMetadataIndex {
     vaultPath: string,
     private readonly pathFilter: PathFilter,
     private readonly frontmatter: FrontmatterHandler,
+    private readonly catalog?: VaultFileCatalog,
   ) {
     this.vaultPath = resolve(vaultPath);
     this.snapshotReady = this.loadSnapshot();
     this.ready = this.initialize();
+    if (catalog) {
+      this.catalogUnsubscribe = catalog.subscribe((path, kind) => {
+        if (path && kind) this.invalidate(path, kind);
+        else {
+          this.clearQueryCaches();
+          this.needsFullRefresh = true;
+        }
+      });
+    }
   }
 
   invalidate(path: string, kind: 'upsert' | 'delete'): void {
@@ -325,6 +337,7 @@ export class VaultMetadataIndex {
   }
 
   close(): void {
+    this.catalogUnsubscribe?.();
     this.watcher?.close();
     this.watcher = undefined;
     if (this.snapshotTimer) clearTimeout(this.snapshotTimer);
@@ -332,6 +345,7 @@ export class VaultMetadataIndex {
   }
 
   private startWatcher(): void {
+    if (this.catalog) return;
     if (this.watcherStarted) return;
     this.watcherStarted = true;
     try {
@@ -363,7 +377,7 @@ export class VaultMetadataIndex {
       this.dirty.clear();
       this.needsFullRefresh = false;
       const next = new Map<string, VaultIndexEntry>();
-      const paths = await this.findNotePaths(this.vaultPath);
+      const paths = this.catalog ? await this.catalog.listNotePaths() : await this.findNotePaths(this.vaultPath);
       for (let start = 0; start < paths.length; start += READ_BATCH_SIZE) {
         const batch = paths.slice(start, start + READ_BATCH_SIZE);
         const metadata = await Promise.all(batch.map(path => this.readEntry(path, this.entries.get(path))));
