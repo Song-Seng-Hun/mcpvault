@@ -9,6 +9,9 @@ const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_MIN_LENGTH = 12;
 const MAX_LOGIN_FAILURES = 5;
 const LOGIN_BLOCK_MS = 30_000;
+export const SCOPE_CAPABILITIES = ['write', 'publish', 'comment', 'chat', 'status', 'whisper', 'task', 'profile', 'journal'];
+const DEFAULT_MODEL_CAPABILITIES = ['write', 'publish', 'comment', 'chat', 'status', 'whisper', 'task', 'profile'];
+const DEFAULT_AGENT_CAPABILITIES = [...DEFAULT_MODEL_CAPABILITIES, 'journal'];
 function tokenDigest(token) {
     return createHash('sha256').update(token).digest('hex');
 }
@@ -60,6 +63,9 @@ export class ScopeAuthService {
         // Windows may ignore POSIX modes; on Unix this narrows permissions even
         // when the directory already existed with a permissive umask.
         await Promise.allSettled([chmod(directory, 0o700), chmod(this.authPath, 0o600)]);
+    }
+    defaultCapabilities(role) {
+        return [...(role === 'agent' ? DEFAULT_AGENT_CAPABILITIES : DEFAULT_MODEL_CAPABILITIES)];
     }
     async exclusive(operation) {
         let release;
@@ -118,6 +124,7 @@ export class ScopeAuthService {
                 modelId,
                 ...(agentId && { agentId }),
                 role: agentId ? 'agent' : 'model',
+                capabilities: this.defaultCapabilities(agentId ? 'agent' : 'model'),
             };
             database.accounts.push({
                 ...principal,
@@ -159,6 +166,9 @@ export class ScopeAuthService {
             modelId: account.modelId,
             ...(account.agentId && { agentId: account.agentId }),
             role: account.role,
+            capabilities: Array.isArray(account.capabilities)
+                ? account.capabilities.filter((capability) => SCOPE_CAPABILITIES.includes(capability))
+                : this.defaultCapabilities(account.role),
         };
         this.sessions.set(tokenDigest(accessToken), { principal, expiresAt });
         return { success: true, accessToken, expiresAt: new Date(expiresAt).toISOString(), principal };
@@ -174,6 +184,46 @@ export class ScopeAuthService {
             role: 'global',
             note: 'No access token supplied. Only the public global scope is accessible.',
         };
+    }
+    async listPrincipals() {
+        const database = await this.readDatabase();
+        return database.accounts.map(account => ({
+            accountId: account.accountId,
+            modelId: account.modelId,
+            ...(account.agentId && { agentId: account.agentId }),
+            role: account.role,
+            capabilities: Array.isArray(account.capabilities)
+                ? account.capabilities.filter((capability) => SCOPE_CAPABILITIES.includes(capability))
+                : this.defaultCapabilities(account.role),
+        }));
+    }
+    async updateAgentCapabilities(params) {
+        const sponsor = this.authenticate(params.accessToken);
+        if (!sponsor || sponsor.role !== 'model')
+            throw new Error('Only an authenticated model owner can change agent capabilities');
+        const agentId = normalizeScopeId(params.agentId, 'agentId');
+        if (!Array.isArray(params.capabilities) || params.capabilities.length === 0)
+            throw new Error('capabilities must be a non-empty array');
+        const capabilities = Array.from(new Set(params.capabilities.map(String)));
+        if (capabilities.some(capability => !SCOPE_CAPABILITIES.includes(capability))) {
+            throw new Error(`capabilities must be chosen from: ${SCOPE_CAPABILITIES.join(', ')}`);
+        }
+        return await this.exclusive(async () => {
+            const database = await this.readDatabase();
+            const account = database.accounts.find(candidate => candidate.agentId === agentId);
+            if (!account || account.modelId !== sponsor.modelId)
+                throw new Error(`Agent account '${agentId}' does not belong to this model scope`);
+            account.capabilities = capabilities;
+            await this.writeDatabase(database);
+            for (const [key, session] of this.sessions) {
+                if (session.principal.agentId === agentId)
+                    this.sessions.delete(key);
+            }
+            return { success: true, agentId, capabilities };
+        });
+    }
+    hasCapability(principal, capability) {
+        return Boolean(principal && (principal.capabilities || this.defaultCapabilities(principal.role)).includes(capability));
     }
     async changePassword(params) {
         const principal = this.authenticate(params.accessToken);

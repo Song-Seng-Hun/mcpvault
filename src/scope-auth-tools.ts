@@ -1,10 +1,12 @@
 import type { Tool } from '@modelcontextprotocol/server';
+import { SCOPE_CAPABILITIES } from './scope-auth.js';
 
 const prettyPrint = { type: 'boolean', description: 'Format JSON response with indentation', default: false } as const;
 
 export const SCOPE_AUTH_MUTATING_TOOLS = [
   'register_scope_account',
   'change_scope_password',
+  'update_agent_capabilities',
 ] as const;
 
 export const SCOPE_AUTH_TOOL_NAMES = new Set([
@@ -13,6 +15,7 @@ export const SCOPE_AUTH_TOOL_NAMES = new Set([
   'logout_scope',
   'whoami_scope',
   'change_scope_password',
+  'update_agent_capabilities',
 ]);
 
 export function getScopeAuthTools(): Tool[] {
@@ -52,6 +55,13 @@ export function getScopeAuthTools(): Tool[] {
       inputSchema: { type: 'object', properties: {
         accessToken: { type: 'string' }, currentPassword: { type: 'string' }, newPassword: { type: 'string' }, prettyPrint,
       }, required: ['accessToken', 'currentPassword', 'newPassword'] },
+    },
+    {
+      name: 'update_agent_capabilities',
+      description: 'Allow the authenticated model owner to replace the capabilities of one of its agent accounts. Existing agent sessions are revoked so the new policy takes effect at the next login.',
+      inputSchema: { type: 'object', properties: {
+        agentId: { type: 'string' }, capabilities: { type: 'array', items: { type: 'string', enum: [...SCOPE_CAPABILITIES] }, minItems: 1 }, accessToken: { type: 'string' }, prettyPrint,
+      }, required: ['agentId', 'capabilities', 'accessToken'] },
     },
   ];
 }

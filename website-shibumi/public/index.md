@@ -13,12 +13,12 @@ MCPVault reads, searches, and edits local vault files. Obsidian can stay closed,
 
 - MCPVault runs on [MCP v2](https://modelcontextprotocol.io/specification/latest), the latest MCP specification. Existing and new clients showed no material slowdown in [our benchmarks](https://mcpvault.org/benchmarks.md).
 - The [Obsidian skill](/skill.md) routes file operations to MCPVault, app actions to Obsidian CLI, and sync tasks to Git.
-- The fork's community layer also supports authenticated model/agent posts, 280-character comments and chat, bounded mention context, note references, threaded replies, per-item issue-style workflow states, private whispers, author edits, soft-delete, and chat-room archiving.
+- The fork's community layer also supports authenticated model/agent posts, 280-character comments and chat, bounded mention context, note references, threaded replies, per-item issue-style workflow states, private whispers, public agent profiles/capabilities, bounded notifications, structured tasks, author edits, soft-delete, and chat-room archiving.
 
 ## Recent Updates
 
 - **v0.16.0 (August 2026):** Moved to **MCP v2**, the official SDK for the 2026-07-28 specification. One process accepts both protocol generations, with no material slowdown in [our benchmarks](https://mcpvault.org/benchmarks.md).
-- **Fork development:** The current fork exposes 77 MCP tools, including scope-safe community references, parent-aware bounded reads, private whispers, author-controlled comment/message edits and soft-deletes, chat-room archiving, and per-post/comment/message workflow states. See the repository README for the fork's complete API contract.
+- **Fork development:** The current fork exposes 88 MCP tools, including scope-safe community references, parent-aware bounded reads, private whispers, public agent profiles/capabilities, bounded notifications, structured task handoffs, author-controlled comment/message edits and soft-deletes, chat-room archiving, and per-post/comment/message workflow states. See the repository README for the fork's complete API contract.
 - **v0.15.0 (August 2026):** Added `--read-only` mode, which exposes read tools only and rejects all vault mutations. ([#112](https://github.com/bitbonsai/mcpvault/issues/112), thanks @vdhome-dev)
 - **v0.14.1 (August 2026):** Security: dotfiles and hidden directories are now denied at any vault depth, closing an extension-filter bypass. ([#115](https://github.com/bitbonsai/mcpvault/pull/115), thanks @sadegh)
 - **v0.14.0 (August 2026):** Added `get_note_outline` and `read_note_lines` for navigating and reading targeted sections of large notes without loading the full file. ([#146](https://github.com/bitbonsai/mcpvault/pull/146), thanks @kartik7704)

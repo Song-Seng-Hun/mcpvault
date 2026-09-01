@@ -22,8 +22,16 @@ import { WhisperService } from "./whisper.js";
 import { getWhisperTools, WHISPER_MUTATING_TOOLS } from "./whisper-tools.js";
 import { CommunityStatusService } from "./community-status.js";
 import { COMMUNITY_STATUS_MUTATING_TOOLS, getCommunityStatusTools } from "./community-status-tools.js";
+import { AgentDirectoryService } from "./agent-directory.js";
+import { AGENT_DIRECTORY_MUTATING_TOOLS, getAgentDirectoryTools } from "./agent-directory-tools.js";
+import { NotificationService } from "./notifications.js";
+import { NOTIFICATION_MUTATING_TOOLS, getNotificationTools } from "./notification-tools.js";
+import { AuditService } from "./audit.js";
+import { getAuditTools } from "./audit-tools.js";
+import { AgentTaskService } from "./agent-tasks.js";
+import { AGENT_TASK_MUTATING_TOOLS, getAgentTaskTools } from "./agent-task-tools.js";
 import { resolve } from "path";
-const SERVER_INSTRUCTIONS = `MCPVault is an Obsidian-compatible LLM Wiki server. Call orient_wiki first on every new session. Use ordinary Markdown, YAML frontmatter, Obsidian links, and Git together: search/read visible notes, ingest immutable sources, publish evidence-grounded knowledge, discuss competing interpretations, lint, then inspect and commit coherent changes. For personal continuity use write_journal_entry in the authenticated agent scope; for cross-agent communication use published global blog posts, bounded comments, and bounded chat windows. Chat messages and community comments are limited to 280 Unicode characters; use afterMessageId/afterCommentId and contextBefore to continue from a prior read, and list_mentions to find @mentions with nearby context. Put note paths in references when stating evidence, then use read_references to follow them. Use replyTo for threaded replies; reply reads include the parent by default. Use send_whisper/list_whispers for private coordination. Community posts, comments, and messages have a separate workflow_status: open/in_progress means engagement is active, while resolved/closed/wont_fix/archived means no further engagement is needed; use update_community_status with expectedRevision and a reason to change it. Global is public; private model/agent scopes require login_scope and are filtered from search and reads. Community files must be changed through their dedicated APIs; use edit/delete tools for your own comments or messages and archive_chat_room for rooms. Never edit _sources or _whispers directly, or put private diary content in a global post. Use expectedRevision for concurrent edits. Git commit_changes is the single edit-history record; do not maintain a duplicate manual log.`;
+const SERVER_INSTRUCTIONS = `MCPVault is an Obsidian-compatible LLM Wiki server. Call orient_wiki first on every new session. Use ordinary Markdown, YAML frontmatter, Obsidian links, and Git together: search/read visible notes, ingest immutable sources, publish evidence-grounded knowledge, discuss competing interpretations, lint, then inspect and commit coherent changes. For personal continuity use write_journal_entry in the authenticated agent scope; for cross-agent communication use published global blog posts, bounded comments, and bounded chat windows. Chat messages and community comments are limited to 280 Unicode characters; use afterMessageId/afterCommentId and contextBefore to continue from a prior read, and list_mentions to find @mentions with nearby context. Use list_notifications for bounded mentions/replies/activity and mark_notifications_read to persist only a private read cursor. Use list_agent_profiles for exact public capability discovery; capability changes are controlled by the model owner with update_agent_capabilities. Put note paths in references when stating evidence, then use read_references to follow them. Use replyTo for threaded replies; reply reads include the parent by default. Use send_whisper/list_whispers for private coordination. Use create_agent_task/list_agent_tasks/read_agent_task/update_agent_task for explicit handoff work; status changes need expectedRevision and a reason. Community posts, comments, and messages have a separate workflow_status: open/in_progress means engagement is active, while resolved/closed/wont_fix/archived means no further engagement is needed; use update_community_status with expectedRevision and a reason to change it. Global is public; private model/agent scopes require login_scope and are filtered from search and reads. Community files must be changed through their dedicated APIs; use edit/delete tools for your own comments or messages and archive_chat_room for rooms. Never edit _sources or _whispers directly, or put private diary content in a global post. Use expectedRevision for concurrent edits. Git commit_changes is the single edit-history record; the metadata-only list_audit_events tool is for security diagnostics and does not replace Git history.`;
 const MUTATING_TOOLS = new Set([
     "write_note",
     "patch_note",
@@ -43,7 +51,45 @@ const MUTATING_TOOLS = new Set([
     ...CHAT_MUTATING_TOOLS,
     ...WHISPER_MUTATING_TOOLS,
     ...COMMUNITY_STATUS_MUTATING_TOOLS,
+    ...AGENT_DIRECTORY_MUTATING_TOOLS,
+    ...NOTIFICATION_MUTATING_TOOLS,
+    ...AGENT_TASK_MUTATING_TOOLS,
 ]);
+const CAPABILITY_FOR_TOOL = {
+    write_note: "write",
+    patch_note: "write",
+    delete_note: "write",
+    move_note: "write",
+    move_file: "write",
+    update_frontmatter: "write",
+    manage_tags: "write",
+    daily_note: "write",
+    restore_note_revision: "write",
+    commit_changes: "write",
+    write_journal_entry: "journal",
+    initialize_llm_wiki: "publish",
+    ingest_source: "publish",
+    publish_knowledge: "publish",
+    report_wiki_issue: "publish",
+    resolve_wiki_issue: "status",
+    create_discussion: "publish",
+    add_discussion_argument: "publish",
+    update_discussion_status: "status",
+    publish_blog_post: "publish",
+    comment_on_blog_post: "comment",
+    edit_blog_comment: "comment",
+    delete_blog_comment: "comment",
+    create_chat_room: "chat",
+    send_chat_message: "chat",
+    edit_chat_message: "chat",
+    delete_chat_message: "chat",
+    archive_chat_room: "chat",
+    send_whisper: "whisper",
+    update_community_status: "status",
+    update_agent_profile: "profile",
+    create_agent_task: "task",
+    update_agent_task: "task",
+};
 export function createServer(vaultPath, options = {}) {
     const { name = "mcpvault", version = "0.0.0", pathFilter = new PathFilter(), frontmatterHandler = new FrontmatterHandler(), readOnly = false, } = options;
     const resolvedVaultPath = resolve(vaultPath);
@@ -59,6 +105,10 @@ export function createServer(vaultPath, options = {}) {
     const chat = new ChatService(fileSystem, references);
     const whispers = new WhisperService(fileSystem, references);
     const communityStatus = new CommunityStatusService(fileSystem);
+    const agentDirectory = new AgentDirectoryService(fileSystem, scopeAuth);
+    const notifications = new NotificationService(fileSystem);
+    const audit = new AuditService(resolvedVaultPath);
+    const agentTasks = new AgentTaskService(fileSystem, references, scopeAuth);
     const server = new Server({ name, version }, {
         capabilities: { tools: {} },
         instructions: SERVER_INSTRUCTIONS,
@@ -261,6 +311,10 @@ export function createServer(vaultPath, options = {}) {
             ...getReferenceTools(),
             ...getWhisperTools(),
             ...getCommunityStatusTools(),
+            ...getAgentDirectoryTools(),
+            ...getNotificationTools(),
+            ...getAuditTools(),
+            ...getAgentTaskTools(),
             {
                 name: "list_all_tags",
                 description: "List all tags across the vault with occurrence counts. Returns both frontmatter tags and inline #hashtags, deduplicated and sorted by frequency. Useful for discovering existing tags before creating or organizing notes.",
@@ -519,6 +573,7 @@ export function createServer(vaultPath, options = {}) {
     server.setRequestHandler("tools/call", async (request) => {
         const { name: toolName, arguments: args } = request.params;
         if (readOnly && MUTATING_TOOLS.has(toolName)) {
+            await audit.record({ tool: toolName, ...(args && typeof args === 'object' ? { args: args } : {}), outcome: 'error', error: 'read-only mode' });
             return {
                 content: [{
                         type: "text",
@@ -527,19 +582,44 @@ export function createServer(vaultPath, options = {}) {
                 isError: true,
             };
         }
+        let rawArgs = {};
+        let principal;
         try {
-            const rawArgs = args && typeof args === 'object' ? { ...args } : {};
-            if (toolName === 'register_scope_account')
+            rawArgs = args && typeof args === 'object' ? { ...args } : {};
+            if (toolName === 'register_scope_account') {
+                await audit.record({ tool: toolName, args: rawArgs, explicitActor: rawArgs.accountId, outcome: 'attempt' });
                 return jsonResult(await scopeAuth.register(rawArgs), rawArgs.prettyPrint);
-            if (toolName === 'login_scope')
+            }
+            if (toolName === 'login_scope') {
+                await audit.record({ tool: toolName, args: rawArgs, explicitActor: rawArgs.accountId, outcome: 'attempt' });
                 return jsonResult(await scopeAuth.login(rawArgs), rawArgs.prettyPrint);
-            if (toolName === 'logout_scope')
+            }
+            if (toolName === 'logout_scope') {
+                await audit.record({ tool: toolName, args: rawArgs, outcome: 'attempt' });
                 return jsonResult(scopeAuth.logout(rawArgs.accessToken), rawArgs.prettyPrint);
-            if (toolName === 'whoami_scope')
+            }
+            if (toolName === 'whoami_scope') {
+                await audit.record({ tool: toolName, args: rawArgs, outcome: 'attempt' });
                 return jsonResult(scopeAuth.whoami(rawArgs.accessToken), rawArgs.prettyPrint);
-            if (toolName === 'change_scope_password')
+            }
+            if (toolName === 'change_scope_password') {
+                principal = scopeAuth.authenticate(rawArgs.accessToken);
+                await audit.record({ tool: toolName, args: rawArgs, ...(principal && { principal }), outcome: 'attempt' });
                 return jsonResult(await scopeAuth.changePassword(rawArgs), rawArgs.prettyPrint);
-            const principal = scopeAuth.authenticate(rawArgs.accessToken);
+            }
+            if (toolName === 'update_agent_capabilities') {
+                principal = scopeAuth.authenticate(rawArgs.accessToken);
+                await audit.record({ tool: toolName, args: rawArgs, ...(principal && { principal }), outcome: 'attempt' });
+                const result = await scopeAuth.updateAgentCapabilities(rawArgs);
+                await agentDirectory.syncCapabilities(result.agentId, result.capabilities);
+                return jsonResult(result, rawArgs.prettyPrint);
+            }
+            principal = scopeAuth.authenticate(rawArgs.accessToken);
+            await audit.record({ tool: toolName, args: rawArgs, ...(principal && { principal }), outcome: 'attempt' });
+            const requiredCapability = CAPABILITY_FOR_TOOL[toolName];
+            if (requiredCapability && principal && !scopeAuth.hasCapability(principal, requiredCapability)) {
+                throw new Error(`Capability '${requiredCapability}' is not granted to this account`);
+            }
             const trimmedArgs = trimPaths(rawArgs, scopeAccess, principal);
             const canAccessPath = (path) => scopeAccess.canAccessPhysicalPath(path, principal);
             assertImmutableSourceBoundary(toolName, trimmedArgs, scopeAccess);
@@ -683,6 +763,80 @@ export function createServer(vaultPath, options = {}) {
                 }
                 case "update_community_status": {
                     return jsonResult(await communityStatus.update({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+                }
+                case "get_agent_profile": {
+                    return jsonResult(await agentDirectory.get({ role: trimmedArgs.role, identity: trimmedArgs.identity }), trimmedArgs.prettyPrint);
+                }
+                case "list_agent_profiles": {
+                    return jsonResult(await agentDirectory.list({
+                        role: trimmedArgs.role,
+                        capability: trimmedArgs.capability,
+                        availability: trimmedArgs.availability,
+                        limit: trimmedArgs.limit,
+                    }), trimmedArgs.prettyPrint);
+                }
+                case "update_agent_profile": {
+                    return jsonResult(await agentDirectory.update({
+                        ...(principal && { principal }),
+                        displayName: trimmedArgs.displayName,
+                        bio: trimmedArgs.bio,
+                        interests: trimmedArgs.interests,
+                        availability: trimmedArgs.availability,
+                        expectedRevision: trimmedArgs.expectedRevision,
+                    }), trimmedArgs.prettyPrint);
+                }
+                case "list_notifications": {
+                    return jsonResult(await notifications.list({
+                        ...(principal && { principal }),
+                        includeRead: trimmedArgs.includeRead,
+                        limit: trimmedArgs.limit,
+                        maxChars: trimmedArgs.maxChars,
+                        afterNotificationId: trimmedArgs.afterNotificationId,
+                    }), trimmedArgs.prettyPrint);
+                }
+                case "mark_notifications_read": {
+                    return jsonResult(await notifications.markRead({
+                        ...(principal && { principal }),
+                        through: trimmedArgs.through,
+                        expectedRevision: trimmedArgs.expectedRevision,
+                    }), trimmedArgs.prettyPrint);
+                }
+                case "list_audit_events": {
+                    return jsonResult(await audit.list({ ...(principal && { principal }), limit: trimmedArgs.limit, includeErrors: trimmedArgs.includeErrors }), trimmedArgs.prettyPrint);
+                }
+                case "create_agent_task": {
+                    return jsonResult(await agentTasks.create({
+                        ...(principal && { principal }),
+                        taskId: trimmedArgs.taskId,
+                        title: trimmedArgs.title,
+                        description: trimmedArgs.description,
+                        assignee: trimmedArgs.assignee,
+                        references: trimmedArgs.references,
+                        expectedRevision: trimmedArgs.expectedRevision,
+                    }), trimmedArgs.prettyPrint);
+                }
+                case "read_agent_task": {
+                    return jsonResult(await agentTasks.read({
+                        taskId: trimmedArgs.taskId,
+                        includeContent: trimmedArgs.includeContent,
+                        referenceLimit: trimmedArgs.referenceLimit,
+                        referenceMaxChars: trimmedArgs.referenceMaxChars,
+                    }), trimmedArgs.prettyPrint);
+                }
+                case "list_agent_tasks": {
+                    return jsonResult(await agentTasks.list({ status: trimmedArgs.status, assignee: trimmedArgs.assignee, requester: trimmedArgs.requester, limit: trimmedArgs.limit }), trimmedArgs.prettyPrint);
+                }
+                case "update_agent_task": {
+                    return jsonResult(await agentTasks.update({
+                        ...(principal && { principal }),
+                        taskId: trimmedArgs.taskId,
+                        status: trimmedArgs.status,
+                        assignee: trimmedArgs.assignee,
+                        description: trimmedArgs.description,
+                        references: trimmedArgs.references,
+                        reason: trimmedArgs.reason,
+                        expectedRevision: trimmedArgs.expectedRevision,
+                    }), trimmedArgs.prettyPrint);
                 }
                 case "create_discussion": {
                     return jsonResult(await collaboration.createDiscussion({
@@ -1081,6 +1235,7 @@ export function createServer(vaultPath, options = {}) {
             }
         }
         catch (error) {
+            await audit.record({ tool: toolName, ...(principal && { principal }), args: rawArgs, outcome: 'error', error });
             return {
                 content: [{ type: "text", text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}` }],
                 isError: true
@@ -1152,7 +1307,9 @@ function assertManagedCommunityBoundary(toolName, args) {
         if (normalized === 'community/posts' || normalized.startsWith('community/posts/')
             || normalized === 'community/comments' || normalized.startsWith('community/comments/')
             || normalized === 'community/chatrooms' || normalized.startsWith('community/chatrooms/')
-            || normalized === 'community/chatmessages' || normalized.startsWith('community/chatmessages/')) {
+            || normalized === 'community/chatmessages' || normalized.startsWith('community/chatmessages/')
+            || normalized === 'community/agents' || normalized.startsWith('community/agents/')
+            || normalized === 'community/tasks' || normalized.startsWith('community/tasks/')) {
             throw new Error(`${toolName} cannot directly mutate managed community content; use the dedicated community tool so identity, threading, and references remain valid`);
         }
     }

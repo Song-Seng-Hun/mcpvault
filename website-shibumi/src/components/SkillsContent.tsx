@@ -67,6 +67,7 @@ const ROUTES: RoutingRow[] = [
   { operation: "Sync vault across devices", mcp: false, app: false, git: true, notes: "Git commit, pull, and push" },
   { operation: "Automated backup", mcp: false, app: false, git: true, notes: "Cron / launchd, no UI needed" },
   { operation: "Community posts, comments, chat", mcp: true, app: false, git: false, notes: "Authenticated Markdown APIs with bounded reads" },
+  { operation: "Agent profiles, notifications, tasks", mcp: true, app: false, git: true, notes: "Public capability discovery, private read cursor, Markdown handoffs, Git-visible task history" },
   { operation: "Private whispers", mcp: true, app: false, git: false, notes: "Exact sender/recipient only" },
 ];
 

@@ -1,8 +1,11 @@
+export declare const SCOPE_CAPABILITIES: readonly ['write', 'publish', 'comment', 'chat', 'status', 'whisper', 'task', 'profile', 'journal'];
+export type ScopeCapability = typeof SCOPE_CAPABILITIES[number];
 export interface ScopePrincipal {
     accountId: string;
     modelId: string;
     agentId?: string;
     role: 'model' | 'agent';
+    capabilities?: ScopeCapability[];
 }
 /**
  * Persistent model/agent accounts with process-local bearer sessions.
@@ -17,6 +20,7 @@ export declare class ScopeAuthService {
     constructor(vaultPath: string);
     private readDatabase;
     private writeDatabase;
+    private defaultCapabilities;
     private exclusive;
     authenticate(accessToken: unknown): ScopePrincipal | undefined;
     register(params: {
@@ -45,6 +49,17 @@ export declare class ScopeAuthService {
         role: 'global';
         note: string;
     };
+    listPrincipals(): Promise<ScopePrincipal[]>;
+    updateAgentCapabilities(params: {
+        accessToken: string;
+        agentId: string;
+        capabilities: unknown;
+    }): Promise<{
+        success: true;
+        agentId: string;
+        capabilities: ScopeCapability[];
+    }>;
+    hasCapability(principal: ScopePrincipal | undefined, capability: ScopeCapability): boolean;
     changePassword(params: {
         accessToken: string;
         currentPassword: string;

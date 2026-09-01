@@ -25,7 +25,7 @@ test("createServer returns a Server instance", () => {
   expect(typeof server.connect).toBe("function");
 });
 
-test("server registers 77 tools", async () => {
+test("server registers 88 tools", async () => {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -37,7 +37,7 @@ test("server registers 77 tools", async () => {
   ]);
 
   const result = await client.listTools();
-  expect(result.tools).toHaveLength(77);
+  expect(result.tools).toHaveLength(88);
 
   const toolNames = result.tools.map((t) => t.name).sort();
   expect(toolNames).toEqual([
@@ -48,6 +48,7 @@ test("server registers 77 tools", async () => {
     "commit_changes",
     "compare_note_revisions",
     "create_agent_scope",
+    "create_agent_task",
     "create_chat_room",
     "create_discussion",
     "daily_note",
@@ -58,6 +59,7 @@ test("server registers 77 tools", async () => {
     "edit_chat_message",
     "find_orphan_notes",
     "find_unresolved_links",
+    "get_agent_profile",
     "get_backlinks",
     "get_daily_note",
     "get_discussion",
@@ -75,18 +77,23 @@ test("server registers 77 tools", async () => {
     "initialize_llm_wiki",
     "initialize_revision_history",
     "lint_wiki",
+    "list_agent_profiles",
+    "list_agent_tasks",
     "list_all_tags",
+    "list_audit_events",
     "list_blog_comments",
     "list_blog_posts",
     "list_chat_rooms",
     "list_directory",
     "list_journal_entries",
     "list_mentions",
+    "list_notifications",
     "list_tasks",
     "list_whispers",
     "login_scope",
     "logout_scope",
     "manage_tags",
+    "mark_notifications_read",
     "move_file",
     "move_note",
     "orient_wiki",
@@ -94,6 +101,7 @@ test("server registers 77 tools", async () => {
     "publish_blog_post",
     "publish_knowledge",
     "query_notes",
+    "read_agent_task",
     "read_blog_post",
     "read_chat_room",
     "read_journal_entry",
@@ -111,6 +119,9 @@ test("server registers 77 tools", async () => {
     "search_scoped_notes",
     "send_chat_message",
     "send_whisper",
+    "update_agent_capabilities",
+    "update_agent_profile",
+    "update_agent_task",
     "update_community_status",
     "update_discussion_status",
     "update_frontmatter",
@@ -302,7 +313,7 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
   try {
     const listedTools = await client.listTools();
     const toolNames = listedTools.tools.map((tool) => tool.name);
-    expect(toolNames).toHaveLength(41);
+    expect(toolNames).toHaveLength(47);
     expect(toolNames).toContain("read_note");
     expect(toolNames).toContain("search_notes");
     expect(toolNames).not.toContain("write_note");
@@ -368,6 +379,11 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
       { name: "archive_chat_room", arguments: { roomId: "blocked", expectedRevision: "blocked" } },
       { name: "send_whisper", arguments: { to: "blocked", content: "blocked" } },
       { name: "update_community_status", arguments: { targetType: "post", slug: "blocked", workflowStatus: "resolved", expectedRevision: "missing" } },
+      { name: "update_agent_capabilities", arguments: { agentId: "blocked", capabilities: ["chat"], accessToken: "blocked" } },
+      { name: "update_agent_profile", arguments: { expectedRevision: "missing", accessToken: "blocked" } },
+      { name: "mark_notifications_read", arguments: { accessToken: "blocked" } },
+      { name: "create_agent_task", arguments: { title: "blocked", description: "blocked", accessToken: "blocked" } },
+      { name: "update_agent_task", arguments: { taskId: "blocked", expectedRevision: "blocked", accessToken: "blocked" } },
     ];
 
     for (const mutation of mutations) {
