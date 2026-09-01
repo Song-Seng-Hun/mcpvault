@@ -20,7 +20,12 @@ interface DirectoryCacheEntry {
 }
 
 export type VaultCatalogChangeKind = 'upsert' | 'delete';
+export interface VaultCatalogChange {
+  path: string;
+  kind: VaultCatalogChangeKind;
+}
 export type VaultCatalogListener = (path?: string, kind?: VaultCatalogChangeKind) => void;
+export type VaultCatalogBatchListener = (changes?: readonly VaultCatalogChange[]) => void;
 
 function normalizePath(value: string): string {
   return value.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
@@ -41,6 +46,7 @@ export class VaultFileCatalog {
   private readonly cacheOwner = createDerivedCacheOwner('vault.directories');
   private readonly vaultPath: string;
   private readonly listeners = new Set<VaultCatalogListener>();
+  private readonly batchListeners = new Set<VaultCatalogBatchListener>();
   private paths: string[] | undefined;
   private allPaths: string[] | undefined;
   private refreshPromise: Promise<{ notes: string[]; all: string[] }> | undefined;
@@ -65,6 +71,13 @@ export class VaultFileCatalog {
     this.listeners.add(listener);
     this.startWatcher();
     return () => this.listeners.delete(listener);
+  }
+
+  /** Subscribe to coalesced watcher changes so read models invalidate once per batch. */
+  subscribeBatch(listener: VaultCatalogBatchListener): () => void {
+    this.batchListeners.add(listener);
+    this.startWatcher();
+    return () => this.batchListeners.delete(listener);
   }
 
   /** Mark a mutation already handled by the write path without broadcasting it twice. */
@@ -123,6 +136,7 @@ export class VaultFileCatalog {
     this.watcher?.close();
     this.watcher = undefined;
     this.listeners.clear();
+    this.batchListeners.clear();
     this.paths = undefined;
     this.allPaths = undefined;
     this.refreshPromise = undefined;
@@ -197,7 +211,7 @@ export class VaultFileCatalog {
     this.pendingFullRefresh = false;
     this.pendingChanges.clear();
     if (fullRefresh) {
-      this.emit();
+      this.emitBatch();
       return;
     }
     for (let start = 0; start < paths.length; start += WATCH_EVENT_STAT_BATCH_SIZE) {
@@ -211,7 +225,7 @@ export class VaultFileCatalog {
         }
       }));
       if (this.closed) return;
-      for (const state of states) this.emit(state.path, state.kind);
+      if (states.length > 0) this.emitBatch(states);
     }
   }
 
@@ -222,6 +236,21 @@ export class VaultFileCatalog {
       } catch {
         // A read model must not be able to break the shared watcher.
       }
+    }
+  }
+
+  private emitBatch(changes?: readonly VaultCatalogChange[]): void {
+    for (const listener of this.batchListeners) {
+      try {
+        listener(changes);
+      } catch {
+        // A read model must not be able to break the shared watcher.
+      }
+    }
+    if (changes) {
+      for (const change of changes) this.emit(change.path, change.kind);
+    } else {
+      this.emit();
     }
   }
 

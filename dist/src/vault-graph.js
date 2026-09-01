@@ -117,9 +117,9 @@ export class VaultGraphIndex {
         this.vaultIo = vaultIo;
         this.vaultPath = resolve(vaultPath);
         if (catalog) {
-            this.catalogUnsubscribe = catalog.subscribe((path, kind) => {
-                if (path && kind)
-                    this.invalidate(path, kind);
+            this.catalogUnsubscribe = catalog.subscribeBatch(changes => {
+                if (changes)
+                    this.invalidateMany(changes);
                 else {
                     this.needsFullRefresh = true;
                     this.dirty.clear();
@@ -146,6 +146,23 @@ export class VaultGraphIndex {
         }
         if (isNote(normalized) || this.pathFilter.isAllowed(normalized))
             this.dirty.add(normalized);
+    }
+    invalidateMany(changes) {
+        this.changeGeneration += 1;
+        for (const change of changes) {
+            const normalized = normalizePath(change.path);
+            if (!this.pathFilter.isAllowedForListing(normalized))
+                continue;
+            if (change.kind === 'delete') {
+                this.entries.delete(normalized);
+                this.allPaths.delete(normalized);
+            }
+            else {
+                this.allPaths.add(normalized);
+            }
+            if (isNote(normalized) || this.pathFilter.isAllowed(normalized))
+                this.dirty.add(normalized);
+        }
     }
     close() {
         this.catalogUnsubscribe?.();

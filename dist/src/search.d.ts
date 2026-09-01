@@ -45,6 +45,7 @@ export declare class SearchService {
      * the TTL also covers edits made directly in Obsidian.
      */
     invalidate(path?: string, kind?: 'upsert' | 'delete'): void;
+    private invalidateMany;
     close(): void;
     private loadSnapshot;
     private restoreSnapshot;
@@ -76,5 +77,6 @@ export declare class SearchService {
     private postingCandidates;
     private findMarkdownFiles;
     private rerank;
+    private materializeResult;
 }
 //# sourceMappingURL=search.d.ts.map

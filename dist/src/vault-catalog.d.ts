@@ -1,6 +1,11 @@
 import type { PathFilter } from './pathfilter.js';
 export type VaultCatalogChangeKind = 'upsert' | 'delete';
+export interface VaultCatalogChange {
+    path: string;
+    kind: VaultCatalogChangeKind;
+}
 export type VaultCatalogListener = (path?: string, kind?: VaultCatalogChangeKind) => void;
+export type VaultCatalogBatchListener = (changes?: readonly VaultCatalogChange[]) => void;
 /**
  * Shared, disposable vault file inventory for the read models.
  *
@@ -13,6 +18,7 @@ export declare class VaultFileCatalog {
     private readonly cacheOwner;
     private readonly vaultPath;
     private readonly listeners;
+    private readonly batchListeners;
     private paths;
     private allPaths;
     private refreshPromise;
@@ -30,6 +36,8 @@ export declare class VaultFileCatalog {
     private readonly dirtyDirectories;
     constructor(vaultPath: string, pathFilter: PathFilter);
     subscribe(listener: VaultCatalogListener): () => void;
+    /** Subscribe to coalesced watcher changes so read models invalidate once per batch. */
+    subscribeBatch(listener: VaultCatalogBatchListener): () => void;
     /** Mark a mutation already handled by the write path without broadcasting it twice. */
     invalidate(path?: string): void;
     listNotePaths(): Promise<string[]>;
@@ -46,6 +54,7 @@ export declare class VaultFileCatalog {
     private scheduleFlush;
     private flushPendingChanges;
     private emit;
+    private emitBatch;
     private refresh;
     private findPaths;
     private readDirectoryEntries;

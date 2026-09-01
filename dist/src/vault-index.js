@@ -211,9 +211,9 @@ export class VaultMetadataIndex {
         this.snapshotReady = this.loadSnapshot();
         this.ready = this.initialize();
         if (catalog) {
-            this.catalogUnsubscribe = catalog.subscribe((path, kind) => {
-                if (path && kind)
-                    this.invalidate(path, kind);
+            this.catalogUnsubscribe = catalog.subscribeBatch(changes => {
+                if (changes)
+                    this.invalidateMany(changes);
                 else {
                     this.clearQueryCaches();
                     this.needsFullRefresh = true;
@@ -222,19 +222,24 @@ export class VaultMetadataIndex {
         }
     }
     invalidate(path, kind) {
-        const normalized = normalizePath(path);
-        if (!isNote(normalized) || !this.pathFilter.isAllowed(normalized))
-            return;
+        this.invalidateMany([{ path, kind }]);
+    }
+    invalidateMany(changes) {
         this.clearQueryCaches();
-        if (kind === 'delete') {
-            const existing = this.entries.get(normalized);
-            if (existing)
-                this.removeFilterEntry(existing);
-            if (existing)
-                this.removePathEntry(existing);
-            this.entries.delete(normalized);
+        for (const change of changes) {
+            const normalized = normalizePath(change.path);
+            if (!isNote(normalized) || !this.pathFilter.isAllowed(normalized))
+                continue;
+            if (change.kind === 'delete') {
+                const existing = this.entries.get(normalized);
+                if (existing)
+                    this.removeFilterEntry(existing);
+                if (existing)
+                    this.removePathEntry(existing);
+                this.entries.delete(normalized);
+            }
+            this.dirty.add(normalized);
         }
-        this.dirty.add(normalized);
     }
     clearQueryCaches() {
         this.queryCache.clear();

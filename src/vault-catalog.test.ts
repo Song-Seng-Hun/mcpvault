@@ -47,13 +47,17 @@ describe('VaultFileCatalog', () => {
     await writeNote('Wiki/one.md', 'one');
     catalog = new VaultFileCatalog(vaultPath, new PathFilter());
     const changes: Array<{ path?: string; kind?: string }> = [];
+    const batches: Array<readonly { path: string; kind: string }[]> = [];
     const unsubscribe = catalog.subscribe((path, kind) => changes.push({ path, kind }));
+    const unsubscribeBatch = catalog.subscribeBatch(batch => batches.push(batch || []));
 
     (catalog as unknown as { onFilesystemEvent: (filename: string) => void }).onFilesystemEvent('Wiki/one.md');
     (catalog as unknown as { onFilesystemEvent: (filename: string) => void }).onFilesystemEvent('Wiki/one.md');
     await new Promise(resolve => setTimeout(resolve, 100));
 
     expect(changes).toEqual([{ path: 'Wiki/one.md', kind: 'upsert' }]);
+    expect(batches).toEqual([[{ path: 'Wiki/one.md', kind: 'upsert' }]]);
     unsubscribe();
+    unsubscribeBatch();
   });
 });

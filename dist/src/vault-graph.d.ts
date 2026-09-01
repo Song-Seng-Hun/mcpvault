@@ -28,6 +28,7 @@ export declare class VaultGraphIndex {
     private readonly catalogUnsubscribe;
     constructor(vaultPath: string, pathFilter: PathFilter, frontmatter: FrontmatterHandler, catalog?: VaultFileCatalog | undefined, vaultIo?: VaultIoCoordinator);
     invalidate(path?: string, kind?: VaultCatalogChangeKind): void;
+    private invalidateMany;
     close(): void;
     getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean): Promise<{
         target: string;

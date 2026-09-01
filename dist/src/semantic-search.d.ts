@@ -75,6 +75,7 @@ export declare class SemanticSearchService {
     private readonly catalogUnsubscribe;
     constructor(vaultPath: string, pathFilter: PathFilter, accessPolicy?: ScopeAccessPolicy, catalog?: VaultFileCatalog | undefined, vaultIo?: VaultIoCoordinator);
     notifyChange(path: string, kind: ChangeKind): void;
+    private notifyChanges;
     close(): void;
     private clearQueryCache;
     private clearVectorCache;

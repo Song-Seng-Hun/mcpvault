@@ -13,6 +13,7 @@ export interface DerivedCacheRegistrationOptions {
 export declare class DerivedCacheBudget {
     readonly maxBytes: number;
     private readonly entries;
+    private readonly lruHeap;
     private totalBytes;
     private clock;
     constructor(maxBytes?: number);
@@ -28,6 +29,9 @@ export declare class DerivedCacheBudget {
     private id;
     private removeById;
     private enforce;
+    private heapMoveUp;
+    private heapMoveDown;
+    private heapSwap;
 }
 export declare const derivedCacheBudget: DerivedCacheBudget;
 export declare function createDerivedCacheOwner(prefix: string): string;

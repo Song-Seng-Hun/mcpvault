@@ -9,7 +9,7 @@ import type { RankCandidate, SearchParams, SearchResult } from './types.js';
 import { generateObsidianUri } from './uri.js';
 import { boundSearchResults, boundedTopK, normalizeSearchLimit, normalizeSearchMaxChars } from './search-limits.js';
 import { isMarkdownModerationHidden } from './moderation-policy.js';
-import type { VaultFileCatalog } from './vault-catalog.js';
+import type { VaultCatalogChange, VaultFileCatalog } from './vault-catalog.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 import { VaultIoCoordinator } from './vault-io.js';
 
@@ -264,8 +264,9 @@ export class SearchService {
     this.vaultPath = resolve(vaultPath);
     this.snapshotReady = this.loadSnapshot();
     if (catalog) {
-      this.catalogUnsubscribe = catalog.subscribe((path, kind) => {
-        this.invalidate(path, kind);
+      this.catalogUnsubscribe = catalog.subscribeBatch(changes => {
+        if (changes) this.invalidateMany(changes);
+        else this.invalidate();
       });
     }
   }
@@ -276,6 +277,11 @@ export class SearchService {
    * the TTL also covers edits made directly in Obsidian.
    */
   invalidate(path?: string, kind: 'upsert' | 'delete' = 'upsert'): void {
+    if (path) this.invalidateMany([{ path, kind }]);
+    else this.invalidateMany();
+  }
+
+  private invalidateMany(changes?: readonly VaultCatalogChange[]): void {
     this.cacheGeneration += 1;
     this.cache.clear();
     derivedCacheBudget.clearOwner(this.cacheOwner);
@@ -283,13 +289,17 @@ export class SearchService {
     derivedCacheBudget.clearOwner(this.corpusCacheOwner);
     this.directoryCache.clear();
     derivedCacheBudget.clearOwner(this.directoryCacheOwner);
-    if (path) {
-      const normalized = path.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-      if (kind === 'delete') {
-        this.removeDocument(normalized);
-        this.maybeCompactGramDictionary();
-      } else this.dirtyDocuments.add(normalized);
-    } else this.needsFullReconcile = true;
+    if (changes) {
+      for (const change of changes) {
+        const normalized = change.path.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+        if (change.kind === 'delete') {
+          this.removeDocument(normalized);
+          this.maybeCompactGramDictionary();
+        } else this.dirtyDocuments.add(normalized);
+      }
+    } else {
+      this.needsFullReconcile = true;
+    }
   }
 
   close(): void {
@@ -523,63 +533,25 @@ export class SearchService {
           : -1;
 
         if (firstIndex !== -1 || filenameMatch) {
-          let excerpt: string;
-          let matchCount = 0;
-          let lineNumber = 0;
-
           const termFreqs = new Map<string, number>();
-
-          if (firstIndex !== -1) {
-            // Find the term that matched first for excerpt
-            const firstTermIdx = termIndices.indexOf(firstIndex);
-            const firstTerm = terms[firstTermIdx]!;
-
-            // Extract excerpt around first content match
-            const excerptStart = Math.max(0, firstIndex - 21);
-            const excerptEnd = Math.min(searchableText.length, firstIndex + firstTerm.length + 21);
-            excerpt = searchableText.slice(excerptStart, excerptEnd).trim();
-
-            // Add ellipsis if excerpt is truncated
-            if (excerptStart > 0) excerpt = '...' + excerpt;
-            if (excerptEnd < searchableText.length) excerpt = excerpt + '...';
-
-            // Count total content matches across all terms
-            for (const term of scoringTerms) {
-              let count = 0;
-              let searchIndex = 0;
-              while ((searchIndex = searchIn.indexOf(term, searchIndex)) !== -1) {
-                count++;
-                searchIndex += term.length;
-              }
-              termFreqs.set(term, count);
-              matchCount += count;
+          // Keep only scoring data here. Excerpts, match counts, and line
+          // numbers are materialized after Top-K ranking so a broad query does
+          // not allocate result payloads for every matching document.
+          for (const term of scoringTerms) {
+            let count = 0;
+            let searchIndex = 0;
+            while ((searchIndex = searchIn.indexOf(term, searchIndex)) !== -1) {
+              count++;
+              searchIndex += term.length;
             }
-
-            // Find line number of first match
-            const lines = searchableText.slice(0, firstIndex).split('\n');
-            lineNumber = lines.length;
-          } else {
-            // Filename-only match: use beginning of content as excerpt
-            excerpt = searchableText.slice(0, 50).trim();
-            if (searchableText.length > 50) excerpt = excerpt + '...';
-            matchCount = 0;
-            lineNumber = 0;
+            termFreqs.set(term, count);
           }
-
-          // Add filename match to count
-          if (filenameMatch) matchCount++;
-
           candidates.push({
-            result: {
-              p: relativePath,
-              t: title,
-              ex: excerpt,
-              mc: matchCount,
-              ln: lineNumber,
-              uri: generateObsidianUri(this.vaultPath, relativePath),
-              ...(document.isWiki && { wk: true as const }),
-              ...(params.includeRevisions && { rv: document.revision }),
-            },
+            documentId,
+            title,
+            firstIndex,
+            firstTermIndex: firstIndex === -1 ? -1 : termIndices.indexOf(firstIndex),
+            filenameMatch,
             termFreqs,
             docLength,
             wiki: document.isWiki
@@ -587,7 +559,8 @@ export class SearchService {
         }
     }
 
-    const results = boundSearchResults(this.rerank(candidates, scoringTerms, termDocFreq, docCount, totalDocLength, maxLimit), maxChars);
+    const ranked = this.rerank(candidates, scoringTerms, termDocFreq, docCount, totalDocLength, maxLimit);
+    const results = boundSearchResults(ranked.map(candidate => this.materializeResult(candidate, terms, scoringTerms, searchContent, searchFrontmatter, caseSensitive, params.includeRevisions === true)), maxChars);
     if (generation === this.cacheGeneration) {
       const cachedResults = results.map(result => ({ ...result }));
       const entry: SearchCacheEntry = { expiresAt: Date.now() + SEARCH_CACHE_TTL_MS, results: cachedResults };
@@ -1118,7 +1091,7 @@ export class SearchService {
     docCount: number,
     totalDocLength: number,
     maxLimit: number
-  ): SearchResult[] {
+  ): RankCandidate[] {
     const avgdl = docCount > 0 ? totalDocLength / docCount : 1;
     const k1 = 1.2;
     const b = 0.75;
@@ -1126,7 +1099,7 @@ export class SearchService {
       const df = termDocFreq.get(term) || 0;
       return [term, Math.log(1 + (docCount - df + 0.5) / (df + 0.5))] as const;
     }));
-    type ScoredCandidate = { score: number; result: SearchResult; wiki: boolean; index: number };
+    type ScoredCandidate = { score: number; candidate: RankCandidate; wiki: boolean; index: number };
     const scoreCandidate = (c: RankCandidate, index: number): ScoredCandidate => {
       let score = 0;
       for (const term of terms) {
@@ -1134,7 +1107,7 @@ export class SearchService {
         const idf = idfByTerm.get(term) || 0;
         score += idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * c.docLength / avgdl));
       }
-      return { score, result: c.result, wiki: c.wiki, index };
+      return { score, candidate: c, wiki: c.wiki, index };
     };
 
     const compare = (a: ScoredCandidate, b: ScoredCandidate) =>
@@ -1143,7 +1116,59 @@ export class SearchService {
       let index = 0;
       for (const candidate of candidates) yield scoreCandidate(candidate, index++);
     }
-    return boundedTopK(scoreStream(), maxLimit, compare).map(s => s.result);
+    return boundedTopK(scoreStream(), maxLimit, compare).map(s => s.candidate);
+  }
+
+  private materializeResult(
+    candidate: RankCandidate,
+    terms: string[],
+    scoringTerms: string[],
+    searchContent: boolean,
+    searchFrontmatter: boolean,
+    caseSensitive: boolean,
+    includeRevision: boolean,
+  ): SearchResult {
+    const document = this.documentsById.get(candidate.documentId);
+    if (!document) throw new Error(`Search document disappeared: ${candidate.documentId}`);
+    let searchableText = '';
+    if (searchContent && searchFrontmatter) searchableText = `${document.frontmatterText || ''}\n${document.body || ''}`;
+    else if (searchContent) searchableText = document.body || '';
+    else if (searchFrontmatter) searchableText = document.frontmatterText || '';
+    const searchIn = caseSensitive ? searchableText : searchableText.toLowerCase();
+    let excerpt: string;
+    let matchCount = candidate.filenameMatch ? 1 : 0;
+    let lineNumber = 0;
+    if (candidate.firstIndex !== -1) {
+      const firstTerm = terms[candidate.firstTermIndex]!;
+      const excerptStart = Math.max(0, candidate.firstIndex - 21);
+      const excerptEnd = Math.min(searchableText.length, candidate.firstIndex + firstTerm.length + 21);
+      excerpt = searchableText.slice(excerptStart, excerptEnd).trim();
+      if (excerptStart > 0) excerpt = `...${excerpt}`;
+      if (excerptEnd < searchableText.length) excerpt = `${excerpt}...`;
+      for (const term of scoringTerms) {
+        let count = 0;
+        let searchIndex = 0;
+        while ((searchIndex = searchIn.indexOf(term, searchIndex)) !== -1) {
+          count += 1;
+          searchIndex += term.length;
+        }
+        matchCount += count;
+      }
+      lineNumber = searchableText.slice(0, candidate.firstIndex).split('\n').length;
+    } else {
+      excerpt = searchableText.slice(0, 50).trim();
+      if (searchableText.length > 50) excerpt = `${excerpt}...`;
+    }
+    return {
+      p: document.relativePath,
+      t: candidate.title,
+      ex: excerpt,
+      mc: matchCount,
+      ln: lineNumber,
+      uri: generateObsidianUri(this.vaultPath, document.relativePath),
+      ...(document.isWiki && { wk: true as const }),
+      ...(includeRevision && { rv: document.revision }),
+    };
   }
 }
 

@@ -120,7 +120,11 @@ export interface SearchResult {
     rv?: string;
 }
 export interface RankCandidate {
-    result: SearchResult;
+    documentId: number;
+    title: string;
+    firstIndex: number;
+    firstTermIndex: number;
+    filenameMatch: boolean;
     termFreqs: Map<string, number>;
     docLength: number;
     wiki: boolean;

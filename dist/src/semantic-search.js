@@ -237,9 +237,9 @@ export class SemanticSearchService {
         this.manifestReady = this.loadManifest();
         this.pendingReady = this.loadPendingSnapshot();
         if (catalog) {
-            this.catalogUnsubscribe = catalog.subscribe((path, kind) => {
-                if (path && kind)
-                    this.notifyChange(path, kind);
+            this.catalogUnsubscribe = catalog.subscribeBatch(changes => {
+                if (changes)
+                    this.notifyChanges(changes);
                 else {
                     this.lastScanAt = 0;
                     this.queryGeneration += 1;
@@ -251,14 +251,19 @@ export class SemanticSearchService {
         }
     }
     notifyChange(path, kind) {
-        const normalized = normalizePath(path);
-        if (!isMarkdown(normalized) || !this.pathFilter.isAllowed(normalized))
-            return;
+        this.notifyChanges([{ path, kind }]);
+    }
+    notifyChanges(changes) {
         this.queryGeneration += 1;
         this.clearQueryCache();
-        if (this.pending.size < MAX_PENDING_CHANGES || this.pending.has(normalized)) {
-            this.pending.set(normalized, { kind });
-            this.queuePendingSnapshotSave();
+        for (const change of changes) {
+            const normalized = normalizePath(change.path);
+            if (!isMarkdown(normalized) || !this.pathFilter.isAllowed(normalized))
+                continue;
+            if (this.pending.size < MAX_PENDING_CHANGES || this.pending.has(normalized)) {
+                this.pending.set(normalized, { kind: change.kind });
+                this.queuePendingSnapshotSave();
+            }
         }
         if (this.semanticActive)
             this.scheduleIdleWork();

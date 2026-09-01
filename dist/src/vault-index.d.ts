@@ -43,6 +43,7 @@ export declare class VaultMetadataIndex {
     private firstList;
     constructor(vaultPath: string, pathFilter: PathFilter, frontmatter: FrontmatterHandler, catalog?: VaultFileCatalog | undefined, vaultIo?: VaultIoCoordinator);
     invalidate(path: string, kind: 'upsert' | 'delete'): void;
+    private invalidateMany;
     private clearQueryCaches;
     list(filters?: Record<string, unknown>, pathPrefix?: string): Promise<VaultIndexEntry[]>;
     /** Count metadata candidates without sorting or reading note bodies. */

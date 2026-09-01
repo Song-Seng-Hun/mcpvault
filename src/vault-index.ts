@@ -4,7 +4,7 @@ import { join, relative, resolve } from 'node:path';
 import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import type { FrontmatterHandler } from './frontmatter.js';
 import type { PathFilter } from './pathfilter.js';
-import type { VaultFileCatalog } from './vault-catalog.js';
+import type { VaultCatalogChange, VaultFileCatalog } from './vault-catalog.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 
@@ -217,8 +217,8 @@ export class VaultMetadataIndex {
     this.snapshotReady = this.loadSnapshot();
     this.ready = this.initialize();
     if (catalog) {
-      this.catalogUnsubscribe = catalog.subscribe((path, kind) => {
-        if (path && kind) this.invalidate(path, kind);
+      this.catalogUnsubscribe = catalog.subscribeBatch(changes => {
+        if (changes) this.invalidateMany(changes);
         else {
           this.clearQueryCaches();
           this.needsFullRefresh = true;
@@ -228,16 +228,22 @@ export class VaultMetadataIndex {
   }
 
   invalidate(path: string, kind: 'upsert' | 'delete'): void {
-    const normalized = normalizePath(path);
-    if (!isNote(normalized) || !this.pathFilter.isAllowed(normalized)) return;
+    this.invalidateMany([{ path, kind }]);
+  }
+
+  private invalidateMany(changes: readonly VaultCatalogChange[]): void {
     this.clearQueryCaches();
-    if (kind === 'delete') {
-      const existing = this.entries.get(normalized);
-      if (existing) this.removeFilterEntry(existing);
-      if (existing) this.removePathEntry(existing);
-      this.entries.delete(normalized);
+    for (const change of changes) {
+      const normalized = normalizePath(change.path);
+      if (!isNote(normalized) || !this.pathFilter.isAllowed(normalized)) continue;
+      if (change.kind === 'delete') {
+        const existing = this.entries.get(normalized);
+        if (existing) this.removeFilterEntry(existing);
+        if (existing) this.removePathEntry(existing);
+        this.entries.delete(normalized);
+      }
+      this.dirty.add(normalized);
     }
-    this.dirty.add(normalized);
   }
 
   private clearQueryCaches(): void {

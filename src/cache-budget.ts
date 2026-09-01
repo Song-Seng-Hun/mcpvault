@@ -13,6 +13,12 @@ interface BudgetEntry {
   lastUsed: number;
   allowOversized: boolean;
   onEvict: () => void;
+  heapIndex: number;
+}
+
+interface LruHeapNode {
+  id: string;
+  lastUsed: number;
 }
 
 export interface DerivedCacheRegistrationOptions {
@@ -22,6 +28,7 @@ export interface DerivedCacheRegistrationOptions {
 
 export class DerivedCacheBudget {
   private readonly entries = new Map<string, BudgetEntry>();
+  private readonly lruHeap: LruHeapNode[] = [];
   private totalBytes = 0;
   private clock = 0;
 
@@ -33,14 +40,21 @@ export class DerivedCacheBudget {
     const id = this.id(owner, key);
     this.removeById(id);
     const boundedBytes = Math.max(0, Math.ceil(bytes));
-    this.entries.set(id, { bytes: boundedBytes, lastUsed: ++this.clock, allowOversized: options.allowOversized === true, onEvict });
+    const entry: BudgetEntry = { bytes: boundedBytes, lastUsed: ++this.clock, allowOversized: options.allowOversized === true, onEvict, heapIndex: this.lruHeap.length };
+    this.entries.set(id, entry);
+    this.lruHeap.push({ id, lastUsed: entry.lastUsed });
+    this.heapMoveUp(entry.heapIndex);
     this.totalBytes += boundedBytes;
     this.enforce();
   }
 
   touch(owner: string, key: string): void {
     const entry = this.entries.get(this.id(owner, key));
-    if (entry) entry.lastUsed = ++this.clock;
+    if (!entry) return;
+    entry.lastUsed = ++this.clock;
+    const node = this.lruHeap[entry.heapIndex];
+    if (node) node.lastUsed = entry.lastUsed;
+    this.heapMoveDown(entry.heapIndex);
   }
 
   remove(owner: string, key: string): void {
@@ -67,18 +81,21 @@ export class DerivedCacheBudget {
     if (!entry) return;
     this.entries.delete(id);
     this.totalBytes -= entry.bytes;
+    const lastIndex = this.lruHeap.length - 1;
+    if (entry.heapIndex !== lastIndex) {
+      const replacement = this.lruHeap[lastIndex]!;
+      this.lruHeap[entry.heapIndex] = replacement;
+      const replacementEntry = this.entries.get(replacement.id);
+      if (replacementEntry) replacementEntry.heapIndex = entry.heapIndex;
+      this.heapMoveUp(entry.heapIndex);
+      this.heapMoveDown(entry.heapIndex);
+    }
+    this.lruHeap.pop();
   }
 
   private enforce(): void {
     while (this.totalBytes > this.maxBytes && this.entries.size > 0) {
-      let oldestId: string | undefined;
-      let oldestUse = Number.POSITIVE_INFINITY;
-      for (const [id, entry] of this.entries) {
-        if (entry.lastUsed < oldestUse) {
-          oldestId = id;
-          oldestUse = entry.lastUsed;
-        }
-      }
+      const oldestId = this.lruHeap[0]?.id;
       if (!oldestId) break;
       const entry = this.entries.get(oldestId);
       if (this.entries.size === 1 && entry?.allowOversized) break;
@@ -90,6 +107,40 @@ export class DerivedCacheBudget {
         // the authoritative server path.
       }
     }
+  }
+
+  private heapMoveUp(index: number): void {
+    let child = index;
+    while (child > 0) {
+      const parent = Math.floor((child - 1) / 2);
+      if (this.lruHeap[parent]!.lastUsed <= this.lruHeap[child]!.lastUsed) break;
+      this.heapSwap(parent, child);
+      child = parent;
+    }
+  }
+
+  private heapMoveDown(index: number): void {
+    let parent = index;
+    while (true) {
+      const left = parent * 2 + 1;
+      const right = left + 1;
+      let smallest = parent;
+      if (left < this.lruHeap.length && this.lruHeap[left]!.lastUsed < this.lruHeap[smallest]!.lastUsed) smallest = left;
+      if (right < this.lruHeap.length && this.lruHeap[right]!.lastUsed < this.lruHeap[smallest]!.lastUsed) smallest = right;
+      if (smallest === parent) break;
+      this.heapSwap(parent, smallest);
+      parent = smallest;
+    }
+  }
+
+  private heapSwap(left: number, right: number): void {
+    const value = this.lruHeap[left]!;
+    this.lruHeap[left] = this.lruHeap[right]!;
+    this.lruHeap[right] = value;
+    const leftEntry = this.entries.get(this.lruHeap[left]!.id);
+    const rightEntry = this.entries.get(this.lruHeap[right]!.id);
+    if (leftEntry) leftEntry.heapIndex = left;
+    if (rightEntry) rightEntry.heapIndex = right;
   }
 }
 
