@@ -274,6 +274,11 @@ export class VaultFileCatalog {
             cached.all = all;
             this.directoryCache.delete(directory);
             this.directoryCache.set(directory, cached);
+            derivedCacheBudget.register(this.cacheOwner, directory, estimateCacheBytes(cached) + 64, () => {
+                if (this.directoryCache.get(directory) !== cached)
+                    return;
+                this.directoryCache.delete(directory);
+            });
             derivedCacheBudget.touch(this.cacheOwner, directory);
         }
         return { notes, all };

@@ -28,6 +28,13 @@ interface Resolver {
   basenameWithoutExtension: Map<string, string[]>;
 }
 
+interface VisibilityContext {
+  generation: number;
+  paths: string[];
+  pathSet: Set<string>;
+  resolver: Resolver;
+}
+
 function normalizePath(value: string): string {
   return value.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
 }
@@ -131,6 +138,7 @@ export class VaultGraphIndex {
   private needsFullRefresh = true;
   private lastFullRefreshAt = 0;
   private changeGeneration = 0;
+  private readonly visibilityCache = new WeakMap<(path: string) => boolean, VisibilityContext>();
   private readonly catalogUnsubscribe: (() => void) | undefined;
 
   constructor(
@@ -210,9 +218,7 @@ export class VaultGraphIndex {
 
   async findUnresolvedLinks(limit: number, canAccessPath: (path: string) => boolean): Promise<UnresolvedLinksResult> {
     await this.ensure();
-    const visiblePaths = [...this.allPaths].filter(canAccessPath).sort((a, b) => a.localeCompare(b));
-    const visible = new Set(visiblePaths);
-    const resolver = buildResolver(visiblePaths);
+    const { paths: visiblePaths, pathSet: visible, resolver } = this.visibilityContext(canAccessPath);
     const unresolved: UnresolvedLinksResult['unresolved'] = [];
     let total = 0;
     for (const path of visiblePaths) {
@@ -230,10 +236,9 @@ export class VaultGraphIndex {
 
   async findOrphanNotes(limit: number, canAccessPath: (path: string) => boolean): Promise<OrphanNotesResult> {
     await this.ensure();
-    const allVisiblePaths = [...this.allPaths].filter(canAccessPath).sort((a, b) => a.localeCompare(b));
-    const notePaths = [...this.entries.keys()].filter(path => canAccessPath(path) && isNote(path)).sort((a, b) => a.localeCompare(b));
+    const { paths: allVisiblePaths, resolver } = this.visibilityContext(canAccessPath);
+    const notePaths = allVisiblePaths.filter(isNote);
     const visible = new Set(notePaths);
-    const resolver = buildResolver(allVisiblePaths);
     const incomingCounts = new Map(notePaths.map(path => [normalizedPath(path), 0]));
     for (const source of notePaths) {
       const entry = this.entries.get(source);
@@ -273,6 +278,20 @@ export class VaultGraphIndex {
     if (this.dirty.size > 0) await this.refreshDirty();
   }
 
+  private visibilityContext(canAccessPath: (path: string) => boolean): VisibilityContext {
+    const cached = this.visibilityCache.get(canAccessPath);
+    if (cached && cached.generation === this.changeGeneration) return cached;
+    const paths = [...this.allPaths].filter(canAccessPath).sort((a, b) => a.localeCompare(b));
+    const context: VisibilityContext = {
+      generation: this.changeGeneration,
+      paths,
+      pathSet: new Set(paths),
+      resolver: buildResolver(paths),
+    };
+    this.visibilityCache.set(canAccessPath, context);
+    return context;
+  }
+
   private startWatcher(): void {
     if (this.catalog || this.watcherStarted) return;
     this.watcherStarted = true;
@@ -309,7 +328,9 @@ export class VaultGraphIndex {
       }
       this.entries.clear();
       for (const [path, entry] of next) this.entries.set(path, entry);
-      if (generation === this.changeGeneration) this.dirty.clear();
+      const unchangedDuringRefresh = generation === this.changeGeneration;
+      this.changeGeneration += 1;
+      if (unchangedDuringRefresh) this.dirty.clear();
       this.needsFullRefresh = false;
       this.initialized = true;
       this.lastFullRefreshAt = Date.now();
@@ -333,6 +354,7 @@ export class VaultGraphIndex {
         if (entry) this.entries.set(path, entry);
         else this.entries.delete(path);
       }
+      this.changeGeneration += 1;
     })();
     try {
       await this.refreshPromise;

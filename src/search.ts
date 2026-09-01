@@ -1040,17 +1040,26 @@ export class SearchService {
   }
 
   private postingCandidates(field: 'body' | 'frontmatter' | 'title', term: string): Set<number> {
-    const termGramIds = [...grams(term)]
-      .map(value => this.gramIds.get(value));
-    if (termGramIds.some(value => value === undefined)) return new Set();
-    const postings = termGramIds
-      .map(value => this.postings.get(this.postingKey(field, value!)))
-      .filter((value): value is Set<number> => Boolean(value))
-      .sort((a, b) => a.size - b.size);
-    if (postings.length !== termGramIds.length || !postings[0]) return new Set();
-    const output = new Set(postings[0]);
-    for (const paths of postings.slice(1)) {
-      for (const path of output) if (!paths.has(path)) output.delete(path);
+    const termGramIds: number[] = [];
+    for (const value of grams(term)) {
+      const gramId = this.gramIds.get(value);
+      if (gramId === undefined) return new Set();
+      termGramIds.push(gramId);
+    }
+    const postings: Set<number>[] = [];
+    for (const gramId of termGramIds) {
+      const posting = this.postings.get(this.postingKey(field, gramId));
+      if (!posting) return new Set();
+      postings.push(posting);
+    }
+    postings.sort((a, b) => a.size - b.size);
+    const first = postings[0];
+    if (!first) return new Set();
+    const output = new Set(first);
+    for (let index = 1; index < postings.length; index += 1) {
+      const posting = postings[index]!;
+      for (const documentId of output) if (!posting.has(documentId)) output.delete(documentId);
+      if (output.size === 0) break;
     }
     return output;
   }

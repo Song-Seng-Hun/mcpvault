@@ -24,6 +24,7 @@ export declare class VaultGraphIndex {
     private needsFullRefresh;
     private lastFullRefreshAt;
     private changeGeneration;
+    private readonly visibilityCache;
     private readonly catalogUnsubscribe;
     constructor(vaultPath: string, pathFilter: PathFilter, frontmatter: FrontmatterHandler, catalog?: VaultFileCatalog | undefined, vaultIo?: VaultIoCoordinator);
     invalidate(path?: string, kind?: VaultCatalogChangeKind): void;
@@ -41,6 +42,7 @@ export declare class VaultGraphIndex {
         count: number;
     }>>;
     private ensure;
+    private visibilityContext;
     private startWatcher;
     private refreshAll;
     private refreshDirty;
