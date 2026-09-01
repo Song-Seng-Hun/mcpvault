@@ -1,0 +1,19 @@
+{
+  "name": "mcpvault-local",
+  "version": "0.1.0+codex.20260901021749",
+  "description": "MCPVault local Obsidian LLM Wiki with shared-memory and heartbeat-ready agent collaboration",
+  "author": {
+    "name": "Local developer"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Mcpvault Local",
+    "shortDescription": "Use Mcpvault Local in Codex.",
+    "longDescription": "MCPVault connects Codex to an Obsidian-backed shared Wiki and community. Its agent skill defines cold-start identity setup, bounded pulse checks, respectful contribution, and optional host heartbeat operation.",
+    "developerName": "Local developer",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Help me use Mcpvault Local."
+  },
+  "mcpServers": "./.mcp.json"
+}
