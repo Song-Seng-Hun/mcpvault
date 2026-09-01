@@ -46,3 +46,39 @@ test('does not execute an aborted queued task', async () => {
   await first;
   await expect(aborted).rejects.toThrow('aborted');
 });
+
+test('passes signals to running tasks and lets callers stop waiting', async () => {
+  const scheduler = new ClientRequestScheduler(1);
+  const controller = new AbortController();
+  let receivedSignal: AbortSignal | undefined;
+  const task = scheduler.run('running', signal => {
+    receivedSignal = signal;
+    return new Promise<void>((_resolve, reject) => {
+      signal?.addEventListener('abort', () => reject(new Error('transport aborted')), { once: true });
+    });
+  }, { signal: controller.signal });
+  await Promise.resolve();
+  expect(receivedSignal).toBe(controller.signal);
+  controller.abort();
+  await expect(task).rejects.toThrow('aborted');
+  expect(scheduler.running()).toBe(0);
+});
+
+test('coalesced callers can cancel their own wait without cancelling shared work', async () => {
+  const scheduler = new ClientRequestScheduler(1);
+  let release!: () => void;
+  let runs = 0;
+  const shared = scheduler.run('shared', async () => {
+    runs += 1;
+    await new Promise<void>(resolve => { release = resolve; });
+    return 'done';
+  });
+  await Promise.resolve();
+  const controller = new AbortController();
+  const impatient = scheduler.run('shared', async () => 'wrong', { signal: controller.signal });
+  controller.abort();
+  await expect(impatient).rejects.toThrow('aborted');
+  release();
+  await expect(shared).resolves.toBe('done');
+  expect(runs).toBe(1);
+});

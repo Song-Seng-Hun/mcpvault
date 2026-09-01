@@ -1,7 +1,7 @@
 export interface ClientScheduleOptions {
     /** Higher values run first when the queue is waiting. */
     priority?: number;
-    /** A queued task is discarded if its signal is already aborted. */
+    /** A queued task is discarded if its signal is aborted; running tasks receive it too. */
     signal?: AbortSignal;
 }
 /**
@@ -16,7 +16,7 @@ export declare class ClientRequestScheduler {
     private sequence;
     private readonly maxConcurrency;
     constructor(maxConcurrency?: number);
-    run<T>(key: string, task: () => Promise<T> | T, options?: ClientScheduleOptions): Promise<T>;
+    run<T>(key: string, task: (signal?: AbortSignal) => Promise<T> | T, options?: ClientScheduleOptions): Promise<T>;
     pending(): number;
     running(): number;
     private pump;

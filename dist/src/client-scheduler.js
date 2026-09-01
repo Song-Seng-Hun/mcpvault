@@ -20,7 +20,7 @@ export class ClientRequestScheduler {
             return Promise.reject(new Error('key is required'));
         const existing = this.inFlight.get(normalizedKey);
         if (existing)
-            return existing;
+            return waitForAbort(existing, options.signal);
         if (options.signal?.aborted)
             return Promise.reject(new Error('scheduled task was aborted'));
         let resolveTask;
@@ -34,7 +34,7 @@ export class ClientRequestScheduler {
             key: normalizedKey,
             priority: options.priority ?? 0,
             sequence: this.sequence++,
-            task: async () => task(),
+            task: async (signal) => task(signal),
             resolve: value => resolveTask(value),
             reject: rejectTask,
             ...(options.signal && { signal: options.signal }),
@@ -60,7 +60,7 @@ export class ClientRequestScheduler {
             }
             this.active += 1;
             Promise.resolve()
-                .then(item.task)
+                .then(() => item.task(item.signal))
                 .then(item.resolve, item.reject)
                 .finally(() => {
                 this.active -= 1;
@@ -69,4 +69,21 @@ export class ClientRequestScheduler {
             });
         }
     }
+}
+async function waitForAbort(promise, signal) {
+    if (!signal)
+        return promise;
+    if (signal.aborted)
+        throw new Error('scheduled task was aborted');
+    return new Promise((resolve, reject) => {
+        const onAbort = () => reject(new Error('scheduled task was aborted'));
+        signal.addEventListener('abort', onAbort, { once: true });
+        promise.then(value => {
+            signal.removeEventListener('abort', onAbort);
+            resolve(value);
+        }, error => {
+            signal.removeEventListener('abort', onAbort);
+            reject(error);
+        });
+    });
 }

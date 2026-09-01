@@ -1,7 +1,7 @@
 export interface ClientScheduleOptions {
   /** Higher values run first when the queue is waiting. */
   priority?: number;
-  /** A queued task is discarded if its signal is already aborted. */
+  /** A queued task is discarded if its signal is aborted; running tasks receive it too. */
   signal?: AbortSignal;
 }
 
@@ -9,7 +9,7 @@ interface QueueItem {
   key: string;
   priority: number;
   sequence: number;
-  task: () => Promise<unknown> | unknown;
+  task: (signal?: AbortSignal) => Promise<unknown> | unknown;
   resolve: (value: unknown) => void;
   reject: (reason?: unknown) => void;
   signal?: AbortSignal;
@@ -32,11 +32,11 @@ export class ClientRequestScheduler {
     this.maxConcurrency = maxConcurrency;
   }
 
-  run<T>(key: string, task: () => Promise<T> | T, options: ClientScheduleOptions = {}): Promise<T> {
+  run<T>(key: string, task: (signal?: AbortSignal) => Promise<T> | T, options: ClientScheduleOptions = {}): Promise<T> {
     const normalizedKey = String(key).trim();
     if (!normalizedKey) return Promise.reject(new Error('key is required'));
     const existing = this.inFlight.get(normalizedKey);
-    if (existing) return existing as Promise<T>;
+    if (existing) return waitForAbort(existing as Promise<T>, options.signal);
     if (options.signal?.aborted) return Promise.reject(new Error('scheduled task was aborted'));
 
     let resolveTask!: (value: T | PromiseLike<T>) => void;
@@ -50,7 +50,7 @@ export class ClientRequestScheduler {
       key: normalizedKey,
       priority: options.priority ?? 0,
       sequence: this.sequence++,
-      task: async () => task(),
+      task: async signal => task(signal),
       resolve: value => resolveTask(value as T),
       reject: rejectTask,
       ...(options.signal && { signal: options.signal }),
@@ -79,7 +79,7 @@ export class ClientRequestScheduler {
       }
       this.active += 1;
       Promise.resolve()
-        .then(item.task)
+        .then(() => item.task(item.signal))
         .then(item.resolve, item.reject)
         .finally(() => {
           this.active -= 1;
@@ -88,4 +88,23 @@ export class ClientRequestScheduler {
         });
     }
   }
+}
+
+async function waitForAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) throw new Error('scheduled task was aborted');
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new Error('scheduled task was aborted'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      value => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      error => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
 }
