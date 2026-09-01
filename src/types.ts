@@ -147,6 +147,8 @@ export interface BatchReadParams {
   paths: string[];
   includeContent?: boolean;
   includeFrontmatter?: boolean;
+  /** Previously returned revisions keyed by the same paths; unchanged notes are not reopened. */
+  knownRevisions?: Record<string, string>;
 }
 
 export interface BatchReadResult {
@@ -155,6 +157,8 @@ export interface BatchReadResult {
     frontmatter?: Record<string, any>;
     content?: string;
     obsidianUri?: string;
+    revision?: string;
+    unchanged?: boolean;
   }>;
   failed: Array<{
     path: string;

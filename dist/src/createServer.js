@@ -340,6 +340,7 @@ export function createServer(vaultPath, options = {}) {
                     paths: { type: "array", items: { type: "string" }, description: "Array of note paths to read", maxItems: 10 },
                     includeContent: { type: "boolean", description: "Include note content (default: true)", default: true },
                     includeFrontmatter: { type: "boolean", description: "Include frontmatter (default: true)", default: true },
+                    knownRevisions: { type: "object", description: "Optional map of paths to previously returned revisions. Unchanged notes return only metadata; changed notes include their new revision.", additionalProperties: { type: "string" } },
                     prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
                 },
                 required: ["paths"]
@@ -1276,7 +1277,8 @@ export function createServer(vaultPath, options = {}) {
                     const result = await fileSystem.readMultipleNotes({
                         paths: trimmedArgs.paths,
                         includeContent: trimmedArgs.includeContent,
-                        includeFrontmatter: trimmedArgs.includeFrontmatter
+                        includeFrontmatter: trimmedArgs.includeFrontmatter,
+                        knownRevisions: trimmedArgs.knownRevisions,
                     });
                     result.successful = result.successful.filter(note => {
                         try {

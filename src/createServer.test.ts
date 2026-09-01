@@ -98,6 +98,18 @@ test("server can read and write notes via tools", async () => {
     changes: [{ path: "test.md", state: "unchanged", revision: parsed.revision }],
   });
 
+  const batch = await client.callTool({ name: "read_multiple_notes", arguments: { paths: ["test.md"], knownRevisions: { "test.md": parsed.revision } } });
+  expect(JSON.parse((batch.content as any)[0].text)).toMatchObject({
+    ok: [{ path: "test.md", unchanged: true, revision: parsed.revision }],
+  });
+
+  await client.callTool({ name: "write_note", arguments: { path: "test.md", content: "# Changed" } });
+  const changedBatch = await client.callTool({ name: "read_multiple_notes", arguments: { paths: ["test.md"], knownRevisions: { "test.md": parsed.revision } } });
+  const changedValue = JSON.parse((changedBatch.content as any)[0].text);
+  expect(changedValue.ok[0].content).toContain("Changed");
+  expect(changedValue.ok[0].revision).not.toBe(parsed.revision);
+  expect(changedValue.ok[0].unchanged).toBeUndefined();
+
   await client.close();
   await server.close();
 });

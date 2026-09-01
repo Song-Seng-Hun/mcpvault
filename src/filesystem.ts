@@ -1001,7 +1001,7 @@ export class FileSystemService {
   }
 
   async readMultipleNotes(params: BatchReadParams): Promise<BatchReadResult> {
-    const { paths, includeContent = true, includeFrontmatter = true } = params;
+    const { paths, includeContent = true, includeFrontmatter = true, knownRevisions } = params;
 
     if (paths.length > 10) {
       throw new Error('Maximum 10 files per batch read request');
@@ -1014,10 +1014,21 @@ export class FileSystemService {
           throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
         }
 
+        const knownRevision = knownRevisions?.[rawPath] || knownRevisions?.[path];
+        if (knownRevision && this.metadataIndex && await this.metadataIndex.matchesRevision(path, knownRevision)) {
+          return {
+            path,
+            obsidianUri: generateObsidianUri(this.vaultPath, path),
+            revision: knownRevision,
+            unchanged: true,
+          };
+        }
+
         const note = await this.readNote(path);
         const result: any = {
           path,
-          obsidianUri: generateObsidianUri(this.vaultPath, path)
+          obsidianUri: generateObsidianUri(this.vaultPath, path),
+          ...(knownRevision && { revision: note.revision }),
         };
 
         if (includeFrontmatter) {
