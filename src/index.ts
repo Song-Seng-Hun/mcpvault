@@ -18,4 +18,6 @@ export { McpVaultClientCache } from './client-cache.js';
 export type { CachedNote, ClientEndpointCaller, ClientReadNotesOptions, ClientReadNotesResult } from './client-cache.js';
 export { ContextBudgeter } from './client-context.js';
 export type { ContextFragment, PackedContext, PackedContextFragment } from './client-context.js';
+export { ClientRequestScheduler } from './client-scheduler.js';
+export type { ClientScheduleOptions } from './client-scheduler.js';
 export * from './types.js';

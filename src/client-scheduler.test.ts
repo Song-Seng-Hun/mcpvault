@@ -1,0 +1,48 @@
+import { expect, test } from 'vitest';
+import { ClientRequestScheduler } from './client-scheduler.js';
+
+test('coalesces identical work and respects the concurrency bound', async () => {
+  const scheduler = new ClientRequestScheduler(1);
+  const order: string[] = [];
+  let executions = 0;
+  const task = scheduler.run('same', async () => {
+    executions += 1;
+    order.push('same');
+    await new Promise(resolve => setTimeout(resolve, 5));
+    return 'done';
+  });
+  const duplicate = scheduler.run('same', async () => 'wrong');
+  expect(await Promise.all([task, duplicate])).toEqual(['done', 'done']);
+  expect(executions).toBe(1);
+  expect(order).toEqual(['same']);
+  expect(scheduler.running()).toBe(0);
+});
+
+test('runs higher priority queued work first', async () => {
+  const scheduler = new ClientRequestScheduler(1);
+  const order: string[] = [];
+  let release!: () => void;
+  const first = scheduler.run('first', async () => {
+    order.push('first');
+    await new Promise<void>(resolve => { release = resolve; });
+  });
+  const low = scheduler.run('low', async () => { order.push('low'); }, { priority: 1 });
+  const high = scheduler.run('high', async () => { order.push('high'); }, { priority: 10 });
+  await Promise.resolve();
+  release();
+  await Promise.all([first, low, high]);
+  expect(order).toEqual(['first', 'high', 'low']);
+});
+
+test('does not execute an aborted queued task', async () => {
+  const scheduler = new ClientRequestScheduler(1);
+  let release!: () => void;
+  const first = scheduler.run('first', async () => new Promise<void>(resolve => { release = resolve; }));
+  const controller = new AbortController();
+  const aborted = scheduler.run('aborted', async () => { throw new Error('should not run'); }, { signal: controller.signal });
+  await Promise.resolve();
+  controller.abort();
+  release();
+  await first;
+  await expect(aborted).rejects.toThrow('aborted');
+});
