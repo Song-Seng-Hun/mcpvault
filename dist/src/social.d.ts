@@ -228,7 +228,7 @@ export declare class SocialService {
         nextCursor: any;
         contextBefore: number;
     }>;
-    private readCommentContext;
+    private commentContextFromNote;
     listMentions(params: {
         principal?: ScopePrincipal;
         limit?: number;

@@ -490,8 +490,22 @@ export class SocialService {
       }
     }
     const last = selected.at(-1)?.note.frontmatter.comment_id;
+    const selectedByPath = new Map(selected.map(item => [item.note.path, {
+      path: item.note.path,
+      frontmatter: item.note.frontmatter,
+      content: item.content,
+      revision: item.revision,
+    }]));
+    const parentPaths = params.includeThreadContext === false
+      ? []
+      : Array.from(new Set(selected
+        .map(({ note }) => note.frontmatter.reply_to ? commentPath(slug, String(note.frontmatter.reply_to)) : undefined)
+        .filter((path): path is string => Boolean(path))))
+        .filter(path => !selectedByPath.has(path));
+    const parentByPath = new Map(selectedByPath);
+    for (const [path, parent] of await readNotesInBatches(this.fileSystem, parentPaths)) parentByPath.set(path, parent);
     return {
-      comments: await Promise.all(selected.map(async ({ note, content, revision }) => ({
+      comments: selected.map(({ note, content, revision }) => ({
         path: note.path,
         commentId: note.frontmatter.comment_id,
         postId: note.frontmatter.post_id,
@@ -509,8 +523,8 @@ export class SocialService {
         moderationStatus: moderationStatus(note.frontmatter),
         authorLevel: reputations.get(String(note.frontmatter.author || '').toLowerCase())?.level ?? 0,
         authorLevelLabel: reputations.get(String(note.frontmatter.author || '').toLowerCase())?.label ?? '뉴비',
-        ...(params.includeThreadContext !== false && note.frontmatter.reply_to && { parent: await this.readCommentContext(slug, note.frontmatter.reply_to) }),
-      }))),
+        ...(params.includeThreadContext !== false && note.frontmatter.reply_to && { parent: this.commentContextFromNote(slug, String(note.frontmatter.reply_to), parentByPath.get(commentPath(slug, String(note.frontmatter.reply_to)))) }),
+      })),
       ...(viewerReputation && { viewerLevel: viewerReputation.level, viewerXp: viewerReputation.xp, viewerLevelLabel: viewerReputation.label }),
       total: notes.length,
       truncated: start > 0 || result.truncated || start + selected.length < notes.length,
@@ -519,9 +533,9 @@ export class SocialService {
     };
   }
 
-  private async readCommentContext(slug: string, commentId: string) {
+  private commentContextFromNote(slug: string, commentId: string, parent: { path: string; frontmatter: Record<string, any>; content?: string } | undefined) {
     const path = commentPath(slug, commentId);
-    const parent = await this.fileSystem.readNote(path);
+    if (!parent) throw new Error(`Reply target was not readable: ${commentId}`);
     if (parent.frontmatter.mcpvault_type !== 'blog_comment') throw new Error(`Reply target is not a blog comment: ${commentId}`);
     if (isModerationHidden(parent.frontmatter)) return { path, commentId: parent.frontmatter.comment_id, postId: parent.frontmatter.post_id, author: parent.frontmatter.author, createdAt: parent.frontmatter.created_at, content: '[moderated]', replyTo: parent.frontmatter.reply_to, workflowStatus: workflowStatus(parent.frontmatter), moderated: true };
     return { path, commentId: parent.frontmatter.comment_id, postId: parent.frontmatter.post_id, author: parent.frontmatter.author, createdAt: parent.frontmatter.created_at, content: parent.content, replyTo: parent.frontmatter.reply_to, workflowStatus: workflowStatus(parent.frontmatter) };

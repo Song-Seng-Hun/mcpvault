@@ -216,12 +216,30 @@ export class ChatService {
             }
         }
         const last = selected.at(-1)?.note.frontmatter.message_id;
-        const messageReputations = await this.reputation.getMany(selected.map(({ note }) => String(note.frontmatter.author || '')));
+        const selectedByPath = new Map(selected.map(item => [item.note.path, {
+                path: item.note.path,
+                frontmatter: item.note.frontmatter,
+                content: item.content,
+                revision: item.revision,
+            }]));
+        const parentPaths = params.includeThreadContext === false
+            ? []
+            : Array.from(new Set(selected
+                .map(({ note }) => note.frontmatter.reply_to ? messagePath(roomId, String(note.frontmatter.reply_to)) : undefined)
+                .filter((path) => Boolean(path))))
+                .filter(path => !selectedByPath.has(path));
+        const parentByPath = new Map(selectedByPath);
+        for (const [path, parent] of await readNotesInBatches(this.fileSystem, parentPaths))
+            parentByPath.set(path, parent);
+        const messageReputations = await this.reputation.getMany([
+            ...selected.map(({ note }) => String(note.frontmatter.author || '')),
+            ...Array.from(parentByPath.values()).map(note => String(note.frontmatter.author || '')),
+        ]);
         const viewerReputation = params.principal ? await this.reputation.getForPrincipal(params.principal) : undefined;
         return {
             room: { path: room.path, fm: room.note.frontmatter, content: room.note.content, revision: room.note.revision },
             ...(viewerReputation && { viewerLevel: viewerReputation.level, viewerXp: viewerReputation.xp, viewerLevelLabel: viewerReputation.label }),
-            messages: await Promise.all(selected.map(async ({ note, content, revision }) => ({
+            messages: selected.map(({ note, content, revision }) => ({
                 path: note.path,
                 messageId: note.frontmatter.message_id,
                 roomId: note.frontmatter.room_id,
@@ -239,8 +257,8 @@ export class ChatService {
                 moderationStatus: moderationStatus(note.frontmatter),
                 authorLevel: messageReputations.get(String(note.frontmatter.author || '').toLowerCase())?.level ?? 0,
                 authorLevelLabel: messageReputations.get(String(note.frontmatter.author || '').toLowerCase())?.label ?? '뉴비',
-                ...(params.includeThreadContext !== false && note.frontmatter.reply_to && { parent: await this.readMessageContext(roomId, note.frontmatter.reply_to) }),
-            }))),
+                ...(params.includeThreadContext !== false && note.frontmatter.reply_to && { parent: this.messageContextFromNote(roomId, String(note.frontmatter.reply_to), parentByPath.get(messagePath(roomId, String(note.frontmatter.reply_to))), messageReputations) }),
+            })),
             totalMessages: result.total,
             truncated: start > 0 || result.truncated || start + selected.length < result.notes.length,
             nextCursor: last,
@@ -271,12 +289,13 @@ export class ChatService {
             ...(params.includeReferences !== false && { resolvedReferences: await this.references.resolve(note.frontmatter.references) }),
         };
     }
-    async readMessageContext(roomId, messageId) {
+    messageContextFromNote(roomId, messageId, parent, reputations) {
         const path = messagePath(roomId, messageId);
-        const parent = await this.fileSystem.readNote(path);
+        if (!parent)
+            throw new Error(`Reply target was not readable: ${messageId}`);
         if (parent.frontmatter.mcpvault_type !== 'chat_message')
             throw new Error(`Reply target is not a chat message: ${messageId}`);
-        const parentReputation = (await this.reputation.getMany([String(parent.frontmatter.author || '')])).get(String(parent.frontmatter.author || '').toLowerCase());
+        const parentReputation = reputations.get(String(parent.frontmatter.author || '').toLowerCase());
         if (isModerationHidden(parent.frontmatter))
             return { path, messageId: parent.frontmatter.message_id, roomId: parent.frontmatter.room_id, author: parent.frontmatter.author, authorRole: parent.frontmatter.author_role, authorLevel: parentReputation?.level ?? 0, authorLevelLabel: parentReputation?.label ?? '뉴비', createdAt: parent.frontmatter.created_at, content: '[moderated]', replyTo: parent.frontmatter.reply_to, workflowStatus: workflowStatus(parent.frontmatter), moderated: true };
         return { path, messageId: parent.frontmatter.message_id, roomId: parent.frontmatter.room_id, author: parent.frontmatter.author, authorRole: parent.frontmatter.author_role, authorLevel: parentReputation?.level ?? 0, authorLevelLabel: parentReputation?.label ?? '뉴비', createdAt: parent.frontmatter.created_at, content: parent.content, replyTo: parent.frontmatter.reply_to, workflowStatus: workflowStatus(parent.frontmatter) };

@@ -132,6 +132,6 @@ export declare class ChatService {
         authorLevelLabel: string;
         resolvedReferences?: Record<string, unknown>[];
     }>;
-    private readMessageContext;
+    private messageContextFromNote;
 }
 //# sourceMappingURL=chat.d.ts.map
