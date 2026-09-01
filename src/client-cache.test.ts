@@ -203,3 +203,33 @@ test('forwards abort signals and does not let stale responses overwrite newer ca
   await expect(pending).rejects.toThrow('aborted');
   expect(calls).toBe(2);
 });
+
+test('reads note batches with bounded client-side concurrency', async () => {
+  let active = 0;
+  let peak = 0;
+  let calls = 0;
+  const caller: ClientEndpointCaller = {
+    async callEndpoint(_endpointId, arguments_) {
+      calls += 1;
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise(resolve => setTimeout(resolve, 5));
+      active -= 1;
+      return {
+        ok: (arguments_.paths as string[]).map(path => ({ path, revision: path.replace('.md', '').repeat(64), content: path })),
+        err: [],
+      };
+    },
+  };
+  const cache = new McpVaultClientCache(caller);
+  const paths = Array.from({ length: 25 }, (_, index) => `note-${index}.md`);
+  const result = await cache.readNotes(paths, { maxConcurrentBatches: 2 });
+  expect(calls).toBe(3);
+  expect(peak).toBeLessThanOrEqual(2);
+  expect(result.notes).toHaveLength(25);
+});
+
+test('rejects an unsafe batch concurrency value', async () => {
+  const cache = new McpVaultClientCache({ callEndpoint: async () => ({ ok: [], err: [] }) });
+  await expect(cache.readNotes(['note.md'], { maxConcurrentBatches: 9 })).rejects.toThrow('maxConcurrentBatches');
+});

@@ -26,6 +26,8 @@ export interface ClientReadNotesOptions {
   includeContent?: boolean;
   includeFrontmatter?: boolean;
   force?: boolean;
+  /** Maximum number of ten-note batches allowed in flight; defaults to 2. */
+  maxConcurrentBatches?: number;
   signal?: AbortSignal;
 }
 
@@ -61,6 +63,9 @@ interface IncrementalCacheManifest {
   version: 1;
   paths: string[];
 }
+
+const DEFAULT_MAX_CONCURRENT_BATCHES = 2;
+const MAX_CONCURRENT_BATCHES = 8;
 
 function decodeEndpointResult(value: unknown): unknown {
   if (!value || typeof value !== 'object' || !Array.isArray((value as { content?: unknown }).content)) return value;
@@ -272,6 +277,7 @@ export class McpVaultClientCache {
 
   private async readNotesUncached(paths: string[], options: ClientReadNotesOptions): Promise<ClientReadNotesResult> {
     const requested = [...new Set(paths.map(path => String(path).trim()).filter(Boolean))];
+    const maxConcurrentBatches = normalizeBatchConcurrency(options.maxConcurrentBatches);
     const generations = new Map(requested.map(path => [path, this.bumpGeneration(path)]));
     const notes = new Map<string, CachedNote>();
     const unchanged: string[] = [];
@@ -279,27 +285,36 @@ export class McpVaultClientCache {
     const errors: Array<{ path: string; error: string }> = [];
     const includeContent = options.includeContent ?? true;
     const includeFrontmatter = options.includeFrontmatter ?? true;
+    const batches: string[][] = [];
+    for (let start = 0; start < requested.length; start += 10) batches.push(requested.slice(start, start + 10));
+    const responses: Array<{ response?: BatchResponse; error?: string }> = batches.map(() => ({}));
+    let nextBatch = 0;
+    const readBatch = async (): Promise<void> => {
+      while (nextBatch < batches.length) {
+        const batchIndex = nextBatch++;
+        const batch = batches[batchIndex]!;
+        const knownRevisions = options.force ? {} : this.knownRevisions(batch);
+        try {
+          const arguments_ = { paths: batch, includeContent, includeFrontmatter, knownRevisions };
+          const decoded = decodeEndpointResult(options.signal
+            ? await this.caller.callEndpoint('mcp.read_multiple_notes', arguments_, { signal: options.signal })
+            : await this.caller.callEndpoint('mcp.read_multiple_notes', arguments_));
+          responses[batchIndex] = { response: decoded as BatchResponse };
+        } catch (error) {
+          responses[batchIndex] = { error: error instanceof Error ? error.message : String(error) };
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(maxConcurrentBatches, batches.length) }, () => readBatch()));
 
-    for (let start = 0; start < requested.length; start += 10) {
-      const batch = requested.slice(start, start + 10);
-      const knownRevisions = options.force ? {} : this.knownRevisions(batch);
-      let decoded: unknown;
-      try {
-        const arguments_ = {
-          paths: batch,
-          includeContent,
-          includeFrontmatter,
-          knownRevisions,
-        };
-        decoded = decodeEndpointResult(options.signal
-          ? await this.caller.callEndpoint('mcp.read_multiple_notes', arguments_, { signal: options.signal })
-          : await this.caller.callEndpoint('mcp.read_multiple_notes', arguments_));
-      } catch (error) {
-        for (const path of batch) errors.push({ path, error: error instanceof Error ? error.message : String(error) });
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
+      const batch = batches[batchIndex]!;
+      const result = responses[batchIndex]!;
+      if (result.error) {
+        for (const path of batch) errors.push({ path, error: result.error });
         continue;
       }
-
-      const response = decoded as BatchResponse;
+      const response = result.response || {};
       for (const item of Array.isArray(response.ok) ? response.ok : []) {
         const path = String(item.path || '').trim();
         if (!path) continue;
@@ -356,6 +371,14 @@ export class McpVaultClientCache {
     this.pathGenerations.set(path, generation);
     return generation;
   }
+}
+
+function normalizeBatchConcurrency(value: number | undefined): number {
+  const maxConcurrentBatches = value ?? DEFAULT_MAX_CONCURRENT_BATCHES;
+  if (!Number.isInteger(maxConcurrentBatches) || maxConcurrentBatches < 1 || maxConcurrentBatches > MAX_CONCURRENT_BATCHES) {
+    throw new Error(`maxConcurrentBatches must be between 1 and ${MAX_CONCURRENT_BATCHES}`);
+  }
+  return maxConcurrentBatches;
 }
 
 function normalizePaths(paths: string[]): string[] {

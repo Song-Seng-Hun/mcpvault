@@ -24,6 +24,8 @@ export interface ClientReadNotesOptions {
     includeContent?: boolean;
     includeFrontmatter?: boolean;
     force?: boolean;
+    /** Maximum number of ten-note batches allowed in flight; defaults to 2. */
+    maxConcurrentBatches?: number;
     signal?: AbortSignal;
 }
 export interface ClientReadNotesResult {
