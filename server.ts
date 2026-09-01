@@ -3,6 +3,7 @@
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { createServer } from "./src/createServer.js";
 import { parseCliArgs } from "./src/cli.js";
+import { startRestApi } from "./src/rest-api.js";
 import { existsSync, readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join, resolve } from "path";
@@ -48,6 +49,7 @@ Options:
   --help, -h      Show this help message
   --read-only     Expose read tools only and reject all vault mutations
                   May be passed alone, with true/false, or as --read-only=true
+  --http[=PORT]   Also expose the optional localhost REST adapter (default 8787)
 
 Examples:
   npx @bitbonsai/mcpvault
@@ -62,15 +64,23 @@ Examples:
 
 // Remove runtime options before joining trailing args, preserving support for
 // unquoted vault paths with spaces. When omitted, use the current directory.
-const { vaultPathArg, readOnly } = parseCliArgs(cliArgs);
+const { vaultPathArg, readOnly, restPort } = parseCliArgs(cliArgs);
 const vaultPath = resolve(vaultPathArg || process.cwd());
+
+const mcpServer = createServer(vaultPath, { version: VERSION, readOnly });
 
 // Serve both the legacy handshake-based protocol and MCP 2026-07-28 from the
 // same process. The opening exchange selects the era for this connection.
 const serverHandle = serveStdio(
-  () => createServer(vaultPath, { version: VERSION, readOnly }),
+  () => mcpServer,
   { onerror: (error) => console.error(error) },
 );
+
+let restHandle: Awaited<ReturnType<typeof startRestApi>> | undefined;
+if (restPort !== undefined) {
+  restHandle = await startRestApi(mcpServer, { port: restPort });
+  console.error(`MCPVault REST adapter listening on http://${restHandle.host}:${restHandle.port}`);
+}
 
 // Exit when the client disconnects (stdin EOF) or the process is asked to
 // terminate. Hosts that don't send an MCP shutdown request otherwise leave
@@ -80,6 +90,7 @@ async function shutdown() {
   if (isShuttingDown) return;
   isShuttingDown = true;
   try {
+    await restHandle?.close();
     await serverHandle.close();
   } catch {
     // Best-effort: exit regardless of transport close errors.

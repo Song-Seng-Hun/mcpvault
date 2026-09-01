@@ -39,4 +39,18 @@ describe("parseCliArgs", () => {
       "--read-only must be true or false",
     );
   });
+
+  test("enables the optional localhost REST adapter", () => {
+    expect(parseCliArgs(["/vault", "--http"])).toEqual({
+      vaultPathArg: "/vault",
+      readOnly: false,
+      restPort: 8787,
+    });
+    expect(parseCliArgs(["/vault", "--http=9123"]).restPort).toBe(9123);
+    expect(parseCliArgs(["/vault", "--http", "9124"]).restPort).toBe(9124);
+  });
+
+  test("rejects invalid REST ports", () => {
+    expect(() => parseCliArgs(["/vault", "--http=abc"])).toThrow("--http must be a numeric port");
+  });
 });

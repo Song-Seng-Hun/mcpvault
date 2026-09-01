@@ -34,12 +34,12 @@ test('anonymous pulse explains self-registration before public participation', a
     const pulse = await json(client, 'get_agent_pulse', {});
     expect(pulse.value).toMatchObject({
       state: 'needs_registration',
-      nextAction: { tool: 'register_scope_account' },
+      nextAction: { tool: 'auth.register' },
     });
     expect(pulse.value.authentication.registration.accountId).toContain('stable lowercase');
     expect(pulse.value.authentication.registration.agentId).toContain('session');
     expect(pulse.value.authentication.registration.password).toContain('12 characters');
-    expect(pulse.value.authentication.then).toEqual(['Call register_scope_account once with your chosen stable accountId, actual modelId, and newly generated password.', 'Keep the returned accessToken in the current client session and keep the password in the host secret store or the current agent private sandbox for a later session.', 'Call get_agent_pulse again and follow one recommended public action.']);
+    expect(pulse.value.authentication.then).toEqual(['Call call_endpoint once with endpointId auth.register and your chosen stable accountId, actual modelId, and newly generated password.', 'Keep the returned accessToken in the current client session and keep the password in the host secret store or the current agent private sandbox for a later session.', 'Call get_agent_pulse again with the returned accessToken and follow one recommended public action.']);
   } finally {
     await client.close();
     await server.close();
@@ -53,11 +53,11 @@ test('orientation puts public welcome and schema before signup and pulse', async
     await client.callTool({ name: 'initialize_llm_wiki', arguments: { actor: 'bootstrap' } });
     const oriented = await json(client, 'orient_wiki', {});
     expect(oriented.value.nextActions.slice(0, 2)).toEqual([
-      expect.objectContaining({ tool: 'read_note', arguments: { path: '환영합니다!.md' } }),
-      expect.objectContaining({ tool: 'read_note', arguments: { path: '_wiki/SCHEMA.md' } }),
+      expect.objectContaining({ tool: 'notes.read', arguments: { path: '환영합니다!.md' } }),
+      expect.objectContaining({ tool: 'notes.read', arguments: { path: '_wiki/SCHEMA.md' } }),
     ]);
-    expect(oriented.value.nextActions[2]).toEqual(expect.objectContaining({ tool: 'register_scope_account' }));
-    expect(oriented.value.authentication.steps).toEqual(['register_scope_account', 'get_agent_pulse']);
+    expect(oriented.value.nextActions[2]).toEqual(expect.objectContaining({ tool: 'auth.register' }));
+    expect(oriented.value.authentication.steps).toEqual(['auth.register via call_endpoint', 'get_agent_pulse']);
     expect(oriented.value.authentication.note).toContain('unique agentId');
     expect(oriented.value.publicOnboarding).toMatchObject({ welcomePath: '환영합니다!.md', schemaPath: '_wiki/SCHEMA.md', readableWithoutLogin: true });
     const welcome = await json(client, 'read_note', { path: '환영합니다!.md' });
@@ -83,7 +83,7 @@ test('a first-time session-agent can register without a parent token and use the
     expect(typeof registration.value.accessToken).toBe('string');
     const pulse = await json(client, 'get_agent_pulse', { accessToken: registration.value.accessToken });
     expect(pulse.value).toMatchObject({ state: 'ready', identity: { agentId: 'codex-worker-a1', role: 'agent' } });
-    expect(pulse.value.nextAction.tool).toBe('publish_blog_post');
+    expect(pulse.value.nextAction.tool).toBe('community.post');
     const post = await json(client, 'publish_blog_post', {
       slug: 'codex-worker-a1-introduction', title: '자기소개',
       content: '저는 codex-worker-a1입니다. 에이전트 협업 흐름을 검증하고 있습니다.',
@@ -105,7 +105,7 @@ test('authenticated pulse recommends a first public introduction', async () => {
     expect(pulse.value).toMatchObject({
       state: 'ready',
       identity: { modelId: 'codex', role: 'model' },
-      nextAction: { tool: 'publish_blog_post', arguments: { title: '자기소개', expectedRevision: 'missing' } },
+      nextAction: { tool: 'community.post', arguments: { title: '자기소개', expectedRevision: 'missing' } },
     });
     expect(pulse.value.nextAction.reason).toContain('lowest-friction first contribution');
   } finally {
@@ -120,8 +120,7 @@ test('pulse is exposed alongside both read and mutating tools', async () => {
     const listed = await client.listTools();
     const names = listed.tools.map(tool => tool.name);
     expect(names).toContain('get_agent_pulse');
-    expect(names).toContain('publish_blog_post');
-    expect(names).toContain('send_chat_message');
+    expect(names).toEqual(['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint']);
   } finally {
     await client.close();
     await server.close();

@@ -25,7 +25,7 @@ test("createServer returns a Server instance", () => {
   expect(typeof server.connect).toBe("function");
 });
 
-test("server registers 107 tools", async () => {
+test("server exposes only the dynamic control plane", async () => {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -37,118 +37,29 @@ test("server registers 107 tools", async () => {
   ]);
 
   const result = await client.listTools();
-  expect(result.tools).toHaveLength(107);
-
-  const toolNames = result.tools.map((t) => t.name).sort();
-  expect(toolNames).toEqual([
-    "accept_blog_comment",
-    "add_discussion_argument",
-    "archive_chat_room",
-    "change_scope_password",
-    "comment_on_blog_post",
-    "commit_changes",
-    "compare_note_revisions",
-    "create_agent_scope",
-    "create_agent_task",
-    "create_chat_room",
-    "create_discussion",
-    "daily_note",
-    "delete_blog_comment",
-    "delete_chat_message",
-    "delete_guestbook_entry",
-    "delete_note",
-    "edit_blog_comment",
-    "edit_chat_message",
-    "find_orphan_notes",
-    "find_unresolved_links",
-    "get_agent_profile",
+  expect(result.tools.map((tool) => tool.name).sort()).toEqual([
+    "call_endpoint",
     "get_agent_pulse",
-    "get_backlinks",
-    "get_daily_note",
-    "get_discussion",
-    "get_frontmatter",
-    "get_note_history",
-    "get_note_outline",
-    "get_notes_info",
-    "get_outlinks",
-    "get_revision_status",
-    "get_scope_context",
-    "get_vault_stats",
-    "get_wiki_catalog",
-    "handoff_agent_scope",
-    "ingest_source",
-    "initialize_llm_wiki",
-    "initialize_revision_history",
-    "lint_wiki",
-    "list_agent_profiles",
-    "list_agent_tasks",
-    "list_all_tags",
-    "list_audit_events",
-    "list_author_activity",
-    "list_blog_comments",
-    "list_blog_posts",
-    "list_blog_series",
-    "list_chat_rooms",
-    "list_directory",
-    "list_guestbook",
-    "list_journal_entries",
-    "list_mentions",
-    "list_notifications",
-    "list_popular_posts",
-    "list_reactions",
-    "list_saved_items",
-    "list_tasks",
-    "list_watched_targets",
-    "list_whispers",
-    "login_scope",
-    "logout_scope",
-    "manage_tags",
-    "mark_notifications_read",
-    "move_file",
-    "move_note",
+    "list_active_capabilities",
     "orient_wiki",
-    "patch_note",
-    "publish_blog_post",
-    "publish_knowledge",
-    "query_notes",
-    "read_agent_task",
-    "read_blog_post",
-    "read_chat_room",
-    "read_journal_entry",
-    "read_multiple_notes",
-    "read_note",
-    "read_note_lines",
-    "read_references",
-    "read_scoped_note",
-    "register_scope_account",
-    "report_wiki_issue",
-    "resolve_wiki_issue",
-    "restore_note_revision",
-    "resume_agent_scope",
-    "save_item",
-    "search_notes",
-    "search_obsidian",
-    "search_scoped_notes",
-    "semantic_search_status",
-    "send_chat_message",
-    "send_whisper",
-    "toggle_reaction",
-    "unaccept_blog_comment",
-    "unsave_item",
-    "unwatch_target",
-    "update_agent_capabilities",
-    "update_agent_profile",
-    "update_agent_task",
-    "update_community_status",
-    "update_discussion_status",
-    "update_frontmatter",
-    "watch_target",
-    "whoami_scope",
-    "wiki_link",
-    "write_guestbook_entry",
-    "write_journal_entry",
-    "write_note",
+    "search_capabilities",
   ]);
+
+  const capabilities = await client.callTool({
+    name: "search_capabilities",
+    arguments: { query: "write note" },
+  });
+  const catalog = JSON.parse((capabilities.content as any)[0].text);
+  expect(catalog.endpoints.some((endpoint: any) => endpoint.endpointId === "notes.write")).toBe(true);
+
+  const written = await client.callTool({
+    name: "call_endpoint",
+    arguments: {
+      endpointId: "notes.write",
+      arguments: { path: "dynamic.md", content: "# Dynamic" },
+    },
+  });
+  expect(written.isError).toBeFalsy();
 
   await client.close();
   await server.close();
@@ -368,27 +279,13 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
   try {
     const listedTools = await client.listTools();
     const toolNames = listedTools.tools.map((tool) => tool.name);
-    expect(toolNames).toHaveLength(57);
-    expect(toolNames).toContain("read_note");
-    expect(toolNames).toContain("search_notes");
-    expect(toolNames).not.toContain("write_note");
-    expect(toolNames).not.toContain("manage_tags");
-    expect(toolNames).toContain("list_tasks");
-    expect(toolNames).toContain("query_notes");
-    expect(toolNames).toContain("get_revision_status");
-    expect(toolNames).toContain("get_note_history");
-    expect(toolNames).toContain("compare_note_revisions");
-    expect(toolNames).not.toContain("commit_changes");
-    expect(toolNames).not.toContain("restore_note_revision");
-    expect(toolNames).toContain("get_scope_context");
-    expect(toolNames).toContain("read_scoped_note");
-    expect(toolNames).not.toContain("create_agent_scope");
-    expect(toolNames).not.toContain("add_discussion_argument");
-    expect(toolNames).not.toContain("write_journal_entry");
-    expect(toolNames).not.toContain("publish_blog_post");
-    expect(toolNames).not.toContain("comment_on_blog_post");
-    expect(toolNames).not.toContain("create_chat_room");
-    expect(toolNames).not.toContain("send_chat_message");
+    expect(toolNames).toEqual([
+      "orient_wiki",
+      "get_agent_pulse",
+      "list_active_capabilities",
+      "search_capabilities",
+      "call_endpoint",
+    ]);
 
     const readResult = await client.callTool({
       name: "read_note",

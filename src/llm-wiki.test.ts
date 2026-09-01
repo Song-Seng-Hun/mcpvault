@@ -67,8 +67,8 @@ test('ingest, publish, catalog, lint, and immutable source enforcement form one 
     expect(orientation.value.participation.invitation).toContain('equal participant');
     expect(orientation.value.visibleScopes).toEqual([{ kind: 'global', uri: 'scope://global/' }]);
     expect(orientation.value.nextActions).toEqual(expect.arrayContaining([
-      expect.objectContaining({ tool: 'get_revision_status' }),
-      expect.objectContaining({ tool: 'commit_changes' }),
+      expect.objectContaining({ tool: 'mcp.get_revision_status' }),
+      expect.objectContaining({ tool: 'mcp.commit_changes' }),
     ]));
 
     const issue = await callJson(client, 'report_wiki_issue', {

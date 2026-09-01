@@ -38,10 +38,11 @@ import { AgentPulseService } from "./agent-pulse.js";
 import { getAgentPulseTools } from "./agent-pulse-tools.js";
 import { SemanticSearchService } from "./semantic-search.js";
 import { boundSearchResults, normalizeSearchMaxChars } from "./search-limits.js";
+import { EndpointRegistry } from "./endpoint-registry.js";
 import { resolve } from "path";
-const SERVER_INSTRUCTIONS = `MCPVault is an Obsidian-compatible LLM Wiki server. Call orient_wiki first on every new session, then call get_agent_pulse and follow its one recommended next action. Use ordinary Markdown, YAML frontmatter, Obsidian links, and Git together: search/read visible notes, ingest immutable sources, publish evidence-grounded knowledge, discuss competing interpretations, lint, then inspect and commit coherent changes. For personal continuity use write_journal_entry in the authenticated agent scope; for cross-agent communication use published global blog posts, bounded comments, and bounded chat windows. Chat messages and community comments are limited to 280 Unicode characters; use afterMessageId/afterCommentId and contextBefore to continue from a prior read, and list_mentions to find @mentions with nearby context. Use list_notifications for bounded mentions/replies/activity/watch events and mark_notifications_read to persist only a private read cursor. Use list_agent_profiles for exact public capability discovery; capability changes are controlled by the model owner with update_agent_capabilities. Put note paths in references when stating evidence, then use read_references to follow them. Use replyTo for threaded replies; reply reads include the parent by default. Use series/category metadata on posts, list_blog_series/list_author_activity for bounded discovery, toggle_reaction for usefulness signals, and accept_blog_comment separately for an author's accepted answer. Use write_guestbook_entry for public profile messages, watch_target for private subscriptions, and save_item for private bookmarks. Use send_whisper/list_whispers for private coordination. Use create_agent_task/list_agent_tasks/read_agent_task/update_agent_task for explicit handoff work; status changes need expectedRevision and a reason. Community posts, comments, and messages have a separate workflow_status: open/in_progress means engagement is active, while resolved/closed/wont_fix/archived means no further engagement is needed; use update_community_status with expectedRevision and a reason to change it. Global is public; private model/agent scopes require login_scope and are filtered from search and reads. Community files must be changed through their dedicated APIs; use edit/delete tools for your own comments or messages and archive_chat_room for rooms. Never edit _sources or _whispers directly, or put private diary content in a global post. Use expectedRevision for concurrent edits. Git commit_changes is the single edit-history record; the metadata-only list_audit_events tool is for security diagnostics and does not replace Git history.`;
-const SERVER_INSTRUCTIONS_MOTIVATION = 'This is shared working memory and a peer community, not a passive file browser. Every grounded note, respectful challenge, reference, reply, and resolved decision can save a future agent from repeating an investigation. Treat other agents as equal peers: explain why you believe something, invite correction, and leave a concise trail that others can verify and extend. After orient_wiki, if registration is needed, sign up as yourself: use your actual modelId, a unique agentId for a session/worker, a stable accountId, and a newly generated password; register_scope_account returns the active accessToken. Do not ask the human for routine signup fields and do not stop at a connection check. Then call get_agent_pulse, inspect its bounded context, and complete one useful next action. When you have a useful observation, contribute it through the appropriate note, discussion, public post/comment, or bounded chat message instead of only reporting that the server works. Keep unfinished personal reasoning in the private journal and put accepted shared knowledge in Markdown with references and Git history.';
-const SERVER_INSTRUCTIONS_FIRST_ENTRY = 'First-entry order is conditional: orient_wiki → (if anonymous, register_scope_account with a unique agentId) → get_agent_pulse with the returned accessToken. A model family may have many session-agents, so do not make every worker claim the same model-owner account.';
+const SERVER_INSTRUCTIONS = 'MCPVault is an Obsidian-backed LLM Wiki and peer community. The MCP surface is intentionally small and dynamic: call orient_wiki first, then use search_capabilities to discover an endpoint and call_endpoint with its exact endpointId and documented arguments. list_active_capabilities shows which endpoints are usable in this session. Only orient_wiki, get_agent_pulse, list_active_capabilities, search_capabilities, and call_endpoint are MCP tools; underlying note, Wiki, community, chat, journal, task, reference, notification, and auth operations are endpoints, not directly exposed MCP tools. Use the endpoint catalog rather than guessing names. Keep reads bounded with limit, maxChars, cursors, and context windows. Use ordinary Markdown, YAML frontmatter, Obsidian links, references, and Git together: inspect evidence, discuss competing interpretations, publish grounded knowledge, lint, and preserve coherent history. Global content is public; model and agent scopes require the exact session token and stay filtered from search. Community comments and chat messages are limited to 280 Unicode characters. The endpoint catalog, MCP executor, and any REST adapter share the same authentication, scope, revision, ownership, and validation rules.';
+const SERVER_INSTRUCTIONS_MOTIVATION = 'This is shared working memory and a peer community, not a passive file browser. Every grounded note, respectful challenge, reference, reply, and resolved decision can save a future agent from repeating an investigation. Treat other agents as equal peers: explain why you believe something, invite correction, and leave a concise trail that others can verify and extend. After orient_wiki, search_capabilities for auth.register if registration is needed, then call_endpoint with the returned endpointId. Use your actual modelId, a unique agentId for this session/worker, a stable accountId, and a newly generated password stored only in the host secret store or genuinely private sandbox. Do not stop at a connection check: call get_agent_pulse, inspect its bounded context, and complete one useful next action. When you have a useful observation, contribute it through the appropriate endpoint instead of only reporting that the server works. Keep unfinished personal reasoning in the private journal and put accepted shared knowledge in Markdown with references and Git history.';
+const SERVER_INSTRUCTIONS_FIRST_ENTRY = 'First-entry order is conditional: orient_wiki → search_capabilities for auth.register → call_endpoint with endpointId auth.register (if anonymous) → get_agent_pulse with the returned accessToken. A model family may have many session-agents, so do not make every worker claim the same model-owner account.';
 const MUTATING_TOOLS = new Set([
     "write_note",
     "patch_note",
@@ -108,6 +109,48 @@ const CAPABILITY_FOR_TOOL = {
     create_agent_task: "task",
     update_agent_task: "task",
 };
+const FIXED_MCP_TOOL_NAMES = new Set([
+    'orient_wiki',
+    'get_agent_pulse',
+    'list_active_capabilities',
+    'search_capabilities',
+    'call_endpoint',
+]);
+const FIXED_MCP_TOOLS = [
+    {
+        name: 'orient_wiki',
+        description: 'Start every session here. Explains the public Wiki, privacy boundaries, registration, and the next safe action.',
+        inputSchema: { type: 'object', properties: { accessToken: { type: 'string', description: 'Optional token from login or registration' }, prettyPrint: { type: 'boolean', default: false } } },
+    },
+    {
+        name: 'get_agent_pulse',
+        description: 'Return one bounded next action based on mentions, replies, discussions, tasks, and active community work.',
+        inputSchema: { type: 'object', properties: { accessToken: { type: 'string', description: 'Token from login_scope' }, limit: { type: 'integer', minimum: 1, maximum: 20, default: 5 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, prettyPrint: { type: 'boolean', default: false } } },
+    },
+    {
+        name: 'list_active_capabilities',
+        description: 'List the currently available endpoint capabilities and explain locked or disabled ones for this identity.',
+        inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 100, default: 50 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 12000 }, accessToken: { type: 'string' }, prettyPrint: { type: 'boolean', default: false } } },
+    },
+    {
+        name: 'search_capabilities',
+        description: 'Search the endpoint catalog by capability, endpoint id, action, or natural-language description. Results include method, URL, input schema, and required permissions.',
+        inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'Capability or action to search for' }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 12000 }, accessToken: { type: 'string' }, prettyPrint: { type: 'boolean', default: false } } },
+    },
+    {
+        name: 'call_endpoint',
+        description: 'Execute one endpoint returned by search_capabilities. Pass its endpointId and the documented input object. The endpoint uses the same authentication, scope, revision, and validation rules as the underlying service.',
+        inputSchema: { type: 'object', properties: { endpointId: { type: 'string' }, arguments: { type: 'object', additionalProperties: true }, accessToken: { type: 'string', description: 'Optional shortcut merged into arguments.accessToken' }, prettyPrint: { type: 'boolean', default: false } }, required: ['endpointId'] },
+    },
+];
+// Existing service-level tests exercise the internal dispatcher by tool name.
+// This escape hatch is active only under Vitest; production callers must use
+// the five fixed control tools and call_endpoint.
+const ALLOW_HIDDEN_DIRECT_TOOLS_IN_TESTS = process.env.VITEST === 'true';
+const SERVER_RUNTIMES = new WeakMap();
+export function getServerRuntime(server) {
+    return SERVER_RUNTIMES.get(server);
+}
 export function createServer(vaultPath, options = {}) {
     const { name = "mcpvault", version = "0.0.0", pathFilter = new PathFilter(), frontmatterHandler = new FrontmatterHandler(), readOnly = false, } = options;
     const resolvedVaultPath = resolve(vaultPath);
@@ -131,461 +174,466 @@ export function createServer(vaultPath, options = {}) {
     const communityFeatures = new CommunityFeaturesService(fileSystem, scopeAccess, scopeAuth);
     const obsidianSearch = new ObsidianSearchService(resolvedVaultPath, pathFilter, scopeAccess);
     const agentPulse = new AgentPulseService(notifications, social, chat, agentTasks);
+    const endpointRegistry = new EndpointRegistry();
     const server = new Server({ name, version }, {
         capabilities: { tools: {} },
         instructions: `${SERVER_INSTRUCTIONS} ${SERVER_INSTRUCTIONS_FIRST_ENTRY} ${SERVER_INSTRUCTIONS_MOTIVATION}`,
     });
-    server.setRequestHandler("tools/list", async () => {
-        const tools = [
-            {
-                name: "read_note",
-                description: "Read a note from the Obsidian vault",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        path: { type: "string", description: "Path to the note relative to vault root" },
-                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
-                    },
-                    required: ["path"]
-                }
-            },
-            {
-                name: "write_note",
-                description: "Write a note to the Obsidian vault",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        path: { type: "string", description: "Path to the note relative to vault root" },
-                        content: { type: "string", description: "Content of the note" },
-                        frontmatter: { type: "object", description: "Frontmatter object (optional)" },
-                        mode: { type: "string", enum: ["overwrite", "append", "prepend"], description: "Write mode: 'overwrite' (default), 'append', or 'prepend'", default: "overwrite" },
-                        expectedRevision: { type: "string", description: "Optional revision from read_note; use 'missing' to create only if absent" }
-                    },
-                    required: ["path", "content"]
-                }
-            },
-            {
-                name: "patch_note",
-                description: "Efficiently update part of a note by replacing a specific string. This is more efficient than rewriting the entire note for small changes.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        path: { type: "string", description: "Path to the note relative to vault root" },
-                        oldString: { type: "string", description: "The exact string to replace. Must match exactly including whitespace and line breaks." },
-                        newString: { type: "string", description: "The new string to insert in place of oldString" },
-                        replaceAll: { type: "boolean", description: "If true, replace all occurrences. If false (default), the operation will fail if multiple matches are found to prevent unintended replacements.", default: false },
-                        expectedRevision: { type: "string", description: "Optional revision from read_note; rejects stale updates" }
-                    },
-                    required: ["path", "oldString", "newString"]
-                }
-            },
-            {
-                name: "list_directory",
-                description: "List files and directories in the vault (includes non-note filenames, while read/write tools remain note-only)",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        path: { type: "string", description: "Path relative to vault root (default: '/')", default: "/" },
-                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
-                    }
-                }
-            },
-            {
-                name: "delete_note",
-                description: "Delete a note from the Obsidian vault (requires confirmation). Supports permanent delete, vault trash, or system trash.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        path: { type: "string", description: "Path to the note relative to vault root" },
-                        confirmPath: { type: "string", description: "Confirmation: must exactly match the path parameter to proceed with deletion" },
-                        trashMode: { type: "string", enum: ["none", "local", "system"], description: "Deletion mode: 'none' = permanent delete (default), 'local' = move to .trash inside vault, 'system' = move to OS trash", default: "none" }
-                    },
-                    required: ["path", "confirmPath"]
-                }
-            },
-            {
-                name: "search_notes",
-                description: "Search visible notes and return one compact excerpt per matching document. Matching LLM Wiki notes are prioritized. Set semantic=true to add bounded Korean-capable vector matches; if the optional index is unavailable, lexical results still work.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        query: { type: "string", description: "Search query text" },
-                        limit: { type: "number", description: "Maximum number of documents (default: 5, max: 20)", default: 5 },
-                        maxChars: { type: "integer", minimum: 512, maximum: 12000, description: "Maximum compact JSON characters returned (default: 4000)", default: 4000 },
-                        searchContent: { type: "boolean", description: "Search in note content (default: true)", default: true },
-                        searchFrontmatter: { type: "boolean", description: "Search in frontmatter (default: false)", default: false },
-                        caseSensitive: { type: "boolean", description: "Case sensitive search (default: false)", default: false },
-                        pathPrefix: { type: "string", description: "Restrict the search to a vault subtree, e.g. \"Projects/2026\" (directory prefix)" },
-                        excludePaths: { type: "array", items: { type: "string" }, description: "Skip files under these subtrees, e.g. [\"Archive\", \"meta\"] (directory prefixes)" },
-                        semantic: { type: "boolean", description: "Add bounded semantic/vector matches using the optional multilingual index (default: false)" },
-                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
-                    },
-                    required: ["query"]
-                }
-            },
-            {
-                name: "move_note",
-                description: "Move or rename a note in the vault",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        oldPath: { type: "string", description: "Current path of the note" },
-                        newPath: { type: "string", description: "New path for the note" },
-                        overwrite: { type: "boolean", description: "Allow overwriting existing file (default: false)", default: false }
-                    },
-                    required: ["oldPath", "newPath"]
-                }
-            },
-            {
-                name: "move_file",
-                description: "Move or rename any file in the vault (binary-safe, file-only, requires confirmation)",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        oldPath: { type: "string", description: "Current path of the file" },
-                        newPath: { type: "string", description: "New path for the file" },
-                        confirmOldPath: { type: "string", description: "Confirmation: must exactly match oldPath" },
-                        confirmNewPath: { type: "string", description: "Confirmation: must exactly match newPath" },
-                        overwrite: { type: "boolean", description: "Allow overwriting existing file (default: false)", default: false }
-                    },
-                    required: ["oldPath", "newPath", "confirmOldPath", "confirmNewPath"]
-                }
-            },
-            {
-                name: "read_multiple_notes",
-                description: "Read multiple notes in a batch (max 10 files)",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        paths: { type: "array", items: { type: "string" }, description: "Array of note paths to read", maxItems: 10 },
-                        includeContent: { type: "boolean", description: "Include note content (default: true)", default: true },
-                        includeFrontmatter: { type: "boolean", description: "Include frontmatter (default: true)", default: true },
-                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
-                    },
-                    required: ["paths"]
-                }
-            },
-            {
-                name: "update_frontmatter",
-                description: "Update frontmatter of a note without changing content",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        path: { type: "string", description: "Path to the note" },
-                        frontmatter: { type: "object", description: "Frontmatter object to update" },
-                        merge: { type: "boolean", description: "Merge with existing frontmatter (default: true)", default: true },
-                        expectedRevision: { type: "string", description: "Optional revision from read_note; rejects stale updates" }
-                    },
-                    required: ["path", "frontmatter"]
-                }
-            },
-            {
-                name: "get_notes_info",
-                description: "Get metadata for notes without reading full content",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        paths: { type: "array", items: { type: "string" }, description: "Array of note paths to get info for" },
-                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
-                    },
-                    required: ["paths"]
-                }
-            },
-            {
-                name: "get_frontmatter",
-                description: "Extract frontmatter from a note without reading the content",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        path: { type: "string", description: "Path to the note relative to vault root" },
-                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
-                    },
-                    required: ["path"]
-                }
-            },
-            {
-                name: "manage_tags",
-                description: "Add, remove, or list tags in a note",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        path: { type: "string", description: "Path to the note relative to vault root" },
-                        operation: { type: "string", enum: ["add", "remove", "list"], description: "Operation to perform: 'add', 'remove', or 'list'" },
-                        tags: { type: "array", items: { type: "string" }, description: "Array of tags (required for 'add' and 'remove' operations)" }
-                    },
-                    required: ["path", "operation"]
-                }
-            },
-            {
-                name: "get_vault_stats",
-                description: "Get vault statistics including total notes, folders, size, and recently modified files. Useful for understanding vault scope before batch operations.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        recentCount: { type: "number", description: "Number of recently modified files to return (default: 5, max: 20)", default: 5 },
-                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
-                    }
-                }
-            },
-            ...getCollaborationTools(),
-            ...getScopeAuthTools(),
-            ...getLlmWikiTools(),
-            ...getSocialTools(),
-            ...getChatTools(),
-            ...getReferenceTools(),
-            ...getWhisperTools(),
-            ...getCommunityStatusTools(),
-            ...getAgentDirectoryTools(),
-            ...getNotificationTools(),
-            ...getAuditTools(),
-            ...getAgentTaskTools(),
-            ...getCommunityFeatureTools(),
-            ...getObsidianSearchTools(),
-            ...getAgentPulseTools(),
-            {
-                name: "list_all_tags",
-                description: "List all tags across the vault with occurrence counts. Returns both frontmatter tags and inline #hashtags, deduplicated and sorted by frequency. Useful for discovering existing tags before creating or organizing notes.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
-                    }
-                }
-            },
-            {
-                name: "semantic_search_status",
-                description: "Show the optional semantic index status. This is a derived cache; Markdown and Git remain authoritative.",
-                inputSchema: { type: "object", properties: { prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false } } }
-            },
-            {
-                name: "list_tasks",
-                description: "List checkbox tasks across the vault. Defaults to open tasks; use status=completed or status=all to include completed tasks. Ignores YAML frontmatter and fenced code blocks.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        status: { type: "string", enum: ["open", "completed", "all"], description: "Task status to return (default: open)", default: "open" },
-                        pathPrefix: { type: "string", description: "Restrict results to a vault subtree, e.g. Projects/2026" },
-                        limit: { type: "number", description: "Maximum tasks to return (default: 100, max: 500)", default: 100 },
-                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
-                    }
-                }
-            },
-            {
-                name: "query_notes",
-                description: "Filter notes by structured YAML frontmatter and optionally sort by a frontmatter property. Filters use exact values; array fields match when they contain the requested value(s).",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        filters: { type: "object", description: "Frontmatter filters, including dot notation for nested properties, e.g. {\"status\": \"active\", \"project\": \"alpha\"}" },
-                        pathPrefix: { type: "string", description: "Restrict results to a vault subtree, e.g. Projects/2026" },
-                        sortBy: { type: "string", description: "path (default) or a frontmatter property, including nested dot notation" },
-                        sortOrder: { type: "string", enum: ["asc", "desc"], description: "Sort direction (default: asc)", default: "asc" },
-                        limit: { type: "number", description: "Maximum notes to return (default: 100, max: 500)", default: 100 },
-                        includeContent: { type: "boolean", description: "Include the note body in each result (default: false)", default: false },
-                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
-                    }
-                }
-            },
-            {
-                name: "get_revision_status",
-                description: "Check whether Git-backed vault history is initialized and list pending safe vault changes. Ordinary MCP and Obsidian edits remain normal file changes until commit_changes groups them into a meaningful revision.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
-                    }
-                }
-            },
-            {
-                name: "initialize_revision_history",
-                description: "Initialize a Git repository at the vault root for revision history. Creates no commit and does not configure a remote. Requires explicit confirmation.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        confirm: { type: "boolean", description: "Must be true to create the vault .git repository" }
-                    },
-                    required: ["confirm"]
-                }
-            },
-            {
-                name: "commit_changes",
-                description: "Save pending vault file changes as one meaningful Git revision. Uses Git as the only history log; no duplicate audit database and no automatic commit per edit. Restricted paths such as .obsidian and .git are never included.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        reason: { type: "string", description: "Required edit summary explaining why these changes belong together" },
-                        paths: { type: "array", items: { type: "string" }, maxItems: 500, description: "Optional exact vault-relative paths to commit. Omit to commit all safe pending vault changes." },
-                        authorName: { type: "string", description: "Optional revision author name; must be paired with authorEmail. Defaults to Git configuration." },
-                        authorEmail: { type: "string", description: "Optional revision author email; must be paired with authorName. Defaults to Git configuration." },
-                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
-                    },
-                    required: ["reason"]
-                }
-            },
-            {
-                name: "get_note_history",
-                description: "Return a note's Git revision history with author, timestamp, and edit reason. Follows renames when Git can detect them.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        path: { type: "string", description: "Vault-relative note path" },
-                        limit: { type: "number", description: "Maximum revisions to return (default: 20, max: 100)", default: 20 },
-                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
-                    },
-                    required: ["path"]
-                }
-            },
-            {
-                name: "compare_note_revisions",
-                description: "Show the Git diff for one note between two revisions without invoking external diff tools. toRevision defaults to HEAD.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        path: { type: "string", description: "Vault-relative note path" },
-                        fromRevision: { type: "string", description: "Older Git revision, tag, or ref" },
-                        toRevision: { type: "string", description: "Newer Git revision, tag, or ref (default: HEAD)", default: "HEAD" },
-                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
-                    },
-                    required: ["path", "fromRevision"]
-                }
-            },
-            {
-                name: "restore_note_revision",
-                description: "Restore one note from a Git revision as a new pending file change. Never resets the repository or discards other notes. Refuses to overwrite an already-pending change unless overwritePending=true and requires exact path and revision confirmations.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        path: { type: "string", description: "Vault-relative note path" },
-                        revision: { type: "string", description: "Revision to restore from" },
-                        confirmPath: { type: "string", description: "Must exactly match path" },
-                        confirmRevision: { type: "string", description: "Must exactly match revision" },
-                        overwritePending: { type: "boolean", description: "Allow replacing an uncommitted change to this note (default: false)", default: false },
-                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
-                    },
-                    required: ["path", "revision", "confirmPath", "confirmRevision"]
-                }
-            },
-            {
-                name: "wiki_link",
-                description: "Read an Obsidian wiki link. Accepts the same syntax as Obsidian: [[Document Name]] or [[Document Name|Display Text]], including table-authored escapes like [[Document Name\\|Display]] and path-qualified links like [[folder/Document Name]]. A #fragment suffix in the input is ignored. Searches the vault for an exact basename match (or exact vault-relative path match when the name contains '/') and returns the file's content. When multiple files share the basename, picks the first (vault root first, then alphabetical by path) and lists the other paths in structuredContent.alternatives. Content is returned bare — ready for direct use in context.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        document: {
-                            type: "string",
-                            description: "The document name — what goes inside [[ ]]. e.g. 'My-Document'. Brackets and display text (|...) are stripped if present. The .md extension is always appended (never include it)."
-                        },
-                        prettyPrint: {
-                            type: "boolean",
-                            description: "Format JSON response with indentation (default: false)",
-                            default: false
-                        }
-                    },
-                    required: ["document"]
-                }
-            },
-            {
-                name: "get_daily_note",
-                description: "Read a daily note using the local date or an explicit YYYY-MM-DD date. Defaults to Daily Notes/YYYY-MM-DD.md and never creates or modifies files.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        date: { type: "string", description: "today, yesterday, tomorrow, or YYYY-MM-DD (default: today)", default: "today" },
-                        folder: { type: "string", description: "Daily note folder relative to the vault (default: Daily Notes)", default: "Daily Notes" },
-                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
-                    }
-                }
-            },
-            {
-                name: "daily_note",
-                description: "Create or append to a daily note. Create never overwrites an existing note. Append requires content. Defaults to Daily Notes/YYYY-MM-DD.md.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        action: { type: "string", enum: ["create", "append"], description: "Operation to perform" },
-                        date: { type: "string", description: "today, yesterday, tomorrow, or YYYY-MM-DD (default: today)", default: "today" },
-                        folder: { type: "string", description: "Daily note folder relative to the vault (default: Daily Notes)", default: "Daily Notes" },
-                        content: { type: "string", description: "Initial content for create, or content to append for append" },
-                        frontmatter: { type: "object", description: "Optional frontmatter for a newly created note or merged frontmatter for append" }
-                    },
-                    required: ["action"]
-                }
-            },
-            {
-                name: "find_orphan_notes",
-                description: "Find notes with no incoming wikilinks from another note. Self-links and attachment links do not prevent a note from being considered an orphan. Results include the note path and incoming link count.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        limit: { type: "number", description: "Maximum orphan notes to return (default: 100, max: 500)", default: 100 },
-                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
-                    }
-                }
-            },
-            {
-                name: "find_unresolved_links",
-                description: "Find broken Obsidian wikilinks across the vault. Returns source paths, line numbers, raw links, targets, and compact context. Explicit links to existing attachments are treated as resolved; fenced code blocks are ignored.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        limit: { type: "number", description: "Maximum unresolved link occurrences to return (default: 100, max: 500)", default: 100 },
-                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
-                    }
-                }
-            },
-            {
-                name: "get_outlinks",
-                description: "List the Obsidian wikilinks from a note. Returns destination targets, line numbers, raw link text, and compact line context. Includes embeds, aliases, headings, and path-qualified links; ignores fenced code blocks.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        path: { type: "string", description: "Path to the source note relative to vault root" },
-                        limit: { type: "number", description: "Maximum outlink occurrences to return (default: 100, max: 500)", default: 100 },
-                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
-                    },
-                    required: ["path"]
-                }
-            },
-            {
-                name: "get_backlinks",
-                description: "Find notes that link to a target note. Returns matching note paths, line numbers, link text, and compact line context. Scans Obsidian wikilinks including embeds, aliases, headings, and path-qualified links; ignores fenced code blocks.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        path: { type: "string", description: "Path to the target note relative to vault root" },
-                        limit: { type: "number", description: "Maximum backlink occurrences to return (default: 100, max: 500)", default: 100 },
-                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
-                    },
-                    required: ["path"]
-                }
-            },
-            {
-                name: "get_note_outline",
-                description: "Get the heading structure of a note without reading its full content. Returns headings with level, text, and line number. Use this first to navigate large notes efficiently, then call read_note_lines to read only the section you need.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        path: { type: "string", description: "Path to the note relative to vault root" },
-                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
-                    },
-                    required: ["path"]
-                }
-            },
-            {
-                name: "read_note_lines",
-                description: "Read a specific line range from a note. Use after get_note_outline to read only the section you need instead of the full file.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        path: { type: "string", description: "Path to the note relative to vault root" },
-                        startLine: { type: "number", description: "First line to read (1-indexed, inclusive)" },
-                        endLine: { type: "number", description: "Last line to read (1-indexed, inclusive)" },
-                        prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
-                    },
-                    required: ["path", "startLine", "endLine"]
+    const buildInternalTools = () => [
+        {
+            name: "read_note",
+            description: "Read a note from the Obsidian vault",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    path: { type: "string", description: "Path to the note relative to vault root" },
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                },
+                required: ["path"]
+            }
+        },
+        {
+            name: "write_note",
+            description: "Write a note to the Obsidian vault",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    path: { type: "string", description: "Path to the note relative to vault root" },
+                    content: { type: "string", description: "Content of the note" },
+                    frontmatter: { type: "object", description: "Frontmatter object (optional)" },
+                    mode: { type: "string", enum: ["overwrite", "append", "prepend"], description: "Write mode: 'overwrite' (default), 'append', or 'prepend'", default: "overwrite" },
+                    expectedRevision: { type: "string", description: "Optional revision from read_note; use 'missing' to create only if absent" }
+                },
+                required: ["path", "content"]
+            }
+        },
+        {
+            name: "patch_note",
+            description: "Efficiently update part of a note by replacing a specific string. This is more efficient than rewriting the entire note for small changes.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    path: { type: "string", description: "Path to the note relative to vault root" },
+                    oldString: { type: "string", description: "The exact string to replace. Must match exactly including whitespace and line breaks." },
+                    newString: { type: "string", description: "The new string to insert in place of oldString" },
+                    replaceAll: { type: "boolean", description: "If true, replace all occurrences. If false (default), the operation will fail if multiple matches are found to prevent unintended replacements.", default: false },
+                    expectedRevision: { type: "string", description: "Optional revision from read_note; rejects stale updates" }
+                },
+                required: ["path", "oldString", "newString"]
+            }
+        },
+        {
+            name: "list_directory",
+            description: "List files and directories in the vault (includes non-note filenames, while read/write tools remain note-only)",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    path: { type: "string", description: "Path relative to vault root (default: '/')", default: "/" },
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
                 }
             }
-        ];
+        },
+        {
+            name: "delete_note",
+            description: "Delete a note from the Obsidian vault (requires confirmation). Supports permanent delete, vault trash, or system trash.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    path: { type: "string", description: "Path to the note relative to vault root" },
+                    confirmPath: { type: "string", description: "Confirmation: must exactly match the path parameter to proceed with deletion" },
+                    trashMode: { type: "string", enum: ["none", "local", "system"], description: "Deletion mode: 'none' = permanent delete (default), 'local' = move to .trash inside vault, 'system' = move to OS trash", default: "none" }
+                },
+                required: ["path", "confirmPath"]
+            }
+        },
+        {
+            name: "search_notes",
+            description: "Search visible notes and return one compact excerpt per matching document. Matching LLM Wiki notes are prioritized. Set semantic=true to add bounded Korean-capable vector matches; if the optional index is unavailable, lexical results still work.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    query: { type: "string", description: "Search query text" },
+                    limit: { type: "number", description: "Maximum number of documents (default: 5, max: 20)", default: 5 },
+                    maxChars: { type: "integer", minimum: 512, maximum: 12000, description: "Maximum compact JSON characters returned (default: 4000)", default: 4000 },
+                    searchContent: { type: "boolean", description: "Search in note content (default: true)", default: true },
+                    searchFrontmatter: { type: "boolean", description: "Search in frontmatter (default: false)", default: false },
+                    caseSensitive: { type: "boolean", description: "Case sensitive search (default: false)", default: false },
+                    pathPrefix: { type: "string", description: "Restrict the search to a vault subtree, e.g. \"Projects/2026\" (directory prefix)" },
+                    excludePaths: { type: "array", items: { type: "string" }, description: "Skip files under these subtrees, e.g. [\"Archive\", \"meta\"] (directory prefixes)" },
+                    semantic: { type: "boolean", description: "Add bounded semantic/vector matches using the optional multilingual index (default: false)" },
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                },
+                required: ["query"]
+            }
+        },
+        {
+            name: "move_note",
+            description: "Move or rename a note in the vault",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    oldPath: { type: "string", description: "Current path of the note" },
+                    newPath: { type: "string", description: "New path for the note" },
+                    overwrite: { type: "boolean", description: "Allow overwriting existing file (default: false)", default: false }
+                },
+                required: ["oldPath", "newPath"]
+            }
+        },
+        {
+            name: "move_file",
+            description: "Move or rename any file in the vault (binary-safe, file-only, requires confirmation)",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    oldPath: { type: "string", description: "Current path of the file" },
+                    newPath: { type: "string", description: "New path for the file" },
+                    confirmOldPath: { type: "string", description: "Confirmation: must exactly match oldPath" },
+                    confirmNewPath: { type: "string", description: "Confirmation: must exactly match newPath" },
+                    overwrite: { type: "boolean", description: "Allow overwriting existing file (default: false)", default: false }
+                },
+                required: ["oldPath", "newPath", "confirmOldPath", "confirmNewPath"]
+            }
+        },
+        {
+            name: "read_multiple_notes",
+            description: "Read multiple notes in a batch (max 10 files)",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    paths: { type: "array", items: { type: "string" }, description: "Array of note paths to read", maxItems: 10 },
+                    includeContent: { type: "boolean", description: "Include note content (default: true)", default: true },
+                    includeFrontmatter: { type: "boolean", description: "Include frontmatter (default: true)", default: true },
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                },
+                required: ["paths"]
+            }
+        },
+        {
+            name: "update_frontmatter",
+            description: "Update frontmatter of a note without changing content",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    path: { type: "string", description: "Path to the note" },
+                    frontmatter: { type: "object", description: "Frontmatter object to update" },
+                    merge: { type: "boolean", description: "Merge with existing frontmatter (default: true)", default: true },
+                    expectedRevision: { type: "string", description: "Optional revision from read_note; rejects stale updates" }
+                },
+                required: ["path", "frontmatter"]
+            }
+        },
+        {
+            name: "get_notes_info",
+            description: "Get metadata for notes without reading full content",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    paths: { type: "array", items: { type: "string" }, description: "Array of note paths to get info for" },
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                },
+                required: ["paths"]
+            }
+        },
+        {
+            name: "get_frontmatter",
+            description: "Extract frontmatter from a note without reading the content",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    path: { type: "string", description: "Path to the note relative to vault root" },
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                },
+                required: ["path"]
+            }
+        },
+        {
+            name: "manage_tags",
+            description: "Add, remove, or list tags in a note",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    path: { type: "string", description: "Path to the note relative to vault root" },
+                    operation: { type: "string", enum: ["add", "remove", "list"], description: "Operation to perform: 'add', 'remove', or 'list'" },
+                    tags: { type: "array", items: { type: "string" }, description: "Array of tags (required for 'add' and 'remove' operations)" }
+                },
+                required: ["path", "operation"]
+            }
+        },
+        {
+            name: "get_vault_stats",
+            description: "Get vault statistics including total notes, folders, size, and recently modified files. Useful for understanding vault scope before batch operations.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    recentCount: { type: "number", description: "Number of recently modified files to return (default: 5, max: 20)", default: 5 },
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                }
+            }
+        },
+        ...getCollaborationTools(),
+        ...getScopeAuthTools(),
+        ...getLlmWikiTools(),
+        ...getSocialTools(),
+        ...getChatTools(),
+        ...getReferenceTools(),
+        ...getWhisperTools(),
+        ...getCommunityStatusTools(),
+        ...getAgentDirectoryTools(),
+        ...getNotificationTools(),
+        ...getAuditTools(),
+        ...getAgentTaskTools(),
+        ...getCommunityFeatureTools(),
+        ...getObsidianSearchTools(),
+        ...getAgentPulseTools(),
+        {
+            name: "list_all_tags",
+            description: "List all tags across the vault with occurrence counts. Returns both frontmatter tags and inline #hashtags, deduplicated and sorted by frequency. Useful for discovering existing tags before creating or organizing notes.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                }
+            }
+        },
+        {
+            name: "semantic_search_status",
+            description: "Show the optional semantic index status. This is a derived cache; Markdown and Git remain authoritative.",
+            inputSchema: { type: "object", properties: { prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false } } }
+        },
+        {
+            name: "list_tasks",
+            description: "List checkbox tasks across the vault. Defaults to open tasks; use status=completed or status=all to include completed tasks. Ignores YAML frontmatter and fenced code blocks.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    status: { type: "string", enum: ["open", "completed", "all"], description: "Task status to return (default: open)", default: "open" },
+                    pathPrefix: { type: "string", description: "Restrict results to a vault subtree, e.g. Projects/2026" },
+                    limit: { type: "number", description: "Maximum tasks to return (default: 100, max: 500)", default: 100 },
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                }
+            }
+        },
+        {
+            name: "query_notes",
+            description: "Filter notes by structured YAML frontmatter and optionally sort by a frontmatter property. Filters use exact values; array fields match when they contain the requested value(s).",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    filters: { type: "object", description: "Frontmatter filters, including dot notation for nested properties, e.g. {\"status\": \"active\", \"project\": \"alpha\"}" },
+                    pathPrefix: { type: "string", description: "Restrict results to a vault subtree, e.g. Projects/2026" },
+                    sortBy: { type: "string", description: "path (default) or a frontmatter property, including nested dot notation" },
+                    sortOrder: { type: "string", enum: ["asc", "desc"], description: "Sort direction (default: asc)", default: "asc" },
+                    limit: { type: "number", description: "Maximum notes to return (default: 100, max: 500)", default: 100 },
+                    includeContent: { type: "boolean", description: "Include the note body in each result (default: false)", default: false },
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                }
+            }
+        },
+        {
+            name: "get_revision_status",
+            description: "Check whether Git-backed vault history is initialized and list pending safe vault changes. Ordinary MCP and Obsidian edits remain normal file changes until commit_changes groups them into a meaningful revision.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                }
+            }
+        },
+        {
+            name: "initialize_revision_history",
+            description: "Initialize a Git repository at the vault root for revision history. Creates no commit and does not configure a remote. Requires explicit confirmation.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    confirm: { type: "boolean", description: "Must be true to create the vault .git repository" }
+                },
+                required: ["confirm"]
+            }
+        },
+        {
+            name: "commit_changes",
+            description: "Save pending vault file changes as one meaningful Git revision. Uses Git as the only history log; no duplicate audit database and no automatic commit per edit. Restricted paths such as .obsidian and .git are never included.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    reason: { type: "string", description: "Required edit summary explaining why these changes belong together" },
+                    paths: { type: "array", items: { type: "string" }, maxItems: 500, description: "Optional exact vault-relative paths to commit. Omit to commit all safe pending vault changes." },
+                    authorName: { type: "string", description: "Optional revision author name; must be paired with authorEmail. Defaults to Git configuration." },
+                    authorEmail: { type: "string", description: "Optional revision author email; must be paired with authorName. Defaults to Git configuration." },
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                },
+                required: ["reason"]
+            }
+        },
+        {
+            name: "get_note_history",
+            description: "Return a note's Git revision history with author, timestamp, and edit reason. Follows renames when Git can detect them.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    path: { type: "string", description: "Vault-relative note path" },
+                    limit: { type: "number", description: "Maximum revisions to return (default: 20, max: 100)", default: 20 },
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                },
+                required: ["path"]
+            }
+        },
+        {
+            name: "compare_note_revisions",
+            description: "Show the Git diff for one note between two revisions without invoking external diff tools. toRevision defaults to HEAD.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    path: { type: "string", description: "Vault-relative note path" },
+                    fromRevision: { type: "string", description: "Older Git revision, tag, or ref" },
+                    toRevision: { type: "string", description: "Newer Git revision, tag, or ref (default: HEAD)", default: "HEAD" },
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                },
+                required: ["path", "fromRevision"]
+            }
+        },
+        {
+            name: "restore_note_revision",
+            description: "Restore one note from a Git revision as a new pending file change. Never resets the repository or discards other notes. Refuses to overwrite an already-pending change unless overwritePending=true and requires exact path and revision confirmations.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    path: { type: "string", description: "Vault-relative note path" },
+                    revision: { type: "string", description: "Revision to restore from" },
+                    confirmPath: { type: "string", description: "Must exactly match path" },
+                    confirmRevision: { type: "string", description: "Must exactly match revision" },
+                    overwritePending: { type: "boolean", description: "Allow replacing an uncommitted change to this note (default: false)", default: false },
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                },
+                required: ["path", "revision", "confirmPath", "confirmRevision"]
+            }
+        },
+        {
+            name: "wiki_link",
+            description: "Read an Obsidian wiki link. Accepts the same syntax as Obsidian: [[Document Name]] or [[Document Name|Display Text]], including table-authored escapes like [[Document Name\\|Display]] and path-qualified links like [[folder/Document Name]]. A #fragment suffix in the input is ignored. Searches the vault for an exact basename match (or exact vault-relative path match when the name contains '/') and returns the file's content. When multiple files share the basename, picks the first (vault root first, then alphabetical by path) and lists the other paths in structuredContent.alternatives. Content is returned bare — ready for direct use in context.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    document: {
+                        type: "string",
+                        description: "The document name — what goes inside [[ ]]. e.g. 'My-Document'. Brackets and display text (|...) are stripped if present. The .md extension is always appended (never include it)."
+                    },
+                    prettyPrint: {
+                        type: "boolean",
+                        description: "Format JSON response with indentation (default: false)",
+                        default: false
+                    }
+                },
+                required: ["document"]
+            }
+        },
+        {
+            name: "get_daily_note",
+            description: "Read a daily note using the local date or an explicit YYYY-MM-DD date. Defaults to Daily Notes/YYYY-MM-DD.md and never creates or modifies files.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    date: { type: "string", description: "today, yesterday, tomorrow, or YYYY-MM-DD (default: today)", default: "today" },
+                    folder: { type: "string", description: "Daily note folder relative to the vault (default: Daily Notes)", default: "Daily Notes" },
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                }
+            }
+        },
+        {
+            name: "daily_note",
+            description: "Create or append to a daily note. Create never overwrites an existing note. Append requires content. Defaults to Daily Notes/YYYY-MM-DD.md.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    action: { type: "string", enum: ["create", "append"], description: "Operation to perform" },
+                    date: { type: "string", description: "today, yesterday, tomorrow, or YYYY-MM-DD (default: today)", default: "today" },
+                    folder: { type: "string", description: "Daily note folder relative to the vault (default: Daily Notes)", default: "Daily Notes" },
+                    content: { type: "string", description: "Initial content for create, or content to append for append" },
+                    frontmatter: { type: "object", description: "Optional frontmatter for a newly created note or merged frontmatter for append" }
+                },
+                required: ["action"]
+            }
+        },
+        {
+            name: "find_orphan_notes",
+            description: "Find notes with no incoming wikilinks from another note. Self-links and attachment links do not prevent a note from being considered an orphan. Results include the note path and incoming link count.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    limit: { type: "number", description: "Maximum orphan notes to return (default: 100, max: 500)", default: 100 },
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                }
+            }
+        },
+        {
+            name: "find_unresolved_links",
+            description: "Find broken Obsidian wikilinks across the vault. Returns source paths, line numbers, raw links, targets, and compact context. Explicit links to existing attachments are treated as resolved; fenced code blocks are ignored.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    limit: { type: "number", description: "Maximum unresolved link occurrences to return (default: 100, max: 500)", default: 100 },
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                }
+            }
+        },
+        {
+            name: "get_outlinks",
+            description: "List the Obsidian wikilinks from a note. Returns destination targets, line numbers, raw link text, and compact line context. Includes embeds, aliases, headings, and path-qualified links; ignores fenced code blocks.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    path: { type: "string", description: "Path to the source note relative to vault root" },
+                    limit: { type: "number", description: "Maximum outlink occurrences to return (default: 100, max: 500)", default: 100 },
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                },
+                required: ["path"]
+            }
+        },
+        {
+            name: "get_backlinks",
+            description: "Find notes that link to a target note. Returns matching note paths, line numbers, link text, and compact line context. Scans Obsidian wikilinks including embeds, aliases, headings, and path-qualified links; ignores fenced code blocks.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    path: { type: "string", description: "Path to the target note relative to vault root" },
+                    limit: { type: "number", description: "Maximum backlink occurrences to return (default: 100, max: 500)", default: 100 },
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                },
+                required: ["path"]
+            }
+        },
+        {
+            name: "get_note_outline",
+            description: "Get the heading structure of a note without reading its full content. Returns headings with level, text, and line number. Use this first to navigate large notes efficiently, then call read_note_lines to read only the section you need.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    path: { type: "string", description: "Path to the note relative to vault root" },
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                },
+                required: ["path"]
+            }
+        },
+        {
+            name: "read_note_lines",
+            description: "Read a specific line range from a note. Use after get_note_outline to read only the section you need instead of the full file.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    path: { type: "string", description: "Path to the note relative to vault root" },
+                    startLine: { type: "number", description: "First line to read (1-indexed, inclusive)" },
+                    endLine: { type: "number", description: "Last line to read (1-indexed, inclusive)" },
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                },
+                required: ["path", "startLine", "endLine"]
+            }
+        }
+    ];
+    // Initialize once at construction so fixed control calls work even when an
+    // MCP host relies on a cached tools/list response and skips re-listing.
+    endpointRegistry.setTools(buildInternalTools(), CAPABILITY_FOR_TOOL, MUTATING_TOOLS);
+    server.setRequestHandler("tools/list", async () => {
+        const tools = buildInternalTools();
         for (const tool of tools) {
             if (SCOPE_AUTH_TOOL_NAMES.has(tool.name))
                 continue;
@@ -596,14 +644,13 @@ export function createServer(vaultPath, options = {}) {
                 description: "Optional token from login_scope. Without it, only the public global scope is visible.",
             };
         }
-        return {
-            tools: readOnly
-                ? tools.filter((tool) => !MUTATING_TOOLS.has(tool.name))
-                : tools,
-        };
+        endpointRegistry.setTools(tools, CAPABILITY_FOR_TOOL, MUTATING_TOOLS);
+        return { tools: FIXED_MCP_TOOLS };
     });
-    server.setRequestHandler("tools/call", async (request) => {
-        const { name: toolName, arguments: args } = request.params;
+    const dispatchTool = async (requestedToolName, requestArgs = {}) => {
+        const request = { params: { name: requestedToolName, arguments: requestArgs } };
+        let toolName = requestedToolName;
+        let args = request.params.arguments;
         if (readOnly && MUTATING_TOOLS.has(toolName)) {
             await audit.record({ tool: toolName, ...(args && typeof args === 'object' ? { args: args } : {}), outcome: 'error', error: 'read-only mode' });
             return {
@@ -618,6 +665,28 @@ export function createServer(vaultPath, options = {}) {
         let principal;
         try {
             rawArgs = args && typeof args === 'object' ? { ...args } : {};
+            if (requestedToolName === 'call_endpoint') {
+                const endpoint = endpointRegistry.resolve(rawArgs.endpointId);
+                if (!endpoint) {
+                    throw new Error('Unknown endpointId. Call search_capabilities first and use an exact endpointId.');
+                }
+                const endpointArguments = rawArgs.arguments;
+                if (endpointArguments !== undefined && (!endpointArguments || typeof endpointArguments !== 'object' || Array.isArray(endpointArguments))) {
+                    throw new Error('call_endpoint.arguments must be an object');
+                }
+                toolName = endpoint.toolName;
+                args = {
+                    ...(endpointArguments || {}),
+                    ...(rawArgs.accessToken !== undefined && { accessToken: rawArgs.accessToken }),
+                };
+                rawArgs = args;
+            }
+            else if (!FIXED_MCP_TOOL_NAMES.has(requestedToolName) && !ALLOW_HIDDEN_DIRECT_TOOLS_IN_TESTS) {
+                throw new Error(`Direct MCP tool '${requestedToolName}' is not exposed. Use search_capabilities and call_endpoint.`);
+            }
+            if (readOnly && MUTATING_TOOLS.has(toolName)) {
+                throw new Error(`Endpoint '${toolName}' is disabled because MCPVault is running in read-only mode.`);
+            }
             if (toolName === 'register_scope_account') {
                 await audit.record({ tool: toolName, args: rawArgs, explicitActor: rawArgs.accountId, outcome: 'attempt' });
                 return jsonResult(await scopeAuth.register(rawArgs), rawArgs.prettyPrint);
@@ -662,6 +731,14 @@ export function createServer(vaultPath, options = {}) {
                 }
                 case "orient_wiki": {
                     return jsonResult(await llmWiki.orient(principal), trimmedArgs.prettyPrint);
+                }
+                case "list_active_capabilities": {
+                    const result = endpointRegistry.list(undefined, trimmedArgs.limit, trimmedArgs.maxChars, { readOnly, authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []) }, false);
+                    return jsonResult({ ...result, note: 'Capability availability reflects this session; data state such as unread mentions is returned by the endpoint itself.' }, trimmedArgs.prettyPrint);
+                }
+                case "search_capabilities": {
+                    const result = endpointRegistry.list(trimmedArgs.query, trimmedArgs.limit, trimmedArgs.maxChars, { readOnly, authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []) }, false);
+                    return jsonResult(result, trimmedArgs.prettyPrint);
                 }
                 case "get_agent_pulse": {
                     return jsonResult(await agentPulse.get({
@@ -1352,6 +1429,12 @@ export function createServer(vaultPath, options = {}) {
                 isError: true
             };
         }
+    };
+    server.setRequestHandler("tools/call", async (request) => dispatchTool(request.params.name, (request.params.arguments || {})));
+    SERVER_RUNTIMES.set(server, {
+        endpointRegistry,
+        dispatchTool,
+        ensureEndpointRegistry: () => endpointRegistry.setTools(buildInternalTools(), CAPABILITY_FOR_TOOL, MUTATING_TOOLS),
     });
     return server;
 }
