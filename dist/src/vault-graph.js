@@ -193,10 +193,12 @@ export class VaultGraphIndex {
         const resolver = buildResolver(visiblePaths);
         const unresolved = [];
         let total = 0;
-        for (const entry of visiblePaths
-            .filter(path => isNote(path))
-            .map(path => this.entries.get(path))
-            .filter((item) => Boolean(item))) {
+        for (const path of visiblePaths) {
+            if (!isNote(path))
+                continue;
+            const entry = this.entries.get(path);
+            if (!entry)
+                continue;
             for (const link of entry.links) {
                 if (resolveTargets(link.target, resolver).some(path => visible.has(path)))
                     continue;

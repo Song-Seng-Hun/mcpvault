@@ -17,6 +17,7 @@ export declare class SearchService {
     private readonly postings;
     private readonly gramIds;
     private readonly gramsById;
+    private readonly gramUsage;
     private readonly pathDocuments;
     private readonly documentPathKeys;
     private readonly corpusStatsCache;
@@ -30,6 +31,8 @@ export declare class SearchService {
     private snapshotTimer;
     private snapshotWrite;
     private snapshotPending;
+    private snapshotSavedGeneration;
+    private indexGeneration;
     private watcher;
     private readonly catalogUnsubscribe;
     private lastIndexReconcileAt;
@@ -55,6 +58,9 @@ export declare class SearchService {
     private gramIdsForText;
     private postingKey;
     private updatePostings;
+    private updateGramUsage;
+    private maybeCompactGramDictionary;
+    private remapGramSet;
     private setDocument;
     private removeDocument;
     private pathKeys;

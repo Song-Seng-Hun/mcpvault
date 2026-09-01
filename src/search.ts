@@ -28,6 +28,9 @@ const SNAPSHOT_SAVE_DEBOUNCE_MS = 1_000;
 const DIRECTORY_CACHE_TTL_MS = 5_000;
 const DIRECTORY_CACHE_MAX_ENTRIES = 1_024;
 const CORPUS_STATS_CACHE_MAX_ENTRIES = 64;
+const GRAM_COMPACTION_MIN_ENTRIES = 4_096;
+const GRAM_COMPACTION_MIN_STALE_ENTRIES = 1_024;
+const GRAM_COMPACTION_STALE_RATIO = 0.25;
 const gunzipAsync = promisify(gunzip);
 const SNAPSHOT_MAGIC = Buffer.from('MCPVSRCH', 'ascii');
 const MAX_SNAPSHOT_ENTRIES = 1_000_000;
@@ -230,6 +233,7 @@ export class SearchService {
   private readonly postings = new Map<string, Set<number>>();
   private readonly gramIds = new Map<string, number>();
   private readonly gramsById = [''];
+  private readonly gramUsage = new Map<number, number>();
   private readonly pathDocuments = new Map<string, Set<number>>();
   private readonly documentPathKeys = new Map<number, string[]>();
   private readonly corpusStatsCache = new Map<string, CorpusStats>();
@@ -243,6 +247,8 @@ export class SearchService {
   private snapshotTimer: ReturnType<typeof setTimeout> | undefined;
   private snapshotWrite: Promise<void> | undefined;
   private snapshotPending = false;
+  private snapshotSavedGeneration = -1;
+  private indexGeneration = 0;
   private watcher: FSWatcher | undefined;
   private readonly catalogUnsubscribe: (() => void) | undefined;
   private lastIndexReconcileAt = 0;
@@ -277,8 +283,10 @@ export class SearchService {
     derivedCacheBudget.clearOwner(this.directoryCacheOwner);
     if (path) {
       const normalized = path.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-      if (kind === 'delete') this.removeDocument(normalized);
-      else this.dirtyDocuments.add(normalized);
+      if (kind === 'delete') {
+        this.removeDocument(normalized);
+        this.maybeCompactGramDictionary();
+      } else this.dirtyDocuments.add(normalized);
     } else this.needsFullReconcile = true;
   }
 
@@ -344,6 +352,7 @@ export class SearchService {
         };
         this.setDocument(document);
     }
+    this.snapshotSavedGeneration = this.indexGeneration;
   }
 
   private scheduleSnapshotSave(): void {
@@ -360,6 +369,8 @@ export class SearchService {
     if (this.snapshotWrite) return;
     if (!this.snapshotPending) return;
     this.snapshotPending = false;
+    if (this.snapshotSavedGeneration === this.indexGeneration) return;
+    const generation = this.indexGeneration;
     const snapshot: SearchSnapshot = {
       version: SEARCH_SNAPSHOT_VERSION,
       documents: [...this.documents.values()].map(document => ({
@@ -386,6 +397,7 @@ export class SearchService {
       const temporaryPath = `${snapshotPath}.${process.pid}.tmp`;
       await writeFile(temporaryPath, encoded);
       await rename(temporaryPath, snapshotPath);
+      this.snapshotSavedGeneration = generation;
     })().catch(() => {
       // The snapshot is an optional acceleration cache. Search correctness
       // must never depend on being able to write it (for example on NAS).
@@ -660,6 +672,7 @@ export class SearchService {
         if (!next.has(path)) this.removeDocument(path);
       }
       for (const document of next.values()) this.setDocument(document);
+      this.maybeCompactGramDictionary();
       this.dirtyDocuments.clear();
       this.needsFullReconcile = false;
       this.lastIndexReconcileAt = Date.now();
@@ -685,6 +698,7 @@ export class SearchService {
         if (document) this.setDocument(document);
         else this.removeDocument(path);
       }
+      this.maybeCompactGramDictionary();
       this.trimTextCache();
       this.scheduleSnapshotSave();
     })();
@@ -775,12 +789,67 @@ export class SearchService {
     }
   }
 
+  private updateGramUsage(document: IndexedDocument, add: boolean): void {
+    for (const values of [document.bodyGrams, document.frontmatterGrams, document.titleGrams]) {
+      for (const value of values) {
+        const next = (this.gramUsage.get(value) || 0) + (add ? 1 : -1);
+        if (next > 0) this.gramUsage.set(value, next);
+        else this.gramUsage.delete(value);
+      }
+    }
+  }
+
+  private maybeCompactGramDictionary(): void {
+    const total = this.gramIds.size;
+    const live = this.gramUsage.size;
+    const stale = total - live;
+    if (total < GRAM_COMPACTION_MIN_ENTRIES
+      || stale < GRAM_COMPACTION_MIN_STALE_ENTRIES
+      || stale / total < GRAM_COMPACTION_STALE_RATIO) return;
+
+    const remap = new Map<number, number>();
+    const nextGrams = [''];
+    const nextIds = new Map<string, number>();
+    for (const [gram, oldId] of this.gramIds) {
+      if (!this.gramUsage.has(oldId)) continue;
+      const nextId = nextGrams.length;
+      remap.set(oldId, nextId);
+      nextIds.set(gram, nextId);
+      nextGrams.push(gram);
+    }
+
+    for (const document of this.documents.values()) {
+      document.bodyGrams = this.remapGramSet(document.bodyGrams, remap);
+      document.frontmatterGrams = this.remapGramSet(document.frontmatterGrams, remap);
+      document.titleGrams = this.remapGramSet(document.titleGrams, remap);
+    }
+    this.gramIds.clear();
+    for (const [gram, id] of nextIds) this.gramIds.set(gram, id);
+    this.gramsById.splice(0, this.gramsById.length, ...nextGrams);
+    this.postings.clear();
+    this.gramUsage.clear();
+    for (const document of this.documents.values()) {
+      this.updatePostings(document, true);
+      this.updateGramUsage(document, true);
+    }
+  }
+
+  private remapGramSet(values: Set<number>, remap: Map<number, number>): Set<number> {
+    const next = new Set<number>();
+    for (const value of values) {
+      const mapped = remap.get(value);
+      if (mapped !== undefined) next.add(mapped);
+    }
+    return next;
+  }
+
   private setDocument(document: IndexedDocument): void {
     const old = this.documents.get(document.relativePath);
     if (old === document) return;
     this.corpusStatsCache.clear();
     if (old) {
       this.updatePostings(old, false);
+      this.updateGramUsage(old, false);
       this.removePathIndex(old);
       this.documentsById.delete(old.documentId);
       if (old.textCached) this.indexedTextBytes -= old.textBytes;
@@ -788,8 +857,10 @@ export class SearchService {
     this.documents.set(document.relativePath, document);
     this.documentsById.set(document.documentId, document);
     this.updatePostings(document, true);
+    this.updateGramUsage(document, true);
     this.addPathIndex(document);
     if (document.textCached) this.indexedTextBytes += document.textBytes;
+    this.indexGeneration += 1;
   }
 
   private removeDocument(path: string): void {
@@ -797,10 +868,12 @@ export class SearchService {
     if (!document) return;
     this.corpusStatsCache.clear();
     this.updatePostings(document, false);
+    this.updateGramUsage(document, false);
     this.removePathIndex(document);
     this.documentsById.delete(document.documentId);
     if (document.textCached) this.indexedTextBytes -= document.textBytes;
     this.documents.delete(path);
+    this.indexGeneration += 1;
   }
 
   private pathKeys(path: string): string[] {

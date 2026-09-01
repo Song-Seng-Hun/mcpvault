@@ -91,6 +91,21 @@ describe("SearchService", () => {
     expect((await searchService.search({ query: "newneedle" }))).toHaveLength(1);
   });
 
+  test("compacts stale gram metadata after a large note is deleted", async () => {
+    const unique = Array.from({ length: 6_000 }, (_, index) => String.fromCodePoint(0x1000 + index)).join('');
+    await writeNote("large.md", unique);
+    await writeNote("keep.md", "keepneedle remains searchable.");
+
+    await searchService.search({ query: "keepneedle" });
+    const before = (searchService as unknown as { gramIds: Map<string, number> }).gramIds.size;
+    await rm(join(testVaultPath, "large.md"));
+    searchService.invalidate("large.md", "delete");
+    const after = (searchService as unknown as { gramIds: Map<string, number> }).gramIds.size;
+
+    expect(after).toBeLessThan(before);
+    expect(await searchService.search({ query: "keepneedle" })).toHaveLength(1);
+  });
+
   test("throws on empty query", async () => {
     await expect(searchService.search({ query: "" }))
       .rejects.toThrow(/empty/);

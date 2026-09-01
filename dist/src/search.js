@@ -24,6 +24,9 @@ const SNAPSHOT_SAVE_DEBOUNCE_MS = 1_000;
 const DIRECTORY_CACHE_TTL_MS = 5_000;
 const DIRECTORY_CACHE_MAX_ENTRIES = 1_024;
 const CORPUS_STATS_CACHE_MAX_ENTRIES = 64;
+const GRAM_COMPACTION_MIN_ENTRIES = 4_096;
+const GRAM_COMPACTION_MIN_STALE_ENTRIES = 1_024;
+const GRAM_COMPACTION_STALE_RATIO = 0.25;
 const gunzipAsync = promisify(gunzip);
 const SNAPSHOT_MAGIC = Buffer.from('MCPVSRCH', 'ascii');
 const MAX_SNAPSHOT_ENTRIES = 1_000_000;
@@ -176,6 +179,7 @@ export class SearchService {
     postings = new Map();
     gramIds = new Map();
     gramsById = [''];
+    gramUsage = new Map();
     pathDocuments = new Map();
     documentPathKeys = new Map();
     corpusStatsCache = new Map();
@@ -189,6 +193,8 @@ export class SearchService {
     snapshotTimer;
     snapshotWrite;
     snapshotPending = false;
+    snapshotSavedGeneration = -1;
+    indexGeneration = 0;
     watcher;
     catalogUnsubscribe;
     lastIndexReconcileAt = 0;
@@ -219,8 +225,10 @@ export class SearchService {
         derivedCacheBudget.clearOwner(this.directoryCacheOwner);
         if (path) {
             const normalized = path.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-            if (kind === 'delete')
+            if (kind === 'delete') {
                 this.removeDocument(normalized);
+                this.maybeCompactGramDictionary();
+            }
             else
                 this.dirtyDocuments.add(normalized);
         }
@@ -297,6 +305,7 @@ export class SearchService {
             };
             this.setDocument(document);
         }
+        this.snapshotSavedGeneration = this.indexGeneration;
     }
     scheduleSnapshotSave() {
         this.snapshotPending = true;
@@ -314,6 +323,9 @@ export class SearchService {
         if (!this.snapshotPending)
             return;
         this.snapshotPending = false;
+        if (this.snapshotSavedGeneration === this.indexGeneration)
+            return;
+        const generation = this.indexGeneration;
         const snapshot = {
             version: SEARCH_SNAPSHOT_VERSION,
             documents: [...this.documents.values()].map(document => ({
@@ -340,6 +352,7 @@ export class SearchService {
             const temporaryPath = `${snapshotPath}.${process.pid}.tmp`;
             await writeFile(temporaryPath, encoded);
             await rename(temporaryPath, snapshotPath);
+            this.snapshotSavedGeneration = generation;
         })().catch(() => {
             // The snapshot is an optional acceleration cache. Search correctness
             // must never depend on being able to write it (for example on NAS).
@@ -600,6 +613,7 @@ export class SearchService {
             }
             for (const document of next.values())
                 this.setDocument(document);
+            this.maybeCompactGramDictionary();
             this.dirtyDocuments.clear();
             this.needsFullReconcile = false;
             this.lastIndexReconcileAt = Date.now();
@@ -628,6 +642,7 @@ export class SearchService {
                 else
                     this.removeDocument(path);
             }
+            this.maybeCompactGramDictionary();
             this.trimTextCache();
             this.scheduleSnapshotSave();
         })();
@@ -720,6 +735,61 @@ export class SearchService {
             }
         }
     }
+    updateGramUsage(document, add) {
+        for (const values of [document.bodyGrams, document.frontmatterGrams, document.titleGrams]) {
+            for (const value of values) {
+                const next = (this.gramUsage.get(value) || 0) + (add ? 1 : -1);
+                if (next > 0)
+                    this.gramUsage.set(value, next);
+                else
+                    this.gramUsage.delete(value);
+            }
+        }
+    }
+    maybeCompactGramDictionary() {
+        const total = this.gramIds.size;
+        const live = this.gramUsage.size;
+        const stale = total - live;
+        if (total < GRAM_COMPACTION_MIN_ENTRIES
+            || stale < GRAM_COMPACTION_MIN_STALE_ENTRIES
+            || stale / total < GRAM_COMPACTION_STALE_RATIO)
+            return;
+        const remap = new Map();
+        const nextGrams = [''];
+        const nextIds = new Map();
+        for (const [gram, oldId] of this.gramIds) {
+            if (!this.gramUsage.has(oldId))
+                continue;
+            const nextId = nextGrams.length;
+            remap.set(oldId, nextId);
+            nextIds.set(gram, nextId);
+            nextGrams.push(gram);
+        }
+        for (const document of this.documents.values()) {
+            document.bodyGrams = this.remapGramSet(document.bodyGrams, remap);
+            document.frontmatterGrams = this.remapGramSet(document.frontmatterGrams, remap);
+            document.titleGrams = this.remapGramSet(document.titleGrams, remap);
+        }
+        this.gramIds.clear();
+        for (const [gram, id] of nextIds)
+            this.gramIds.set(gram, id);
+        this.gramsById.splice(0, this.gramsById.length, ...nextGrams);
+        this.postings.clear();
+        this.gramUsage.clear();
+        for (const document of this.documents.values()) {
+            this.updatePostings(document, true);
+            this.updateGramUsage(document, true);
+        }
+    }
+    remapGramSet(values, remap) {
+        const next = new Set();
+        for (const value of values) {
+            const mapped = remap.get(value);
+            if (mapped !== undefined)
+                next.add(mapped);
+        }
+        return next;
+    }
     setDocument(document) {
         const old = this.documents.get(document.relativePath);
         if (old === document)
@@ -727,6 +797,7 @@ export class SearchService {
         this.corpusStatsCache.clear();
         if (old) {
             this.updatePostings(old, false);
+            this.updateGramUsage(old, false);
             this.removePathIndex(old);
             this.documentsById.delete(old.documentId);
             if (old.textCached)
@@ -735,9 +806,11 @@ export class SearchService {
         this.documents.set(document.relativePath, document);
         this.documentsById.set(document.documentId, document);
         this.updatePostings(document, true);
+        this.updateGramUsage(document, true);
         this.addPathIndex(document);
         if (document.textCached)
             this.indexedTextBytes += document.textBytes;
+        this.indexGeneration += 1;
     }
     removeDocument(path) {
         const document = this.documents.get(path);
@@ -745,11 +818,13 @@ export class SearchService {
             return;
         this.corpusStatsCache.clear();
         this.updatePostings(document, false);
+        this.updateGramUsage(document, false);
         this.removePathIndex(document);
         this.documentsById.delete(document.documentId);
         if (document.textCached)
             this.indexedTextBytes -= document.textBytes;
         this.documents.delete(path);
+        this.indexGeneration += 1;
     }
     pathKeys(path) {
         const parts = path.split('/');
