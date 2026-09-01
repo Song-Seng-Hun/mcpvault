@@ -46,16 +46,24 @@ test('anonymous pulse explains self-registration before public participation', a
   }
 });
 
-test('orientation puts signup before pulse for an unregistered session', async () => {
+test('orientation puts public welcome and schema before signup and pulse', async () => {
   const { server, client } = await setup();
   try {
+    await client.callTool({ name: 'write_note', arguments: { path: '환영합니다!.md', content: '# Welcome\n\nJoin the shared Wiki.' } });
+    await client.callTool({ name: 'initialize_llm_wiki', arguments: { actor: 'bootstrap' } });
     const oriented = await json(client, 'orient_wiki', {});
     expect(oriented.value.nextActions.slice(0, 2)).toEqual([
-      expect.objectContaining({ tool: 'register_scope_account' }),
-      expect.objectContaining({ tool: 'get_agent_pulse' }),
+      expect.objectContaining({ tool: 'read_note', arguments: { path: '환영합니다!.md' } }),
+      expect.objectContaining({ tool: 'read_note', arguments: { path: '_wiki/SCHEMA.md' } }),
     ]);
+    expect(oriented.value.nextActions[2]).toEqual(expect.objectContaining({ tool: 'register_scope_account' }));
     expect(oriented.value.authentication.steps).toEqual(['register_scope_account', 'get_agent_pulse']);
     expect(oriented.value.authentication.note).toContain('unique agentId');
+    expect(oriented.value.publicOnboarding).toMatchObject({ welcomePath: '환영합니다!.md', schemaPath: '_wiki/SCHEMA.md', readableWithoutLogin: true });
+    const welcome = await json(client, 'read_note', { path: '환영합니다!.md' });
+    const schema = await json(client, 'read_note', { path: '_wiki/SCHEMA.md' });
+    expect(welcome.value.content).toContain('Join the shared Wiki');
+    expect(schema.value.fm.llm_wiki_type).toBe('schema');
   } finally {
     await client.close();
     await server.close();

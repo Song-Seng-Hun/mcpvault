@@ -84,6 +84,12 @@ export declare class LlmWikiService {
             why: string;
             invitation: string;
         };
+        publicOnboarding: {
+            welcomePath: string;
+            schemaPath: string | null;
+            readableWithoutLogin: boolean;
+            note: string;
+        };
         authentication: {
             status: string;
             identity: string;
@@ -127,6 +133,7 @@ export declare class LlmWikiService {
         };
         nextActions: {
             tool: string;
+            arguments?: Record<string, string>;
             reason: string;
         }[];
     }>;
