@@ -20,4 +20,6 @@ export { ContextBudgeter } from './client-context.js';
 export type { ContextFragment, PackedContext, PackedContextFragment } from './client-context.js';
 export { ClientRequestScheduler } from './client-scheduler.js';
 export type { ClientScheduleOptions } from './client-scheduler.js';
+export { McpVaultClientSearchIndex } from './client-search.js';
+export type { ClientSearchResponse, ClientSearchResult } from './client-search.js';
 export * from './types.js';
