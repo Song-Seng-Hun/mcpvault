@@ -1,5 +1,5 @@
 import { normalizeScopeId } from './scopes.js';
-import { queryAllNotes } from './paged-query.js';
+import { iterateNotes, queryAllNotes } from './paged-query.js';
 import { isClosedWorkflowStatus } from './community-status.js';
 import { isModerationHidden } from './moderation-policy.js';
 const READ_STATE_ROOT = '_notifications';
@@ -139,6 +139,9 @@ export class NotificationService {
         this.fileSystem = fileSystem;
         this.reputation = reputation;
     }
+    async discoverySnapshot() {
+        return this.cachedPublicSnapshot();
+    }
     /** Return only indexed public items that mention one of the exact identities. */
     async mentionCandidates(targets, includeClosed = false) {
         const snapshot = await this.cachedPublicSnapshot();
@@ -182,12 +185,17 @@ export class NotificationService {
             return cached.value;
         if (this.publicSnapshotInFlight)
             return this.publicSnapshotInFlight;
-        const computation = Promise.all([
-            queryAllNotes(this.fileSystem, { pathPrefix: 'Community/Posts', filters: { mcpvault_type: 'blog_post', status: 'published' }, sortBy: 'created_at', sortOrder: 'desc' }),
-            queryAllNotes(this.fileSystem, { pathPrefix: 'Community/Comments', filters: { mcpvault_type: 'blog_comment' }, sortBy: 'created_at', sortOrder: 'desc' }),
-            queryAllNotes(this.fileSystem, { pathPrefix: 'Community/ChatMessages', filters: { mcpvault_type: 'chat_message' }, sortBy: 'created_at', sortOrder: 'desc' }),
-            queryAllNotes(this.fileSystem, { pathPrefix: 'Community/ChatRooms', filters: { mcpvault_type: 'chat_room' } }),
-        ]).then(([posts, comments, messages, rooms]) => buildPublicSnapshotIndex({ posts: posts.notes, comments: comments.notes, messages: messages.notes, rooms: rooms.notes }));
+        const computation = (async () => {
+            const snapshot = { posts: [], comments: [], messages: [], rooms: [] };
+            for await (const note of iterateNotes(this.fileSystem)) {
+                const collection = publicCollectionForPath(note.path);
+                if (collection && belongsInPublicCollection(note, collection))
+                    snapshot[collection].push(note);
+            }
+            for (const collection of ['posts', 'comments', 'messages', 'rooms'])
+                sortPublicCollection(snapshot[collection], collection);
+            return buildPublicSnapshotIndex(snapshot);
+        })();
         this.publicSnapshotInFlight = computation;
         try {
             const value = await computation;

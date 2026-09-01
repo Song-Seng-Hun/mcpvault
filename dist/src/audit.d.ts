@@ -18,6 +18,7 @@ export declare class AuditService {
     private tail;
     constructor(vaultPath: string);
     private exclusive;
+    private readTail;
     record(params: {
         tool: string;
         principal?: ScopePrincipal;

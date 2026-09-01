@@ -17,6 +17,29 @@ export interface NotificationEvent {
     authorLevelLabel?: string;
     unread: boolean;
 }
+export interface PublicSnapshot {
+    posts: QueryNote[];
+    comments: QueryNote[];
+    messages: QueryNote[];
+    rooms: QueryNote[];
+}
+export interface PublicSnapshotIndex extends PublicSnapshot {
+    postsByPostId: Map<string, QueryNote[]>;
+    postsBySeriesId: Map<string, QueryNote[]>;
+    postsByAuthor: Map<string, QueryNote[]>;
+    postsByTag: Map<string, QueryNote[]>;
+    postsByMention: Map<string, QueryNote[]>;
+    commentsByPostId: Map<string, QueryNote[]>;
+    commentsByCommentId: Map<string, QueryNote[]>;
+    commentsByAuthor: Map<string, QueryNote[]>;
+    commentsByMention: Map<string, QueryNote[]>;
+    commentsByReplyTo: Map<string, QueryNote[]>;
+    messagesByMessageId: Map<string, QueryNote[]>;
+    messagesByMention: Map<string, QueryNote[]>;
+    messagesByReplyTo: Map<string, QueryNote[]>;
+    postTitles: Map<string, string>;
+    roomTitles: Map<string, string>;
+}
 export declare class NotificationService {
     private readonly fileSystem;
     private readonly reputation;
@@ -26,6 +49,7 @@ export declare class NotificationService {
     private publicSnapshotInFlight;
     private publicSnapshotUpdate;
     constructor(fileSystem: FileSystemService, reputation: ReputationService);
+    discoverySnapshot(): Promise<PublicSnapshotIndex>;
     /** Return only indexed public items that mention one of the exact identities. */
     mentionCandidates(targets: ReadonlySet<string>, includeClosed?: boolean): Promise<QueryNote[]>;
     invalidate(path?: string, kind?: 'upsert' | 'delete'): void;

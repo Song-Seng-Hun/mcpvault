@@ -9,6 +9,7 @@ import { normalizeScopeId } from './scopes.js';
 import { boundItems, boundedTopK } from './search-limits.js';
 import { MAX_COMMUNITY_TEXT_LENGTH, extractMentions } from './social.js';
 import type { ReputationService } from './reputation.js';
+import type { NotificationService } from './notifications.js';
 import { iterateNotes, queryAllNotes, queryWindow } from './paged-query.js';
 
 const POSTS = 'Community/Posts';
@@ -133,6 +134,7 @@ export class CommunityFeaturesService {
     private readonly auth: ScopeAuthService,
     private readonly reputation: ReputationService,
     private readonly vaultPath: string,
+    private readonly notifications?: NotificationService,
   ) {}
 
   private async assertKnownIdentity(value: string): Promise<void> {
@@ -144,15 +146,24 @@ export class CommunityFeaturesService {
     const groups = new Map<string, any>();
     const filters: Record<string, unknown> = { mcpvault_type: 'blog_post', status: 'published' };
     if (params.seriesId) filters.series_id = normalizeScopeId(params.seriesId, 'seriesId');
-    for await (const note of iterateNotes(this.fileSystem, { pathPrefix: POSTS, filters, sortBy: 'created_at', sortOrder: 'asc' })) {
-      if (isModerationHidden(note.frontmatter)) continue;
+    const addPost = (note: { path: string; frontmatter: Record<string, any> }) => {
+      if (isModerationHidden(note.frontmatter)) return;
       const id = String(note.frontmatter.series_id || '').trim();
-      if (!id) continue;
+      if (!id) return;
       const order = Number(note.frontmatter.series_order || 0);
       const chapter = { slug: note.frontmatter.post_id, title: note.frontmatter.title, author: note.frontmatter.author, order, path: note.path, moderationStatus: moderationStatus(note.frontmatter) } as Record<string, any>;
       const current = groups.get(id) || { seriesId: id, title: note.frontmatter.series_title || id, chapters: [] };
       current.chapters.push(chapter);
       groups.set(id, current);
+    };
+    const snapshot = this.notifications ? await this.notifications.discoverySnapshot() : undefined;
+    if (snapshot) {
+      for (const note of snapshot.posts) {
+        if (params.seriesId && String(note.frontmatter.series_id || '').trim() !== String(filters.series_id)) continue;
+        addPost(note);
+      }
+    } else {
+      for await (const note of iterateNotes(this.fileSystem, { pathPrefix: POSTS, filters, sortBy: 'created_at', sortOrder: 'asc' })) addPost(note);
     }
     const series = Array.from(groups.values()).map(group => ({ ...group, chapters: group.chapters.sort((a: any, b: any) => a.order - b.order || String(a.slug).localeCompare(String(b.slug))), count: group.chapters.length }));
     const limited = series.slice(0, positive(params.limit, 50, 100));
@@ -181,18 +192,35 @@ export class CommunityFeaturesService {
     const author = normalizeScopeId(params.author, 'author');
     const limit = positive(params.limit, 30, 100);
     const maxChars = positive(params.maxChars, 6000, 20000);
-    const [postWindow, commentWindow, postCount, commentCount] = await Promise.all([
-      queryWindow(this.fileSystem, { pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post', author }, sortBy: 'updated_at', sortOrder: 'desc', limit }, n => !isModerationHidden(n.frontmatter)),
-      queryWindow(this.fileSystem, { pathPrefix: COMMENTS, filters: { mcpvault_type: 'blog_comment', author }, sortBy: 'created_at', sortOrder: 'desc', limit }, n => !isModerationHidden(n.frontmatter)),
-      this.fileSystem.countNotes({ pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post', author } }, undefined, n => !isModerationHidden(n.frontmatter)),
-      this.fileSystem.countNotes({ pathPrefix: COMMENTS, filters: { mcpvault_type: 'blog_comment', author } }, undefined, n => !isModerationHidden(n.frontmatter)),
-    ]);
-    const candidates = [...postWindow.notes.map(n => ({ type: 'post' as const, note: n, id: n.frontmatter.post_id, path: n.path, title: n.frontmatter.title, postId: undefined, createdAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at })), ...commentWindow.notes.map(n => ({ type: 'comment' as const, note: n, id: n.frontmatter.comment_id, title: undefined, postId: n.frontmatter.post_id, path: n.path, createdAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at }))];
+    const snapshot = this.notifications ? await this.notifications.discoverySnapshot() : undefined;
+    let postNotes = snapshot?.postsByAuthor.get(author) || [];
+    let commentNotes = snapshot?.commentsByAuthor.get(author) || [];
+    let postWindow: Awaited<ReturnType<typeof queryWindow>> | undefined;
+    let commentWindow: Awaited<ReturnType<typeof queryWindow>> | undefined;
+    let postCount = postNotes.filter(n => !isModerationHidden(n.frontmatter)).length;
+    let commentCount = commentNotes.filter(n => !isModerationHidden(n.frontmatter)).length;
+    if (!snapshot) {
+      const [loadedPosts, loadedComments, loadedPostCount, loadedCommentCount] = await Promise.all([
+        queryWindow(this.fileSystem, { pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post', author }, sortBy: 'updated_at', sortOrder: 'desc', limit }, n => !isModerationHidden(n.frontmatter)),
+        queryWindow(this.fileSystem, { pathPrefix: COMMENTS, filters: { mcpvault_type: 'blog_comment', author }, sortBy: 'created_at', sortOrder: 'desc', limit }, n => !isModerationHidden(n.frontmatter)),
+        this.fileSystem.countNotes({ pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post', author } }, undefined, n => !isModerationHidden(n.frontmatter)),
+        this.fileSystem.countNotes({ pathPrefix: COMMENTS, filters: { mcpvault_type: 'blog_comment', author } }, undefined, n => !isModerationHidden(n.frontmatter)),
+      ]);
+      postWindow = loadedPosts;
+      commentWindow = loadedComments;
+      postNotes = loadedPosts.notes;
+      commentNotes = loadedComments.notes;
+      postCount = loadedPostCount;
+      commentCount = loadedCommentCount;
+    }
+    const visiblePosts = snapshot ? postNotes.filter(n => !isModerationHidden(n.frontmatter)) : postWindow!.notes;
+    const visibleComments = snapshot ? commentNotes.filter(n => !isModerationHidden(n.frontmatter)) : commentWindow!.notes;
+    const candidates = [...visiblePosts.map(n => ({ type: 'post' as const, note: n, id: n.frontmatter.post_id, path: n.path, title: n.frontmatter.title, postId: undefined, createdAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at })), ...visibleComments.map(n => ({ type: 'comment' as const, note: n, id: n.frontmatter.comment_id, title: undefined, postId: n.frontmatter.post_id, path: n.path, createdAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at }))];
     const selected = boundedTopK(candidates, limit, (a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)) || a.path.localeCompare(b.path));
     const authorReputations = await this.reputation.getMany(selected.map(item => String(item.note.frontmatter.author || '')));
     const items = selected.map(item => ({ type: item.type, id: item.id, path: item.path, ...(item.title !== undefined && { title: item.title }), ...(item.postId !== undefined && { postId: item.postId }), authorLevel: authorReputations.get(String(item.note.frontmatter.author || '').toLowerCase())?.level ?? 0, authorLevelLabel: authorReputations.get(String(item.note.frontmatter.author || '').toLowerCase())?.label ?? '뉴비', createdAt: item.createdAt, updatedAt: item.updatedAt }));
     const total = postCount + commentCount;
-    return { author, items, postCount, commentCount, total, truncated: total > items.length || postWindow.truncated || commentWindow.truncated, maxChars };
+    return { author, items, postCount, commentCount, total, truncated: total > items.length || Boolean(postWindow?.truncated) || Boolean(commentWindow?.truncated), maxChars };
   }
 
   private async targetPath(targetType: TargetType, targetId: string, postId?: string) {

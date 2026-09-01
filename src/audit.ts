@@ -1,4 +1,4 @@
-import { appendFile, chmod, mkdir, readFile } from 'node:fs/promises';
+import { appendFile, chmod, mkdir, open } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import type { ScopePrincipal } from './scope-auth.js';
 
@@ -24,6 +24,9 @@ function targetFor(args: Record<string, unknown>): string | undefined {
   return values.length ? values.join(' ') : undefined;
 }
 
+const AUDIT_TAIL_BYTES = 512 * 1024;
+const AUDIT_TAIL_LINES = 2_000;
+
 /**
  * Append-only, metadata-only audit trail. It deliberately excludes request
  * bodies and access tokens so it can diagnose denied operations without
@@ -43,6 +46,27 @@ export class AuditService {
     this.tail = new Promise<void>(resolvePromise => { release = resolvePromise; });
     await previous;
     try { await operation(); } finally { release(); }
+  }
+
+  private async readTail(): Promise<{ lines: string[]; truncated: boolean }> {
+    let handle;
+    try {
+      handle = await open(this.auditPath, 'r');
+      const size = (await handle.stat()).size;
+      const start = Math.max(0, size - AUDIT_TAIL_BYTES);
+      const buffer = Buffer.alloc(size - start);
+      if (buffer.length > 0) await handle.read(buffer, 0, buffer.length, start);
+      let lines = buffer.toString('utf8').split(/\r?\n/).filter(Boolean);
+      const partialLine = start > 0;
+      if (partialLine) lines = lines.slice(1);
+      const truncated = partialLine || lines.length > AUDIT_TAIL_LINES;
+      return { lines: lines.slice(-AUDIT_TAIL_LINES), truncated };
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return { lines: [], truncated: false };
+      throw error;
+    } finally {
+      if (handle) await handle.close().catch(() => undefined);
+    }
   }
 
   async record(params: { tool: string; principal?: ScopePrincipal; args?: Record<string, unknown>; outcome: AuditEvent['outcome']; error?: unknown; explicitActor?: unknown }): Promise<void> {
@@ -72,13 +96,10 @@ export class AuditService {
   async list(params: { principal?: ScopePrincipal; limit?: number; includeErrors?: boolean }) {
     if (!params.principal) throw new Error('Login is required to read the security audit log');
     const limit = Math.min(Math.max(Number(params.limit ?? 50), 1), 500);
-    let lines: string[] = [];
-    try { lines = (await readFile(this.auditPath, 'utf8')).split(/\r?\n/).filter(Boolean); } catch (error) {
-      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
-    }
+    const tail = await this.readTail();
     const target = params.principal.agentId || params.principal.modelId;
     const events: AuditEvent[] = [];
-    for (const line of lines.slice(-2000).reverse()) {
+    for (const line of tail.lines.reverse()) {
       try {
         const event = JSON.parse(line) as AuditEvent;
         if (event.actor !== target) continue;
@@ -87,6 +108,6 @@ export class AuditService {
         if (events.length >= limit) break;
       } catch { /* ignore a torn/corrupt line and keep the audit reader bounded */ }
     }
-    return { events, total: events.length, truncated: lines.length > events.length };
+    return { events, total: events.length, truncated: tail.truncated || events.length >= limit };
   }
 }

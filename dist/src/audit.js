@@ -1,4 +1,4 @@
-import { appendFile, chmod, mkdir, readFile } from 'node:fs/promises';
+import { appendFile, chmod, mkdir, open } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 function actorFor(principal, explicit) {
     if (principal)
@@ -11,6 +11,8 @@ function targetFor(args) {
     const values = candidates.flatMap(key => typeof args[key] === 'string' && args[key] ? [`${key}=${String(args[key]).slice(0, 160)}`] : []);
     return values.length ? values.join(' ') : undefined;
 }
+const AUDIT_TAIL_BYTES = 512 * 1024;
+const AUDIT_TAIL_LINES = 2_000;
 /**
  * Append-only, metadata-only audit trail. It deliberately excludes request
  * bodies and access tokens so it can diagnose denied operations without
@@ -32,6 +34,32 @@ export class AuditService {
         }
         finally {
             release();
+        }
+    }
+    async readTail() {
+        let handle;
+        try {
+            handle = await open(this.auditPath, 'r');
+            const size = (await handle.stat()).size;
+            const start = Math.max(0, size - AUDIT_TAIL_BYTES);
+            const buffer = Buffer.alloc(size - start);
+            if (buffer.length > 0)
+                await handle.read(buffer, 0, buffer.length, start);
+            let lines = buffer.toString('utf8').split(/\r?\n/).filter(Boolean);
+            const partialLine = start > 0;
+            if (partialLine)
+                lines = lines.slice(1);
+            const truncated = partialLine || lines.length > AUDIT_TAIL_LINES;
+            return { lines: lines.slice(-AUDIT_TAIL_LINES), truncated };
+        }
+        catch (error) {
+            if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
+                return { lines: [], truncated: false };
+            throw error;
+        }
+        finally {
+            if (handle)
+                await handle.close().catch(() => undefined);
         }
     }
     async record(params) {
@@ -62,17 +90,10 @@ export class AuditService {
         if (!params.principal)
             throw new Error('Login is required to read the security audit log');
         const limit = Math.min(Math.max(Number(params.limit ?? 50), 1), 500);
-        let lines = [];
-        try {
-            lines = (await readFile(this.auditPath, 'utf8')).split(/\r?\n/).filter(Boolean);
-        }
-        catch (error) {
-            if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT'))
-                throw error;
-        }
+        const tail = await this.readTail();
         const target = params.principal.agentId || params.principal.modelId;
         const events = [];
-        for (const line of lines.slice(-2000).reverse()) {
+        for (const line of tail.lines.reverse()) {
             try {
                 const event = JSON.parse(line);
                 if (event.actor !== target)
@@ -85,6 +106,6 @@ export class AuditService {
             }
             catch { /* ignore a torn/corrupt line and keep the audit reader bounded */ }
         }
-        return { events, total: events.length, truncated: lines.length > events.length };
+        return { events, total: events.length, truncated: tail.truncated || events.length >= limit };
     }
 }

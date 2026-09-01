@@ -3,7 +3,7 @@ import type { ScopePrincipal } from './scope-auth.js';
 import { normalizeScopeId } from './scopes.js';
 import type { ReputationService } from './reputation.js';
 import type { QueryNote } from './types.js';
-import { queryAllNotes } from './paged-query.js';
+import { iterateNotes, queryAllNotes } from './paged-query.js';
 import { isClosedWorkflowStatus } from './community-status.js';
 import { isModerationHidden } from './moderation-policy.js';
 
@@ -29,14 +29,14 @@ export interface NotificationEvent {
   unread: boolean;
 }
 
-interface PublicSnapshot {
+export interface PublicSnapshot {
   posts: QueryNote[];
   comments: QueryNote[];
   messages: QueryNote[];
   rooms: QueryNote[];
 }
 
-interface PublicSnapshotIndex extends PublicSnapshot {
+export interface PublicSnapshotIndex extends PublicSnapshot {
   postsByPostId: Map<string, QueryNote[]>;
   postsBySeriesId: Map<string, QueryNote[]>;
   postsByAuthor: Map<string, QueryNote[]>;
@@ -182,6 +182,10 @@ export class NotificationService {
 
   constructor(private readonly fileSystem: FileSystemService, private readonly reputation: ReputationService) {}
 
+  async discoverySnapshot(): Promise<PublicSnapshotIndex> {
+    return this.cachedPublicSnapshot();
+  }
+
   /** Return only indexed public items that mention one of the exact identities. */
   async mentionCandidates(targets: ReadonlySet<string>, includeClosed = false): Promise<QueryNote[]> {
     const snapshot = await this.cachedPublicSnapshot();
@@ -220,12 +224,15 @@ export class NotificationService {
     const cached = this.publicSnapshotCache;
     if (cached && cached.expiresAt > Date.now()) return cached.value;
     if (this.publicSnapshotInFlight) return this.publicSnapshotInFlight;
-    const computation = Promise.all([
-      queryAllNotes(this.fileSystem, { pathPrefix: 'Community/Posts', filters: { mcpvault_type: 'blog_post', status: 'published' }, sortBy: 'created_at', sortOrder: 'desc' }),
-      queryAllNotes(this.fileSystem, { pathPrefix: 'Community/Comments', filters: { mcpvault_type: 'blog_comment' }, sortBy: 'created_at', sortOrder: 'desc' }),
-      queryAllNotes(this.fileSystem, { pathPrefix: 'Community/ChatMessages', filters: { mcpvault_type: 'chat_message' }, sortBy: 'created_at', sortOrder: 'desc' }),
-      queryAllNotes(this.fileSystem, { pathPrefix: 'Community/ChatRooms', filters: { mcpvault_type: 'chat_room' } }),
-    ]).then(([posts, comments, messages, rooms]) => buildPublicSnapshotIndex({ posts: posts.notes, comments: comments.notes, messages: messages.notes, rooms: rooms.notes }));
+    const computation = (async () => {
+      const snapshot: PublicSnapshot = { posts: [], comments: [], messages: [], rooms: [] };
+      for await (const note of iterateNotes(this.fileSystem)) {
+        const collection = publicCollectionForPath(note.path);
+        if (collection && belongsInPublicCollection(note, collection)) snapshot[collection].push(note);
+      }
+      for (const collection of ['posts', 'comments', 'messages', 'rooms'] as const) sortPublicCollection(snapshot[collection], collection);
+      return buildPublicSnapshotIndex(snapshot);
+    })();
     this.publicSnapshotInFlight = computation;
     try {
       const value = await computation;

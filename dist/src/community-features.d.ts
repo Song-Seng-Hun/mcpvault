@@ -2,6 +2,7 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopeAuthService, ScopePrincipal } from './scope-auth.js';
 import type { ReputationService } from './reputation.js';
+import type { NotificationService } from './notifications.js';
 declare const CATEGORIES: readonly ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase', 'agora'];
 type TargetType = 'post' | 'comment';
 export declare class CommunityFeaturesService {
@@ -10,10 +11,11 @@ export declare class CommunityFeaturesService {
     private readonly auth;
     private readonly reputation;
     private readonly vaultPath;
+    private readonly notifications?;
     private reactionAggregateCache;
     private reactionAggregateInFlight;
     private reactionAggregateGeneration;
-    constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, auth: ScopeAuthService, reputation: ReputationService, vaultPath: string);
+    constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, auth: ScopeAuthService, reputation: ReputationService, vaultPath: string, notifications?: NotificationService | undefined);
     private assertKnownIdentity;
     listSeries(params: {
         seriesId?: string;
