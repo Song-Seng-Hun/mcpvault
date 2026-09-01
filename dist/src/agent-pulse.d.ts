@@ -114,6 +114,7 @@ export declare class AgentPulseService {
             workflowStatusBy: any;
             workflowStatusReason: any;
             workflowStatusUpdatedAt: any;
+            moderationStatus: "hidden" | "quarantined" | "removed" | "visible" | "warned";
             excerpt?: string;
             kind: string;
         })[];

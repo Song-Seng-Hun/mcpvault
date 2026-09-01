@@ -35,6 +35,7 @@ export declare class SocialService {
     listJournalEntries(params: {
         principal?: ScopePrincipal;
         limit?: number;
+        maxChars?: number;
         date?: string;
     }): Promise<{
         entries: {
@@ -91,6 +92,7 @@ export declare class SocialService {
         category?: string;
         seriesId?: string;
         limit?: number;
+        maxChars?: number;
         includeExcerpt?: boolean;
         excerptMaxChars?: number;
     }): Promise<{
@@ -113,6 +115,7 @@ export declare class SocialService {
             workflowStatusBy: any;
             workflowStatusReason: any;
             workflowStatusUpdatedAt: any;
+            moderationStatus: "hidden" | "quarantined" | "removed" | "visible" | "warned";
             excerpt?: string;
         }[];
         total: number;

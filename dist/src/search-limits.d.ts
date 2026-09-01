@@ -6,4 +6,9 @@ export declare function normalizeSearchLimit(value: unknown, defaultValue?: numb
 export declare function normalizeSearchMaxChars(value: unknown, defaultValue?: number): number;
 /** Keep the compact JSON payload within the requested context budget. */
 export declare function boundSearchResults<T>(results: T[], maxChars: number): T[];
+/** Bound metadata/list responses without cutting JSON in the middle. */
+export declare function boundItems<T>(items: T[], maxChars: number): {
+    items: T[];
+    truncated: boolean;
+};
 //# sourceMappingURL=search-limits.d.ts.map

@@ -22,6 +22,7 @@ export declare class ChatService {
     listRooms(params: {
         status?: string;
         limit?: number;
+        maxChars?: number;
     }): Promise<{
         rooms: {
             path: string;
@@ -32,6 +33,7 @@ export declare class ChatService {
             createdBy: any;
             createdAt: any;
             updatedAt: any;
+            moderationStatus: "hidden" | "quarantined" | "removed" | "visible" | "warned";
         }[];
         total: number;
         truncated: boolean;

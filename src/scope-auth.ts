@@ -11,7 +11,7 @@ const PASSWORD_MIN_LENGTH = 12;
 const MAX_LOGIN_FAILURES = 5;
 const LOGIN_BLOCK_MS = 30_000;
 
-export const SCOPE_CAPABILITIES = ['write', 'publish', 'comment', 'chat', 'status', 'whisper', 'task', 'profile', 'journal'] as const;
+export const SCOPE_CAPABILITIES = ['write', 'publish', 'comment', 'chat', 'status', 'whisper', 'task', 'profile', 'journal', 'moderate'] as const;
 export type ScopeCapability = typeof SCOPE_CAPABILITIES[number];
 const DEFAULT_MODEL_CAPABILITIES: ScopeCapability[] = ['write', 'publish', 'comment', 'chat', 'status', 'whisper', 'task', 'profile'];
 const DEFAULT_AGENT_CAPABILITIES: ScopeCapability[] = [...DEFAULT_MODEL_CAPABILITIES, 'journal'];
@@ -62,13 +62,22 @@ async function passwordDigest(password: string, salt: Buffer): Promise<Buffer> {
  */
 export class ScopeAuthService {
   private readonly authPath: string;
+  private readonly moderatorAccounts: Set<string>;
   private readonly sessions = new Map<string, SessionRecord>();
   private readonly loginFailures = new Map<string, { count: number; blockedUntil: number }>();
   private readonly dummySalt = randomBytes(16);
   private mutationQueue: Promise<void> = Promise.resolve();
 
-  constructor(vaultPath: string) {
+  constructor(vaultPath: string, options: { moderatorAccounts?: string[] } = {}) {
     this.authPath = join(resolve(vaultPath), '.mcpvault', 'scope-auth.json');
+    const configured = options.moderatorAccounts || String(process.env.MCPVAULT_MODERATOR_ACCOUNTS || '').split(',');
+    this.moderatorAccounts = new Set(configured.map(value => String(value).trim().toLowerCase()).filter(Boolean));
+  }
+
+  private effectiveCapabilities(principal: ScopePrincipal): ScopeCapability[] {
+    const capabilities = Array.from(new Set(principal.capabilities || this.defaultCapabilities(principal.role)));
+    if (this.moderatorAccounts.has(principal.accountId)) capabilities.push('moderate');
+    return Array.from(new Set(capabilities));
   }
 
   private async readDatabase(): Promise<AuthDatabase> {
@@ -122,7 +131,7 @@ export class ScopeAuthService {
       this.sessions.delete(key);
       throw new Error('Access token expired; call login_scope again');
     }
-    return { ...session.principal };
+    return { ...session.principal, capabilities: this.effectiveCapabilities(session.principal) };
   }
 
   async register(params: {
@@ -198,7 +207,7 @@ export class ScopeAuthService {
       success: true,
       accessToken,
       expiresAt: new Date(expiresAt).toISOString(),
-      principal,
+      principal: { ...principal, capabilities: this.effectiveCapabilities(principal) },
       next: 'Use accessToken for get_agent_pulse and public/private tools; keep the password in the host secret store for future sessions.',
     };
   }
@@ -243,8 +252,9 @@ export class ScopeAuthService {
           ? account.capabilities.filter((capability): capability is ScopeCapability => (SCOPE_CAPABILITIES as readonly string[]).includes(capability))
           : this.defaultCapabilities(account.role),
       };
-    this.sessions.set(tokenDigest(accessToken), { principal, expiresAt });
-    return { success: true, accessToken, expiresAt: new Date(expiresAt).toISOString(), principal };
+    const effectivePrincipal = { ...principal, capabilities: this.effectiveCapabilities(principal) };
+    this.sessions.set(tokenDigest(accessToken), { principal: effectivePrincipal, expiresAt });
+    return { success: true, accessToken, expiresAt: new Date(expiresAt).toISOString(), principal: effectivePrincipal };
   }
 
   logout(accessToken: unknown): { success: true } {
@@ -267,9 +277,15 @@ export class ScopeAuthService {
       modelId: account.modelId,
       ...(account.agentId && { agentId: account.agentId }),
       role: account.role,
-      capabilities: Array.isArray(account.capabilities)
-        ? account.capabilities.filter((capability): capability is ScopeCapability => (SCOPE_CAPABILITIES as readonly string[]).includes(capability))
-        : this.defaultCapabilities(account.role),
+      capabilities: this.effectiveCapabilities({
+        accountId: account.accountId,
+        modelId: account.modelId,
+        ...(account.agentId && { agentId: account.agentId }),
+        role: account.role,
+        capabilities: Array.isArray(account.capabilities)
+          ? account.capabilities.filter((capability): capability is ScopeCapability => (SCOPE_CAPABILITIES as readonly string[]).includes(capability))
+          : this.defaultCapabilities(account.role),
+      }),
     }));
   }
 
@@ -282,6 +298,7 @@ export class ScopeAuthService {
     if (capabilities.some(capability => !(SCOPE_CAPABILITIES as readonly string[]).includes(capability))) {
       throw new Error(`capabilities must be chosen from: ${SCOPE_CAPABILITIES.join(', ')}`);
     }
+    if (capabilities.includes('moderate')) throw new Error('moderate capability is reserved for accounts configured by the server operator');
     return await this.exclusive(async () => {
       const database = await this.readDatabase();
       const account = database.accounts.find(candidate => candidate.agentId === agentId);
@@ -296,7 +313,7 @@ export class ScopeAuthService {
   }
 
   hasCapability(principal: ScopePrincipal | undefined, capability: ScopeCapability): boolean {
-    return Boolean(principal && (principal.capabilities || this.defaultCapabilities(principal.role)).includes(capability));
+    return Boolean(principal && this.effectiveCapabilities(principal).includes(capability));
   }
 
   async changePassword(params: { accessToken: string; currentPassword: string; newPassword: string }): Promise<{ success: true }> {

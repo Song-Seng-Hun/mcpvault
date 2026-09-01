@@ -12,6 +12,7 @@ export declare class CommunityFeaturesService {
     listSeries(params: {
         seriesId?: string;
         limit?: number;
+        maxChars?: number;
         includeExcerpts?: boolean;
         excerptMaxChars?: number;
     }): Promise<{
@@ -68,11 +69,13 @@ export declare class CommunityFeaturesService {
         targetId: string;
         postId?: string;
         limit?: number;
+        maxChars?: number;
     }): Promise<{
         targetType: TargetType;
         targetId: string;
         counts: {
             like: number;
+            dislike: number;
         };
         reactions: {
             actor: any;
@@ -85,6 +88,7 @@ export declare class CommunityFeaturesService {
     listPopularPosts(params: {
         limit?: number;
         category?: string;
+        maxChars?: number;
     }): Promise<{
         posts: {
             path: string;
@@ -94,6 +98,8 @@ export declare class CommunityFeaturesService {
             category: any;
             tags: any;
             likeCount: number;
+            dislikeCount: number;
+            moderationStatus: "hidden" | "quarantined" | "removed" | "visible" | "warned";
             createdAt: any;
             updatedAt: any;
         }[];
@@ -120,6 +126,7 @@ export declare class CommunityFeaturesService {
         entryId?: string;
         replyTo?: string;
         limit?: number;
+        maxChars?: number;
         afterEntryId?: string;
         deleteEntry?: boolean;
         expectedRevision?: string;
@@ -173,7 +180,7 @@ export declare class CommunityFeaturesService {
         targetType: "author" | "post" | "series" | "tag";
         targetId: string;
     }>;
-    listWatches(principal?: ScopePrincipal): Promise<{
+    listWatches(principal?: ScopePrincipal, maxChars?: number): Promise<{
         watches: {
             targetType: any;
             targetId: any;
@@ -192,7 +199,7 @@ export declare class CommunityFeaturesService {
         active: boolean;
         targetPath: string;
     }>;
-    listSaves(principal?: ScopePrincipal): Promise<{
+    listSaves(principal?: ScopePrincipal, maxChars?: number): Promise<{
         saves: {
             targetPath: any;
             note: any;

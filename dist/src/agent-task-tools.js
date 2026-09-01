@@ -19,7 +19,7 @@ export function getAgentTaskTools() {
         {
             name: 'list_agent_tasks',
             description: 'List public structured tasks with bounded status/requester/assignee filters. Use this for coordination instead of scraping long community threads.',
-            inputSchema: { type: 'object', properties: { status: { type: 'string', enum: ['proposed', 'accepted', 'in_progress', 'blocked', 'completed', 'cancelled'] }, assignee: { type: 'string' }, requester: { type: 'string' }, limit: { type: 'integer', minimum: 1, maximum: 500, default: 50 }, accessToken, prettyPrint } },
+            inputSchema: { type: 'object', properties: { status: { type: 'string', enum: ['proposed', 'accepted', 'in_progress', 'blocked', 'completed', 'cancelled'] }, assignee: { type: 'string' }, requester: { type: 'string' }, limit: { type: 'integer', minimum: 1, maximum: 500, default: 50 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 6000 }, accessToken, prettyPrint } },
         },
         {
             name: 'update_agent_task',

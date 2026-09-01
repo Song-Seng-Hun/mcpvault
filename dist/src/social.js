@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { normalizeScopeId } from './scopes.js';
 import { isClosedWorkflowStatus, matchesWorkflowFilter, workflowStatus } from './community-status.js';
+import { isModerationHidden, moderationStatus } from './moderation-policy.js';
+import { boundItems } from './search-limits.js';
 const JOURNAL_ROOT = '_journal/entries';
 const BLOG_ROOT = 'Community/Posts';
 const COMMENTS_ROOT = 'Community/Comments';
@@ -160,19 +162,20 @@ export class SocialService {
             pathPrefix: agentJournalRoot(principal.agentId), filters,
             sortBy: 'date', sortOrder: 'desc', limit: Math.min(Math.max(Number(params.limit || 50), 1), 500),
         }, path => this.access.canAccessPhysicalPath(path, principal));
+        const bounded = boundItems(result.notes.map(note => ({
+            path: this.access.toPublicPath(note.path),
+            entryId: note.frontmatter.entry_id,
+            date: note.frontmatter.date,
+            kind: note.frontmatter.kind,
+            title: note.frontmatter.title,
+            mood: note.frontmatter.mood,
+            tags: note.frontmatter.tags || [],
+            updatedAt: note.frontmatter.updated_at,
+        })), Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000));
         return {
-            entries: result.notes.map(note => ({
-                path: this.access.toPublicPath(note.path),
-                entryId: note.frontmatter.entry_id,
-                date: note.frontmatter.date,
-                kind: note.frontmatter.kind,
-                title: note.frontmatter.title,
-                mood: note.frontmatter.mood,
-                tags: note.frontmatter.tags || [],
-                updatedAt: note.frontmatter.updated_at,
-            })),
+            entries: bounded.items,
             total: result.total,
-            truncated: result.truncated,
+            truncated: result.truncated || bounded.truncated,
         };
     }
     async readJournalEntry(params) {
@@ -190,6 +193,8 @@ export class SocialService {
         const note = await this.fileSystem.readNote(path);
         if (note.frontmatter.mcpvault_type !== 'blog_post')
             throw new Error(`Not a community blog post: ${slug}`);
+        if (isModerationHidden(note.frontmatter))
+            throw new Error('This community post is unavailable because it was hidden by moderation');
         return { path, note };
     }
     async publishBlogPost(params) {
@@ -262,6 +267,8 @@ export class SocialService {
         });
         const caller = params.principal ? identity(params.principal) : undefined;
         const entries = result.notes.filter(note => {
+            if (isModerationHidden(note.frontmatter))
+                return false;
             const status = String(note.frontmatter.status || 'published');
             if (requestedStatus !== 'all' && status !== requestedStatus)
                 return false;
@@ -293,10 +300,12 @@ export class SocialService {
             workflowStatusBy: note.frontmatter.workflow_status_by,
             workflowStatusReason: note.frontmatter.workflow_status_reason,
             workflowStatusUpdatedAt: note.frontmatter.workflow_status_updated_at,
+            moderationStatus: moderationStatus(note.frontmatter),
             ...(params.includeExcerpt && { excerpt: String(note.content || '').slice(0, Math.min(Math.max(Number(params.excerptMaxChars ?? 280), 1), 1000)) }),
         }));
         const limit = Math.min(Math.max(Number(params.limit || 50), 1), 500);
-        return { posts: entries.slice(0, limit), total: entries.length, truncated: result.truncated || entries.length > limit };
+        const bounded = boundItems(entries.slice(0, limit), Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000));
+        return { posts: bounded.items, total: entries.length, truncated: result.truncated || entries.length > limit || bounded.truncated };
     }
     async getBlogPost(params) {
         const { path, note } = await this.readBlogPost(params.slug);
@@ -323,6 +332,8 @@ export class SocialService {
         const note = await this.fileSystem.readNote(path);
         if (note.frontmatter.mcpvault_type !== 'blog_comment')
             throw new Error(`Not a blog comment: ${commentId}`);
+        if (isModerationHidden(note.frontmatter))
+            throw new Error('This community comment is unavailable because it was hidden by moderation');
         return {
             path,
             fm: note.frontmatter,
@@ -407,7 +418,7 @@ export class SocialService {
             pathPrefix: commentsRoot(slug), filters: { mcpvault_type: 'blog_comment' },
             sortBy: 'created_at', sortOrder: 'asc', limit: 500,
         });
-        const notes = result.notes.filter(note => matchesWorkflowFilter(note.frontmatter, params.workflowStatus || 'all'));
+        const notes = result.notes.filter(note => !isModerationHidden(note.frontmatter) && matchesWorkflowFilter(note.frontmatter, params.workflowStatus || 'all'));
         const limit = windowNumber(params.limit, 20, 100);
         const maxChars = windowNumber(params.maxChars, 6000, 20000);
         const contextBefore = windowNumber(params.contextBefore, 2, 20) - 1;
@@ -445,6 +456,7 @@ export class SocialService {
                 workflowStatusBy: note.frontmatter.workflow_status_by,
                 workflowStatusReason: note.frontmatter.workflow_status_reason,
                 workflowStatusUpdatedAt: note.frontmatter.workflow_status_updated_at,
+                moderationStatus: moderationStatus(note.frontmatter),
                 ...(params.includeThreadContext !== false && note.frontmatter.reply_to && { parent: await this.readCommentContext(slug, note.frontmatter.reply_to) }),
             }))),
             total: notes.length,
@@ -458,6 +470,8 @@ export class SocialService {
         const parent = await this.fileSystem.readNote(path);
         if (parent.frontmatter.mcpvault_type !== 'blog_comment')
             throw new Error(`Reply target is not a blog comment: ${commentId}`);
+        if (isModerationHidden(parent.frontmatter))
+            return { path, commentId: parent.frontmatter.comment_id, postId: parent.frontmatter.post_id, author: parent.frontmatter.author, createdAt: parent.frontmatter.created_at, content: '[moderated]', replyTo: parent.frontmatter.reply_to, workflowStatus: workflowStatus(parent.frontmatter), moderated: true };
         return { path, commentId: parent.frontmatter.comment_id, postId: parent.frontmatter.post_id, author: parent.frontmatter.author, createdAt: parent.frontmatter.created_at, content: parent.content, replyTo: parent.frontmatter.reply_to, workflowStatus: workflowStatus(parent.frontmatter) };
     }
     async listMentions(params) {
@@ -468,7 +482,8 @@ export class SocialService {
             this.fileSystem.queryNotes({ pathPrefix: 'Community/ChatMessages', filters: { mcpvault_type: 'chat_message' }, sortBy: 'created_at', sortOrder: 'desc', limit: 500 }),
         ]);
         const notes = [...comments.notes, ...messages.notes]
-            .filter(note => (params.includeClosed === true || !isClosedWorkflowStatus(note.frontmatter.workflow_status))
+            .filter(note => !isModerationHidden(note.frontmatter)
+            && (params.includeClosed === true || !isClosedWorkflowStatus(note.frontmatter.workflow_status))
             && Array.isArray(note.frontmatter.mentions) && note.frontmatter.mentions.some((mention) => targets.has(String(mention).toLowerCase())))
             .sort((a, b) => String(b.frontmatter.created_at).localeCompare(String(a.frontmatter.created_at)));
         const limit = windowNumber(params.limit, 20, 100);

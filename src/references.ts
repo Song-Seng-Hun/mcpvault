@@ -2,6 +2,7 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import { extractWikiLinkOccurrences } from './backlinks.js';
+import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 
 const MAX_REFERENCES = 50;
@@ -82,6 +83,7 @@ export class ReferenceService {
       if (resolved.length >= Math.min(Math.max(limit, 1), 50)) break;
       if (!this.access.canAccessPhysicalPath(path, principal) || !await this.fileSystem.noteExists(path)) continue;
       const note = await this.fileSystem.readNote(path);
+      if (isModerationHidden(note.frontmatter)) continue;
       const item: Record<string, unknown> = {
         path: this.access.toPublicPath(path),
         title: titleFor(path, note.frontmatter),
@@ -109,6 +111,7 @@ export class ReferenceService {
   }) {
     if (!this.access.canAccessPhysicalPath(params.path, params.principal)) throw new Error('Access denied to source note');
     const note = await this.fileSystem.readNote(params.path);
+    if (isModerationHidden(note.frontmatter)) throw new Error('The source note is unavailable because moderation has hidden it');
     const references = [
       ...(Array.isArray(note.frontmatter.references) ? note.frontmatter.references : []),
       ...(Array.isArray(note.frontmatter.evidence_paths) ? note.frontmatter.evidence_paths : []),

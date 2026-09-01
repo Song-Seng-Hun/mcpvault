@@ -33,6 +33,11 @@ test('community discovery, reactions, guestbook, watches, and saves work through
     await client.callTool({ name: 'toggle_reaction', arguments: { ...auth, targetType: 'post', targetId: 'first-post' } });
     expect(value(await client.callTool({ name: 'list_reactions', arguments: { targetType: 'post', targetId: 'first-post' } })).counts.like).toBe(1);
     expect(value(await client.callTool({ name: 'list_popular_posts', arguments: {} })).posts[0].slug).toBe('first-post');
+    await client.callTool({ name: 'toggle_reaction', arguments: { ...auth, targetType: 'post', targetId: 'first-post', reaction: 'dislike' } });
+    const reactions = value(await client.callTool({ name: 'list_reactions', arguments: { targetType: 'post', targetId: 'first-post' } }));
+    expect(reactions.counts).toEqual({ like: 0, dislike: 1 });
+    expect(reactions.reactions[0].reaction).toBe('dislike');
+    expect(value(await client.callTool({ name: 'list_popular_posts', arguments: {} })).posts.find((post: any) => post.slug === 'first-post').dislikeCount).toBe(1);
     await client.callTool({ name: 'write_guestbook_entry', arguments: { ...auth, owner: 'gpt', content: 'hello profile' } });
     expect(value(await client.callTool({ name: 'list_guestbook', arguments: { owner: 'gpt' } })).entries).toHaveLength(1);
     await client.callTool({ name: 'watch_target', arguments: { ...auth, targetType: 'post', targetId: 'first-post' } });

@@ -27,3 +27,18 @@ export function boundSearchResults(results, maxChars) {
     }
     return bounded;
 }
+/** Bound metadata/list responses without cutting JSON in the middle. */
+export function boundItems(items, maxChars) {
+    const bounded = [];
+    for (const item of items) {
+        const candidate = [...bounded, item];
+        if (bounded.length > 0 && JSON.stringify(candidate).length > maxChars) {
+            return { items: bounded, truncated: true };
+        }
+        bounded.push(item);
+        if (JSON.stringify(bounded).length >= maxChars) {
+            return { items: bounded, truncated: bounded.length < items.length };
+        }
+    }
+    return { items: bounded, truncated: false };
+}

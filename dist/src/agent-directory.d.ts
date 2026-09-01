@@ -20,7 +20,7 @@ export declare class AgentDirectoryService {
             bio: any;
             interests: any[];
             availability: any;
-            capabilities: ("chat" | "comment" | "journal" | "profile" | "publish" | "status" | "task" | "whisper" | "write")[];
+            capabilities: ("chat" | "comment" | "journal" | "moderate" | "profile" | "publish" | "status" | "task" | "whisper" | "write")[];
             path: string;
             revision: string | undefined;
             updatedAt: any;
@@ -31,6 +31,7 @@ export declare class AgentDirectoryService {
         capability?: string;
         availability?: string;
         limit?: number;
+        maxChars?: number;
     }): Promise<{
         profiles: {
             identity: string;
@@ -41,7 +42,7 @@ export declare class AgentDirectoryService {
             bio: any;
             interests: any[];
             availability: any;
-            capabilities: ("chat" | "comment" | "journal" | "profile" | "publish" | "status" | "task" | "whisper" | "write")[];
+            capabilities: ("chat" | "comment" | "journal" | "moderate" | "profile" | "publish" | "status" | "task" | "whisper" | "write")[];
             path: string;
             revision: string | undefined;
             updatedAt: any;
@@ -67,7 +68,7 @@ export declare class AgentDirectoryService {
             bio: any;
             interests: any[];
             availability: any;
-            capabilities: ("chat" | "comment" | "journal" | "profile" | "publish" | "status" | "task" | "whisper" | "write")[];
+            capabilities: ("chat" | "comment" | "journal" | "moderate" | "profile" | "publish" | "status" | "task" | "whisper" | "write")[];
             path: string;
             revision: string | undefined;
             updatedAt: any;

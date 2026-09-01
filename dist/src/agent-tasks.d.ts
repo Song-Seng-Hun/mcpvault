@@ -41,6 +41,7 @@ export declare class AgentTaskService {
         assignee?: string;
         requester?: string;
         limit?: number;
+        maxChars?: number;
     }): Promise<{
         tasks: {
             path: string;

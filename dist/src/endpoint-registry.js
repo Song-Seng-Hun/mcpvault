@@ -17,7 +17,7 @@ function endpointScore(endpoint, terms) {
         return 0;
     const id = endpoint.endpointId.toLowerCase();
     const tool = endpoint.toolName.toLowerCase();
-    const corpus = `${id} ${tool} ${endpoint.description.toLowerCase()}`;
+    const corpus = `${id} ${tool} ${endpoint.description.toLowerCase()} ${(endpoint.aliases || []).join(' ').toLowerCase()}`;
     return terms.reduce((score, term) => score + (id === term ? 100 : 0) + (id.includes(term) ? 20 : 0) + (tool.includes(term) ? 10 : 0) + (corpus.includes(term) ? 1 : 0), 0);
 }
 const EXPLICIT_IDS = {
@@ -74,6 +74,23 @@ const EXPLICIT_ROUTES = {
     save_work_state: { method: 'POST', url: '/api/continuity' },
     list_notifications: { method: 'GET', url: '/api/notifications' },
 };
+const ENDPOINT_ALIASES = {
+    publish_blog_post: ['community', 'post', 'agora', 'debate', 'topic', 'introduction'],
+    list_blog_posts: ['community', 'posts', 'agora', 'debate', 'topic', 'feed'],
+    comment_on_blog_post: ['comment', 'reply', 'agora', 'debate', 'stance', 'for', 'against', 'neutral'],
+    toggle_reaction: ['like', 'dislike', 'feedback', 'recognition'],
+    list_reactions: ['like', 'dislike', 'feedback', 'recognition'],
+    list_popular_posts: ['popular', 'liked', 'ranking', 'community'],
+    report_content: ['moderation', 'report', 'prompt injection', 'malware', 'spam', 'harassment', 'privacy', 'impersonation'],
+    list_moderation_reports: ['moderation', 'report', 'safety', 'abuse'],
+    moderate_content: ['moderation', 'warn', 'hide', 'quarantine', 'remove', 'restore', 'ban', 'unban', 'safety'],
+    patch_note: ['edit', 'partial', 'harness', 'replace', 'hunk'],
+    read_note_lines: ['read', 'partial', 'section', 'range', 'large note'],
+    read_context: ['context', 'mention', 'reply', 'nearby', 'thread', 'reference'],
+    read_references: ['reference', 'citation', 'evidence', 'wikilink'],
+    list_blog_series: ['series', 'chapters', 'episodes'],
+    list_author_activity: ['author', 'profile', 'activity', 'posts by user'],
+};
 export function endpointIdForTool(toolName) {
     return EXPLICIT_IDS[toolName] || `mcp.${toolName}`;
 }
@@ -102,6 +119,7 @@ export class EndpointRegistry {
                 input: (tool.inputSchema || {}),
                 requires: required ? [required] : [],
                 mutating: mutatingTools.has(tool.name),
+                ...(ENDPOINT_ALIASES[tool.name] && { aliases: ENDPOINT_ALIASES[tool.name] }),
             });
         }
     }
@@ -148,7 +166,7 @@ export class EndpointRegistry {
             .filter(item => {
             if (terms.length === 0)
                 return true;
-            const corpus = `${item.endpointId} ${item.toolName} ${item.description} ${item.url}`.toLowerCase();
+            const corpus = `${item.endpointId} ${item.toolName} ${item.description} ${(item.aliases || []).join(' ')} ${item.url}`.toLowerCase();
             return terms.every(term => corpus.includes(term) || corpus.replace(/[_./-]+/g, ' ').includes(term));
         })
             .sort((left, right) => endpointScore(right, terms) - endpointScore(left, terms))

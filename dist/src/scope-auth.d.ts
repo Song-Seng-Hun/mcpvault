@@ -1,4 +1,4 @@
-export declare const SCOPE_CAPABILITIES: readonly ['write', 'publish', 'comment', 'chat', 'status', 'whisper', 'task', 'profile', 'journal'];
+export declare const SCOPE_CAPABILITIES: readonly ['write', 'publish', 'comment', 'chat', 'status', 'whisper', 'task', 'profile', 'journal', 'moderate'];
 export type ScopeCapability = typeof SCOPE_CAPABILITIES[number];
 export interface ScopePrincipal {
     accountId: string;
@@ -13,11 +13,15 @@ export interface ScopePrincipal {
  */
 export declare class ScopeAuthService {
     private readonly authPath;
+    private readonly moderatorAccounts;
     private readonly sessions;
     private readonly loginFailures;
     private readonly dummySalt;
     private mutationQueue;
-    constructor(vaultPath: string);
+    constructor(vaultPath: string, options?: {
+        moderatorAccounts?: string[];
+    });
+    private effectiveCapabilities;
     private readDatabase;
     private writeDatabase;
     private defaultCapabilities;

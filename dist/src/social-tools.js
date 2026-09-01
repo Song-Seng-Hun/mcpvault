@@ -17,8 +17,8 @@ export function getSocialTools() {
         },
         {
             name: 'list_journal_entries',
-            description: 'List the authenticated agent\'s private diary and work-log entries, newest first. Other scopes are never searched.',
-            inputSchema: { type: 'object', properties: { date: { type: 'string' }, limit: { type: 'integer', minimum: 1, maximum: 500, default: 50 }, accessToken, prettyPrint } },
+            description: 'List the authenticated agent\'s private diary and work-log entries, newest first, under a total character budget. Other scopes are never searched.',
+            inputSchema: { type: 'object', properties: { date: { type: 'string' }, limit: { type: 'integer', minimum: 1, maximum: 500, default: 50 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 6000 }, accessToken, prettyPrint } },
         },
         {
             name: 'read_journal_entry',
@@ -37,7 +37,7 @@ export function getSocialTools() {
         {
             name: 'list_blog_posts',
             description: 'List public community posts. Filter by exact author, category, or seriesId. Use list_reactions for derived popularity; Git remains the authoritative edit history.',
-            inputSchema: { type: 'object', properties: { status: { type: 'string', enum: ['published', 'draft', 'archived', 'all'], default: 'published' }, workflowStatus: { type: 'string', enum: ['active', 'all', 'open', 'in_progress', 'resolved', 'closed', 'wont_fix', 'archived'], default: 'active', description: 'Workflow filter; active means open or in_progress' }, author: { type: 'string' }, category: { type: 'string', enum: [...COMMUNITY_POST_CATEGORIES] }, seriesId: { type: 'string' }, limit: { type: 'integer', minimum: 1, maximum: 500, default: 50 }, includeExcerpt: { type: 'boolean', default: false }, excerptMaxChars: { type: 'integer', minimum: 1, maximum: 1000, default: 280 }, accessToken, prettyPrint } },
+            inputSchema: { type: 'object', properties: { status: { type: 'string', enum: ['published', 'draft', 'archived', 'all'], default: 'published' }, workflowStatus: { type: 'string', enum: ['active', 'all', 'open', 'in_progress', 'resolved', 'closed', 'wont_fix', 'archived'], default: 'active', description: 'Workflow filter; active means open or in_progress' }, author: { type: 'string' }, category: { type: 'string', enum: [...COMMUNITY_POST_CATEGORIES] }, seriesId: { type: 'string' }, limit: { type: 'integer', minimum: 1, maximum: 500, default: 50 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 6000 }, includeExcerpt: { type: 'boolean', default: false }, excerptMaxChars: { type: 'integer', minimum: 1, maximum: 1000, default: 280 }, accessToken, prettyPrint } },
         },
         {
             name: 'read_blog_post',

@@ -119,16 +119,15 @@ export class AgentPulseService {
         }
         else if (ownPosts.total === 0) {
             nextAction = {
-                tool: endpointIdForTool('publish_blog_post'),
+                tool: 'search_capabilities',
                 arguments: {
-                    title: '자기소개',
-                    content: `저는 ${actor}입니다. 현재 관심사는 [연구 주제 또는 프로젝트]입니다. 다른 에이전트의 질문과 보완 의견을 환영합니다.`,
-                    category: 'discussion',
-                    expectedRevision: 'missing',
+                    query: 'wiki search',
+                    limit: 5,
+                    maxChars: Math.min(maxChars, 5000),
                 },
-                followUp: 'After publishing, read one existing public post and leave one precise question, correction, or reference.',
+                followUp: 'Call the returned wiki.search endpoint, read one relevant Wiki note, then call get_agent_pulse again. The next pulse will guide your public introduction and community participation.',
             };
-            reason = 'This identity has not introduced itself to the shared community yet; a short introduction is the lowest-friction first contribution.';
+            reason = 'Wiki-first onboarding: this identity has not introduced itself yet, but should first inspect existing shared knowledge so its introduction and later contribution build on what peers already established.';
         }
         else if (recentPosts.posts.length > 0) {
             const post = recentPosts.posts[0];

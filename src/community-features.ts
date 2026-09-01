@@ -2,7 +2,9 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopeAuthService, ScopePrincipal } from './scope-auth.js';
+import { isModerationHidden, moderationStatus } from './moderation-policy.js';
 import { normalizeScopeId } from './scopes.js';
+import { boundItems } from './search-limits.js';
 import { MAX_COMMUNITY_TEXT_LENGTH, extractMentions } from './social.js';
 
 const POSTS = 'Community/Posts';
@@ -44,20 +46,23 @@ export class CommunityFeaturesService {
     if (!identities.some(principal => identity(principal) === value)) throw new Error(`Unknown public identity: ${value}`);
   }
 
-  async listSeries(params: { seriesId?: string; limit?: number; includeExcerpts?: boolean; excerptMaxChars?: number }) {
+  async listSeries(params: { seriesId?: string; limit?: number; maxChars?: number; includeExcerpts?: boolean; excerptMaxChars?: number }) {
     const result = await this.fileSystem.queryNotes({ pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post', status: 'published' }, sortBy: 'created_at', sortOrder: 'asc', limit: MAX_SCAN, includeContent: params.includeExcerpts === true });
     const groups = new Map<string, any>();
     for (const note of result.notes) {
+      if (isModerationHidden(note.frontmatter)) continue;
       const id = String(note.frontmatter.series_id || '').trim();
       if (!id || (params.seriesId && id !== normalizeScopeId(params.seriesId, 'seriesId'))) continue;
       const order = Number(note.frontmatter.series_order || 0);
-      const chapter = { slug: note.frontmatter.post_id, title: note.frontmatter.title, author: note.frontmatter.author, order, path: note.path, ...(params.includeExcerpts && { excerpt: String(note.content || '').slice(0, Math.min(positive(params.excerptMaxChars, 280, 1000), 1000)) }) };
+      const chapter = { slug: note.frontmatter.post_id, title: note.frontmatter.title, author: note.frontmatter.author, order, path: note.path, moderationStatus: moderationStatus(note.frontmatter), ...(params.includeExcerpts && { excerpt: String(note.content || '').slice(0, Math.min(positive(params.excerptMaxChars, 280, 1000), 1000)) }) };
       const current = groups.get(id) || { seriesId: id, title: note.frontmatter.series_title || id, chapters: [] };
       current.chapters.push(chapter);
       groups.set(id, current);
     }
     const series = Array.from(groups.values()).map(group => ({ ...group, chapters: group.chapters.sort((a: any, b: any) => a.order - b.order || String(a.slug).localeCompare(String(b.slug))), count: group.chapters.length }));
-    return { series: series.slice(0, positive(params.limit, 50, 100)), total: series.length, truncated: series.length > positive(params.limit, 50, 100) };
+    const limited = series.slice(0, positive(params.limit, 50, 100));
+    const bounded = boundItems(limited, positive(params.maxChars, 6000, 20000));
+    return { series: bounded.items, total: series.length, truncated: series.length > limited.length || bounded.truncated };
   }
 
   async authorActivity(params: { author: string; limit?: number; maxChars?: number }) {
@@ -68,7 +73,7 @@ export class CommunityFeaturesService {
       this.fileSystem.queryNotes({ pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post', author }, sortBy: 'updated_at', sortOrder: 'desc', limit: MAX_SCAN }),
       this.fileSystem.queryNotes({ pathPrefix: COMMENTS, filters: { mcpvault_type: 'blog_comment', author }, sortBy: 'created_at', sortOrder: 'desc', limit: MAX_SCAN }),
     ]);
-    const items = [...posts.notes.map(n => ({ type: 'post', id: n.frontmatter.post_id, path: n.path, title: n.frontmatter.title, createdAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at })), ...comments.notes.map(n => ({ type: 'comment', id: n.frontmatter.comment_id, postId: n.frontmatter.post_id, path: n.path, createdAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at }))].sort((a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)));
+    const items = [...posts.notes.filter(n => !isModerationHidden(n.frontmatter)).map(n => ({ type: 'post', id: n.frontmatter.post_id, path: n.path, title: n.frontmatter.title, createdAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at })), ...comments.notes.filter(n => !isModerationHidden(n.frontmatter)).map(n => ({ type: 'comment', id: n.frontmatter.comment_id, postId: n.frontmatter.post_id, path: n.path, createdAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at }))].sort((a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)));
     return { author, items: items.slice(0, limit), postCount: posts.notes.length, commentCount: comments.notes.length, total: items.length, truncated: items.length > limit || posts.truncated || comments.truncated, maxChars };
   }
 
@@ -77,13 +82,15 @@ export class CommunityFeaturesService {
       const path = publicPostPath(targetId);
       const note = await this.fileSystem.readNote(path);
       if (note.frontmatter.mcpvault_type !== 'blog_post') throw new Error('target post was not found');
+      if (isModerationHidden(note.frontmatter)) throw new Error('This community item is unavailable because moderation has hidden it');
       return path;
     }
     if (!postId) throw new Error('postId is required for a comment target');
     const path = publicCommentPath(postId, targetId);
-    const note = await this.fileSystem.readNote(path);
-    if (note.frontmatter.mcpvault_type !== 'blog_comment') throw new Error('target comment was not found');
-    return path;
+      const note = await this.fileSystem.readNote(path);
+      if (note.frontmatter.mcpvault_type !== 'blog_comment') throw new Error('target comment was not found');
+      if (isModerationHidden(note.frontmatter)) throw new Error('This community item is unavailable because moderation has hidden it');
+      return path;
   }
 
   private reactionRoot(type: TargetType, id: string) { return `${REACTIONS}/${type}/${actorPath(id, 'targetId')}`; }
@@ -91,7 +98,7 @@ export class CommunityFeaturesService {
   async toggleReaction(params: { principal?: ScopePrincipal; targetType: TargetType; targetId: string; postId?: string; reaction?: string; active?: boolean }) {
     if (!params.principal) throw new Error('Login is required to react');
     const reaction = normalizeScopeId(params.reaction || 'like', 'reaction');
-    if (reaction !== 'like') throw new Error("reaction currently supports only 'like'");
+    if (reaction !== 'like' && reaction !== 'dislike') throw new Error("reaction must be 'like' or 'dislike'");
     await this.targetPath(params.targetType, params.targetId, params.postId);
     const actor = actorPath(identity(params.principal), 'actor');
     const path = `${this.reactionRoot(params.targetType, params.targetId)}/${actor}.md`;
@@ -106,22 +113,24 @@ export class CommunityFeaturesService {
     return { success: true, active: params.active !== false, reaction, targetType: params.targetType, targetId: params.targetId, actor: identity(params.principal) };
   }
 
-  async listReactions(params: { targetType: TargetType; targetId: string; postId?: string; limit?: number }) {
+  async listReactions(params: { targetType: TargetType; targetId: string; postId?: string; limit?: number; maxChars?: number }) {
     await this.targetPath(params.targetType, params.targetId, params.postId);
     const result = await this.fileSystem.queryNotes({ pathPrefix: this.reactionRoot(params.targetType, params.targetId), filters: { mcpvault_type: 'reaction', active: true }, sortBy: 'created_at', sortOrder: 'desc', limit: MAX_SCAN });
     const reactions = result.notes.slice(0, positive(params.limit, 100, 500)).map(n => ({ actor: n.frontmatter.actor, reaction: n.frontmatter.reaction, createdAt: n.frontmatter.created_at }));
-    return { targetType: params.targetType, targetId: params.targetId, counts: { like: reactions.filter(r => r.reaction === 'like').length }, reactions, total: result.total, truncated: result.truncated || result.total > reactions.length };
+    const bounded = boundItems(reactions, positive(params.maxChars, 6000, 20000));
+    return { targetType: params.targetType, targetId: params.targetId, counts: { like: result.notes.filter(n => n.frontmatter.reaction === 'like').length, dislike: result.notes.filter(n => n.frontmatter.reaction === 'dislike').length }, reactions: bounded.items, total: result.total, truncated: result.truncated || result.total > reactions.length || bounded.truncated };
   }
 
-  async listPopularPosts(params: { limit?: number; category?: string }) {
+  async listPopularPosts(params: { limit?: number; category?: string; maxChars?: number }) {
     const result = await this.fileSystem.queryNotes({ pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post', status: 'published' }, sortBy: 'updated_at', sortOrder: 'desc', limit: MAX_SCAN });
-    const posts = await Promise.all(result.notes.filter(note => !params.category || String(note.frontmatter.category || 'discussion').toLowerCase() === String(params.category).toLowerCase()).map(async note => {
-      const reactions = await this.fileSystem.queryNotes({ pathPrefix: this.reactionRoot('post', String(note.frontmatter.post_id)), filters: { mcpvault_type: 'reaction', active: true, reaction: 'like' }, limit: MAX_SCAN });
-      return { path: note.path, slug: note.frontmatter.post_id, title: note.frontmatter.title, author: note.frontmatter.author, category: note.frontmatter.category || 'discussion', tags: note.frontmatter.tags || [], likeCount: reactions.total, createdAt: note.frontmatter.created_at, updatedAt: note.frontmatter.updated_at };
+    const posts = await Promise.all(result.notes.filter(note => !isModerationHidden(note.frontmatter)).filter(note => !params.category || String(note.frontmatter.category || 'discussion').toLowerCase() === String(params.category).toLowerCase()).map(async note => {
+      const reactions = await this.fileSystem.queryNotes({ pathPrefix: this.reactionRoot('post', String(note.frontmatter.post_id)), filters: { mcpvault_type: 'reaction', active: true }, limit: MAX_SCAN });
+      return { path: note.path, slug: note.frontmatter.post_id, title: note.frontmatter.title, author: note.frontmatter.author, category: note.frontmatter.category || 'discussion', tags: note.frontmatter.tags || [], likeCount: reactions.notes.filter(reaction => reaction.frontmatter.reaction === 'like').length, dislikeCount: reactions.notes.filter(reaction => reaction.frontmatter.reaction === 'dislike').length, moderationStatus: moderationStatus(note.frontmatter), createdAt: note.frontmatter.created_at, updatedAt: note.frontmatter.updated_at };
     }));
     posts.sort((a, b) => b.likeCount - a.likeCount || String(b.updatedAt).localeCompare(String(a.updatedAt)));
     const limit = positive(params.limit, 50, 500);
-    return { posts: posts.slice(0, limit), total: posts.length, truncated: result.truncated || posts.length > limit };
+    const bounded = boundItems(posts.slice(0, limit), positive(params.maxChars, 6000, 20000));
+    return { posts: bounded.items, total: posts.length, truncated: result.truncated || posts.length > limit || bounded.truncated };
   }
 
   async acceptComment(params: { principal?: ScopePrincipal; slug: string; commentId: string; accepted?: boolean; expectedRevision: string }) {
@@ -141,7 +150,7 @@ export class CommunityFeaturesService {
     return { success: true, accepted, slug: params.slug, commentId: params.commentId, revision: (await this.fileSystem.readNote(postPath)).revision };
   }
 
-  async guestbook(params: { principal?: ScopePrincipal; owner: string; content?: string; entryId?: string; replyTo?: string; limit?: number; afterEntryId?: string; deleteEntry?: boolean; expectedRevision?: string }) {
+  async guestbook(params: { principal?: ScopePrincipal; owner: string; content?: string; entryId?: string; replyTo?: string; limit?: number; maxChars?: number; afterEntryId?: string; deleteEntry?: boolean; expectedRevision?: string }) {
     const owner = normalizeScopeId(params.owner, 'owner');
     await this.assertKnownIdentity(owner);
     const pathRoot = `${GUESTBOOKS}/${owner}`;
@@ -167,7 +176,8 @@ export class CommunityFeaturesService {
     const cursor = params.afterEntryId ? result.notes.findIndex(n => n.frontmatter.entry_id === normalizeScopeId(params.afterEntryId!, 'afterEntryId')) : -1;
     if (params.afterEntryId && cursor < 0) throw new Error('afterEntryId was not found');
     const selected = result.notes.slice(cursor >= 0 ? cursor + 1 : Math.max(0, result.notes.length - limit), cursor >= 0 ? cursor + 1 + limit : undefined);
-    return { owner, entries: selected.map(n => ({ path: n.path, entryId: n.frontmatter.entry_id, author: n.frontmatter.author, replyTo: n.frontmatter.reply_to, createdAt: n.frontmatter.created_at, content: n.content })), total: result.total, truncated: result.truncated || selected.length < result.total, nextCursor: selected.at(-1)?.frontmatter.entry_id };
+    const bounded = boundItems(selected.map(n => ({ path: n.path, entryId: n.frontmatter.entry_id, author: n.frontmatter.author, replyTo: n.frontmatter.reply_to, createdAt: n.frontmatter.created_at, content: n.content })), positive(params.maxChars, 6000, 20000));
+    return { owner, entries: bounded.items, total: result.total, truncated: result.truncated || selected.length < result.total || bounded.truncated, nextCursor: bounded.items.at(-1)?.entryId };
   }
 
   private ownerRoot(principal: ScopePrincipal, kind: 'subscriptions' | 'saves') {
@@ -193,10 +203,11 @@ export class CommunityFeaturesService {
     return { success: true, active, targetType: params.targetType, targetId };
   }
 
-  async listWatches(principal?: ScopePrincipal) {
+  async listWatches(principal?: ScopePrincipal, maxChars?: number) {
     if (!principal) throw new Error('Login is required');
     const result = await this.fileSystem.queryNotes({ pathPrefix: this.ownerRoot(principal, 'subscriptions'), filters: { mcpvault_type: 'subscription', active: true }, sortBy: 'updated_at', sortOrder: 'desc', limit: 500 });
-    return { watches: result.notes.map(n => ({ targetType: n.frontmatter.target_type, targetId: n.frontmatter.target_id, updatedAt: n.frontmatter.updated_at })), total: result.total, truncated: result.truncated };
+    const bounded = boundItems(result.notes.map(n => ({ targetType: n.frontmatter.target_type, targetId: n.frontmatter.target_id, updatedAt: n.frontmatter.updated_at })), positive(maxChars, 6000, 20000));
+    return { watches: bounded.items, total: result.total, truncated: result.truncated || bounded.truncated };
   }
 
   async save(params: { principal?: ScopePrincipal; targetPath: string; note?: string; active?: boolean }) {
@@ -216,10 +227,11 @@ export class CommunityFeaturesService {
     return { success: true, active, targetPath: target };
   }
 
-  async listSaves(principal?: ScopePrincipal) {
+  async listSaves(principal?: ScopePrincipal, maxChars?: number) {
     if (!principal) throw new Error('Login is required');
     const result = await this.fileSystem.queryNotes({ pathPrefix: this.ownerRoot(principal, 'saves'), filters: { mcpvault_type: 'saved_item', active: true }, sortBy: 'updated_at', sortOrder: 'desc', limit: 500 });
-    return { saves: result.notes.map(n => ({ targetPath: n.frontmatter.target_path, note: n.frontmatter.note, savedAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at })), total: result.total, truncated: result.truncated };
+    const bounded = boundItems(result.notes.map(n => ({ targetPath: n.frontmatter.target_path, note: n.frontmatter.note, savedAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at })), positive(maxChars, 6000, 20000));
+    return { saves: bounded.items, total: result.total, truncated: result.truncated || bounded.truncated };
   }
 }
 

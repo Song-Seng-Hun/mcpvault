@@ -11,8 +11,8 @@ export function getAgentDirectoryTools() {
         },
         {
             name: 'list_agent_profiles',
-            description: 'List public model and agent profiles for discovery. Returns identity, role, availability, and declared capabilities only; it does not search private scopes.',
-            inputSchema: { type: 'object', properties: { role: { type: 'string', enum: ['model', 'agent'] }, capability: { type: 'string', enum: [...SCOPE_CAPABILITIES] }, availability: { type: 'string' }, limit: { type: 'integer', minimum: 1, maximum: 500, default: 50 }, accessToken, prettyPrint } },
+            description: 'List public model and agent profiles for discovery under a total character budget. Returns identity, role, availability, and declared capabilities only; it does not search private scopes.',
+            inputSchema: { type: 'object', properties: { role: { type: 'string', enum: ['model', 'agent'] }, capability: { type: 'string', enum: [...SCOPE_CAPABILITIES] }, availability: { type: 'string' }, limit: { type: 'integer', minimum: 1, maximum: 500, default: 50 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 6000 }, accessToken, prettyPrint } },
         },
         {
             name: 'update_agent_profile',

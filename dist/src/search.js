@@ -2,6 +2,7 @@ import { join, resolve } from 'path';
 import { readFile, readdir } from 'node:fs/promises';
 import { generateObsidianUri } from './uri.js';
 import { boundSearchResults, normalizeSearchLimit, normalizeSearchMaxChars } from './search-limits.js';
+import { isMarkdownModerationHidden } from './moderation-policy.js';
 const WIKI_TYPES = new Set(['schema', 'source', 'knowledge', 'issue']);
 function isWikiPath(path) {
     const normalized = path.toLowerCase();
@@ -76,6 +77,8 @@ export class SearchService {
                 if (content === null || content === undefined)
                     continue;
                 const { relativePath } = batch[i];
+                if (isMarkdownModerationHidden(content))
+                    continue;
                 const isWiki = isWikiPath(relativePath) || wikiType(content) !== undefined;
                 let searchableText = '';
                 // Prepare search text based on options

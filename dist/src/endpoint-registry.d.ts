@@ -9,6 +9,7 @@ export interface EndpointDescriptor {
     input: Record<string, unknown>;
     requires: string[];
     mutating: boolean;
+    aliases?: string[];
 }
 export interface MatchedEndpoint {
     endpoint: EndpointDescriptor;

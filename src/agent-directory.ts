@@ -1,6 +1,7 @@
 import type { FileSystemService } from './filesystem.js';
 import { normalizeScopeId } from './scopes.js';
 import { SCOPE_CAPABILITIES, type ScopeAuthService, type ScopeCapability, type ScopePrincipal } from './scope-auth.js';
+import { boundItems } from './search-limits.js';
 
 const ROOT = 'Community/Agents';
 const now = () => new Date().toISOString();
@@ -62,7 +63,7 @@ export class AgentDirectoryService {
     return { success: true, profile: await this.profileFor(await this.findPrincipal(params.role, params.identity)) };
   }
 
-  async list(params: { role?: string; capability?: string; availability?: string; limit?: number }) {
+  async list(params: { role?: string; capability?: string; availability?: string; limit?: number; maxChars?: number }) {
     if (params.role !== undefined && params.role !== 'model' && params.role !== 'agent') throw new Error('role must be model or agent');
     if (params.capability !== undefined && !(SCOPE_CAPABILITIES as readonly string[]).includes(params.capability)) throw new Error(`capability must be one of: ${SCOPE_CAPABILITIES.join(', ')}`);
     const principals = await this.auth.listPrincipals();
@@ -72,7 +73,8 @@ export class AgentDirectoryService {
       .map(principal => this.profileFor(principal)));
     const filtered = params.availability ? profiles.filter(profile => profile.availability === params.availability) : profiles;
     const limit = Math.min(Math.max(Number(params.limit || 50), 1), 500);
-    return { profiles: filtered.slice(0, limit), total: filtered.length, truncated: filtered.length > limit };
+    const bounded = boundItems(filtered.slice(0, limit), Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000));
+    return { profiles: bounded.items, total: filtered.length, truncated: filtered.length > limit || bounded.truncated };
   }
 
   async update(params: { principal?: ScopePrincipal; displayName?: string; bio?: string; interests?: unknown; availability?: string; expectedRevision?: string }) {

@@ -1,8 +1,11 @@
 import { execFile } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type { PathFilter } from './pathfilter.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
+import { isMarkdownModerationHidden } from './moderation-policy.js';
 import { boundSearchResults, normalizeSearchMaxChars } from './search-limits.js';
 
 const execFileAsync = promisify(execFile);
@@ -73,18 +76,29 @@ export class ObsidianSearchService {
       }).filter(entry => entry.path);
     }
     const seen = new Set<string>();
-    const results = boundSearchResults(entries.filter(entry => {
+    const visibleEntries: Array<{ path: string; line?: number; text?: string }> = [];
+    for (const entry of entries) {
       const path = entry.path.replace(/\\/g, '/').replace(/^\.\//, '').trim();
-      if (!path || !this.pathFilter.isAllowed(path) || !this.access.canAccessPhysicalPath(path)) return false;
-      if (pathPrefix && path !== pathPrefix && !path.startsWith(`${pathPrefix}/`)) return false;
-      if (seen.has(`${path}:${entry.line ?? ''}`)) return false;
-      seen.add(`${path}:${entry.line ?? ''}`);
-      return true;
-    }).slice(0, limit).map(entry => ({
-      p: entry.path.replace(/\\/g, '/').replace(/^\.\//, ''),
+      if (!path || !this.pathFilter.isAllowed(path) || !this.access.canAccessPhysicalPath(path)) continue;
+      if (pathPrefix && path !== pathPrefix && !path.startsWith(`${pathPrefix}/`)) continue;
+      const key = `${path}:${entry.line ?? ''}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      try {
+        const markdown = await readFile(join(this.vaultPath, path), 'utf8');
+        if (isMarkdownModerationHidden(markdown)) continue;
+      } catch {
+        // The CLI result may race with a deleted or inaccessible note. Do not
+        // turn that into a leak or make the whole search fail.
+        continue;
+      }
+      visibleEntries.push({ ...entry, path });
+    }
+    const results = boundSearchResults(visibleEntries.slice(0, limit).map(entry => ({
+      p: entry.path,
       ...(entry.line !== undefined && { ln: entry.line }),
       ...(entry.text !== undefined && { ex: entry.text }),
     })), maxChars);
-    return { backend: 'obsidian', query, context: params.context === true, results, total: results.length, truncated: entries.length > results.length };
+    return { backend: 'obsidian', query, context: params.context === true, results, total: results.length, truncated: visibleEntries.length > results.length || entries.length > visibleEntries.length };
   }
 }

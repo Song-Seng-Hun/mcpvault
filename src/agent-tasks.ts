@@ -3,6 +3,7 @@ import type { FileSystemService } from './filesystem.js';
 import type { ReferenceService } from './references.js';
 import type { ScopeAuthService, ScopePrincipal } from './scope-auth.js';
 import { normalizeScopeId } from './scopes.js';
+import { boundItems } from './search-limits.js';
 
 const ROOT = 'Community/Tasks';
 export const AGENT_TASK_STATUSES = ['proposed', 'accepted', 'in_progress', 'blocked', 'completed', 'cancelled'] as const;
@@ -78,22 +79,20 @@ export class AgentTaskService {
     };
   }
 
-  async list(params: { status?: string; assignee?: string; requester?: string; limit?: number }) {
+  async list(params: { status?: string; assignee?: string; requester?: string; limit?: number; maxChars?: number }) {
     const filters: Record<string, unknown> = { mcpvault_type: 'agent_task' };
     if (params.status) filters.status = taskStatus(params.status);
     if (params.assignee) filters.assignee = normalizeScopeId(params.assignee, 'assignee');
     if (params.requester) filters.requester = normalizeScopeId(params.requester, 'requester');
     const result = await this.fileSystem.queryNotes({ pathPrefix: ROOT, filters, sortBy: 'updated_at', sortOrder: 'desc', limit: 500 });
     const limit = Math.min(Math.max(Number(params.limit ?? 50), 1), 500);
-    return {
-      tasks: result.notes.slice(0, limit).map(note => ({
+    const bounded = boundItems(result.notes.slice(0, limit).map(note => ({
         path: note.path, taskId: note.frontmatter.task_id, title: note.frontmatter.title,
         requester: note.frontmatter.requester, assignee: note.frontmatter.assignee,
         status: taskStatus(note.frontmatter.status), updatedAt: note.frontmatter.updated_at,
         revision: undefined,
-      })),
-      total: result.total, truncated: result.truncated || result.notes.length > limit,
-    };
+      })), Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000));
+    return { tasks: bounded.items, total: result.total, truncated: result.truncated || result.notes.length > limit || bounded.truncated };
   }
 
   async update(params: { principal?: ScopePrincipal; taskId: string; status?: string; assignee?: string; description?: string; references?: unknown; reason?: string; expectedRevision: string }) {

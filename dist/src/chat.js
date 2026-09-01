@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { normalizeScopeId } from './scopes.js';
 import { extractMentions, MAX_COMMUNITY_TEXT_LENGTH } from './social.js';
 import { workflowStatus } from './community-status.js';
+import { isModerationHidden, moderationStatus } from './moderation-policy.js';
+import { boundItems } from './search-limits.js';
 const ROOM_ROOT = 'Community/ChatRooms';
 const MESSAGE_ROOT = 'Community/ChatMessages';
 const ROOM_STATUSES = new Set(['open', 'archived']);
@@ -79,9 +81,11 @@ export class ChatService {
             createdBy: note.frontmatter.created_by,
             createdAt: note.frontmatter.created_at,
             updatedAt: note.frontmatter.updated_at,
+            moderationStatus: moderationStatus(note.frontmatter),
         }));
         const limit = Math.min(Math.max(Number(params.limit || 50), 1), 500);
-        return { rooms: rooms.slice(0, limit), total: rooms.length, truncated: result.truncated || rooms.length > limit };
+        const bounded = boundItems(rooms.slice(0, limit), Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000));
+        return { rooms: bounded.items, total: rooms.length, truncated: result.truncated || rooms.length > limit || bounded.truncated };
     }
     async readRoom(roomId) {
         const path = roomPath(roomId);
@@ -185,6 +189,8 @@ export class ChatService {
         let usedChars = 0;
         for (let index = start; index < result.notes.length && selected.length < limit; index += 1) {
             const note = result.notes[index];
+            if (isModerationHidden(note.frontmatter))
+                continue;
             const full = await this.fileSystem.readNote(note.path);
             const contentLength = Array.from(full.content).length;
             if (selected.length > 0 && usedChars + contentLength > maxChars)
@@ -210,6 +216,7 @@ export class ChatService {
                 workflowStatusBy: note.frontmatter.workflow_status_by,
                 workflowStatusReason: note.frontmatter.workflow_status_reason,
                 workflowStatusUpdatedAt: note.frontmatter.workflow_status_updated_at,
+                moderationStatus: moderationStatus(note.frontmatter),
                 ...(params.includeThreadContext !== false && note.frontmatter.reply_to && { parent: await this.readMessageContext(roomId, note.frontmatter.reply_to) }),
             }))),
             totalMessages: result.total,
@@ -227,6 +234,8 @@ export class ChatService {
         const note = await this.fileSystem.readNote(path);
         if (note.frontmatter.mcpvault_type !== 'chat_message')
             throw new Error(`Not a chat message: ${messageId}`);
+        if (isModerationHidden(note.frontmatter))
+            throw new Error('This chat message is unavailable because it was hidden by moderation');
         return {
             path,
             fm: note.frontmatter,
@@ -242,6 +251,8 @@ export class ChatService {
         const parent = await this.fileSystem.readNote(path);
         if (parent.frontmatter.mcpvault_type !== 'chat_message')
             throw new Error(`Reply target is not a chat message: ${messageId}`);
+        if (isModerationHidden(parent.frontmatter))
+            return { path, messageId: parent.frontmatter.message_id, roomId: parent.frontmatter.room_id, author: parent.frontmatter.author, authorRole: parent.frontmatter.author_role, createdAt: parent.frontmatter.created_at, content: '[moderated]', replyTo: parent.frontmatter.reply_to, workflowStatus: workflowStatus(parent.frontmatter), moderated: true };
         return { path, messageId: parent.frontmatter.message_id, roomId: parent.frontmatter.room_id, author: parent.frontmatter.author, authorRole: parent.frontmatter.author_role, createdAt: parent.frontmatter.created_at, content: parent.content, replyTo: parent.frontmatter.reply_to, workflowStatus: workflowStatus(parent.frontmatter) };
     }
 }

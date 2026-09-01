@@ -9,6 +9,8 @@ export interface CreateServerOptions {
     frontmatterHandler?: FrontmatterHandler;
     /** Expose read tools only and reject direct calls to mutating tools. */
     readOnly?: boolean;
+    /** Account IDs granted the site-wide moderation capability. */
+    moderatorAccounts?: string[];
 }
 export interface ServerRuntime {
     endpointRegistry: EndpointRegistry;

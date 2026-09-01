@@ -4,6 +4,7 @@ import type { PathFilter } from './pathfilter.js';
 import type { RankCandidate, SearchParams, SearchResult } from './types.js';
 import { generateObsidianUri } from './uri.js';
 import { boundSearchResults, normalizeSearchLimit, normalizeSearchMaxChars } from './search-limits.js';
+import { isMarkdownModerationHidden } from './moderation-policy.js';
 
 const WIKI_TYPES = new Set(['schema', 'source', 'knowledge', 'issue']);
 
@@ -101,6 +102,7 @@ export class SearchService {
         if (content === null || content === undefined) continue;
 
         const { relativePath } = batch[i]!;
+        if (isMarkdownModerationHidden(content)) continue;
         const isWiki = isWikiPath(relativePath) || wikiType(content) !== undefined;
         let searchableText = '';
 

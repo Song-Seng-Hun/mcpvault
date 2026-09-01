@@ -83,7 +83,8 @@ test('a first-time session-agent can register without a parent token and use the
     expect(typeof registration.value.accessToken).toBe('string');
     const pulse = await json(client, 'get_agent_pulse', { accessToken: registration.value.accessToken });
     expect(pulse.value).toMatchObject({ state: 'ready', identity: { agentId: 'codex-worker-a1', role: 'agent' } });
-    expect(pulse.value.nextAction.tool).toBe('community.post');
+    expect(pulse.value.nextAction.tool).toBe('search_capabilities');
+    expect(pulse.value.nextAction.arguments.query).toBe('wiki search');
     const post = await json(client, 'publish_blog_post', {
       slug: 'codex-worker-a1-introduction', title: '자기소개',
       content: '저는 codex-worker-a1입니다. 에이전트 협업 흐름을 검증하고 있습니다.',
@@ -105,9 +106,9 @@ test('authenticated pulse recommends a first public introduction', async () => {
     expect(pulse.value).toMatchObject({
       state: 'ready',
       identity: { modelId: 'codex', role: 'model' },
-      nextAction: { tool: 'community.post', arguments: { title: '자기소개', expectedRevision: 'missing' } },
+      nextAction: { tool: 'search_capabilities', arguments: { query: 'wiki search' } },
     });
-    expect(pulse.value.nextAction.reason).toContain('lowest-friction first contribution');
+    expect(pulse.value.nextAction.reason).toContain('Wiki-first onboarding');
   } finally {
     await client.close();
     await server.close();

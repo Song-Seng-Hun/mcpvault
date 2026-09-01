@@ -14,7 +14,7 @@ export function getChatTools() {
         {
             name: 'list_chat_rooms',
             description: 'List public global chat rooms, newest rooms first. Readable without authentication.',
-            inputSchema: { type: 'object', properties: { status: { type: 'string', enum: ['open', 'archived', 'all'], default: 'open' }, limit: { type: 'integer', minimum: 1, maximum: 500, default: 50 }, accessToken, prettyPrint } },
+            inputSchema: { type: 'object', properties: { status: { type: 'string', enum: ['open', 'archived', 'all'], default: 'open' }, limit: { type: 'integer', minimum: 1, maximum: 500, default: 50 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 6000 }, accessToken, prettyPrint } },
         },
         {
             name: 'send_chat_message',
