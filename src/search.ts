@@ -10,6 +10,7 @@ import { generateObsidianUri } from './uri.js';
 import { boundSearchResults, boundedTopK, normalizeSearchLimit, normalizeSearchMaxChars } from './search-limits.js';
 import { isMarkdownModerationHidden } from './moderation-policy.js';
 import type { VaultFileCatalog } from './vault-catalog.js';
+import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 
 const WIKI_TYPES = new Set(['schema', 'source', 'knowledge', 'issue']);
 const SEARCH_CACHE_TTL_MS = 5_000;
@@ -217,6 +218,7 @@ function normalizeSubtree(p: string): string {
 }
 
 export class SearchService {
+  private readonly cacheOwner = createDerivedCacheOwner('search.results');
   private vaultPath: string;
   private readonly cache = new Map<string, SearchCacheEntry>();
   private readonly inFlight = new Map<string, Promise<SearchResult[]>>();
@@ -266,6 +268,7 @@ export class SearchService {
   invalidate(path?: string, kind: 'upsert' | 'delete' = 'upsert'): void {
     this.cacheGeneration += 1;
     this.cache.clear();
+    derivedCacheBudget.clearOwner(this.cacheOwner);
     this.corpusStatsCache.clear();
     this.directoryCache.clear();
     if (path) {
@@ -280,6 +283,7 @@ export class SearchService {
     this.watcher?.close();
     this.watcher = undefined;
     this.directoryCache.clear();
+    derivedCacheBudget.clearOwner(this.cacheOwner);
   }
 
   private async loadSnapshot(): Promise<void> {
@@ -420,9 +424,13 @@ export class SearchService {
     if (cached && cached.expiresAt > Date.now()) {
       this.cache.delete(cacheKey);
       this.cache.set(cacheKey, cached);
+      derivedCacheBudget.touch(this.cacheOwner, cacheKey);
       return cached.results.map(result => ({ ...result }));
     }
-    if (cached) this.cache.delete(cacheKey);
+    if (cached) {
+      this.cache.delete(cacheKey);
+      derivedCacheBudget.remove(this.cacheOwner, cacheKey);
+    }
 
     const running = this.inFlight.get(cacheKey);
     if (running) return (await running).map(result => ({ ...result }));
@@ -568,11 +576,19 @@ export class SearchService {
 
     const results = boundSearchResults(this.rerank(candidates, scoringTerms, termDocFreq, docCount, totalDocLength, maxLimit), maxChars);
     if (generation === this.cacheGeneration) {
-      this.cache.set(cacheKey, { expiresAt: Date.now() + SEARCH_CACHE_TTL_MS, results: results.map(result => ({ ...result })) });
+      const cachedResults = results.map(result => ({ ...result }));
+      this.cache.set(cacheKey, { expiresAt: Date.now() + SEARCH_CACHE_TTL_MS, results: cachedResults });
+      derivedCacheBudget.register(
+        this.cacheOwner,
+        cacheKey,
+        estimateCacheBytes(cachedResults) + Buffer.byteLength(cacheKey, 'utf8') + 128,
+        () => this.cache.delete(cacheKey),
+      );
       while (this.cache.size > SEARCH_CACHE_MAX_ENTRIES) {
         const oldest = this.cache.keys().next();
         if (oldest.done) break;
         this.cache.delete(oldest.value);
+        derivedCacheBudget.remove(this.cacheOwner, oldest.value);
       }
     }
     return results;

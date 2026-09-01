@@ -51,6 +51,8 @@ export declare class NotificationService {
     private readonly reputation;
     private readonly vaultPath?;
     private readonly fileCatalog?;
+    private readonly candidateCacheOwner;
+    private readonly publicSnapshotCacheOwner;
     private readonly candidateCache;
     private readonly candidateInFlight;
     private publicSnapshotCache;
@@ -67,6 +69,9 @@ export declare class NotificationService {
     private loadPublicSnapshot;
     private savePublicSnapshot;
     private queuePublicSnapshotSave;
+    private clearCandidateCache;
+    private clearPublicSnapshotCache;
+    private trackPublicSnapshotCache;
     invalidate(path?: string, kind?: 'upsert' | 'delete'): void;
     private cachedPublicSnapshot;
     private updatePublicSnapshot;

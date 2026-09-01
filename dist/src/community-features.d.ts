@@ -12,6 +12,7 @@ export declare class CommunityFeaturesService {
     private readonly reputation;
     private readonly vaultPath;
     private readonly notifications?;
+    private readonly reactionCacheOwner;
     private reactionAggregateCache;
     private reactionAggregateInFlight;
     private reactionAggregateGeneration;
@@ -59,6 +60,7 @@ export declare class CommunityFeaturesService {
     private targetPath;
     private reactionRoot;
     private invalidateReactionAggregates;
+    private trackReactionAggregateCache;
     invalidate(path?: string): void;
     private adjustReactionCount;
     private refreshReactionRecord;

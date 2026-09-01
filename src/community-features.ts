@@ -11,6 +11,7 @@ import { MAX_COMMUNITY_TEXT_LENGTH, extractMentions } from './social.js';
 import type { ReputationService } from './reputation.js';
 import type { NotificationService } from './notifications.js';
 import { iterateNotes, queryAllNotes, queryWindow } from './paged-query.js';
+import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 
 const POSTS = 'Community/Posts';
 const COMMENTS = 'Community/Comments';
@@ -129,6 +130,7 @@ function decodeReactionSnapshot(buffer: Buffer): ReactionSnapshot {
 }
 
 export class CommunityFeaturesService {
+  private readonly reactionCacheOwner = createDerivedCacheOwner('community.reactions');
   private reactionAggregateCache: { expiresAt: number; counts: Map<string, { likeCount: number; dislikeCount: number }>; incomplete: boolean } | undefined;
   private reactionAggregateInFlight: Promise<{ counts: Map<string, { likeCount: number; dislikeCount: number }>; incomplete: boolean }> | undefined;
   private reactionAggregateGeneration = 0;
@@ -148,6 +150,7 @@ export class CommunityFeaturesService {
 
   async close(): Promise<void> {
     if (this.reactionSnapshotWrite) await this.reactionSnapshotWrite;
+    derivedCacheBudget.clearOwner(this.reactionCacheOwner);
   }
 
   private async assertKnownIdentity(value: string): Promise<void> {
@@ -266,6 +269,17 @@ export class CommunityFeaturesService {
     this.reactionAggregateCache = undefined;
     this.reactionIndexReady = false;
     this.reactionRecords.clear();
+    derivedCacheBudget.clearOwner(this.reactionCacheOwner);
+  }
+
+  private trackReactionAggregateCache(value: { counts: Map<string, { likeCount: number; dislikeCount: number }>; incomplete: boolean }): void {
+    const counts = [...value.counts.entries()];
+    derivedCacheBudget.register(
+      this.reactionCacheOwner,
+      'current',
+      estimateCacheBytes(counts) + this.reactionRecords.size * 96 + 256,
+      () => this.invalidateReactionAggregates(),
+    );
   }
 
   invalidate(path?: string): void {
@@ -393,7 +407,11 @@ export class CommunityFeaturesService {
   private async postReactionAggregates(): Promise<{ counts: Map<string, { likeCount: number; dislikeCount: number }>; incomplete: boolean }> {
     await this.reactionIndexUpdate;
     const cached = this.reactionAggregateCache;
-    if (cached && cached.expiresAt > Date.now()) return cached;
+    if (cached && cached.expiresAt > Date.now()) {
+      derivedCacheBudget.touch(this.reactionCacheOwner, 'current');
+      return cached;
+    }
+    if (cached) derivedCacheBudget.remove(this.reactionCacheOwner, 'current');
     if (this.reactionAggregateInFlight) return this.reactionAggregateInFlight;
     const generation = this.reactionAggregateGeneration;
     const computation = (async () => {
@@ -442,6 +460,7 @@ export class CommunityFeaturesService {
       const value = await computation;
       if (this.reactionAggregateGeneration === generation) {
         this.reactionAggregateCache = { expiresAt: Date.now() + REACTION_CACHE_TTL_MS, ...value };
+        this.trackReactionAggregateCache(value);
       }
       return value;
     } finally {

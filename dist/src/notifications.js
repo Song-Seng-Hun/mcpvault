@@ -6,6 +6,7 @@ import { normalizeScopeId } from './scopes.js';
 import { iterateNotes, queryAllNotes } from './paged-query.js';
 import { isClosedWorkflowStatus } from './community-status.js';
 import { isModerationHidden } from './moderation-policy.js';
+import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
 const READ_STATE_ROOT = '_notifications';
@@ -430,6 +431,8 @@ export class NotificationService {
     reputation;
     vaultPath;
     fileCatalog;
+    candidateCacheOwner = createDerivedCacheOwner('notifications.candidates');
+    publicSnapshotCacheOwner = createDerivedCacheOwner('notifications.public-snapshot');
     candidateCache = new Map();
     candidateInFlight = new Map();
     publicSnapshotCache;
@@ -448,6 +451,8 @@ export class NotificationService {
             await this.publicSnapshotUpdate;
         if (this.publicSnapshotWrite)
             await this.publicSnapshotWrite;
+        this.clearCandidateCache();
+        this.clearPublicSnapshotCache();
     }
     async discoverySnapshot() {
         return this.cachedPublicSnapshot();
@@ -553,13 +558,27 @@ export class NotificationService {
                 this.publicSnapshotWrite = undefined;
         });
     }
-    invalidate(path, kind = 'upsert') {
+    clearCandidateCache() {
         this.candidateCache.clear();
         this.candidateInFlight.clear();
+        derivedCacheBudget.clearOwner(this.candidateCacheOwner);
+    }
+    clearPublicSnapshotCache() {
+        this.publicSnapshotCache = undefined;
+        derivedCacheBudget.clearOwner(this.publicSnapshotCacheOwner);
+    }
+    trackPublicSnapshotCache(value) {
+        const bytes = estimateCacheBytes({ posts: value.posts, comments: value.comments, messages: value.messages, rooms: value.rooms }) + 256;
+        derivedCacheBudget.register(this.publicSnapshotCacheOwner, 'current', bytes, () => {
+            this.publicSnapshotCache = undefined;
+        });
+    }
+    invalidate(path, kind = 'upsert') {
+        this.clearCandidateCache();
         const collection = path ? publicCollectionForPath(path) : undefined;
         if (!path || !collection) {
             if (!path)
-                this.publicSnapshotCache = undefined;
+                this.clearPublicSnapshotCache();
             return;
         }
         const previous = this.publicSnapshotUpdate || Promise.resolve();
@@ -576,8 +595,12 @@ export class NotificationService {
         while (this.publicSnapshotUpdate)
             await this.publicSnapshotUpdate;
         const cached = this.publicSnapshotCache;
-        if (cached && cached.expiresAt > Date.now())
+        if (cached && cached.expiresAt > Date.now()) {
+            derivedCacheBudget.touch(this.publicSnapshotCacheOwner, 'current');
             return cached.value;
+        }
+        if (cached)
+            this.clearPublicSnapshotCache();
         if (this.publicSnapshotInFlight)
             return this.publicSnapshotInFlight;
         const computation = (async () => {
@@ -603,6 +626,7 @@ export class NotificationService {
         try {
             const value = await computation;
             this.publicSnapshotCache = { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, value };
+            this.trackPublicSnapshotCache(value);
             return value;
         }
         finally {
@@ -615,7 +639,7 @@ export class NotificationService {
             await this.publicSnapshotInFlight;
         const cached = this.publicSnapshotCache;
         if (!cached || cached.expiresAt <= Date.now()) {
-            this.publicSnapshotCache = undefined;
+            this.clearPublicSnapshotCache();
             return;
         }
         const previous = cached.value[collection].find(note => note.path === path);
@@ -630,7 +654,9 @@ export class NotificationService {
             }
         }
         sortPublicCollection(nextCollection, collection);
-        this.publicSnapshotCache = { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, value: patchPublicSnapshotIndex(cached.value, collection, nextCollection, previous, nextNote) };
+        const value = patchPublicSnapshotIndex(cached.value, collection, nextCollection, previous, nextNote);
+        this.publicSnapshotCache = { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, value };
+        this.trackPublicSnapshotCache(value);
     }
     async hydrateNotes(notes) {
         const unique = [...new Map(notes.map(note => [note.path, note])).values()];
@@ -653,10 +679,14 @@ export class NotificationService {
     async cachedPublicCandidates(principal) {
         const key = JSON.stringify({ accountId: principal.accountId, modelId: principal.modelId, agentId: principal.agentId, role: principal.role });
         const cached = this.candidateCache.get(key);
-        if (cached && cached.expiresAt > Date.now())
+        if (cached && cached.expiresAt > Date.now()) {
+            derivedCacheBudget.touch(this.candidateCacheOwner, key);
             return cached.candidates.map(candidate => ({ ...candidate }));
-        if (cached)
+        }
+        if (cached) {
             this.candidateCache.delete(key);
+            derivedCacheBudget.remove(this.candidateCacheOwner, key);
+        }
         const running = this.candidateInFlight.get(key);
         if (running)
             return (await running).map(candidate => ({ ...candidate }));
@@ -664,12 +694,15 @@ export class NotificationService {
         this.candidateInFlight.set(key, computation);
         try {
             const candidates = await computation;
-            this.candidateCache.set(key, { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, candidates: candidates.map(candidate => ({ ...candidate })) });
+            const cachedCandidates = candidates.map(candidate => ({ ...candidate }));
+            this.candidateCache.set(key, { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, candidates: cachedCandidates });
+            derivedCacheBudget.register(this.candidateCacheOwner, key, estimateCacheBytes(cachedCandidates) + Buffer.byteLength(key, 'utf8') + 128, () => this.candidateCache.delete(key));
             while (this.candidateCache.size > EVENT_CACHE_MAX_ENTRIES) {
                 const oldest = this.candidateCache.keys().next();
                 if (oldest.done)
                     break;
                 this.candidateCache.delete(oldest.value);
+                derivedCacheBudget.remove(this.candidateCacheOwner, oldest.value);
             }
             return candidates;
         }

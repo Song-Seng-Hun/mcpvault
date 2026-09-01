@@ -11,6 +11,7 @@ import type { QueryNote } from './types.js';
 import { iterateNotes, queryAllNotes } from './paged-query.js';
 import { isClosedWorkflowStatus } from './community-status.js';
 import { isModerationHidden } from './moderation-policy.js';
+import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
@@ -483,6 +484,8 @@ function patchPublicSnapshotIndex(index: PublicSnapshotIndex, collection: Public
 }
 
 export class NotificationService {
+  private readonly candidateCacheOwner = createDerivedCacheOwner('notifications.candidates');
+  private readonly publicSnapshotCacheOwner = createDerivedCacheOwner('notifications.public-snapshot');
   private readonly candidateCache = new Map<string, { expiresAt: number; candidates: NotificationCandidate[] }>();
   private readonly candidateInFlight = new Map<string, Promise<NotificationCandidate[]>>();
   private publicSnapshotCache: { expiresAt: number; value: PublicSnapshotIndex } | undefined;
@@ -501,6 +504,8 @@ export class NotificationService {
   async close(): Promise<void> {
     if (this.publicSnapshotUpdate) await this.publicSnapshotUpdate;
     if (this.publicSnapshotWrite) await this.publicSnapshotWrite;
+    this.clearCandidateCache();
+    this.clearPublicSnapshotCache();
   }
 
   async discoverySnapshot(): Promise<PublicSnapshotIndex> {
@@ -595,12 +600,29 @@ export class NotificationService {
     });
   }
 
-  invalidate(path?: string, kind: 'upsert' | 'delete' = 'upsert'): void {
+  private clearCandidateCache(): void {
     this.candidateCache.clear();
     this.candidateInFlight.clear();
+    derivedCacheBudget.clearOwner(this.candidateCacheOwner);
+  }
+
+  private clearPublicSnapshotCache(): void {
+    this.publicSnapshotCache = undefined;
+    derivedCacheBudget.clearOwner(this.publicSnapshotCacheOwner);
+  }
+
+  private trackPublicSnapshotCache(value: PublicSnapshotIndex): void {
+    const bytes = estimateCacheBytes({ posts: value.posts, comments: value.comments, messages: value.messages, rooms: value.rooms }) + 256;
+    derivedCacheBudget.register(this.publicSnapshotCacheOwner, 'current', bytes, () => {
+      this.publicSnapshotCache = undefined;
+    });
+  }
+
+  invalidate(path?: string, kind: 'upsert' | 'delete' = 'upsert'): void {
+    this.clearCandidateCache();
     const collection = path ? publicCollectionForPath(path) : undefined;
     if (!path || !collection) {
-      if (!path) this.publicSnapshotCache = undefined;
+      if (!path) this.clearPublicSnapshotCache();
       return;
     }
     const previous = this.publicSnapshotUpdate || Promise.resolve();
@@ -616,7 +638,11 @@ export class NotificationService {
   private async cachedPublicSnapshot(): Promise<PublicSnapshotIndex> {
     while (this.publicSnapshotUpdate) await this.publicSnapshotUpdate;
     const cached = this.publicSnapshotCache;
-    if (cached && cached.expiresAt > Date.now()) return cached.value;
+    if (cached && cached.expiresAt > Date.now()) {
+      derivedCacheBudget.touch(this.publicSnapshotCacheOwner, 'current');
+      return cached.value;
+    }
+    if (cached) this.clearPublicSnapshotCache();
     if (this.publicSnapshotInFlight) return this.publicSnapshotInFlight;
     const computation = (async () => {
       if (!this.publicSnapshotRestoreAttempted) {
@@ -638,6 +664,7 @@ export class NotificationService {
     try {
       const value = await computation;
       this.publicSnapshotCache = { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, value };
+      this.trackPublicSnapshotCache(value);
       return value;
     } finally {
       if (this.publicSnapshotInFlight === computation) this.publicSnapshotInFlight = undefined;
@@ -648,7 +675,7 @@ export class NotificationService {
     if (this.publicSnapshotInFlight) await this.publicSnapshotInFlight;
     const cached = this.publicSnapshotCache;
     if (!cached || cached.expiresAt <= Date.now()) {
-      this.publicSnapshotCache = undefined;
+      this.clearPublicSnapshotCache();
       return;
     }
     const previous = cached.value[collection].find(note => note.path === path);
@@ -663,7 +690,9 @@ export class NotificationService {
       }
     }
     sortPublicCollection(nextCollection, collection);
-    this.publicSnapshotCache = { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, value: patchPublicSnapshotIndex(cached.value, collection, nextCollection, previous, nextNote) };
+    const value = patchPublicSnapshotIndex(cached.value, collection, nextCollection, previous, nextNote);
+    this.publicSnapshotCache = { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, value };
+    this.trackPublicSnapshotCache(value);
   }
 
   private async hydrateNotes(notes: QueryNote[]): Promise<QueryNote[]> {
@@ -687,19 +716,33 @@ export class NotificationService {
   private async cachedPublicCandidates(principal: ScopePrincipal): Promise<NotificationCandidate[]> {
     const key = JSON.stringify({ accountId: principal.accountId, modelId: principal.modelId, agentId: principal.agentId, role: principal.role });
     const cached = this.candidateCache.get(key);
-    if (cached && cached.expiresAt > Date.now()) return cached.candidates.map(candidate => ({ ...candidate }));
-    if (cached) this.candidateCache.delete(key);
+    if (cached && cached.expiresAt > Date.now()) {
+      derivedCacheBudget.touch(this.candidateCacheOwner, key);
+      return cached.candidates.map(candidate => ({ ...candidate }));
+    }
+    if (cached) {
+      this.candidateCache.delete(key);
+      derivedCacheBudget.remove(this.candidateCacheOwner, key);
+    }
     const running = this.candidateInFlight.get(key);
     if (running) return (await running).map(candidate => ({ ...candidate }));
     const computation = this.publicCandidates(principal);
     this.candidateInFlight.set(key, computation);
     try {
       const candidates = await computation;
-      this.candidateCache.set(key, { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, candidates: candidates.map(candidate => ({ ...candidate })) });
+      const cachedCandidates = candidates.map(candidate => ({ ...candidate }));
+      this.candidateCache.set(key, { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, candidates: cachedCandidates });
+      derivedCacheBudget.register(
+        this.candidateCacheOwner,
+        key,
+        estimateCacheBytes(cachedCandidates) + Buffer.byteLength(key, 'utf8') + 128,
+        () => this.candidateCache.delete(key),
+      );
       while (this.candidateCache.size > EVENT_CACHE_MAX_ENTRIES) {
         const oldest = this.candidateCache.keys().next();
         if (oldest.done) break;
         this.candidateCache.delete(oldest.value);
+        derivedCacheBudget.remove(this.candidateCacheOwner, oldest.value);
       }
       return candidates;
     } finally {

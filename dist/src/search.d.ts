@@ -4,6 +4,7 @@ import type { VaultFileCatalog } from './vault-catalog.js';
 export declare class SearchService {
     private pathFilter;
     private readonly catalog?;
+    private readonly cacheOwner;
     private vaultPath;
     private readonly cache;
     private readonly inFlight;
