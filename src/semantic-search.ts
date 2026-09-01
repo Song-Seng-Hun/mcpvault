@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
-import { mkdir, open, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, open, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
 import { gzip, gunzip } from 'node:zlib';
 import { promisify } from 'node:util';
@@ -34,6 +34,8 @@ type PendingChange = { kind: ChangeKind };
 interface ManifestEntry {
   hash: string;
   scope: string;
+  size?: number;
+  mtimeMs?: number;
 }
 
 interface IndexRow {
@@ -429,22 +431,32 @@ export class SemanticSearchService {
     if (Date.now() - this.lastScanAt < SCAN_INTERVAL_MS) return;
     this.scanPromise = (async () => {
       const seen = new Set<string>();
+      let manifestChanged = false;
       for (const path of await this.findMarkdownFiles(this.vaultPath)) {
         const normalized = normalizePath(path);
         seen.add(normalized);
         if (!this.pathFilter.isAllowed(normalized)) continue;
         const fullPath = join(this.vaultPath, normalized);
+        const info = await stat(fullPath).catch(() => undefined);
+        if (!info?.isFile()) continue;
+        const entry = this.manifest[normalized];
+        if (entry && entry.size === info.size && entry.mtimeMs === info.mtimeMs) continue;
         const content = await readFile(fullPath, 'utf8').catch(() => undefined);
         if (content === undefined) continue;
         const hash = hashContent(content);
-        const entry = this.manifest[normalized];
         if ((!entry || entry.hash !== hash) && (this.pending.size < MAX_PENDING_CHANGES || this.pending.has(normalized))) {
           this.pending.set(normalized, { kind: 'upsert' });
+        } else if (entry) {
+          // Timestamp-only changes do not require a new embedding. Persist the
+          // refreshed metadata so future scans stay stat-only.
+          this.manifest[normalized] = { ...entry, size: info.size, mtimeMs: info.mtimeMs };
+          manifestChanged = true;
         }
       }
       for (const path of Object.keys(this.manifest)) {
         if (!seen.has(path) && (this.pending.size < MAX_PENDING_CHANGES || this.pending.has(path))) this.pending.set(path, { kind: 'delete' });
       }
+      if (manifestChanged && this.pending.size === 0) await this.saveManifest();
       this.lastScanAt = Date.now();
     })();
     try {
@@ -625,6 +637,7 @@ export class SemanticSearchService {
   private async indexPathContent(path: string): Promise<void> {
     const fullPath = join(this.vaultPath, path);
     const content = await readFile(fullPath, 'utf8');
+    const info = await stat(fullPath);
     const contentHash = hashContent(content);
     const scope = scopeForPath(path);
     const db = await this.getDb();
@@ -658,7 +671,7 @@ export class SemanticSearchService {
       if (names.has(name)) await table.add(rows);
       this.tableNamesCache?.add(name);
     }
-    this.manifest[path] = { hash: contentHash, scope };
+    this.manifest[path] = { hash: contentHash, scope, size: info.size, mtimeMs: info.mtimeMs };
   }
 
   private async removePath(path: string): Promise<void> {

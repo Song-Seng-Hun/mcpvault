@@ -11,6 +11,7 @@ export declare class SearchService {
     private indexedTextBytes;
     private cacheGeneration;
     private indexReady;
+    private readonly snapshotReady;
     private indexRefresh;
     private watcher;
     private lastIndexReconcileAt;
@@ -23,6 +24,8 @@ export declare class SearchService {
      */
     invalidate(path?: string, kind?: 'upsert' | 'delete'): void;
     close(): void;
+    private loadSnapshot;
+    private saveSnapshot;
     search(params: SearchParams): Promise<SearchResult[]>;
     private ensureIndex;
     private startWatcher;

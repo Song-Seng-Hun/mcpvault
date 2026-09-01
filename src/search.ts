@@ -1,7 +1,9 @@
 import { join, resolve } from 'path';
 import { watch, type FSWatcher } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { gunzip, gzip } from 'node:zlib';
+import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
+import { promisify } from 'node:util';
 import type { PathFilter } from './pathfilter.js';
 import type { RankCandidate, SearchParams, SearchResult } from './types.js';
 import { generateObsidianUri } from './uri.js';
@@ -16,6 +18,10 @@ const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
 const INDEX_READ_BATCH_SIZE = 32;
 const MAX_INDEXED_TEXT_BYTES = 64 * 1024 * 1024;
 const NGRAM_SIZE = 3;
+const SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.gz';
+const SEARCH_SNAPSHOT_VERSION = 1;
+const gzipAsync = promisify(gzip);
+const gunzipAsync = promisify(gunzip);
 
 interface SearchCacheEntry {
   expiresAt: number;
@@ -36,10 +42,32 @@ interface IndexedDocument {
   bodyLength: number;
   frontmatterLength: number;
   textBytes: number;
+  textCached: boolean;
   lastAccessAt: number;
   bodyGrams: Set<string>;
   frontmatterGrams: Set<string>;
   titleGrams: Set<string>;
+}
+
+interface SearchSnapshotDocument {
+  relativePath: string;
+  title: string;
+  isWiki: boolean;
+  moderationHidden: boolean;
+  revision: string;
+  size: number;
+  mtimeMs: number;
+  bodyLength: number;
+  frontmatterLength: number;
+  textBytes: number;
+  bodyGrams: string[];
+  frontmatterGrams: string[];
+  titleGrams: string[];
+}
+
+interface SearchSnapshot {
+  version: number;
+  documents: SearchSnapshotDocument[];
 }
 
 function isWikiPath(path: string): boolean {
@@ -82,6 +110,7 @@ export class SearchService {
   private indexedTextBytes = 0;
   private cacheGeneration = 0;
   private indexReady: Promise<void> | undefined;
+  private readonly snapshotReady: Promise<void>;
   private indexRefresh: Promise<void> | undefined;
   private watcher: FSWatcher | undefined;
   private lastIndexReconcileAt = 0;
@@ -92,6 +121,7 @@ export class SearchService {
     private pathFilter: PathFilter
   ) {
     this.vaultPath = resolve(vaultPath);
+    this.snapshotReady = this.loadSnapshot();
   }
 
   /**
@@ -112,6 +142,75 @@ export class SearchService {
   close(): void {
     this.watcher?.close();
     this.watcher = undefined;
+  }
+
+  private async loadSnapshot(): Promise<void> {
+    try {
+      const raw = await gunzipAsync(await readFile(join(this.vaultPath, SEARCH_SNAPSHOT_FILE)));
+      const parsed = JSON.parse(raw.toString('utf8')) as Partial<SearchSnapshot>;
+      if (parsed.version !== SEARCH_SNAPSHOT_VERSION || !Array.isArray(parsed.documents)) return;
+      for (const item of parsed.documents) {
+        if (!item || typeof item !== 'object') continue;
+        const relativePath = normalizeSubtree(String(item.relativePath || ''));
+        if (!relativePath || !this.pathFilter.isAllowed(relativePath)) continue;
+        if (!Array.isArray(item.bodyGrams) || !Array.isArray(item.frontmatterGrams) || !Array.isArray(item.titleGrams)) continue;
+        if (![item.size, item.mtimeMs, item.bodyLength, item.frontmatterLength, item.textBytes].every(value => typeof value === 'number' && Number.isFinite(value))) continue;
+        const document: IndexedDocument = {
+          fullPath: join(this.vaultPath, relativePath),
+          relativePath,
+          title: String(item.title || relativePath),
+          isWiki: item.isWiki === true,
+          moderationHidden: item.moderationHidden === true,
+          revision: String(item.revision || ''),
+          size: item.size,
+          mtimeMs: item.mtimeMs,
+          bodyLength: item.bodyLength,
+          frontmatterLength: item.frontmatterLength,
+          textBytes: item.textBytes,
+          textCached: false,
+          lastAccessAt: 0,
+          bodyGrams: new Set(item.bodyGrams.filter(value => typeof value === 'string')),
+          frontmatterGrams: new Set(item.frontmatterGrams.filter(value => typeof value === 'string')),
+          titleGrams: new Set(item.titleGrams.filter(value => typeof value === 'string')),
+        };
+        this.setDocument(document);
+      }
+    } catch {
+      // A missing, corrupt, or old snapshot is harmless; refreshAll rebuilds
+      // the derived index from Markdown and replaces it atomically.
+    }
+  }
+
+  private async saveSnapshot(): Promise<void> {
+    const snapshot: SearchSnapshot = {
+      version: SEARCH_SNAPSHOT_VERSION,
+      documents: [...this.documents.values()].map(document => ({
+        relativePath: document.relativePath,
+        title: document.title,
+        isWiki: document.isWiki,
+        moderationHidden: document.moderationHidden,
+        revision: document.revision,
+        size: document.size,
+        mtimeMs: document.mtimeMs,
+        bodyLength: document.bodyLength,
+        frontmatterLength: document.frontmatterLength,
+        textBytes: document.textBytes,
+        bodyGrams: [...document.bodyGrams],
+        frontmatterGrams: [...document.frontmatterGrams],
+        titleGrams: [...document.titleGrams],
+      })),
+    };
+    try {
+      const snapshotPath = join(this.vaultPath, SEARCH_SNAPSHOT_FILE);
+      await mkdir(join(this.vaultPath, '.mcpvault'), { recursive: true });
+      const compressed = await gzipAsync(Buffer.from(JSON.stringify(snapshot), 'utf8'));
+      const temporaryPath = `${snapshotPath}.${process.pid}.tmp`;
+      await writeFile(temporaryPath, compressed);
+      await rename(temporaryPath, snapshotPath);
+    } catch {
+      // The snapshot is an optional acceleration cache. Search correctness
+      // must never depend on being able to write it (for example on NAS).
+    }
   }
 
   async search(params: SearchParams): Promise<SearchResult[]> {
@@ -317,6 +416,7 @@ export class SearchService {
 
   private async ensureIndex(): Promise<void> {
     this.startWatcher();
+    await this.snapshotReady;
     if (!this.indexReady) this.indexReady = this.refreshAll();
     await this.indexReady;
 
@@ -374,6 +474,7 @@ export class SearchService {
       this.needsFullReconcile = false;
       this.lastIndexReconcileAt = Date.now();
       this.trimTextCache();
+      await this.saveSnapshot();
     })();
     try {
       await this.indexRefresh;
@@ -395,6 +496,7 @@ export class SearchService {
         else this.removeDocument(path);
       }
       this.trimTextCache();
+      await this.saveSnapshot();
     })();
     try {
       await this.indexRefresh;
@@ -429,6 +531,7 @@ export class SearchService {
         bodyLength: countWords(body),
         frontmatterLength: countWords(frontmatterText),
         textBytes: Buffer.byteLength(content, 'utf8'),
+        textCached: true,
         lastAccessAt: Date.now(),
         bodyGrams: grams(body.toLowerCase()),
         frontmatterGrams: grams(frontmatterText.toLowerCase()),
@@ -473,18 +576,18 @@ export class SearchService {
     if (old === document) return;
     if (old) {
       this.updatePostings(old, false);
-      this.indexedTextBytes -= old.textBytes;
+      if (old.textCached) this.indexedTextBytes -= old.textBytes;
     }
     this.documents.set(document.relativePath, document);
     this.updatePostings(document, true);
-    this.indexedTextBytes += document.textBytes;
+    if (document.textCached) this.indexedTextBytes += document.textBytes;
   }
 
   private removeDocument(path: string): void {
     const document = this.documents.get(path);
     if (!document) return;
     this.updatePostings(document, false);
-    this.indexedTextBytes -= document.textBytes;
+    if (document.textCached) this.indexedTextBytes -= document.textBytes;
     this.documents.delete(path);
   }
 
@@ -498,7 +601,10 @@ export class SearchService {
       const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
       document.body = frontmatterMatch ? content.slice(frontmatterMatch[0].length) : content;
       document.frontmatterText = frontmatterMatch?.[1] || '';
-      this.indexedTextBytes += document.textBytes;
+      if (!document.textCached) {
+        this.indexedTextBytes += document.textBytes;
+        document.textCached = true;
+      }
       document.lastAccessAt = Date.now();
       this.trimTextCache(document.relativePath);
     } catch {
@@ -517,6 +623,7 @@ export class SearchService {
       if (this.indexedTextBytes <= MAX_INDEXED_TEXT_BYTES) break;
       delete document.body;
       delete document.frontmatterText;
+      document.textCached = false;
       this.indexedTextBytes -= document.textBytes;
     }
   }

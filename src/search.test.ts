@@ -61,6 +61,21 @@ describe("SearchService", () => {
     expect(results).toHaveLength(0);
   });
 
+  test("restores the derived index snapshot after a server restart", async () => {
+    await writeNote("restartable.md", "# Restartable\n\nSnapshot candidate.");
+    expect(await searchService.search({ query: "candidate" })).toHaveLength(1);
+
+    searchService.close();
+    const restarted = new SearchService(testVaultPath, new PathFilter());
+    try {
+      const results = await restarted.search({ query: "candidate" });
+      expect(results).toHaveLength(1);
+      expect(results[0]!.p).toBe("restartable.md");
+    } finally {
+      restarted.close();
+    }
+  });
+
   test("invalidates the bounded cache when a caller reports a direct edit", async () => {
     await writeNote("changing.md", "# Changing\n\noldneedle.");
     expect((await searchService.search({ query: "oldneedle" }))).toHaveLength(1);
