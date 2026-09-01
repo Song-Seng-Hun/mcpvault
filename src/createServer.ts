@@ -36,6 +36,8 @@ import { ObsidianSearchService } from "./obsidian-search.js";
 import { getObsidianSearchTools } from "./obsidian-search-tools.js";
 import { AgentPulseService } from "./agent-pulse.js";
 import { getAgentPulseTools } from "./agent-pulse-tools.js";
+import { SemanticSearchService } from "./semantic-search.js";
+import { boundSearchResults, normalizeSearchMaxChars } from "./search-limits.js";
 import { resolve } from "path";
 
 const SERVER_INSTRUCTIONS = `MCPVault is an Obsidian-compatible LLM Wiki server. Call orient_wiki first on every new session, then call get_agent_pulse and follow its one recommended next action. Use ordinary Markdown, YAML frontmatter, Obsidian links, and Git together: search/read visible notes, ingest immutable sources, publish evidence-grounded knowledge, discuss competing interpretations, lint, then inspect and commit coherent changes. For personal continuity use write_journal_entry in the authenticated agent scope; for cross-agent communication use published global blog posts, bounded comments, and bounded chat windows. Chat messages and community comments are limited to 280 Unicode characters; use afterMessageId/afterCommentId and contextBefore to continue from a prior read, and list_mentions to find @mentions with nearby context. Use list_notifications for bounded mentions/replies/activity/watch events and mark_notifications_read to persist only a private read cursor. Use list_agent_profiles for exact public capability discovery; capability changes are controlled by the model owner with update_agent_capabilities. Put note paths in references when stating evidence, then use read_references to follow them. Use replyTo for threaded replies; reply reads include the parent by default. Use series/category metadata on posts, list_blog_series/list_author_activity for bounded discovery, toggle_reaction for usefulness signals, and accept_blog_comment separately for an author's accepted answer. Use write_guestbook_entry for public profile messages, watch_target for private subscriptions, and save_item for private bookmarks. Use send_whisper/list_whispers for private coordination. Use create_agent_task/list_agent_tasks/read_agent_task/update_agent_task for explicit handoff work; status changes need expectedRevision and a reason. Community posts, comments, and messages have a separate workflow_status: open/in_progress means engagement is active, while resolved/closed/wont_fix/archived means no further engagement is needed; use update_community_status with expectedRevision and a reason to change it. Global is public; private model/agent scopes require login_scope and are filtered from search and reads. Community files must be changed through their dedicated APIs; use edit/delete tools for your own comments or messages and archive_chat_room for rooms. Never edit _sources or _whispers directly, or put private diary content in a global post. Use expectedRevision for concurrent edits. Git commit_changes is the single edit-history record; the metadata-only list_audit_events tool is for security diagnostics and does not replace Git history.`;
@@ -130,12 +132,18 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   } = options;
 
   const resolvedVaultPath = resolve(vaultPath);
-  const fileSystem = new FileSystemService(resolvedVaultPath, pathFilter, frontmatterHandler);
+  const scopeAuth = new ScopeAuthService(resolvedVaultPath);
+  const scopeAccess = new ScopeAccessPolicy();
+  const semanticSearch = new SemanticSearchService(resolvedVaultPath, pathFilter, scopeAccess);
+  const fileSystem = new FileSystemService(
+    resolvedVaultPath,
+    pathFilter,
+    frontmatterHandler,
+    (path, kind) => semanticSearch.notifyChange(path, kind),
+  );
   const searchService = new SearchService(resolvedVaultPath, pathFilter);
   const gitHistory = new GitHistoryService(resolvedVaultPath, pathFilter);
   const collaboration = new CollaborationService(fileSystem, searchService);
-  const scopeAuth = new ScopeAuthService(resolvedVaultPath);
-  const scopeAccess = new ScopeAccessPolicy();
   const references = new ReferenceService(fileSystem, scopeAccess);
   const llmWiki = new LlmWikiService(fileSystem, scopeAccess, references);
   const social = new SocialService(fileSystem, scopeAccess, references);
@@ -225,7 +233,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "search_notes",
-          description: "Search visible notes and return one compact excerpt per matching document. Matching LLM Wiki notes are prioritized; use read_note or read_scoped_note for the selected document.",
+          description: "Search visible notes and return one compact excerpt per matching document. Matching LLM Wiki notes are prioritized. Set semantic=true to add bounded Korean-capable vector matches; if the optional index is unavailable, lexical results still work.",
           inputSchema: {
             type: "object",
             properties: {
@@ -237,6 +245,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
               caseSensitive: { type: "boolean", description: "Case sensitive search (default: false)", default: false },
               pathPrefix: { type: "string", description: "Restrict the search to a vault subtree, e.g. \"Projects/2026\" (directory prefix)" },
               excludePaths: { type: "array", items: { type: "string" }, description: "Skip files under these subtrees, e.g. [\"Archive\", \"meta\"] (directory prefixes)" },
+              semantic: { type: "boolean", description: "Add bounded semantic/vector matches using the optional multilingual index (default: false)" },
               prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
             },
             required: ["query"]
@@ -370,6 +379,11 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
               prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
             }
           }
+        },
+        {
+          name: "semantic_search_status",
+          description: "Show the optional semantic index status. This is a derived cache; Markdown and Git remain authoritative.",
+          inputSchema: { type: "object", properties: { prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false } } }
         },
         {
           name: "list_tasks",
@@ -1087,7 +1101,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "search_notes": {
-          const results = trimmedArgs.pathPrefix
+          const lexicalResults = trimmedArgs.pathPrefix
             ? (await searchService.search({
                 query: trimmedArgs.query,
                 limit: trimmedArgs.limit,
@@ -1108,10 +1122,34 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
                 ...(principal?.modelId && { modelId: principal.modelId }),
                 ...(principal?.agentId && { agentId: principal.agentId }),
               });
+          let results = lexicalResults;
+          if (trimmedArgs.semantic === true) {
+            const semantic = await semanticSearch.search({
+              query: trimmedArgs.query,
+              limit: trimmedArgs.limit,
+              maxChars: trimmedArgs.maxChars,
+              pathPrefix: trimmedArgs.pathPrefix,
+              excludePaths: trimmedArgs.excludePaths,
+              principal,
+            });
+            const byPath = new Map(lexicalResults.map(result => [result.p, result]));
+            for (const result of semantic.results) {
+              const existing = byPath.get(result.p);
+              byPath.set(result.p, existing ? { ...existing, vs: true } : result);
+            }
+            results = [...byPath.values()]
+              .sort((a, b) => Number(Boolean(b.wk)) - Number(Boolean(a.wk)))
+              .slice(0, Math.min(20, Number(trimmedArgs.limit || 5)));
+            results = boundSearchResults(results, normalizeSearchMaxChars(trimmedArgs.maxChars));
+          }
           const indent = trimmedArgs.prettyPrint ? 2 : undefined;
           return {
             content: [{ type: "text", text: JSON.stringify(results, null, indent) }]
           };
+        }
+
+        case "semantic_search_status": {
+          return jsonResult(semanticSearch.status(), trimmedArgs.prettyPrint);
         }
 
         case "move_note": {

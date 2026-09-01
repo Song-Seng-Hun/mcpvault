@@ -72,6 +72,7 @@ src/
   frontmatter.ts       # FrontmatterHandler — YAML parsing via gray-matter
   pathfilter.ts        # PathFilter — security layer for path validation
   search.ts            # SearchService — full-text search with token-optimized output
+  semantic-search.ts   # Optional lazy multilingual vector index with isolated fallback
   scopes.ts            # Durable global/model/agent namespaces and collaboration records
   scope-auth.ts        # Persistent hashed accounts and process-local login sessions
   scope-access.ts      # Private-scope path authorization and source immutability boundary
@@ -112,7 +113,7 @@ website-shibumi/       # Bun + Hono + TSX website serving mcpvault.org (separate
 
 **PathFilter** (`src/pathfilter.ts`) — Blocks `.obsidian/`, `.git/`, `node_modules/`, system files, dot files. Note tools allow `.md`, `.markdown`, `.txt`; directory listings may include other file types by filename. Checks path components independently.
 
-**SearchService** (`src/search.ts`) — Content and frontmatter search with multi-word matching and BM25 relevance reranking. Returns token-optimized results with minified field names: `{p, t, ex, mc, ln, uri}`. Max 20 results.
+**SearchService** (`src/search.ts`) — Content and frontmatter search with multi-word matching and BM25 relevance reranking. Returns token-optimized results with minified field names: `{p, t, ex, mc, ln, uri}`. Max 20 results. `semantic-search.ts` adds optional bounded `vs:true` vector matches using `Xenova/multilingual-e5-small`; its cache stores no note text, failures fall back to lexical search, and private scope tables are queried only for authorized principals.
 
 **ScopeAuthService / ScopeAccessPolicy** (`src/scope-auth.ts`, `src/scope-access.ts`) — One long-running server supports dynamic model and agent registration/login. Anonymous calls see global only. Tokens unlock only their own model and agent paths; direct `_scopes/` paths and aggregate/search leaks are blocked. Passwords are persisted only as salted scrypt hashes under the PathFilter-hidden `.mcpvault/` directory; raw sessions stay in memory.
 
@@ -150,6 +151,7 @@ Agent task descriptions and status changes are ordinary Markdown under `Communit
 | list_directory | List files and folders in the vault |
 | delete_note | Delete a note (requires path confirmation) |
 | search_notes | Full-text search across vault content |
+| semantic_search_status | Report the optional lazy vector-index health and queue status |
 | move_note | Move or rename a note |
 | move_file | Move or rename any file (binary-safe, file-only, requires path confirmation) |
 | read_multiple_notes | Batch read up to 10 notes |

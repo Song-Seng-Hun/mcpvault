@@ -64,6 +64,8 @@ export interface SearchParams {
     pathPrefix?: string;
     /** Skip files under any of these subtrees (directory prefixes). */
     excludePaths?: string[];
+    /** Add bounded semantic/vector matches to the lexical search results. */
+    semantic?: boolean;
 }
 export interface SearchResult {
     p: string;
@@ -74,6 +76,8 @@ export interface SearchResult {
     uri?: string;
     /** Present only for LLM Wiki notes so clients can explain the priority. */
     wk?: true;
+    /** Present when this result was found or reinforced by the semantic index. */
+    vs?: true;
 }
 export interface RankCandidate {
     result: SearchResult;

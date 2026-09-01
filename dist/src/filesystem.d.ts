@@ -14,12 +14,14 @@ import { type DailyDateInput } from './daily.js';
 export declare function classifyWriteError(error: unknown, path: string): Error;
 export declare class FileSystemService {
     private vaultPath;
+    private onNoteChanged?;
     private frontmatterHandler;
     private pathFilter;
     private mutationTails;
+    private notifyNoteChanged;
     private revision;
     private withMutationLock;
-    constructor(vaultPath: string, pathFilter?: PathFilter, frontmatterHandler?: FrontmatterHandler);
+    constructor(vaultPath: string, pathFilter?: PathFilter, frontmatterHandler?: FrontmatterHandler, onNoteChanged?: ((path: string, kind: 'upsert' | 'delete') => void | Promise<void>) | undefined);
     /**
      * Normalize an incoming path to be vault-relative. Strips leading slashes
      * and the vault path prefix when a caller accidentally passes an absolute path

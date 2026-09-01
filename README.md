@@ -109,11 +109,12 @@ An MCP client starts MCPVault as a local stdio process and passes the vault path
 
 - AST-aware frontmatter updates preserve formatting for unchanged YAML fields.
 - Path checks block traversal, symlink escapes, dotfiles, `.obsidian`, `.git`, and `node_modules`.
-- One hundred five MCP tools cover note, collaboration, private scope, LLM Wiki, social journaling, public community, chat, references, agent coordination, and private coordination operations:
+- One hundred seven MCP tools cover note, collaboration, private scope, LLM Wiki, social journaling, public community, chat, references, agent coordination, and private coordination operations:
   - File operations: `read_note`, `write_note`, `patch_note`, `delete_note`, `move_note`, `move_file`
   - Partial reads: `get_note_outline`, `read_note_lines`
   - Directory and batch reads: `list_directory`, `read_multiple_notes`
 - Search: `search_notes` with multi-word matching, LLM Wiki-first ranking, one compact excerpt per document, and bounded result count/characters
+  - Optional semantic search: pass `semantic: true` to add Korean-capable `multilingual-e5-small` vector matches. The model and LanceDB cache load lazily, are processed in small idle batches, and are unloaded after inactivity; if either dependency or its local index fails, `search_notes` returns the normal lexical results. `semantic_search_status` reports cache health. The cache stores no note text—only vectors and derived path/hash/line metadata; bounded excerpts are read from the authorized Markdown source at query time. Markdown/Git remain authoritative.
   - Optional Obsidian-native search: `search_obsidian` uses the running Obsidian CLI index for public-global results; authenticated private searches must use `search_scoped_notes`
   - Metadata and tags: `get_frontmatter`, `update_frontmatter`, `get_notes_info`, `get_vault_stats`, `manage_tags`, `list_all_tags`
   - Wiki links: `wiki_link` resolves names and returns alternative paths when a name is ambiguous; `get_backlinks` finds incoming wikilinks, `get_outlinks` lists outgoing wikilinks, `find_unresolved_links` finds broken references, and `find_orphan_notes` finds isolated notes
@@ -796,7 +797,7 @@ Add, remove, or list tags in a note. Tags are managed in the frontmatter and inl
 
 ### `search_notes`
 
-Search for notes in the vault by content or frontmatter with multi-word matching and BM25 relevance reranking. Matching LLM Wiki notes are placed first within the caller's visible scopes. The result contains one compact excerpt per document, never the full document; use `read_note` or `read_scoped_note` after selecting a result.
+Search for notes in the vault by content or frontmatter with multi-word matching and BM25 relevance reranking. Matching LLM Wiki notes are placed first within the caller's visible scopes. The result contains one compact excerpt per document, never the full document; use `read_note` or `read_scoped_note` after selecting a result. Set `semantic: true` to add bounded vector matches from the optional Korean-capable multilingual index. Semantic results carry `vs: true`; a failed model download, vector database, or index operation is isolated and falls back to lexical results.
 
 **Request:**
 
@@ -810,6 +811,7 @@ Search for notes in the vault by content or frontmatter with multi-word matching
     "searchContent": true,
     "searchFrontmatter": false,
     "caseSensitive": false,
+    "semantic": true,
     "prettyPrint": false
   }
 }
@@ -839,12 +841,25 @@ Search for notes in the vault by content or frontmatter with multi-word matching
 - `ln` = line number
 - `uri` = Obsidian deep link for quick opening
 - `wk` = present only when the result is an LLM Wiki schema, source, knowledge, or issue note
+- `vs` = present when the result was found or reinforced by the semantic/vector index
 
 `limit` defaults to 5 and is capped at 20. `maxChars` defaults to 4000 and is
 capped at 12000. Both limits apply before the response is returned, including
 authenticated agent/model/global searches. The built-in `search_obsidian` path
 is also bounded (20 results by default, 50 maximum, and the same character
 budget); use it only for public-global Obsidian index search.
+
+The semantic index is a disposable derived cache under the hidden
+`.mcpvault/semantic-index/` directory. It is never the source of truth and is
+not required for startup or ordinary search. New and changed Markdown notes
+are queued by the file service, then embedded in small background batches when
+the server is idle. The default model is `Xenova/multilingual-e5-small`, which
+uses E5's `query:`/`passage:` prefixes and 384-dimensional normalized vectors.
+The cache contains no raw Markdown excerpts: only vectors, hashes, paths, and
+line metadata are persisted. The short result excerpt is read from the source
+note only after the caller's scope predicate passes. Only scopes visible to the
+current caller are queried; private scope tables are never included for
+anonymous callers or other agents.
 
 ### `get_backlinks`
 

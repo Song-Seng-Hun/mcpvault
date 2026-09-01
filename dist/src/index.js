@@ -3,6 +3,7 @@ export { FileSystemService } from './filesystem.js';
 export { FrontmatterHandler, parseFrontmatter } from './frontmatter.js';
 export { PathFilter } from './pathfilter.js';
 export { SearchService } from './search.js';
+export { SemanticSearchService } from './semantic-search.js';
 export { CollaborationService, expandScopePath, parseScopePath, scopeRoot } from './scopes.js';
 export { ScopeAuthService } from './scope-auth.js';
 export { ScopeAccessPolicy } from './scope-access.js';

@@ -95,6 +95,19 @@ export class FileSystemService {
   private pathFilter: PathFilter;
   private mutationTails = new Map<string, Promise<void>>();
 
+  private notifyNoteChanged(path: string, kind: 'upsert' | 'delete'): void {
+    const callback = this.onNoteChanged;
+    if (!callback || !path.toLowerCase().endsWith('.md')) return;
+    try {
+      void Promise.resolve(callback(path, kind)).catch(() => {
+        // Index maintenance is deliberately best-effort and must never change
+        // the outcome of the user's note mutation.
+      });
+    } catch {
+      // A synchronous callback failure is isolated for the same reason.
+    }
+  }
+
   private revision(content: string): string {
     return createHash('sha256').update(content, 'utf8').digest('hex');
   }
@@ -116,7 +129,8 @@ export class FileSystemService {
   constructor(
     private vaultPath: string,
     pathFilter?: PathFilter,
-    frontmatterHandler?: FrontmatterHandler
+    frontmatterHandler?: FrontmatterHandler,
+    private onNoteChanged?: (path: string, kind: 'upsert' | 'delete') => void | Promise<void>
   ) {
     const resolved = resolve(vaultPath);
     try {
@@ -341,6 +355,7 @@ export class FileSystemService {
       // Create directories if they don't exist
       await mkdir(dirname(fullPath), { recursive: true });
       await writeFile(fullPath, finalContent!, 'utf-8');
+      this.notifyNoteChanged(path, 'upsert');
     } catch (error) {
       throw classifyWriteError(error, path);
     }
@@ -429,6 +444,7 @@ export class FileSystemService {
       // Write the updated content
       const fullPath = this.resolvePath(path);
       await writeFile(fullPath, updatedContent, 'utf-8');
+      this.notifyNoteChanged(path, 'upsert');
 
       return {
         success: true,
@@ -597,6 +613,8 @@ export class FileSystemService {
 
         await rename(fullPath, finalTrashPath);
 
+        this.notifyNoteChanged(path, 'delete');
+
         return {
           success: true,
           path: path,
@@ -615,6 +633,8 @@ export class FileSystemService {
 
       // Perform the deletion using Node.js native API
       await unlink(fullPath);
+
+      this.notifyNoteChanged(path, 'delete');
 
       return {
         success: true,
@@ -715,6 +735,9 @@ export class FileSystemService {
 
       // Delete the source file
       await unlink(oldFullPath);
+
+      this.notifyNoteChanged(oldPath, 'delete');
+      this.notifyNoteChanged(newPath, 'upsert');
 
       return {
         success: true,
@@ -845,6 +868,9 @@ export class FileSystemService {
           throw error;
         }
       }
+
+      this.notifyNoteChanged(oldPath, 'delete');
+      this.notifyNoteChanged(newPath, 'upsert');
 
       return {
         success: true,

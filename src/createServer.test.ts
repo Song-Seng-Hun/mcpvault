@@ -25,7 +25,7 @@ test("createServer returns a Server instance", () => {
   expect(typeof server.connect).toBe("function");
 });
 
-test("server registers 106 tools", async () => {
+test("server registers 107 tools", async () => {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -37,7 +37,7 @@ test("server registers 106 tools", async () => {
   ]);
 
   const result = await client.listTools();
-  expect(result.tools).toHaveLength(106);
+  expect(result.tools).toHaveLength(107);
 
   const toolNames = result.tools.map((t) => t.name).sort();
   expect(toolNames).toEqual([
@@ -129,6 +129,7 @@ test("server registers 106 tools", async () => {
     "search_notes",
     "search_obsidian",
     "search_scoped_notes",
+    "semantic_search_status",
     "send_chat_message",
     "send_whisper",
     "toggle_reaction",
@@ -207,6 +208,24 @@ test("search_notes bounds output and prioritizes Wiki notes", async () => {
     const parsed = JSON.parse(text);
     expect(parsed[0]).toMatchObject({ p: "_wiki/knowledge.md", wk: true });
     expect(text.length).toBeLessThanOrEqual(512);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test("semantic search is optional and falls back to lexical results", async () => {
+  const { server, client } = await connectClient();
+  try {
+    await client.callTool({ name: "write_note", arguments: { path: "korean.md", content: "# 한국어\n\n벡터 검색 장애에도 원문 검색은 계속되어야 합니다." } });
+    const result = await client.callTool({ name: "search_notes", arguments: { query: "벡터 검색", semantic: true, maxChars: 512 } });
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as any)[0].text);
+    expect(parsed[0]?.p).toBe("korean.md");
+
+    const status = await client.callTool({ name: "semantic_search_status", arguments: {} });
+    const statusJson = JSON.parse((status.content as any)[0].text);
+    expect(statusJson).toMatchObject({ enabled: true, model: "Xenova/multilingual-e5-small" });
   } finally {
     await client.close();
     await server.close();
@@ -349,7 +368,7 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
   try {
     const listedTools = await client.listTools();
     const toolNames = listedTools.tools.map((tool) => tool.name);
-    expect(toolNames).toHaveLength(56);
+    expect(toolNames).toHaveLength(57);
     expect(toolNames).toContain("read_note");
     expect(toolNames).toContain("search_notes");
     expect(toolNames).not.toContain("write_note");
