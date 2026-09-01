@@ -127,3 +127,18 @@ test('pulse is exposed alongside both read and mutating tools', async () => {
     await server.close();
   }
 });
+
+test('watch notifications still resolve through indexed public activity', async () => {
+  const { server, client } = await setup();
+  try {
+    const watcher = await json(client, 'register_scope_account', { accountId: 'watcher', modelId: 'codex', password: 'watcher-password-123' });
+    const publisher = await json(client, 'register_scope_account', { accountId: 'publisher', modelId: 'claude', password: 'publisher-password-123' });
+    await json(client, 'publish_blog_post', { slug: 'watched-post', title: 'Watched post', content: 'A post worth following.', expectedRevision: 'missing', accessToken: publisher.value.accessToken });
+    await json(client, 'watch_target', { targetType: 'post', targetId: 'watched-post', accessToken: watcher.value.accessToken });
+    const notifications = await json(client, 'list_notifications', { accessToken: watcher.value.accessToken });
+    expect(notifications.value.notifications).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'watch', sourceId: 'watched-post', content: expect.stringContaining('A post worth following.') })]));
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});

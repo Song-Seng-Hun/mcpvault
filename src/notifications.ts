@@ -217,6 +217,48 @@ export class NotificationService {
     const messageBodies = new Map(hydratedMessages.map(note => [text(note.frontmatter.message_id), text(note.content).trim()]));
     const events: NotificationEvent[] = [];
     const reputations = await this.reputation.getMany([...comments, ...messages, ...posts].map(note => text(note.frontmatter.author)));
+    const postsByPostId = new Map<string, QueryNote[]>();
+    const commentsByPostId = new Map<string, QueryNote[]>();
+    const postsBySeriesId = new Map<string, QueryNote[]>();
+    const postsByAuthor = new Map<string, QueryNote[]>();
+    const commentsByAuthor = new Map<string, QueryNote[]>();
+    const postsByTag = new Map<string, QueryNote[]>();
+    const addToIndex = (index: Map<string, QueryNote[]>, key: unknown, note: QueryNote) => {
+      const normalized = text(key).toLowerCase();
+      if (!normalized) return;
+      const existing = index.get(normalized);
+      if (existing) existing.push(note);
+      else index.set(normalized, [note]);
+    };
+    for (const note of hydratedPosts) {
+      addToIndex(postsByPostId, note.frontmatter.post_id, note);
+      addToIndex(postsBySeriesId, note.frontmatter.series_id, note);
+      addToIndex(postsByAuthor, note.frontmatter.author, note);
+      if (Array.isArray(note.frontmatter.tags)) {
+        for (const tag of note.frontmatter.tags) addToIndex(postsByTag, tag, note);
+      }
+    }
+    for (const note of hydratedComments) {
+      addToIndex(commentsByPostId, note.frontmatter.post_id, note);
+      addToIndex(commentsByAuthor, note.frontmatter.author, note);
+    }
+    const watchedSourceCache = new Map<string, QueryNote[]>();
+    const watchedSources = (type: string, target: string): QueryNote[] => {
+      const cacheKey = `${type}:${target}`;
+      const cached = watchedSourceCache.get(cacheKey);
+      if (cached) return cached;
+      const sources = type === 'post'
+        ? [...(postsByPostId.get(target) || []), ...(commentsByPostId.get(target) || [])]
+        : type === 'series'
+          ? (postsBySeriesId.get(target) || [])
+          : type === 'author'
+            ? [...(postsByAuthor.get(target) || []), ...(commentsByAuthor.get(target) || [])]
+            : type === 'tag'
+              ? (postsByTag.get(target) || [])
+              : [];
+      watchedSourceCache.set(cacheKey, sources);
+      return sources;
+    };
 
     const add = (note: { path: string; frontmatter: Record<string, any>; content?: string }, kind: NotificationKind, sourceId: string) => {
       const author = text(note.frontmatter.author);
@@ -258,15 +300,7 @@ export class NotificationService {
     for (const subscription of subscriptions.notes) {
       const type = text(subscription.frontmatter.target_type);
       const target = text(subscription.frontmatter.target_id).toLowerCase();
-      const sources = type === 'post'
-        ? [...hydratedPosts.filter(note => text(note.frontmatter.post_id).toLowerCase() === target), ...hydratedComments.filter(note => text(note.frontmatter.post_id).toLowerCase() === target)]
-        : type === 'series'
-          ? hydratedPosts.filter(note => text(note.frontmatter.series_id).toLowerCase() === target)
-          : type === 'author'
-            ? [...hydratedPosts, ...hydratedComments].filter(note => text(note.frontmatter.author).toLowerCase() === target)
-            : type === 'tag'
-              ? hydratedPosts.filter(note => Array.isArray(note.frontmatter.tags) && note.frontmatter.tags.some((tag: unknown) => String(tag).toLowerCase() === target))
-              : [];
+      const sources = watchedSources(type, target);
       for (const note of sources) {
         const sourceId = text(note.frontmatter.post_id || note.frontmatter.comment_id);
         const notificationId = eventId('watch', note.path, `${type}:${target}:${sourceId}`);
