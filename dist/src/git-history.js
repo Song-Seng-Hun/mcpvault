@@ -9,6 +9,7 @@ export class GitHistoryService {
     vaultPath;
     statusCache;
     statusPromise;
+    mutationTail = Promise.resolve();
     constructor(vaultPath, pathFilter = new PathFilter()) {
         this.pathFilter = pathFilter;
         this.vaultPath = resolve(vaultPath);
@@ -65,6 +66,18 @@ export class GitHistoryService {
     }
     clearStatusCache() {
         this.statusCache = undefined;
+    }
+    async withMutation(task) {
+        const previous = this.mutationTail;
+        let release;
+        this.mutationTail = new Promise(resolvePromise => { release = resolvePromise; });
+        await previous;
+        try {
+            return await task();
+        }
+        finally {
+            release();
+        }
     }
     normalizeVaultPath(input, noteOnly = false) {
         if (typeof input !== 'string' || !input.trim()) {
@@ -162,6 +175,9 @@ export class GitHistoryService {
         return result.stdout.trim();
     }
     async initialize() {
+        return this.withMutation(() => this.initializeInternal());
+    }
+    async initializeInternal() {
         const existingRoot = await this.repoRoot();
         if (existingRoot) {
             return { success: true, initialized: false, message: 'Revision history is already initialized.' };
@@ -218,6 +234,9 @@ export class GitHistoryService {
         };
     }
     async commitChanges(params) {
+        return this.withMutation(() => this.commitChangesInternal(params));
+    }
+    async commitChangesInternal(params) {
         await this.requireRepo();
         this.clearStatusCache();
         const reason = params.reason?.trim();

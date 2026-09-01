@@ -31,6 +31,7 @@ export class GitHistoryService {
   private readonly vaultPath: string;
   private statusCache: { expiresAt: number; value: RevisionStatus } | undefined;
   private statusPromise: Promise<RevisionStatus> | undefined;
+  private mutationTail: Promise<void> = Promise.resolve();
 
   constructor(vaultPath: string, private readonly pathFilter: PathFilter = new PathFilter()) {
     this.vaultPath = resolve(vaultPath);
@@ -96,6 +97,18 @@ export class GitHistoryService {
 
   private clearStatusCache(): void {
     this.statusCache = undefined;
+  }
+
+  private async withMutation<T>(task: () => Promise<T>): Promise<T> {
+    const previous = this.mutationTail;
+    let release!: () => void;
+    this.mutationTail = new Promise<void>(resolvePromise => { release = resolvePromise; });
+    await previous;
+    try {
+      return await task();
+    } finally {
+      release();
+    }
   }
 
   private normalizeVaultPath(input: string, noteOnly: boolean = false): string {
@@ -198,6 +211,10 @@ export class GitHistoryService {
   }
 
   async initialize(): Promise<InitializeRevisionResult> {
+    return this.withMutation(() => this.initializeInternal());
+  }
+
+  private async initializeInternal(): Promise<InitializeRevisionResult> {
     const existingRoot = await this.repoRoot();
     if (existingRoot) {
       return { success: true, initialized: false, message: 'Revision history is already initialized.' };
@@ -254,6 +271,10 @@ export class GitHistoryService {
   }
 
   async commitChanges(params: CommitChangesParams): Promise<CommitChangesResult> {
+    return this.withMutation(() => this.commitChangesInternal(params));
+  }
+
+  private async commitChangesInternal(params: CommitChangesParams): Promise<CommitChangesResult> {
     await this.requireRepo();
     this.clearStatusCache();
     const reason = params.reason?.trim();

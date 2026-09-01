@@ -38,7 +38,9 @@ export declare class SemanticSearchService {
     private readonly vaultIo;
     private readonly vaultPath;
     private readonly queryCacheOwner;
+    private readonly vectorCacheOwner;
     private readonly queryCache;
+    private readonly vectorCache;
     private queryGeneration;
     private readonly indexPath;
     private readonly manifestPath;
@@ -46,6 +48,8 @@ export declare class SemanticSearchService {
     private manifest;
     private manifestReady;
     private db;
+    private readonly tableCache;
+    private readonly tableOpening;
     private embedder;
     private embedderLease;
     private pending;
@@ -67,6 +71,7 @@ export declare class SemanticSearchService {
     notifyChange(path: string, kind: ChangeKind): void;
     close(): void;
     private clearQueryCache;
+    private clearVectorCache;
     search(params: SemanticSearchParams): Promise<SemanticSearchOutcome>;
     status(): SemanticIndexStatus;
     private indexedCount;
@@ -78,6 +83,7 @@ export declare class SemanticSearchService {
     private findMarkdownFiles;
     private drain;
     private getDb;
+    private getTable;
     /**
      * Coordinate document indexing across separately spawned MCP processes.
      * The first process that opts into server-side semantic search becomes the
@@ -88,6 +94,7 @@ export declare class SemanticSearchService {
     private getTableNames;
     private getEmbedder;
     private embed;
+    private embedQuery;
     private embedMany;
     private prepareIndex;
     private applyIndexBatch;

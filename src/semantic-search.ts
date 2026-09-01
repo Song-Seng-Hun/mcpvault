@@ -30,6 +30,9 @@ const MAX_PENDING_CHANGES = 5_000;
 const EMBED_BATCH_SIZE = 8;
 const SEMANTIC_QUERY_CACHE_TTL_MS = 5_000;
 const SEMANTIC_QUERY_CACHE_MAX_ENTRIES = 64;
+const SEMANTIC_VECTOR_CACHE_TTL_MS = 60_000;
+const SEMANTIC_VECTOR_CACHE_MAX_ENTRIES = 32;
+const FALLBACK_SCAN_BATCH_SIZE = 8;
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
 
@@ -274,7 +277,9 @@ async function resultFromRow(row: IndexRow, vaultPath: string, includeRevision: 
 export class SemanticSearchService {
   private readonly vaultPath: string;
   private readonly queryCacheOwner = createDerivedCacheOwner('semantic.results');
+  private readonly vectorCacheOwner = createDerivedCacheOwner('semantic.vectors');
   private readonly queryCache = new Map<string, { expiresAt: number; generation: number; results: SearchResult[] }>();
+  private readonly vectorCache = new Map<string, { expiresAt: number; vector: number[] }>();
   private queryGeneration = 0;
   private readonly indexPath: string;
   private readonly manifestPath: string;
@@ -282,6 +287,8 @@ export class SemanticSearchService {
   private manifest: Record<string, ManifestEntry> = {};
   private manifestReady: Promise<void>;
   private db: any;
+  private readonly tableCache = new Map<string, any>();
+  private readonly tableOpening = new Map<string, Promise<any>>();
   private embedder: Embedder | undefined;
   private embedderLease: SharedEmbedderLease | undefined;
   private pending = new Map<string, PendingChange>();
@@ -343,11 +350,19 @@ export class SemanticSearchService {
     this.idleTimer = undefined;
     this.unloadTimer = undefined;
     this.clearQueryCache();
+    this.clearVectorCache();
+    this.tableCache.clear();
+    this.tableOpening.clear();
   }
 
   private clearQueryCache(): void {
     this.queryCache.clear();
     derivedCacheBudget.clearOwner(this.queryCacheOwner);
+  }
+
+  private clearVectorCache(): void {
+    this.vectorCache.clear();
+    derivedCacheBudget.clearOwner(this.vectorCacheOwner);
   }
 
   async search(params: SemanticSearchParams): Promise<SemanticSearchOutcome> {
@@ -404,13 +419,13 @@ export class SemanticSearchService {
       if (names.size === 0) {
         return { results: [], available: true, indexed: this.indexedCount(), pending: this.pending.size };
       }
-      const vector = await this.embed(params.query, 'query');
+      const vector = await this.embedQuery(params.query.trim());
       const scopes = this.accessPolicy.scopeRoots(params.principal).map(root => root.kind === 'global' ? 'global' : `${root.kind}:${root.root.split('/').pop()}`);
       const bestByPath = new Map<string, { row: IndexRow; distance: number }>();
       for (const scope of scopes) {
         const name = tableName(scope);
         if (!names.has(name)) continue;
-        const table = await this.db.openTable(name);
+        const table = await this.getTable(name);
         const rows = await table.vectorSearch(vector).distanceType('cosine').limit(limit * 2).toArray();
         for (const row of rows as Array<IndexRow & { _distance?: number }>) {
           const path = normalizePath(row.path);
@@ -579,11 +594,17 @@ export class SemanticSearchService {
     } catch {
       return output;
     }
+    const directories: string[] = [];
     for (const entry of entries) {
       if (entry.name === '.mcpvault' || entry.name === '.git' || entry.name === '.obsidian' || entry.name === 'node_modules') continue;
       const full = join(dir, entry.name);
-      if (entry.isDirectory()) output.push(...await this.findMarkdownFiles(full));
+      if (entry.isDirectory()) directories.push(full);
       else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) output.push(full.slice(this.vaultPath.length + 1));
+    }
+    for (let start = 0; start < directories.length; start += FALLBACK_SCAN_BATCH_SIZE) {
+      const batch = directories.slice(start, start + FALLBACK_SCAN_BATCH_SIZE);
+      const nested = await Promise.all(batch.map(directory => this.findMarkdownFiles(directory)));
+      for (const paths of nested) output.push(...paths);
     }
     return output;
   }
@@ -644,6 +665,22 @@ export class SemanticSearchService {
       return await this.dbPromise;
     } finally {
       this.dbPromise = undefined;
+    }
+  }
+
+  private async getTable(name: string): Promise<any> {
+    const cached = this.tableCache.get(name);
+    if (cached) return cached;
+    const opening = this.tableOpening.get(name);
+    if (opening) return opening;
+    const promise = this.getDb().then(db => db.openTable(name));
+    this.tableOpening.set(name, promise);
+    try {
+      const table = await promise;
+      this.tableCache.set(name, table);
+      return table;
+    } finally {
+      if (this.tableOpening.get(name) === promise) this.tableOpening.delete(name);
     }
   }
 
@@ -716,6 +753,8 @@ export class SemanticSearchService {
       this.db = undefined;
       this.tableNamesCache = undefined;
       this.tableNamesCachedAt = 0;
+      this.tableCache.clear();
+      this.tableOpening.clear();
       this.unloadTimer = undefined;
     }, IDLE_DELAY_MS * 4);
     this.unloadTimer.unref?.();
@@ -730,6 +769,33 @@ export class SemanticSearchService {
     const row: unknown = Array.isArray(valueList?.[0]) ? valueList[0] : values;
     if (!Array.isArray(row) || row.length !== EMBEDDING_DIMENSIONS || !row.every(value => typeof value === 'number' && Number.isFinite(value))) throw new Error(`Embedding model returned an invalid ${EMBEDDING_DIMENSIONS}-dimensional vector`);
     return row as number[];
+  }
+
+  private async embedQuery(query: string): Promise<number[]> {
+    const cached = this.vectorCache.get(query);
+    if (cached && cached.expiresAt > Date.now()) {
+      this.vectorCache.delete(query);
+      this.vectorCache.set(query, cached);
+      derivedCacheBudget.touch(this.vectorCacheOwner, query);
+      return cached.vector.slice();
+    }
+    if (cached) {
+      this.vectorCache.delete(query);
+      derivedCacheBudget.remove(this.vectorCacheOwner, query);
+    }
+    const vector = await this.embed(query, 'query');
+    const entry = { expiresAt: Date.now() + SEMANTIC_VECTOR_CACHE_TTL_MS, vector: vector.slice() };
+    this.vectorCache.set(query, entry);
+    derivedCacheBudget.register(this.vectorCacheOwner, query, vector.length * 8 + Buffer.byteLength(query, 'utf8') + 64, () => {
+      if (this.vectorCache.get(query) === entry) this.vectorCache.delete(query);
+    });
+    while (this.vectorCache.size > SEMANTIC_VECTOR_CACHE_MAX_ENTRIES) {
+      const oldest = this.vectorCache.keys().next();
+      if (oldest.done) break;
+      this.vectorCache.delete(oldest.value);
+      derivedCacheBudget.remove(this.vectorCacheOwner, oldest.value);
+    }
+    return vector;
   }
 
   private async embedMany(texts: string[], prefix: 'query' | 'passage'): Promise<number[][]> {
@@ -815,7 +881,7 @@ export class SemanticSearchService {
     }
 
     for (const [name, group] of groups) {
-      let table = names.has(name) ? await db.openTable(name) : undefined;
+      let table = names.has(name) ? await this.getTable(name) : undefined;
       if (table && group.paths.size > 0) {
         const predicate = [...group.paths]
           .map(path => `path = '${path.replace(/'/g, "''")}'`)
@@ -827,6 +893,7 @@ export class SemanticSearchService {
         else {
           table = await db.createTable(name, group.rows);
           names.add(name);
+          this.tableCache.set(name, table);
         }
         this.tableNamesCache?.add(name);
       }

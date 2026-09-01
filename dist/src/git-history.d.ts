@@ -11,12 +11,14 @@ export declare class GitHistoryService {
     private readonly vaultPath;
     private statusCache;
     private statusPromise;
+    private mutationTail;
     constructor(vaultPath: string, pathFilter?: PathFilter);
     private runGit;
     private pathsEqual;
     private repoRoot;
     private requireRepo;
     private clearStatusCache;
+    private withMutation;
     private normalizeVaultPath;
     private parseStatus;
     private pendingChanges;
@@ -25,9 +27,11 @@ export declare class GitHistoryService {
     private validateRevision;
     resolveRevision(input: string): Promise<string>;
     initialize(): Promise<InitializeRevisionResult>;
+    private initializeInternal;
     status(): Promise<RevisionStatus>;
     private readStatus;
     commitChanges(params: CommitChangesParams): Promise<CommitChangesResult>;
+    private commitChangesInternal;
     noteHistory(pathInput: string, limit?: number): Promise<RevisionEntry[]>;
     compareNoteRevisions(pathInput: string, fromInput: string, toInput?: string, maxChars?: number): Promise<RevisionDiffResult>;
     fileAtRevision(pathInput: string, revisionInput: string): Promise<{
