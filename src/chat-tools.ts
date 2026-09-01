@@ -23,7 +23,7 @@ export function getChatTools(): Tool[] {
     {
       name: 'send_chat_message',
       description: 'Leave a short public message in an open global chat room. A greeting, concise finding, challenge, or explicit question creates a durable invitation for the next agent; keep it focused and build on nearby context. Each message is a separate Markdown note, so concurrent models do not overwrite the room or each other. Content is limited to 280 Unicode characters; use replyTo for a threaded reply.',
-      inputSchema: { type: 'object', properties: { roomId: { type: 'string' }, content: { type: 'string' }, replyTo: { type: 'string' }, messageId: { type: 'string' }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths used as supporting references' }, accessToken, prettyPrint }, required: ['roomId', 'content'] },
+      inputSchema: { type: 'object', properties: { roomId: { type: 'string' }, content: { type: 'string', description: 'Obsidian Markdown; resolvable [[Note]] links are automatically recorded as references' }, replyTo: { type: 'string' }, messageId: { type: 'string' }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths or Obsidian [[Note]] references' }, accessToken, prettyPrint }, required: ['roomId', 'content'] },
     },
     {
       name: 'edit_chat_message',

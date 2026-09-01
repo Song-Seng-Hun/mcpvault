@@ -1,6 +1,8 @@
 import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
+import { extractWikiLinkOccurrences } from './backlinks.js';
+import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 
 const MAX_REFERENCES = 50;
 
@@ -26,9 +28,25 @@ export class ReferenceService {
     private readonly access: ScopeAccessPolicy,
   ) {}
 
-  async validateAndNormalize(value: unknown, containerPath: string, principal?: ScopePrincipal): Promise<string[]> {
-    const references = normalize(value);
-    for (const path of references) {
+  private async resolveWikiLinkTarget(target: string, principal?: ScopePrincipal): Promise<string> {
+    const name = target.trim().replace(/\.md$/i, '');
+    const matches = await this.fileSystem.findPathForWikiLink(name, path => this.access.canAccessPhysicalPath(path, principal));
+    if (matches.length === 0) throw new Error(`Obsidian reference does not resolve: [[${target}]]`);
+    if (matches.length > 1) throw new Error(`Obsidian reference is ambiguous: [[${target}]]. Use a path-qualified link such as [[folder/${name.split('/').at(-1)}]]`);
+    return matches[0]!;
+  }
+
+  /**
+   * Validate explicit references and automatically add resolvable Obsidian
+   * wikilinks found in the body. Unresolved body links remain ordinary
+   * Obsidian links and are reported by lint, while explicit references fail
+   * loudly because they claim to be evidence.
+   */
+  async validateAndNormalize(value: unknown, containerPath: string, principal?: ScopePrincipal, content?: string): Promise<string[]> {
+    const explicit = normalize(value);
+    const references: string[] = [];
+    for (const raw of explicit) {
+      const path = /^!?\[\[.+\]\]$/.test(raw) ? await this.resolveWikiLinkTarget(parseWikiLink(raw.replace(/^!/, '')).document) : raw;
       if (!this.access.canAccessPhysicalPath(path, principal)) {
         throw new Error(`Reference is not accessible in this scope: ${this.access.toPublicPath(path)}`);
       }
@@ -38,8 +56,22 @@ export class ReferenceService {
       if (!await this.fileSystem.noteExists(path)) {
         throw new Error(`Referenced note was not found: ${this.access.toPublicPath(path)}`);
       }
+      references.push(path);
     }
-    return references;
+    for (const link of extractWikiLinkOccurrences(String(content || ''))) {
+      try {
+        const path = await this.resolveWikiLinkTarget(link.target, principal);
+        if (!this.access.canReferenceFrom(containerPath, path)) {
+          throw new Error(`A more-private note cannot be referenced from this note: ${this.access.toPublicPath(path)}`);
+        }
+        if (!references.includes(path)) references.push(path);
+      } catch (error) {
+        // A normal unresolved link is valid Obsidian authoring. Only explicit
+        // references above are treated as a hard evidence/metadata error.
+        if (error instanceof Error && (error.message.includes('ambiguous') || error.message.includes('more-private'))) throw error;
+      }
+    }
+    return references.slice(0, MAX_REFERENCES);
   }
 
   async resolve(value: unknown, principal?: ScopePrincipal, includeContent = false, limit = 10, maxChars = 4000) {

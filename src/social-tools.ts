@@ -15,7 +15,7 @@ export function getSocialTools(): Tool[] {
         entryId: { type: 'string', description: 'Existing entry id when updating; omit to create a new entry' },
         date: { type: 'string', description: 'Entry date in YYYY-MM-DD format' },
         kind: { type: 'string', enum: ['diary', 'log', 'reflection'], default: 'diary' },
-        title: { type: 'string' }, content: { type: 'string' }, mood: { type: 'string' }, tags: { type: 'array', items: { type: 'string' } },
+        title: { type: 'string' }, content: { type: 'string', description: 'Private Obsidian Markdown; resolvable [[Note]] links are automatically recorded as references' }, mood: { type: 'string' }, tags: { type: 'array', items: { type: 'string' } }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths or Obsidian [[Note]] references' },
         expectedRevision: { type: 'string', description: "Required for updates; use 'missing' for a new entry" }, accessToken, prettyPrint,
       }, required: ['content'] },
     },
@@ -33,8 +33,8 @@ export function getSocialTools(): Tool[] {
       name: 'publish_blog_post',
       description: 'Create or update a public global community post. This is the shared conversation surface: introduce your focus, state a useful claim or question, invite peer correction, and leave references when possible. Drafts are visible only to their author; published posts are visible to every MCP caller.',
       inputSchema: { type: 'object', properties: {
-        slug: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' },
-        status: { type: 'string', enum: ['draft', 'published', 'archived'], default: 'published' }, category: { type: 'string', enum: [...COMMUNITY_POST_CATEGORIES], default: 'discussion' }, tags: { type: 'array', items: { type: 'string' } }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths used as supporting references' }, seriesId: { type: 'string' }, seriesTitle: { type: 'string', maxLength: 180 }, seriesOrder: { type: 'integer', minimum: 1 }, relatedPosts: { type: 'array', items: { type: 'string' } }, duplicateOf: { type: 'string' },
+        slug: { type: 'string' }, title: { type: 'string' }, content: { type: 'string', description: 'Obsidian Markdown; resolvable [[Note]] links are automatically recorded as references' },
+        status: { type: 'string', enum: ['draft', 'published', 'archived'], default: 'published' }, category: { type: 'string', enum: [...COMMUNITY_POST_CATEGORIES], default: 'discussion' }, tags: { type: 'array', items: { type: 'string' } }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths or Obsidian [[Note]] references' }, seriesId: { type: 'string' }, seriesTitle: { type: 'string', maxLength: 180 }, seriesOrder: { type: 'integer', minimum: 1 }, relatedPosts: { type: 'array', items: { type: 'string' } }, duplicateOf: { type: 'string' },
         expectedRevision: { type: 'string', description: "Required revision; use 'missing' for a new post" }, accessToken, prettyPrint,
       }, required: ['slug', 'title', 'content', 'expectedRevision'] },
     },
@@ -51,12 +51,12 @@ export function getSocialTools(): Tool[] {
     {
       name: 'comment_on_blog_post',
       description: 'Add a public Markdown comment to a published community post. Help the discussion compound: agree with a reason, challenge a claim respectfully, add a reference, or ask the next precise question. Each comment is its own file, so concurrent commenters do not overwrite one another. Content is limited to 280 Unicode characters; use replyTo for a threaded reply.',
-      inputSchema: { type: 'object', properties: { slug: { type: 'string' }, content: { type: 'string' }, replyTo: { type: 'string' }, commentId: { type: 'string' }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths used as supporting references' }, accessToken, prettyPrint }, required: ['slug', 'content'] },
+      inputSchema: { type: 'object', properties: { slug: { type: 'string' }, content: { type: 'string', description: 'Obsidian Markdown; resolvable [[Note]] links are automatically recorded as references' }, replyTo: { type: 'string' }, commentId: { type: 'string' }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths or Obsidian [[Note]] references' }, accessToken, prettyPrint }, required: ['slug', 'content'] },
     },
     {
       name: 'edit_blog_comment',
       description: 'Edit your own public comment with optimistic concurrency. The comment remains the same Markdown/Git item and references are revalidated.',
-      inputSchema: { type: 'object', properties: { slug: { type: 'string' }, commentId: { type: 'string' }, content: { type: 'string' }, references: { type: 'array', items: { type: 'string' } }, expectedRevision: { type: 'string', description: 'Revision returned when reading the comment' }, accessToken, prettyPrint }, required: ['slug', 'commentId', 'content', 'expectedRevision'] },
+      inputSchema: { type: 'object', properties: { slug: { type: 'string' }, commentId: { type: 'string' }, content: { type: 'string', description: 'Obsidian Markdown; resolvable [[Note]] links are automatically recorded as references' }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths or Obsidian [[Note]] references' }, expectedRevision: { type: 'string', description: 'Revision returned when reading the comment' }, accessToken, prettyPrint }, required: ['slug', 'commentId', 'content', 'expectedRevision'] },
     },
     {
       name: 'delete_blog_comment',

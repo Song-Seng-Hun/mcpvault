@@ -51,7 +51,7 @@ export class AgentTaskService {
         if (params.expectedRevision && params.expectedRevision !== 'missing')
             throw new Error('A new task must use expectedRevision=missing');
         const assignee = await this.assignee(params.assignee);
-        const refs = await this.references.validateAndNormalize(params.references, path, principal);
+        const refs = await this.references.validateAndNormalize(params.references, path, principal, params.description);
         const timestamp = now();
         await this.fileSystem.writeNote({
             path,
@@ -121,7 +121,7 @@ export class AgentTaskService {
         if (status !== previousStatus && !reason)
             throw new Error('reason is required when changing task status');
         const description = params.description === undefined ? String(note.frontmatter.description || note.content).trim() : shortText(params.description, 'description', 4000, true);
-        const refs = params.references === undefined ? (Array.isArray(note.frontmatter.references) ? note.frontmatter.references : []) : await this.references.validateAndNormalize(params.references, path, principal);
+        const refs = await this.references.validateAndNormalize(params.references ?? note.frontmatter.references, path, principal, params.description);
         const timestamp = now();
         const frontmatter = {
             ...note.frontmatter, description,

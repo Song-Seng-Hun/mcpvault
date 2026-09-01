@@ -121,6 +121,7 @@ export class SocialService {
     const path = existing?.path || `${agentJournalRoot(principal.agentId)}/${date}/${entryId}.md`;
     const timestamp = now();
     const existingFrontmatter = existing?.frontmatter || {};
+    const references = await this.references.validateAndNormalize(params.references ?? existingFrontmatter.references, path, principal, content);
     const expectedRevision = existing ? params.expectedRevision! : (params.expectedRevision || 'missing');
     await this.fileSystem.writeNote({
       path,
@@ -132,6 +133,7 @@ export class SocialService {
         ...(params.title?.trim() && { title: params.title.trim() }),
         ...(params.mood?.trim() && { mood: params.mood.trim() }),
         ...(params.tags !== undefined && { tags: cleanTags(params.tags) }),
+        references,
         ...(existing ? { updated_at: timestamp } : { created_at: timestamp, updated_at: timestamp }),
       },
       expectedRevision,
@@ -248,9 +250,7 @@ export class SocialService {
         ...(!seriesId && existing?.note.frontmatter.series_id && { series_id: null, series_title: null, series_order: null }),
         related_posts: relatedPosts,
         ...(duplicateOf ? { duplicate_of: duplicateOf } : {}),
-        references: params.references !== undefined
-          ? await this.references.validateAndNormalize(params.references, path, principal)
-          : (existing?.note.frontmatter.references || []),
+        references: await this.references.validateAndNormalize(params.references ?? existing?.note.frontmatter.references, path, principal, content),
         ...(existing ? { updated_at: timestamp } : { created_at: timestamp, updated_at: timestamp }),
         ...(!existing && { workflow_status: 'open' }),
       },
@@ -349,7 +349,7 @@ export class SocialService {
     }
     const timestamp = now();
     const path = commentPath(slug, commentId);
-    const references = await this.references.validateAndNormalize(params.references, path, principal);
+    const references = await this.references.validateAndNormalize(params.references, path, principal, content);
     await this.fileSystem.writeNote({
       path,
       content: `${content}\n`,
@@ -377,9 +377,7 @@ export class SocialService {
     if (note.frontmatter.author !== identity(principal)) throw new Error('Only the original comment author can edit this comment');
     if (!params.expectedRevision) throw new Error('expectedRevision is required; read the comment first');
     const text = requireShortCommunityText(params.content);
-    const references = params.references !== undefined
-      ? await this.references.validateAndNormalize(params.references, path, principal)
-      : (note.frontmatter.references || []);
+    const references = await this.references.validateAndNormalize(params.references ?? note.frontmatter.references, path, principal, text);
     await this.fileSystem.writeNote({ path, content: `${text}\n`, frontmatter: { ...note.frontmatter, content_status: 'published', mentions: extractMentions(text), references, updated_at: now() }, expectedRevision: params.expectedRevision });
     const updated = await this.fileSystem.readNote(path);
     return { success: true, commentId, postId: slug, revision: updated.revision };

@@ -50,7 +50,7 @@ test('public chat rooms preserve authenticated model identities and independent 
     await client.callTool({ name: 'write_note', arguments: { path: 'scope://model/codex/private-design.md', content: 'Private model notes', accessToken: codexToken } });
     const privateReference = await client.callTool({ name: 'send_chat_message', arguments: { roomId: 'architecture', content: 'This must not leak', references: ['scope://model/codex/private-design.md'], accessToken: codexToken } });
     expect(privateReference.isError).toBe(true);
-    const first = await json(client, 'send_chat_message', { roomId: 'architecture', content: 'I propose a Markdown-first design. @claude', references: ['Design.md'], accessToken: codexToken });
+    const first = await json(client, 'send_chat_message', { roomId: 'architecture', content: 'I propose a Markdown-first design [[Design]]. @claude', accessToken: codexToken });
     const second = await json(client, 'send_chat_message', { roomId: 'architecture', content: 'I agree, with one indexing caveat. @codex', replyTo: first.value.messageId, accessToken: claudeToken });
     expect(second.value.roomId).toBe('architecture');
     expect(second.value.path).toContain('Community/ChatMessages/architecture/');

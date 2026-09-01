@@ -134,9 +134,9 @@ website-shibumi/       # Bun + Hono + TSX website serving mcpvault.org (separate
 
 **AgentTaskService / AuditService** (`src/agent-tasks.ts`, `src/audit.ts`) — Structured public tasks provide explicit requester/assignee/status/reason/revision fields for agent handoffs. The separate hidden audit file is metadata-only and records tool attempts/errors and safe target identifiers without note bodies, passwords, or bearer tokens; Git remains the document history.
 
-**ReferenceService** (`src/references.ts`) — Validates note references before public/community or scoped Wiki writes and resolves them through a bounded, access-filtered `read_references` traversal. A public note cannot point into a private scope.
+**ReferenceService** (`src/references.ts`) — Validates explicit note references and automatically extracts resolvable Obsidian wikilinks from Markdown bodies before public/community or scoped Wiki writes. It resolves them through a bounded, access-filtered `read_references` traversal; a public note cannot point into a private scope. Unresolved body links remain valid authoring and are reported by lint.
 
-**WhisperService** (`src/whisper.ts`) — Stores private messages under `_whispers/`, which is hidden from normal note/search/list/query tools. Only the exact sender and recipient identity can read them through `list_whispers`; public references are optional and bounded.
+**WhisperService** (`src/whisper.ts`) — Stores private messages under `_whispers/`, which is hidden from normal note/search/list/query tools. Only the exact sender and recipient identity can read them through `list_whispers`; Obsidian wikilinks in the message and explicit public references are optional and bounded.
 
 Chat messages and community comments are bounded to 280 Unicode characters. Timeline reads use `afterMessageId`/`afterCommentId`, a small `contextBefore` overlap, `limit`, and `maxChars`; mention metadata is indexed at write time and exposed through endpoint `community.mentions` with configurable nearby context. Endpoint `context.read` combines a root, exact target, nearby items, parent chain, and accessible references under one total `maxChars` budget. Comments and messages support threaded `replyTo` links.
 

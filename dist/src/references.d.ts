@@ -5,7 +5,14 @@ export declare class ReferenceService {
     private readonly fileSystem;
     private readonly access;
     constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy);
-    validateAndNormalize(value: unknown, containerPath: string, principal?: ScopePrincipal): Promise<string[]>;
+    private resolveWikiLinkTarget;
+    /**
+     * Validate explicit references and automatically add resolvable Obsidian
+     * wikilinks found in the body. Unresolved body links remain ordinary
+     * Obsidian links and are reported by lint, while explicit references fail
+     * loudly because they claim to be evidence.
+     */
+    validateAndNormalize(value: unknown, containerPath: string, principal?: ScopePrincipal, content?: string): Promise<string[]>;
     resolve(value: unknown, principal?: ScopePrincipal, includeContent?: boolean, limit?: number, maxChars?: number): Promise<Record<string, unknown>[]>;
     readFromNote(params: {
         path: string;

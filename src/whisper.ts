@@ -42,7 +42,7 @@ export class WhisperService {
     const message = content(params.content);
     const id = `whisper-${randomUUID().slice(0, 12)}`;
     const path = `${WHISPER_ROOT}/${id}.md`;
-    const refs = await this.references.validateAndNormalize(params.references, WHISPER_ROOT, principal);
+    const refs = await this.references.validateAndNormalize(params.references, WHISPER_ROOT, principal, message);
     const timestamp = now();
     await this.fileSystem.writeNote({
       path,

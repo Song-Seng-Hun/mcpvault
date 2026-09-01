@@ -35,12 +35,15 @@ test('agent journals are private, revision-safe, and separate from global commun
     const modelToken = (await json(client, 'login_scope', { accountId: 'social-model', password: 'social-model-password' })).value.accessToken;
     await client.callTool({ name: 'register_scope_account', arguments: { accountId: 'social-agent-account', modelId: 'codex', agentId: 'diary-agent', password: 'social-agent-password', accessToken: modelToken }, });
     const agentToken = (await json(client, 'login_scope', { accountId: 'social-agent-account', password: 'social-agent-password' })).value.accessToken;
+    await client.callTool({ name: 'write_note', arguments: { path: 'Journal-reference.md', content: 'A public note referenced by a private journal.' } });
 
     const created = await json(client, 'write_journal_entry', {
-      date: '2026-09-01', kind: 'reflection', title: 'First reflection', content: 'Private working thoughts', tags: ['daily'], accessToken: agentToken,
+      date: '2026-09-01', kind: 'reflection', title: 'First reflection', content: 'Private working thoughts [[Journal-reference]]', tags: ['daily'], accessToken: agentToken,
     });
     expect(created.value).toMatchObject({ created: true, date: '2026-09-01', kind: 'reflection' });
     expect(created.value.path).toContain('scope://agent/diary-agent/');
+    const journal = await json(client, 'read_journal_entry', { entryId: created.value.entryId, accessToken: agentToken });
+    expect(journal.value.fm.references).toEqual(['Journal-reference.md']);
 
     const listed = await json(client, 'list_journal_entries', { accessToken: agentToken });
     expect(listed.value.entries).toHaveLength(1);
@@ -53,7 +56,7 @@ test('agent journals are private, revision-safe, and separate from global commun
     expect(modelJournal.isError).toBe(true);
     const anonymousJournal = await client.callTool({ name: 'list_journal_entries', arguments: {} });
     expect(anonymousJournal.isError).toBe(true);
-    const anonymousSearch = await json(client, 'search_notes', { query: 'Private working thoughts' });
+    const anonymousSearch = await json(client, 'search_notes', { query: 'working thoughts' });
     expect(anonymousSearch.value).toEqual([]);
   } finally {
     await client.close();
@@ -66,6 +69,7 @@ test('published posts and comments are public while drafts remain author-private
   try {
     await client.callTool({ name: 'register_scope_account', arguments: { accountId: 'publisher', modelId: 'claude', password: 'publisher-password' } });
     const publisherToken = (await json(client, 'login_scope', { accountId: 'publisher', password: 'publisher-password' })).value.accessToken;
+    await client.callTool({ name: 'write_note', arguments: { path: 'Evidence.md', content: 'A small public supporting note.' } });
 
     const draft = await json(client, 'publish_blog_post', { slug: 'draft-post', title: 'Draft', content: 'Not public yet', status: 'draft', expectedRevision: 'missing', accessToken: publisherToken });
     expect(draft.value.status).toBe('draft');
@@ -74,19 +78,21 @@ test('published posts and comments are public while drafts remain author-private
     const anonymousDraftRead = await client.callTool({ name: 'read_blog_post', arguments: { slug: 'draft-post' } });
     expect(anonymousDraftRead.isError).toBe(true);
 
-    const published = await json(client, 'publish_blog_post', { slug: 'hello-agents', title: 'Hello agents', content: 'Let us share useful discoveries.', expectedRevision: 'missing', accessToken: publisherToken });
+    const published = await json(client, 'publish_blog_post', { slug: 'hello-agents', title: 'Hello agents', content: 'Let us share useful discoveries [[Evidence]].', expectedRevision: 'missing', accessToken: publisherToken });
     expect(published.value.path).toBe('Community/Posts/hello-agents.md');
     const publicPost = await json(client, 'read_blog_post', { slug: 'hello-agents' });
     expect(publicPost.value.fm.title).toBe('Hello agents');
+    expect(publicPost.value.fm.references).toEqual(['Evidence.md']);
 
     const anonymousComment = await client.callTool({ name: 'comment_on_blog_post', arguments: { slug: 'hello-agents', content: 'Anonymous should not be able to impersonate an agent.' } });
     expect(anonymousComment.isError).toBe(true);
-    const comment = await json(client, 'comment_on_blog_post', { slug: 'hello-agents', content: 'Useful idea. @claude', accessToken: publisherToken });
+    const comment = await json(client, 'comment_on_blog_post', { slug: 'hello-agents', content: 'Useful idea [[Evidence]]. @claude', accessToken: publisherToken });
     expect(comment.value).toMatchObject({ success: true, postId: 'hello-agents' });
     const closedComment = await json(client, 'update_community_status', { targetType: 'comment', slug: 'hello-agents', commentId: comment.value.commentId, workflowStatus: 'resolved', reason: 'The point has been incorporated.', expectedRevision: comment.value.revision, accessToken: publisherToken });
     expect(closedComment.value).toMatchObject({ workflowStatus: 'resolved', closed: true, reason: 'The point has been incorporated.' });
     const comments = await json(client, 'list_blog_comments', { slug: 'hello-agents' });
     expect(comments.value.comments).toHaveLength(1);
+    expect(comments.value.comments[0].references).toEqual(['Evidence.md']);
     expect(comments.value.comments[0]).toMatchObject({ workflowStatus: 'resolved', workflowStatusReason: 'The point has been incorporated.' });
     const activeComments = await json(client, 'list_blog_comments', { slug: 'hello-agents', workflowStatus: 'active' });
     expect(activeComments.value.comments).toHaveLength(0);
@@ -95,7 +101,7 @@ test('published posts and comments are public while drafts remain author-private
     const reply = await json(client, 'comment_on_blog_post', { slug: 'hello-agents', content: 'Following up on that point.', replyTo: comment.value.commentId, accessToken: publisherToken });
     const threaded = await json(client, 'list_blog_comments', { slug: 'hello-agents' });
     expect(threaded.value.comments[1]).toMatchObject({ commentId: reply.value.commentId, replyTo: comment.value.commentId });
-    expect(threaded.value.comments[1].parent).toMatchObject({ commentId: comment.value.commentId, content: expect.stringContaining('Useful idea.') });
+    expect(threaded.value.comments[1].parent).toMatchObject({ commentId: comment.value.commentId, content: expect.stringContaining('Useful idea [[Evidence]]') });
     const withComments = await json(client, 'read_blog_post', { slug: 'hello-agents', includeComments: true, commentLimit: 5, accessToken: publisherToken });
     expect(withComments.value.comments).toHaveLength(2);
     const mentions = await json(client, 'list_mentions', { accessToken: publisherToken });

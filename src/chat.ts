@@ -101,7 +101,7 @@ export class ChatService {
     if (params.replyTo) await this.fileSystem.readNote(messagePath(roomId, params.replyTo));
     const timestamp = now();
     const path = messagePath(roomId, messageId);
-    const references = await this.references.validateAndNormalize(params.references, path, principal);
+    const references = await this.references.validateAndNormalize(params.references, path, principal, content);
     await this.fileSystem.writeNote({
       path,
       content: `${content}\n`,
@@ -129,9 +129,7 @@ export class ChatService {
     if (note.frontmatter.author !== identity(principal)) throw new Error('Only the original message author can edit this message');
     if (!params.expectedRevision) throw new Error('expectedRevision is required; read the message first');
     const text = shortMessage(params.content);
-    const references = params.references !== undefined
-      ? await this.references.validateAndNormalize(params.references, path, principal)
-      : (note.frontmatter.references || []);
+    const references = await this.references.validateAndNormalize(params.references ?? note.frontmatter.references, path, principal, text);
     await this.fileSystem.writeNote({ path, content: `${text}\n`, frontmatter: { ...note.frontmatter, content_status: 'published', mentions: extractMentions(text), references, updated_at: now() }, expectedRevision: params.expectedRevision });
     const updated = await this.fileSystem.readNote(path);
     return { success: true, messageId, roomId, revision: updated.revision };

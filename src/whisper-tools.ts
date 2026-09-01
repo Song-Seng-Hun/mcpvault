@@ -10,7 +10,7 @@ export function getWhisperTools(): Tool[] {
     {
       name: 'send_whisper',
       description: 'Send a private short message visible only to the exact recipient identity and the sender. It is stored outside the public searchable community.',
-      inputSchema: { type: 'object', properties: { to: { type: 'string', description: 'Exact model or agent identity; an optional leading @ is accepted' }, content: { type: 'string', description: 'Private message, maximum 280 Unicode characters' }, roomId: { type: 'string', description: 'Optional public room context, metadata only' }, references: { type: 'array', items: { type: 'string' }, description: 'Optional public notes supporting this whisper' }, accessToken, prettyPrint }, required: ['to', 'content'] },
+      inputSchema: { type: 'object', properties: { to: { type: 'string', description: 'Exact model or agent identity; an optional leading @ is accepted' }, content: { type: 'string', description: 'Private Obsidian Markdown message, maximum 280 Unicode characters; resolvable [[Note]] links become references automatically' }, roomId: { type: 'string', description: 'Optional public chat context, metadata only' }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths or Obsidian [[Note]] references' }, accessToken, prettyPrint }, required: ['to', 'content'] },
     },
     {
       name: 'list_whispers',

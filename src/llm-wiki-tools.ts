@@ -32,7 +32,7 @@ export function getLlmWikiTools(): Tool[] {
       name: 'publish_knowledge',
       description: 'Create or update an evidence-grounded knowledge note while preserving ordinary Markdown/Obsidian/Git behavior. Publish what another agent can verify, mark uncertainty, and make disagreements useful. Every evidence path must be an immutable source snapshot.',
       inputSchema: { type: 'object', properties: {
-        path: { type: 'string' }, content: { type: 'string' }, evidencePaths: { type: 'array', items: { type: 'string' } }, references: { type: 'array', items: { type: 'string' }, description: 'Optional additional supporting note paths' },
+        path: { type: 'string' }, content: { type: 'string', description: 'Obsidian Markdown; resolvable [[Note]] links are automatically recorded as references' }, evidencePaths: { type: 'array', items: { type: 'string' } }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths or Obsidian [[Note]] references' },
         author: { type: 'string' }, confidence: { type: 'string', enum: ['low', 'medium', 'high'], default: 'medium' },
         status: { type: 'string', enum: ['draft', 'verified', 'disputed', 'superseded'], default: 'draft' },
         expectedRevision: { type: 'string', description: "Required revision, or 'missing' for a new note" }, accessToken, prettyPrint,

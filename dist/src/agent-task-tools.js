@@ -5,7 +5,7 @@ export function getAgentTaskTools() {
     return [
         {
             name: 'create_agent_task',
-            description: 'Create a public structured task in Community/Tasks. Git history remains the change log; references are validated before publishing.',
+            description: 'Create a public structured task in Community/Tasks using Obsidian Markdown. Resolvable [[Note]] links in the description become references automatically; Git remains the change log.',
             inputSchema: { type: 'object', properties: {
                     taskId: { type: 'string', description: 'Optional stable id; generated when omitted' }, title: { type: 'string', maxLength: 180 }, description: { type: 'string', maxLength: 4000 },
                     assignee: { type: 'string', description: 'Optional exact model or agent identity' }, references: { type: 'array', items: { type: 'string' } }, expectedRevision: { type: 'string', description: 'Use missing for a new task' }, accessToken, prettyPrint,

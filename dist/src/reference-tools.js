@@ -3,7 +3,7 @@ const accessToken = { type: 'string', description: 'Optional token from login_sc
 export function getReferenceTools() {
     return [{
             name: 'read_references',
-            description: 'Follow the references and evidence_paths attached to a note, post, comment, chat message, or knowledge note. Only accessible referenced notes are returned.',
+            description: 'Follow the references and evidence_paths attached to a note, post, comment, chat message, or knowledge note. Resolvable Obsidian [[Note]] links in the body are recorded as references automatically; only accessible referenced notes are returned.',
             inputSchema: { type: 'object', properties: {
                     path: { type: 'string', description: 'Source note path or authorized scope URI' },
                     includeContent: { type: 'boolean', description: 'Include bounded referenced note content; false returns metadata only', default: false },
