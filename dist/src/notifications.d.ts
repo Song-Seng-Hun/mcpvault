@@ -1,4 +1,5 @@
 import type { FileSystemService } from './filesystem.js';
+import type { VaultFileCatalog } from './vault-catalog.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ReputationService } from './reputation.js';
 import type { QueryNote } from './types.js';
@@ -48,15 +49,21 @@ export interface PublicSnapshotIndex extends PublicSnapshot {
 export declare class NotificationService {
     private readonly fileSystem;
     private readonly reputation;
+    private readonly vaultPath?;
+    private readonly fileCatalog?;
     private readonly eventCache;
     private readonly eventInFlight;
     private publicSnapshotCache;
     private publicSnapshotInFlight;
     private publicSnapshotUpdate;
-    constructor(fileSystem: FileSystemService, reputation: ReputationService);
+    private publicSnapshotRestoreAttempted;
+    constructor(fileSystem: FileSystemService, reputation: ReputationService, vaultPath?: string | undefined, fileCatalog?: VaultFileCatalog | undefined);
     discoverySnapshot(): Promise<PublicSnapshotIndex>;
     /** Return only indexed public items that mention one of the exact identities. */
     mentionCandidates(targets: ReadonlySet<string>, includeClosed?: boolean): Promise<QueryNote[]>;
+    private publicManifest;
+    private loadPublicSnapshot;
+    private savePublicSnapshot;
     invalidate(path?: string, kind?: 'upsert' | 'delete'): void;
     private cachedPublicSnapshot;
     private updatePublicSnapshot;

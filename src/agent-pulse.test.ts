@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, expect, test } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { gunzipSync } from 'node:zlib';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createServer } from './createServer.js';
 
@@ -140,5 +141,37 @@ test('watch notifications still resolve through indexed public activity', async 
   } finally {
     await client.close();
     await server.close();
+  }
+});
+
+test('persists and restores the public discovery snapshot after restart', async () => {
+  const first = await setup();
+  try {
+    const registration = await json(first.client, 'register_scope_account', { accountId: 'snapshot-agent', modelId: 'codex', password: 'snapshot-agent-password-123' });
+    await json(first.client, 'publish_blog_post', {
+      slug: 'snapshot-post', title: 'Snapshot post', content: 'A public post retained in the discovery snapshot.',
+      expectedRevision: 'missing', accessToken: registration.value.accessToken,
+    });
+    await json(first.client, 'get_agent_pulse', { accessToken: registration.value.accessToken });
+    let snapshot: Buffer | undefined;
+    for (let attempt = 0; attempt < 25 && !snapshot; attempt += 1) {
+      try { snapshot = await readFile(join(vault, '.mcpvault', 'public-discovery.snapshot.bin')); } catch { /* save is debounced/background */ }
+      if (!snapshot) await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    expect(snapshot).toBeDefined();
+    expect(gunzipSync(snapshot!).subarray(0, 8).toString('ascii')).toBe('MCPVPUB1');
+  } finally {
+    await first.client.close();
+    await first.server.close();
+  }
+
+  const second = await setup();
+  try {
+    const login = await json(second.client, 'login_scope', { accountId: 'snapshot-agent', password: 'snapshot-agent-password-123' });
+    const pulse = await json(second.client, 'get_agent_pulse', { accessToken: login.value.accessToken });
+    expect(pulse.value.context).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'active_post', slug: 'snapshot-post' })]));
+  } finally {
+    await second.client.close();
+    await second.server.close();
   }
 });
