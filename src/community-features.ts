@@ -130,15 +130,40 @@ export class CommunityFeaturesService {
     const result = await this.fileSystem.queryNotes({ pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post', status: 'published' }, sortBy: 'updated_at', sortOrder: 'desc', limit: MAX_SCAN });
     const visibleNotes = result.notes.filter(note => !isModerationHidden(note.frontmatter)).filter(note => !params.category || String(note.frontmatter.category || 'discussion').toLowerCase() === String(params.category).toLowerCase());
     const reputations = await this.reputation.getMany(visibleNotes.map(note => String(note.frontmatter.author || '')));
-    const posts = await Promise.all(visibleNotes.map(async note => {
-      const reactions = await this.fileSystem.queryNotes({ pathPrefix: this.reactionRoot('post', String(note.frontmatter.post_id)), filters: { mcpvault_type: 'reaction', active: true }, limit: MAX_SCAN });
+    const visiblePostIds = new Set(visibleNotes.map(note => String(note.frontmatter.post_id || '').toLowerCase()));
+    const reactionCounts = new Map<string, { likeCount: number; dislikeCount: number }>();
+    let reactionOffset = 0;
+    let reactionScanIncomplete = false;
+    while (true) {
+      const reactions = await this.fileSystem.queryNotes({
+        pathPrefix: REACTIONS,
+        filters: { mcpvault_type: 'reaction', active: true, target_type: 'post' },
+        limit: MAX_SCAN,
+        offset: reactionOffset,
+      });
+      for (const reaction of reactions.notes) {
+        const postId = String(reaction.frontmatter.target_id || '').toLowerCase();
+        if (!visiblePostIds.has(postId)) continue;
+        const counts = reactionCounts.get(postId) || { likeCount: 0, dislikeCount: 0 };
+        if (reaction.frontmatter.reaction === 'like') counts.likeCount += 1;
+        else if (reaction.frontmatter.reaction === 'dislike') counts.dislikeCount += 1;
+        reactionCounts.set(postId, counts);
+      }
+      reactionOffset += reactions.notes.length;
+      if (!reactions.truncated || reactions.notes.length === 0 || reactionOffset >= reactions.total) {
+        reactionScanIncomplete = reactions.truncated && reactionOffset < reactions.total;
+        break;
+      }
+    }
+    const posts = visibleNotes.map(note => {
+      const counts = reactionCounts.get(String(note.frontmatter.post_id || '').toLowerCase()) || { likeCount: 0, dislikeCount: 0 };
       const authorReputation = reputations.get(String(note.frontmatter.author || '').toLowerCase());
-      return { path: note.path, slug: note.frontmatter.post_id, title: note.frontmatter.title, author: note.frontmatter.author, authorLevel: authorReputation?.level ?? 0, authorLevelLabel: authorReputation?.label ?? '뉴비', category: note.frontmatter.category || 'discussion', tags: note.frontmatter.tags || [], likeCount: reactions.notes.filter(reaction => reaction.frontmatter.reaction === 'like').length, dislikeCount: reactions.notes.filter(reaction => reaction.frontmatter.reaction === 'dislike').length, moderationStatus: moderationStatus(note.frontmatter), createdAt: note.frontmatter.created_at, updatedAt: note.frontmatter.updated_at };
-    }));
+      return { path: note.path, slug: note.frontmatter.post_id, title: note.frontmatter.title, author: note.frontmatter.author, authorLevel: authorReputation?.level ?? 0, authorLevelLabel: authorReputation?.label ?? '뉴비', category: note.frontmatter.category || 'discussion', tags: note.frontmatter.tags || [], likeCount: counts.likeCount, dislikeCount: counts.dislikeCount, moderationStatus: moderationStatus(note.frontmatter), createdAt: note.frontmatter.created_at, updatedAt: note.frontmatter.updated_at };
+    });
     posts.sort((a, b) => b.likeCount - a.likeCount || String(b.updatedAt).localeCompare(String(a.updatedAt)));
     const limit = positive(params.limit, 50, 500);
     const bounded = boundItems(posts.slice(0, limit), positive(params.maxChars, 6000, 20000));
-    return { posts: bounded.items, total: posts.length, truncated: result.truncated || posts.length > limit || bounded.truncated };
+    return { posts: bounded.items, total: posts.length, truncated: result.truncated || reactionScanIncomplete || posts.length > limit || bounded.truncated };
   }
 
   async acceptComment(params: { principal?: ScopePrincipal; slug: string; commentId: string; accepted?: boolean; expectedRevision: string }) {
