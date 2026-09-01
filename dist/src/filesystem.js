@@ -204,12 +204,13 @@ export class FileSystemService {
     vaultPath;
     onNoteChanged;
     metadataIndex;
+    graphIndex;
     frontmatterHandler;
     pathFilter;
     mutationTails = new Map();
     notifyNoteChanged(path, kind) {
         const callback = this.onNoteChanged;
-        if (!callback || !path.toLowerCase().endsWith('.md'))
+        if (!callback || !/\.(?:md|markdown|txt)$/i.test(path))
             return;
         try {
             void Promise.resolve(callback(path, kind)).catch(() => {
@@ -239,10 +240,11 @@ export class FileSystemService {
                 this.mutationTails.delete(path);
         }
     }
-    constructor(vaultPath, pathFilter, frontmatterHandler, onNoteChanged, metadataIndex) {
+    constructor(vaultPath, pathFilter, frontmatterHandler, onNoteChanged, metadataIndex, graphIndex) {
         this.vaultPath = vaultPath;
         this.onNoteChanged = onNoteChanged;
         this.metadataIndex = metadataIndex;
+        this.graphIndex = graphIndex;
         const resolved = resolve(vaultPath);
         try {
             this.vaultPath = realpathSync(resolved);
@@ -1314,6 +1316,12 @@ export class FileSystemService {
         if (!this.pathFilter.isAllowed(target)) {
             throw new Error(`Access denied: ${target}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
         }
+        if (this.graphIndex) {
+            if (!canAccessPath(target))
+                throw new Error(`Access denied: ${target}`);
+            await this.readNote(target);
+            return this.graphIndex.getBacklinks(target, limit, canAccessPath);
+        }
         // Validate that the requested target is an existing readable note before
         // scanning the vault. This also applies the same symlink boundary checks
         // as read_note.
@@ -1376,6 +1384,8 @@ export class FileSystemService {
         };
     }
     async findUnresolvedLinks(limit = 100, canAccessPath = () => true) {
+        if (this.graphIndex)
+            return this.graphIndex.findUnresolvedLinks(limit, canAccessPath);
         const vaultFiles = (await this.collectVaultFiles()).filter(canAccessPath);
         const noteFiles = vaultFiles.filter((path) => this.isNotePath(path));
         const unresolved = [];
@@ -1403,6 +1413,8 @@ export class FileSystemService {
         };
     }
     async findOrphanNotes(limit = 100, canAccessPath = () => true) {
+        if (this.graphIndex)
+            return this.graphIndex.findOrphanNotes(limit, canAccessPath);
         const vaultFiles = (await this.collectVaultFiles()).filter(canAccessPath);
         const noteFiles = vaultFiles.filter((path) => this.isNotePath(path));
         const incomingCounts = new Map(noteFiles.map((path) => [path.toLowerCase(), 0]));
@@ -1653,6 +1665,8 @@ export class FileSystemService {
         };
     }
     async listAllTags(canAccessPath = () => true) {
+        if (this.graphIndex)
+            return this.graphIndex.listAllTags(canAccessPath);
         const tagCounts = new Map();
         const inlineTagRegex = /(?:^|\s)#([a-zA-Z][a-zA-Z0-9_/\-]*)/g;
         const scanDirectory = async (dirPath, relativePath = '') => {

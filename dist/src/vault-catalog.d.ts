@@ -13,6 +13,7 @@ export declare class VaultFileCatalog {
     private readonly vaultPath;
     private readonly listeners;
     private paths;
+    private allPaths;
     private refreshPromise;
     private watcher;
     private watcherStarted;
@@ -24,11 +25,13 @@ export declare class VaultFileCatalog {
     /** Mark a mutation already handled by the write path without broadcasting it twice. */
     invalidate(path?: string): void;
     listNotePaths(): Promise<string[]>;
+    listAllPaths(): Promise<string[]>;
+    private listInventory;
     close(): void;
     private startWatcher;
     private onFilesystemEvent;
     private emit;
     private refresh;
-    private findNotePaths;
+    private findPaths;
 }
 //# sourceMappingURL=vault-catalog.d.ts.map

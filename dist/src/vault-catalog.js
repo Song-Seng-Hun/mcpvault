@@ -21,6 +21,7 @@ export class VaultFileCatalog {
     vaultPath;
     listeners = new Set();
     paths;
+    allPaths;
     refreshPromise;
     watcher;
     watcherStarted = false;
@@ -45,14 +46,23 @@ export class VaultFileCatalog {
             this.needsRefresh = true;
     }
     async listNotePaths() {
+        const inventory = await this.listInventory();
+        return [...inventory.notes];
+    }
+    async listAllPaths() {
+        const inventory = await this.listInventory();
+        return [...inventory.all];
+    }
+    async listInventory() {
         this.startWatcher();
         const interval = this.watcher ? WATCH_RECONCILE_INTERVAL_MS : NO_WATCHER_RECONCILE_INTERVAL_MS;
-        if (!this.needsRefresh && this.paths && Date.now() - this.lastRefreshAt < interval)
-            return [...this.paths];
+        if (!this.needsRefresh && this.paths && this.allPaths && Date.now() - this.lastRefreshAt < interval) {
+            return { notes: [...this.paths], all: [...this.allPaths] };
+        }
         if (!this.refreshPromise)
             this.refreshPromise = this.refresh();
         try {
-            return [...await this.refreshPromise];
+            return await this.refreshPromise;
         }
         finally {
             this.refreshPromise = undefined;
@@ -63,6 +73,7 @@ export class VaultFileCatalog {
         this.watcher = undefined;
         this.listeners.clear();
         this.paths = undefined;
+        this.allPaths = undefined;
         this.refreshPromise = undefined;
     }
     startWatcher() {
@@ -122,34 +133,43 @@ export class VaultFileCatalog {
     }
     async refresh() {
         const generation = this.changeGeneration;
-        const paths = await this.findNotePaths(this.vaultPath);
+        const inventory = await this.findPaths(this.vaultPath);
         if (generation === this.changeGeneration) {
-            this.paths = paths;
+            this.paths = inventory.notes;
+            this.allPaths = inventory.all;
             this.needsRefresh = false;
             this.lastRefreshAt = Date.now();
         }
-        return paths;
+        return inventory;
     }
-    async findNotePaths(directory) {
-        const output = [];
+    async findPaths(directory) {
+        const notes = [];
+        const all = [];
         let entries;
         try {
             entries = await readdir(directory, { withFileTypes: true });
         }
         catch {
-            return output;
+            return { notes, all };
         }
         for (const entry of entries) {
             const fullPath = join(directory, entry.name);
             const relativePath = normalizePath(relative(this.vaultPath, fullPath));
             if (entry.isDirectory()) {
-                if (this.pathFilter.isAllowedForListing(relativePath))
-                    output.push(...await this.findNotePaths(fullPath));
+                if (this.pathFilter.isAllowedForListing(relativePath)) {
+                    const nested = await this.findPaths(fullPath);
+                    notes.push(...nested.notes);
+                    all.push(...nested.all);
+                }
             }
-            else if (entry.isFile() && isNote(relativePath) && this.pathFilter.isAllowed(relativePath)) {
-                output.push(relativePath);
+            else if (entry.isFile() && this.pathFilter.isAllowedForListing(relativePath)) {
+                all.push(relativePath);
+                if (isNote(relativePath) && this.pathFilter.isAllowed(relativePath))
+                    notes.push(relativePath);
             }
         }
-        return output.sort((a, b) => a.localeCompare(b));
+        notes.sort((a, b) => a.localeCompare(b));
+        all.sort((a, b) => a.localeCompare(b));
+        return { notes, all };
     }
 }

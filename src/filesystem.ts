@@ -11,6 +11,7 @@ import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, D
 import { extractWikiLinkOccurrences, findBacklinkMatches, findUnresolvedLinkMatches, resolveWikiLinkTargets } from './backlinks.js';
 import { buildDailyNotePath, resolveDailyDate, type DailyDateInput } from './daily.js';
 import type { VaultMetadataIndex } from './vault-index.js';
+import type { VaultGraphIndex } from './vault-graph.js';
 
 function getFrontmatterValue(frontmatter: Record<string, any>, key: string): { found: boolean; value?: unknown } {
   let current: unknown = frontmatter;
@@ -208,7 +209,7 @@ export class FileSystemService {
 
   private notifyNoteChanged(path: string, kind: 'upsert' | 'delete'): void {
     const callback = this.onNoteChanged;
-    if (!callback || !path.toLowerCase().endsWith('.md')) return;
+    if (!callback || !/\.(?:md|markdown|txt)$/i.test(path)) return;
     try {
       void Promise.resolve(callback(path, kind)).catch(() => {
         // Index maintenance is deliberately best-effort and must never change
@@ -243,6 +244,7 @@ export class FileSystemService {
     frontmatterHandler?: FrontmatterHandler,
     private onNoteChanged?: (path: string, kind: 'upsert' | 'delete') => void | Promise<void>,
     private readonly metadataIndex?: VaultMetadataIndex,
+    private readonly graphIndex?: VaultGraphIndex,
   ) {
     const resolved = resolve(vaultPath);
     try {
@@ -1415,6 +1417,12 @@ export class FileSystemService {
       throw new Error(`Access denied: ${target}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
     }
 
+    if (this.graphIndex) {
+      if (!canAccessPath(target)) throw new Error(`Access denied: ${target}`);
+      await this.readNote(target);
+      return this.graphIndex.getBacklinks(target, limit, canAccessPath);
+    }
+
     // Validate that the requested target is an existing readable note before
     // scanning the vault. This also applies the same symlink boundary checks
     // as read_note.
@@ -1488,6 +1496,7 @@ export class FileSystemService {
   }
 
   async findUnresolvedLinks(limit: number = 100, canAccessPath: (path: string) => boolean = () => true): Promise<UnresolvedLinksResult> {
+    if (this.graphIndex) return this.graphIndex.findUnresolvedLinks(limit, canAccessPath);
     const vaultFiles = (await this.collectVaultFiles()).filter(canAccessPath);
     const noteFiles = vaultFiles.filter((path) => this.isNotePath(path));
     const unresolved: UnresolvedLinksResult['unresolved'] = [];
@@ -1518,6 +1527,7 @@ export class FileSystemService {
   }
 
   async findOrphanNotes(limit: number = 100, canAccessPath: (path: string) => boolean = () => true): Promise<OrphanNotesResult> {
+    if (this.graphIndex) return this.graphIndex.findOrphanNotes(limit, canAccessPath);
     const vaultFiles = (await this.collectVaultFiles()).filter(canAccessPath);
     const noteFiles = vaultFiles.filter((path) => this.isNotePath(path));
     const incomingCounts = new Map(noteFiles.map((path) => [path.toLowerCase(), 0]));
@@ -1796,6 +1806,7 @@ export class FileSystemService {
   }
 
   async listAllTags(canAccessPath: (path: string) => boolean = () => true): Promise<Array<{ tag: string; count: number }>> {
+    if (this.graphIndex) return this.graphIndex.listAllTags(canAccessPath);
     const tagCounts = new Map<string, number>();
 
     const inlineTagRegex = /(?:^|\s)#([a-zA-Z][a-zA-Z0-9_/\-]*)/g;
