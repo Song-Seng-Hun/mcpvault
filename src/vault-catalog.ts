@@ -5,6 +5,8 @@ import type { PathFilter } from './pathfilter.js';
 
 const WATCH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
+const WATCH_EVENT_BATCH_DELAY_MS = 50;
+const WATCH_EVENT_STAT_BATCH_SIZE = 32;
 
 export type VaultCatalogChangeKind = 'upsert' | 'delete';
 export type VaultCatalogListener = (path?: string, kind?: VaultCatalogChangeKind) => void;
@@ -35,6 +37,11 @@ export class VaultFileCatalog {
   private needsRefresh = true;
   private lastRefreshAt = 0;
   private changeGeneration = 0;
+  private pendingChanges = new Map<string, true>();
+  private pendingFullRefresh = false;
+  private pendingTimer: ReturnType<typeof setTimeout> | undefined;
+  private flushPromise: Promise<void> = Promise.resolve();
+  private closed = false;
 
   constructor(vaultPath: string, private readonly pathFilter: PathFilter) {
     this.vaultPath = resolve(vaultPath);
@@ -79,6 +86,11 @@ export class VaultFileCatalog {
   }
 
   close(): void {
+    this.closed = true;
+    if (this.pendingTimer) clearTimeout(this.pendingTimer);
+    this.pendingTimer = undefined;
+    this.pendingChanges.clear();
+    this.pendingFullRefresh = false;
     this.watcher?.close();
     this.watcher = undefined;
     this.listeners.clear();
@@ -111,7 +123,7 @@ export class VaultFileCatalog {
   private onFilesystemEvent(filename: string | undefined): void {
     if (!filename) {
       this.invalidate();
-      this.emit();
+      this.queueFullRefreshEvent();
       return;
     }
     const path = normalizePath(filename);
@@ -120,15 +132,52 @@ export class VaultFileCatalog {
     if (!path || !this.pathFilter.isAllowedForListing(path)) return;
     if (!isNote(path) || !this.pathFilter.isAllowed(path)) {
       this.invalidate();
-      this.emit();
+      this.queueFullRefreshEvent();
       return;
     }
     this.invalidate(path);
-    void stat(join(this.vaultPath, path)).then(info => {
-      this.emit(path, info.isFile() ? 'upsert' : 'delete');
-    }).catch(() => {
-      this.emit(path, 'delete');
-    });
+    this.pendingChanges.set(path, true);
+    this.scheduleFlush();
+  }
+
+  private queueFullRefreshEvent(): void {
+    this.pendingFullRefresh = true;
+    this.pendingChanges.clear();
+    this.scheduleFlush();
+  }
+
+  private scheduleFlush(): void {
+    if (this.pendingTimer || this.closed) return;
+    this.pendingTimer = setTimeout(() => {
+      this.pendingTimer = undefined;
+      this.flushPromise = this.flushPromise.then(() => this.flushPendingChanges()).catch(() => undefined);
+    }, WATCH_EVENT_BATCH_DELAY_MS);
+    this.pendingTimer.unref?.();
+  }
+
+  private async flushPendingChanges(): Promise<void> {
+    if (this.closed) return;
+    const fullRefresh = this.pendingFullRefresh;
+    const paths = fullRefresh ? [] : [...this.pendingChanges.keys()];
+    this.pendingFullRefresh = false;
+    this.pendingChanges.clear();
+    if (fullRefresh) {
+      this.emit();
+      return;
+    }
+    for (let start = 0; start < paths.length; start += WATCH_EVENT_STAT_BATCH_SIZE) {
+      const batch = paths.slice(start, start + WATCH_EVENT_STAT_BATCH_SIZE);
+      const states = await Promise.all(batch.map(async path => {
+        try {
+          const info = await stat(join(this.vaultPath, path));
+          return { path, kind: info.isFile() ? 'upsert' as const : 'delete' as const };
+        } catch {
+          return { path, kind: 'delete' as const };
+        }
+      }));
+      if (this.closed) return;
+      for (const state of states) this.emit(state.path, state.kind);
+    }
   }
 
   private emit(path?: string, kind?: VaultCatalogChangeKind): void {

@@ -20,6 +20,11 @@ export declare class VaultFileCatalog {
     private needsRefresh;
     private lastRefreshAt;
     private changeGeneration;
+    private pendingChanges;
+    private pendingFullRefresh;
+    private pendingTimer;
+    private flushPromise;
+    private closed;
     constructor(vaultPath: string, pathFilter: PathFilter);
     subscribe(listener: VaultCatalogListener): () => void;
     /** Mark a mutation already handled by the write path without broadcasting it twice. */
@@ -30,6 +35,9 @@ export declare class VaultFileCatalog {
     close(): void;
     private startWatcher;
     private onFilesystemEvent;
+    private queueFullRefreshEvent;
+    private scheduleFlush;
+    private flushPendingChanges;
     private emit;
     private refresh;
     private findPaths;

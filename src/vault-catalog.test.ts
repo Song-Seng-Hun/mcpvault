@@ -37,4 +37,19 @@ describe('VaultFileCatalog', () => {
     catalog.invalidate('Wiki/three.txt');
     expect(await catalog.listNotePaths()).toEqual(['Wiki/one.md', 'Wiki/three.txt', 'Wiki/two.markdown']);
   });
+
+  test('coalesces duplicate watcher events for the same path', async () => {
+    vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-catalog-'));
+    await writeNote('Wiki/one.md', 'one');
+    catalog = new VaultFileCatalog(vaultPath, new PathFilter());
+    const changes: Array<{ path?: string; kind?: string }> = [];
+    const unsubscribe = catalog.subscribe((path, kind) => changes.push({ path, kind }));
+
+    (catalog as unknown as { onFilesystemEvent: (filename: string) => void }).onFilesystemEvent('Wiki/one.md');
+    (catalog as unknown as { onFilesystemEvent: (filename: string) => void }).onFilesystemEvent('Wiki/one.md');
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    expect(changes).toEqual([{ path: 'Wiki/one.md', kind: 'upsert' }]);
+    unsubscribe();
+  });
 });
