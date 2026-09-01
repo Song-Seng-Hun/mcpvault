@@ -21,9 +21,15 @@ export declare class VaultMetadataIndex {
     private readonly pathIndex;
     private readonly queryCache;
     private readonly sortedQueryCache;
+    private queryCacheRows;
+    private sortedQueryCacheRows;
     private readonly dirty;
+    private readonly snapshotReady;
     private ready;
     private refreshPromise;
+    private snapshotWrite;
+    private snapshotTimer;
+    private snapshotPending;
     private watcher;
     private watcherStarted;
     private needsFullRefresh;
@@ -31,6 +37,7 @@ export declare class VaultMetadataIndex {
     private firstList;
     constructor(vaultPath: string, pathFilter: PathFilter, frontmatter: FrontmatterHandler);
     invalidate(path: string, kind: 'upsert' | 'delete'): void;
+    private clearQueryCaches;
     list(filters?: Record<string, unknown>, pathPrefix?: string): Promise<VaultIndexEntry[]>;
     listSorted(filters?: Record<string, unknown>, pathPrefix?: string, sortBy?: string, sortOrder?: 'asc' | 'desc'): Promise<VaultIndexEntry[]>;
     /**
@@ -44,6 +51,10 @@ export declare class VaultMetadataIndex {
     private refreshAll;
     private refreshDirty;
     private readEntry;
+    private initialize;
+    private loadSnapshot;
+    private scheduleSnapshotSave;
+    private flushSnapshot;
     private rebuildFilterIndex;
     private rebuildPathIndex;
     private addPathEntry;

@@ -681,6 +681,31 @@ describe("structured frontmatter queries", () => {
 
     await expect(fileSystem.queryNotes({ after: {} as any })).rejects.toThrow(/cursor path/);
   });
+
+  test("persists and restores the metadata index as a derived binary snapshot", async () => {
+    await writeFile(join(testVaultPath, "Snapshot.md"), "---\nstatus: active\n---\nSnapshot body");
+    const metadataIndex = new VaultMetadataIndex(testVaultPath, new PathFilter(), new FrontmatterHandler());
+    await metadataIndex.list();
+    let snapshot: Buffer | undefined;
+    for (let attempt = 0; attempt < 25 && !snapshot; attempt += 1) {
+      try {
+        snapshot = await readFile(join(testVaultPath, ".mcpvault/metadata-index.snapshot.bin"));
+      } catch {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+    expect(snapshot?.subarray(0, 8).toString("ascii")).toBe("MCPVMETA");
+    metadataIndex.close();
+
+    const restoredIndex = new VaultMetadataIndex(testVaultPath, new PathFilter(), new FrontmatterHandler());
+    try {
+      await expect(restoredIndex.list({ status: "active" })).resolves.toEqual([
+        expect.objectContaining({ path: "Snapshot.md", frontmatter: { status: "active" } }),
+      ]);
+    } finally {
+      restoredIndex.close();
+    }
+  });
 });
 
 // ============================================================================

@@ -1,12 +1,20 @@
 import { watch } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join, relative, resolve } from 'node:path';
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 const FULL_REFRESH_INTERVAL_MS = 60_000;
 const READ_BATCH_SIZE = 32;
 const QUERY_CACHE_TTL_MS = 2_000;
 const QUERY_CACHE_MAX_ENTRIES = 128;
+const QUERY_CACHE_MAX_ROWS = 100_000;
 const SORTED_QUERY_CACHE_MAX_ENTRIES = 64;
+const SORTED_QUERY_CACHE_MAX_ROWS = 100_000;
+const METADATA_SNAPSHOT_FILE = '.mcpvault/metadata-index.snapshot.bin';
+const METADATA_SNAPSHOT_VERSION = 1;
+const METADATA_SNAPSHOT_MAX_ENTRIES = 1_000_000;
+const METADATA_SNAPSHOT_MAX_BYTES = 128 * 1024 * 1024;
+const METADATA_SNAPSHOT_SAVE_DEBOUNCE_MS = 1_000;
+const METADATA_SNAPSHOT_MAGIC = Buffer.from('MCPVMETA', 'ascii');
 function normalizePath(value) {
     return value.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
 }
@@ -78,6 +86,76 @@ function compareEntries(a, b, sortBy, sortOrder) {
         return sortOrder === 'asc' ? comparison : -comparison;
     return a.path.localeCompare(b.path);
 }
+function encodeSnapshotString(value) {
+    const bytes = Buffer.from(value, 'utf8');
+    const length = Buffer.allocUnsafe(4);
+    length.writeUInt32LE(bytes.length, 0);
+    return Buffer.concat([length, bytes]);
+}
+function encodeMetadataSnapshot(entries) {
+    const chunks = [METADATA_SNAPSHOT_MAGIC];
+    const header = Buffer.allocUnsafe(8);
+    header.writeUInt32LE(METADATA_SNAPSHOT_VERSION, 0);
+    header.writeUInt32LE(entries.length, 4);
+    chunks.push(header);
+    for (const entry of entries) {
+        chunks.push(encodeSnapshotString(entry.path), encodeSnapshotString(entry.revision));
+        const frontmatter = JSON.stringify(entry.frontmatter);
+        if (frontmatter === undefined)
+            throw new Error('frontmatter is not serializable');
+        chunks.push(encodeSnapshotString(frontmatter));
+        const numbers = Buffer.allocUnsafe(16);
+        numbers.writeDoubleLE(entry.size, 0);
+        numbers.writeDoubleLE(entry.mtimeMs, 8);
+        chunks.push(numbers);
+    }
+    return Buffer.concat(chunks);
+}
+function decodeMetadataSnapshot(buffer) {
+    if (buffer.length < METADATA_SNAPSHOT_MAGIC.length + 8 || !buffer.subarray(0, METADATA_SNAPSHOT_MAGIC.length).equals(METADATA_SNAPSHOT_MAGIC))
+        return undefined;
+    let offset = METADATA_SNAPSHOT_MAGIC.length;
+    const version = buffer.readUInt32LE(offset);
+    const count = buffer.readUInt32LE(offset + 4);
+    offset += 8;
+    if (version !== METADATA_SNAPSHOT_VERSION || count > METADATA_SNAPSHOT_MAX_ENTRIES)
+        return undefined;
+    const readString = () => {
+        if (offset + 4 > buffer.length)
+            return undefined;
+        const length = buffer.readUInt32LE(offset);
+        offset += 4;
+        if (length > buffer.length - offset)
+            return undefined;
+        const value = buffer.toString('utf8', offset, offset + length);
+        offset += length;
+        return value;
+    };
+    const entries = [];
+    for (let index = 0; index < count; index += 1) {
+        const path = readString();
+        const revisionValue = readString();
+        const frontmatterText = readString();
+        if (path === undefined || revisionValue === undefined || frontmatterText === undefined || offset + 16 > buffer.length)
+            return undefined;
+        let frontmatter;
+        try {
+            frontmatter = JSON.parse(frontmatterText);
+        }
+        catch {
+            return undefined;
+        }
+        if (!path || !isNote(path) || !frontmatter || typeof frontmatter !== 'object' || Array.isArray(frontmatter))
+            return undefined;
+        const size = buffer.readDoubleLE(offset);
+        const mtimeMs = buffer.readDoubleLE(offset + 8);
+        offset += 16;
+        if (![size, mtimeMs].every(value => Number.isFinite(value)))
+            return undefined;
+        entries.push({ path, frontmatter: frontmatter, revision: revisionValue, size, mtimeMs });
+    }
+    return offset === buffer.length ? entries : undefined;
+}
 /**
  * A disposable, metadata-only read model for repeated structured queries.
  * Markdown remains authoritative; this index only avoids reopening and
@@ -92,9 +170,15 @@ export class VaultMetadataIndex {
     pathIndex = new Map();
     queryCache = new Map();
     sortedQueryCache = new Map();
+    queryCacheRows = 0;
+    sortedQueryCacheRows = 0;
     dirty = new Set();
+    snapshotReady;
     ready;
     refreshPromise;
+    snapshotWrite;
+    snapshotTimer;
+    snapshotPending = false;
     watcher;
     watcherStarted = false;
     needsFullRefresh = true;
@@ -104,14 +188,14 @@ export class VaultMetadataIndex {
         this.pathFilter = pathFilter;
         this.frontmatter = frontmatter;
         this.vaultPath = resolve(vaultPath);
-        this.ready = this.refreshAll();
+        this.snapshotReady = this.loadSnapshot();
+        this.ready = this.initialize();
     }
     invalidate(path, kind) {
         const normalized = normalizePath(path);
         if (!isNote(normalized) || !this.pathFilter.isAllowed(normalized))
             return;
-        this.queryCache.clear();
-        this.sortedQueryCache.clear();
+        this.clearQueryCaches();
         if (kind === 'delete') {
             const existing = this.entries.get(normalized);
             if (existing)
@@ -121,6 +205,12 @@ export class VaultMetadataIndex {
             this.entries.delete(normalized);
         }
         this.dirty.add(normalized);
+    }
+    clearQueryCaches() {
+        this.queryCache.clear();
+        this.sortedQueryCache.clear();
+        this.queryCacheRows = 0;
+        this.sortedQueryCacheRows = 0;
     }
     async list(filters, pathPrefix = '') {
         await this.ready;
@@ -151,8 +241,10 @@ export class VaultMetadataIndex {
             this.queryCache.set(cacheKey, cached);
             return cached.paths.map(path => this.entries.get(path)).filter((entry) => entry !== undefined);
         }
-        if (cached)
+        if (cached) {
             this.queryCache.delete(cacheKey);
+            this.queryCacheRows -= cached.paths.length;
+        }
         const filterCandidates = hasFilters ? this.filterCandidates(filters) : undefined;
         const prefixCandidates = normalizedPrefix ? this.pathIndex.get(normalizedPrefix) : undefined;
         let candidates;
@@ -168,9 +260,18 @@ export class VaultMetadataIndex {
         if (!candidates)
             return [...this.entries.values()];
         const paths = [...candidates];
-        this.queryCache.set(cacheKey, { expiresAt: Date.now() + QUERY_CACHE_TTL_MS, paths });
-        while (this.queryCache.size > QUERY_CACHE_MAX_ENTRIES)
-            this.queryCache.delete(this.queryCache.keys().next().value);
+        if (paths.length <= QUERY_CACHE_MAX_ROWS) {
+            this.queryCache.set(cacheKey, { expiresAt: Date.now() + QUERY_CACHE_TTL_MS, paths });
+            this.queryCacheRows += paths.length;
+            while (this.queryCache.size > QUERY_CACHE_MAX_ENTRIES || this.queryCacheRows > QUERY_CACHE_MAX_ROWS) {
+                const oldest = this.queryCache.keys().next();
+                if (oldest.done)
+                    break;
+                const removed = this.queryCache.get(oldest.value);
+                this.queryCache.delete(oldest.value);
+                this.queryCacheRows -= removed?.paths.length || 0;
+            }
+        }
         return paths.map(path => this.entries.get(path)).filter((entry) => entry !== undefined);
     }
     async listSorted(filters = {}, pathPrefix = '', sortBy = 'path', sortOrder = 'asc') {
@@ -182,9 +283,18 @@ export class VaultMetadataIndex {
             return cached;
         }
         const entries = [...await this.list(filters, pathPrefix)].sort((a, b) => compareEntries(a, b, sortBy, sortOrder));
-        this.sortedQueryCache.set(cacheKey, entries);
-        while (this.sortedQueryCache.size > SORTED_QUERY_CACHE_MAX_ENTRIES)
-            this.sortedQueryCache.delete(this.sortedQueryCache.keys().next().value);
+        if (entries.length <= SORTED_QUERY_CACHE_MAX_ROWS) {
+            this.sortedQueryCache.set(cacheKey, entries);
+            this.sortedQueryCacheRows += entries.length;
+            while (this.sortedQueryCache.size > SORTED_QUERY_CACHE_MAX_ENTRIES || this.sortedQueryCacheRows > SORTED_QUERY_CACHE_MAX_ROWS) {
+                const oldest = this.sortedQueryCache.keys().next();
+                if (oldest.done)
+                    break;
+                const removed = this.sortedQueryCache.get(oldest.value);
+                this.sortedQueryCache.delete(oldest.value);
+                this.sortedQueryCacheRows -= removed?.length || 0;
+            }
+        }
         return entries;
     }
     /**
@@ -216,6 +326,9 @@ export class VaultMetadataIndex {
     close() {
         this.watcher?.close();
         this.watcher = undefined;
+        if (this.snapshotTimer)
+            clearTimeout(this.snapshotTimer);
+        this.snapshotTimer = undefined;
     }
     startWatcher() {
         if (this.watcherStarted)
@@ -224,14 +337,12 @@ export class VaultMetadataIndex {
         try {
             this.watcher = watch(this.vaultPath, { recursive: true }, (_event, filename) => {
                 if (!filename) {
-                    this.queryCache.clear();
-                    this.sortedQueryCache.clear();
+                    this.clearQueryCaches();
                     this.needsFullRefresh = true;
                     return;
                 }
                 const normalized = normalizePath(String(filename));
-                this.queryCache.clear();
-                this.sortedQueryCache.clear();
+                this.clearQueryCaches();
                 if (isNote(normalized) && this.pathFilter.isAllowed(normalized))
                     this.dirty.add(normalized);
                 else
@@ -269,9 +380,9 @@ export class VaultMetadataIndex {
                 this.entries.set(path, entry);
             this.rebuildFilterIndex();
             this.rebuildPathIndex();
-            this.queryCache.clear();
-            this.sortedQueryCache.clear();
+            this.clearQueryCaches();
             this.lastFullRefreshAt = Date.now();
+            this.scheduleSnapshotSave();
         })();
         try {
             await this.refreshPromise;
@@ -286,8 +397,7 @@ export class VaultMetadataIndex {
         this.refreshPromise = (async () => {
             const paths = [...this.dirty];
             this.dirty.clear();
-            this.queryCache.clear();
-            this.sortedQueryCache.clear();
+            this.clearQueryCaches();
             const metadata = await Promise.all(paths.map(path => this.readEntry(path)));
             for (let index = 0; index < paths.length; index += 1) {
                 const path = paths[index];
@@ -306,6 +416,7 @@ export class VaultMetadataIndex {
                 if (entry)
                     this.addPathEntry(entry);
             }
+            this.scheduleSnapshotSave();
         })();
         try {
             await this.refreshPromise;
@@ -339,6 +450,69 @@ export class VaultMetadataIndex {
         }
         catch {
             return undefined;
+        }
+    }
+    async initialize() {
+        await this.snapshotReady;
+        await this.refreshAll();
+    }
+    async loadSnapshot() {
+        try {
+            const snapshotPath = join(this.vaultPath, METADATA_SNAPSHOT_FILE);
+            const info = await stat(snapshotPath);
+            if (!info.isFile() || info.size > METADATA_SNAPSHOT_MAX_BYTES)
+                return;
+            const parsed = decodeMetadataSnapshot(await readFile(snapshotPath));
+            if (!parsed)
+                return;
+            for (const entry of parsed) {
+                const normalized = normalizePath(entry.path);
+                if (normalized && this.pathFilter.isAllowed(normalized))
+                    this.entries.set(normalized, { ...entry, path: normalized });
+            }
+        }
+        catch {
+            // A missing, corrupt, or stale snapshot is harmless; refreshAll rebuilds
+            // the metadata read model from Markdown and replaces it atomically.
+        }
+    }
+    scheduleSnapshotSave() {
+        this.snapshotPending = true;
+        if (this.snapshotTimer)
+            return;
+        this.snapshotTimer = setTimeout(() => {
+            this.snapshotTimer = undefined;
+            void this.flushSnapshot();
+        }, METADATA_SNAPSHOT_SAVE_DEBOUNCE_MS);
+        this.snapshotTimer.unref?.();
+    }
+    async flushSnapshot() {
+        if (this.snapshotWrite || !this.snapshotPending)
+            return;
+        this.snapshotPending = false;
+        let encoded;
+        try {
+            encoded = encodeMetadataSnapshot([...this.entries.values()]);
+        }
+        catch {
+            return;
+        }
+        this.snapshotWrite = (async () => {
+            const snapshotPath = join(this.vaultPath, METADATA_SNAPSHOT_FILE);
+            await mkdir(join(this.vaultPath, '.mcpvault'), { recursive: true });
+            const temporaryPath = `${snapshotPath}.${process.pid}.tmp`;
+            await writeFile(temporaryPath, encoded);
+            await rename(temporaryPath, snapshotPath);
+        })().catch(() => {
+            // The snapshot is optional acceleration state; Markdown remains authoritative.
+        });
+        try {
+            await this.snapshotWrite;
+        }
+        finally {
+            this.snapshotWrite = undefined;
+            if (this.snapshotPending)
+                this.scheduleSnapshotSave();
         }
     }
     rebuildFilterIndex() {
