@@ -430,8 +430,8 @@ export class NotificationService {
     reputation;
     vaultPath;
     fileCatalog;
-    eventCache = new Map();
-    eventInFlight = new Map();
+    candidateCache = new Map();
+    candidateInFlight = new Map();
     publicSnapshotCache;
     publicSnapshotInFlight;
     publicSnapshotUpdate;
@@ -554,8 +554,8 @@ export class NotificationService {
         });
     }
     invalidate(path, kind = 'upsert') {
-        this.eventCache.clear();
-        this.eventInFlight.clear();
+        this.candidateCache.clear();
+        this.candidateInFlight.clear();
         const collection = path ? publicCollectionForPath(path) : undefined;
         if (!path || !collection) {
             if (!path)
@@ -650,32 +650,32 @@ export class NotificationService {
         }
         return hydrated;
     }
-    async cachedPublicEvents(principal) {
+    async cachedPublicCandidates(principal) {
         const key = JSON.stringify({ accountId: principal.accountId, modelId: principal.modelId, agentId: principal.agentId, role: principal.role });
-        const cached = this.eventCache.get(key);
+        const cached = this.candidateCache.get(key);
         if (cached && cached.expiresAt > Date.now())
-            return cached.events.map(event => ({ ...event }));
+            return cached.candidates.map(candidate => ({ ...candidate }));
         if (cached)
-            this.eventCache.delete(key);
-        const running = this.eventInFlight.get(key);
+            this.candidateCache.delete(key);
+        const running = this.candidateInFlight.get(key);
         if (running)
-            return (await running).map(event => ({ ...event }));
-        const computation = this.publicEvents(principal);
-        this.eventInFlight.set(key, computation);
+            return (await running).map(candidate => ({ ...candidate }));
+        const computation = this.publicCandidates(principal);
+        this.candidateInFlight.set(key, computation);
         try {
-            const events = await computation;
-            this.eventCache.set(key, { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, events: events.map(event => ({ ...event })) });
-            while (this.eventCache.size > EVENT_CACHE_MAX_ENTRIES) {
-                const oldest = this.eventCache.keys().next();
+            const candidates = await computation;
+            this.candidateCache.set(key, { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, candidates: candidates.map(candidate => ({ ...candidate })) });
+            while (this.candidateCache.size > EVENT_CACHE_MAX_ENTRIES) {
+                const oldest = this.candidateCache.keys().next();
                 if (oldest.done)
                     break;
-                this.eventCache.delete(oldest.value);
+                this.candidateCache.delete(oldest.value);
             }
-            return events;
+            return candidates;
         }
         finally {
-            if (this.eventInFlight.get(key) === computation)
-                this.eventInFlight.delete(key);
+            if (this.candidateInFlight.get(key) === computation)
+                this.candidateInFlight.delete(key);
         }
     }
     async lastReadAt(principal) {
@@ -685,7 +685,7 @@ export class NotificationService {
         const note = await this.fileSystem.readNote(path);
         return { value: text(note.frontmatter.last_read_at), revision: note.revision };
     }
-    async publicEvents(principal) {
+    async publicCandidates(principal) {
         const target = identity(principal);
         const ownerRoot = principal.agentId
             ? `_scopes/agents/${normalizeScopeId(principal.agentId, 'agentId')}/_subscriptions`
@@ -742,22 +742,55 @@ export class NotificationService {
             messagesByMention.get(targetKey) || [],
             ...[...ownedMessageIds].map(id => messagesByReplyTo.get(id.toLowerCase()) || []),
         ]).filter(note => text(note.frontmatter.author).toLowerCase() !== targetKey);
-        const parentCommentIds = new Set(relevantComments.map(note => text(note.frontmatter.reply_to)).filter(Boolean));
-        const parentMessageIds = new Set(relevantMessages.map(note => text(note.frontmatter.reply_to)).filter(Boolean));
-        const hydratedPosts = await this.hydrateNotes(relevantPosts);
-        const hydratedComments = await this.hydrateNotes([
-            ...relevantComments,
-            ...[...parentCommentIds].flatMap(id => commentsByCommentId.get(id.toLowerCase()) || []),
-        ]);
-        const hydratedMessages = await this.hydrateNotes([
-            ...relevantMessages,
-            ...[...parentMessageIds].flatMap(id => messagesByMessageId.get(id.toLowerCase()) || []),
-        ]);
-        const commentBodies = new Map(hydratedComments.map(note => [text(note.frontmatter.comment_id), text(note.content).trim()]));
-        const messageBodies = new Map(hydratedMessages.map(note => [text(note.frontmatter.message_id), text(note.content).trim()]));
-        const events = [];
-        const reputations = await this.reputation.getMany([...hydratedComments, ...hydratedMessages, ...hydratedPosts].map(note => text(note.frontmatter.author)));
-        const hydratedByPath = new Map([...hydratedPosts, ...hydratedComments, ...hydratedMessages].map(note => [note.path, note]));
+        const candidates = [];
+        const candidateIds = new Set();
+        const parentPathFor = (note, replyTo) => {
+            if (!replyTo)
+                return undefined;
+            const type = text(note.frontmatter.mcpvault_type);
+            return type === 'blog_comment'
+                ? commentsByCommentId.get(replyTo.toLowerCase())?.[0]?.path
+                : type === 'chat_message'
+                    ? messagesByMessageId.get(replyTo.toLowerCase())?.[0]?.path
+                    : undefined;
+        };
+        const addCandidate = (note, kind, sourceId) => {
+            const author = text(note.frontmatter.author);
+            if (!author || author === target)
+                return;
+            const mentions = Array.isArray(note.frontmatter.mentions) ? note.frontmatter.mentions.map(String).map(value => value.toLowerCase()) : [];
+            const isMention = mentions.includes(target.toLowerCase());
+            const replyTo = text(note.frontmatter.reply_to);
+            const isReply = (note.frontmatter.mcpvault_type === 'blog_comment' && ownedCommentIds.has(replyTo))
+                || (note.frontmatter.mcpvault_type === 'chat_message' && ownedMessageIds.has(replyTo));
+            const postId = text(note.frontmatter.post_id);
+            const roomId = text(note.frontmatter.room_id);
+            const activity = note.frontmatter.mcpvault_type === 'blog_comment' && ownedPostIds.has(postId);
+            if (!isMention && !isReply && !activity)
+                return;
+            const selectedKind = isMention ? 'mention' : isReply ? 'reply' : kind;
+            const type = text(note.frontmatter.mcpvault_type);
+            const contextPrefix = type === 'blog_comment'
+                ? `post: ${postTitles.get(postId) || postId}`
+                : `room: ${roomTitles.get(roomId) || roomId}`;
+            const notificationId = eventId(selectedKind, note.path, sourceId);
+            if (candidateIds.has(notificationId))
+                return;
+            candidateIds.add(notificationId);
+            const parentPath = parentPathFor(note, replyTo);
+            candidates.push({
+                notificationId,
+                kind: selectedKind,
+                sourcePath: note.path,
+                sourceType: type,
+                sourceId,
+                author,
+                createdAt: text(note.frontmatter.created_at),
+                note,
+                contextPrefix,
+                ...(parentPath ? { parentPath } : {}),
+            });
+        };
         const watchedSourceCache = new Map();
         const watchedSources = (type, target) => {
             const cacheKey = `${type}:${target}`;
@@ -773,50 +806,16 @@ export class NotificationService {
                         : type === 'tag'
                             ? (postsByTag.get(target) || [])
                             : [];
-            const sources = metadataSources.map(note => hydratedByPath.get(note.path) || note);
-            watchedSourceCache.set(cacheKey, sources);
-            return sources;
+            watchedSourceCache.set(cacheKey, metadataSources);
+            return metadataSources;
         };
-        const add = (note, kind, sourceId) => {
-            const author = text(note.frontmatter.author);
-            if (!author || author === target)
-                return;
-            const mentions = Array.isArray(note.frontmatter.mentions) ? note.frontmatter.mentions.map(String).map(value => value.toLowerCase()) : [];
-            const isMention = mentions.includes(target.toLowerCase());
-            const replyTo = text(note.frontmatter.reply_to);
-            const isReply = (note.frontmatter.mcpvault_type === 'blog_comment' && ownedCommentIds.has(replyTo))
-                || (note.frontmatter.mcpvault_type === 'chat_message' && ownedMessageIds.has(replyTo));
-            const postId = text(note.frontmatter.post_id);
-            const roomId = text(note.frontmatter.room_id);
-            const activity = note.frontmatter.mcpvault_type === 'blog_comment' && ownedPostIds.has(postId);
-            if (!isMention && !isReply && !activity)
-                return;
-            const selectedKind = isMention ? 'mention' : isReply ? 'reply' : kind;
-            const parentBody = note.frontmatter.mcpvault_type === 'blog_comment' ? commentBodies.get(replyTo) : messageBodies.get(replyTo);
-            const contextParts = note.frontmatter.mcpvault_type === 'blog_comment'
-                ? [`post: ${postTitles.get(postId) || postId}`, ...(parentBody ? [`replying to: ${parentBody}`] : [])]
-                : [`room: ${roomTitles.get(roomId) || roomId}`, ...(parentBody ? [`replying to: ${parentBody}`] : [])];
-            events.push({
-                notificationId: eventId(selectedKind, note.path, sourceId),
-                kind: selectedKind,
-                sourcePath: note.path,
-                sourceType: text(note.frontmatter.mcpvault_type),
-                sourceId,
-                author,
-                createdAt: text(note.frontmatter.created_at),
-                content: text(note.content).trim(),
-                context: contextParts.join(' | '),
-                ...(reputations.get(author.toLowerCase()) && { authorLevel: reputations.get(author.toLowerCase()).level, authorLevelLabel: reputations.get(author.toLowerCase()).label }),
-                unread: true,
-            });
-        };
-        for (const note of hydratedComments)
-            add(note, 'activity', text(note.frontmatter.comment_id));
-        for (const note of hydratedMessages)
-            add(note, 'activity', text(note.frontmatter.message_id));
+        for (const note of relevantComments)
+            addCandidate(note, 'activity', text(note.frontmatter.comment_id));
+        for (const note of relevantMessages)
+            addCandidate(note, 'activity', text(note.frontmatter.message_id));
         // A post mention is useful too, while comments on a post are handled above.
-        for (const note of hydratedPosts)
-            add(note, 'activity', text(note.frontmatter.post_id));
+        for (const note of relevantPosts)
+            addCandidate(note, 'activity', text(note.frontmatter.post_id));
         const watchedEvents = new Set();
         for (const subscription of subscriptions.notes) {
             const type = text(subscription.frontmatter.target_type);
@@ -829,31 +828,50 @@ export class NotificationService {
                     continue;
                 watchedEvents.add(notificationId);
                 const author = text(note.frontmatter.author);
-                const authorReputation = reputations.get(author.toLowerCase());
-                events.push({ notificationId, kind: 'watch', sourcePath: note.path, sourceType: text(note.frontmatter.mcpvault_type), sourceId, author, createdAt: text(note.frontmatter.updated_at || note.frontmatter.created_at), content: text(note.content).trim(), context: `watched ${type}: ${target}`, ...(authorReputation && { authorLevel: authorReputation.level, authorLevelLabel: authorReputation.label }), unread: true });
+                if (!author || candidateIds.has(notificationId))
+                    continue;
+                candidateIds.add(notificationId);
+                candidates.push({ notificationId, kind: 'watch', sourcePath: note.path, sourceType: text(note.frontmatter.mcpvault_type), sourceId, author, createdAt: text(note.frontmatter.updated_at || note.frontmatter.created_at), note, contextPrefix: `watched ${type}: ${target}` });
             }
         }
-        return events.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+        return candidates.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || a.notificationId.localeCompare(b.notificationId));
+    }
+    async hydrateCandidates(candidates, cutoff) {
+        const parentNotes = candidates.flatMap(candidate => candidate.parentPath ? [candidate.note, { path: candidate.parentPath, frontmatter: {} }] : [candidate.note]);
+        const hydrated = await this.hydrateNotes(parentNotes);
+        const byPath = new Map(hydrated.map(note => [note.path, note]));
+        const reputations = await this.reputation.getMany(candidates.map(candidate => candidate.author));
+        return candidates.flatMap(candidate => {
+            const note = byPath.get(candidate.note.path);
+            if (!note)
+                return [];
+            const parent = candidate.parentPath ? byPath.get(candidate.parentPath) : undefined;
+            const context = parent?.content ? `${candidate.contextPrefix} | replying to: ${text(parent.content).trim()}` : candidate.contextPrefix;
+            const reputation = reputations.get(candidate.author.toLowerCase());
+            return [{ notificationId: candidate.notificationId, kind: candidate.kind, sourcePath: candidate.sourcePath, sourceType: candidate.sourceType, sourceId: candidate.sourceId, author: candidate.author, createdAt: candidate.createdAt, content: text(note.content).trim(), context, ...(reputation && { authorLevel: reputation.level, authorLevelLabel: reputation.label }), unread: !cutoff || candidate.createdAt > cutoff }];
+        });
     }
     async list(params) {
         if (!params.principal)
             throw new Error('Login is required to read notifications');
         const state = await this.lastReadAt(params.principal);
         const cutoff = state.value || '';
-        let events = await this.cachedPublicEvents(params.principal);
-        events = events.map(event => ({ ...event, unread: !cutoff || event.createdAt > cutoff }));
+        const candidates = await this.cachedPublicCandidates(params.principal);
+        let visible = candidates.map(candidate => ({ candidate, unread: !cutoff || candidate.createdAt > cutoff }));
         if (!params.includeRead)
-            events = events.filter(event => event.unread);
+            visible = visible.filter(item => item.unread);
         if (params.afterNotificationId) {
-            const index = events.findIndex(event => event.notificationId === params.afterNotificationId);
+            const index = visible.findIndex(item => item.candidate.notificationId === params.afterNotificationId);
             if (index >= 0)
-                events = events.slice(index + 1);
+                visible = visible.slice(index + 1);
         }
         const limit = limitNumber(params.limit, 20, 100);
         const budget = maxChars(params.maxChars);
+        const selectedCandidates = visible.slice(0, limit).map(item => item.candidate);
+        const hydrated = await this.hydrateCandidates(selectedCandidates, cutoff);
         const selected = [];
         let used = 0;
-        for (const event of events) {
+        for (const event of hydrated) {
             if (selected.length >= limit)
                 break;
             const size = Array.from(event.content).length + Array.from(event.context || '').length;
@@ -864,9 +882,9 @@ export class NotificationService {
         }
         return {
             notifications: selected,
-            unreadCount: events.filter(event => event.unread).length,
-            total: events.length,
-            truncated: selected.length < events.length,
+            unreadCount: visible.filter(item => item.unread).length,
+            total: visible.length,
+            truncated: selected.length < visible.length,
             lastReadAt: cutoff || undefined,
             nextCursor: selected.at(-1)?.notificationId,
         };

@@ -51,8 +51,8 @@ export declare class NotificationService {
     private readonly reputation;
     private readonly vaultPath?;
     private readonly fileCatalog?;
-    private readonly eventCache;
-    private readonly eventInFlight;
+    private readonly candidateCache;
+    private readonly candidateInFlight;
     private publicSnapshotCache;
     private publicSnapshotInFlight;
     private publicSnapshotUpdate;
@@ -71,9 +71,10 @@ export declare class NotificationService {
     private cachedPublicSnapshot;
     private updatePublicSnapshot;
     private hydrateNotes;
-    private cachedPublicEvents;
+    private cachedPublicCandidates;
     private lastReadAt;
-    private publicEvents;
+    private publicCandidates;
+    private hydrateCandidates;
     list(params: {
         principal?: ScopePrincipal;
         includeRead?: boolean;
