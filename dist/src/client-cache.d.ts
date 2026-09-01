@@ -1,5 +1,7 @@
 export interface ClientEndpointCaller {
-    callEndpoint(endpointId: string, arguments_: Record<string, unknown>): Promise<unknown>;
+    callEndpoint(endpointId: string, arguments_: Record<string, unknown>, options?: {
+        signal?: AbortSignal;
+    }): Promise<unknown>;
 }
 export interface ClientKeyValueStore {
     getItem(key: string): string | null;
@@ -22,6 +24,7 @@ export interface ClientReadNotesOptions {
     includeContent?: boolean;
     includeFrontmatter?: boolean;
     force?: boolean;
+    signal?: AbortSignal;
 }
 export interface ClientReadNotesResult {
     notes: CachedNote[];
@@ -47,6 +50,7 @@ export declare class McpVaultClientCache {
     private readonly caller;
     private readonly entries;
     private readonly inFlight;
+    private readonly pathGenerations;
     private readonly dirtyPaths;
     private readonly maxEntries;
     constructor(caller: ClientEndpointCaller, options?: {
@@ -68,5 +72,6 @@ export declare class McpVaultClientCache {
     readNotesStale(paths: string[], options?: ClientReadNotesOptions): ClientStaleReadResult;
     private readNotesUncached;
     private put;
+    private bumpGeneration;
 }
 //# sourceMappingURL=client-cache.d.ts.map

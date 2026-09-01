@@ -166,3 +166,40 @@ test('supports asynchronous incremental persistence for IndexedDB-like stores', 
   await expect(restored.hydrateIncrementalAsync(store, 'async-cache')).resolves.toBe(1);
   expect(restored.get('async.md')).toMatchObject({ content: 'async persisted' });
 });
+
+test('forwards abort signals and does not let stale responses overwrite newer cache entries', async () => {
+  let calls = 0;
+  let releaseOld!: () => void;
+  const caller: ClientEndpointCaller = {
+    async callEndpoint(_endpointId, arguments_, options) {
+      calls += 1;
+      const includeContent = arguments_.includeContent === true;
+      if (includeContent) {
+        await new Promise<void>(resolve => { releaseOld = resolve; });
+        return { ok: [{ path: 'race.md', revision: 'old'.repeat(16), content: 'old' }], err: [] };
+      }
+      return { ok: [{ path: 'race.md', revision: 'new'.repeat(16) }], err: [] };
+    },
+  };
+  const cache = new McpVaultClientCache(caller);
+  const oldRead = cache.readNotes(['race.md'], { includeContent: true });
+  await Promise.resolve();
+  const currentRead = await cache.readNotes(['race.md'], { includeContent: false });
+  expect(currentRead.notes[0]!.revision).toBe('new'.repeat(16));
+  releaseOld();
+  await oldRead;
+  expect(cache.get('race.md')!.revision).toBe('new'.repeat(16));
+
+  const controller = new AbortController();
+  const abortedCaller: ClientEndpointCaller = {
+    async callEndpoint(_endpointId, _arguments_, options) {
+      await new Promise<void>((_resolve, reject) => options?.signal?.addEventListener('abort', () => reject(new Error('aborted by host')), { once: true }));
+      return {};
+    },
+  };
+  const abortCache = new McpVaultClientCache(abortedCaller);
+  const pending = abortCache.readNotes(['cancel.md'], { signal: controller.signal });
+  controller.abort();
+  await expect(pending).rejects.toThrow('aborted');
+  expect(calls).toBe(2);
+});

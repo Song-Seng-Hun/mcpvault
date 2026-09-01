@@ -20,6 +20,7 @@ export class McpVaultClientCache {
     caller;
     entries = new Map();
     inFlight = new Map();
+    pathGenerations = new Map();
     dirtyPaths = new Set();
     maxEntries;
     constructor(caller, options = {}) {
@@ -174,13 +175,16 @@ export class McpVaultClientCache {
     }
     invalidate(path) {
         if (path === undefined) {
-            for (const entryPath of this.entries.keys())
+            for (const entryPath of this.entries.keys()) {
                 this.dirtyPaths.add(entryPath);
+                this.bumpGeneration(entryPath);
+            }
             this.entries.clear();
         }
         else {
             this.entries.delete(path);
             this.dirtyPaths.add(path);
+            this.bumpGeneration(path);
         }
     }
     knownRevisions(paths) {
@@ -193,15 +197,17 @@ export class McpVaultClientCache {
         return known;
     }
     async readNotes(paths, options = {}) {
+        if (options.signal?.aborted)
+            throw new Error('request was aborted');
         const requested = normalizePaths(paths);
         const key = JSON.stringify({ paths: requested, options });
         const running = this.inFlight.get(key);
         if (running)
-            return cloneReadNotesResult(await running);
+            return cloneReadNotesResult(await waitForAbort(running, options.signal));
         const computation = this.readNotesUncached(requested, options);
         this.inFlight.set(key, computation);
         try {
-            return cloneReadNotesResult(await computation);
+            return cloneReadNotesResult(await waitForAbort(computation, options.signal));
         }
         finally {
             if (this.inFlight.get(key) === computation)
@@ -221,6 +227,7 @@ export class McpVaultClientCache {
     }
     async readNotesUncached(paths, options) {
         const requested = [...new Set(paths.map(path => String(path).trim()).filter(Boolean))];
+        const generations = new Map(requested.map(path => [path, this.bumpGeneration(path)]));
         const notes = new Map();
         const unchanged = [];
         const missing = new Set();
@@ -232,12 +239,15 @@ export class McpVaultClientCache {
             const knownRevisions = options.force ? {} : this.knownRevisions(batch);
             let decoded;
             try {
-                decoded = decodeEndpointResult(await this.caller.callEndpoint('mcp.read_multiple_notes', {
+                const arguments_ = {
                     paths: batch,
                     includeContent,
                     includeFrontmatter,
                     knownRevisions,
-                }));
+                };
+                decoded = decodeEndpointResult(options.signal
+                    ? await this.caller.callEndpoint('mcp.read_multiple_notes', arguments_, { signal: options.signal })
+                    : await this.caller.callEndpoint('mcp.read_multiple_notes', arguments_));
             }
             catch (error) {
                 for (const path of batch)
@@ -272,7 +282,8 @@ export class McpVaultClientCache {
                     ...(item.obsidianUri !== undefined && { obsidianUri: item.obsidianUri }),
                 };
                 const merged = cached ? { ...cached, ...note } : note;
-                this.put(merged);
+                if (this.pathGenerations.get(path) === generations.get(path))
+                    this.put(merged);
                 notes.set(path, cloneNote(merged));
             }
             for (const item of Array.isArray(response.err) ? response.err : []) {
@@ -298,9 +309,31 @@ export class McpVaultClientCache {
         while (this.entries.size > this.maxEntries)
             this.entries.delete(this.entries.keys().next().value);
     }
+    bumpGeneration(path) {
+        const generation = (this.pathGenerations.get(path) || 0) + 1;
+        this.pathGenerations.set(path, generation);
+        return generation;
+    }
 }
 function normalizePaths(paths) {
     return [...new Set(paths.map(path => String(path).trim()).filter(Boolean))];
+}
+async function waitForAbort(promise, signal) {
+    if (!signal)
+        return promise;
+    if (signal.aborted)
+        throw new Error('request was aborted');
+    return new Promise((resolve, reject) => {
+        const onAbort = () => reject(new Error('request was aborted'));
+        signal.addEventListener('abort', onAbort, { once: true });
+        promise.then(value => {
+            signal.removeEventListener('abort', onAbort);
+            resolve(value);
+        }, error => {
+            signal.removeEventListener('abort', onAbort);
+            reject(error);
+        });
+    });
 }
 function noteStorageKey(key, path) {
     return `${key}:note:${encodeURIComponent(path)}`;

@@ -1,5 +1,5 @@
 export interface ClientEndpointCaller {
-  callEndpoint(endpointId: string, arguments_: Record<string, unknown>): Promise<unknown>;
+  callEndpoint(endpointId: string, arguments_: Record<string, unknown>, options?: { signal?: AbortSignal }): Promise<unknown>;
 }
 
 export interface ClientKeyValueStore {
@@ -26,6 +26,7 @@ export interface ClientReadNotesOptions {
   includeContent?: boolean;
   includeFrontmatter?: boolean;
   force?: boolean;
+  signal?: AbortSignal;
 }
 
 export interface ClientReadNotesResult {
@@ -76,6 +77,7 @@ function decodeEndpointResult(value: unknown): unknown {
 export class McpVaultClientCache {
   private readonly entries = new Map<string, CachedNote>();
   private readonly inFlight = new Map<string, Promise<ClientReadNotesResult>>();
+  private readonly pathGenerations = new Map<string, number>();
   private readonly dirtyPaths = new Set<string>();
   private readonly maxEntries: number;
 
@@ -220,11 +222,15 @@ export class McpVaultClientCache {
 
   invalidate(path?: string): void {
     if (path === undefined) {
-      for (const entryPath of this.entries.keys()) this.dirtyPaths.add(entryPath);
+      for (const entryPath of this.entries.keys()) {
+        this.dirtyPaths.add(entryPath);
+        this.bumpGeneration(entryPath);
+      }
       this.entries.clear();
     } else {
       this.entries.delete(path);
       this.dirtyPaths.add(path);
+      this.bumpGeneration(path);
     }
   }
 
@@ -238,14 +244,15 @@ export class McpVaultClientCache {
   }
 
   async readNotes(paths: string[], options: ClientReadNotesOptions = {}): Promise<ClientReadNotesResult> {
+    if (options.signal?.aborted) throw new Error('request was aborted');
     const requested = normalizePaths(paths);
     const key = JSON.stringify({ paths: requested, options });
     const running = this.inFlight.get(key);
-    if (running) return cloneReadNotesResult(await running);
+    if (running) return cloneReadNotesResult(await waitForAbort(running, options.signal));
     const computation = this.readNotesUncached(requested, options);
     this.inFlight.set(key, computation);
     try {
-      return cloneReadNotesResult(await computation);
+      return cloneReadNotesResult(await waitForAbort(computation, options.signal));
     } finally {
       if (this.inFlight.get(key) === computation) this.inFlight.delete(key);
     }
@@ -265,6 +272,7 @@ export class McpVaultClientCache {
 
   private async readNotesUncached(paths: string[], options: ClientReadNotesOptions): Promise<ClientReadNotesResult> {
     const requested = [...new Set(paths.map(path => String(path).trim()).filter(Boolean))];
+    const generations = new Map(requested.map(path => [path, this.bumpGeneration(path)]));
     const notes = new Map<string, CachedNote>();
     const unchanged: string[] = [];
     const missing = new Set<string>();
@@ -277,12 +285,15 @@ export class McpVaultClientCache {
       const knownRevisions = options.force ? {} : this.knownRevisions(batch);
       let decoded: unknown;
       try {
-        decoded = decodeEndpointResult(await this.caller.callEndpoint('mcp.read_multiple_notes', {
+        const arguments_ = {
           paths: batch,
           includeContent,
           includeFrontmatter,
           knownRevisions,
-        }));
+        };
+        decoded = decodeEndpointResult(options.signal
+          ? await this.caller.callEndpoint('mcp.read_multiple_notes', arguments_, { signal: options.signal })
+          : await this.caller.callEndpoint('mcp.read_multiple_notes', arguments_));
       } catch (error) {
         for (const path of batch) errors.push({ path, error: error instanceof Error ? error.message : String(error) });
         continue;
@@ -314,7 +325,7 @@ export class McpVaultClientCache {
           ...(item.obsidianUri !== undefined && { obsidianUri: item.obsidianUri }),
         };
         const merged = cached ? { ...cached, ...note } : note;
-        this.put(merged);
+        if (this.pathGenerations.get(path) === generations.get(path)) this.put(merged);
         notes.set(path, cloneNote(merged));
       }
       for (const item of Array.isArray(response.err) ? response.err : []) {
@@ -339,10 +350,35 @@ export class McpVaultClientCache {
     this.dirtyPaths.add(note.path);
     while (this.entries.size > this.maxEntries) this.entries.delete(this.entries.keys().next().value!);
   }
+
+  private bumpGeneration(path: string): number {
+    const generation = (this.pathGenerations.get(path) || 0) + 1;
+    this.pathGenerations.set(path, generation);
+    return generation;
+  }
 }
 
 function normalizePaths(paths: string[]): string[] {
   return [...new Set(paths.map(path => String(path).trim()).filter(Boolean))];
+}
+
+async function waitForAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) throw new Error('request was aborted');
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new Error('request was aborted'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      value => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      error => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
 }
 
 function noteStorageKey(key: string, path: string): string {
