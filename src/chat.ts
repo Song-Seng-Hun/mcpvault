@@ -72,12 +72,14 @@ export class ChatService {
     const requestedStatus = String(params.status || 'open').trim().toLowerCase();
     if (requestedStatus !== 'all' && !ROOM_STATUSES.has(requestedStatus)) throw new Error('status must be open, archived, or all');
     const result = await queryAllNotes(this.fileSystem, {
-      pathPrefix: ROOM_ROOT, filters: { mcpvault_type: 'chat_room' },
+      pathPrefix: ROOM_ROOT, filters: { mcpvault_type: 'chat_room', ...(requestedStatus !== 'all' && { status: requestedStatus }) },
       sortBy: 'created_at', sortOrder: 'desc',
     });
     const visibleRooms = result.notes.filter(note => requestedStatus === 'all' || note.frontmatter.status === requestedStatus);
-    const reputations = await this.reputation.getMany(visibleRooms.map(note => String(note.frontmatter.created_by || '')));
-    const rooms = visibleRooms.map(note => ({
+    const limit = Math.min(Math.max(Number(params.limit || 50), 1), 500);
+    const selectedRooms = visibleRooms.slice(0, limit);
+    const reputations = await this.reputation.getMany(selectedRooms.map(note => String(note.frontmatter.created_by || '')));
+    const rooms = selectedRooms.map(note => ({
       path: note.path,
       roomId: note.frontmatter.room_id,
       title: note.frontmatter.title,
@@ -90,9 +92,8 @@ export class ChatService {
       creatorLevelLabel: reputations.get(String(note.frontmatter.created_by || '').toLowerCase())?.label ?? '뉴비',
       moderationStatus: moderationStatus(note.frontmatter),
     }));
-    const limit = Math.min(Math.max(Number(params.limit || 50), 1), 500);
-    const bounded = boundItems(rooms.slice(0, limit), Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000));
-    return { rooms: bounded.items, total: rooms.length, truncated: result.truncated || rooms.length > limit || bounded.truncated };
+    const bounded = boundItems(rooms, Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000));
+    return { rooms: bounded.items, total: visibleRooms.length, truncated: result.truncated || visibleRooms.length > limit || bounded.truncated };
   }
 
   private async readRoom(roomId: string) {
