@@ -1,4 +1,4 @@
-import type { CachedNote, ClientKeyValueStore } from './client-cache.js';
+import type { AsyncClientKeyValueStore, CachedNote, ClientKeyValueStore } from './client-cache.js';
 
 export interface ClientSearchResult {
   path: string;
@@ -18,6 +18,11 @@ interface IndexedDocument {
   note: CachedNote;
   title: string;
   tokenCounts: Map<string, number>;
+}
+
+interface IncrementalSearchIndexManifest {
+  version: 1;
+  paths: string[];
 }
 
 const MAX_QUERY_CHARS = 500;
@@ -116,6 +121,7 @@ export class McpVaultClientSearchIndex {
   private readonly documents = new Map<string, IndexedDocument>();
   private readonly postings = new Map<string, Map<string, number>>();
   private readonly searchCache = new Map<string, SearchCacheEntry>();
+  private readonly dirtyPaths = new Set<string>();
   private readonly maxDocuments: number;
 
   constructor(options: { maxDocuments?: number } = {}) {
@@ -133,6 +139,7 @@ export class McpVaultClientSearchIndex {
       tokenCounts: tokenCounts(content),
     };
     this.documents.set(note.path, document);
+    this.dirtyPaths.add(note.path);
     for (const [token, count] of document.tokenCounts) {
       const posting = this.postings.get(token) || new Map<string, number>();
       posting.set(note.path, count);
@@ -149,10 +156,12 @@ export class McpVaultClientSearchIndex {
   remove(path: string): void {
     this.unindex(path);
     this.documents.delete(path);
+    this.dirtyPaths.add(path);
     this.searchCache.clear();
   }
 
   clear(): void {
+    for (const path of this.documents.keys()) this.dirtyPaths.add(path);
     this.documents.clear();
     this.postings.clear();
     this.searchCache.clear();
@@ -201,6 +210,94 @@ export class McpVaultClientSearchIndex {
   hydrate(store: ClientKeyValueStore, key: string): number {
     const snapshot = store.getItem(key);
     return snapshot ? this.restore(snapshot) : 0;
+  }
+
+  /**
+   * Persists only changed or newly indexed documents plus a small manifest.
+   * The host store remains responsible for choosing protected storage.
+   */
+  persistIncremental(store: ClientKeyValueStore, key: string): void {
+    const previous = readIncrementalManifest(store.getItem(key));
+    const currentPaths = [...this.documents.keys()];
+    const previousPaths = new Set(previous?.paths || []);
+    for (const path of currentPaths) {
+      if (!this.dirtyPaths.has(path) && previousPaths.has(path)) continue;
+      const document = this.documents.get(path);
+      if (document) store.setItem(searchDocumentStorageKey(key, path), JSON.stringify(document.note));
+    }
+    for (const path of previous?.paths || []) {
+      if (!this.documents.has(path)) store.removeItem?.(searchDocumentStorageKey(key, path));
+    }
+    store.setItem(key, JSON.stringify({ version: 1, paths: currentPaths } satisfies IncrementalSearchIndexManifest));
+    this.dirtyPaths.clear();
+  }
+
+  async persistIncrementalAsync(store: AsyncClientKeyValueStore, key: string): Promise<void> {
+    const previous = readIncrementalManifest(await store.getItem(key));
+    const currentPaths = [...this.documents.keys()];
+    const previousPaths = new Set(previous?.paths || []);
+    for (const path of currentPaths) {
+      if (!this.dirtyPaths.has(path) && previousPaths.has(path)) continue;
+      const document = this.documents.get(path);
+      if (document) await store.setItem(searchDocumentStorageKey(key, path), JSON.stringify(document.note));
+    }
+    for (const path of previous?.paths || []) {
+      if (!this.documents.has(path)) await store.removeItem?.(searchDocumentStorageKey(key, path));
+    }
+    await store.setItem(key, JSON.stringify({ version: 1, paths: currentPaths } satisfies IncrementalSearchIndexManifest));
+    this.dirtyPaths.clear();
+  }
+
+  hydrateIncremental(store: ClientKeyValueStore, key: string): number {
+    const manifest = readIncrementalManifest(store.getItem(key));
+    if (!manifest) return 0;
+    let restored = 0;
+    for (const path of manifest.paths) {
+      const snapshot = store.getItem(searchDocumentStorageKey(key, path));
+      if (!snapshot) continue;
+      try {
+        const value = JSON.parse(snapshot) as Partial<CachedNote>;
+        if (typeof value.path !== 'string' || value.path !== path || typeof value.revision !== 'string' || !value.revision) continue;
+        this.upsert({
+          path,
+          revision: value.revision,
+          ...(typeof value.content === 'string' && { content: value.content }),
+          ...(value.frontmatter && typeof value.frontmatter === 'object' && { frontmatter: value.frontmatter as Record<string, unknown> }),
+          ...(typeof value.obsidianUri === 'string' && { obsidianUri: value.obsidianUri }),
+        });
+        restored += 1;
+      } catch {
+        // Ignore one corrupt entry and keep the remaining index usable.
+      }
+    }
+    this.dirtyPaths.clear();
+    return restored;
+  }
+
+  async hydrateIncrementalAsync(store: AsyncClientKeyValueStore, key: string): Promise<number> {
+    const manifest = readIncrementalManifest(await store.getItem(key));
+    if (!manifest) return 0;
+    let restored = 0;
+    for (const path of manifest.paths) {
+      const snapshot = await store.getItem(searchDocumentStorageKey(key, path));
+      if (!snapshot) continue;
+      try {
+        const value = JSON.parse(snapshot) as Partial<CachedNote>;
+        if (typeof value.path !== 'string' || value.path !== path || typeof value.revision !== 'string' || !value.revision) continue;
+        this.upsert({
+          path,
+          revision: value.revision,
+          ...(typeof value.content === 'string' && { content: value.content }),
+          ...(value.frontmatter && typeof value.frontmatter === 'object' && { frontmatter: value.frontmatter as Record<string, unknown> }),
+          ...(typeof value.obsidianUri === 'string' && { obsidianUri: value.obsidianUri }),
+        });
+        restored += 1;
+      } catch {
+        // Ignore one corrupt entry and keep the remaining index usable.
+      }
+    }
+    this.dirtyPaths.clear();
+    return restored;
   }
 
   search(query: string, options: { limit?: number; maxChars?: number } = {}): ClientSearchResponse {
@@ -253,4 +350,20 @@ export class McpVaultClientSearchIndex {
 
 function cloneSearchResponse(value: ClientSearchResponse): ClientSearchResponse {
   return { ...value, results: value.results.map(result => ({ ...result })) };
+}
+
+function searchDocumentStorageKey(key: string, path: string): string {
+  return `${key}:document:${encodeURIComponent(path)}`;
+}
+
+function readIncrementalManifest(value: string | null): IncrementalSearchIndexManifest | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed = JSON.parse(value) as Partial<IncrementalSearchIndexManifest>;
+    if (parsed.version !== 1 || !Array.isArray(parsed.paths)) return undefined;
+    const paths = parsed.paths.filter((path): path is string => typeof path === 'string' && path.length > 0);
+    return { version: 1, paths: [...new Set(paths)] };
+  } catch {
+    return undefined;
+  }
 }

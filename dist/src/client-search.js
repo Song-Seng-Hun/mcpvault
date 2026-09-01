@@ -93,6 +93,7 @@ export class McpVaultClientSearchIndex {
     documents = new Map();
     postings = new Map();
     searchCache = new Map();
+    dirtyPaths = new Set();
     maxDocuments;
     constructor(options = {}) {
         const maxDocuments = options.maxDocuments ?? MAX_INDEXED_DOCUMENTS;
@@ -109,6 +110,7 @@ export class McpVaultClientSearchIndex {
             tokenCounts: tokenCounts(content),
         };
         this.documents.set(note.path, document);
+        this.dirtyPaths.add(note.path);
         for (const [token, count] of document.tokenCounts) {
             const posting = this.postings.get(token) || new Map();
             posting.set(note.path, count);
@@ -124,9 +126,12 @@ export class McpVaultClientSearchIndex {
     remove(path) {
         this.unindex(path);
         this.documents.delete(path);
+        this.dirtyPaths.add(path);
         this.searchCache.clear();
     }
     clear() {
+        for (const path of this.documents.keys())
+            this.dirtyPaths.add(path);
         this.documents.clear();
         this.postings.clear();
         this.searchCache.clear();
@@ -177,6 +182,104 @@ export class McpVaultClientSearchIndex {
     hydrate(store, key) {
         const snapshot = store.getItem(key);
         return snapshot ? this.restore(snapshot) : 0;
+    }
+    /**
+     * Persists only changed or newly indexed documents plus a small manifest.
+     * The host store remains responsible for choosing protected storage.
+     */
+    persistIncremental(store, key) {
+        const previous = readIncrementalManifest(store.getItem(key));
+        const currentPaths = [...this.documents.keys()];
+        const previousPaths = new Set(previous?.paths || []);
+        for (const path of currentPaths) {
+            if (!this.dirtyPaths.has(path) && previousPaths.has(path))
+                continue;
+            const document = this.documents.get(path);
+            if (document)
+                store.setItem(searchDocumentStorageKey(key, path), JSON.stringify(document.note));
+        }
+        for (const path of previous?.paths || []) {
+            if (!this.documents.has(path))
+                store.removeItem?.(searchDocumentStorageKey(key, path));
+        }
+        store.setItem(key, JSON.stringify({ version: 1, paths: currentPaths }));
+        this.dirtyPaths.clear();
+    }
+    async persistIncrementalAsync(store, key) {
+        const previous = readIncrementalManifest(await store.getItem(key));
+        const currentPaths = [...this.documents.keys()];
+        const previousPaths = new Set(previous?.paths || []);
+        for (const path of currentPaths) {
+            if (!this.dirtyPaths.has(path) && previousPaths.has(path))
+                continue;
+            const document = this.documents.get(path);
+            if (document)
+                await store.setItem(searchDocumentStorageKey(key, path), JSON.stringify(document.note));
+        }
+        for (const path of previous?.paths || []) {
+            if (!this.documents.has(path))
+                await store.removeItem?.(searchDocumentStorageKey(key, path));
+        }
+        await store.setItem(key, JSON.stringify({ version: 1, paths: currentPaths }));
+        this.dirtyPaths.clear();
+    }
+    hydrateIncremental(store, key) {
+        const manifest = readIncrementalManifest(store.getItem(key));
+        if (!manifest)
+            return 0;
+        let restored = 0;
+        for (const path of manifest.paths) {
+            const snapshot = store.getItem(searchDocumentStorageKey(key, path));
+            if (!snapshot)
+                continue;
+            try {
+                const value = JSON.parse(snapshot);
+                if (typeof value.path !== 'string' || value.path !== path || typeof value.revision !== 'string' || !value.revision)
+                    continue;
+                this.upsert({
+                    path,
+                    revision: value.revision,
+                    ...(typeof value.content === 'string' && { content: value.content }),
+                    ...(value.frontmatter && typeof value.frontmatter === 'object' && { frontmatter: value.frontmatter }),
+                    ...(typeof value.obsidianUri === 'string' && { obsidianUri: value.obsidianUri }),
+                });
+                restored += 1;
+            }
+            catch {
+                // Ignore one corrupt entry and keep the remaining index usable.
+            }
+        }
+        this.dirtyPaths.clear();
+        return restored;
+    }
+    async hydrateIncrementalAsync(store, key) {
+        const manifest = readIncrementalManifest(await store.getItem(key));
+        if (!manifest)
+            return 0;
+        let restored = 0;
+        for (const path of manifest.paths) {
+            const snapshot = await store.getItem(searchDocumentStorageKey(key, path));
+            if (!snapshot)
+                continue;
+            try {
+                const value = JSON.parse(snapshot);
+                if (typeof value.path !== 'string' || value.path !== path || typeof value.revision !== 'string' || !value.revision)
+                    continue;
+                this.upsert({
+                    path,
+                    revision: value.revision,
+                    ...(typeof value.content === 'string' && { content: value.content }),
+                    ...(value.frontmatter && typeof value.frontmatter === 'object' && { frontmatter: value.frontmatter }),
+                    ...(typeof value.obsidianUri === 'string' && { obsidianUri: value.obsidianUri }),
+                });
+                restored += 1;
+            }
+            catch {
+                // Ignore one corrupt entry and keep the remaining index usable.
+            }
+        }
+        this.dirtyPaths.clear();
+        return restored;
     }
     search(query, options = {}) {
         const normalizedQuery = String(query || '').trim();
@@ -238,4 +341,21 @@ export class McpVaultClientSearchIndex {
 }
 function cloneSearchResponse(value) {
     return { ...value, results: value.results.map(result => ({ ...result })) };
+}
+function searchDocumentStorageKey(key, path) {
+    return `${key}:document:${encodeURIComponent(path)}`;
+}
+function readIncrementalManifest(value) {
+    if (!value)
+        return undefined;
+    try {
+        const parsed = JSON.parse(value);
+        if (parsed.version !== 1 || !Array.isArray(parsed.paths))
+            return undefined;
+        const paths = parsed.paths.filter((path) => typeof path === 'string' && path.length > 0);
+        return { version: 1, paths: [...new Set(paths)] };
+    }
+    catch {
+        return undefined;
+    }
 }

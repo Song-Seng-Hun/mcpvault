@@ -1,4 +1,4 @@
-import type { CachedNote, ClientKeyValueStore } from './client-cache.js';
+import type { AsyncClientKeyValueStore, CachedNote, ClientKeyValueStore } from './client-cache.js';
 export interface ClientSearchResult {
     path: string;
     score: number;
@@ -20,6 +20,7 @@ export declare class McpVaultClientSearchIndex {
     private readonly documents;
     private readonly postings;
     private readonly searchCache;
+    private readonly dirtyPaths;
     private readonly maxDocuments;
     constructor(options?: {
         maxDocuments?: number;
@@ -33,6 +34,14 @@ export declare class McpVaultClientSearchIndex {
     restore(snapshot: string): number;
     persist(store: ClientKeyValueStore, key: string): void;
     hydrate(store: ClientKeyValueStore, key: string): number;
+    /**
+     * Persists only changed or newly indexed documents plus a small manifest.
+     * The host store remains responsible for choosing protected storage.
+     */
+    persistIncremental(store: ClientKeyValueStore, key: string): void;
+    persistIncrementalAsync(store: AsyncClientKeyValueStore, key: string): Promise<void>;
+    hydrateIncremental(store: ClientKeyValueStore, key: string): number;
+    hydrateIncrementalAsync(store: AsyncClientKeyValueStore, key: string): Promise<number>;
     search(query: string, options?: {
         limit?: number;
         maxChars?: number;

@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { McpVaultClientSearchIndex } from './client-search.js';
-import type { ClientKeyValueStore } from './client-cache.js';
+import type { AsyncClientKeyValueStore, ClientKeyValueStore } from './client-cache.js';
 
 test('searches only cached notes and ranks title matches', () => {
   const index = new McpVaultClientSearchIndex();
@@ -59,4 +59,48 @@ test('persists and restores a bounded local search index', () => {
   original.upsert({ path: 'three.md', revision: '3'.repeat(64), content: 'gamma' });
   expect(original.size()).toBe(2);
   expect(original.search('alpha').results).toHaveLength(0);
+});
+
+test('persists only changed local search documents incrementally', () => {
+  const values = new Map<string, string>();
+  const writes: string[] = [];
+  const store: ClientKeyValueStore = {
+    getItem: key => values.get(key) || null,
+    setItem: (key, value) => { writes.push(key); values.set(key, value); },
+    removeItem: key => { values.delete(key); },
+  };
+  const index = new McpVaultClientSearchIndex();
+  index.upsert({ path: 'one.md', revision: '1'.repeat(64), content: 'one' });
+  index.upsert({ path: 'two.md', revision: '2'.repeat(64), content: 'two' });
+  index.persistIncremental(store, 'search-index');
+  writes.length = 0;
+
+  index.upsert({ path: 'two.md', revision: '3'.repeat(64), content: 'updated' });
+  index.persistIncremental(store, 'search-index');
+  expect(writes).toEqual(['search-index:document:two.md', 'search-index']);
+
+  writes.length = 0;
+  index.remove('one.md');
+  index.persistIncremental(store, 'search-index');
+  expect(writes).toEqual(['search-index']);
+  expect(values.has('search-index:document:one.md')).toBe(false);
+
+  const restored = new McpVaultClientSearchIndex();
+  expect(restored.hydrateIncremental(store, 'search-index')).toBe(1);
+  expect(restored.search('updated').results[0]!.path).toBe('two.md');
+});
+
+test('supports asynchronous incremental search-index persistence', async () => {
+  const values = new Map<string, string>();
+  const store: AsyncClientKeyValueStore = {
+    getItem: async key => values.get(key) || null,
+    setItem: async (key, value) => { values.set(key, value); },
+    removeItem: async key => { values.delete(key); },
+  };
+  const original = new McpVaultClientSearchIndex();
+  original.upsert({ path: 'async.md', revision: 'a'.repeat(64), content: 'async search' });
+  await original.persistIncrementalAsync(store, 'async-index');
+  const restored = new McpVaultClientSearchIndex();
+  await expect(restored.hydrateIncrementalAsync(store, 'async-index')).resolves.toBe(1);
+  expect(restored.search('async').results[0]!.path).toBe('async.md');
 });
