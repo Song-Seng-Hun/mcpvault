@@ -1728,7 +1728,7 @@ export class FileSystemService {
         const pathPrefix = this.resolvePathPrefix(params.pathPrefix);
         const notes = [];
         const filters = params.filters || {};
-        const indexedEntries = this.metadataIndex ? await this.metadataIndex.list() : undefined;
+        const indexedEntries = this.metadataIndex ? await this.metadataIndex.list(filters) : undefined;
         if (indexedEntries) {
             for (const entry of indexedEntries) {
                 if (!this.pathFilter.isAllowed(entry.path) || !canAccessPath(entry.path))

@@ -13,6 +13,31 @@ function isNote(path) {
 function revision(content) {
     return createHash('sha256').update(content, 'utf8').digest('hex');
 }
+function isFilterScalar(value) {
+    return value === null || typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value)) || typeof value === 'boolean';
+}
+function encodeFilterValue(value) {
+    return JSON.stringify(value);
+}
+function flattenFilterValues(value, prefix = '') {
+    if (isFilterScalar(value))
+        return prefix ? [[prefix, [value]]] : [];
+    if (Array.isArray(value)) {
+        const scalars = value.filter(isFilterScalar);
+        return prefix && scalars.length === value.length && scalars.length > 0 ? [[prefix, scalars]] : [];
+    }
+    if (!value || typeof value !== 'object')
+        return [];
+    return Object.entries(value).flatMap(([key, child]) => flattenFilterValues(child, prefix ? `${prefix}.${key}` : key));
+}
+function filterValues(value) {
+    if (Array.isArray(value)) {
+        if (value.length === 0 || !value.every(isFilterScalar))
+            return undefined;
+        return value;
+    }
+    return isFilterScalar(value) ? [value] : undefined;
+}
 /**
  * A disposable, metadata-only read model for repeated structured queries.
  * Markdown remains authoritative; this index only avoids reopening and
@@ -23,6 +48,7 @@ export class VaultMetadataIndex {
     frontmatter;
     vaultPath;
     entries = new Map();
+    filterIndex = new Map();
     dirty = new Set();
     ready;
     refreshPromise;
@@ -40,11 +66,15 @@ export class VaultMetadataIndex {
         const normalized = normalizePath(path);
         if (!isNote(normalized) || !this.pathFilter.isAllowed(normalized))
             return;
-        if (kind === 'delete')
+        if (kind === 'delete') {
+            const existing = this.entries.get(normalized);
+            if (existing)
+                this.removeFilterEntry(existing);
             this.entries.delete(normalized);
+        }
         this.dirty.add(normalized);
     }
-    async list() {
+    async list(filters) {
         await this.ready;
         this.startWatcher();
         // The server may have been constructed before Obsidian or a direct
@@ -62,7 +92,10 @@ export class VaultMetadataIndex {
         if (this.dirty.size > 0) {
             await this.refreshDirty();
         }
-        return [...this.entries.values()];
+        const candidates = filters && Object.keys(filters).length > 0 ? this.filterCandidates(filters) : undefined;
+        if (!candidates)
+            return [...this.entries.values()];
+        return [...candidates].map(path => this.entries.get(path)).filter((entry) => entry !== undefined);
     }
     /**
      * Check a previously returned revision without reopening the note body.
@@ -137,6 +170,7 @@ export class VaultMetadataIndex {
             this.entries.clear();
             for (const [path, entry] of next)
                 this.entries.set(path, entry);
+            this.rebuildFilterIndex();
             this.lastFullRefreshAt = Date.now();
         })();
         try {
@@ -156,10 +190,15 @@ export class VaultMetadataIndex {
             for (let index = 0; index < paths.length; index += 1) {
                 const path = paths[index];
                 const entry = metadata[index];
+                const previous = this.entries.get(path);
+                if (previous)
+                    this.removeFilterEntry(previous);
                 if (entry)
                     this.entries.set(path, entry);
                 else
                     this.entries.delete(path);
+                if (entry)
+                    this.addFilterEntry(entry);
             }
         })();
         try {
@@ -195,6 +234,90 @@ export class VaultMetadataIndex {
         catch {
             return undefined;
         }
+    }
+    rebuildFilterIndex() {
+        this.filterIndex.clear();
+        for (const entry of this.entries.values())
+            this.addFilterEntry(entry);
+    }
+    addFilterEntry(entry) {
+        for (const [key, values] of flattenFilterValues(entry.frontmatter)) {
+            for (const value of values) {
+                const encoded = encodeFilterValue(value);
+                let valueIndex = this.filterIndex.get(key);
+                if (!valueIndex) {
+                    valueIndex = new Map();
+                    this.filterIndex.set(key, valueIndex);
+                }
+                let paths = valueIndex.get(encoded);
+                if (!paths) {
+                    paths = new Set();
+                    valueIndex.set(encoded, paths);
+                }
+                paths.add(entry.path);
+            }
+        }
+    }
+    removeFilterEntry(entry) {
+        for (const [key, values] of flattenFilterValues(entry.frontmatter)) {
+            const valueIndex = this.filterIndex.get(key);
+            if (!valueIndex)
+                continue;
+            for (const value of values) {
+                const encoded = encodeFilterValue(value);
+                const paths = valueIndex.get(encoded);
+                paths?.delete(entry.path);
+                if (paths && paths.size === 0)
+                    valueIndex.delete(encoded);
+            }
+            if (valueIndex.size === 0)
+                this.filterIndex.delete(key);
+        }
+    }
+    filterCandidates(filters) {
+        let candidates;
+        for (const [key, expected] of Object.entries(filters)) {
+            const expectedValues = filterValues(expected);
+            if (expectedValues === undefined)
+                return undefined;
+            const valueIndex = this.filterIndex.get(key);
+            const matching = new Set();
+            for (const value of expectedValues) {
+                for (const path of valueIndex?.get(encodeFilterValue(value)) || [])
+                    matching.add(path);
+            }
+            // An array filter means every requested value must be present in the
+            // note's array, so intersect its per-value posting sets rather than
+            // unioning them.
+            if (Array.isArray(expected)) {
+                const required = expectedValues.map(value => valueIndex?.get(encodeFilterValue(value)) || new Set());
+                const intersection = new Set(required[0] || []);
+                for (const paths of required.slice(1)) {
+                    for (const path of intersection)
+                        if (!paths.has(path))
+                            intersection.delete(path);
+                }
+                if (candidates) {
+                    for (const path of candidates)
+                        if (!intersection.has(path))
+                            candidates.delete(path);
+                }
+                else {
+                    candidates = intersection;
+                }
+            }
+            else if (candidates) {
+                for (const path of candidates)
+                    if (!matching.has(path))
+                        candidates.delete(path);
+            }
+            else {
+                candidates = matching;
+            }
+            if (candidates && candidates.size === 0)
+                return candidates;
+        }
+        return candidates || new Set();
     }
     async findNotePaths(directory) {
         const output = [];

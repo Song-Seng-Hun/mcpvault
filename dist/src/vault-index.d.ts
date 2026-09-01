@@ -17,6 +17,7 @@ export declare class VaultMetadataIndex {
     private readonly frontmatter;
     private readonly vaultPath;
     private readonly entries;
+    private readonly filterIndex;
     private readonly dirty;
     private ready;
     private refreshPromise;
@@ -26,7 +27,7 @@ export declare class VaultMetadataIndex {
     private firstList;
     constructor(vaultPath: string, pathFilter: PathFilter, frontmatter: FrontmatterHandler);
     invalidate(path: string, kind: 'upsert' | 'delete'): void;
-    list(): Promise<VaultIndexEntry[]>;
+    list(filters?: Record<string, unknown>): Promise<VaultIndexEntry[]>;
     /**
      * Check a previously returned revision without reopening the note body.
      * The stat check keeps the answer fresh even when a filesystem watcher is
@@ -38,6 +39,10 @@ export declare class VaultMetadataIndex {
     private refreshAll;
     private refreshDirty;
     private readEntry;
+    private rebuildFilterIndex;
+    private addFilterEntry;
+    private removeFilterEntry;
+    private filterCandidates;
     private findNotePaths;
 }
 //# sourceMappingURL=vault-index.d.ts.map
