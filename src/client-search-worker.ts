@@ -145,6 +145,85 @@ export class ClientSearchWorkerClient {
   }
 }
 
+export interface ClientSearchWorkerPoolOptions {
+  workerCount?: number;
+  createRuntime: () => ClientSearchWorkerRuntime;
+}
+
+/**
+ * Shards local search documents across a bounded Worker set. A stable path
+ * hash keeps updates and removals on the same shard; queries fan out and
+ * merge only each worker's bounded top-K results.
+ */
+export class ClientSearchWorkerPool {
+  private readonly workers: ClientSearchWorkerClient[];
+
+  constructor(options: ClientSearchWorkerPoolOptions) {
+    const workerCount = options.workerCount ?? 2;
+    if (!Number.isInteger(workerCount) || workerCount < 1 || workerCount > 8) throw new Error('workerCount must be between 1 and 8');
+    this.workers = Array.from({ length: workerCount }, () => new ClientSearchWorkerClient(options.createRuntime()));
+  }
+
+  async upsertMany(notes: CachedNote[], options: Pick<ClientSearchIndexBuildOptions, 'batchSize' | 'signal'> = {}): Promise<void> {
+    const shards = this.partition(notes);
+    await Promise.all(this.workers.map((worker, index) => worker.upsertMany(shards[index]!, options)));
+  }
+
+  remove(path: string, signal?: AbortSignal): Promise<void> {
+    return this.workerFor(path).remove(path, signal);
+  }
+
+  async clear(signal?: AbortSignal): Promise<void> {
+    await Promise.all(this.workers.map(worker => worker.clear(signal)));
+  }
+
+  async search(query: string, options: { limit?: number; maxChars?: number } = {}, signal?: AbortSignal): Promise<ClientSearchResponse> {
+    const responses = await Promise.all(this.workers.map(worker => worker.search(query, options, signal)));
+    const limit = Math.min(Math.max(Math.floor(options.limit ?? 5), 1), 50);
+    const results = responses.flatMap(response => response.results)
+      .sort((left, right) => right.score - left.score || left.path.localeCompare(right.path))
+      .slice(0, limit);
+    return {
+      complete: false,
+      indexedDocuments: responses.reduce((total, response) => total + response.indexedDocuments, 0),
+      results,
+    };
+  }
+
+  async snapshot(signal?: AbortSignal): Promise<string> {
+    const snapshots = await Promise.all(this.workers.map(worker => worker.snapshot(signal)));
+    return JSON.stringify({ version: 1, shards: snapshots });
+  }
+
+  async restore(snapshot: string, signal?: AbortSignal): Promise<number> {
+    let parsed: unknown;
+    try { parsed = JSON.parse(snapshot); } catch { return 0; }
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray((parsed as { shards?: unknown }).shards)) return 0;
+    const shards = (parsed as { shards: unknown[] }).shards;
+    if (shards.length !== this.workers.length || !shards.every(shard => typeof shard === 'string')) throw new Error('search worker snapshot shard count does not match the pool');
+    const restored = await Promise.all(this.workers.map((worker, index) => worker.restore(shards[index] as string, signal)));
+    return restored.reduce((total, count) => total + count, 0);
+  }
+
+  close(): void {
+    for (const worker of this.workers) worker.close();
+  }
+
+  private partition(notes: CachedNote[]): CachedNote[][] {
+    const shards = this.workers.map(() => [] as CachedNote[]);
+    for (const note of notes) shards[this.shardFor(note.path)]!.push(note);
+    return shards;
+  }
+
+  private workerFor(path: string): ClientSearchWorkerClient {
+    return this.workers[this.shardFor(path)]!;
+  }
+
+  private shardFor(path: string): number {
+    return hashPath(path) % this.workers.length;
+  }
+}
+
 async function execute(index: McpVaultClientSearchIndex, request: WorkerRequest, signal: AbortSignal): Promise<unknown> {
   switch (request.op) {
     case 'upsertMany':
@@ -180,4 +259,13 @@ function parseResponse(value: unknown): WorkerResponse | undefined {
   const response = value as Partial<WorkerResponse>;
   if (typeof response.id !== 'string' || typeof response.ok !== 'boolean') return undefined;
   return response as WorkerResponse;
+}
+
+function hashPath(path: string): number {
+  let hash = 2166136261;
+  for (const character of String(path)) {
+    hash ^= character.codePointAt(0) || 0;
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
 }

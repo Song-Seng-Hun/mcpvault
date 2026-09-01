@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { attachClientSearchWorker, ClientSearchWorkerClient, type ClientSearchWorkerRuntime } from './client-search-worker.js';
+import { attachClientSearchWorker, ClientSearchWorkerClient, ClientSearchWorkerPool, type ClientSearchWorkerRuntime } from './client-search-worker.js';
 
 class FakeRuntime implements ClientSearchWorkerRuntime {
   private readonly listeners = new Set<(event: { data: unknown }) => void>();
@@ -53,4 +53,28 @@ test('can cancel a worker-side background index refresh', async () => {
   await expect(pending).rejects.toThrow('aborted');
   client.close();
   detach();
+});
+
+test('shards documents across a bounded worker pool and merges top results', async () => {
+  const detach: Array<() => void> = [];
+  const pool = new ClientSearchWorkerPool({
+    workerCount: 2,
+    createRuntime: () => {
+      const runtime = new FakeRuntime();
+      detach.push(attachClientSearchWorker(runtime));
+      return runtime;
+    },
+  });
+  await pool.upsertMany([
+    { path: 'pool-a.md', revision: 'a'.repeat(64), content: 'pool target target' },
+    { path: 'pool-b.md', revision: 'b'.repeat(64), content: 'pool target' },
+    { path: 'pool-c.md', revision: 'c'.repeat(64), content: 'different' },
+  ], { batchSize: 1 });
+  const result = await pool.search('target', { limit: 2 });
+  expect(result.complete).toBe(false);
+  expect(result.indexedDocuments).toBe(3);
+  expect(result.results).toHaveLength(2);
+  expect(result.results[0]!.path).toBe('pool-a.md');
+  pool.close();
+  for (const dispose of detach) dispose();
 });

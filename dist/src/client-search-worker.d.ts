@@ -40,4 +40,30 @@ export declare class ClientSearchWorkerClient {
     close(): void;
     private request;
 }
+export interface ClientSearchWorkerPoolOptions {
+    workerCount?: number;
+    createRuntime: () => ClientSearchWorkerRuntime;
+}
+/**
+ * Shards local search documents across a bounded Worker set. A stable path
+ * hash keeps updates and removals on the same shard; queries fan out and
+ * merge only each worker's bounded top-K results.
+ */
+export declare class ClientSearchWorkerPool {
+    private readonly workers;
+    constructor(options: ClientSearchWorkerPoolOptions);
+    upsertMany(notes: CachedNote[], options?: Pick<ClientSearchIndexBuildOptions, 'batchSize' | 'signal'>): Promise<void>;
+    remove(path: string, signal?: AbortSignal): Promise<void>;
+    clear(signal?: AbortSignal): Promise<void>;
+    search(query: string, options?: {
+        limit?: number;
+        maxChars?: number;
+    }, signal?: AbortSignal): Promise<ClientSearchResponse>;
+    snapshot(signal?: AbortSignal): Promise<string>;
+    restore(snapshot: string, signal?: AbortSignal): Promise<number>;
+    close(): void;
+    private partition;
+    private workerFor;
+    private shardFor;
+}
 //# sourceMappingURL=client-search-worker.d.ts.map

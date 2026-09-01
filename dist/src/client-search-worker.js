@@ -114,6 +114,78 @@ export class ClientSearchWorkerClient {
         });
     }
 }
+/**
+ * Shards local search documents across a bounded Worker set. A stable path
+ * hash keeps updates and removals on the same shard; queries fan out and
+ * merge only each worker's bounded top-K results.
+ */
+export class ClientSearchWorkerPool {
+    workers;
+    constructor(options) {
+        const workerCount = options.workerCount ?? 2;
+        if (!Number.isInteger(workerCount) || workerCount < 1 || workerCount > 8)
+            throw new Error('workerCount must be between 1 and 8');
+        this.workers = Array.from({ length: workerCount }, () => new ClientSearchWorkerClient(options.createRuntime()));
+    }
+    async upsertMany(notes, options = {}) {
+        const shards = this.partition(notes);
+        await Promise.all(this.workers.map((worker, index) => worker.upsertMany(shards[index], options)));
+    }
+    remove(path, signal) {
+        return this.workerFor(path).remove(path, signal);
+    }
+    async clear(signal) {
+        await Promise.all(this.workers.map(worker => worker.clear(signal)));
+    }
+    async search(query, options = {}, signal) {
+        const responses = await Promise.all(this.workers.map(worker => worker.search(query, options, signal)));
+        const limit = Math.min(Math.max(Math.floor(options.limit ?? 5), 1), 50);
+        const results = responses.flatMap(response => response.results)
+            .sort((left, right) => right.score - left.score || left.path.localeCompare(right.path))
+            .slice(0, limit);
+        return {
+            complete: false,
+            indexedDocuments: responses.reduce((total, response) => total + response.indexedDocuments, 0),
+            results,
+        };
+    }
+    async snapshot(signal) {
+        const snapshots = await Promise.all(this.workers.map(worker => worker.snapshot(signal)));
+        return JSON.stringify({ version: 1, shards: snapshots });
+    }
+    async restore(snapshot, signal) {
+        let parsed;
+        try {
+            parsed = JSON.parse(snapshot);
+        }
+        catch {
+            return 0;
+        }
+        if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.shards))
+            return 0;
+        const shards = parsed.shards;
+        if (shards.length !== this.workers.length || !shards.every(shard => typeof shard === 'string'))
+            throw new Error('search worker snapshot shard count does not match the pool');
+        const restored = await Promise.all(this.workers.map((worker, index) => worker.restore(shards[index], signal)));
+        return restored.reduce((total, count) => total + count, 0);
+    }
+    close() {
+        for (const worker of this.workers)
+            worker.close();
+    }
+    partition(notes) {
+        const shards = this.workers.map(() => []);
+        for (const note of notes)
+            shards[this.shardFor(note.path)].push(note);
+        return shards;
+    }
+    workerFor(path) {
+        return this.workers[this.shardFor(path)];
+    }
+    shardFor(path) {
+        return hashPath(path) % this.workers.length;
+    }
+}
 async function execute(index, request, signal) {
     switch (request.op) {
         case 'upsertMany':
@@ -152,4 +224,12 @@ function parseResponse(value) {
     if (typeof response.id !== 'string' || typeof response.ok !== 'boolean')
         return undefined;
     return response;
+}
+function hashPath(path) {
+    let hash = 2166136261;
+    for (const character of String(path)) {
+        hash ^= character.codePointAt(0) || 0;
+        hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
 }
