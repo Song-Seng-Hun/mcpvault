@@ -119,6 +119,7 @@ export class CommunityFeaturesService {
     reactionRecords = new Map();
     reactionIndexReady = false;
     reactionIndexUpdate = Promise.resolve();
+    reactionSnapshotWrite;
     constructor(fileSystem, access, auth, reputation, vaultPath, notifications) {
         this.fileSystem = fileSystem;
         this.access = access;
@@ -126,6 +127,10 @@ export class CommunityFeaturesService {
         this.reputation = reputation;
         this.vaultPath = vaultPath;
         this.notifications = notifications;
+    }
+    async close() {
+        if (this.reactionSnapshotWrite)
+            await this.reactionSnapshotWrite;
     }
     async assertKnownIdentity(value) {
         const identities = await this.auth.listPrincipals();
@@ -381,6 +386,15 @@ export class CommunityFeaturesService {
             // Derived acceleration state is optional; Markdown and Git remain authoritative.
         }
     }
+    queueReactionSnapshotSave(counts) {
+        const previous = this.reactionSnapshotWrite || Promise.resolve();
+        const write = previous.then(() => this.saveReactionSnapshot(counts)).catch(() => undefined);
+        this.reactionSnapshotWrite = write;
+        void write.finally(() => {
+            if (this.reactionSnapshotWrite === write)
+                this.reactionSnapshotWrite = undefined;
+        });
+    }
     async postReactionAggregates() {
         await this.reactionIndexUpdate;
         const cached = this.reactionAggregateCache;
@@ -433,7 +447,7 @@ export class CommunityFeaturesService {
                     this.reactionRecords.set(path, record);
                 this.reactionIndexReady = true;
             }
-            void this.saveReactionSnapshot(counts);
+            this.queueReactionSnapshotSave(counts);
             return { counts, incomplete };
         })();
         this.reactionAggregateInFlight = computation;

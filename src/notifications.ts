@@ -475,6 +475,7 @@ export class NotificationService {
   private publicSnapshotCache: { expiresAt: number; value: PublicSnapshotIndex } | undefined;
   private publicSnapshotInFlight: Promise<PublicSnapshotIndex> | undefined;
   private publicSnapshotUpdate: Promise<void> | undefined;
+  private publicSnapshotWrite: Promise<void> | undefined;
   private publicSnapshotRestoreAttempted = false;
 
   constructor(
@@ -483,6 +484,11 @@ export class NotificationService {
     private readonly vaultPath?: string,
     private readonly fileCatalog?: VaultFileCatalog,
   ) {}
+
+  async close(): Promise<void> {
+    if (this.publicSnapshotUpdate) await this.publicSnapshotUpdate;
+    if (this.publicSnapshotWrite) await this.publicSnapshotWrite;
+  }
 
   async discoverySnapshot(): Promise<PublicSnapshotIndex> {
     return this.cachedPublicSnapshot();
@@ -567,6 +573,15 @@ export class NotificationService {
     }
   }
 
+  private queuePublicSnapshotSave(value: PublicSnapshotIndex): void {
+    const previous = this.publicSnapshotWrite || Promise.resolve();
+    const write = previous.then(() => this.savePublicSnapshot(value)).catch(() => undefined);
+    this.publicSnapshotWrite = write;
+    void write.finally(() => {
+      if (this.publicSnapshotWrite === write) this.publicSnapshotWrite = undefined;
+    });
+  }
+
   invalidate(path?: string, kind: 'upsert' | 'delete' = 'upsert'): void {
     this.eventCache.clear();
     this.eventInFlight.clear();
@@ -603,7 +618,7 @@ export class NotificationService {
       }
       for (const collection of ['posts', 'comments', 'messages', 'rooms'] as const) sortPublicCollection(snapshot[collection], collection);
       const value = buildPublicSnapshotIndex(snapshot);
-      void this.savePublicSnapshot(value);
+      this.queuePublicSnapshotSave(value);
       return value;
     })();
     this.publicSnapshotInFlight = computation;

@@ -1901,6 +1901,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     searchService.close();
     semanticSearch.close();
     graphIndex.close();
+    await notifications.close();
+    await communityFeatures.close();
     fileCatalog.close();
     return closeServer();
   };

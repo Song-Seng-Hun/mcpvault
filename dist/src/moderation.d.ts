@@ -25,12 +25,17 @@ export declare class ModerationService {
     private readonly fileSystem;
     private readonly scopeAuth;
     private readonly databasePath;
+    private readonly eventPath;
     private mutationQueue;
     private databaseCache;
     private databaseInFlight;
+    private databaseEventCursor;
+    private databaseEventCount;
     constructor(vaultPath: string, fileSystem: FileSystemService, scopeAuth: ScopeAuthService);
+    private applyEvent;
     private readDatabase;
     private writeDatabase;
+    private appendEvent;
     private exclusive;
     private requireLoggedIn;
     private requireModerator;

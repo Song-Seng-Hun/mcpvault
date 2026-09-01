@@ -18,7 +18,9 @@ export declare class CommunityFeaturesService {
     private readonly reactionRecords;
     private reactionIndexReady;
     private reactionIndexUpdate;
+    private reactionSnapshotWrite;
     constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, auth: ScopeAuthService, reputation: ReputationService, vaultPath: string, notifications?: NotificationService | undefined);
+    close(): Promise<void>;
     private assertKnownIdentity;
     listSeries(params: {
         seriesId?: string;
@@ -63,6 +65,7 @@ export declare class CommunityFeaturesService {
     private reactionFiles;
     private loadReactionSnapshot;
     private saveReactionSnapshot;
+    private queueReactionSnapshotSave;
     private postReactionAggregates;
     toggleReaction(params: {
         principal?: ScopePrincipal;

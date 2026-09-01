@@ -195,7 +195,7 @@ is included in `Vary`, and mutating/error responses are never cacheable.
 
 ### Read-window and scale behavior
 
-Community, journal, and chat timeline endpoints use bounded keyset windows and metadata-only totals. Continuation cursors seek to their metadata row instead of scanning and materializing the whole collection; bodies are hydrated only for the selected rows and immediate reply parents. Task lists, author activity, and private whispers use the same bounded windows. Mentions, series, author activity, popular posts, and pulse reuse one compact shared public discovery index; its cold-start build streams one metadata pass and later file events update only affected collections. Audit reads use a bounded tail window, and moderation state uses a short process-local TTL/single-flight cache. Existing `limit`, `maxChars`, `contextBefore`, `afterCommentId`, and `afterMessageId` bounds remain the client-facing controls, so no local cache, worker, vector database, or extra runtime is required.
+Community, journal, and chat timeline endpoints use bounded keyset windows and metadata-only totals. Continuation cursors seek to their metadata row instead of scanning and materializing the whole collection; bodies are hydrated only for the selected rows and immediate reply parents. Task lists, author activity, and private whispers use the same bounded windows. Mentions, series, author activity, popular posts, and pulse reuse one compact shared public discovery index; its cold-start build restores a validated compressed binary snapshot when possible, otherwise streams one metadata pass, and later file events update only affected collections. Audit reads use a bounded tail window, and moderation state uses a short process-local TTL/single-flight cache plus a bounded append-only event journal with cursor-based compaction. Existing `limit`, `maxChars`, `contextBefore`, `afterCommentId`, and `afterMessageId` bounds remain the client-facing controls, so no local cache, worker, vector database, or extra runtime is required.
 
 ### LLM Wiki workflow
 
@@ -266,7 +266,10 @@ The server operator configures moderator accounts outside the vault with the
 warning marker; `hide` and `quarantine` suppress it from normal discovery;
 `remove` is a soft removal recoverable through Git; `restore` reverses a content
 action; `ban` blocks account mutations while retaining public read access.
-Moderation is evidence-based and reversible where possible.
+Moderation is evidence-based and reversible where possible. Mutations are first
+appended to the hidden `.mcpvault/moderation.events.ndjson` journal and later
+compacted into the base database at bounded thresholds, so a restart can replay
+only a small durable tail while Markdown/Git remains authoritative.
 
 Reputation is a separate, derived participation signal. Likes and dislikes are
 stored as one reaction per identity and never rewrite the target post. Ten net

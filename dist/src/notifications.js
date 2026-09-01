@@ -435,12 +435,19 @@ export class NotificationService {
     publicSnapshotCache;
     publicSnapshotInFlight;
     publicSnapshotUpdate;
+    publicSnapshotWrite;
     publicSnapshotRestoreAttempted = false;
     constructor(fileSystem, reputation, vaultPath, fileCatalog) {
         this.fileSystem = fileSystem;
         this.reputation = reputation;
         this.vaultPath = vaultPath;
         this.fileCatalog = fileCatalog;
+    }
+    async close() {
+        if (this.publicSnapshotUpdate)
+            await this.publicSnapshotUpdate;
+        if (this.publicSnapshotWrite)
+            await this.publicSnapshotWrite;
     }
     async discoverySnapshot() {
         return this.cachedPublicSnapshot();
@@ -537,6 +544,15 @@ export class NotificationService {
             // Derived acceleration state is optional; Markdown remains authoritative.
         }
     }
+    queuePublicSnapshotSave(value) {
+        const previous = this.publicSnapshotWrite || Promise.resolve();
+        const write = previous.then(() => this.savePublicSnapshot(value)).catch(() => undefined);
+        this.publicSnapshotWrite = write;
+        void write.finally(() => {
+            if (this.publicSnapshotWrite === write)
+                this.publicSnapshotWrite = undefined;
+        });
+    }
     invalidate(path, kind = 'upsert') {
         this.eventCache.clear();
         this.eventInFlight.clear();
@@ -580,7 +596,7 @@ export class NotificationService {
             for (const collection of ['posts', 'comments', 'messages', 'rooms'])
                 sortPublicCollection(snapshot[collection], collection);
             const value = buildPublicSnapshotIndex(snapshot);
-            void this.savePublicSnapshot(value);
+            this.queuePublicSnapshotSave(value);
             return value;
         })();
         this.publicSnapshotInFlight = computation;

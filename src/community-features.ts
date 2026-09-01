@@ -135,6 +135,7 @@ export class CommunityFeaturesService {
   private readonly reactionRecords = new Map<string, ReactionRecord>();
   private reactionIndexReady = false;
   private reactionIndexUpdate: Promise<void> = Promise.resolve();
+  private reactionSnapshotWrite: Promise<void> | undefined;
 
   constructor(
     private readonly fileSystem: FileSystemService,
@@ -144,6 +145,10 @@ export class CommunityFeaturesService {
     private readonly vaultPath: string,
     private readonly notifications?: NotificationService,
   ) {}
+
+  async close(): Promise<void> {
+    if (this.reactionSnapshotWrite) await this.reactionSnapshotWrite;
+  }
 
   private async assertKnownIdentity(value: string): Promise<void> {
     const identities = await this.auth.listPrincipals();
@@ -372,6 +377,15 @@ export class CommunityFeaturesService {
     }
   }
 
+  private queueReactionSnapshotSave(counts: Map<string, { likeCount: number; dislikeCount: number }>): void {
+    const previous = this.reactionSnapshotWrite || Promise.resolve();
+    const write = previous.then(() => this.saveReactionSnapshot(counts)).catch(() => undefined);
+    this.reactionSnapshotWrite = write;
+    void write.finally(() => {
+      if (this.reactionSnapshotWrite === write) this.reactionSnapshotWrite = undefined;
+    });
+  }
+
   private async postReactionAggregates(): Promise<{ counts: Map<string, { likeCount: number; dislikeCount: number }>; incomplete: boolean }> {
     await this.reactionIndexUpdate;
     const cached = this.reactionAggregateCache;
@@ -416,7 +430,7 @@ export class CommunityFeaturesService {
         for (const [path, record] of records) this.reactionRecords.set(path, record);
         this.reactionIndexReady = true;
       }
-      void this.saveReactionSnapshot(counts);
+      this.queueReactionSnapshotSave(counts);
       return { counts, incomplete };
     })();
     this.reactionAggregateInFlight = computation;

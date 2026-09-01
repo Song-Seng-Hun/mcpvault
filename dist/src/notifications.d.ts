@@ -56,14 +56,17 @@ export declare class NotificationService {
     private publicSnapshotCache;
     private publicSnapshotInFlight;
     private publicSnapshotUpdate;
+    private publicSnapshotWrite;
     private publicSnapshotRestoreAttempted;
     constructor(fileSystem: FileSystemService, reputation: ReputationService, vaultPath?: string | undefined, fileCatalog?: VaultFileCatalog | undefined);
+    close(): Promise<void>;
     discoverySnapshot(): Promise<PublicSnapshotIndex>;
     /** Return only indexed public items that mention one of the exact identities. */
     mentionCandidates(targets: ReadonlySet<string>, includeClosed?: boolean): Promise<QueryNote[]>;
     private publicManifest;
     private loadPublicSnapshot;
     private savePublicSnapshot;
+    private queuePublicSnapshotSave;
     invalidate(path?: string, kind?: 'upsert' | 'delete'): void;
     private cachedPublicSnapshot;
     private updatePublicSnapshot;
