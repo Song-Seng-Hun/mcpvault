@@ -104,3 +104,43 @@ test('stale reads return cached notes immediately and refresh by revision', asyn
   await expect(stale.refresh).resolves.toMatchObject({ notes: [{ path: 'note.md', content: 'new', revision }] });
   expect(cache.get('note.md')!.content).toBe('new');
 });
+
+test('persists only changed entries with an incremental manifest', async () => {
+  let revisionA = 'a'.repeat(64);
+  let contentA = 'one';
+  const values = new Map<string, string>();
+  const writes: string[] = [];
+  const removals: string[] = [];
+  const store: ClientKeyValueStore = {
+    getItem: key => values.get(key) || null,
+    setItem: (key, value) => { values.set(key, value); writes.push(key); },
+    removeItem: key => { values.delete(key); removals.push(key); },
+  };
+  const caller: ClientEndpointCaller = {
+    async callEndpoint(_endpointId, arguments_) {
+      const paths = arguments_.paths as string[];
+      return {
+        ok: paths.map(path => path === 'a.md'
+          ? { path, revision: revisionA, content: contentA }
+          : { path, revision: 'b'.repeat(64), content: 'two' }),
+        err: [],
+      };
+    },
+  };
+  const cache = new McpVaultClientCache(caller);
+  await cache.readNotes(['a.md', 'b.md']);
+  cache.persistIncremental(store, 'incremental');
+  writes.length = 0;
+  revisionA = 'c'.repeat(64);
+  contentA = 'updated';
+  await cache.readNotes(['a.md']);
+  cache.invalidate('b.md');
+  cache.persistIncremental(store, 'incremental');
+
+  expect(writes).toEqual(['incremental:note:a.md', 'incremental']);
+  expect(removals).toEqual(['incremental:note:b.md']);
+  const restored = new McpVaultClientCache(caller);
+  expect(restored.hydrateIncremental(store, 'incremental')).toBe(1);
+  expect(restored.get('a.md')).toMatchObject({ content: 'updated', revision: 'c'.repeat(64) });
+  expect(restored.get('b.md')).toBeUndefined();
+});

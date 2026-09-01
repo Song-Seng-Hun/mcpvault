@@ -4,6 +4,7 @@ export interface ClientEndpointCaller {
 export interface ClientKeyValueStore {
     getItem(key: string): string | null;
     setItem(key: string, value: string): void;
+    removeItem?(key: string): void;
 }
 export interface CachedNote {
     path: string;
@@ -41,6 +42,7 @@ export declare class McpVaultClientCache {
     private readonly caller;
     private readonly entries;
     private readonly inFlight;
+    private readonly dirtyPaths;
     private readonly maxEntries;
     constructor(caller: ClientEndpointCaller, options?: {
         maxEntries?: number;
@@ -50,7 +52,9 @@ export declare class McpVaultClientCache {
     snapshot(): string;
     restore(snapshot: string): number;
     persist(store: ClientKeyValueStore, key: string): void;
+    persistIncremental(store: ClientKeyValueStore, key: string): void;
     hydrate(store: ClientKeyValueStore, key: string): number;
+    hydrateIncremental(store: ClientKeyValueStore, key: string): number;
     invalidate(path?: string): void;
     knownRevisions(paths: string[]): Record<string, string>;
     readNotes(paths: string[], options?: ClientReadNotesOptions): Promise<ClientReadNotesResult>;
