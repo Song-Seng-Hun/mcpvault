@@ -41,6 +41,63 @@ function compareQueryValues(a, b) {
         return Number(a) - Number(b);
     return String(a ?? '').localeCompare(String(b ?? ''), undefined, { numeric: true, sensitivity: 'base' });
 }
+const TOP_K_MAX = 1_024;
+function compareQueryNotes(a, b, sortBy, sortOrder) {
+    const aValue = sortBy === 'path' ? a.path : getFrontmatterValue(a.frontmatter, sortBy).value;
+    const bValue = sortBy === 'path' ? b.path : getFrontmatterValue(b.frontmatter, sortBy).value;
+    const aMissing = aValue === undefined;
+    const bMissing = bValue === undefined;
+    if (aMissing !== bMissing)
+        return aMissing ? 1 : -1;
+    const comparison = compareQueryValues(aValue, bValue);
+    if (comparison !== 0)
+        return sortOrder === 'asc' ? comparison : -comparison;
+    return a.path.localeCompare(b.path);
+}
+function selectSortedNotes(notes, sortBy, sortOrder, offset, limit) {
+    const needed = offset + limit;
+    const compare = (a, b) => compareQueryNotes(a, b, sortBy, sortOrder);
+    if (needed > TOP_K_MAX || needed >= notes.length)
+        return notes.sort(compare).slice(offset, needed);
+    // Keep the worst selected item at the heap root. This reduces sorting from
+    // O(N log N) to O(N log K) when callers ask for a small first page.
+    const heap = [];
+    const siftUp = (index) => {
+        while (index > 0) {
+            const parent = Math.floor((index - 1) / 2);
+            if (compare(heap[parent], heap[index]) >= 0)
+                break;
+            [heap[parent], heap[index]] = [heap[index], heap[parent]];
+            index = parent;
+        }
+    };
+    const siftDown = (index) => {
+        while (true) {
+            const left = index * 2 + 1;
+            const right = left + 1;
+            let worst = index;
+            if (left < heap.length && compare(heap[left], heap[worst]) > 0)
+                worst = left;
+            if (right < heap.length && compare(heap[right], heap[worst]) > 0)
+                worst = right;
+            if (worst === index)
+                break;
+            [heap[index], heap[worst]] = [heap[worst], heap[index]];
+            index = worst;
+        }
+    };
+    for (const note of notes) {
+        if (heap.length < needed) {
+            heap.push(note);
+            siftUp(heap.length - 1);
+        }
+        else if (compare(note, heap[0]) < 0) {
+            heap[0] = note;
+            siftDown(0);
+        }
+    }
+    return heap.sort(compare).slice(offset, needed);
+}
 function lineStarts(content) {
     const starts = [0];
     const newline = /\r\n|\n|\r/g;
@@ -1768,19 +1825,7 @@ export class FileSystemService {
             }
         }
         const sortBy = params.sortBy || 'path';
-        notes.sort((a, b) => {
-            const aValue = sortBy === 'path' ? a.path : getFrontmatterValue(a.frontmatter, sortBy).value;
-            const bValue = sortBy === 'path' ? b.path : getFrontmatterValue(b.frontmatter, sortBy).value;
-            const aMissing = aValue === undefined;
-            const bMissing = bValue === undefined;
-            if (aMissing !== bMissing)
-                return aMissing ? 1 : -1;
-            const comparison = compareQueryValues(aValue, bValue);
-            if (comparison !== 0)
-                return sortOrder === 'asc' ? comparison : -comparison;
-            return a.path.localeCompare(b.path);
-        });
-        const selected = notes.slice(requestedOffset, requestedOffset + limit);
+        const selected = selectSortedNotes(notes, sortBy, sortOrder, requestedOffset, limit);
         if (params.includeContent && indexedEntries) {
             const withContent = await Promise.all(selected.map(async (note) => {
                 try {
