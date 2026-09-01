@@ -26,6 +26,8 @@ export { ClientTimelineCache } from './client-timeline.js';
 export type { ClientTimelineCacheOptions, ClientTimelineMergeResult } from './client-timeline.js';
 export { ClientCapabilityCatalogCache, ClientHeartbeatBackoff } from './client-control-plane.js';
 export type { ClientCapabilityCatalogCacheOptions, ClientHeartbeatBackoffOptions, ClientMcpCaller } from './client-control-plane.js';
+export { createNoteUpdatePlan } from './client-diff.js';
+export type { ClientDiffOptions, ClientNoteUpdatePlan, ClientPatchHunk } from './client-diff.js';
 export { McpVaultClientSearchIndex } from './client-search.js';
 export type { ClientSearchResponse, ClientSearchResult } from './client-search.js';
 export * from './types.js';
