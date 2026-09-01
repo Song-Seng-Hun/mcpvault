@@ -275,7 +275,14 @@ export interface QueryNotesParams {
     limit?: number;
     /** Internal pagination offset; MCP callers should prefer bounded cursors. */
     offset?: number;
+    /** Internal keyset cursor. Use the last returned sort value and path. */
+    after?: QueryNotesCursor;
     includeContent?: boolean;
+}
+export interface QueryNotesCursor {
+    path: string;
+    value?: string | number | boolean | null;
+    missing?: boolean;
 }
 export interface QueryNote {
     path: string;
@@ -286,6 +293,7 @@ export interface QueryNotesResult {
     notes: QueryNote[];
     total: number;
     truncated: boolean;
+    nextCursor?: QueryNotesCursor;
 }
 export interface RevisionChange {
     status: string;

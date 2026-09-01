@@ -293,14 +293,14 @@ export class CommunityFeaturesService {
                     return snapshot;
             }
             const counts = new Map();
-            let offset = 0;
+            let after;
             let incomplete = false;
             while (true) {
                 const page = await this.fileSystem.queryNotes({
                     pathPrefix: REACTIONS,
                     filters: { mcpvault_type: 'reaction', active: true, target_type: 'post' },
                     limit: MAX_SCAN,
-                    offset,
+                    ...(after ? { after } : {}),
                 });
                 for (const reaction of page.notes) {
                     const postId = String(reaction.frontmatter.target_id || '').toLowerCase();
@@ -313,11 +313,11 @@ export class CommunityFeaturesService {
                         current.dislikeCount += 1;
                     counts.set(postId, current);
                 }
-                offset += page.notes.length;
-                if (!page.truncated || page.notes.length === 0 || offset >= page.total) {
-                    incomplete = page.truncated && offset < page.total;
+                if (!page.truncated || page.notes.length === 0 || !page.nextCursor) {
+                    incomplete = page.truncated && !page.nextCursor;
                     break;
                 }
+                after = page.nextCursor;
             }
             void this.saveReactionSnapshot(counts);
             return { counts, incomplete };

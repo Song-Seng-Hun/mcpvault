@@ -648,6 +648,23 @@ describe("structured frontmatter queries", () => {
     await expect(fileSystem.queryNotes({ limit: 0 })).rejects.toThrow(/positive integer/);
     await expect(fileSystem.queryNotes({ sortOrder: "sideways" as "asc" })).rejects.toThrow(/sortOrder/);
   });
+
+  test("returns a stable keyset cursor for the next sorted page", async () => {
+    await writeFile(join(testVaultPath, "One.md"), "---\npriority: 1\n---\nOne");
+    await writeFile(join(testVaultPath, "Two.md"), "---\npriority: 2\n---\nTwo");
+    await writeFile(join(testVaultPath, "Three.md"), "---\npriority: 3\n---\nThree");
+
+    const first = await fileSystem.queryNotes({ sortBy: "priority", limit: 2 });
+    expect(first.notes.map(note => note.path)).toEqual(["One.md", "Two.md"]);
+    expect(first.nextCursor).toMatchObject({ path: "Two.md", value: 2 });
+
+    const second = await fileSystem.queryNotes({ sortBy: "priority", limit: 2, after: first.nextCursor });
+    expect(second.notes.map(note => note.path)).toEqual(["Three.md"]);
+    expect(second.truncated).toBe(false);
+    expect(second.nextCursor).toBeUndefined();
+
+    await expect(fileSystem.queryNotes({ after: {} as any })).rejects.toThrow(/cursor path/);
+  });
 });
 
 // ============================================================================

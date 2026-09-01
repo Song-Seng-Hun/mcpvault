@@ -77,13 +77,13 @@ export class AgentDirectoryService {
             .filter(principal => !params.role || principal.role === params.role)
             .filter(principal => !params.capability || (principal.capabilities || []).includes(params.capability));
         const profileNotes = [];
-        let profileOffset = 0;
+        let profileAfter;
         while (eligiblePrincipals.length > 0) {
-            const page = await this.fileSystem.queryNotes({ pathPrefix: ROOT, filters: { mcpvault_type: 'agent_profile' }, limit: 500, offset: profileOffset });
+            const page = await this.fileSystem.queryNotes({ pathPrefix: ROOT, filters: { mcpvault_type: 'agent_profile' }, limit: 500, ...(profileAfter ? { after: profileAfter } : {}) });
             profileNotes.push(...page.notes);
-            profileOffset += page.notes.length;
-            if (!page.truncated || page.notes.length === 0 || profileOffset >= page.total)
+            if (!page.truncated || page.notes.length === 0 || !page.nextCursor)
                 break;
+            profileAfter = page.nextCursor;
         }
         const profileByPath = new Map(profileNotes.map(note => [note.path, note]));
         const profiles = eligiblePrincipals.map(principal => {

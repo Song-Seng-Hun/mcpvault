@@ -111,13 +111,13 @@ export class ReputationService {
             return new Map();
         const queryAll = async (params) => {
             const notes = [];
-            let offset = 0;
+            let after;
             while (true) {
-                const page = await this.fileSystem.queryNotes({ ...params, limit: MAX_SCAN, offset });
+                const page = await this.fileSystem.queryNotes({ ...params, limit: MAX_SCAN, ...(after ? { after } : {}) });
                 notes.push(...page.notes);
-                if (!page.truncated || page.notes.length === 0)
+                if (!page.truncated || page.notes.length === 0 || !page.nextCursor)
                     return { notes, total: page.total, truncated: false };
-                offset += page.notes.length;
+                after = page.nextCursor;
             }
         };
         const [posts, comments, reactions] = await Promise.all([

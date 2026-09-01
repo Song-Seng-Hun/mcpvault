@@ -15,15 +15,16 @@ export async function queryAllNotes(
   params: QueryNotesParams = {},
   canAccessPath: (path: string) => boolean = () => true,
 ): Promise<QueryNotesResult> {
+  const { offset: _offset, after: initialAfter, ...baseParams } = params;
   const notes: QueryNotesResult['notes'] = [];
-  let offset = 0;
+  let after = initialAfter;
   let total = 0;
   while (true) {
-    const page = await fileSystem.queryNotes({ ...params, limit: PAGE_SIZE, offset, includeContent: params.includeContent === true }, canAccessPath);
+    const page = await fileSystem.queryNotes({ ...baseParams, limit: PAGE_SIZE, ...(after ? { after } : {}), includeContent: params.includeContent === true }, canAccessPath);
     notes.push(...page.notes);
     total = page.total;
-    offset += page.notes.length;
-    if (!page.truncated || page.notes.length === 0 || offset >= page.total) break;
+    if (!page.truncated || page.notes.length === 0 || !page.nextCursor) break;
+    after = page.nextCursor;
   }
-  return { notes, total, truncated: offset < total };
+  return { notes, total, truncated: notes.length < total };
 }

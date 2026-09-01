@@ -6,6 +6,7 @@ const FULL_REFRESH_INTERVAL_MS = 60_000;
 const READ_BATCH_SIZE = 32;
 const QUERY_CACHE_TTL_MS = 2_000;
 const QUERY_CACHE_MAX_ENTRIES = 128;
+const SORTED_QUERY_CACHE_MAX_ENTRIES = 64;
 function normalizePath(value) {
     return value.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
 }
@@ -47,6 +48,36 @@ function filterValues(value) {
     }
     return isFilterScalar(value) ? [value] : undefined;
 }
+function sortValue(entry, sortBy) {
+    if (sortBy === 'path')
+        return entry.path;
+    let current = entry.frontmatter;
+    for (const segment of sortBy.split('.')) {
+        if (!current || typeof current !== 'object' || !Object.prototype.hasOwnProperty.call(current, segment))
+            return undefined;
+        current = current[segment];
+    }
+    return current;
+}
+function compareValues(a, b) {
+    if (typeof a === 'number' && typeof b === 'number')
+        return a - b;
+    if (typeof a === 'boolean' && typeof b === 'boolean')
+        return Number(a) - Number(b);
+    return String(a ?? '').localeCompare(String(b ?? ''), undefined, { numeric: true, sensitivity: 'base' });
+}
+function compareEntries(a, b, sortBy, sortOrder) {
+    const aValue = sortValue(a, sortBy);
+    const bValue = sortValue(b, sortBy);
+    const aMissing = aValue === undefined;
+    const bMissing = bValue === undefined;
+    if (aMissing !== bMissing)
+        return aMissing ? 1 : -1;
+    const comparison = compareValues(aValue, bValue);
+    if (comparison !== 0)
+        return sortOrder === 'asc' ? comparison : -comparison;
+    return a.path.localeCompare(b.path);
+}
 /**
  * A disposable, metadata-only read model for repeated structured queries.
  * Markdown remains authoritative; this index only avoids reopening and
@@ -60,10 +91,12 @@ export class VaultMetadataIndex {
     filterIndex = new Map();
     pathIndex = new Map();
     queryCache = new Map();
+    sortedQueryCache = new Map();
     dirty = new Set();
     ready;
     refreshPromise;
     watcher;
+    watcherStarted = false;
     needsFullRefresh = true;
     lastFullRefreshAt = 0;
     firstList = true;
@@ -78,6 +111,7 @@ export class VaultMetadataIndex {
         if (!isNote(normalized) || !this.pathFilter.isAllowed(normalized))
             return;
         this.queryCache.clear();
+        this.sortedQueryCache.clear();
         if (kind === 'delete') {
             const existing = this.entries.get(normalized);
             if (existing)
@@ -139,6 +173,20 @@ export class VaultMetadataIndex {
             this.queryCache.delete(this.queryCache.keys().next().value);
         return paths.map(path => this.entries.get(path)).filter((entry) => entry !== undefined);
     }
+    async listSorted(filters = {}, pathPrefix = '', sortBy = 'path', sortOrder = 'asc') {
+        const cacheKey = JSON.stringify([pathPrefix, filters, sortBy, sortOrder]);
+        const cached = this.sortedQueryCache.get(cacheKey);
+        if (cached) {
+            this.sortedQueryCache.delete(cacheKey);
+            this.sortedQueryCache.set(cacheKey, cached);
+            return cached;
+        }
+        const entries = [...await this.list(filters, pathPrefix)].sort((a, b) => compareEntries(a, b, sortBy, sortOrder));
+        this.sortedQueryCache.set(cacheKey, entries);
+        while (this.sortedQueryCache.size > SORTED_QUERY_CACHE_MAX_ENTRIES)
+            this.sortedQueryCache.delete(this.sortedQueryCache.keys().next().value);
+        return entries;
+    }
     /**
      * Check a previously returned revision without reopening the note body.
      * The stat check keeps the answer fresh even when a filesystem watcher is
@@ -170,15 +218,20 @@ export class VaultMetadataIndex {
         this.watcher = undefined;
     }
     startWatcher() {
+        if (this.watcherStarted)
+            return;
+        this.watcherStarted = true;
         try {
             this.watcher = watch(this.vaultPath, { recursive: true }, (_event, filename) => {
                 if (!filename) {
                     this.queryCache.clear();
+                    this.sortedQueryCache.clear();
                     this.needsFullRefresh = true;
                     return;
                 }
                 const normalized = normalizePath(String(filename));
                 this.queryCache.clear();
+                this.sortedQueryCache.clear();
                 if (isNote(normalized) && this.pathFilter.isAllowed(normalized))
                     this.dirty.add(normalized);
                 else
@@ -217,6 +270,7 @@ export class VaultMetadataIndex {
             this.rebuildFilterIndex();
             this.rebuildPathIndex();
             this.queryCache.clear();
+            this.sortedQueryCache.clear();
             this.lastFullRefreshAt = Date.now();
         })();
         try {
@@ -233,6 +287,7 @@ export class VaultMetadataIndex {
             const paths = [...this.dirty];
             this.dirty.clear();
             this.queryCache.clear();
+            this.sortedQueryCache.clear();
             const metadata = await Promise.all(paths.map(path => this.readEntry(path)));
             for (let index = 0; index < paths.length; index += 1) {
                 const path = paths[index];

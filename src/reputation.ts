@@ -126,12 +126,12 @@ export class ReputationService {
 
     const queryAll = async (params: Parameters<FileSystemService['queryNotes']>[0]) => {
       const notes: Awaited<ReturnType<FileSystemService['queryNotes']>>['notes'] = [];
-      let offset = 0;
+      let after: Awaited<ReturnType<FileSystemService['queryNotes']>>['nextCursor'];
       while (true) {
-        const page = await this.fileSystem.queryNotes({ ...params, limit: MAX_SCAN, offset });
+        const page = await this.fileSystem.queryNotes({ ...params, limit: MAX_SCAN, ...(after ? { after } : {}) });
         notes.push(...page.notes);
-        if (!page.truncated || page.notes.length === 0) return { notes, total: page.total, truncated: false };
-        offset += page.notes.length;
+        if (!page.truncated || page.notes.length === 0 || !page.nextCursor) return { notes, total: page.total, truncated: false };
+        after = page.nextCursor;
       }
     };
     const [posts, comments, reactions] = await Promise.all([

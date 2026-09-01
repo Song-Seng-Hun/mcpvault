@@ -9,6 +9,7 @@ const FULL_REFRESH_INTERVAL_MS = 60_000;
 const READ_BATCH_SIZE = 32;
 const QUERY_CACHE_TTL_MS = 2_000;
 const QUERY_CACHE_MAX_ENTRIES = 128;
+const SORTED_QUERY_CACHE_MAX_ENTRIES = 64;
 
 export interface VaultIndexEntry {
   path: string;
@@ -63,6 +64,33 @@ function filterValues(value: unknown): Array<string | number | boolean | null> |
   return isFilterScalar(value) ? [value] : undefined;
 }
 
+function sortValue(entry: VaultIndexEntry, sortBy: string): unknown {
+  if (sortBy === 'path') return entry.path;
+  let current: unknown = entry.frontmatter;
+  for (const segment of sortBy.split('.')) {
+    if (!current || typeof current !== 'object' || !Object.prototype.hasOwnProperty.call(current, segment)) return undefined;
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
+}
+
+function compareValues(a: unknown, b: unknown): number {
+  if (typeof a === 'number' && typeof b === 'number') return a - b;
+  if (typeof a === 'boolean' && typeof b === 'boolean') return Number(a) - Number(b);
+  return String(a ?? '').localeCompare(String(b ?? ''), undefined, { numeric: true, sensitivity: 'base' });
+}
+
+function compareEntries(a: VaultIndexEntry, b: VaultIndexEntry, sortBy: string, sortOrder: 'asc' | 'desc'): number {
+  const aValue = sortValue(a, sortBy);
+  const bValue = sortValue(b, sortBy);
+  const aMissing = aValue === undefined;
+  const bMissing = bValue === undefined;
+  if (aMissing !== bMissing) return aMissing ? 1 : -1;
+  const comparison = compareValues(aValue, bValue);
+  if (comparison !== 0) return sortOrder === 'asc' ? comparison : -comparison;
+  return a.path.localeCompare(b.path);
+}
+
 /**
  * A disposable, metadata-only read model for repeated structured queries.
  * Markdown remains authoritative; this index only avoids reopening and
@@ -74,10 +102,12 @@ export class VaultMetadataIndex {
   private readonly filterIndex = new Map<string, Map<string, Set<string>>>();
   private readonly pathIndex = new Map<string, Set<string>>();
   private readonly queryCache = new Map<string, { expiresAt: number; paths: string[] }>();
+  private readonly sortedQueryCache = new Map<string, VaultIndexEntry[]>();
   private readonly dirty = new Set<string>();
   private ready: Promise<void>;
   private refreshPromise: Promise<void> | undefined;
   private watcher: FSWatcher | undefined;
+  private watcherStarted = false;
   private needsFullRefresh = true;
   private lastFullRefreshAt = 0;
   private firstList = true;
@@ -95,6 +125,7 @@ export class VaultMetadataIndex {
     const normalized = normalizePath(path);
     if (!isNote(normalized) || !this.pathFilter.isAllowed(normalized)) return;
     this.queryCache.clear();
+    this.sortedQueryCache.clear();
     if (kind === 'delete') {
       const existing = this.entries.get(normalized);
       if (existing) this.removeFilterEntry(existing);
@@ -149,6 +180,20 @@ export class VaultMetadataIndex {
     return paths.map(path => this.entries.get(path)).filter((entry): entry is VaultIndexEntry => entry !== undefined);
   }
 
+  async listSorted(filters: Record<string, unknown> = {}, pathPrefix = '', sortBy = 'path', sortOrder: 'asc' | 'desc' = 'asc'): Promise<VaultIndexEntry[]> {
+    const cacheKey = JSON.stringify([pathPrefix, filters, sortBy, sortOrder]);
+    const cached = this.sortedQueryCache.get(cacheKey);
+    if (cached) {
+      this.sortedQueryCache.delete(cacheKey);
+      this.sortedQueryCache.set(cacheKey, cached);
+      return cached;
+    }
+    const entries = [...await this.list(filters, pathPrefix)].sort((a, b) => compareEntries(a, b, sortBy, sortOrder));
+    this.sortedQueryCache.set(cacheKey, entries);
+    while (this.sortedQueryCache.size > SORTED_QUERY_CACHE_MAX_ENTRIES) this.sortedQueryCache.delete(this.sortedQueryCache.keys().next().value!);
+    return entries;
+  }
+
   /**
    * Check a previously returned revision without reopening the note body.
    * The stat check keeps the answer fresh even when a filesystem watcher is
@@ -179,15 +224,19 @@ export class VaultMetadataIndex {
   }
 
   private startWatcher(): void {
+    if (this.watcherStarted) return;
+    this.watcherStarted = true;
     try {
       this.watcher = watch(this.vaultPath, { recursive: true }, (_event, filename) => {
         if (!filename) {
           this.queryCache.clear();
+          this.sortedQueryCache.clear();
           this.needsFullRefresh = true;
           return;
         }
         const normalized = normalizePath(String(filename));
         this.queryCache.clear();
+        this.sortedQueryCache.clear();
         if (isNote(normalized) && this.pathFilter.isAllowed(normalized)) this.dirty.add(normalized);
         else this.needsFullRefresh = true;
       });
@@ -221,6 +270,7 @@ export class VaultMetadataIndex {
       this.rebuildFilterIndex();
       this.rebuildPathIndex();
       this.queryCache.clear();
+      this.sortedQueryCache.clear();
       this.lastFullRefreshAt = Date.now();
     })();
     try {
@@ -236,6 +286,7 @@ export class VaultMetadataIndex {
       const paths = [...this.dirty];
       this.dirty.clear();
       this.queryCache.clear();
+      this.sortedQueryCache.clear();
       const metadata = await Promise.all(paths.map(path => this.readEntry(path)));
       for (let index = 0; index < paths.length; index += 1) {
         const path = paths[index]!;

@@ -528,6 +528,7 @@ export function createServer(vaultPath, options = {}) {
                     sortBy: { type: "string", description: "path (default) or a frontmatter property, including nested dot notation" },
                     sortOrder: { type: "string", enum: ["asc", "desc"], description: "Sort direction (default: asc)", default: "asc" },
                     limit: { type: "number", description: "Maximum notes to return (default: 100, max: 500)", default: 100 },
+                    after: { type: "object", description: "Keyset cursor returned as nextCursor by the previous page; keeps the next page stable while avoiding large offsets" },
                     includeContent: { type: "boolean", description: "Include the note body in each result (default: false)", default: false },
                     prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
                 }
@@ -1516,6 +1517,7 @@ export function createServer(vaultPath, options = {}) {
                         sortBy: trimmedArgs.sortBy,
                         sortOrder: trimmedArgs.sortOrder,
                         limit: Math.min(requestedLimit, 500),
+                        after: trimmedArgs.after,
                         includeContent: trimmedArgs.includeContent,
                     }, canAccessPath);
                     result.notes = result.notes.filter(note => !isManagedCommunityPath(note.path) || !isModerationHidden(note.frontmatter));

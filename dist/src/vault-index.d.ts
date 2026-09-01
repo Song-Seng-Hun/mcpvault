@@ -20,16 +20,19 @@ export declare class VaultMetadataIndex {
     private readonly filterIndex;
     private readonly pathIndex;
     private readonly queryCache;
+    private readonly sortedQueryCache;
     private readonly dirty;
     private ready;
     private refreshPromise;
     private watcher;
+    private watcherStarted;
     private needsFullRefresh;
     private lastFullRefreshAt;
     private firstList;
     constructor(vaultPath: string, pathFilter: PathFilter, frontmatter: FrontmatterHandler);
     invalidate(path: string, kind: 'upsert' | 'delete'): void;
     list(filters?: Record<string, unknown>, pathPrefix?: string): Promise<VaultIndexEntry[]>;
+    listSorted(filters?: Record<string, unknown>, pathPrefix?: string, sortBy?: string, sortOrder?: 'asc' | 'desc'): Promise<VaultIndexEntry[]>;
     /**
      * Check a previously returned revision without reopening the note body.
      * The stat check keeps the answer fresh even when a filesystem watcher is

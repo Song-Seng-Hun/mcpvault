@@ -98,6 +98,31 @@ function selectSortedNotes(notes, sortBy, sortOrder, offset, limit) {
     }
     return heap.sort(compare).slice(offset, needed);
 }
+function queryCursorValue(note, sortBy) {
+    if (sortBy === 'path')
+        return note.path;
+    return getFrontmatterValue(note.frontmatter, sortBy).value;
+}
+function compareQueryNoteToCursor(note, cursor, sortBy, sortOrder) {
+    const noteValue = queryCursorValue(note, sortBy);
+    const noteMissing = noteValue === undefined;
+    const cursorMissing = cursor.missing === true;
+    if (noteMissing !== cursorMissing)
+        return noteMissing ? 1 : -1;
+    const comparison = compareQueryValues(noteValue, cursor.value);
+    if (comparison !== 0)
+        return sortOrder === 'asc' ? comparison : -comparison;
+    return note.path.localeCompare(cursor.path);
+}
+function cursorForQueryNote(note, sortBy) {
+    const value = queryCursorValue(note, sortBy);
+    if (value === undefined)
+        return { path: note.path, missing: true };
+    if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        return { path: note.path, value };
+    }
+    return { path: note.path, value: String(value) };
+}
 function lineStarts(content) {
     const starts = [0];
     const newline = /\r\n|\n|\r/g;
@@ -1782,10 +1807,14 @@ export class FileSystemService {
         if (params.filters !== undefined && (typeof params.filters !== 'object' || Array.isArray(params.filters) || params.filters === null)) {
             throw new Error('filters must be an object');
         }
+        if (params.after !== undefined && (!params.after || typeof params.after !== 'object' || typeof params.after.path !== 'string' || !params.after.path.trim())) {
+            throw new Error('after must contain a cursor path');
+        }
         const pathPrefix = this.resolvePathPrefix(params.pathPrefix);
+        const sortBy = params.sortBy || 'path';
         const notes = [];
         const filters = params.filters || {};
-        const indexedEntries = this.metadataIndex ? await this.metadataIndex.list(filters, pathPrefix) : undefined;
+        const indexedEntries = this.metadataIndex ? await this.metadataIndex.listSorted(filters, pathPrefix, sortBy, sortOrder) : undefined;
         if (indexedEntries) {
             for (const entry of indexedEntries) {
                 if (!this.pathFilter.isAllowed(entry.path) || !canAccessPath(entry.path))
@@ -1824,8 +1853,14 @@ export class FileSystemService {
                     notes.push({ path, frontmatter: parsed.frontmatter, ...(params.includeContent && { content: parsed.content }) });
             }
         }
-        const sortBy = params.sortBy || 'path';
-        const selected = selectSortedNotes(notes, sortBy, sortOrder, requestedOffset, limit);
+        const afterNotes = params.after
+            ? notes.filter(note => compareQueryNoteToCursor(note, params.after, sortBy, sortOrder) > 0)
+            : notes;
+        const selected = indexedEntries
+            ? afterNotes.slice(requestedOffset, requestedOffset + limit)
+            : selectSortedNotes(afterNotes, sortBy, sortOrder, requestedOffset, limit);
+        const truncated = requestedOffset + limit < afterNotes.length;
+        const nextCursor = selected.length > 0 && truncated ? cursorForQueryNote(selected[selected.length - 1], sortBy) : undefined;
         if (params.includeContent && indexedEntries) {
             const withContent = await Promise.all(selected.map(async (note) => {
                 try {
@@ -1839,13 +1874,15 @@ export class FileSystemService {
             return {
                 notes: withContent.filter((note) => note !== undefined),
                 total: notes.length,
-                truncated: requestedOffset + limit < notes.length,
+                truncated,
+                ...(nextCursor ? { nextCursor } : {}),
             };
         }
         return {
             notes: selected,
             total: notes.length,
-            truncated: requestedOffset + limit < notes.length,
+            truncated,
+            ...(nextCursor ? { nextCursor } : {}),
         };
     }
 }
