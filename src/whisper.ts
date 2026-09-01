@@ -58,16 +58,20 @@ export class WhisperService {
     return { success: true, whisperId: id, to, path: 'private://whisper', revision: created.revision };
   }
 
-  async list(params: { principal?: ScopePrincipal; limit?: number; maxChars?: number }) {
+  async list(params: { principal?: ScopePrincipal; limit?: number; maxChars?: number; afterWhisperId?: string }) {
     const principal = requirePrincipal(params.principal);
     const me = identity(principal);
     const result = await this.fileSystem.queryNotes({ pathPrefix: WHISPER_ROOT, filters: { mcpvault_type: 'whisper' }, sortBy: 'created_at', sortOrder: 'desc', limit: 500 });
     const limit = Math.min(Math.max(Number(params.limit ?? 20), 1), 100);
     const maxChars = Math.min(Math.max(Number(params.maxChars ?? 6000), 1), 20000);
     const visible = result.notes.filter(note => note.frontmatter.to === me || note.frontmatter.from === me);
+    const cursor = params.afterWhisperId
+      ? visible.findIndex(note => note.frontmatter.whisper_id === params.afterWhisperId)
+      : -1;
+    if (params.afterWhisperId && cursor < 0) throw new Error(`afterWhisperId was not found in whispers: ${params.afterWhisperId}`);
     const whispers: Array<Record<string, unknown>> = [];
     let usedChars = 0;
-    for (const note of visible) {
+    for (const note of visible.slice(cursor >= 0 ? cursor + 1 : 0)) {
       if (whispers.length >= limit) break;
       const full = await this.fileSystem.readNote(note.path);
       const length = Array.from(full.content).length;
@@ -75,6 +79,6 @@ export class WhisperService {
       whispers.push({ whisperId: note.frontmatter.whisper_id, from: note.frontmatter.from, to: note.frontmatter.to, roomId: note.frontmatter.room_id, createdAt: note.frontmatter.created_at, content: full.content, references: note.frontmatter.references || [], revision: full.revision });
       usedChars += length;
     }
-    return { whispers, total: visible.length, truncated: visible.length > whispers.length || result.truncated };
+    return { whispers, total: visible.length, truncated: cursor >= 0 || visible.length > whispers.length || result.truncated, nextCursor: whispers.at(-1)?.whisperId };
   }
 }

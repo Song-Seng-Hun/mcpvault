@@ -83,8 +83,8 @@ export async function FeatureGrid() {
       size: "small",
     }),
     FeatureCard({
-      title: "18 MCP tools",
-      description: "Tools cover note reads and writes, exact patches, file moves, search, tags, frontmatter, outlines, line ranges, and vault statistics.",
+      title: "76 MCP tools",
+      description: "Tools cover notes, scoped Wiki workflows, public community posts/comments/chat, bounded context reads, references, private whispers, and Git-safe recovery.",
       icon: "toolkit",
       size: "medium",
     }),

@@ -11,7 +11,7 @@ export function getWhisperTools() {
         {
             name: 'list_whispers',
             description: 'Read private whispers addressed to or sent by the authenticated exact identity. Other models and agents are never included.',
-            inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 1, maximum: 20000, default: 6000 }, accessToken, prettyPrint } },
+            inputSchema: { type: 'object', properties: { afterWhisperId: { type: 'string', description: 'Last whisper previously read; continues with older messages' }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 1, maximum: 20000, default: 6000 }, accessToken, prettyPrint } },
         },
     ];
 }

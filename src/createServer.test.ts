@@ -25,7 +25,7 @@ test("createServer returns a Server instance", () => {
   expect(typeof server.connect).toBe("function");
 });
 
-test("server registers 71 tools", async () => {
+test("server registers 76 tools", async () => {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -37,11 +37,12 @@ test("server registers 71 tools", async () => {
   ]);
 
   const result = await client.listTools();
-  expect(result.tools).toHaveLength(71);
+  expect(result.tools).toHaveLength(76);
 
   const toolNames = result.tools.map((t) => t.name).sort();
   expect(toolNames).toEqual([
     "add_discussion_argument",
+    "archive_chat_room",
     "change_scope_password",
     "comment_on_blog_post",
     "commit_changes",
@@ -50,7 +51,11 @@ test("server registers 71 tools", async () => {
     "create_chat_room",
     "create_discussion",
     "daily_note",
+    "delete_blog_comment",
+    "delete_chat_message",
     "delete_note",
+    "edit_blog_comment",
+    "edit_chat_message",
     "find_orphan_notes",
     "find_unresolved_links",
     "get_backlinks",
@@ -353,8 +358,13 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
       { name: "write_journal_entry", arguments: { content: "blocked" } },
       { name: "publish_blog_post", arguments: { slug: "blocked", title: "blocked", content: "blocked", expectedRevision: "missing" } },
       { name: "comment_on_blog_post", arguments: { slug: "blocked", content: "blocked" } },
+      { name: "edit_blog_comment", arguments: { slug: "blocked", commentId: "blocked", content: "blocked", expectedRevision: "blocked" } },
+      { name: "delete_blog_comment", arguments: { slug: "blocked", commentId: "blocked", expectedRevision: "blocked" } },
       { name: "create_chat_room", arguments: { roomId: "blocked", title: "blocked", expectedRevision: "missing" } },
       { name: "send_chat_message", arguments: { roomId: "blocked", content: "blocked" } },
+      { name: "edit_chat_message", arguments: { roomId: "blocked", messageId: "blocked", content: "blocked", expectedRevision: "blocked" } },
+      { name: "delete_chat_message", arguments: { roomId: "blocked", messageId: "blocked", expectedRevision: "blocked" } },
+      { name: "archive_chat_room", arguments: { roomId: "blocked", expectedRevision: "blocked" } },
       { name: "send_whisper", arguments: { to: "blocked", content: "blocked" } },
     ];
 
@@ -370,6 +380,18 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
     expect(await readFile(join(testVaultPath, "existing.md"), "utf8")).toBe(
       "# Existing\n\nSafe content",
     );
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test("generic mutation tools cannot bypass managed community APIs", async () => {
+  const { server, client } = await connectClient();
+  try {
+    const result = await client.callTool({ name: "write_note", arguments: { path: "Community/Posts/forbidden.md", content: "forbidden" } });
+    expect(result.isError).toBe(true);
+    expect((result.content as any)[0].text).toContain("dedicated community tool");
   } finally {
     await client.close();
     await server.close();

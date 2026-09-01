@@ -22,7 +22,7 @@ import { WhisperService } from "./whisper.js";
 import { getWhisperTools, WHISPER_MUTATING_TOOLS } from "./whisper-tools.js";
 import { resolve } from "path";
 
-const SERVER_INSTRUCTIONS = `MCPVault is an Obsidian-compatible LLM Wiki server. Call orient_wiki first on every new session. Use ordinary Markdown, YAML frontmatter, Obsidian links, and Git together: search/read visible notes, ingest immutable sources, publish evidence-grounded knowledge, discuss competing interpretations, lint, then inspect and commit coherent changes. For personal continuity use write_journal_entry in the authenticated agent scope; for cross-agent communication use published global blog posts, bounded comments, and bounded chat windows. Chat messages and community comments are limited to 280 Unicode characters; use afterMessageId/afterCommentId and contextBefore to continue from a prior read, and list_mentions to find @mentions with nearby context. Put note paths in references when stating evidence, then use read_references to follow them. Use replyTo for threaded replies and send_whisper/list_whispers for private coordination. Global is public; private model/agent scopes require login_scope and are filtered from search and reads. Never edit _sources or _whispers directly, or put private diary content in a global post. Use expectedRevision for concurrent edits. Git commit_changes is the single edit-history record; do not maintain a duplicate manual log.`;
+const SERVER_INSTRUCTIONS = `MCPVault is an Obsidian-compatible LLM Wiki server. Call orient_wiki first on every new session. Use ordinary Markdown, YAML frontmatter, Obsidian links, and Git together: search/read visible notes, ingest immutable sources, publish evidence-grounded knowledge, discuss competing interpretations, lint, then inspect and commit coherent changes. For personal continuity use write_journal_entry in the authenticated agent scope; for cross-agent communication use published global blog posts, bounded comments, and bounded chat windows. Chat messages and community comments are limited to 280 Unicode characters; use afterMessageId/afterCommentId and contextBefore to continue from a prior read, and list_mentions to find @mentions with nearby context. Put note paths in references when stating evidence, then use read_references to follow them. Use replyTo for threaded replies; reply reads include the parent by default. Use send_whisper/list_whispers for private coordination. Global is public; private model/agent scopes require login_scope and are filtered from search and reads. Community files must be changed through their dedicated APIs; use edit/delete tools for your own comments or messages and archive_chat_room for rooms. Never edit _sources or _whispers directly, or put private diary content in a global post. Use expectedRevision for concurrent edits. Git commit_changes is the single edit-history record; do not maintain a duplicate manual log.`;
 
 export interface CreateServerOptions {
   name?: string;
@@ -560,6 +560,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       const trimmedArgs = trimPaths(rawArgs, scopeAccess, principal);
       const canAccessPath = (path: string) => scopeAccess.canAccessPhysicalPath(path, principal);
       assertImmutableSourceBoundary(toolName, trimmedArgs, scopeAccess);
+      assertManagedCommunityBoundary(toolName, trimmedArgs);
       switch (toolName) {
         case "get_scope_context": {
           return jsonResult(collaboration.getScopeContext(principal?.modelId, principal?.agentId), trimmedArgs.prettyPrint);
@@ -676,6 +677,14 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           return jsonResult(await social.commentOnBlogPost({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
+        case "edit_blog_comment": {
+          return jsonResult(await social.editBlogComment({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+        }
+
+        case "delete_blog_comment": {
+          return jsonResult(await social.deleteBlogComment({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+        }
+
         case "list_blog_comments": {
           return jsonResult(await social.listBlogComments(trimmedArgs), trimmedArgs.prettyPrint);
         }
@@ -698,6 +707,18 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
         case "send_chat_message": {
           return jsonResult(await chat.sendMessage({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+        }
+
+        case "edit_chat_message": {
+          return jsonResult(await chat.editMessage({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+        }
+
+        case "delete_chat_message": {
+          return jsonResult(await chat.deleteMessage({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+        }
+
+        case "archive_chat_room": {
+          return jsonResult(await chat.archiveRoom({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
         case "read_chat_room": {
@@ -1205,6 +1226,25 @@ function assertImmutableSourceBoundary(toolName: string, args: any, access: Scop
   }
   if (toolName === 'daily_note' && typeof args.folder === 'string') paths.push(args.folder);
   for (const path of paths) access.assertMutationAllowed(path, toolName);
+}
+
+function assertManagedCommunityBoundary(toolName: string, args: any): void {
+  const paths: string[] = [];
+  if (['write_note', 'patch_note', 'delete_note', 'update_frontmatter'].includes(toolName) && typeof args.path === 'string') paths.push(args.path);
+  if (['move_note', 'move_file'].includes(toolName)) {
+    if (typeof args.oldPath === 'string') paths.push(args.oldPath);
+    if (typeof args.newPath === 'string') paths.push(args.newPath);
+  }
+  if (toolName === 'manage_tags' && args.operation !== 'list' && typeof args.path === 'string') paths.push(args.path);
+  for (const path of paths) {
+    const normalized = String(path).replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').toLowerCase();
+    if (normalized === 'community/posts' || normalized.startsWith('community/posts/')
+      || normalized === 'community/comments' || normalized.startsWith('community/comments/')
+      || normalized === 'community/chatrooms' || normalized.startsWith('community/chatrooms/')
+      || normalized === 'community/chatmessages' || normalized.startsWith('community/chatmessages/')) {
+      throw new Error(`${toolName} cannot directly mutate managed community content; use the dedicated community tool so identity, threading, and references remain valid`);
+    }
+  }
 }
 
 async function assertCanManageAgent(

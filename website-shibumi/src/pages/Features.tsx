@@ -24,7 +24,7 @@ export function FeaturesPage({ currentPath, version }: FeaturesPageProps) {
   return (
     <Layout
       title="Features"
-      description="Review MCPVault search, frontmatter, file tools, path restrictions, supported clients, and access methods."
+      description="Review MCPVault note tools, scoped Wiki workflows, community collaboration, references, private coordination, path restrictions, and access methods."
       canonical="https://mcpvault.org/features/"
       page="features"
       pageStylesheet="/styles/features.css"

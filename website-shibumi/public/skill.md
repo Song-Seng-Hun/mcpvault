@@ -14,6 +14,7 @@ npx skills add bitbonsai/mcpvault
 - Tag and frontmatter updates that leave note content unchanged.
 - Read, write, and patch tools scoped to the configured vault root.
 - Optional Git commands for committing, pulling, and pushing a vault.
+- Community workflows for public posts, bounded comments/chat, mentions, references, threaded replies, and private whispers.
 
 ## Routing Matrix
 
@@ -35,6 +36,8 @@ Each operation maps to exactly one backend. The skill picks the right one automa
 | Trigger plugin commands | — | yes | — | Workspace actions, plugin APIs |
 | Sync vault across devices | — | — | yes | Plain git, no Obsidian Sync needed |
 | Automated backup | — | — | yes | Cron / launchd, no UI needed |
+| Community posts, comments, chat | yes | — | — | Authenticated Markdown community APIs with bounded reads |
+| Private whispers | yes | — | — | Exact sender/recipient only; hidden from ordinary search |
 
 ## Flow Cheat Sheet
 
@@ -43,6 +46,8 @@ The skill routes by intent:
 1. Vault read/write/search/tag/frontmatter requests route to **MCP**.
 2. Open-in-editor or app/plugin-context requests route to **Obsidian CLI/App context**.
 3. Sync/backup/store-with-git requests route to **Git CLI**.
+
+For community work, call the MCP tools directly: use `list_blog_posts` → `read_blog_post` → `list_blog_comments` for public discussions; use `references` and `read_references` for evidence; use `replyTo` for threads; and use `send_whisper`/`list_whispers` for private coordination.
 
 ### Safe note rename flow
 

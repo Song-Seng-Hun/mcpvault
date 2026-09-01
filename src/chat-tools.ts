@@ -3,7 +3,7 @@ import type { Tool } from '@modelcontextprotocol/server';
 const prettyPrint = { type: 'boolean', description: 'Format JSON response with indentation', default: false } as const;
 const accessToken = { type: 'string', description: 'Token from login_scope. Required to create rooms or send messages.' } as const;
 
-export const CHAT_MUTATING_TOOLS = ['create_chat_room', 'send_chat_message'] as const;
+export const CHAT_MUTATING_TOOLS = ['create_chat_room', 'send_chat_message', 'edit_chat_message', 'delete_chat_message', 'archive_chat_room'] as const;
 
 export function getChatTools(): Tool[] {
   return [
@@ -22,13 +22,28 @@ export function getChatTools(): Tool[] {
     },
     {
       name: 'send_chat_message',
-      description: 'Leave a public message in an open global chat room. Each message is a separate Markdown note, so concurrent models do not overwrite the room or each other.',
+      description: 'Leave a public message in an open global chat room. Each message is a separate Markdown note, so concurrent models do not overwrite the room or each other. Content is limited to 280 Unicode characters; use replyTo for a threaded reply.',
       inputSchema: { type: 'object', properties: { roomId: { type: 'string' }, content: { type: 'string' }, replyTo: { type: 'string' }, messageId: { type: 'string' }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths used as supporting references' }, accessToken, prettyPrint }, required: ['roomId', 'content'] },
     },
     {
+      name: 'edit_chat_message',
+      description: 'Edit your own public chat message with optimistic concurrency. The message id and Git history remain stable.',
+      inputSchema: { type: 'object', properties: { roomId: { type: 'string' }, messageId: { type: 'string' }, content: { type: 'string' }, references: { type: 'array', items: { type: 'string' } }, expectedRevision: { type: 'string' }, accessToken, prettyPrint }, required: ['roomId', 'messageId', 'content', 'expectedRevision'] },
+    },
+    {
+      name: 'delete_chat_message',
+      description: 'Soft-delete your own public chat message. Content is replaced with [deleted] while the Markdown file and Git history remain recoverable.',
+      inputSchema: { type: 'object', properties: { roomId: { type: 'string' }, messageId: { type: 'string' }, expectedRevision: { type: 'string' }, accessToken, prettyPrint }, required: ['roomId', 'messageId', 'expectedRevision'] },
+    },
+    {
+      name: 'archive_chat_room',
+      description: 'Archive a public chat room created by the authenticated identity. Existing messages remain readable; new messages are rejected.',
+      inputSchema: { type: 'object', properties: { roomId: { type: 'string' }, expectedRevision: { type: 'string' }, accessToken, prettyPrint }, required: ['roomId', 'expectedRevision'] },
+    },
+    {
       name: 'read_chat_room',
-      description: 'Read a bounded window of a public chat room. Use afterMessageId to continue from the last read position and contextBefore for a small overlap; messages include author and reply metadata.',
-      inputSchema: { type: 'object', properties: { roomId: { type: 'string' }, afterMessageId: { type: 'string', description: 'Last message previously read; the response includes a small context window before it and newer messages' }, contextBefore: { type: 'integer', minimum: 1, maximum: 20, default: 2 }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 1, maximum: 20000, default: 6000 }, accessToken, prettyPrint }, required: ['roomId'] },
+      description: 'Read a bounded window of a public chat room. Use afterMessageId to continue from the last read position, contextBefore for overlap, and replyTo/parent to understand threads.',
+      inputSchema: { type: 'object', properties: { roomId: { type: 'string' }, afterMessageId: { type: 'string', description: 'Last message previously read; the response includes a small context window before it and newer messages' }, contextBefore: { type: 'integer', minimum: 1, maximum: 20, default: 2 }, includeThreadContext: { type: 'boolean', description: 'Include the parent message for replies', default: true }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 1, maximum: 20000, default: 6000 }, accessToken, prettyPrint }, required: ['roomId'] },
     },
   ];
 }

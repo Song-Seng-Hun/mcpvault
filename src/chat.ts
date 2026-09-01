@@ -117,7 +117,50 @@ export class ChatService {
     return { success: true, messageId, roomId, path, revision: created.revision };
   }
 
-  async readRoomWithMessages(params: { roomId: string; limit?: number; afterMessageId?: string; contextBefore?: number; maxChars?: number }) {
+  async editMessage(params: { principal?: ScopePrincipal; roomId: string; messageId: string; content: string; references?: unknown; expectedRevision: string }) {
+    const principal = requireParticipant(params.principal);
+    const roomId = normalizeScopeId(params.roomId, 'roomId');
+    const messageId = normalizeScopeId(params.messageId, 'messageId');
+    const path = messagePath(roomId, messageId);
+    const note = await this.fileSystem.readNote(path);
+    if (note.frontmatter.mcpvault_type !== 'chat_message') throw new Error(`Not a chat message: ${messageId}`);
+    if (note.frontmatter.author !== identity(principal)) throw new Error('Only the original message author can edit this message');
+    if (!params.expectedRevision) throw new Error('expectedRevision is required; read the message first');
+    const text = shortMessage(params.content);
+    const references = params.references !== undefined
+      ? await this.references.validateAndNormalize(params.references, path, principal)
+      : (note.frontmatter.references || []);
+    await this.fileSystem.writeNote({ path, content: `${text}\n`, frontmatter: { ...note.frontmatter, content_status: 'published', mentions: extractMentions(text), references, updated_at: now() }, expectedRevision: params.expectedRevision });
+    const updated = await this.fileSystem.readNote(path);
+    return { success: true, messageId, roomId, revision: updated.revision };
+  }
+
+  async deleteMessage(params: { principal?: ScopePrincipal; roomId: string; messageId: string; expectedRevision: string }) {
+    const principal = requireParticipant(params.principal);
+    const roomId = normalizeScopeId(params.roomId, 'roomId');
+    const messageId = normalizeScopeId(params.messageId, 'messageId');
+    const path = messagePath(roomId, messageId);
+    const note = await this.fileSystem.readNote(path);
+    if (note.frontmatter.mcpvault_type !== 'chat_message') throw new Error(`Not a chat message: ${messageId}`);
+    if (note.frontmatter.author !== identity(principal)) throw new Error('Only the original message author can delete this message');
+    if (!params.expectedRevision) throw new Error('expectedRevision is required; read the message first');
+    await this.fileSystem.writeNote({ path, content: '[deleted]\n', frontmatter: { ...note.frontmatter, content_status: 'deleted', deleted_at: now(), updated_at: now() }, expectedRevision: params.expectedRevision });
+    const updated = await this.fileSystem.readNote(path);
+    return { success: true, messageId, roomId, deleted: true, revision: updated.revision };
+  }
+
+  async archiveRoom(params: { principal?: ScopePrincipal; roomId: string; expectedRevision: string }) {
+    const principal = requireParticipant(params.principal);
+    const roomId = normalizeScopeId(params.roomId, 'roomId');
+    const room = await this.readRoom(roomId);
+    if (room.note.frontmatter.created_by !== identity(principal)) throw new Error('Only the room creator can archive this room');
+    if (!params.expectedRevision) throw new Error('expectedRevision is required; read the room first');
+    await this.fileSystem.writeNote({ path: room.path, content: room.note.content, frontmatter: { ...room.note.frontmatter, status: 'archived', updated_at: now() }, expectedRevision: params.expectedRevision });
+    const updated = await this.fileSystem.readNote(room.path);
+    return { success: true, roomId, status: 'archived', revision: updated.revision };
+  }
+
+  async readRoomWithMessages(params: { roomId: string; limit?: number; afterMessageId?: string; contextBefore?: number; maxChars?: number; includeThreadContext?: boolean }) {
     const roomId = normalizeScopeId(params.roomId, 'roomId');
     const room = await this.readRoom(roomId);
     const result = await this.fileSystem.queryNotes({
@@ -145,7 +188,7 @@ export class ChatService {
     const last = selected.at(-1)?.note.frontmatter.message_id;
     return {
       room: { path: room.path, fm: room.note.frontmatter, content: room.note.content, revision: room.note.revision },
-      messages: selected.map(({ note, content, revision }) => ({
+      messages: await Promise.all(selected.map(async ({ note, content, revision }) => ({
         path: note.path,
         messageId: note.frontmatter.message_id,
         roomId: note.frontmatter.room_id,
@@ -156,11 +199,19 @@ export class ChatService {
         content,
         revision,
         references: note.frontmatter.references || [],
-      })),
+        ...(params.includeThreadContext !== false && note.frontmatter.reply_to && { parent: await this.readMessageContext(roomId, note.frontmatter.reply_to) }),
+      }))),
       totalMessages: result.total,
       truncated: start > 0 || result.truncated || start + selected.length < result.notes.length,
       nextCursor: last,
       contextBefore: cursorIndex >= 0 ? contextBefore + 1 : 0,
     };
+  }
+
+  private async readMessageContext(roomId: string, messageId: string) {
+    const path = messagePath(roomId, messageId);
+    const parent = await this.fileSystem.readNote(path);
+    if (parent.frontmatter.mcpvault_type !== 'chat_message') throw new Error(`Reply target is not a chat message: ${messageId}`);
+    return { path, messageId: parent.frontmatter.message_id, roomId: parent.frontmatter.room_id, author: parent.frontmatter.author, authorRole: parent.frontmatter.author_role, createdAt: parent.frontmatter.created_at, content: parent.content, replyTo: parent.frontmatter.reply_to };
   }
 }

@@ -79,6 +79,8 @@ export declare class SocialService {
         principal?: ScopePrincipal;
         status?: string;
         limit?: number;
+        includeExcerpt?: boolean;
+        excerptMaxChars?: number;
     }): Promise<{
         posts: {
             path: string;
@@ -89,6 +91,7 @@ export declare class SocialService {
             tags: any;
             createdAt: any;
             updatedAt: any;
+            excerpt?: string;
         }[];
         total: number;
         truncated: boolean;
@@ -96,12 +99,18 @@ export declare class SocialService {
     getBlogPost(params: {
         principal?: ScopePrincipal;
         slug: string;
+        includeComments?: boolean;
+        commentLimit?: number;
+        commentMaxChars?: number;
+        includeThreadContext?: boolean;
     }): Promise<{
         path: string;
         fm: Record<string, any>;
         content: string;
         revision: string;
         commentCount: number;
+        comments?: any[];
+        commentsTruncated?: boolean;
         resolvedReferences: Record<string, unknown>[];
     }>;
     commentOnBlogPost(params: {
@@ -118,39 +127,58 @@ export declare class SocialService {
         path: string;
         revision: string;
     }>;
+    editBlogComment(params: {
+        principal?: ScopePrincipal;
+        slug: string;
+        commentId: string;
+        content: string;
+        references?: unknown;
+        expectedRevision: string;
+    }): Promise<{
+        success: boolean;
+        commentId: string;
+        postId: string;
+        revision: string;
+    }>;
+    deleteBlogComment(params: {
+        principal?: ScopePrincipal;
+        slug: string;
+        commentId: string;
+        expectedRevision: string;
+    }): Promise<{
+        success: boolean;
+        commentId: string;
+        postId: string;
+        deleted: boolean;
+        revision: string;
+    }>;
     listBlogComments(params: {
         slug: string;
         limit?: number;
         afterCommentId?: string;
         contextBefore?: number;
         maxChars?: number;
+        includeThreadContext?: boolean;
     }): Promise<{
-        comments: {
-            path: string;
-            commentId: any;
-            postId: any;
-            author: any;
-            replyTo: any;
-            createdAt: any;
-            content: string;
-            revision: string;
-            references: any;
-        }[];
+        comments: any[];
         total: number;
         truncated: boolean;
         nextCursor: any;
         contextBefore: number;
     }>;
+    private readCommentContext;
     listMentions(params: {
         principal?: ScopePrincipal;
         limit?: number;
         maxChars?: number;
         contextBefore?: number;
         contextAfter?: number;
+        afterMentionId?: string;
     }): Promise<{
         mentions: Record<string, unknown>[];
         total: number;
         truncated: boolean;
+        nextCursor: unknown;
         targets: string[];
     }>;
 }

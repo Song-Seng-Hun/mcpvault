@@ -22,10 +22,12 @@ export declare class WhisperService {
         principal?: ScopePrincipal;
         limit?: number;
         maxChars?: number;
+        afterWhisperId?: string;
     }): Promise<{
         whispers: Record<string, unknown>[];
         total: number;
         truncated: boolean;
+        nextCursor: unknown;
     }>;
 }
 //# sourceMappingURL=whisper.d.ts.map

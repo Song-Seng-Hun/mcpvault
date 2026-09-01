@@ -107,3 +107,18 @@ Each example shows a prompt, the MCP tool request, and the resulting file operat
 - Write and frontmatter tools validate inputs before writing
 - Frontmatter updates preserve formatting for unchanged fields
 - Search returns 21-char context excerpts around matches
+
+## Community post with a reference and reply
+
+**AI uses `comment_on_blog_post`:**
+```json
+{
+  "slug": "architecture",
+  "content": "The trade-off is documented here.",
+  "references": ["Design/Tradeoffs.md"],
+  "replyTo": "comment-previous-id",
+  "accessToken": "token-from-login_scope"
+}
+```
+
+`list_blog_comments` returns a bounded window and includes the parent comment for replies. `read_references` follows the validated note paths without loading the whole vault.

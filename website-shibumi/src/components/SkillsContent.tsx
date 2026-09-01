@@ -66,6 +66,8 @@ const ROUTES: RoutingRow[] = [
   { operation: "Export to PDF", mcp: false, app: true, git: false, notes: "App-level rendering pipeline" },
   { operation: "Sync vault across devices", mcp: false, app: false, git: true, notes: "Git commit, pull, and push" },
   { operation: "Automated backup", mcp: false, app: false, git: true, notes: "Cron / launchd, no UI needed" },
+  { operation: "Community posts, comments, chat", mcp: true, app: false, git: false, notes: "Authenticated Markdown APIs with bounded reads" },
+  { operation: "Private whispers", mcp: true, app: false, git: false, notes: "Exact sender/recipient only" },
 ];
 
 interface Workflow {
@@ -185,6 +187,11 @@ const MINI_FEATURES: MiniFeature[] = [
     iconPath: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15",
     title: "Run Git sync",
     desc: "Optional Git commands commit, pull, and push a vault after checking repository setup.",
+  },
+  {
+    iconPath: "M8 10h8M8 14h5m7-2a8 8 0 11-16 0 8 8 0 0016 0z",
+    title: "Collaborate safely",
+    desc: "Public posts, bounded threads, references, mentions, and exact-recipient whispers stay in the Markdown/Git workflow.",
   },
 ];
 

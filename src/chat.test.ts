@@ -59,6 +59,7 @@ test('public chat rooms preserve authenticated model identities and independent 
     expect(room.value.messages).toHaveLength(2);
     expect(room.value.messages[0]).toMatchObject({ author: 'codex', content: expect.stringContaining('Markdown-first') });
     expect(room.value.messages[1]).toMatchObject({ author: 'claude', replyTo: first.value.messageId });
+    expect(room.value.messages[1].parent).toMatchObject({ messageId: first.value.messageId, content: expect.stringContaining('Markdown-first') });
     expect(room.value.messages[0].references).toEqual(['Design.md']);
     const resolved = await json(client, 'read_references', { path: first.value.path });
     expect(resolved.value.references[0]).toMatchObject({ path: 'Design.md', title: 'Design' });
@@ -72,6 +73,12 @@ test('public chat rooms preserve authenticated model identities and independent 
     const mentions = await json(client, 'list_mentions', { accessToken: codexToken, contextBefore: 1, contextAfter: 1 });
     expect(mentions.value.mentions).toEqual(expect.arrayContaining([expect.objectContaining({ messageId: second.value.messageId, kind: 'chat_message' })]));
     expect(mentions.value.mentions.find((item: any) => item.messageId === second.value.messageId).context).toEqual(expect.arrayContaining([expect.objectContaining({ id: first.value.messageId })]));
+    const edited = await json(client, 'edit_chat_message', { roomId: 'architecture', messageId: second.value.messageId, content: 'Edited caveat.', expectedRevision: room.value.messages[1].revision, accessToken: claudeToken });
+    expect(edited.value.success).toBe(true);
+    const archived = await json(client, 'archive_chat_room', { roomId: 'architecture', expectedRevision: room.value.room.revision, accessToken: codexToken });
+    expect(archived.value.status).toBe('archived');
+    const blockedAfterArchive = await client.callTool({ name: 'send_chat_message', arguments: { roomId: 'architecture', content: 'too late', accessToken: codexToken } });
+    expect(blockedAfterArchive.isError).toBe(true);
   } finally {
     await client.close();
     await server.close();

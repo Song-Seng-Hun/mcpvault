@@ -51,12 +51,48 @@ export declare class ChatService {
         path: string;
         revision: string;
     }>;
+    editMessage(params: {
+        principal?: ScopePrincipal;
+        roomId: string;
+        messageId: string;
+        content: string;
+        references?: unknown;
+        expectedRevision: string;
+    }): Promise<{
+        success: boolean;
+        messageId: string;
+        roomId: string;
+        revision: string;
+    }>;
+    deleteMessage(params: {
+        principal?: ScopePrincipal;
+        roomId: string;
+        messageId: string;
+        expectedRevision: string;
+    }): Promise<{
+        success: boolean;
+        messageId: string;
+        roomId: string;
+        deleted: boolean;
+        revision: string;
+    }>;
+    archiveRoom(params: {
+        principal?: ScopePrincipal;
+        roomId: string;
+        expectedRevision: string;
+    }): Promise<{
+        success: boolean;
+        roomId: string;
+        status: string;
+        revision: string;
+    }>;
     readRoomWithMessages(params: {
         roomId: string;
         limit?: number;
         afterMessageId?: string;
         contextBefore?: number;
         maxChars?: number;
+        includeThreadContext?: boolean;
     }): Promise<{
         room: {
             path: string;
@@ -64,22 +100,12 @@ export declare class ChatService {
             content: string;
             revision: string;
         };
-        messages: {
-            path: string;
-            messageId: any;
-            roomId: any;
-            author: any;
-            authorRole: any;
-            replyTo: any;
-            createdAt: any;
-            content: string;
-            revision: string;
-            references: any;
-        }[];
+        messages: any[];
         totalMessages: number;
         truncated: boolean;
         nextCursor: any;
         contextBefore: number;
     }>;
+    private readMessageContext;
 }
 //# sourceMappingURL=chat.d.ts.map
