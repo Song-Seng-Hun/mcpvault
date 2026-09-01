@@ -14,5 +14,7 @@ export { ScopeAuthService } from './scope-auth.js';
 export type { ScopePrincipal } from './scope-auth.js';
 export { ScopeAccessPolicy } from './scope-access.js';
 export { LlmWikiService } from './llm-wiki.js';
+export { McpVaultClientCache } from './client-cache.js';
+export type { CachedNote, ClientEndpointCaller, ClientReadNotesOptions, ClientReadNotesResult } from './client-cache.js';
 export * from './types.js';
 //# sourceMappingURL=index.d.ts.map

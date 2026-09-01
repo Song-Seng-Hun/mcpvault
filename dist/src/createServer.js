@@ -1274,11 +1274,27 @@ export function createServer(vaultPath, options = {}) {
                     };
                 }
                 case "read_multiple_notes": {
+                    const publicPaths = new Map();
+                    if (Array.isArray(rawArgs.paths)) {
+                        for (const rawPath of rawArgs.paths) {
+                            if (typeof rawPath !== 'string')
+                                continue;
+                            const externalPath = rawPath.trim();
+                            const physicalPath = scopeAccess.resolveExternalPath(externalPath, principal).replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+                            publicPaths.set(physicalPath, externalPath);
+                        }
+                    }
+                    const knownRevisions = trimmedArgs.knownRevisions && typeof trimmedArgs.knownRevisions === 'object' && !Array.isArray(trimmedArgs.knownRevisions)
+                        ? Object.fromEntries(Object.entries(trimmedArgs.knownRevisions).map(([path, revision]) => [
+                            scopeAccess.resolveExternalPath(path, principal),
+                            String(revision),
+                        ]))
+                        : undefined;
                     const result = await fileSystem.readMultipleNotes({
                         paths: trimmedArgs.paths,
                         includeContent: trimmedArgs.includeContent,
                         includeFrontmatter: trimmedArgs.includeFrontmatter,
-                        knownRevisions: trimmedArgs.knownRevisions,
+                        ...(knownRevisions && { knownRevisions }),
                     });
                     result.successful = result.successful.filter(note => {
                         try {
@@ -1289,6 +1305,14 @@ export function createServer(vaultPath, options = {}) {
                             return false;
                         }
                     });
+                    result.successful = result.successful.map(note => ({
+                        ...note,
+                        path: publicPaths.get(note.path.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')) || scopeAccess.toPublicPath(note.path),
+                    }));
+                    result.failed = result.failed.map(item => ({
+                        ...item,
+                        path: publicPaths.get(item.path.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')) || scopeAccess.toPublicPath(item.path),
+                    }));
                     const indent = trimmedArgs.prettyPrint ? 2 : undefined;
                     return {
                         content: [{ type: "text", text: JSON.stringify({ ok: result.successful, err: result.failed }, null, indent) }]

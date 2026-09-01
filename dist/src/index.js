@@ -9,4 +9,5 @@ export { CollaborationService, expandScopePath, parseScopePath, scopeRoot } from
 export { ScopeAuthService } from './scope-auth.js';
 export { ScopeAccessPolicy } from './scope-access.js';
 export { LlmWikiService } from './llm-wiki.js';
+export { McpVaultClientCache } from './client-cache.js';
 export * from './types.js';

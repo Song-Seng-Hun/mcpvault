@@ -1028,7 +1028,7 @@ export class FileSystemService {
         const result: any = {
           path,
           obsidianUri: generateObsidianUri(this.vaultPath, path),
-          ...(knownRevision && { revision: note.revision }),
+          ...(knownRevisions !== undefined && { revision: note.revision }),
         };
 
         if (includeFrontmatter) {

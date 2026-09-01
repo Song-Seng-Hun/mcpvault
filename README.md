@@ -184,6 +184,7 @@ is included in `Vary`, and mutating/error responses are never cacheable.
 - `read_note` returns a SHA-256 `revision`; pass it as `knownRevision` on a later read to receive a small `notModified` response when the note is unchanged, or pass it as `expectedRevision` to `write_note`, `patch_note`, or `update_frontmatter` to reject stale concurrent edits. Use `"missing"` when creating a note that must not already exist.
 - `sync_note_revisions` accepts up to 200 cached `{path: revision}` entries and returns only `unchanged`, `changed`, or `missing` states from the metadata index; clients can then fetch bodies only for changed/new notes.
 - `read_multiple_notes` accepts an optional `knownRevisions` map for one-round-trip cache reads: unchanged notes return only `{path, revision, unchanged}`, while changed notes return the requested body/frontmatter and their new revision.
+- The package exports `McpVaultClientCache`, a bounded host-side LRU helper that automatically sends `knownRevisions` to `mcp.read_multiple_notes`; use it in a runner or adapter to keep repeated note reads local and fetch only changed bodies. It does not make authorization decisions.
 - `write_note` supports overwrite, append, and prepend modes.
 - `delete_note` and `move_file` require matching confirmation paths.
 - Path arguments are trimmed before validation.
