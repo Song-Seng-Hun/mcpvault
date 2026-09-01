@@ -5,6 +5,7 @@ import type { ScopePrincipal } from './scope-auth.js';
 import { normalizeScopeId } from './scopes.js';
 import type { ReferenceService } from './references.js';
 import { endpointIdForTool } from './endpoint-registry.js';
+import { queryAllNotes } from './paged-query.js';
 
 const KNOWLEDGE_STATUSES = new Set(['draft', 'verified', 'disputed', 'superseded']);
 const CONFIDENCE_LEVELS = new Set(['low', 'medium', 'high']);
@@ -231,7 +232,7 @@ export class LlmWikiService {
 
   async catalog(principal?: ScopePrincipal) {
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
-    const result = await this.fileSystem.queryNotes({ limit: 500 }, canAccess);
+    const result = await queryAllNotes(this.fileSystem, {}, canAccess);
     const entries = result.notes
       .filter(note => typeof note.frontmatter.llm_wiki_type === 'string')
       .map(note => ({
@@ -407,7 +408,7 @@ export class LlmWikiService {
 
   async lint(principal?: ScopePrincipal, limit: number = 200) {
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
-    const result = await this.fileSystem.queryNotes({ limit: 500, includeContent: true }, canAccess);
+    const result = await queryAllNotes(this.fileSystem, { includeContent: true }, canAccess);
     const issues: Array<{ severity: 'error' | 'warning'; code: string; path: string; detail: string }> = [];
 
     for (const note of result.notes) {

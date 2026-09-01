@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { extractMentions, MAX_COMMUNITY_TEXT_LENGTH } from './social.js';
+import { queryAllNotes } from './paged-query.js';
 const WHISPER_ROOT = '_whispers';
 const now = () => new Date().toISOString();
 function identity(principal) {
@@ -56,7 +57,7 @@ export class WhisperService {
     async list(params) {
         const principal = requirePrincipal(params.principal);
         const me = identity(principal);
-        const result = await this.fileSystem.queryNotes({ pathPrefix: WHISPER_ROOT, filters: { mcpvault_type: 'whisper' }, sortBy: 'created_at', sortOrder: 'desc', limit: 500 });
+        const result = await queryAllNotes(this.fileSystem, { pathPrefix: WHISPER_ROOT, filters: { mcpvault_type: 'whisper' }, sortBy: 'created_at', sortOrder: 'desc' });
         const limit = Math.min(Math.max(Number(params.limit ?? 20), 1), 100);
         const maxChars = Math.min(Math.max(Number(params.maxChars ?? 6000), 1), 20000);
         const visible = result.notes.filter(note => note.frontmatter.to === me || note.frontmatter.from === me);

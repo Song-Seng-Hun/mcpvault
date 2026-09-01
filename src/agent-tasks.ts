@@ -4,6 +4,7 @@ import type { ReferenceService } from './references.js';
 import type { ScopeAuthService, ScopePrincipal } from './scope-auth.js';
 import { normalizeScopeId } from './scopes.js';
 import { boundItems } from './search-limits.js';
+import { queryAllNotes } from './paged-query.js';
 
 const ROOT = 'Community/Tasks';
 export const AGENT_TASK_STATUSES = ['proposed', 'accepted', 'in_progress', 'blocked', 'completed', 'cancelled'] as const;
@@ -84,7 +85,7 @@ export class AgentTaskService {
     if (params.status) filters.status = taskStatus(params.status);
     if (params.assignee) filters.assignee = normalizeScopeId(params.assignee, 'assignee');
     if (params.requester) filters.requester = normalizeScopeId(params.requester, 'requester');
-    const result = await this.fileSystem.queryNotes({ pathPrefix: ROOT, filters, sortBy: 'updated_at', sortOrder: 'desc', limit: 500 });
+    const result = await queryAllNotes(this.fileSystem, { pathPrefix: ROOT, filters, sortBy: 'updated_at', sortOrder: 'desc' });
     const limit = Math.min(Math.max(Number(params.limit ?? 50), 1), 500);
     const bounded = boundItems(result.notes.slice(0, limit).map(note => ({
         path: note.path, taskId: note.frontmatter.task_id, title: note.frontmatter.title,

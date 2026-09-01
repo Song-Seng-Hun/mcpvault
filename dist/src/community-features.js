@@ -5,6 +5,7 @@ import { isModerationHidden, moderationStatus } from './moderation-policy.js';
 import { normalizeScopeId } from './scopes.js';
 import { boundItems } from './search-limits.js';
 import { MAX_COMMUNITY_TEXT_LENGTH, extractMentions } from './social.js';
+import { queryAllNotes } from './paged-query.js';
 const POSTS = 'Community/Posts';
 const COMMENTS = 'Community/Comments';
 const REACTIONS = 'Community/Reactions';
@@ -127,7 +128,7 @@ export class CommunityFeaturesService {
             throw new Error(`Unknown public identity: ${value}`);
     }
     async listSeries(params) {
-        const result = await this.fileSystem.queryNotes({ pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post', status: 'published' }, sortBy: 'created_at', sortOrder: 'asc', limit: MAX_SCAN, includeContent: params.includeExcerpts === true });
+        const result = await queryAllNotes(this.fileSystem, { pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post', status: 'published' }, sortBy: 'created_at', sortOrder: 'asc' });
         const groups = new Map();
         const reputations = await this.reputation.getMany(result.notes.map(note => String(note.frontmatter.author || '')));
         for (const note of result.notes) {
@@ -138,13 +139,25 @@ export class CommunityFeaturesService {
                 continue;
             const order = Number(note.frontmatter.series_order || 0);
             const authorReputation = reputations.get(String(note.frontmatter.author || '').toLowerCase());
-            const chapter = { slug: note.frontmatter.post_id, title: note.frontmatter.title, author: note.frontmatter.author, authorLevel: authorReputation?.level ?? 0, authorLevelLabel: authorReputation?.label ?? '뉴비', order, path: note.path, moderationStatus: moderationStatus(note.frontmatter), ...(params.includeExcerpts && { excerpt: String(note.content || '').slice(0, Math.min(positive(params.excerptMaxChars, 280, 1000), 1000)) }) };
+            const chapter = { slug: note.frontmatter.post_id, title: note.frontmatter.title, author: note.frontmatter.author, authorLevel: authorReputation?.level ?? 0, authorLevelLabel: authorReputation?.label ?? '뉴비', order, path: note.path, moderationStatus: moderationStatus(note.frontmatter) };
             const current = groups.get(id) || { seriesId: id, title: note.frontmatter.series_title || id, chapters: [] };
             current.chapters.push(chapter);
             groups.set(id, current);
         }
         const series = Array.from(groups.values()).map(group => ({ ...group, chapters: group.chapters.sort((a, b) => a.order - b.order || String(a.slug).localeCompare(String(b.slug))), count: group.chapters.length }));
         const limited = series.slice(0, positive(params.limit, 50, 100));
+        if (params.includeExcerpts) {
+            const excerptLength = Math.min(positive(params.excerptMaxChars, 280, 1000), 1000);
+            await Promise.all(limited.flatMap(group => group.chapters.map(async (chapter) => {
+                try {
+                    const note = await this.fileSystem.readNote(chapter.path);
+                    chapter.excerpt = note.content.slice(0, excerptLength);
+                }
+                catch {
+                    chapter.excerpt = '';
+                }
+            })));
+        }
         const bounded = boundItems(limited, positive(params.maxChars, 6000, 20000));
         return { series: bounded.items, total: series.length, truncated: series.length > limited.length || bounded.truncated };
     }
@@ -153,8 +166,8 @@ export class CommunityFeaturesService {
         const limit = positive(params.limit, 30, 100);
         const maxChars = positive(params.maxChars, 6000, 20000);
         const [posts, comments] = await Promise.all([
-            this.fileSystem.queryNotes({ pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post', author }, sortBy: 'updated_at', sortOrder: 'desc', limit: MAX_SCAN }),
-            this.fileSystem.queryNotes({ pathPrefix: COMMENTS, filters: { mcpvault_type: 'blog_comment', author }, sortBy: 'created_at', sortOrder: 'desc', limit: MAX_SCAN }),
+            queryAllNotes(this.fileSystem, { pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post', author }, sortBy: 'updated_at', sortOrder: 'desc' }),
+            queryAllNotes(this.fileSystem, { pathPrefix: COMMENTS, filters: { mcpvault_type: 'blog_comment', author }, sortBy: 'created_at', sortOrder: 'desc' }),
         ]);
         const authorReputations = await this.reputation.getMany([...posts.notes, ...comments.notes].map(note => String(note.frontmatter.author || '')));
         const items = [...posts.notes.filter(n => !isModerationHidden(n.frontmatter)).map(n => ({ type: 'post', id: n.frontmatter.post_id, path: n.path, title: n.frontmatter.title, authorLevel: authorReputations.get(String(n.frontmatter.author || '').toLowerCase())?.level ?? 0, authorLevelLabel: authorReputations.get(String(n.frontmatter.author || '').toLowerCase())?.label ?? '뉴비', createdAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at })), ...comments.notes.filter(n => !isModerationHidden(n.frontmatter)).map(n => ({ type: 'comment', id: n.frontmatter.comment_id, postId: n.frontmatter.post_id, path: n.path, authorLevel: authorReputations.get(String(n.frontmatter.author || '').toLowerCase())?.level ?? 0, authorLevelLabel: authorReputations.get(String(n.frontmatter.author || '').toLowerCase())?.label ?? '뉴비', createdAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at }))].sort((a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)));
@@ -344,13 +357,13 @@ export class CommunityFeaturesService {
     }
     async listReactions(params) {
         await this.targetPath(params.targetType, params.targetId, params.postId);
-        const result = await this.fileSystem.queryNotes({ pathPrefix: this.reactionRoot(params.targetType, params.targetId), filters: { mcpvault_type: 'reaction', active: true }, sortBy: 'created_at', sortOrder: 'desc', limit: MAX_SCAN });
+        const result = await queryAllNotes(this.fileSystem, { pathPrefix: this.reactionRoot(params.targetType, params.targetId), filters: { mcpvault_type: 'reaction', active: true }, sortBy: 'created_at', sortOrder: 'desc' });
         const reactions = result.notes.slice(0, positive(params.limit, 100, 500)).map(n => ({ actor: n.frontmatter.actor, reaction: n.frontmatter.reaction, createdAt: n.frontmatter.created_at }));
         const bounded = boundItems(reactions, positive(params.maxChars, 6000, 20000));
         return { targetType: params.targetType, targetId: params.targetId, counts: { like: result.notes.filter(n => n.frontmatter.reaction === 'like').length, dislike: result.notes.filter(n => n.frontmatter.reaction === 'dislike').length }, reactions: bounded.items, total: result.total, truncated: result.truncated || result.total > reactions.length || bounded.truncated };
     }
     async listPopularPosts(params) {
-        const result = await this.fileSystem.queryNotes({ pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post', status: 'published' }, sortBy: 'updated_at', sortOrder: 'desc', limit: MAX_SCAN });
+        const result = await queryAllNotes(this.fileSystem, { pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post', status: 'published' }, sortBy: 'updated_at', sortOrder: 'desc' });
         const visibleNotes = result.notes.filter(note => !isModerationHidden(note.frontmatter)).filter(note => !params.category || String(note.frontmatter.category || 'discussion').toLowerCase() === String(params.category).toLowerCase());
         const reputations = await this.reputation.getMany(visibleNotes.map(note => String(note.frontmatter.author || '')));
         const reactionAggregates = await this.postReactionAggregates();
@@ -416,13 +429,22 @@ export class CommunityFeaturesService {
             await this.fileSystem.writeNote({ path, content: `${content}\n`, frontmatter: { mcpvault_type: 'guestbook_entry', guestbook_owner: owner, entry_id: entryId, author: identity(params.principal), author_role: params.principal.role, mentions: extractMentions(content), ...(params.replyTo && { reply_to: normalizeScopeId(params.replyTo, 'replyTo') }), content_status: 'published', created_at: now(), updated_at: now() }, expectedRevision: 'missing' });
             return { success: true, entryId, owner, path };
         }
-        const result = await this.fileSystem.queryNotes({ pathPrefix: pathRoot, filters: { mcpvault_type: 'guestbook_entry', content_status: 'published' }, sortBy: 'created_at', sortOrder: 'asc', limit: MAX_SCAN, includeContent: true });
+        const result = await queryAllNotes(this.fileSystem, { pathPrefix: pathRoot, filters: { mcpvault_type: 'guestbook_entry', content_status: 'published' }, sortBy: 'created_at', sortOrder: 'asc' });
         const limit = positive(params.limit, 20, 100);
         const cursor = params.afterEntryId ? result.notes.findIndex(n => n.frontmatter.entry_id === normalizeScopeId(params.afterEntryId, 'afterEntryId')) : -1;
         if (params.afterEntryId && cursor < 0)
             throw new Error('afterEntryId was not found');
         const selected = result.notes.slice(cursor >= 0 ? cursor + 1 : Math.max(0, result.notes.length - limit), cursor >= 0 ? cursor + 1 + limit : undefined);
-        const bounded = boundItems(selected.map(n => ({ path: n.path, entryId: n.frontmatter.entry_id, author: n.frontmatter.author, replyTo: n.frontmatter.reply_to, createdAt: n.frontmatter.created_at, content: n.content })), positive(params.maxChars, 6000, 20000));
+        const hydrated = await Promise.all(selected.map(async (n) => {
+            try {
+                const note = await this.fileSystem.readNote(n.path);
+                return { path: n.path, entryId: n.frontmatter.entry_id, author: n.frontmatter.author, replyTo: n.frontmatter.reply_to, createdAt: n.frontmatter.created_at, content: note.content };
+            }
+            catch {
+                return undefined;
+            }
+        }));
+        const bounded = boundItems(hydrated.filter((entry) => entry !== undefined), positive(params.maxChars, 6000, 20000));
         return { owner, entries: bounded.items, total: result.total, truncated: result.truncated || selected.length < result.total || bounded.truncated, nextCursor: bounded.items.at(-1)?.entryId };
     }
     ownerRoot(principal, kind) {
@@ -453,7 +475,7 @@ export class CommunityFeaturesService {
     async listWatches(principal, maxChars) {
         if (!principal)
             throw new Error('Login is required');
-        const result = await this.fileSystem.queryNotes({ pathPrefix: this.ownerRoot(principal, 'subscriptions'), filters: { mcpvault_type: 'subscription', active: true }, sortBy: 'updated_at', sortOrder: 'desc', limit: 500 });
+        const result = await queryAllNotes(this.fileSystem, { pathPrefix: this.ownerRoot(principal, 'subscriptions'), filters: { mcpvault_type: 'subscription', active: true }, sortBy: 'updated_at', sortOrder: 'desc' });
         const bounded = boundItems(result.notes.map(n => ({ targetType: n.frontmatter.target_type, targetId: n.frontmatter.target_id, updatedAt: n.frontmatter.updated_at })), positive(maxChars, 6000, 20000));
         return { watches: bounded.items, total: result.total, truncated: result.truncated || bounded.truncated };
     }
@@ -479,7 +501,7 @@ export class CommunityFeaturesService {
     async listSaves(principal, maxChars) {
         if (!principal)
             throw new Error('Login is required');
-        const result = await this.fileSystem.queryNotes({ pathPrefix: this.ownerRoot(principal, 'saves'), filters: { mcpvault_type: 'saved_item', active: true }, sortBy: 'updated_at', sortOrder: 'desc', limit: 500 });
+        const result = await queryAllNotes(this.fileSystem, { pathPrefix: this.ownerRoot(principal, 'saves'), filters: { mcpvault_type: 'saved_item', active: true }, sortBy: 'updated_at', sortOrder: 'desc' });
         const bounded = boundItems(result.notes.map(n => ({ targetPath: n.frontmatter.target_path, note: n.frontmatter.note, savedAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at })), positive(maxChars, 6000, 20000));
         return { saves: bounded.items, total: result.total, truncated: result.truncated || bounded.truncated };
     }

@@ -180,7 +180,7 @@ export declare class CommunityFeaturesService {
             author: any;
             replyTo: any;
             createdAt: any;
-            content: string | undefined;
+            content: string;
         }[];
         total: number;
         truncated: boolean;

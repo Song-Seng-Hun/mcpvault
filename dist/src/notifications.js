@@ -1,6 +1,6 @@
 import { normalizeScopeId } from './scopes.js';
+import { queryAllNotes } from './paged-query.js';
 const READ_STATE_ROOT = '_notifications';
-const MAX_SCAN = 500;
 const EVENT_CACHE_TTL_MS = 2_000;
 const EVENT_CACHE_MAX_ENTRIES = 64;
 const HYDRATE_BATCH_SIZE = 32;
@@ -119,10 +119,10 @@ export class NotificationService {
         if (this.publicSnapshotInFlight)
             return this.publicSnapshotInFlight;
         const computation = Promise.all([
-            this.fileSystem.queryNotes({ pathPrefix: 'Community/Posts', filters: { mcpvault_type: 'blog_post', status: 'published' }, sortBy: 'created_at', sortOrder: 'desc', limit: MAX_SCAN }),
-            this.fileSystem.queryNotes({ pathPrefix: 'Community/Comments', filters: { mcpvault_type: 'blog_comment' }, sortBy: 'created_at', sortOrder: 'desc', limit: MAX_SCAN }),
-            this.fileSystem.queryNotes({ pathPrefix: 'Community/ChatMessages', filters: { mcpvault_type: 'chat_message' }, sortBy: 'created_at', sortOrder: 'desc', limit: MAX_SCAN }),
-            this.fileSystem.queryNotes({ pathPrefix: 'Community/ChatRooms', filters: { mcpvault_type: 'chat_room' }, limit: MAX_SCAN }),
+            queryAllNotes(this.fileSystem, { pathPrefix: 'Community/Posts', filters: { mcpvault_type: 'blog_post', status: 'published' }, sortBy: 'created_at', sortOrder: 'desc' }),
+            queryAllNotes(this.fileSystem, { pathPrefix: 'Community/Comments', filters: { mcpvault_type: 'blog_comment' }, sortBy: 'created_at', sortOrder: 'desc' }),
+            queryAllNotes(this.fileSystem, { pathPrefix: 'Community/ChatMessages', filters: { mcpvault_type: 'chat_message' }, sortBy: 'created_at', sortOrder: 'desc' }),
+            queryAllNotes(this.fileSystem, { pathPrefix: 'Community/ChatRooms', filters: { mcpvault_type: 'chat_room' } }),
         ]).then(([posts, comments, messages, rooms]) => buildPublicSnapshotIndex({ posts: posts.notes, comments: comments.notes, messages: messages.notes, rooms: rooms.notes }));
         this.publicSnapshotInFlight = computation;
         try {
@@ -195,7 +195,7 @@ export class NotificationService {
             : `_scopes/models/${normalizeScopeId(principal.modelId, 'modelId')}/_subscriptions`;
         const [snapshot, subscriptions] = await Promise.all([
             this.cachedPublicSnapshot(),
-            this.fileSystem.queryNotes({ pathPrefix: ownerRoot, filters: { mcpvault_type: 'subscription', active: true }, limit: 500 }),
+            queryAllNotes(this.fileSystem, { pathPrefix: ownerRoot, filters: { mcpvault_type: 'subscription', active: true } }),
         ]);
         const { messages, postsByPostId, postsBySeriesId, postsByAuthor, postsByTag, postsByMention, commentsByPostId, commentsByCommentId, commentsByAuthor, commentsByMention, commentsByReplyTo, messagesByMessageId, messagesByMention, messagesByReplyTo, postTitles, roomTitles } = snapshot;
         const targetKey = target.toLowerCase();

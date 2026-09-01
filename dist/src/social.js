@@ -3,6 +3,7 @@ import { normalizeScopeId } from './scopes.js';
 import { isClosedWorkflowStatus, matchesWorkflowFilter, workflowStatus } from './community-status.js';
 import { isModerationHidden, moderationStatus } from './moderation-policy.js';
 import { boundItems } from './search-limits.js';
+import { queryAllNotes } from './paged-query.js';
 import { readNotesInBatches } from './batch-read.js';
 const JOURNAL_ROOT = '_journal/entries';
 const BLOG_ROOT = 'Community/Posts';
@@ -161,9 +162,9 @@ export class SocialService {
         const filters = { mcpvault_type: 'journal_entry' };
         if (params.date !== undefined)
             filters.date = validateDate(params.date);
-        const result = await this.fileSystem.queryNotes({
+        const result = await queryAllNotes(this.fileSystem, {
             pathPrefix: agentJournalRoot(principal.agentId), filters,
-            sortBy: 'date', sortOrder: 'desc', limit: Math.min(Math.max(Number(params.limit || 50), 1), 500),
+            sortBy: 'date', sortOrder: 'desc',
         }, path => this.access.canAccessPhysicalPath(path, principal));
         const bounded = boundItems(result.notes.map(note => ({
             path: this.access.toPublicPath(note.path),
@@ -264,9 +265,9 @@ export class SocialService {
         const requestedStatus = String(params.status || 'published').trim().toLowerCase();
         if (requestedStatus !== 'all' && !POST_STATUSES.has(requestedStatus))
             throw new Error('status must be published, draft, archived, or all');
-        const result = await this.fileSystem.queryNotes({
+        const result = await queryAllNotes(this.fileSystem, {
             pathPrefix: BLOG_ROOT, filters: { mcpvault_type: 'blog_post' },
-            sortBy: 'updated_at', sortOrder: 'desc', limit: 500, includeContent: params.includeExcerpt === true,
+            sortBy: 'updated_at', sortOrder: 'desc',
         });
         const caller = params.principal ? identity(params.principal) : undefined;
         const visibleNotes = result.notes.filter(note => {
@@ -285,6 +286,23 @@ export class SocialService {
                 return false;
             return matchesWorkflowFilter(note.frontmatter, params.workflowStatus || 'active');
         });
+        const limit = Math.min(Math.max(Number(params.limit || 50), 1), 500);
+        const excerptByPath = new Map();
+        if (params.includeExcerpt) {
+            const excerptLength = Math.min(Math.max(Number(params.excerptMaxChars ?? 280), 1), 1000);
+            const selected = visibleNotes.slice(0, limit);
+            const excerpts = await Promise.all(selected.map(async (note) => {
+                try {
+                    const full = await this.fileSystem.readNote(note.path);
+                    return [note.path, full.content.slice(0, excerptLength)];
+                }
+                catch {
+                    return [note.path, ''];
+                }
+            }));
+            for (const [path, excerpt] of excerpts)
+                excerptByPath.set(path, excerpt);
+        }
         const reputations = await this.reputation.getMany(visibleNotes.map(note => String(note.frontmatter.author || '')));
         const viewerReputation = params.principal ? await this.reputation.getForPrincipal(params.principal) : undefined;
         const entries = visibleNotes.map(note => ({
@@ -309,9 +327,8 @@ export class SocialService {
             moderationStatus: moderationStatus(note.frontmatter),
             authorLevel: reputations.get(String(note.frontmatter.author || '').toLowerCase())?.level ?? 0,
             authorLevelLabel: reputations.get(String(note.frontmatter.author || '').toLowerCase())?.label ?? '뉴비',
-            ...(params.includeExcerpt && { excerpt: String(note.content || '').slice(0, Math.min(Math.max(Number(params.excerptMaxChars ?? 280), 1), 1000)) }),
+            ...(params.includeExcerpt && { excerpt: excerptByPath.get(note.path) || '' }),
         }));
-        const limit = Math.min(Math.max(Number(params.limit || 50), 1), 500);
         const bounded = boundItems(entries.slice(0, limit), Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000));
         return { posts: bounded.items, ...(viewerReputation && { viewerLevel: viewerReputation.level, viewerXp: viewerReputation.xp, viewerLevelLabel: viewerReputation.label }), total: entries.length, truncated: result.truncated || entries.length > limit || bounded.truncated };
     }
@@ -430,9 +447,9 @@ export class SocialService {
     }
     async listBlogComments(params) {
         const slug = normalizeScopeId(params.slug, 'slug');
-        const result = await this.fileSystem.queryNotes({
+        const result = await queryAllNotes(this.fileSystem, {
             pathPrefix: commentsRoot(slug), filters: { mcpvault_type: 'blog_comment' },
-            sortBy: 'created_at', sortOrder: 'asc', limit: 500,
+            sortBy: 'created_at', sortOrder: 'asc',
         });
         const notes = result.notes.filter(note => !isModerationHidden(note.frontmatter) && matchesWorkflowFilter(note.frontmatter, params.workflowStatus || 'all'));
         const reputations = await this.reputation.getMany(notes.map(note => String(note.frontmatter.author || '')));
@@ -510,8 +527,8 @@ export class SocialService {
         const principal = requirePublisher(params.principal);
         const targets = new Set([identity(principal), principal.modelId, ...(principal.agentId ? [principal.agentId] : [])]);
         const [comments, messages] = await Promise.all([
-            this.fileSystem.queryNotes({ pathPrefix: 'Community/Comments', filters: { mcpvault_type: 'blog_comment' }, sortBy: 'created_at', sortOrder: 'desc', limit: 500 }),
-            this.fileSystem.queryNotes({ pathPrefix: 'Community/ChatMessages', filters: { mcpvault_type: 'chat_message' }, sortBy: 'created_at', sortOrder: 'desc', limit: 500 }),
+            queryAllNotes(this.fileSystem, { pathPrefix: 'Community/Comments', filters: { mcpvault_type: 'blog_comment' }, sortBy: 'created_at', sortOrder: 'desc' }),
+            queryAllNotes(this.fileSystem, { pathPrefix: 'Community/ChatMessages', filters: { mcpvault_type: 'chat_message' }, sortBy: 'created_at', sortOrder: 'desc' }),
         ]);
         const notes = [...comments.notes, ...messages.notes]
             .filter(note => !isModerationHidden(note.frontmatter)
@@ -546,7 +563,7 @@ export class SocialService {
             const cached = timelines.get(cacheKey);
             if (cached)
                 return cached;
-            const result = await this.fileSystem.queryNotes({ pathPrefix: root, filters: { mcpvault_type: isChat ? 'chat_message' : 'blog_comment' }, sortBy: 'created_at', sortOrder: 'asc', limit: 500 });
+            const result = await queryAllNotes(this.fileSystem, { pathPrefix: root, filters: { mcpvault_type: isChat ? 'chat_message' : 'blog_comment' }, sortBy: 'created_at', sortOrder: 'asc' });
             const timeline = { key, notes: result.notes };
             timelines.set(cacheKey, timeline);
             return timeline;

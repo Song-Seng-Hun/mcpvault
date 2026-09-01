@@ -7,6 +7,7 @@ import type { ReferenceService } from './references.js';
 import { workflowStatus } from './community-status.js';
 import { isModerationHidden, moderationStatus } from './moderation-policy.js';
 import { boundItems } from './search-limits.js';
+import { queryAllNotes } from './paged-query.js';
 import type { ReputationService } from './reputation.js';
 import { readNotesInBatches } from './batch-read.js';
 
@@ -70,9 +71,9 @@ export class ChatService {
   async listRooms(params: { status?: string; limit?: number; maxChars?: number }) {
     const requestedStatus = String(params.status || 'open').trim().toLowerCase();
     if (requestedStatus !== 'all' && !ROOM_STATUSES.has(requestedStatus)) throw new Error('status must be open, archived, or all');
-    const result = await this.fileSystem.queryNotes({
+    const result = await queryAllNotes(this.fileSystem, {
       pathPrefix: ROOM_ROOT, filters: { mcpvault_type: 'chat_room' },
-      sortBy: 'created_at', sortOrder: 'desc', limit: 500,
+      sortBy: 'created_at', sortOrder: 'desc',
     });
     const visibleRooms = result.notes.filter(note => requestedStatus === 'all' || note.frontmatter.status === requestedStatus);
     const reputations = await this.reputation.getMany(visibleRooms.map(note => String(note.frontmatter.created_by || '')));
@@ -173,9 +174,9 @@ export class ChatService {
   async readRoomWithMessages(params: { principal?: ScopePrincipal; roomId: string; limit?: number; afterMessageId?: string; contextBefore?: number; maxChars?: number; includeThreadContext?: boolean }) {
     const roomId = normalizeScopeId(params.roomId, 'roomId');
     const room = await this.readRoom(roomId);
-    const result = await this.fileSystem.queryNotes({
+    const result = await queryAllNotes(this.fileSystem, {
       pathPrefix: messagesRoot(roomId), filters: { mcpvault_type: 'chat_message' },
-      sortBy: 'created_at', sortOrder: 'asc', limit: 500,
+      sortBy: 'created_at', sortOrder: 'asc',
     });
     const limit = windowNumber(params.limit, 20, 100);
     const maxChars = windowNumber(params.maxChars, 6000, 20000);

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { normalizeScopeId } from './scopes.js';
 import { endpointIdForTool } from './endpoint-registry.js';
+import { queryAllNotes } from './paged-query.js';
 const KNOWLEDGE_STATUSES = new Set(['draft', 'verified', 'disputed', 'superseded']);
 const CONFIDENCE_LEVELS = new Set(['low', 'medium', 'high']);
 const ISSUE_KINDS = new Set(['contradiction', 'unsupported_claim', 'stale', 'broken_link', 'missing_context', 'other']);
@@ -204,7 +205,7 @@ export class LlmWikiService {
     }
     async catalog(principal) {
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
-        const result = await this.fileSystem.queryNotes({ limit: 500 }, canAccess);
+        const result = await queryAllNotes(this.fileSystem, {}, canAccess);
         const entries = result.notes
             .filter(note => typeof note.frontmatter.llm_wiki_type === 'string')
             .map(note => ({
@@ -378,7 +379,7 @@ export class LlmWikiService {
     }
     async lint(principal, limit = 200) {
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
-        const result = await this.fileSystem.queryNotes({ limit: 500, includeContent: true }, canAccess);
+        const result = await queryAllNotes(this.fileSystem, { includeContent: true }, canAccess);
         const issues = [];
         for (const note of result.notes) {
             const type = note.frontmatter.llm_wiki_type;
