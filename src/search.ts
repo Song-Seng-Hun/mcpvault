@@ -23,6 +23,7 @@ const LEGACY_SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.gz';
 const SEARCH_SNAPSHOT_VERSION = 2;
 const SNAPSHOT_SAVE_DEBOUNCE_MS = 1_000;
 const DIRECTORY_CACHE_TTL_MS = 5_000;
+const CORPUS_STATS_CACHE_MAX_ENTRIES = 64;
 const gunzipAsync = promisify(gunzip);
 const SNAPSHOT_MAGIC = Buffer.from('MCPVSRCH', 'ascii');
 const MAX_SNAPSHOT_ENTRIES = 1_000_000;
@@ -79,6 +80,11 @@ interface SearchSnapshot {
 interface DirectoryCacheEntry {
   expiresAt: number;
   paths: string[];
+}
+
+interface CorpusStats {
+  docCount: number;
+  totalDocLength: number;
 }
 
 function encodeSnapshotString(value: string): Buffer {
@@ -221,6 +227,7 @@ export class SearchService {
   private readonly gramsById = [''];
   private readonly pathDocuments = new Map<string, Set<number>>();
   private readonly documentPathKeys = new Map<number, string[]>();
+  private readonly corpusStatsCache = new Map<string, CorpusStats>();
   private readonly directoryCache = new Map<string, DirectoryCacheEntry>();
   private nextDocumentId = 1;
   private indexedTextBytes = 0;
@@ -251,6 +258,7 @@ export class SearchService {
   invalidate(path?: string, kind: 'upsert' | 'delete' = 'upsert'): void {
     this.cacheGeneration += 1;
     this.cache.clear();
+    this.corpusStatsCache.clear();
     this.directoryCache.clear();
     if (path) {
       const normalized = path.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
@@ -420,10 +428,8 @@ export class SearchService {
     const maxLimit = normalizeSearchLimit(limit);
     const maxChars = normalizeSearchMaxChars(params.maxChars);
 
-    // Corpus stats for reranking. Lengths are prepared during indexing, so a
-    // cache miss does not split every note into words again.
-    let totalDocLength = 0;
-    let docCount = 0;
+    // Corpus stats for reranking. Lengths are prepared during indexing, and
+    // the bounded cache lets different queries reuse the same scope stats.
     const termDocFreq = new Map<string, number>();
     const candidates: RankCandidate[] = [];
     const searchQuery = caseSensitive ? query : query.toLowerCase();
@@ -433,18 +439,17 @@ export class SearchService {
     // The server-owned document index has already performed the filesystem
     // reads. Search only the visible in-memory documents on this pass.
     const scopedDocumentIds = this.scopedDocumentIds(normalizedPrefix, normalizedExcludes);
+    const corpusStats = this.getCorpusStats(scopedDocumentIds, searchContent, searchFrontmatter, normalizedPrefix, normalizedExcludes);
+    const { totalDocLength, docCount } = corpusStats;
+    const candidateIds = this.candidateIds(terms, searchContent, searchFrontmatter, caseSensitive, scopedDocumentIds);
     const allowedFiles: IndexedDocument[] = [];
-    for (const documentId of scopedDocumentIds) {
+    for (const documentId of candidateIds) {
       const document = this.documentsById.get(documentId);
       if (!document || !this.pathFilter.isAllowed(document.relativePath)) continue;
       if (document.moderationHidden) continue;
       allowedFiles.push(document);
-      totalDocLength += (searchContent ? document.bodyLength : 0)
-        + (searchFrontmatter ? document.frontmatterLength : 0);
-      docCount++;
     }
 
-    const candidateIds = this.candidateIds(terms, searchContent, searchFrontmatter, caseSensitive, scopedDocumentIds);
     for (const document of allowedFiles) {
       if (!candidateIds.has(document.documentId)) continue;
         const { relativePath } = document;
@@ -747,6 +752,7 @@ export class SearchService {
   private setDocument(document: IndexedDocument): void {
     const old = this.documents.get(document.relativePath);
     if (old === document) return;
+    this.corpusStatsCache.clear();
     if (old) {
       this.updatePostings(old, false);
       this.removePathIndex(old);
@@ -763,6 +769,7 @@ export class SearchService {
   private removeDocument(path: string): void {
     const document = this.documents.get(path);
     if (!document) return;
+    this.corpusStatsCache.clear();
     this.updatePostings(document, false);
     this.removePathIndex(document);
     this.documentsById.delete(document.documentId);
@@ -805,6 +812,44 @@ export class SearchService {
       for (const documentId of this.pathDocuments.get(exclude) || []) output.delete(documentId);
     }
     return output;
+  }
+
+  private getCorpusStats(
+    scopedIds: Set<number>,
+    searchContent: boolean,
+    searchFrontmatter: boolean,
+    pathPrefix: string,
+    excludePaths: string[],
+  ): CorpusStats {
+    const key = JSON.stringify({
+      searchContent,
+      searchFrontmatter,
+      pathPrefix,
+      excludePaths: [...excludePaths].sort(),
+    });
+    const cached = this.corpusStatsCache.get(key);
+    if (cached) {
+      this.corpusStatsCache.delete(key);
+      this.corpusStatsCache.set(key, cached);
+      return cached;
+    }
+    let totalDocLength = 0;
+    let docCount = 0;
+    for (const documentId of scopedIds) {
+      const document = this.documentsById.get(documentId);
+      if (!document || !this.pathFilter.isAllowed(document.relativePath) || document.moderationHidden) continue;
+      totalDocLength += (searchContent ? document.bodyLength : 0)
+        + (searchFrontmatter ? document.frontmatterLength : 0);
+      docCount += 1;
+    }
+    const stats = { docCount, totalDocLength };
+    this.corpusStatsCache.set(key, stats);
+    while (this.corpusStatsCache.size > CORPUS_STATS_CACHE_MAX_ENTRIES) {
+      const oldest = this.corpusStatsCache.keys().next();
+      if (oldest.done) break;
+      this.corpusStatsCache.delete(oldest.value);
+    }
+    return stats;
   }
 
   private async loadText(document: IndexedDocument): Promise<void> {

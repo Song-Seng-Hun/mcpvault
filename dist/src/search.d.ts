@@ -13,6 +13,7 @@ export declare class SearchService {
     private readonly gramsById;
     private readonly pathDocuments;
     private readonly documentPathKeys;
+    private readonly corpusStatsCache;
     private readonly directoryCache;
     private nextDocumentId;
     private indexedTextBytes;
@@ -53,6 +54,7 @@ export declare class SearchService {
     private addPathIndex;
     private removePathIndex;
     private scopedDocumentIds;
+    private getCorpusStats;
     private loadText;
     private trimTextCache;
     private candidateIds;
