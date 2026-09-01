@@ -529,7 +529,7 @@ export class NotificationService {
 
   private async publicManifest(): Promise<PublicSnapshotManifestEntry[] | undefined> {
     if (!this.vaultPath || !this.fileCatalog) return undefined;
-    const paths = (await this.fileCatalog.listNotePaths()).filter(isPublicRootNotePath).sort((a, b) => a.localeCompare(b));
+    const paths = (await this.fileCatalog.notePathsSnapshot()).filter(isPublicRootNotePath).sort((a, b) => a.localeCompare(b));
     const entries: PublicSnapshotManifestEntry[] = [];
     for (let start = 0; start < paths.length; start += HYDRATE_BATCH_SIZE) {
       const batch = paths.slice(start, start + HYDRATE_BATCH_SIZE);

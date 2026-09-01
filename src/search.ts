@@ -661,7 +661,7 @@ export class SearchService {
     if (this.indexRefresh) return this.indexRefresh;
     this.indexRefresh = (async () => {
       const paths = this.catalog
-        ? (await this.catalog.listNotePaths()).filter(path => path.toLowerCase().endsWith('.md')).map(path => join(this.vaultPath, path))
+        ? (await this.catalog.notePathsSnapshot()).filter(path => path.toLowerCase().endsWith('.md')).map(path => join(this.vaultPath, path))
         : await this.findMarkdownFiles(this.vaultPath);
       const next = new Map<string, IndexedDocument>();
       for (let start = 0; start < paths.length; start += INDEX_READ_BATCH_SIZE) {
@@ -914,7 +914,9 @@ export class SearchService {
   }
 
   private scopedDocumentIds(pathPrefix: string, excludePaths: string[]): Set<number> {
-    const output = new Set<number>(this.pathDocuments.get(pathPrefix || '') || []);
+    const base = this.pathDocuments.get(pathPrefix || '');
+    if (!base || excludePaths.length === 0) return base || new Set<number>();
+    const output = new Set<number>(base);
     for (const exclude of excludePaths) {
       for (const documentId of this.pathDocuments.get(exclude) || []) output.delete(documentId);
     }

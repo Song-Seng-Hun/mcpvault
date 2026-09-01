@@ -286,7 +286,7 @@ export class VaultGraphIndex {
         this.refreshPromise = (async () => {
             const generation = this.changeGeneration;
             const paths = this.catalog
-                ? await this.catalog.listAllPaths()
+                ? await this.catalog.allPathsSnapshot()
                 : await this.findNotePaths(this.vaultPath);
             this.allPaths = new Set(paths.filter(path => this.pathFilter.isAllowedForListing(path)));
             const next = new Map();

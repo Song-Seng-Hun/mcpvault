@@ -513,7 +513,7 @@ export class VaultMetadataIndex {
       this.dirty.clear();
       this.needsFullRefresh = false;
       const next = new Map<string, VaultIndexEntry>();
-      const paths = this.catalog ? await this.catalog.listNotePaths() : await this.findNotePaths(this.vaultPath);
+      const paths = this.catalog ? await this.catalog.notePathsSnapshot() : await this.findNotePaths(this.vaultPath);
       for (let start = 0; start < paths.length; start += READ_BATCH_SIZE) {
         const batch = paths.slice(start, start + READ_BATCH_SIZE);
         const metadata = await Promise.all(batch.map(path => this.readEntry(path, this.entries.get(path))));

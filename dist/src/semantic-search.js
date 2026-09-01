@@ -531,7 +531,7 @@ export class SemanticSearchService {
             const seen = new Set();
             let manifestChanged = false;
             const paths = this.catalog
-                ? (await this.catalog.listNotePaths()).filter(path => isMarkdown(path))
+                ? (await this.catalog.notePathsSnapshot()).filter(path => isMarkdown(path))
                 : await this.findMarkdownFiles(this.vaultPath);
             for (const path of paths) {
                 const normalized = normalizePath(path);

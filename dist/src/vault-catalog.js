@@ -67,15 +67,23 @@ export class VaultFileCatalog {
         const inventory = await this.listInventory();
         return [...inventory.notes];
     }
+    /** Return the current immutable-by-convention note-path snapshot for read models. */
+    async notePathsSnapshot() {
+        return (await this.listInventory()).notes;
+    }
     async listAllPaths() {
         const inventory = await this.listInventory();
         return [...inventory.all];
+    }
+    /** Return the current immutable-by-convention all-path snapshot for read models. */
+    async allPathsSnapshot() {
+        return (await this.listInventory()).all;
     }
     async listInventory() {
         this.startWatcher();
         const interval = this.watcher ? WATCH_RECONCILE_INTERVAL_MS : NO_WATCHER_RECONCILE_INTERVAL_MS;
         if (!this.needsRefresh && this.paths && this.allPaths && Date.now() - this.lastRefreshAt < interval) {
-            return { notes: [...this.paths], all: [...this.allPaths] };
+            return { notes: this.paths, all: this.allPaths };
         }
         if (!this.refreshPromise)
             this.refreshPromise = this.refresh();
