@@ -91,6 +91,13 @@ test("server can read and write notes via tools", async () => {
     revision: parsed.revision,
   });
 
+  const sync = await client.callTool({ name: "sync_note_revisions", arguments: { knownRevisions: { "test.md": parsed.revision } } });
+  expect(JSON.parse((sync.content as any)[0].text)).toMatchObject({
+    checked: 1,
+    unchanged: 1,
+    changes: [{ path: "test.md", state: "unchanged", revision: parsed.revision }],
+  });
+
   await client.close();
   await server.close();
 });

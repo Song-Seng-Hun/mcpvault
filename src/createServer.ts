@@ -480,6 +480,18 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           }
         },
         {
+          name: "sync_note_revisions",
+          description: "Compare a bounded client-side note cache against current visible revisions without reading note bodies. Returns unchanged, changed, new, or missing states.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              knownRevisions: { type: "object", description: "Map of vault-relative or authorized scope:// note paths to revisions previously returned by read_note or search_notes(includeRevisions=true). Maximum 200 entries.", additionalProperties: { type: "string" } },
+              prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+            },
+            required: ["knownRevisions"]
+          }
+        },
+        {
           name: "semantic_search_status",
           description: "Show the optional semantic index status. This is a derived cache; Markdown and Git remain authoritative.",
           inputSchema: { type: "object", properties: { prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false } } }
@@ -1420,6 +1432,41 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           return {
             content: [{ type: "text", text: JSON.stringify({ ok: result.successful, err: result.failed }, null, indent) }]
           };
+        }
+
+        case "sync_note_revisions": {
+          const knownRevisions = trimmedArgs.knownRevisions;
+          if (!knownRevisions || typeof knownRevisions !== 'object' || Array.isArray(knownRevisions)) {
+            throw new Error('knownRevisions must be an object mapping note paths to revisions');
+          }
+          const requested = Object.entries(knownRevisions as Record<string, unknown>);
+          if (requested.length > 200) throw new Error('knownRevisions cannot contain more than 200 notes');
+          const entries = new Map((await metadataIndex.list()).map(entry => [entry.path, entry]));
+          const changes: Array<Record<string, unknown>> = [];
+          for (const [externalPath, revision] of requested) {
+            if (typeof revision !== 'string' || !revision.trim()) throw new Error(`knownRevisions['${externalPath}'] must be a non-empty revision string`);
+            const physicalPath = scopeAccess.resolveExternalPath(externalPath, principal).replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+            if (!canAccessPath(physicalPath)) continue;
+            const entry = entries.get(physicalPath);
+            let visible = false;
+            if (entry) {
+              try {
+                assertReadableCommunityNote(entry.frontmatter, physicalPath);
+                visible = true;
+              } catch {
+                visible = false;
+              }
+            }
+            const path = scopeAccess.toPublicPath(physicalPath);
+            if (!visible) {
+              changes.push({ path, state: 'missing' });
+            } else if (entry!.revision === revision.trim()) {
+              changes.push({ path, state: 'unchanged', revision: entry!.revision });
+            } else {
+              changes.push({ path, state: 'changed', revision: entry!.revision, size: entry!.size, modified: entry!.mtimeMs });
+            }
+          }
+          return jsonResult({ changes, checked: changes.length, unchanged: changes.filter(item => item.state === 'unchanged').length, changed: changes.filter(item => item.state === 'changed').length, missing: changes.filter(item => item.state === 'missing').length }, trimmedArgs.prettyPrint);
         }
 
         case "update_frontmatter": {
