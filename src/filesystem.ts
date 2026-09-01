@@ -123,6 +123,17 @@ function cursorForQueryNote(note: QueryNote, sortBy: string): QueryNotesCursor {
   return { path: note.path, value: String(value) };
 }
 
+function findCursorStart(notes: Array<Pick<QueryNote, 'path' | 'frontmatter'>>, cursor: QueryNotesCursor, sortBy: string, sortOrder: 'asc' | 'desc'): number {
+  let low = 0;
+  let high = notes.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (compareQueryNoteToCursor(notes[middle]!, cursor, sortBy, sortOrder) > 0) high = middle;
+    else low = middle + 1;
+  }
+  return low;
+}
+
 function lineStarts(content: string): number[] {
   const starts = [0];
   const newline = /\r\n|\n|\r/g;
@@ -1973,6 +1984,54 @@ export class FileSystemService {
     const notes: QueryNote[] = [];
     const filters = params.filters || {};
     const indexedEntries = this.metadataIndex ? await this.metadataIndex.listSorted(filters, pathPrefix, sortBy, sortOrder) : undefined;
+    if (indexedEntries && params.includeTotal === false) {
+      const start = params.after ? findCursorStart(indexedEntries, params.after, sortBy, sortOrder) : 0;
+      const pageCandidates: QueryNote[] = [];
+      let skipped = requestedOffset;
+      for (let index = start; index < indexedEntries.length; index += 1) {
+        const entry = indexedEntries[index]!;
+        if (!this.pathFilter.isAllowed(entry.path) || !canAccessPath(entry.path)) continue;
+        if (pathPrefix && entry.path !== pathPrefix && !entry.path.startsWith(`${pathPrefix}/`)) continue;
+        const matches = Object.entries(filters).every(([key, expected]) => {
+          const actual = getFrontmatterValue(entry.frontmatter, key);
+          return actual.found && frontmatterValuesEqual(actual.value, expected);
+        });
+        if (!matches) continue;
+        if (skipped > 0) {
+          skipped -= 1;
+          continue;
+        }
+        pageCandidates.push({ path: entry.path, frontmatter: entry.frontmatter });
+        if (pageCandidates.length > limit) break;
+      }
+      const truncated = pageCandidates.length > limit;
+      const selected = pageCandidates.slice(0, limit);
+      const nextCursor = truncated ? cursorForQueryNote(selected[selected.length - 1]!, sortBy) : undefined;
+      if (params.includeContent) {
+        const withContent = await Promise.all(selected.map(async note => {
+          try {
+            const raw = await readFile(this.resolvePath(note.path), 'utf-8');
+            return { ...note, content: this.frontmatterHandler.parse(raw).content };
+          } catch {
+            return undefined;
+          }
+        }));
+        return {
+          notes: withContent.filter((note): note is QueryNote & { content: string } => note !== undefined),
+          total: -1,
+          totalKnown: false,
+          truncated,
+          ...(nextCursor ? { nextCursor } : {}),
+        };
+      }
+      return {
+        notes: selected,
+        total: -1,
+        totalKnown: false,
+        truncated,
+        ...(nextCursor ? { nextCursor } : {}),
+      };
+    }
     if (indexedEntries) {
       for (const entry of indexedEntries) {
         if (!this.pathFilter.isAllowed(entry.path) || !canAccessPath(entry.path)) continue;

@@ -298,6 +298,7 @@ export class CommunityFeaturesService {
           pathPrefix: REACTIONS,
           filters: { mcpvault_type: 'reaction', active: true, target_type: 'post' },
           limit: MAX_SCAN,
+          includeTotal: false,
           ...(after ? { after } : {}),
         });
         for (const reaction of page.notes) {

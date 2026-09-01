@@ -79,7 +79,7 @@ export class AgentDirectoryService {
         const profileNotes = [];
         let profileAfter;
         while (eligiblePrincipals.length > 0) {
-            const page = await this.fileSystem.queryNotes({ pathPrefix: ROOT, filters: { mcpvault_type: 'agent_profile' }, limit: 500, ...(profileAfter ? { after: profileAfter } : {}) });
+            const page = await this.fileSystem.queryNotes({ pathPrefix: ROOT, filters: { mcpvault_type: 'agent_profile' }, limit: 500, includeTotal: false, ...(profileAfter ? { after: profileAfter } : {}) });
             profileNotes.push(...page.notes);
             if (!page.truncated || page.notes.length === 0 || !page.nextCursor)
                 break;

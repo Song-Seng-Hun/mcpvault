@@ -1,6 +1,8 @@
 import { test, expect, beforeEach, afterEach, describe } from "vitest";
 import { FileSystemService, classifyWriteError } from "./filesystem.js";
 import { PathFilter } from "./pathfilter.js";
+import { FrontmatterHandler } from "./frontmatter.js";
+import { VaultMetadataIndex } from "./vault-index.js";
 import { writeFile, readFile, mkdir, mkdtemp, rm, symlink } from "fs/promises";
 import { join, relative } from "path";
 import { tmpdir, homedir } from "os";
@@ -662,6 +664,20 @@ describe("structured frontmatter queries", () => {
     expect(second.notes.map(note => note.path)).toEqual(["Three.md"]);
     expect(second.truncated).toBe(false);
     expect(second.nextCursor).toBeUndefined();
+
+    const metadataIndex = new VaultMetadataIndex(testVaultPath, new PathFilter(), new FrontmatterHandler());
+    const indexedFileSystem = new FileSystemService(testVaultPath, new PathFilter(), new FrontmatterHandler(), undefined, metadataIndex);
+    try {
+      const fastFirst = await indexedFileSystem.queryNotes({ sortBy: "priority", limit: 1, includeTotal: false });
+      expect(fastFirst.notes.map(note => note.path)).toEqual(["One.md"]);
+      expect(fastFirst.total).toBe(-1);
+      expect(fastFirst.totalKnown).toBe(false);
+      const fastSecond = await indexedFileSystem.queryNotes({ sortBy: "priority", limit: 1, includeTotal: false, after: fastFirst.nextCursor });
+      expect(fastSecond.notes.map(note => note.path)).toEqual(["Two.md"]);
+      expect(fastSecond.truncated).toBe(true);
+    } finally {
+      metadataIndex.close();
+    }
 
     await expect(fileSystem.queryNotes({ after: {} as any })).rejects.toThrow(/cursor path/);
   });

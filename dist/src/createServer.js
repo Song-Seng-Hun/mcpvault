@@ -530,6 +530,7 @@ export function createServer(vaultPath, options = {}) {
                     limit: { type: "number", description: "Maximum notes to return (default: 100, max: 500)", default: 100 },
                     after: { type: "object", description: "Keyset cursor returned as nextCursor by the previous page; keeps the next page stable while avoiding large offsets" },
                     includeContent: { type: "boolean", description: "Include the note body in each result (default: false)", default: false },
+                    includeTotal: { type: "boolean", description: "Compute the exact total matching count (default: true); false returns total=-1 and can stop after the requested page", default: true },
                     prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
                 }
             }
@@ -1519,6 +1520,7 @@ export function createServer(vaultPath, options = {}) {
                         limit: Math.min(requestedLimit, 500),
                         after: trimmedArgs.after,
                         includeContent: trimmedArgs.includeContent,
+                        includeTotal: trimmedArgs.includeTotal,
                     }, canAccessPath);
                     result.notes = result.notes.filter(note => !isManagedCommunityPath(note.path) || !isModerationHidden(note.frontmatter));
                     const indent = trimmedArgs.prettyPrint ? 2 : undefined;

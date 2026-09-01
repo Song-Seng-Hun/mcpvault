@@ -304,6 +304,8 @@ export interface QueryNotesParams {
   /** Internal keyset cursor. Use the last returned sort value and path. */
   after?: QueryNotesCursor;
   includeContent?: boolean;
+  /** Skip the exact total count when only page data is needed. */
+  includeTotal?: boolean;
 }
 
 export interface QueryNotesCursor {
@@ -323,6 +325,8 @@ export interface QueryNotesResult {
   total: number;
   truncated: boolean;
   nextCursor?: QueryNotesCursor;
+  /** False only when includeTotal=false; total is then -1. */
+  totalKnown?: boolean;
 }
 
 // Git-backed revision history types
