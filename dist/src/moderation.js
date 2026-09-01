@@ -6,6 +6,7 @@ import {} from './moderation-policy.js';
 export const MODERATION_TARGET_TYPES = ['post', 'comment', 'message', 'account'];
 export const MODERATION_REPORT_CATEGORIES = ['prompt_injection', 'malware', 'harassment', 'spam', 'privacy', 'impersonation', 'other'];
 export const MODERATION_ACTIONS = ['warn', 'hide', 'quarantine', 'remove', 'restore', 'ban', 'unban'];
+const MODERATION_DATABASE_CACHE_TTL_MS = 1_000;
 const emptyDatabase = () => ({ version: 1, reports: [], actions: [], bans: [] });
 const actorName = (principal) => principal.agentId || principal.modelId || principal.accountId;
 const boundedText = (value, max) => String(value || '').trim().slice(0, max);
@@ -15,23 +16,42 @@ export class ModerationService {
     scopeAuth;
     databasePath;
     mutationQueue = Promise.resolve();
+    databaseCache;
+    databaseInFlight;
     constructor(vaultPath, fileSystem, scopeAuth) {
         this.fileSystem = fileSystem;
         this.scopeAuth = scopeAuth;
         this.databasePath = join(resolve(vaultPath), '.mcpvault', 'moderation.json');
     }
     async readDatabase() {
-        try {
-            const parsed = JSON.parse(await readFile(this.databasePath, 'utf8'));
-            if (parsed.version !== 1 || !Array.isArray(parsed.reports) || !Array.isArray(parsed.actions) || !Array.isArray(parsed.bans)) {
-                throw new Error('Unsupported or corrupt moderation database');
+        const cached = this.databaseCache;
+        if (cached && cached.expiresAt > Date.now())
+            return cached.value;
+        if (this.databaseInFlight)
+            return this.databaseInFlight;
+        const computation = (async () => {
+            try {
+                const parsed = JSON.parse(await readFile(this.databasePath, 'utf8'));
+                if (parsed.version !== 1 || !Array.isArray(parsed.reports) || !Array.isArray(parsed.actions) || !Array.isArray(parsed.bans)) {
+                    throw new Error('Unsupported or corrupt moderation database');
+                }
+                return parsed;
             }
-            return parsed;
+            catch (error) {
+                if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
+                    return emptyDatabase();
+                throw error;
+            }
+        })();
+        this.databaseInFlight = computation;
+        try {
+            const database = await computation;
+            this.databaseCache = { expiresAt: Date.now() + MODERATION_DATABASE_CACHE_TTL_MS, value: database };
+            return database;
         }
-        catch (error) {
-            if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
-                return emptyDatabase();
-            throw error;
+        finally {
+            if (this.databaseInFlight === computation)
+                this.databaseInFlight = undefined;
         }
     }
     async writeDatabase(database) {
@@ -40,6 +60,7 @@ export class ModerationService {
         const temporary = `${this.databasePath}.${randomBytes(8).toString('hex')}.tmp`;
         await writeFile(temporary, `${JSON.stringify(database, null, 2)}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
         await rename(temporary, this.databasePath);
+        this.databaseCache = { expiresAt: Date.now() + MODERATION_DATABASE_CACHE_TTL_MS, value: database };
         await Promise.allSettled([chmod(directory, 0o700), chmod(this.databasePath, 0o600)]);
     }
     async exclusive(operation) {

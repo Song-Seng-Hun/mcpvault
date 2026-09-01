@@ -26,6 +26,8 @@ export declare class ModerationService {
     private readonly scopeAuth;
     private readonly databasePath;
     private mutationQueue;
+    private databaseCache;
+    private databaseInFlight;
     constructor(vaultPath: string, fileSystem: FileSystemService, scopeAuth: ScopeAuthService);
     private readDatabase;
     private writeDatabase;

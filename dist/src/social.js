@@ -299,11 +299,12 @@ export class SocialService {
     }
     /** Read the published post set once for pulse's own-post and active-post signals. */
     async pulsePosts(params) {
-        const result = await queryAllNotes(this.fileSystem, {
+        const snapshot = this.notifications ? await this.notifications.discoverySnapshot() : undefined;
+        const result = snapshot ? undefined : await queryAllNotes(this.fileSystem, {
             pathPrefix: BLOG_ROOT, filters: { mcpvault_type: 'blog_post', status: 'published' },
             sortBy: 'updated_at', sortOrder: 'desc',
         });
-        const visibleNotes = result.notes.filter(note => !isModerationHidden(note.frontmatter) && String(note.frontmatter.status || 'published') === 'published');
+        const visibleNotes = (snapshot?.posts || result.notes).filter(note => !isModerationHidden(note.frontmatter) && String(note.frontmatter.status || 'published') === 'published');
         const ownNotes = visibleNotes.filter(note => String(note.frontmatter.author || '').toLowerCase() === params.author.toLowerCase());
         const activeNotes = visibleNotes.filter(note => matchesWorkflowFilter(note.frontmatter, 'active'));
         const active = await this.formatBlogPosts(activeNotes, {
@@ -312,7 +313,7 @@ export class SocialService {
             maxChars: Math.min(params.maxChars, 6000),
             includeExcerpt: true,
             excerptMaxChars: 240,
-        }, result.truncated);
+        }, Boolean(result?.truncated));
         return { ownPublishedPosts: ownNotes.length, activePosts: active.posts, activeTotal: active.total, activeTruncated: active.truncated };
     }
     async formatBlogPosts(visibleNotes, params, queryTruncated, total = visibleNotes.length) {
