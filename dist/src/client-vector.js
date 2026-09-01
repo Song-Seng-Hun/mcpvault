@@ -1,3 +1,4 @@
+import { gzipSnapshotCodec } from './client-compression.js';
 const MAX_DOCUMENTS = 5_000;
 const MAX_RESULT_LIMIT = 50;
 /**
@@ -108,9 +109,23 @@ export class McpVaultClientVectorIndex {
     persist(store, key) {
         store.setItem(key, this.snapshot());
     }
+    persistCompressed(store, key, codec = gzipSnapshotCodec) {
+        store.setItem(key, codec.compress(this.snapshot()));
+    }
     hydrate(store, key) {
         const snapshot = store.getItem(key);
         return snapshot ? this.restore(snapshot) : 0;
+    }
+    hydrateCompressed(store, key, codec = gzipSnapshotCodec) {
+        const snapshot = store.getItem(key);
+        if (!snapshot)
+            return 0;
+        try {
+            return this.restore(codec.decompress(snapshot));
+        }
+        catch {
+            return 0;
+        }
     }
     async persistAsync(store, key) {
         await store.setItem(key, this.snapshot());
@@ -118,6 +133,20 @@ export class McpVaultClientVectorIndex {
     async hydrateAsync(store, key) {
         const snapshot = await store.getItem(key);
         return snapshot ? this.restore(snapshot) : 0;
+    }
+    async persistCompressedAsync(store, key, codec = gzipSnapshotCodec) {
+        await store.setItem(key, codec.compress(this.snapshot()));
+    }
+    async hydrateCompressedAsync(store, key, codec = gzipSnapshotCodec) {
+        const snapshot = await store.getItem(key);
+        if (!snapshot)
+            return 0;
+        try {
+            return this.restore(codec.decompress(snapshot));
+        }
+        catch {
+            return 0;
+        }
     }
     persistIncremental(store, key) {
         const previous = readIncrementalManifest(store.getItem(key));

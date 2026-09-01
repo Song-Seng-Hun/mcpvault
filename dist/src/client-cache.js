@@ -1,3 +1,4 @@
+import { gzipSnapshotCodec } from './client-compression.js';
 const DEFAULT_MAX_CONCURRENT_BATCHES = 2;
 const MAX_CONCURRENT_BATCHES = 8;
 function decodeEndpointResult(value) {
@@ -77,6 +78,9 @@ export class McpVaultClientCache {
     persist(store, key) {
         store.setItem(key, this.snapshot());
     }
+    persistCompressed(store, key, codec = gzipSnapshotCodec) {
+        store.setItem(key, codec.compress(this.snapshot()));
+    }
     persistIncremental(store, key) {
         const previous = readManifest(store.getItem(key));
         const currentPaths = [...this.entries.keys()];
@@ -116,6 +120,31 @@ export class McpVaultClientCache {
     hydrate(store, key) {
         const snapshot = store.getItem(key);
         return snapshot ? this.restore(snapshot) : 0;
+    }
+    hydrateCompressed(store, key, codec = gzipSnapshotCodec) {
+        const snapshot = store.getItem(key);
+        if (!snapshot)
+            return 0;
+        try {
+            return this.restore(codec.decompress(snapshot));
+        }
+        catch {
+            return 0;
+        }
+    }
+    async persistCompressedAsync(store, key, codec = gzipSnapshotCodec) {
+        await store.setItem(key, codec.compress(this.snapshot()));
+    }
+    async hydrateCompressedAsync(store, key, codec = gzipSnapshotCodec) {
+        const snapshot = await store.getItem(key);
+        if (!snapshot)
+            return 0;
+        try {
+            return this.restore(codec.decompress(snapshot));
+        }
+        catch {
+            return 0;
+        }
     }
     hydrateIncremental(store, key) {
         const manifest = readManifest(store.getItem(key));

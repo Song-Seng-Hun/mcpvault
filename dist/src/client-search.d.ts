@@ -1,4 +1,5 @@
 import type { AsyncClientKeyValueStore, CachedNote, ClientKeyValueStore } from './client-cache.js';
+import { type AsyncClientBinaryStore, type ClientBinaryStore, type ClientSnapshotCodec } from './client-compression.js';
 export interface ClientSearchResult {
     path: string;
     score: number;
@@ -47,7 +48,11 @@ export declare class McpVaultClientSearchIndex {
     snapshot(): string;
     restore(snapshot: string): number;
     persist(store: ClientKeyValueStore, key: string): void;
+    persistCompressed(store: ClientBinaryStore, key: string, codec?: ClientSnapshotCodec): void;
     hydrate(store: ClientKeyValueStore, key: string): number;
+    hydrateCompressed(store: ClientBinaryStore, key: string, codec?: ClientSnapshotCodec): number;
+    persistCompressedAsync(store: AsyncClientBinaryStore, key: string, codec?: ClientSnapshotCodec): Promise<void>;
+    hydrateCompressedAsync(store: AsyncClientBinaryStore, key: string, codec?: ClientSnapshotCodec): Promise<number>;
     /**
      * Persists only changed or newly indexed documents plus a small manifest.
      * The host store remains responsible for choosing protected storage.

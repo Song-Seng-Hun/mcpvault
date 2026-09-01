@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import { McpVaultClientSearchIndex } from './client-search.js';
 import type { AsyncClientKeyValueStore, ClientKeyValueStore } from './client-cache.js';
+import type { ClientBinaryStore } from './client-compression.js';
 
 test('searches only cached notes and ranks title matches', () => {
   const index = new McpVaultClientSearchIndex();
@@ -124,4 +125,19 @@ test('builds the local search index in yielding batches and can abort idle work'
   })).rejects.toThrow('aborted');
   expect(yields).toBe(2);
   expect(index.size()).toBe(4);
+});
+
+test('persists a local search snapshot as compressed binary', () => {
+  const values = new Map<string, Uint8Array>();
+  const store: ClientBinaryStore = {
+    getItem: key => values.get(key) || null,
+    setItem: (key, value) => { values.set(key, value); },
+  };
+  const original = new McpVaultClientSearchIndex();
+  original.upsert({ path: 'compressed.md', revision: 'a'.repeat(64), content: '검색 가능한 반복 본문 '.repeat(300) });
+  original.persistCompressed(store, 'compressed-search');
+  expect(values.get('compressed-search')!.byteLength).toBeLessThan(Buffer.byteLength(original.snapshot()));
+  const restored = new McpVaultClientSearchIndex();
+  expect(restored.hydrateCompressed(store, 'compressed-search')).toBe(1);
+  expect(restored.search('검색').results[0]!.path).toBe('compressed.md');
 });

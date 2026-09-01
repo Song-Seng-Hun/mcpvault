@@ -1,4 +1,5 @@
 import type { AsyncClientKeyValueStore, CachedNote, ClientKeyValueStore } from './client-cache.js';
+import { gzipSnapshotCodec, type AsyncClientBinaryStore, type ClientBinaryStore, type ClientSnapshotCodec } from './client-compression.js';
 
 export interface ClientSearchResult {
   path: string;
@@ -235,9 +236,29 @@ export class McpVaultClientSearchIndex {
     store.setItem(key, this.snapshot());
   }
 
+  persistCompressed(store: ClientBinaryStore, key: string, codec: ClientSnapshotCodec = gzipSnapshotCodec): void {
+    store.setItem(key, codec.compress(this.snapshot()));
+  }
+
   hydrate(store: ClientKeyValueStore, key: string): number {
     const snapshot = store.getItem(key);
     return snapshot ? this.restore(snapshot) : 0;
+  }
+
+  hydrateCompressed(store: ClientBinaryStore, key: string, codec: ClientSnapshotCodec = gzipSnapshotCodec): number {
+    const snapshot = store.getItem(key);
+    if (!snapshot) return 0;
+    try { return this.restore(codec.decompress(snapshot)); } catch { return 0; }
+  }
+
+  async persistCompressedAsync(store: AsyncClientBinaryStore, key: string, codec: ClientSnapshotCodec = gzipSnapshotCodec): Promise<void> {
+    await store.setItem(key, codec.compress(this.snapshot()));
+  }
+
+  async hydrateCompressedAsync(store: AsyncClientBinaryStore, key: string, codec: ClientSnapshotCodec = gzipSnapshotCodec): Promise<number> {
+    const snapshot = await store.getItem(key);
+    if (!snapshot) return 0;
+    try { return this.restore(codec.decompress(snapshot)); } catch { return 0; }
   }
 
   /**

@@ -16,6 +16,8 @@ export { ScopeAccessPolicy } from './scope-access.js';
 export { LlmWikiService } from './llm-wiki.js';
 export { McpVaultClientCache } from './client-cache.js';
 export type { AsyncClientKeyValueStore, CachedNote, ClientEndpointCaller, ClientKeyValueStore, ClientReadNotesOptions, ClientReadNotesResult, ClientStaleReadResult } from './client-cache.js';
+export { gzipSnapshotCodec } from './client-compression.js';
+export type { AsyncClientBinaryStore, ClientBinaryStore, ClientSnapshotCodec } from './client-compression.js';
 export { ClientReferenceCache } from './client-references.js';
 export type { ClientReferenceCacheOptions, ClientReferenceReadOptions } from './client-references.js';
 export { ContextBudgeter } from './client-context.js';

@@ -1,3 +1,4 @@
+import { gzipSnapshotCodec } from './client-compression.js';
 const MAX_QUERY_CHARS = 500;
 const MAX_RESULT_LIMIT = 50;
 const MAX_INDEXED_DOCUMENTS = 5_000;
@@ -200,9 +201,37 @@ export class McpVaultClientSearchIndex {
     persist(store, key) {
         store.setItem(key, this.snapshot());
     }
+    persistCompressed(store, key, codec = gzipSnapshotCodec) {
+        store.setItem(key, codec.compress(this.snapshot()));
+    }
     hydrate(store, key) {
         const snapshot = store.getItem(key);
         return snapshot ? this.restore(snapshot) : 0;
+    }
+    hydrateCompressed(store, key, codec = gzipSnapshotCodec) {
+        const snapshot = store.getItem(key);
+        if (!snapshot)
+            return 0;
+        try {
+            return this.restore(codec.decompress(snapshot));
+        }
+        catch {
+            return 0;
+        }
+    }
+    async persistCompressedAsync(store, key, codec = gzipSnapshotCodec) {
+        await store.setItem(key, codec.compress(this.snapshot()));
+    }
+    async hydrateCompressedAsync(store, key, codec = gzipSnapshotCodec) {
+        const snapshot = await store.getItem(key);
+        if (!snapshot)
+            return 0;
+        try {
+            return this.restore(codec.decompress(snapshot));
+        }
+        catch {
+            return 0;
+        }
     }
     /**
      * Persists only changed or newly indexed documents plus a small manifest.

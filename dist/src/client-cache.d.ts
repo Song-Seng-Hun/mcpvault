@@ -1,3 +1,4 @@
+import { type AsyncClientBinaryStore, type ClientBinaryStore, type ClientSnapshotCodec } from './client-compression.js';
 export interface ClientEndpointCaller {
     callEndpoint(endpointId: string, arguments_: Record<string, unknown>, options?: {
         signal?: AbortSignal;
@@ -63,9 +64,13 @@ export declare class McpVaultClientCache {
     snapshot(): string;
     restore(snapshot: string): number;
     persist(store: ClientKeyValueStore, key: string): void;
+    persistCompressed(store: ClientBinaryStore, key: string, codec?: ClientSnapshotCodec): void;
     persistIncremental(store: ClientKeyValueStore, key: string): void;
     persistIncrementalAsync(store: AsyncClientKeyValueStore, key: string): Promise<void>;
     hydrate(store: ClientKeyValueStore, key: string): number;
+    hydrateCompressed(store: ClientBinaryStore, key: string, codec?: ClientSnapshotCodec): number;
+    persistCompressedAsync(store: AsyncClientBinaryStore, key: string, codec?: ClientSnapshotCodec): Promise<void>;
+    hydrateCompressedAsync(store: AsyncClientBinaryStore, key: string, codec?: ClientSnapshotCodec): Promise<number>;
     hydrateIncremental(store: ClientKeyValueStore, key: string): number;
     hydrateIncrementalAsync(store: AsyncClientKeyValueStore, key: string): Promise<number>;
     invalidate(path?: string): void;

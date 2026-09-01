@@ -1,4 +1,5 @@
 import type { AsyncClientKeyValueStore, ClientKeyValueStore } from './client-cache.js';
+import { type AsyncClientBinaryStore, type ClientBinaryStore, type ClientSnapshotCodec } from './client-compression.js';
 export interface ClientVectorSearchResult {
     path: string;
     score: number;
@@ -39,9 +40,13 @@ export declare class McpVaultClientVectorIndex {
     snapshot(): string;
     restore(snapshot: string): number;
     persist(store: ClientKeyValueStore, key: string): void;
+    persistCompressed(store: ClientBinaryStore, key: string, codec?: ClientSnapshotCodec): void;
     hydrate(store: ClientKeyValueStore, key: string): number;
+    hydrateCompressed(store: ClientBinaryStore, key: string, codec?: ClientSnapshotCodec): number;
     persistAsync(store: AsyncClientKeyValueStore, key: string): Promise<void>;
     hydrateAsync(store: AsyncClientKeyValueStore, key: string): Promise<number>;
+    persistCompressedAsync(store: AsyncClientBinaryStore, key: string, codec?: ClientSnapshotCodec): Promise<void>;
+    hydrateCompressedAsync(store: AsyncClientBinaryStore, key: string, codec?: ClientSnapshotCodec): Promise<number>;
     persistIncremental(store: ClientKeyValueStore, key: string): void;
     persistIncrementalAsync(store: AsyncClientKeyValueStore, key: string): Promise<void>;
     hydrateIncremental(store: ClientKeyValueStore, key: string): number;

@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
 import { McpVaultClientCache, type AsyncClientKeyValueStore, type ClientEndpointCaller, type ClientKeyValueStore } from './client-cache.js';
+import type { ClientBinaryStore } from './client-compression.js';
 
 test('client cache performs a first read, then conditional reuse and refresh', async () => {
   let revision = 'a'.repeat(64);
@@ -232,4 +233,20 @@ test('reads note batches with bounded client-side concurrency', async () => {
 test('rejects an unsafe batch concurrency value', async () => {
   const cache = new McpVaultClientCache({ callEndpoint: async () => ({ ok: [], err: [] }) });
   await expect(cache.readNotes(['note.md'], { maxConcurrentBatches: 9 })).rejects.toThrow('maxConcurrentBatches');
+});
+
+test('persists cache snapshots as compressed binary without breaking restore', () => {
+  const values = new Map<string, Uint8Array>();
+  const store: ClientBinaryStore = {
+    getItem: key => values.get(key) || null,
+    setItem: (key, value) => { values.set(key, value); },
+  };
+  const original = new McpVaultClientCache({ callEndpoint: async () => ({}) });
+  const content = '반복되는 위키 본문입니다. '.repeat(500);
+  original.restore(JSON.stringify([{ path: 'compressed.md', revision: 'a'.repeat(64), content }]));
+  original.persistCompressed(store, 'compressed-cache');
+  expect(values.get('compressed-cache')!.byteLength).toBeLessThan(Buffer.byteLength(original.snapshot()));
+  const restored = new McpVaultClientCache({ callEndpoint: async () => ({}) });
+  expect(restored.hydrateCompressed(store, 'compressed-cache')).toBe(1);
+  expect(restored.get('compressed.md')!.content).toBe(content);
 });

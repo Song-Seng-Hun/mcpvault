@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import { McpVaultClientVectorIndex } from './client-vector.js';
 import type { AsyncClientKeyValueStore, ClientKeyValueStore } from './client-cache.js';
+import type { ClientBinaryStore } from './client-compression.js';
 
 test('ranks supplied vectors locally with bounded top-k results', () => {
   const index = new McpVaultClientVectorIndex({ maxDocuments: 3, dimension: 2 });
@@ -92,4 +93,19 @@ test('supports asynchronous incremental vector persistence', async () => {
   const restored = new McpVaultClientVectorIndex();
   await expect(restored.hydrateIncrementalAsync(store, 'async-vectors')).resolves.toBe(1);
   expect(restored.search([1, 1]).results[0]!.path).toBe('async.md');
+});
+
+test('persists a vector snapshot as compressed binary', () => {
+  const values = new Map<string, Uint8Array>();
+  const store: ClientBinaryStore = {
+    getItem: key => values.get(key) || null,
+    setItem: (key, value) => { values.set(key, value); },
+  };
+  const original = new McpVaultClientVectorIndex({ dimension: 3 });
+  original.upsert('compressed.md', 'a'.repeat(64), [1, 2, 3]);
+  original.persistCompressed(store, 'compressed-vectors');
+  expect(values.get('compressed-vectors')!.byteLength).toBeLessThan(Buffer.byteLength(original.snapshot()));
+  const restored = new McpVaultClientVectorIndex();
+  expect(restored.hydrateCompressed(store, 'compressed-vectors')).toBe(1);
+  expect(restored.search([1, 2, 3]).results[0]!.path).toBe('compressed.md');
 });
