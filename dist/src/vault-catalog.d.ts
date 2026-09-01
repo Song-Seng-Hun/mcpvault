@@ -25,6 +25,8 @@ export declare class VaultFileCatalog {
     private pendingTimer;
     private flushPromise;
     private closed;
+    private readonly directoryCache;
+    private readonly dirtyDirectories;
     constructor(vaultPath: string, pathFilter: PathFilter);
     subscribe(listener: VaultCatalogListener): () => void;
     /** Mark a mutation already handled by the write path without broadcasting it twice. */
@@ -41,5 +43,7 @@ export declare class VaultFileCatalog {
     private emit;
     private refresh;
     private findPaths;
+    private readDirectoryEntries;
+    private markDirtyDirectories;
 }
 //# sourceMappingURL=vault-catalog.d.ts.map

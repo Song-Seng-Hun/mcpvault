@@ -6,6 +6,7 @@ const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
 const WATCH_EVENT_BATCH_DELAY_MS = 50;
 const WATCH_EVENT_STAT_BATCH_SIZE = 32;
 const DIRECTORY_SCAN_BATCH_SIZE = 8;
+const DIRECTORY_CACHE_MAX_ENTRIES = 4096;
 function normalizePath(value) {
     return value.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
 }
@@ -36,6 +37,8 @@ export class VaultFileCatalog {
     pendingTimer;
     flushPromise = Promise.resolve();
     closed = false;
+    directoryCache = new Map();
+    dirtyDirectories = new Set();
     constructor(vaultPath, pathFilter) {
         this.pathFilter = pathFilter;
         this.vaultPath = resolve(vaultPath);
@@ -51,7 +54,11 @@ export class VaultFileCatalog {
         this.paths = undefined;
         this.needsRefresh = true;
         if (path)
-            this.needsRefresh = true;
+            this.markDirtyDirectories(path);
+        else {
+            this.directoryCache.clear();
+            this.dirtyDirectories.clear();
+        }
     }
     async listNotePaths() {
         const inventory = await this.listInventory();
@@ -89,6 +96,8 @@ export class VaultFileCatalog {
         this.paths = undefined;
         this.allPaths = undefined;
         this.refreshPromise = undefined;
+        this.directoryCache.clear();
+        this.dirtyDirectories.clear();
     }
     startWatcher() {
         if (this.watcherStarted)
@@ -135,6 +144,8 @@ export class VaultFileCatalog {
     queueFullRefreshEvent() {
         this.pendingFullRefresh = true;
         this.pendingChanges.clear();
+        this.directoryCache.clear();
+        this.dirtyDirectories.clear();
         this.scheduleFlush();
     }
     scheduleFlush() {
@@ -200,23 +211,17 @@ export class VaultFileCatalog {
     async findPaths(directory) {
         const notes = [];
         const all = [];
-        let entries;
-        try {
-            entries = await readdir(directory, { withFileTypes: true });
-        }
-        catch {
-            return { notes, all };
-        }
+        const entries = await this.readDirectoryEntries(directory);
         const directories = [];
         for (const entry of entries) {
             const fullPath = join(directory, entry.name);
             const relativePath = normalizePath(relative(this.vaultPath, fullPath));
-            if (entry.isDirectory()) {
+            if (entry.directory) {
                 if (this.pathFilter.isAllowedForListing(relativePath)) {
                     directories.push({ fullPath, relativePath });
                 }
             }
-            else if (entry.isFile() && this.pathFilter.isAllowedForListing(relativePath)) {
+            else if (entry.file && this.pathFilter.isAllowedForListing(relativePath)) {
                 all.push(relativePath);
                 if (isNote(relativePath) && this.pathFilter.isAllowed(relativePath))
                     notes.push(relativePath);
@@ -231,5 +236,54 @@ export class VaultFileCatalog {
             }
         }
         return { notes, all };
+    }
+    async readDirectoryEntries(directory) {
+        // Keep full reconciliation when recursive watching is unavailable. The
+        // cache is safe only when watcher events can mark changed ancestors.
+        if (!this.watcher) {
+            try {
+                const entries = await readdir(directory, { withFileTypes: true });
+                return entries.map(entry => ({ name: entry.name, directory: entry.isDirectory(), file: entry.isFile() }));
+            }
+            catch {
+                return [];
+            }
+        }
+        let info;
+        try {
+            info = await stat(directory);
+        }
+        catch {
+            return [];
+        }
+        const cached = this.directoryCache.get(directory);
+        if (!this.dirtyDirectories.has(directory) && cached && cached.mtimeMs === info.mtimeMs && cached.size === info.size) {
+            this.directoryCache.delete(directory);
+            this.directoryCache.set(directory, cached);
+            return cached.entries;
+        }
+        let entries;
+        try {
+            const listed = await readdir(directory, { withFileTypes: true });
+            entries = listed.map(entry => ({ name: entry.name, directory: entry.isDirectory(), file: entry.isFile() }));
+        }
+        catch {
+            return [];
+        }
+        this.dirtyDirectories.delete(directory);
+        this.directoryCache.set(directory, { mtimeMs: info.mtimeMs, size: info.size, entries });
+        while (this.directoryCache.size > DIRECTORY_CACHE_MAX_ENTRIES)
+            this.directoryCache.delete(this.directoryCache.keys().next().value);
+        return entries;
+    }
+    markDirtyDirectories(path) {
+        let current = resolve(this.vaultPath, path).replace(/[\\/][^\\/]+$/, '');
+        const root = this.vaultPath.toLowerCase();
+        while (current.toLowerCase().startsWith(root) && current.length >= this.vaultPath.length) {
+            this.dirtyDirectories.add(current);
+            if (current.length === this.vaultPath.length)
+                break;
+            current = resolve(current, '..');
+        }
     }
 }

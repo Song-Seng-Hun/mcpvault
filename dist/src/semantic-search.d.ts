@@ -48,12 +48,16 @@ export declare class SemanticSearchService {
     private readonly workerLockPath;
     private manifest;
     private manifestReady;
+    private pendingReady;
     private db;
     private readonly tableCache;
     private readonly tableOpening;
     private embedder;
     private embedderLease;
     private pending;
+    private pendingSnapshotTimer;
+    private pendingSnapshotWrite;
+    private pendingSnapshotPending;
     private idleTimer;
     private unloadTimer;
     private syncPromise;
@@ -78,6 +82,9 @@ export declare class SemanticSearchService {
     private indexedCount;
     private loadManifest;
     private saveManifest;
+    private loadPendingSnapshot;
+    private queuePendingSnapshotSave;
+    private flushPendingSnapshot;
     private scheduleIdleWork;
     private runIdleWork;
     private scanForChanges;

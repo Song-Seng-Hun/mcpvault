@@ -13,6 +13,7 @@ const EMBEDDING_DIMENSIONS = 384;
 const INDEX_DIR = '.mcpvault/semantic-index';
 const MANIFEST_FILE = 'manifest.snapshot.gz';
 const LEGACY_MANIFEST_FILE = 'manifest.json';
+const PENDING_FILE = 'pending.snapshot.gz';
 const WORKER_LOCK_FILE = 'worker.lock';
 const MAX_CHUNK_CHARS = 1200;
 const MAX_CHUNKS_PER_NOTE = 64;
@@ -27,6 +28,7 @@ const SEMANTIC_QUERY_CACHE_MAX_ENTRIES = 64;
 const SEMANTIC_VECTOR_CACHE_TTL_MS = 60_000;
 const SEMANTIC_VECTOR_CACHE_MAX_ENTRIES = 32;
 const FALLBACK_SCAN_BATCH_SIZE = 8;
+const PENDING_SNAPSHOT_DEBOUNCE_MS = 1_000;
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
 // One model per Node process, regardless of how many vault/server instances or
@@ -197,12 +199,16 @@ export class SemanticSearchService {
     workerLockPath;
     manifest = {};
     manifestReady;
+    pendingReady;
     db;
     tableCache = new Map();
     tableOpening = new Map();
     embedder;
     embedderLease;
     pending = new Map();
+    pendingSnapshotTimer;
+    pendingSnapshotWrite;
+    pendingSnapshotPending = false;
     idleTimer;
     unloadTimer;
     syncPromise;
@@ -227,6 +233,7 @@ export class SemanticSearchService {
         this.manifestPath = join(this.indexPath, MANIFEST_FILE);
         this.workerLockPath = join(this.indexPath, WORKER_LOCK_FILE);
         this.manifestReady = this.loadManifest();
+        this.pendingReady = this.loadPendingSnapshot();
         if (catalog) {
             this.catalogUnsubscribe = catalog.subscribe((path, kind) => {
                 if (path && kind)
@@ -249,6 +256,7 @@ export class SemanticSearchService {
         this.clearQueryCache();
         if (this.pending.size < MAX_PENDING_CHANGES || this.pending.has(normalized)) {
             this.pending.set(normalized, { kind });
+            this.queuePendingSnapshotSave();
         }
         if (this.semanticActive)
             this.scheduleIdleWork();
@@ -259,8 +267,15 @@ export class SemanticSearchService {
             clearTimeout(this.idleTimer);
         if (this.unloadTimer)
             clearTimeout(this.unloadTimer);
+        if (this.pendingSnapshotTimer)
+            clearTimeout(this.pendingSnapshotTimer);
         this.idleTimer = undefined;
         this.unloadTimer = undefined;
+        this.pendingSnapshotTimer = undefined;
+        // Do not start a new asynchronous write during shutdown. The queue is
+        // disposable and scanForChanges reconstructs it after a restart; avoiding
+        // a late write also lets callers safely remove a temporary test vault.
+        this.pendingSnapshotPending = false;
         this.clearQueryCache();
         this.clearVectorCache();
         this.vectorInFlight.clear();
@@ -423,6 +438,62 @@ export class SemanticSearchService {
         await writeFile(temporaryPath, compressed);
         await rename(temporaryPath, this.manifestPath);
     }
+    async loadPendingSnapshot() {
+        try {
+            const raw = await gunzipAsync(await readFile(join(this.indexPath, PENDING_FILE)));
+            const parsed = JSON.parse(raw.toString('utf8'));
+            if (!Array.isArray(parsed))
+                return;
+            for (const item of parsed.slice(0, MAX_PENDING_CHANGES)) {
+                if (!item || typeof item !== 'object')
+                    continue;
+                const value = item;
+                const path = normalizePath(String(value.path || ''));
+                const kind = value.kind === 'delete' ? 'delete' : value.kind === 'upsert' ? 'upsert' : undefined;
+                if (!kind || !isMarkdown(path) || !this.pathFilter.isAllowed(path) || this.pending.has(path))
+                    continue;
+                const attempt = Number.isInteger(value.attempt) ? Math.min(Math.max(Number(value.attempt), 0), 8) : 0;
+                const retryAt = Number.isFinite(Number(value.retryAt)) ? Number(value.retryAt) : undefined;
+                this.pending.set(path, { kind, ...(attempt > 0 && { attempt }), ...(retryAt && { retryAt }) });
+            }
+        }
+        catch {
+            // A missing or corrupt work queue is harmless; scanForChanges rebuilds it.
+        }
+    }
+    queuePendingSnapshotSave() {
+        this.pendingSnapshotPending = true;
+        if (this.pendingSnapshotTimer)
+            return;
+        this.pendingSnapshotTimer = setTimeout(() => {
+            this.pendingSnapshotTimer = undefined;
+            void this.flushPendingSnapshot();
+        }, PENDING_SNAPSHOT_DEBOUNCE_MS);
+        this.pendingSnapshotTimer.unref?.();
+    }
+    async flushPendingSnapshot() {
+        if (this.pendingSnapshotWrite || !this.pendingSnapshotPending)
+            return;
+        this.pendingSnapshotPending = false;
+        const entries = [...this.pending.entries()].slice(0, MAX_PENDING_CHANGES).map(([path, change]) => ({ path, ...change }));
+        this.pendingSnapshotWrite = (async () => {
+            await mkdir(this.indexPath, { recursive: true });
+            const path = join(this.indexPath, PENDING_FILE);
+            const temporaryPath = `${path}.${process.pid}.tmp`;
+            await writeFile(temporaryPath, await gzipAsync(Buffer.from(JSON.stringify(entries), 'utf8')));
+            await rename(temporaryPath, path);
+        })().catch(() => {
+            // The queue is disposable; a later catalog scan can reconstruct it.
+        });
+        try {
+            await this.pendingSnapshotWrite;
+        }
+        finally {
+            this.pendingSnapshotWrite = undefined;
+            if (this.pendingSnapshotPending)
+                this.queuePendingSnapshotSave();
+        }
+    }
     scheduleIdleWork() {
         if (this.idleTimer)
             return;
@@ -439,6 +510,7 @@ export class SemanticSearchService {
             return;
         try {
             await this.manifestReady;
+            await this.pendingReady;
             await this.scanForChanges();
             await this.drain(4);
         }
@@ -491,8 +563,9 @@ export class SemanticSearchService {
                 }
             }
             for (const path of Object.keys(this.manifest)) {
-                if (!seen.has(path) && (this.pending.size < MAX_PENDING_CHANGES || this.pending.has(path)))
+                if (!seen.has(path) && (this.pending.size < MAX_PENDING_CHANGES || this.pending.has(path)) && !this.pending.has(path)) {
                     this.pending.set(path, { kind: 'delete' });
+                }
             }
             if (manifestChanged && this.pending.size === 0)
                 await this.saveManifest();
@@ -547,6 +620,7 @@ export class SemanticSearchService {
             }
             if (batch.length === 0)
                 return;
+            this.queuePendingSnapshotSave();
             try {
                 const prepared = [];
                 const deleted = [];
@@ -558,6 +632,7 @@ export class SemanticSearchService {
                 }
                 await this.applyIndexBatch(prepared, deleted);
                 await this.saveManifest();
+                this.queuePendingSnapshotSave();
                 this.lastError = undefined;
             }
             catch (error) {
@@ -570,6 +645,7 @@ export class SemanticSearchService {
                         this.pending.set(path, { kind: change.kind, attempt, retryAt: Date.now() + retryDelay });
                     }
                 }
+                this.queuePendingSnapshotSave();
                 throw error;
             }
         })();
