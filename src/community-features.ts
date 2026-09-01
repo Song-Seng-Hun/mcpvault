@@ -231,8 +231,12 @@ export class CommunityFeaturesService {
     }
     const visiblePosts = snapshot ? postNotes.filter(n => !isModerationHidden(n.frontmatter)) : postWindow!.notes;
     const visibleComments = snapshot ? commentNotes.filter(n => !isModerationHidden(n.frontmatter)) : commentWindow!.notes;
-    const candidates = [...visiblePosts.map(n => ({ type: 'post' as const, note: n, id: n.frontmatter.post_id, path: n.path, title: n.frontmatter.title, postId: undefined, createdAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at })), ...visibleComments.map(n => ({ type: 'comment' as const, note: n, id: n.frontmatter.comment_id, title: undefined, postId: n.frontmatter.post_id, path: n.path, createdAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at }))];
-    const selected = boundedTopK(candidates, limit, (a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)) || a.path.localeCompare(b.path));
+    type ActivityCandidate = { type: 'post' | 'comment'; note: { path: string; frontmatter: Record<string, any> }; id: unknown; path: string; title?: unknown; postId?: unknown; createdAt?: unknown; updatedAt?: unknown };
+    function* activityCandidates(): IterableIterator<ActivityCandidate> {
+      for (const note of visiblePosts) yield { type: 'post', note, id: note.frontmatter.post_id, path: note.path, title: note.frontmatter.title, createdAt: note.frontmatter.created_at, updatedAt: note.frontmatter.updated_at };
+      for (const note of visibleComments) yield { type: 'comment', note, id: note.frontmatter.comment_id, path: note.path, postId: note.frontmatter.post_id, createdAt: note.frontmatter.created_at, updatedAt: note.frontmatter.updated_at };
+    }
+    const selected = boundedTopK(activityCandidates(), limit, (a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)) || a.path.localeCompare(b.path));
     const authorReputations = await this.reputation.getMany(selected.map(item => String(item.note.frontmatter.author || '')));
     const items = selected.map(item => ({ type: item.type, id: item.id, path: item.path, ...(item.title !== undefined && { title: item.title }), ...(item.postId !== undefined && { postId: item.postId }), authorLevel: authorReputations.get(String(item.note.frontmatter.author || '').toLowerCase())?.level ?? 0, authorLevelLabel: authorReputations.get(String(item.note.frontmatter.author || '').toLowerCase())?.label ?? '뉴비', createdAt: item.createdAt, updatedAt: item.updatedAt }));
     const total = postCount + commentCount;
@@ -468,12 +472,18 @@ export class CommunityFeaturesService {
     await this.targetPath(params.targetType, params.targetId, params.postId);
     const limit = positive(params.limit, 100, 500);
     const filters = { mcpvault_type: 'reaction', active: true };
-    const [window, total, likeCount, dislikeCount] = await Promise.all([
+    const [window, aggregate] = await Promise.all([
       queryWindow(this.fileSystem, { pathPrefix: this.reactionRoot(params.targetType, params.targetId), filters, sortBy: 'created_at', sortOrder: 'desc', limit }),
-      this.fileSystem.countNotes({ pathPrefix: this.reactionRoot(params.targetType, params.targetId), filters }),
-      this.fileSystem.countNotes({ pathPrefix: this.reactionRoot(params.targetType, params.targetId), filters: { ...filters, reaction: 'like' } }),
-      this.fileSystem.countNotes({ pathPrefix: this.reactionRoot(params.targetType, params.targetId), filters: { ...filters, reaction: 'dislike' } }),
+      params.targetType === 'post' ? this.postReactionAggregates() : Promise.resolve(undefined),
     ]);
+    const aggregateCounts = aggregate && !aggregate.incomplete ? (aggregate.counts.get(normalizeScopeId(params.targetId, 'targetId').toLowerCase()) || { likeCount: 0, dislikeCount: 0 }) : undefined;
+    const [total, likeCount, dislikeCount] = aggregateCounts
+      ? [aggregateCounts.likeCount + aggregateCounts.dislikeCount, aggregateCounts.likeCount, aggregateCounts.dislikeCount]
+      : await Promise.all([
+        this.fileSystem.countNotes({ pathPrefix: this.reactionRoot(params.targetType, params.targetId), filters }),
+        this.fileSystem.countNotes({ pathPrefix: this.reactionRoot(params.targetType, params.targetId), filters: { ...filters, reaction: 'like' } }),
+        this.fileSystem.countNotes({ pathPrefix: this.reactionRoot(params.targetType, params.targetId), filters: { ...filters, reaction: 'dislike' } }),
+      ]);
     const reactions = window.notes.map(n => ({ actor: n.frontmatter.actor, reaction: n.frontmatter.reaction, createdAt: n.frontmatter.created_at }));
     const bounded = boundItems(reactions, positive(params.maxChars, 6000, 20000));
     return { targetType: params.targetType, targetId: params.targetId, counts: { like: likeCount, dislike: dislikeCount }, reactions: bounded.items, total, truncated: window.truncated || total > reactions.length || bounded.truncated };
@@ -482,15 +492,22 @@ export class CommunityFeaturesService {
   async listPopularPosts(params: { limit?: number; category?: string; maxChars?: number }) {
     const snapshot = this.notifications ? await this.notifications.discoverySnapshot() : undefined;
     const result = snapshot ? undefined : await queryAllNotes(this.fileSystem, { pathPrefix: POSTS, filters: { mcpvault_type: 'blog_post', status: 'published' }, sortBy: 'updated_at', sortOrder: 'desc' });
-    const visibleNotes = (snapshot?.posts || result!.notes).filter(note => !isModerationHidden(note.frontmatter)).filter(note => !params.category || String(note.frontmatter.category || 'discussion').toLowerCase() === String(params.category).toLowerCase());
+    const sourceNotes = snapshot?.posts || result!.notes;
     const reactionAggregates = await this.postReactionAggregates();
     const reactionCounts = reactionAggregates.counts;
     const limit = positive(params.limit, 50, 500);
-    const selected = boundedTopK(visibleNotes.map(note => {
-      const postId = String(note.frontmatter.post_id || '').toLowerCase();
-      const counts = reactionCounts.get(postId) || { likeCount: 0, dislikeCount: 0 };
-      return { note, likeCount: counts.likeCount, dislikeCount: counts.dislikeCount };
-    }), limit, (a, b) => b.likeCount - a.likeCount || String(b.note.frontmatter.updated_at || '').localeCompare(String(a.note.frontmatter.updated_at || '')) || a.note.path.localeCompare(b.note.path));
+    let visibleCount = 0;
+    function* visiblePosts(): IterableIterator<{ note: typeof sourceNotes[number]; likeCount: number; dislikeCount: number }> {
+      for (const note of sourceNotes) {
+        if (isModerationHidden(note.frontmatter)) continue;
+        if (params.category && String(note.frontmatter.category || 'discussion').toLowerCase() !== String(params.category).toLowerCase()) continue;
+        visibleCount += 1;
+        const postId = String(note.frontmatter.post_id || '').toLowerCase();
+        const counts = reactionCounts.get(postId) || { likeCount: 0, dislikeCount: 0 };
+        yield { note, likeCount: counts.likeCount, dislikeCount: counts.dislikeCount };
+      }
+    }
+    const selected = boundedTopK(visiblePosts(), limit, (a, b) => b.likeCount - a.likeCount || String(b.note.frontmatter.updated_at || '').localeCompare(String(a.note.frontmatter.updated_at || '')) || a.note.path.localeCompare(b.note.path));
     const reputations = await this.reputation.getMany(selected.map(item => String(item.note.frontmatter.author || '')));
     const posts = selected.map(item => {
       const note = item.note;
@@ -498,7 +515,7 @@ export class CommunityFeaturesService {
       return { path: note.path, slug: note.frontmatter.post_id, title: note.frontmatter.title, author: note.frontmatter.author, authorLevel: authorReputation?.level ?? 0, authorLevelLabel: authorReputation?.label ?? '뉴비', category: note.frontmatter.category || 'discussion', tags: note.frontmatter.tags || [], likeCount: item.likeCount, dislikeCount: item.dislikeCount, moderationStatus: moderationStatus(note.frontmatter), createdAt: note.frontmatter.created_at, updatedAt: note.frontmatter.updated_at };
     });
     const bounded = boundItems(posts, positive(params.maxChars, 6000, 20000));
-    return { posts: bounded.items, total: visibleNotes.length, truncated: Boolean(result?.truncated) || reactionAggregates.incomplete || visibleNotes.length > limit || bounded.truncated };
+    return { posts: bounded.items, total: visibleCount, truncated: Boolean(result?.truncated) || reactionAggregates.incomplete || visibleCount > limit || bounded.truncated };
   }
 
   async acceptComment(params: { principal?: ScopePrincipal; slug: string; commentId: string; accepted?: boolean; expectedRevision: string }) {

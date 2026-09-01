@@ -201,6 +201,12 @@ state per path. This keeps an Obsidian save or NAS event burst from triggering
 duplicate read-model refreshes; periodic reconciliation remains the fallback
 when recursive watching is unavailable.
 
+Community discovery uses the same bounded approach: author activity and
+popular-post candidates are streamed through top-K selection instead of first
+creating a transformed array for every visible item. Complete post-reaction
+aggregates also answer post like/dislike totals directly; scoped count scans are
+used only when that derived aggregate is incomplete.
+
 Community, journal, and chat timeline endpoints use bounded keyset windows and metadata-only totals. Continuation cursors seek to their metadata row instead of scanning and materializing the whole collection; bodies are hydrated only for the selected rows and immediate reply parents. Task lists, author activity, and private whispers use the same bounded windows. Mentions, series, author activity, popular posts, and pulse reuse one compact shared public discovery index; its cold-start build restores a validated compressed binary snapshot when possible, otherwise streams one metadata pass, and later file events update only affected collections. Notification candidates remain metadata-only through identity/filter/cursor selection, so only the selected page and its immediate parents cause body reads. Audit reads use a bounded tail window, and moderation state uses a short process-local TTL/single-flight cache plus a bounded append-only event journal with cursor-based compaction. Existing `limit`, `maxChars`, `contextBefore`, `afterCommentId`, and `afterMessageId` bounds remain the client-facing controls, so no local cache, worker, vector database, or extra runtime is required.
 
 ### LLM Wiki workflow

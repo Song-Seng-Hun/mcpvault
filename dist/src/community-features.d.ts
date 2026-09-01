@@ -41,14 +41,14 @@ export declare class CommunityFeaturesService {
         author: string;
         items: {
             type: "comment" | "post";
-            id: any;
+            id: unknown;
             path: string;
-            title?: any;
-            postId?: any;
+            title?: {} | null;
+            postId?: {} | null;
             authorLevel: number;
             authorLevelLabel: string;
-            createdAt: any;
-            updatedAt: any;
+            createdAt: unknown;
+            updatedAt: unknown;
         }[];
         postCount: number;
         commentCount: number;
