@@ -26,6 +26,7 @@ export declare class CommunityFeaturesService {
     listSeries(params: {
         seriesId?: string;
         limit?: number;
+        chapterLimit?: number;
         maxChars?: number;
         includeExcerpts?: boolean;
         excerptMaxChars?: number;

@@ -9,6 +9,7 @@ export declare class ObsidianSearchService {
     private readonly vaultIo;
     private readonly cache;
     private readonly inFlight;
+    private readonly cacheOwner;
     constructor(vaultPath: string, pathFilter: PathFilter, access: ScopeAccessPolicy, vaultIo?: VaultIoCoordinator);
     search(params: {
         query: string;
@@ -27,5 +28,6 @@ export declare class ObsidianSearchService {
         truncated: boolean;
     }>;
     private searchUncached;
+    private deleteCache;
 }
 //# sourceMappingURL=obsidian-search.d.ts.map

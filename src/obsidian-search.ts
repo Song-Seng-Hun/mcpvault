@@ -7,10 +7,13 @@ import type { ScopePrincipal } from './scope-auth.js';
 import { isMarkdownModerationHidden } from './moderation-policy.js';
 import { boundSearchResults, normalizeSearchMaxChars } from './search-limits.js';
 import { VaultIoCoordinator } from './vault-io.js';
+import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 
 const execFileAsync = promisify(execFile);
 const OBSIDIAN_CACHE_TTL_MS = 2_000;
 const OBSIDIAN_CACHE_MAX_ENTRIES = 64;
+const OBSIDIAN_MAX_CLI_ENTRIES = 200;
+const OBSIDIAN_VERIFY_BATCH_SIZE = 8;
 
 interface ObsidianSearchCacheEntry {
   expiresAt: number;
@@ -38,23 +41,43 @@ function limitNumber(value: unknown): number {
   return Math.min(parsed, 50);
 }
 
-function extractEntries(value: unknown): Array<{ path: string; line?: number; text?: string }> {
-  if (Array.isArray(value)) return value.flatMap(extractEntries);
-  if (typeof value === 'string') return [{ path: value.trim() }];
-  if (!value || typeof value !== 'object') return [];
-  const item = value as Record<string, unknown>;
-  const pathValue = item.path ?? item.file ?? item.p;
-  if (typeof pathValue === 'string') {
-    const line = item.line ?? item.lineNumber ?? item.ln;
-    const text = item.text ?? item.context ?? item.excerpt ?? item.ex;
-    return [{ path: pathValue, ...(Number.isInteger(Number(line)) && { line: Number(line) }), ...(typeof text === 'string' && { text }) }];
-  }
-  return Object.values(item).flatMap(extractEntries);
+function extractEntries(value: unknown, maxEntries = OBSIDIAN_MAX_CLI_ENTRIES): { entries: Array<{ path: string; line?: number; text?: string }>; truncated: boolean } {
+  const entries: Array<{ path: string; line?: number; text?: string }> = [];
+  const visit = (current: unknown): void => {
+    if (entries.length >= maxEntries) return;
+    if (Array.isArray(current)) {
+      for (const item of current) {
+        visit(item);
+        if (entries.length >= maxEntries) return;
+      }
+      return;
+    }
+    if (typeof current === 'string') {
+      entries.push({ path: current.trim() });
+      return;
+    }
+    if (!current || typeof current !== 'object') return;
+    const item = current as Record<string, unknown>;
+    const pathValue = item.path ?? item.file ?? item.p;
+    if (typeof pathValue === 'string') {
+      const line = item.line ?? item.lineNumber ?? item.ln;
+      const text = item.text ?? item.context ?? item.excerpt ?? item.ex;
+      entries.push({ path: pathValue, ...(Number.isInteger(Number(line)) && { line: Number(line) }), ...(typeof text === 'string' && { text }) });
+      return;
+    }
+    for (const child of Object.values(item)) {
+      visit(child);
+      if (entries.length >= maxEntries) return;
+    }
+  };
+  visit(value);
+  return { entries, truncated: entries.length >= maxEntries };
 }
 
 export class ObsidianSearchService {
   private readonly cache = new Map<string, ObsidianSearchCacheEntry>();
   private readonly inFlight = new Map<string, Promise<ObsidianSearchCacheEntry['value']>>();
+  private readonly cacheOwner = createDerivedCacheOwner('obsidian.search');
 
   constructor(
     private readonly vaultPath: string,
@@ -80,17 +103,22 @@ export class ObsidianSearchService {
     if (cached && cached.expiresAt > Date.now()) {
       this.cache.delete(cacheKey);
       this.cache.set(cacheKey, cached);
+      derivedCacheBudget.touch(this.cacheOwner, cacheKey);
       return cloneObsidianSearchResult(cached.value);
     }
-    if (cached) this.cache.delete(cacheKey);
+    if (cached) this.deleteCache(cacheKey);
     const running = this.inFlight.get(cacheKey);
     if (running) return cloneObsidianSearchResult(await running);
     const computation = this.searchUncached(params);
     this.inFlight.set(cacheKey, computation);
     try {
       const value = await computation;
-      this.cache.set(cacheKey, { expiresAt: Date.now() + OBSIDIAN_CACHE_TTL_MS, value: cloneObsidianSearchResult(value) });
-      while (this.cache.size > OBSIDIAN_CACHE_MAX_ENTRIES) this.cache.delete(this.cache.keys().next().value!);
+      const entry = { expiresAt: Date.now() + OBSIDIAN_CACHE_TTL_MS, value: cloneObsidianSearchResult(value) };
+      this.cache.set(cacheKey, entry);
+      derivedCacheBudget.register(this.cacheOwner, cacheKey, estimateCacheBytes(entry.value), () => {
+        if (this.cache.get(cacheKey) === entry) this.cache.delete(cacheKey);
+      });
+      while (this.cache.size > OBSIDIAN_CACHE_MAX_ENTRIES) this.deleteCache(this.cache.keys().next().value!);
       return cloneObsidianSearchResult(value);
     } finally {
       if (this.inFlight.get(cacheKey) === computation) this.inFlight.delete(cacheKey);
@@ -110,7 +138,8 @@ export class ObsidianSearchService {
     const pathPrefix = params.pathPrefix ? cleanRelativePath(params.pathPrefix) : undefined;
     if (pathPrefix && !this.pathFilter.isAllowed(pathPrefix)) throw new Error('pathPrefix is restricted');
     const command = params.context ? 'search:context' : 'search';
-    const args = [`query=${query}`, `limit=${limit}`, 'format=json', ...(pathPrefix ? [`path=${pathPrefix}`] : []), ...(params.caseSensitive ? ['case'] : [])];
+    const cliLimit = Math.min(Math.max(limit * 4, limit), 50);
+    const args = [`query=${query}`, `limit=${cliLimit}`, 'format=json', ...(pathPrefix ? [`path=${pathPrefix}`] : []), ...(params.caseSensitive ? ['case'] : [])];
     let stdout: string;
     try {
       ({ stdout } = await execFileAsync('obsidian', [command, ...args], { cwd: this.vaultPath, windowsHide: true, timeout: 15_000, maxBuffer: 2 * 1024 * 1024 }));
@@ -119,16 +148,21 @@ export class ObsidianSearchService {
       throw new Error(`Obsidian CLI search failed. Make sure Obsidian is running and CLI is enabled: ${message}`);
     }
     let entries: Array<{ path: string; line?: number; text?: string }>;
+    let parserTruncated = false;
     try {
-      entries = extractEntries(JSON.parse(stdout));
+      const extracted = extractEntries(JSON.parse(stdout));
+      entries = extracted.entries;
+      parserTruncated = extracted.truncated;
     } catch {
-      entries = stdout.split(/\r?\n/).map(line => {
+      const lines = stdout.split(/\r?\n/).slice(0, OBSIDIAN_MAX_CLI_ENTRIES);
+      entries = lines.map(line => {
         const match = /^(.*?):(\d+):\s?(.*)$/.exec(line.trim());
         return match ? { path: match[1]!, line: Number(match[2]), ...(match[3] !== undefined && { text: match[3] }) } : { path: line.trim() };
       }).filter(entry => entry.path);
+      parserTruncated = stdout.split(/\r?\n/).length > entries.length;
     }
     const seen = new Set<string>();
-    const visibleEntries: Array<{ path: string; line?: number; text?: string }> = [];
+    const candidates: Array<{ path: string; line?: number; text?: string }> = [];
     for (const entry of entries) {
       const path = entry.path.replace(/\\/g, '/').replace(/^\.\//, '').trim();
       if (!path || !this.pathFilter.isAllowed(path) || !this.access.canAccessPhysicalPath(path)) continue;
@@ -136,22 +170,33 @@ export class ObsidianSearchService {
       const key = `${path}:${entry.line ?? ''}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      try {
-        const markdown = await this.vaultIo.readUtf8(join(this.vaultPath, path));
-        if (isMarkdownModerationHidden(markdown)) continue;
-      } catch {
-        // The CLI result may race with a deleted or inaccessible note. Do not
-        // turn that into a leak or make the whole search fail.
-        continue;
-      }
-      visibleEntries.push({ ...entry, path });
+      candidates.push({ ...entry, path });
+    }
+    const visibleEntries: Array<{ path: string; line?: number; text?: string }> = [];
+    for (let offset = 0; offset < candidates.length; offset += OBSIDIAN_VERIFY_BATCH_SIZE) {
+      const batch = candidates.slice(offset, offset + OBSIDIAN_VERIFY_BATCH_SIZE);
+      const verified = await Promise.all(batch.map(async entry => {
+        try {
+          const markdown = await this.vaultIo.readUtf8(join(this.vaultPath, entry.path));
+          return isMarkdownModerationHidden(markdown) ? undefined : entry;
+        } catch {
+          // The CLI result may race with a deleted or inaccessible note. Do not
+          // turn that into a leak or make the whole search fail.
+          return undefined;
+        }
+      }));
+      for (const entry of verified) if (entry) visibleEntries.push(entry);
     }
     const results = boundSearchResults(visibleEntries.slice(0, limit).map(entry => ({
       p: entry.path,
       ...(entry.line !== undefined && { ln: entry.line }),
       ...(entry.text !== undefined && { ex: entry.text }),
     })), maxChars);
-    return { backend: 'obsidian', query, context: params.context === true, results, total: results.length, truncated: visibleEntries.length > results.length || entries.length > visibleEntries.length };
+    return { backend: 'obsidian', query, context: params.context === true, results, total: results.length, truncated: parserTruncated || visibleEntries.length > results.length || entries.length > visibleEntries.length };
+  }
+
+  private deleteCache(cacheKey: string): void {
+    if (this.cache.delete(cacheKey)) derivedCacheBudget.remove(this.cacheOwner, cacheKey);
   }
 }
 

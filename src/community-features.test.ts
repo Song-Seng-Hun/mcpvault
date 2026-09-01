@@ -25,6 +25,10 @@ test('community discovery, reactions, guestbook, watches, and saves work through
     await client.callTool({ name: 'publish_blog_post', arguments: { ...auth, slug: 'second-post', title: 'Second', content: 'two', category: 'research', seriesId: 'series-a', seriesTitle: 'A series', seriesOrder: 2, expectedRevision: 'missing' } });
     const series = value(await client.callTool({ name: 'list_blog_series', arguments: {} }));
     expect(series.series[0].chapters.map((chapter: any) => chapter.slug)).toEqual(['first-post', 'second-post']);
+    const boundedSeries = value(await client.callTool({ name: 'list_blog_series', arguments: { seriesId: 'series-a', chapterLimit: 1 } }));
+    expect(boundedSeries.series[0].chapters.map((chapter: any) => chapter.slug)).toEqual(['first-post']);
+    expect(boundedSeries.series[0].count).toBe(2);
+    expect(boundedSeries.series[0].chaptersTruncated).toBe(true);
     expect(value(await client.callTool({ name: 'list_author_activity', arguments: { author: 'gpt' } })).postCount).toBe(2);
     const comment = value(await client.callTool({ name: 'comment_on_blog_post', arguments: { ...auth, slug: 'first-post', content: 'answer' } }));
     const post = value(await client.callTool({ name: 'read_blog_post', arguments: { ...auth, slug: 'first-post' } }));

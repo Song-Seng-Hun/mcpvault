@@ -61,41 +61,91 @@ const SEMANTIC_QUERY_TIMEOUT_MS = 2_000;
 class RequestConcurrencyGate {
     maxConcurrent;
     maxQueued;
+    maxPerKey;
     active = 0;
-    waiting = [];
-    constructor(maxConcurrent = 32, maxQueued = 256) {
+    activeByKey = new Map();
+    waitingByKey = new Map();
+    readyKeys = [];
+    waitingCount = 0;
+    constructor(maxConcurrent = 32, maxQueued = 256, maxPerKey = 8) {
         this.maxConcurrent = maxConcurrent;
         this.maxQueued = maxQueued;
+        this.maxPerKey = maxPerKey;
     }
-    run(task) {
-        if (this.active < this.maxConcurrent)
-            return this.execute(task);
-        if (this.waiting.length >= this.maxQueued) {
+    run(task, key = 'anonymous') {
+        if (this.active < this.maxConcurrent && (this.activeByKey.get(key) || 0) < this.maxPerKey)
+            return this.execute(task, key);
+        if (this.waitingCount >= this.maxQueued) {
             return Promise.reject(new Error('MCPVault is busy; retry this request shortly.'));
         }
         return new Promise((resolvePromise, reject) => {
-            this.waiting.push({
+            const queue = this.waitingByKey.get(key) || [];
+            if (queue.length === 0)
+                this.readyKeys.push(key);
+            queue.push({
                 task: task,
                 resolve: value => resolvePromise(value),
                 reject,
             });
+            this.waitingByKey.set(key, queue);
+            this.waitingCount += 1;
         });
     }
-    execute(task) {
+    execute(task, key) {
         this.active += 1;
+        this.activeByKey.set(key, (this.activeByKey.get(key) || 0) + 1);
         return Promise.resolve()
             .then(task)
             .finally(() => {
             this.active -= 1;
+            const keyActive = (this.activeByKey.get(key) || 1) - 1;
+            if (keyActive > 0)
+                this.activeByKey.set(key, keyActive);
+            else
+                this.activeByKey.delete(key);
             this.drain();
         });
     }
     drain() {
-        while (this.active < this.maxConcurrent && this.waiting.length > 0) {
-            const next = this.waiting.shift();
-            void this.execute(next.task).then(next.resolve, next.reject);
+        while (this.active < this.maxConcurrent && this.waitingCount > 0 && this.readyKeys.length > 0) {
+            let scheduled = false;
+            const rounds = this.readyKeys.length;
+            for (let round = 0; round < rounds; round += 1) {
+                const key = this.readyKeys.shift();
+                const queue = this.waitingByKey.get(key);
+                if (!queue || queue.length === 0) {
+                    this.waitingByKey.delete(key);
+                    continue;
+                }
+                if ((this.activeByKey.get(key) || 0) >= this.maxPerKey) {
+                    this.readyKeys.push(key);
+                    continue;
+                }
+                const next = queue.shift();
+                this.waitingCount -= 1;
+                if (queue.length > 0)
+                    this.readyKeys.push(key);
+                else
+                    this.waitingByKey.delete(key);
+                void this.execute(next.task, key).then(next.resolve, next.reject);
+                scheduled = true;
+                break;
+            }
+            if (!scheduled)
+                break;
         }
     }
+}
+function requestFairnessKey(args) {
+    // Never retain or log bearer tokens in the scheduler. A short opaque key is
+    // enough to isolate one authenticated principal from another.
+    const token = typeof args.accessToken === 'string' ? args.accessToken : '';
+    if (!token)
+        return 'anonymous';
+    let hash = 0x811c9dc5;
+    for (let index = 0; index < token.length; index += 1)
+        hash = Math.imul(hash ^ token.charCodeAt(index), 0x01000193);
+    return `token:${(hash >>> 0).toString(16)}`;
 }
 const MUTATING_TOOLS = new Set([
     "write_note",
@@ -1720,7 +1770,7 @@ export function createServer(vaultPath, options = {}) {
             };
         }
     };
-    server.setRequestHandler("tools/call", async (request) => requestGate.run(() => dispatchTool(request.params.name, (request.params.arguments || {}))));
+    server.setRequestHandler("tools/call", async (request) => requestGate.run(() => dispatchTool(request.params.name, (request.params.arguments || {})), requestFairnessKey((request.params.arguments || {}))));
     SERVER_RUNTIMES.set(server, {
         endpointRegistry,
         dispatchTool,

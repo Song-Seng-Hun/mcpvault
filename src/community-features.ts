@@ -158,8 +158,9 @@ export class CommunityFeaturesService {
     if (!identities.some(principal => identity(principal) === value)) throw new Error(`Unknown public identity: ${value}`);
   }
 
-  async listSeries(params: { seriesId?: string; limit?: number; maxChars?: number; includeExcerpts?: boolean; excerptMaxChars?: number }) {
+  async listSeries(params: { seriesId?: string; limit?: number; chapterLimit?: number; maxChars?: number; includeExcerpts?: boolean; excerptMaxChars?: number }) {
     const groups = new Map<string, any>();
+    const chapterLimit = positive(params.chapterLimit, 100, 500);
     const filters: Record<string, unknown> = { mcpvault_type: 'blog_post', status: 'published' };
     if (params.seriesId) filters.series_id = normalizeScopeId(params.seriesId, 'seriesId');
     const addPost = (note: { path: string; frontmatter: Record<string, any> }) => {
@@ -168,8 +169,17 @@ export class CommunityFeaturesService {
       if (!id) return;
       const order = Number(note.frontmatter.series_order || 0);
       const chapter = { slug: note.frontmatter.post_id, title: note.frontmatter.title, author: note.frontmatter.author, order, path: note.path, moderationStatus: moderationStatus(note.frontmatter) } as Record<string, any>;
-      const current = groups.get(id) || { seriesId: id, title: note.frontmatter.series_title || id, chapters: [] };
+      const current = groups.get(id) || { seriesId: id, title: note.frontmatter.series_title || id, chapters: [], totalChapters: 0, chaptersTruncated: false };
+      current.totalChapters += 1;
       current.chapters.push(chapter);
+      // Keep the earliest chapters without retaining an unbounded per-series
+      // array. The count remains exact even when the returned chapter window
+      // is truncated.
+      current.chapters.sort((a: any, b: any) => a.order - b.order || String(a.slug).localeCompare(String(b.slug)));
+      if (current.chapters.length > chapterLimit) {
+        current.chapters.pop();
+        current.chaptersTruncated = true;
+      }
       groups.set(id, current);
     };
     const snapshot = this.notifications ? await this.notifications.discoverySnapshot() : undefined;
@@ -183,7 +193,13 @@ export class CommunityFeaturesService {
     } else {
       for await (const note of iterateNotes(this.fileSystem, { pathPrefix: POSTS, filters, sortBy: 'created_at', sortOrder: 'asc' })) addPost(note);
     }
-    const series = Array.from(groups.values()).map(group => ({ ...group, chapters: group.chapters.sort((a: any, b: any) => a.order - b.order || String(a.slug).localeCompare(String(b.slug))), count: group.chapters.length }));
+    const series = Array.from(groups.values()).map(group => ({
+      seriesId: group.seriesId,
+      title: group.title,
+      chapters: group.chapters,
+      count: group.totalChapters,
+      ...(group.chaptersTruncated && { chaptersTruncated: true }),
+    }));
     const limited = series.slice(0, positive(params.limit, 50, 100));
     const reputations = await this.reputation.getMany(limited.flatMap(group => group.chapters.map((chapter: Record<string, any>) => String(chapter.author || ''))));
     for (const group of limited) for (const chapter of group.chapters) {
@@ -204,7 +220,7 @@ export class CommunityFeaturesService {
     }
     const bounded = boundItems(limited, positive(params.maxChars, 6000, 20000));
     const total = snapshot ? (params.seriesId ? series.length : snapshot.seriesOrder.length) : series.length;
-    return { series: bounded.items, total, truncated: total > limited.length || bounded.truncated };
+    return { series: bounded.items, total, truncated: total > limited.length || bounded.truncated || limited.some(group => group.chaptersTruncated === true) };
   }
 
   async authorActivity(params: { author: string; limit?: number; maxChars?: number }) {
