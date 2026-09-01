@@ -9,10 +9,30 @@ export class ClientRequestScheduler {
     active = 0;
     sequence = 0;
     maxConcurrency;
-    constructor(maxConcurrency = 4) {
+    minConcurrency;
+    adaptive;
+    targetLatencyMs;
+    concurrency;
+    constructor(options = 4) {
+        const configured = typeof options === 'number' ? { maxConcurrency: options } : options;
+        const maxConcurrency = configured.maxConcurrency ?? 4;
+        const adaptive = configured.adaptive === true;
+        const minConcurrency = configured.minConcurrency ?? (adaptive ? 1 : maxConcurrency);
+        const initialConcurrency = configured.initialConcurrency ?? (adaptive ? minConcurrency : maxConcurrency);
+        const targetLatencyMs = configured.targetLatencyMs ?? 250;
         if (!Number.isInteger(maxConcurrency) || maxConcurrency < 1)
             throw new Error('maxConcurrency must be a positive integer');
+        if (!Number.isInteger(minConcurrency) || minConcurrency < 1 || minConcurrency > maxConcurrency)
+            throw new Error('minConcurrency must be between 1 and maxConcurrency');
+        if (!Number.isInteger(initialConcurrency) || initialConcurrency < minConcurrency || initialConcurrency > maxConcurrency)
+            throw new Error('initialConcurrency must be between minConcurrency and maxConcurrency');
+        if (!Number.isInteger(targetLatencyMs) || targetLatencyMs < 1)
+            throw new Error('targetLatencyMs must be a positive integer');
         this.maxConcurrency = maxConcurrency;
+        this.minConcurrency = minConcurrency;
+        this.adaptive = adaptive;
+        this.targetLatencyMs = targetLatencyMs;
+        this.concurrency = initialConcurrency;
     }
     run(key, task, options = {}) {
         const normalizedKey = String(key).trim();
@@ -49,8 +69,11 @@ export class ClientRequestScheduler {
     running() {
         return this.active;
     }
+    currentConcurrency() {
+        return this.concurrency;
+    }
     pump() {
-        while (this.active < this.maxConcurrency && this.queue.length > 0) {
+        while (this.active < this.concurrency && this.queue.length > 0) {
             this.queue.sort((left, right) => right.priority - left.priority || left.sequence - right.sequence);
             const item = this.queue.shift();
             if (item.signal?.aborted) {
@@ -59,9 +82,16 @@ export class ClientRequestScheduler {
                 continue;
             }
             this.active += 1;
+            const startedAt = Date.now();
             Promise.resolve()
                 .then(() => item.task(item.signal))
-                .then(item.resolve, item.reject)
+                .then(value => {
+                this.recordOutcome(Date.now() - startedAt, true);
+                item.resolve(value);
+            }, error => {
+                this.recordOutcome(Date.now() - startedAt, false, error);
+                item.reject(error);
+            })
                 .finally(() => {
                 this.active -= 1;
                 this.inFlight.delete(item.key);
@@ -69,6 +99,19 @@ export class ClientRequestScheduler {
             });
         }
     }
+    recordOutcome(latencyMs, success, error) {
+        if (!this.adaptive || !success && isAbortError(error))
+            return;
+        if (!success || latencyMs >= this.targetLatencyMs * 2) {
+            this.concurrency = Math.max(this.minConcurrency, Math.floor(this.concurrency / 2));
+            return;
+        }
+        if (latencyMs <= this.targetLatencyMs)
+            this.concurrency = Math.min(this.maxConcurrency, this.concurrency + 1);
+    }
+}
+function isAbortError(error) {
+    return error instanceof Error && /abort/i.test(error.message);
 }
 async function waitForAbort(promise, signal) {
     if (!signal)

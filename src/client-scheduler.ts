@@ -5,6 +5,19 @@ export interface ClientScheduleOptions {
   signal?: AbortSignal;
 }
 
+export interface ClientRequestSchedulerOptions {
+  /** Hard upper bound for concurrent work. */
+  maxConcurrency?: number;
+  /** Lower bound used when adaptive control is enabled; defaults to 1. */
+  minConcurrency?: number;
+  /** Starting concurrency used when adaptive control is enabled. */
+  initialConcurrency?: number;
+  /** Enable additive-increase/multiplicative-decrease backpressure. */
+  adaptive?: boolean;
+  /** Successful work slower than this target is treated as congested. */
+  targetLatencyMs?: number;
+}
+
 interface QueueItem {
   key: string;
   priority: number;
@@ -26,10 +39,27 @@ export class ClientRequestScheduler {
   private active = 0;
   private sequence = 0;
   private readonly maxConcurrency: number;
+  private readonly minConcurrency: number;
+  private readonly adaptive: boolean;
+  private readonly targetLatencyMs: number;
+  private concurrency: number;
 
-  constructor(maxConcurrency = 4) {
+  constructor(options: number | ClientRequestSchedulerOptions = 4) {
+    const configured = typeof options === 'number' ? { maxConcurrency: options } : options;
+    const maxConcurrency = configured.maxConcurrency ?? 4;
+    const adaptive = configured.adaptive === true;
+    const minConcurrency = configured.minConcurrency ?? (adaptive ? 1 : maxConcurrency);
+    const initialConcurrency = configured.initialConcurrency ?? (adaptive ? minConcurrency : maxConcurrency);
+    const targetLatencyMs = configured.targetLatencyMs ?? 250;
     if (!Number.isInteger(maxConcurrency) || maxConcurrency < 1) throw new Error('maxConcurrency must be a positive integer');
+    if (!Number.isInteger(minConcurrency) || minConcurrency < 1 || minConcurrency > maxConcurrency) throw new Error('minConcurrency must be between 1 and maxConcurrency');
+    if (!Number.isInteger(initialConcurrency) || initialConcurrency < minConcurrency || initialConcurrency > maxConcurrency) throw new Error('initialConcurrency must be between minConcurrency and maxConcurrency');
+    if (!Number.isInteger(targetLatencyMs) || targetLatencyMs < 1) throw new Error('targetLatencyMs must be a positive integer');
     this.maxConcurrency = maxConcurrency;
+    this.minConcurrency = minConcurrency;
+    this.adaptive = adaptive;
+    this.targetLatencyMs = targetLatencyMs;
+    this.concurrency = initialConcurrency;
   }
 
   run<T>(key: string, task: (signal?: AbortSignal) => Promise<T> | T, options: ClientScheduleOptions = {}): Promise<T> {
@@ -68,8 +98,12 @@ export class ClientRequestScheduler {
     return this.active;
   }
 
+  currentConcurrency(): number {
+    return this.concurrency;
+  }
+
   private pump(): void {
-    while (this.active < this.maxConcurrency && this.queue.length > 0) {
+    while (this.active < this.concurrency && this.queue.length > 0) {
       this.queue.sort((left, right) => right.priority - left.priority || left.sequence - right.sequence);
       const item = this.queue.shift()!;
       if (item.signal?.aborted) {
@@ -78,9 +112,16 @@ export class ClientRequestScheduler {
         continue;
       }
       this.active += 1;
+      const startedAt = Date.now();
       Promise.resolve()
         .then(() => item.task(item.signal))
-        .then(item.resolve, item.reject)
+        .then(value => {
+          this.recordOutcome(Date.now() - startedAt, true);
+          item.resolve(value);
+        }, error => {
+          this.recordOutcome(Date.now() - startedAt, false, error);
+          item.reject(error);
+        })
         .finally(() => {
           this.active -= 1;
           this.inFlight.delete(item.key);
@@ -88,6 +129,19 @@ export class ClientRequestScheduler {
         });
     }
   }
+
+  private recordOutcome(latencyMs: number, success: boolean, error?: unknown): void {
+    if (!this.adaptive || !success && isAbortError(error)) return;
+    if (!success || latencyMs >= this.targetLatencyMs * 2) {
+      this.concurrency = Math.max(this.minConcurrency, Math.floor(this.concurrency / 2));
+      return;
+    }
+    if (latencyMs <= this.targetLatencyMs) this.concurrency = Math.min(this.maxConcurrency, this.concurrency + 1);
+  }
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && /abort/i.test(error.message);
 }
 
 async function waitForAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {

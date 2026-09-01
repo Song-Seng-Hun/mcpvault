@@ -82,3 +82,14 @@ test('coalesced callers can cancel their own wait without cancelling shared work
   await expect(shared).resolves.toBe('done');
   expect(runs).toBe(1);
 });
+
+test('adapts concurrency to latency while keeping a hard bound', async () => {
+  const scheduler = new ClientRequestScheduler({ maxConcurrency: 4, minConcurrency: 1, initialConcurrency: 1, adaptive: true, targetLatencyMs: 10 });
+  expect(scheduler.currentConcurrency()).toBe(1);
+  await scheduler.run('fast', async () => undefined);
+  expect(scheduler.currentConcurrency()).toBe(2);
+  await scheduler.run('slow', async () => new Promise<void>(resolve => setTimeout(resolve, 25)));
+  expect(scheduler.currentConcurrency()).toBe(1);
+  await expect(scheduler.run('failed', async () => { throw new Error('server overloaded'); })).rejects.toThrow('overloaded');
+  expect(scheduler.currentConcurrency()).toBe(1);
+});

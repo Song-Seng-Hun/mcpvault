@@ -21,7 +21,7 @@ export type { ClientReferenceCacheOptions, ClientReferenceReadOptions } from './
 export { ContextBudgeter } from './client-context.js';
 export type { ContextFragment, PackedContext, PackedContextFragment } from './client-context.js';
 export { ClientRequestScheduler } from './client-scheduler.js';
-export type { ClientScheduleOptions } from './client-scheduler.js';
+export type { ClientRequestSchedulerOptions, ClientScheduleOptions } from './client-scheduler.js';
 export { ClientTimelineCache } from './client-timeline.js';
 export type { ClientTimelineCacheOptions, ClientTimelineMergeResult } from './client-timeline.js';
 export { ClientCapabilityCatalogCache, ClientHeartbeatBackoff } from './client-control-plane.js';
