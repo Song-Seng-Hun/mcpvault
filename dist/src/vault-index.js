@@ -64,6 +64,32 @@ export class VaultMetadataIndex {
         }
         return [...this.entries.values()];
     }
+    /**
+     * Check a previously returned revision without reopening the note body.
+     * The stat check keeps the answer fresh even when a filesystem watcher is
+     * unavailable; a later full refresh repairs metadata and hash state.
+     */
+    async matchesRevision(path, expectedRevision) {
+        const normalized = normalizePath(path);
+        if (!isNote(normalized) || !this.pathFilter.isAllowed(normalized))
+            return false;
+        await this.list();
+        const entry = this.entries.get(normalized);
+        if (!entry || entry.revision !== expectedRevision)
+            return false;
+        try {
+            const info = await stat(join(this.vaultPath, normalized));
+            if (!info.isFile() || info.size !== entry.size || info.mtimeMs !== entry.mtimeMs) {
+                this.dirty.add(normalized);
+                return false;
+            }
+            return true;
+        }
+        catch {
+            this.dirty.add(normalized);
+            return false;
+        }
+    }
     close() {
         this.watcher?.close();
         this.watcher = undefined;

@@ -24,6 +24,14 @@ test('REST adapter uses the same dynamic endpoint registry and dispatcher', asyn
   expect(capabilities.status).toBe(200);
   const catalog = await capabilities.json() as any;
   expect(catalog.endpoints.some((endpoint: any) => endpoint.endpointId === 'notes.write')).toBe(true);
+  const etag = capabilities.headers.get('etag');
+  expect(etag).toBeTruthy();
+  expect(capabilities.headers.get('cache-control')).toContain('private');
+  const unchanged = await fetch(`http://127.0.0.1:${api.port}/api/capabilities?limit=100&maxChars=20000`, {
+    headers: { 'if-none-match': etag! },
+  });
+  expect(unchanged.status).toBe(304);
+  expect(await unchanged.text()).toBe('');
   // The full catalog is itself bounded, so newly added endpoints may be past
   // the response budget. Probe the generic executor to verify both are
   // registered without asking it to perform a real read.

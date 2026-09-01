@@ -40,4 +40,13 @@ describe('VaultMetadataIndex', () => {
     index.invalidate('Community/Post.md', 'delete');
     expect(await index.list()).toHaveLength(0);
   });
+
+  test('matches a revision without requiring a note-body read', async () => {
+    vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-index-'));
+    await writeNote('Stable.md', 'unchanged');
+    const index = new VaultMetadataIndex(vaultPath, new PathFilter(), new FrontmatterHandler());
+    const entry = (await index.list())[0]!;
+    expect(await index.matchesRevision('Stable.md', entry.revision)).toBe(true);
+    expect(await index.matchesRevision('Stable.md', 'wrong-revision')).toBe(false);
+  });
 });

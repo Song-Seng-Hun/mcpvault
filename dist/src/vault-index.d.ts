@@ -27,6 +27,12 @@ export declare class VaultMetadataIndex {
     constructor(vaultPath: string, pathFilter: PathFilter, frontmatter: FrontmatterHandler);
     invalidate(path: string, kind: 'upsert' | 'delete'): void;
     list(): Promise<VaultIndexEntry[]>;
+    /**
+     * Check a previously returned revision without reopening the note body.
+     * The stat check keeps the answer fresh even when a filesystem watcher is
+     * unavailable; a later full refresh repairs metadata and hash state.
+     */
+    matchesRevision(path: string, expectedRevision: string): Promise<boolean>;
     close(): void;
     private startWatcher;
     private refreshAll;

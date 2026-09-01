@@ -84,6 +84,13 @@ test("server can read and write notes via tools", async () => {
   const parsed = JSON.parse((result.content as any)[0].text);
   expect(parsed.content).toContain("Hello World");
 
+  const unchanged = await client.callTool({ name: "read_note", arguments: { path: "test.md", knownRevision: parsed.revision } });
+  expect(JSON.parse((unchanged.content as any)[0].text)).toEqual({
+    notModified: true,
+    path: "test.md",
+    revision: parsed.revision,
+  });
+
   await client.close();
   await server.close();
 });

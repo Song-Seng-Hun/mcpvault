@@ -213,6 +213,7 @@ export function createServer(vaultPath, options = {}) {
                 type: "object",
                 properties: {
                     path: { type: "string", description: "Path to the note relative to vault root" },
+                    knownRevision: { type: "string", description: "Optional revision previously returned by read_note. If unchanged, returns notModified without the note body." },
                     prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
                 },
                 required: ["path"]
@@ -1112,6 +1113,14 @@ export function createServer(vaultPath, options = {}) {
                     }), trimmedArgs.prettyPrint);
                 }
                 case "read_note": {
+                    if (typeof trimmedArgs.knownRevision === 'string' && trimmedArgs.knownRevision.trim()) {
+                        const unchanged = await metadataIndex.matchesRevision(trimmedArgs.path, trimmedArgs.knownRevision.trim());
+                        if (unchanged) {
+                            return {
+                                content: [{ type: "text", text: JSON.stringify({ notModified: true, path: trimmedArgs.path, revision: trimmedArgs.knownRevision.trim() }) }]
+                            };
+                        }
+                    }
                     const note = await fileSystem.readNote(trimmedArgs.path);
                     assertReadableCommunityNote(note.frontmatter, trimmedArgs.path);
                     const indent = trimmedArgs.prettyPrint ? 2 : undefined;

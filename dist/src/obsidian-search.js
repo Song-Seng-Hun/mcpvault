@@ -5,6 +5,8 @@ import { promisify } from 'node:util';
 import { isMarkdownModerationHidden } from './moderation-policy.js';
 import { boundSearchResults, normalizeSearchMaxChars } from './search-limits.js';
 const execFileAsync = promisify(execFile);
+const OBSIDIAN_CACHE_TTL_MS = 2_000;
+const OBSIDIAN_CACHE_MAX_ENTRIES = 64;
 function cleanRelativePath(value) {
     const normalized = value.trim().replace(/\\/g, '/').replace(/^\.\//, '');
     if (!normalized || normalized.startsWith('/') || /^[a-z]:\//i.test(normalized) || normalized.split('/').includes('..')) {
@@ -38,12 +40,53 @@ export class ObsidianSearchService {
     vaultPath;
     pathFilter;
     access;
+    cache = new Map();
+    inFlight = new Map();
     constructor(vaultPath, pathFilter, access) {
         this.vaultPath = vaultPath;
         this.pathFilter = pathFilter;
         this.access = access;
     }
     async search(params) {
+        // Enforce the public-only boundary before consulting the cache. Otherwise
+        // an anonymous cached result could be returned to an authenticated caller
+        // without reaching the same guard in searchUncached().
+        if (params.principal)
+            throw new Error('search_obsidian is limited to the public global scope; use search_scoped_notes for authenticated private-scope search');
+        const cacheKey = JSON.stringify({
+            query: params.query,
+            pathPrefix: params.pathPrefix || '',
+            limit: params.limit,
+            maxChars: params.maxChars,
+            context: params.context === true,
+            caseSensitive: params.caseSensitive === true,
+        });
+        const cached = this.cache.get(cacheKey);
+        if (cached && cached.expiresAt > Date.now()) {
+            this.cache.delete(cacheKey);
+            this.cache.set(cacheKey, cached);
+            return cloneObsidianSearchResult(cached.value);
+        }
+        if (cached)
+            this.cache.delete(cacheKey);
+        const running = this.inFlight.get(cacheKey);
+        if (running)
+            return cloneObsidianSearchResult(await running);
+        const computation = this.searchUncached(params);
+        this.inFlight.set(cacheKey, computation);
+        try {
+            const value = await computation;
+            this.cache.set(cacheKey, { expiresAt: Date.now() + OBSIDIAN_CACHE_TTL_MS, value: cloneObsidianSearchResult(value) });
+            while (this.cache.size > OBSIDIAN_CACHE_MAX_ENTRIES)
+                this.cache.delete(this.cache.keys().next().value);
+            return cloneObsidianSearchResult(value);
+        }
+        finally {
+            if (this.inFlight.get(cacheKey) === computation)
+                this.inFlight.delete(cacheKey);
+        }
+    }
+    async searchUncached(params) {
         // Obsidian's index has no concept of MCPVault model/agent scopes. Never
         // run it for an authenticated caller, because its output could reveal a
         // private file before the MCP scope layer gets a chance to filter it.
@@ -110,4 +153,7 @@ export class ObsidianSearchService {
         })), maxChars);
         return { backend: 'obsidian', query, context: params.context === true, results, total: results.length, truncated: visibleEntries.length > results.length || entries.length > visibleEntries.length };
     }
+}
+function cloneObsidianSearchResult(value) {
+    return { ...value, results: value.results.map(result => ({ ...result })) };
 }

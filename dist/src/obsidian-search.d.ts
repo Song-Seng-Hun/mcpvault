@@ -5,6 +5,8 @@ export declare class ObsidianSearchService {
     private readonly vaultPath;
     private readonly pathFilter;
     private readonly access;
+    private readonly cache;
+    private readonly inFlight;
     constructor(vaultPath: string, pathFilter: PathFilter, access: ScopeAccessPolicy);
     search(params: {
         query: string;
@@ -15,16 +17,13 @@ export declare class ObsidianSearchService {
         caseSensitive?: boolean;
         principal?: ScopePrincipal;
     }): Promise<{
-        backend: string;
+        backend: 'obsidian';
         query: string;
         context: boolean;
-        results: {
-            p: string;
-            ln?: number;
-            ex?: string;
-        }[];
+        results: Array<Record<string, unknown>>;
         total: number;
         truncated: boolean;
     }>;
+    private searchUncached;
 }
 //# sourceMappingURL=obsidian-search.d.ts.map

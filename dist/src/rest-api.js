@@ -1,10 +1,28 @@
 import { createServer } from 'node:http';
+import { createHash } from 'node:crypto';
 import { URL } from 'node:url';
 import { getServerRuntime } from './createServer.js';
-function sendJson(response, status, value) {
+function sendJson(request, response, status, value, cacheable = false) {
     const body = JSON.stringify(value);
     response.statusCode = status;
     response.setHeader('content-type', 'application/json; charset=utf-8');
+    if (cacheable && status >= 200 && status < 300) {
+        const etag = `"${createHash('sha256').update(body, 'utf8').digest('hex')}"`;
+        response.setHeader('etag', etag);
+        response.setHeader('cache-control', 'private, max-age=2, must-revalidate');
+        response.setHeader('vary', 'Authorization');
+        const requestedTag = request.headers['if-none-match'];
+        if (typeof requestedTag === 'string' && requestedTag.split(',').map(tag => tag.trim()).includes(etag)) {
+            response.statusCode = 304;
+            response.removeHeader('content-type');
+            response.setHeader('content-length', '0');
+            response.end();
+            return;
+        }
+    }
+    else {
+        response.setHeader('cache-control', 'no-store');
+    }
     response.setHeader('content-length', Buffer.byteLength(body));
     response.end(body);
 }
@@ -56,7 +74,7 @@ export async function startRestApi(server, options = {}) {
         try {
             const requestUrl = new URL(request.url || '/', `http://${host}`);
             if (request.method === 'GET' && requestUrl.pathname === '/healthz') {
-                sendJson(response, 200, { ok: true });
+                sendJson(request, response, 200, { ok: true });
                 return;
             }
             const bearer = tokenFrom(request);
@@ -66,7 +84,7 @@ export async function startRestApi(server, options = {}) {
                     limit: requestUrl.searchParams.get('limit') || undefined,
                     maxChars: requestUrl.searchParams.get('maxChars') || undefined,
                 });
-                sendJson(response, result.isError ? 400 : 200, resultValue(result));
+                sendJson(request, response, result.isError ? 400 : 200, resultValue(result), !result.isError);
                 return;
             }
             let body = {};
@@ -86,16 +104,16 @@ export async function startRestApi(server, options = {}) {
                 pathArguments = match?.pathArguments || {};
             }
             if (!endpointId) {
-                sendJson(response, 404, { error: 'unknown endpoint route' });
+                sendJson(request, response, 404, { error: 'unknown endpoint route' });
                 return;
             }
             const queryArguments = Object.fromEntries(requestUrl.searchParams.entries());
             const arguments_ = { ...queryArguments, ...pathArguments, ...body };
             const result = await runtime.dispatchTool('call_endpoint', { endpointId, arguments: arguments_ });
-            sendJson(response, result.isError ? 400 : 200, resultValue(result));
+            sendJson(request, response, result.isError ? 400 : 200, resultValue(result), !result.isError && request.method === 'GET');
         }
         catch (error) {
-            sendJson(response, 400, { error: error instanceof Error ? error.message : 'Unknown error' });
+            sendJson(request, response, 400, { error: error instanceof Error ? error.message : 'Unknown error' });
         }
     });
     await new Promise((resolve, reject) => {
