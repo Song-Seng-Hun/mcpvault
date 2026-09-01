@@ -45,3 +45,18 @@ test('client cache evicts least recently used entries within its bound', async (
   expect(cache.get('a.md')).toBeDefined();
   expect(cache.get('b.md')).toBeUndefined();
 });
+
+test('client cache coalesces identical concurrent reads', async () => {
+  let calls = 0;
+  const caller: ClientEndpointCaller = {
+    async callEndpoint() {
+      calls += 1;
+      await new Promise(resolve => setTimeout(resolve, 5));
+      return { ok: [{ path: 'same.md', revision: 'c'.repeat(64), content: 'same' }], err: [] };
+    },
+  };
+  const cache = new McpVaultClientCache(caller);
+  const [first, second] = await Promise.all([cache.readNotes(['same.md']), cache.readNotes(['same.md'])]);
+  expect(calls).toBe(1);
+  expect(first.notes[0]!.content).toBe(second.notes[0]!.content);
+});

@@ -51,6 +51,7 @@ function decodeEndpointResult(value: unknown): unknown {
  */
 export class McpVaultClientCache {
   private readonly entries = new Map<string, CachedNote>();
+  private readonly inFlight = new Map<string, Promise<ClientReadNotesResult>>();
   private readonly maxEntries: number;
 
   constructor(
@@ -85,6 +86,19 @@ export class McpVaultClientCache {
   }
 
   async readNotes(paths: string[], options: ClientReadNotesOptions = {}): Promise<ClientReadNotesResult> {
+    const key = JSON.stringify({ paths, options });
+    const running = this.inFlight.get(key);
+    if (running) return cloneReadNotesResult(await running);
+    const computation = this.readNotesUncached(paths, options);
+    this.inFlight.set(key, computation);
+    try {
+      return cloneReadNotesResult(await computation);
+    } finally {
+      if (this.inFlight.get(key) === computation) this.inFlight.delete(key);
+    }
+  }
+
+  private async readNotesUncached(paths: string[], options: ClientReadNotesOptions): Promise<ClientReadNotesResult> {
     const requested = [...new Set(paths.map(path => String(path).trim()).filter(Boolean))];
     const notes = new Map<string, CachedNote>();
     const unchanged: string[] = [];
@@ -159,6 +173,15 @@ export class McpVaultClientCache {
     this.entries.set(note.path, cloneNote(note));
     while (this.entries.size > this.maxEntries) this.entries.delete(this.entries.keys().next().value!);
   }
+}
+
+function cloneReadNotesResult(value: ClientReadNotesResult): ClientReadNotesResult {
+  return {
+    notes: value.notes.map(cloneNote),
+    unchanged: [...value.unchanged],
+    missing: [...value.missing],
+    errors: value.errors.map(error => ({ ...error })),
+  };
 }
 
 function cloneNote(note: CachedNote): CachedNote {

@@ -30,6 +30,7 @@ export interface ClientReadNotesResult {
 export declare class McpVaultClientCache {
     private readonly caller;
     private readonly entries;
+    private readonly inFlight;
     private readonly maxEntries;
     constructor(caller: ClientEndpointCaller, options?: {
         maxEntries?: number;
@@ -38,6 +39,7 @@ export declare class McpVaultClientCache {
     invalidate(path?: string): void;
     knownRevisions(paths: string[]): Record<string, string>;
     readNotes(paths: string[], options?: ClientReadNotesOptions): Promise<ClientReadNotesResult>;
+    private readNotesUncached;
     private put;
 }
 //# sourceMappingURL=client-cache.d.ts.map

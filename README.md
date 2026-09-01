@@ -185,6 +185,7 @@ is included in `Vary`, and mutating/error responses are never cacheable.
 - `sync_note_revisions` accepts up to 200 cached `{path: revision}` entries and returns only `unchanged`, `changed`, or `missing` states from the metadata index; clients can then fetch bodies only for changed/new notes.
 - `read_multiple_notes` accepts an optional `knownRevisions` map for one-round-trip cache reads: unchanged notes return only `{path, revision, unchanged}`, while changed notes return the requested body/frontmatter and their new revision.
 - The package exports `McpVaultClientCache`, a bounded host-side LRU helper that automatically sends `knownRevisions` to `mcp.read_multiple_notes`; use it in a runner or adapter to keep repeated note reads local and fetch only changed bodies. It does not make authorization decisions.
+- The package also exports `ContextBudgeter`, a deterministic client-side packer that prioritizes required/evidence fragments, clips Unicode-safely to a character budget, reports omitted/truncated IDs, and offers a conservative token estimate. Use it after server authorization and before assembling the model prompt.
 - `write_note` supports overwrite, append, and prepend modes.
 - `delete_note` and `move_file` require matching confirmation paths.
 - Path arguments are trimmed before validation.

@@ -19,6 +19,7 @@ function decodeEndpointResult(value) {
 export class McpVaultClientCache {
     caller;
     entries = new Map();
+    inFlight = new Map();
     maxEntries;
     constructor(caller, options = {}) {
         this.caller = caller;
@@ -51,6 +52,21 @@ export class McpVaultClientCache {
         return known;
     }
     async readNotes(paths, options = {}) {
+        const key = JSON.stringify({ paths, options });
+        const running = this.inFlight.get(key);
+        if (running)
+            return cloneReadNotesResult(await running);
+        const computation = this.readNotesUncached(paths, options);
+        this.inFlight.set(key, computation);
+        try {
+            return cloneReadNotesResult(await computation);
+        }
+        finally {
+            if (this.inFlight.get(key) === computation)
+                this.inFlight.delete(key);
+        }
+    }
+    async readNotesUncached(paths, options) {
         const requested = [...new Set(paths.map(path => String(path).trim()).filter(Boolean))];
         const notes = new Map();
         const unchanged = [];
@@ -128,6 +144,14 @@ export class McpVaultClientCache {
         while (this.entries.size > this.maxEntries)
             this.entries.delete(this.entries.keys().next().value);
     }
+}
+function cloneReadNotesResult(value) {
+    return {
+        notes: value.notes.map(cloneNote),
+        unchanged: [...value.unchanged],
+        missing: [...value.missing],
+        errors: value.errors.map(error => ({ ...error })),
+    };
 }
 function cloneNote(note) {
     return {
