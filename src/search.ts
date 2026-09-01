@@ -209,21 +209,18 @@ function normalizeSubtree(p: string): string {
   return p.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
 }
 
-/** True if a vault-relative path is the subtree itself or sits under it. */
-function isUnderSubtree(relativePath: string, subtree: string): boolean {
-  if (!subtree) return false;
-  return relativePath === subtree || relativePath.startsWith(subtree + '/');
-}
-
 export class SearchService {
   private vaultPath: string;
   private readonly cache = new Map<string, SearchCacheEntry>();
   private readonly inFlight = new Map<string, Promise<SearchResult[]>>();
   private readonly documents = new Map<string, IndexedDocument>();
+  private readonly documentsById = new Map<number, IndexedDocument>();
   private readonly dirtyDocuments = new Set<string>();
   private readonly postings = new Map<string, Set<number>>();
   private readonly gramIds = new Map<string, number>();
   private readonly gramsById = [''];
+  private readonly pathDocuments = new Map<string, Set<number>>();
+  private readonly documentPathKeys = new Map<number, string[]>();
   private readonly directoryCache = new Map<string, DirectoryCacheEntry>();
   private nextDocumentId = 1;
   private indexedTextBytes = 0;
@@ -435,14 +432,11 @@ export class SearchService {
 
     // The server-owned document index has already performed the filesystem
     // reads. Search only the visible in-memory documents on this pass.
-    const prefixLen = this.vaultPath.length + 1;
+    const scopedDocumentIds = this.scopedDocumentIds(normalizedPrefix, normalizedExcludes);
     const allowedFiles: IndexedDocument[] = [];
-    for (const document of this.documents.values()) {
-      const relativePath = document.fullPath.substring(prefixLen).replace(/\\/g, '/');
-      if (!this.pathFilter.isAllowed(relativePath)) continue;
-      // Scope to the requested subtree, and skip excluded subtrees, before I/O
-      if (normalizedPrefix && !isUnderSubtree(relativePath, normalizedPrefix)) continue;
-      if (normalizedExcludes.some(ex => isUnderSubtree(relativePath, ex))) continue;
+    for (const documentId of scopedDocumentIds) {
+      const document = this.documentsById.get(documentId);
+      if (!document || !this.pathFilter.isAllowed(document.relativePath)) continue;
       if (document.moderationHidden) continue;
       allowedFiles.push(document);
       totalDocLength += (searchContent ? document.bodyLength : 0)
@@ -450,7 +444,7 @@ export class SearchService {
       docCount++;
     }
 
-    const candidateIds = this.candidateIds(terms, searchContent, searchFrontmatter, caseSensitive);
+    const candidateIds = this.candidateIds(terms, searchContent, searchFrontmatter, caseSensitive, scopedDocumentIds);
     for (const document of allowedFiles) {
       if (!candidateIds.has(document.documentId)) continue;
         const { relativePath } = document;
@@ -755,10 +749,14 @@ export class SearchService {
     if (old === document) return;
     if (old) {
       this.updatePostings(old, false);
+      this.removePathIndex(old);
+      this.documentsById.delete(old.documentId);
       if (old.textCached) this.indexedTextBytes -= old.textBytes;
     }
     this.documents.set(document.relativePath, document);
+    this.documentsById.set(document.documentId, document);
     this.updatePostings(document, true);
+    this.addPathIndex(document);
     if (document.textCached) this.indexedTextBytes += document.textBytes;
   }
 
@@ -766,8 +764,47 @@ export class SearchService {
     const document = this.documents.get(path);
     if (!document) return;
     this.updatePostings(document, false);
+    this.removePathIndex(document);
+    this.documentsById.delete(document.documentId);
     if (document.textCached) this.indexedTextBytes -= document.textBytes;
     this.documents.delete(path);
+  }
+
+  private pathKeys(path: string): string[] {
+    const parts = path.split('/');
+    const keys = [''];
+    for (let index = 1; index <= parts.length; index += 1) keys.push(parts.slice(0, index).join('/'));
+    return keys;
+  }
+
+  private addPathIndex(document: IndexedDocument): void {
+    const keys = this.pathKeys(document.relativePath);
+    this.documentPathKeys.set(document.documentId, keys);
+    for (const key of keys) {
+      let ids = this.pathDocuments.get(key);
+      if (!ids) {
+        ids = new Set<number>();
+        this.pathDocuments.set(key, ids);
+      }
+      ids.add(document.documentId);
+    }
+  }
+
+  private removePathIndex(document: IndexedDocument): void {
+    for (const key of this.documentPathKeys.get(document.documentId) || []) {
+      const ids = this.pathDocuments.get(key);
+      ids?.delete(document.documentId);
+      if (ids && ids.size === 0) this.pathDocuments.delete(key);
+    }
+    this.documentPathKeys.delete(document.documentId);
+  }
+
+  private scopedDocumentIds(pathPrefix: string, excludePaths: string[]): Set<number> {
+    const output = new Set<number>(this.pathDocuments.get(pathPrefix || '') || []);
+    for (const exclude of excludePaths) {
+      for (const documentId of this.pathDocuments.get(exclude) || []) output.delete(documentId);
+    }
+    return output;
   }
 
   private async loadText(document: IndexedDocument): Promise<void> {
@@ -812,8 +849,9 @@ export class SearchService {
     searchContent: boolean,
     searchFrontmatter: boolean,
     caseSensitive: boolean,
+    scopedIds: Set<number>,
   ): Set<number> {
-    const all = new Set([...this.documents.values()].map(document => document.documentId));
+    const all = scopedIds;
     if (caseSensitive) return all;
     if (!searchContent && !searchFrontmatter) return this.matchingPostingCandidates(terms, ['title'], all);
     if (terms.some(term => term.length < NGRAM_SIZE)) return all;
@@ -833,7 +871,9 @@ export class SearchService {
       const term = rawTerm.toLowerCase();
       if (term.length < NGRAM_SIZE) return all;
       for (const field of fields) {
-        for (const path of this.postingCandidates(field, term)) output.add(path);
+        for (const documentId of this.postingCandidates(field, term)) {
+          if (all.has(documentId)) output.add(documentId);
+        }
       }
     }
     return output;

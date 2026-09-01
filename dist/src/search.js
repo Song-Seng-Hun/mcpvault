@@ -157,22 +157,19 @@ function wikiType(content) {
 function normalizeSubtree(p) {
     return p.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
 }
-/** True if a vault-relative path is the subtree itself or sits under it. */
-function isUnderSubtree(relativePath, subtree) {
-    if (!subtree)
-        return false;
-    return relativePath === subtree || relativePath.startsWith(subtree + '/');
-}
 export class SearchService {
     pathFilter;
     vaultPath;
     cache = new Map();
     inFlight = new Map();
     documents = new Map();
+    documentsById = new Map();
     dirtyDocuments = new Set();
     postings = new Map();
     gramIds = new Map();
     gramsById = [''];
+    pathDocuments = new Map();
+    documentPathKeys = new Map();
     directoryCache = new Map();
     nextDocumentId = 1;
     indexedTextBytes = 0;
@@ -379,16 +376,11 @@ export class SearchService {
             const scoringTerms = terms.length > 1 ? [...terms, searchQuery] : terms;
             // The server-owned document index has already performed the filesystem
             // reads. Search only the visible in-memory documents on this pass.
-            const prefixLen = this.vaultPath.length + 1;
+            const scopedDocumentIds = this.scopedDocumentIds(normalizedPrefix, normalizedExcludes);
             const allowedFiles = [];
-            for (const document of this.documents.values()) {
-                const relativePath = document.fullPath.substring(prefixLen).replace(/\\/g, '/');
-                if (!this.pathFilter.isAllowed(relativePath))
-                    continue;
-                // Scope to the requested subtree, and skip excluded subtrees, before I/O
-                if (normalizedPrefix && !isUnderSubtree(relativePath, normalizedPrefix))
-                    continue;
-                if (normalizedExcludes.some(ex => isUnderSubtree(relativePath, ex)))
+            for (const documentId of scopedDocumentIds) {
+                const document = this.documentsById.get(documentId);
+                if (!document || !this.pathFilter.isAllowed(document.relativePath))
                     continue;
                 if (document.moderationHidden)
                     continue;
@@ -397,7 +389,7 @@ export class SearchService {
                     + (searchFrontmatter ? document.frontmatterLength : 0);
                 docCount++;
             }
-            const candidateIds = this.candidateIds(terms, searchContent, searchFrontmatter, caseSensitive);
+            const candidateIds = this.candidateIds(terms, searchContent, searchFrontmatter, caseSensitive, scopedDocumentIds);
             for (const document of allowedFiles) {
                 if (!candidateIds.has(document.documentId))
                     continue;
@@ -711,11 +703,15 @@ export class SearchService {
             return;
         if (old) {
             this.updatePostings(old, false);
+            this.removePathIndex(old);
+            this.documentsById.delete(old.documentId);
             if (old.textCached)
                 this.indexedTextBytes -= old.textBytes;
         }
         this.documents.set(document.relativePath, document);
+        this.documentsById.set(document.documentId, document);
         this.updatePostings(document, true);
+        this.addPathIndex(document);
         if (document.textCached)
             this.indexedTextBytes += document.textBytes;
     }
@@ -724,9 +720,47 @@ export class SearchService {
         if (!document)
             return;
         this.updatePostings(document, false);
+        this.removePathIndex(document);
+        this.documentsById.delete(document.documentId);
         if (document.textCached)
             this.indexedTextBytes -= document.textBytes;
         this.documents.delete(path);
+    }
+    pathKeys(path) {
+        const parts = path.split('/');
+        const keys = [''];
+        for (let index = 1; index <= parts.length; index += 1)
+            keys.push(parts.slice(0, index).join('/'));
+        return keys;
+    }
+    addPathIndex(document) {
+        const keys = this.pathKeys(document.relativePath);
+        this.documentPathKeys.set(document.documentId, keys);
+        for (const key of keys) {
+            let ids = this.pathDocuments.get(key);
+            if (!ids) {
+                ids = new Set();
+                this.pathDocuments.set(key, ids);
+            }
+            ids.add(document.documentId);
+        }
+    }
+    removePathIndex(document) {
+        for (const key of this.documentPathKeys.get(document.documentId) || []) {
+            const ids = this.pathDocuments.get(key);
+            ids?.delete(document.documentId);
+            if (ids && ids.size === 0)
+                this.pathDocuments.delete(key);
+        }
+        this.documentPathKeys.delete(document.documentId);
+    }
+    scopedDocumentIds(pathPrefix, excludePaths) {
+        const output = new Set(this.pathDocuments.get(pathPrefix || '') || []);
+        for (const exclude of excludePaths) {
+            for (const documentId of this.pathDocuments.get(exclude) || [])
+                output.delete(documentId);
+        }
+        return output;
     }
     async loadText(document) {
         if (document.body !== undefined && document.frontmatterText !== undefined) {
@@ -766,8 +800,8 @@ export class SearchService {
             this.indexedTextBytes -= document.textBytes;
         }
     }
-    candidateIds(terms, searchContent, searchFrontmatter, caseSensitive) {
-        const all = new Set([...this.documents.values()].map(document => document.documentId));
+    candidateIds(terms, searchContent, searchFrontmatter, caseSensitive, scopedIds) {
+        const all = scopedIds;
         if (caseSensitive)
             return all;
         if (!searchContent && !searchFrontmatter)
@@ -788,8 +822,10 @@ export class SearchService {
             if (term.length < NGRAM_SIZE)
                 return all;
             for (const field of fields) {
-                for (const path of this.postingCandidates(field, term))
-                    output.add(path);
+                for (const documentId of this.postingCandidates(field, term)) {
+                    if (all.has(documentId))
+                        output.add(documentId);
+                }
             }
         }
         return output;

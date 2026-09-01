@@ -6,10 +6,13 @@ export declare class SearchService {
     private readonly cache;
     private readonly inFlight;
     private readonly documents;
+    private readonly documentsById;
     private readonly dirtyDocuments;
     private readonly postings;
     private readonly gramIds;
     private readonly gramsById;
+    private readonly pathDocuments;
+    private readonly documentPathKeys;
     private readonly directoryCache;
     private nextDocumentId;
     private indexedTextBytes;
@@ -46,6 +49,10 @@ export declare class SearchService {
     private updatePostings;
     private setDocument;
     private removeDocument;
+    private pathKeys;
+    private addPathIndex;
+    private removePathIndex;
+    private scopedDocumentIds;
     private loadText;
     private trimTextCache;
     private candidateIds;
