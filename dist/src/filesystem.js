@@ -1427,15 +1427,32 @@ export class FileSystemService {
             truncated: total > backlinks.length,
         };
     }
-    async getOutlinks(path, limit = 100) {
+    async getOutlinks(path, limit = 100, canAccessPath = () => true) {
         const source = this.normalizePath(path);
         if (!this.pathFilter.isAllowed(source)) {
             throw new Error(`Access denied: ${source}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
         }
+        if (!canAccessPath(source))
+            throw new Error(`Access denied: ${source}`);
         const note = await this.readNote(source);
         const allOutlinks = extractWikiLinkOccurrences(note.originalContent);
-        const outlinks = allOutlinks.slice(0, limit);
-        const total = allOutlinks.length;
+        // Outlinks are raw authoring data, but a public note must not disclose
+        // the names or paths of private notes it happens to mention. Keep links
+        // that are unresolved in the caller's visible view (they are useful
+        // authoring diagnostics), while suppressing links that resolve only to
+        // inaccessible notes and explicit private scope URIs.
+        const allPaths = await this.collectVaultFiles();
+        const allVisiblePaths = allPaths.filter(canAccessPath);
+        const visibleOutlinks = allOutlinks.filter(link => {
+            if (/^scope:\/\/(?:model|agent|user)\//i.test(link.target.trim()))
+                return false;
+            const anyMatches = resolveWikiLinkTargets(link.target, allPaths);
+            if (anyMatches.length === 0)
+                return true;
+            return resolveWikiLinkTargets(link.target, allVisiblePaths).length > 0;
+        });
+        const outlinks = visibleOutlinks.slice(0, limit);
+        const total = visibleOutlinks.length;
         return {
             source,
             outlinks,

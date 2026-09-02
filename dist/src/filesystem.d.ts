@@ -83,7 +83,7 @@ export declare class FileSystemService {
      */
     findPathForWikiLink(wikiLinkName: string, canAccessPath?: (path: string) => boolean): Promise<string[]>;
     getBacklinks(path: string, limit?: number, canAccessPath?: (path: string) => boolean): Promise<BacklinksResult>;
-    getOutlinks(path: string, limit?: number): Promise<OutlinksResult>;
+    getOutlinks(path: string, limit?: number, canAccessPath?: (path: string) => boolean): Promise<OutlinksResult>;
     findUnresolvedLinks(limit?: number, canAccessPath?: (path: string) => boolean): Promise<UnresolvedLinksResult>;
     findOrphanNotes(limit?: number, canAccessPath?: (path: string) => boolean): Promise<OrphanNotesResult>;
     private isNotePath;

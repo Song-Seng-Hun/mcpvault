@@ -980,7 +980,11 @@ export class SemanticSearchService {
         this.clearQueryCache();
     }
     pathIsVisible(path, params) {
-        if (!this.accessPolicy.canAccessPhysicalPath(path, params.principal))
+        // The vector index is disposable and can be restored from a stale or
+        // externally supplied snapshot. Re-apply the authoritative file filter
+        // before hydrating any result so a derived cache can never expose .git,
+        // .obsidian, dotfiles, or other restricted paths.
+        if (!this.pathFilter.isAllowed(path) || !this.accessPolicy.canAccessPhysicalPath(path, params.principal))
             return false;
         const prefix = normalizePath(params.pathPrefix || '');
         if (prefix && !isUnder(path, prefix))

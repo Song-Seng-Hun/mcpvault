@@ -1760,7 +1760,7 @@ export function createServer(vaultPath, options = {}) {
                         if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
                             throw new Error('limit must be a positive integer');
                         }
-                        const outlinks = await fileSystem.getOutlinks(trimmedArgs.path, Math.min(requestedLimit, 500));
+                        const outlinks = await fileSystem.getOutlinks(trimmedArgs.path, Math.min(requestedLimit, 500), canAccessPath);
                         const indent = trimmedArgs.prettyPrint ? 2 : undefined;
                         return {
                             content: [{ type: "text", text: JSON.stringify(outlinks, null, indent) }]

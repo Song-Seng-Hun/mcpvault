@@ -1029,7 +1029,11 @@ export class SemanticSearchService {
   }
 
   private pathIsVisible(path: string, params: SemanticSearchParams): boolean {
-    if (!this.accessPolicy.canAccessPhysicalPath(path, params.principal)) return false;
+    // The vector index is disposable and can be restored from a stale or
+    // externally supplied snapshot. Re-apply the authoritative file filter
+    // before hydrating any result so a derived cache can never expose .git,
+    // .obsidian, dotfiles, or other restricted paths.
+    if (!this.pathFilter.isAllowed(path) || !this.accessPolicy.canAccessPhysicalPath(path, params.principal)) return false;
     const prefix = normalizePath(params.pathPrefix || '');
     if (prefix && !isUnder(path, prefix)) return false;
     const excludes = (params.excludePaths || []).map(normalizePath).filter(Boolean);

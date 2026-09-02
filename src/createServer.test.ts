@@ -750,6 +750,22 @@ test("get_outlinks returns destinations and ignores fenced examples", async () =
   }
 });
 
+test("get_outlinks hides private note targets from public callers", async () => {
+  const { server, client } = await connectClient();
+  try {
+    await mkdir(join(testVaultPath, "_scopes", "models", "private-model"), { recursive: true });
+    await writeFile(join(testVaultPath, "_scopes", "models", "private-model", "Secret.md"), "private\n");
+    await writeFile(join(testVaultPath, "Source.md"), "A hidden reference: [[Secret]].\n");
+
+    const result = await client.callTool({ name: "get_outlinks", arguments: { path: "Source.md" } });
+    expect(result.isError).toBeFalsy();
+    expect(JSON.parse((result.content as any)[0].text)).toMatchObject({ outlinks: [], total: 0, truncated: false });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test("get_backlinks returns wikilink occurrences with line context", async () => {
   const { server, client } = await connectClient();
   try {
