@@ -358,21 +358,33 @@ export class CommunityFeaturesService {
     const root = join(this.vaultPath, REACTIONS, 'post');
     const entries: ReactionSnapshotEntry[] = [];
     try {
-      const targets = await readdir(root, { withFileTypes: true });
-      for (const target of targets) {
-        if (!target.isDirectory()) continue;
-        const targetPath = join(root, target.name);
-        const actors = await readdir(targetPath, { withFileTypes: true });
-        for (const actor of actors) {
-          if (!actor.isFile() || !/\.md$/i.test(actor.name)) continue;
-          const relativePath = `${REACTIONS}/post/${target.name}/${actor.name}`.replace(/\\/g, '/');
-          try {
-            const info = await stat(join(targetPath, actor.name));
-            if (!info.isFile()) continue;
-            entries.push({ path: relativePath, size: info.size, mtimeMs: info.mtimeMs });
-          } catch {
-            return undefined;
-          }
+      const targets = (await readdir(root, { withFileTypes: true })).filter(target => target.isDirectory());
+      // Reaction snapshots are disposable, but their cold-start scan should
+      // not serialize every post directory on a busy community. Keep both
+      // directory reads and stat calls bounded for NAS-backed vaults.
+      for (let start = 0; start < targets.length; start += 8) {
+        const targetBatch = targets.slice(start, start + 8);
+        const actorBatches = await Promise.all(targetBatch.map(async target => {
+          const targetPath = join(root, target.name);
+          const actors = await readdir(targetPath, { withFileTypes: true });
+          return actors
+            .filter(actor => actor.isFile() && /\.md$/i.test(actor.name))
+            .map(actor => ({ target: target.name, targetPath, actor: actor.name }));
+        }));
+        const files = actorBatches.flat();
+        for (let fileStart = 0; fileStart < files.length; fileStart += 32) {
+          const fileBatch = files.slice(fileStart, fileStart + 32);
+          const stats = await Promise.all(fileBatch.map(async file => {
+            const relativePath = `${REACTIONS}/post/${file.target}/${file.actor}`.replace(/\\/g, '/');
+            try {
+              const info = await stat(join(file.targetPath, file.actor));
+              return info.isFile() ? { path: relativePath, size: info.size, mtimeMs: info.mtimeMs } : undefined;
+            } catch {
+              return undefined;
+            }
+          }));
+          if (stats.some(entry => !entry)) return undefined;
+          entries.push(...stats as ReactionSnapshotEntry[]);
           if (entries.length > MAX_REACTION_SNAPSHOT_ENTRIES) return undefined;
         }
       }

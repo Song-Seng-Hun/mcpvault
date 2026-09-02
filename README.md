@@ -219,6 +219,12 @@ a short manifest cache, so the same public file set is not independently
 `stat`-checked by every derived service. Cached notification candidates are
 read-only and reused without creating a per-request clone.
 
+Agent-directory scans retain profile metadata only for identities that survive
+the role/capability filter. Reaction snapshot cold starts read post directories
+and stat reaction files in bounded parallel batches, reducing latency without
+turning a large reaction tree into an unbounded I/O burst. Obsidian CLI search
+fallback parsing also splits its text output only once.
+
 The fair request queue also has a bounded waiting budget. When all lanes are
 busy, a request that cannot start within the queue window is rejected with a
 retryable error and does not remain as an unbounded promise or timer.

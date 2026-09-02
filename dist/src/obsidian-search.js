@@ -153,12 +153,13 @@ export class ObsidianSearchService {
             parserTruncated = extracted.truncated;
         }
         catch {
-            const lines = stdout.split(/\r?\n/).slice(0, OBSIDIAN_MAX_CLI_ENTRIES);
+            const allLines = stdout.split(/\r?\n/);
+            const lines = allLines.slice(0, OBSIDIAN_MAX_CLI_ENTRIES);
             entries = lines.map(line => {
                 const match = /^(.*?):(\d+):\s?(.*)$/.exec(line.trim());
                 return match ? { path: match[1], line: Number(match[2]), ...(match[3] !== undefined && { text: match[3] }) } : { path: line.trim() };
             }).filter(entry => entry.path);
-            parserTruncated = stdout.split(/\r?\n/).length > entries.length;
+            parserTruncated = allLines.length > entries.length;
         }
         const seen = new Set();
         const candidates = [];

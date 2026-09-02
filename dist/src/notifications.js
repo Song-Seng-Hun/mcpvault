@@ -776,9 +776,11 @@ export class NotificationService {
         this.candidateInFlight.set(key, computation);
         try {
             const candidates = await computation;
-            const cachedCandidates = candidates.map(candidate => ({ ...candidate }));
-            this.candidateCache.set(key, { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, candidates: cachedCandidates });
-            derivedCacheBudget.register(this.candidateCacheOwner, key, estimateCacheBytes(cachedCandidates) + Buffer.byteLength(key, 'utf8') + 128, () => this.candidateCache.delete(key));
+            // Candidates are private read-model values. Callers only consume them
+            // for selection/hydration, so retain the single computed array instead
+            // of cloning every candidate once per cache fill.
+            this.candidateCache.set(key, { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, candidates });
+            derivedCacheBudget.register(this.candidateCacheOwner, key, estimateCacheBytes(candidates) + Buffer.byteLength(key, 'utf8') + 128, () => this.candidateCache.delete(key));
             while (this.candidateCache.size > EVENT_CACHE_MAX_ENTRIES) {
                 const oldest = this.candidateCache.keys().next();
                 if (oldest.done)

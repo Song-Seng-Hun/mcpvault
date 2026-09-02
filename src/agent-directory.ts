@@ -76,15 +76,17 @@ export class AgentDirectoryService {
     const eligiblePrincipals = principals
       .filter(principal => !params.role || principal.role === params.role)
       .filter(principal => !params.capability || (principal.capabilities || []).includes(params.capability as ScopeCapability));
-    const profileNotes: Array<{ path: string; frontmatter: Record<string, any> }> = [];
+    const eligibleProfilePaths = new Set(eligiblePrincipals.map(principal => profilePath(principal.role, identityOf(principal))));
+    const profileByPath = new Map<string, { path: string; frontmatter: Record<string, any> }>();
     let profileAfter: Awaited<ReturnType<FileSystemService['queryNotes']>>['nextCursor'];
     while (eligiblePrincipals.length > 0) {
       const page = await this.fileSystem.queryNotes({ pathPrefix: ROOT, filters: { mcpvault_type: 'agent_profile' }, limit: 500, includeTotal: false, ...(profileAfter ? { after: profileAfter } : {}) });
-      profileNotes.push(...page.notes);
+      for (const note of page.notes) {
+        if (eligibleProfilePaths.has(note.path)) profileByPath.set(note.path, note);
+      }
       if (!page.truncated || page.notes.length === 0 || !page.nextCursor) break;
       profileAfter = page.nextCursor;
     }
-    const profileByPath = new Map(profileNotes.map(note => [note.path, note]));
     const profiles = eligiblePrincipals.map(principal => {
       const path = profilePath(principal.role, identityOf(principal));
       return this.profileFrom(principal, path, profileByPath.get(path));
