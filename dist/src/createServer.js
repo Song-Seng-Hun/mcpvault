@@ -1038,6 +1038,8 @@ export function createServer(vaultPath, options = {}) {
                             summary: trimmedArgs.summary,
                             nextAction: trimmedArgs.nextAction,
                             ...(trimmedArgs.openQuestions !== undefined && { openQuestions: trimmedArgs.openQuestions }),
+                            ...(trimmedArgs.summaryLayer !== undefined && { summaryLayer: trimmedArgs.summaryLayer }),
+                            ...(trimmedArgs.summaryHighlights !== undefined && { summaryHighlights: trimmedArgs.summaryHighlights }),
                             ...(trimmedArgs.references !== undefined && { references: trimmedArgs.references }),
                             ...(trimmedArgs.cursors !== undefined && { cursors: trimmedArgs.cursors }),
                             ...(trimmedArgs.expectedRevision !== undefined && { expectedRevision: trimmedArgs.expectedRevision }),
@@ -1136,6 +1138,8 @@ export function createServer(vaultPath, options = {}) {
                             ...(typeof trimmedArgs.summary === 'string' && { summary: trimmedArgs.summary }),
                             ...(trimmedArgs.keyPoints !== undefined && { keyPoints: trimmedArgs.keyPoints }),
                             ...(trimmedArgs.openQuestions !== undefined && { openQuestions: trimmedArgs.openQuestions }),
+                            ...(trimmedArgs.summaryLayer !== undefined && { summaryLayer: trimmedArgs.summaryLayer }),
+                            ...(trimmedArgs.summaryHighlights !== undefined && { summaryHighlights: trimmedArgs.summaryHighlights }),
                             expectedRevision: trimmedArgs.expectedRevision,
                         }), trimmedArgs.prettyPrint);
                     }
@@ -1233,6 +1237,9 @@ export function createServer(vaultPath, options = {}) {
                             ...(typeof trimmedArgs.mocScope === 'string' && { mocScope: trimmedArgs.mocScope }),
                             ...(trimmedArgs.mocQuestions !== undefined && { mocQuestions: trimmedArgs.mocQuestions }),
                             ...(typeof trimmedArgs.mocParent === 'string' && { mocParent: trimmedArgs.mocParent }),
+                            ...(typeof trimmedArgs.focusHorizon === 'string' && { focusHorizon: trimmedArgs.focusHorizon }),
+                            ...(typeof trimmedArgs.focusParent === 'string' && { focusParent: trimmedArgs.focusParent }),
+                            ...(trimmedArgs.focusSupports !== undefined && { focusSupports: trimmedArgs.focusSupports }),
                             expectedRevision: trimmedArgs.expectedRevision,
                         }), trimmedArgs.prettyPrint);
                     }

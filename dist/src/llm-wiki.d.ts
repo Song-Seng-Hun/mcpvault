@@ -99,6 +99,8 @@ export declare class LlmWikiService {
         summary?: string;
         keyPoints?: unknown;
         openQuestions?: unknown;
+        summaryLayer?: unknown;
+        summaryHighlights?: unknown;
         expectedRevision: string;
     }): Promise<{
         noteKind: "area" | "assumption" | "atomic" | "decision" | "fleeting" | "hypothesis" | "journal" | "knowledge" | "literature" | "moc" | "project" | "question" | "resource" | "task";
@@ -141,6 +143,8 @@ export declare class LlmWikiService {
         summary?: string;
         keyPoints?: unknown;
         openQuestions?: unknown;
+        summaryLayer?: unknown;
+        summaryHighlights?: unknown;
         nextActions?: unknown;
         nextAction?: string;
         waitingFor?: string;
@@ -171,6 +175,9 @@ export declare class LlmWikiService {
         mocScope?: string;
         mocQuestions?: unknown;
         mocParent?: string;
+        focusHorizon?: unknown;
+        focusParent?: string;
+        focusSupports?: unknown;
         evidence?: unknown;
         claims?: WikiClaimInput[];
         expectedRevision: string;
@@ -420,6 +427,8 @@ export declare class LlmWikiService {
         summary?: string;
         keyPoints?: unknown;
         openQuestions?: unknown;
+        summaryLayer?: unknown;
+        summaryHighlights?: unknown;
         nextActions?: unknown;
         desiredOutcome?: string;
         taskContext?: string;
@@ -453,6 +462,9 @@ export declare class LlmWikiService {
         mocScope?: string;
         mocQuestions?: unknown;
         mocParent?: string;
+        focusHorizon?: unknown;
+        focusParent?: string;
+        focusSupports?: unknown;
         expectedRevision: string;
     }): Promise<{
         success: boolean;
@@ -466,7 +478,82 @@ export declare class LlmWikiService {
         view?: WikiProjectionView;
         section?: string;
         maxChars?: number;
-    }): Promise<any>;
+    }): Promise<{
+        path: string;
+        title: string;
+        view: WikiProjectionView;
+        revision: string;
+        noteKind: any;
+        lifecycle: any;
+        status: any;
+        confidence: any;
+        aliases?: any[];
+        summary?: string;
+        keyPoints?: any[];
+        openQuestions?: any[];
+        summaryLayer?: any;
+        summaryHighlights?: any[];
+        nextActions?: any[];
+        nextAction?: string;
+        waitingFor?: string;
+        desiredOutcome?: string;
+        taskContext?: string;
+        dueAt?: string;
+        deferUntil?: string;
+        stableId?: string;
+        taskStatus?: string;
+        reviewPolicy?: string;
+        reviewOutcome?: string;
+        reviewedBy?: string;
+        reviewedAt?: string;
+        reviewNote?: string;
+        disposition?: string;
+        clarifiedBy?: string;
+        clarifiedAt?: string;
+        clarifyNote?: string;
+        targetPath?: string;
+        mocPurpose?: string;
+        mocScope?: string;
+        mocQuestions?: any[];
+        mocParent?: string;
+        focusHorizon?: string;
+        focusParent?: string;
+        focusSupports?: any[];
+        epistemicStatus?: string;
+        polarity?: string;
+        negativeType?: string;
+        attempted?: string;
+        observed?: string;
+        failureCondition?: string;
+        affectedScope?: string;
+        reproduction?: string;
+        whyRejected?: string;
+        reusableLesson?: string;
+        replacementPath?: string;
+        summaryFingerprint?: string;
+        summaryFresh?: boolean;
+        relations: {
+            [k: string]: any;
+        };
+        section?: {
+            startLine: number;
+            endLine: number;
+            requested: string | undefined;
+        };
+        headings?: import("./types.js").NoteHeading[];
+        content: string;
+        truncated: boolean;
+        references: string[];
+        evidence: {
+            heading?: string;
+            blockId?: string;
+            revision?: string;
+            startLine?: number;
+            endLine?: number;
+            quoteHash?: string;
+            path: string;
+        }[];
+    }>;
     impactReport(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
         items: Record<string, unknown>[];
         total: number;

@@ -1,7 +1,7 @@
 import { watch } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
-import { extractWikiLinkOccurrences } from './backlinks.js';
+import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import { RELATION_FIELDS } from './organization.js';
 const GRAPH_RECONCILE_INTERVAL_MS = 60_000;
@@ -418,7 +418,7 @@ export class VaultGraphIndex {
             let match;
             while ((match = INLINE_TAG_PATTERN.exec(parsed.content)) !== null)
                 tags.push(match[1].toLowerCase());
-            const links = extractWikiLinkOccurrences(raw);
+            const links = extractObsidianLinkOccurrences(raw);
             for (const relation of RELATION_FIELDS) {
                 const values = Array.isArray(parsed.frontmatter[relation]) ? parsed.frontmatter[relation] : [];
                 for (const value of values) {

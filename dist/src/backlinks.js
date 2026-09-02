@@ -1,4 +1,8 @@
 const WIKI_LINK_PATTERN = /!?(\[\[[^\]]+\]\])/g;
+// Obsidian also indexes ordinary Markdown links whose destination is a note.
+// Keep this intentionally small: external URLs, images, and anchor-only links
+// are not vault graph edges.
+const MARKDOWN_LINK_PATTERN = /(?<!!)(?:\[([^\]]*)\])\(\s*(<[^>]+>|[^\s)]+)(?:\s+['"][^)]*['"])?\s*\)/g;
 const FENCE_PATTERN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 /**
  * Find Obsidian wikilinks in a note that refer to a target note.
@@ -13,11 +17,23 @@ const FENCE_PATTERN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 export function findBacklinkMatches(content, targetPath) {
     const normalizedTarget = normalizeTarget(targetPath);
     const targetBasename = basenameWithoutExtension(normalizedTarget);
-    return extractWikiLinkOccurrences(content)
+    return extractObsidianLinkOccurrences(content)
         .filter(({ target }) => matchesTarget(target, normalizedTarget, targetBasename))
         .map(({ line, link, context }) => ({ line, link, context, path: '' }));
 }
 export function extractWikiLinkOccurrences(content) {
+    return extractLinkOccurrences(content, false);
+}
+/**
+ * Extract the two Obsidian-compatible internal link forms that can create a
+ * graph edge: wikilinks and relative Markdown links. The result stays line
+ * based and bounded so callers can provide a useful locator without loading
+ * the source note again.
+ */
+export function extractObsidianLinkOccurrences(content) {
+    return extractLinkOccurrences(content, true);
+}
+function extractLinkOccurrences(content, includeMarkdown) {
     const matches = [];
     const lines = content.split('\n');
     let fenceChar = '';
@@ -55,12 +71,27 @@ export function extractWikiLinkOccurrences(content) {
                 context: line.trim().slice(0, 300),
             });
         }
+        if (includeMarkdown) {
+            MARKDOWN_LINK_PATTERN.lastIndex = 0;
+            while ((match = MARKDOWN_LINK_PATTERN.exec(line)) !== null) {
+                const link = match[0];
+                const document = markdownLinkDocument(match[2]);
+                if (!document)
+                    continue;
+                matches.push({
+                    line: index + 1,
+                    link,
+                    target: document,
+                    context: line.trim().slice(0, 300),
+                });
+            }
+        }
     }
     return matches;
 }
 export function findUnresolvedLinkMatches(content, vaultFiles) {
     const normalizedFiles = vaultFiles.map(normalizePath);
-    return extractWikiLinkOccurrences(content)
+    return extractObsidianLinkOccurrences(content)
         .filter(({ target }) => resolveWikiLinkTargets(target, normalizedFiles).length === 0)
         .map(({ target, line, link, context }) => ({ target, line, link, context, path: '' }));
 }
@@ -91,6 +122,24 @@ function linkDocument(rawLink) {
     const hashIndex = document.indexOf('#');
     if (hashIndex !== -1)
         document = document.slice(0, hashIndex);
+    return document.trim().replace(/^\.\//, '');
+}
+function markdownLinkDocument(rawDestination) {
+    let document = rawDestination.trim();
+    if (document.startsWith('<') && document.endsWith('>'))
+        document = document.slice(1, -1).trim();
+    if (!document || /^[a-z][a-z0-9+.-]*:/i.test(document) || document.startsWith('#'))
+        return '';
+    const hashIndex = document.indexOf('#');
+    if (hashIndex !== -1)
+        document = document.slice(0, hashIndex);
+    const queryIndex = document.indexOf('?');
+    if (queryIndex !== -1)
+        document = document.slice(0, queryIndex);
+    try {
+        document = decodeURIComponent(document);
+    }
+    catch { /* retain the raw safe path */ }
     return document.trim().replace(/^\.\//, '');
 }
 function normalizeTarget(path) {

@@ -15,6 +15,8 @@ export declare const HYPOTHESIS_STATUSES: readonly ['proposed', 'supported', 're
 export declare const ASSUMPTION_STATUSES: readonly ['active', 'verified', 'invalidated', 'replaced'];
 export declare const KNOWLEDGE_POLARITIES: readonly ['positive', 'negative'];
 export declare const NEGATIVE_KINDS: readonly ['failure', 'rejected', 'counterexample', 'non_reproducible', 'superseded'];
+/** GTD horizons from concrete action up to purpose; these are optional focus metadata. */
+export declare const FOCUS_HORIZONS: readonly ['ground', 'project', 'area', 'goal', 'vision', 'purpose'];
 /** GTD clarification outcomes. These are workflow metadata, not deletion commands. */
 export declare const CLARIFY_DISPOSITIONS: readonly ['knowledge', 'reference', 'project', 'someday', 'discard', 'delegate'];
 /** Typed relationships are navigation metadata, never an access grant. */
@@ -31,6 +33,7 @@ export declare function normalizeNegativeKind(value: unknown, fallback?: typeof 
 export declare function normalizeClarifyDisposition(value: unknown, fallback?: typeof CLARIFY_DISPOSITIONS[number]): typeof CLARIFY_DISPOSITIONS[number] | undefined;
 export declare function normalizeNoteKind(value: unknown, fallback?: NoteKind): NoteKind | undefined;
 export declare function normalizeLifecycle(value: unknown, fallback?: Lifecycle): Lifecycle | undefined;
+export declare function normalizeFocusHorizon(value: unknown, fallback?: typeof FOCUS_HORIZONS[number]): typeof FOCUS_HORIZONS[number] | undefined;
 export declare function lifecycleForKnowledgeStatus(status: string): Lifecycle;
 export declare function normalizeReviewAt(value: unknown): string | undefined;
 export declare function normalizeIsoDate(value: unknown, field: string): string | undefined;
@@ -46,6 +49,8 @@ export interface KnowledgeOrganizationInput {
     summary?: unknown;
     keyPoints?: unknown;
     openQuestions?: unknown;
+    summaryLayer?: unknown;
+    summaryHighlights?: unknown;
     nextActions?: unknown;
     nextAction?: unknown;
     waitingFor?: unknown;
@@ -81,6 +86,9 @@ export interface KnowledgeOrganizationInput {
     mocScope?: unknown;
     mocQuestions?: unknown;
     mocParent?: unknown;
+    focusHorizon?: unknown;
+    focusParent?: unknown;
+    focusSupports?: unknown;
     contentDigest?: unknown;
 }
 export declare function knowledgeOrganization(input: KnowledgeOrganizationInput): Record<string, unknown>;

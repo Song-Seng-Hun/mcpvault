@@ -4,7 +4,7 @@ import { normalizeScopeId } from './scopes.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
 import { knowledgeOrganization, normalizeClarifyDisposition, normalizeLifecycle, normalizeNoteKind, normalizeReviewAt, normalizeReviewOutcome, normalizeTaskStatus, organizationLintIssues, RELATION_FIELDS } from './organization.js';
-import { extractWikiLinkOccurrences, resolveWikiLinkTargets } from './backlinks.js';
+import { extractObsidianLinkOccurrences, resolveWikiLinkTargets } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 const KNOWLEDGE_STATUSES = new Set(['draft', 'verified', 'disputed', 'superseded']);
@@ -155,6 +155,8 @@ function jaccard(left, right) {
     return intersection / (left.size + right.size - intersection);
 }
 const hash = (value) => createHash('sha256').update(value).digest('hex');
+const hasProgressiveProjection = (frontmatter) => Boolean(frontmatter.summary || frontmatter.key_points || frontmatter.open_questions
+    || frontmatter.summary_layer !== undefined || frontmatter.summary_highlights);
 const now = () => new Date().toISOString();
 const joinRoot = (root, path) => root ? `${root}/${path}` : path;
 const normalizePath = (value) => String(value || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
@@ -204,6 +206,15 @@ Use YAML properties and Obsidian links together:
 - \`project\`, \`moc\`, and \`review_at\`: optional navigation and review hints.
 - A knowledge note remains grounded by \`evidence_paths\`; links are not evidence by themselves.
 
+Obsidian navigation accepts both \`[[wikilinks]]\` and relative Markdown links
+such as \`[Guide](Resources/Guide.md#section)\`. Both participate in
+references, backlinks, unresolved-link checks, and MOC coverage; external URLs
+and fenced-code examples do not. Optional \`summary_layer\` (0-4) and bounded
+\`summary_highlights\` make progressive compression explicit while the full
+Markdown body remains authoritative. Optional GTD focus metadata uses
+\`focus_horizon\` (ground, project, area, goal, vision, purpose),
+\`focus_parent\`, and \`focus_supports\` to connect actions to outcomes.
+
 Write one durable claim per \`atomic\` note, use \`moc\` notes as linked maps, and keep unfinished reasoning in Inbox or a private journal. Review uncertain or overdue knowledge; do not silently delete it.
 
 The working pipeline is Capture (\`ingest_source\`/Inbox) -> Organize (properties
@@ -226,9 +237,21 @@ Reflect pass over Inbox, active work, due knowledge, and graph health.
 
 MOCs should explain their purpose and boundary with \`moc_purpose\`,
 \`moc_scope\`, and \`moc_questions\`, optionally link to a parent with
-\`moc_parent\`, and use ordinary Obsidian [[wikilinks]] for coverage. Call
+\`moc_parent\`, and use ordinary Obsidian [[wikilinks]] or relative Markdown
+links for coverage; graph health follows parent/child MOC links to a bounded
+depth so nested maps do not hide covered knowledge. Call
 \`get_wiki_moc_candidates\` for bounded suggestions; it never creates a map
 automatically.
+
+For Obsidian compatibility, relative Markdown links such as
+\`[Guide](Resources/Guide.md#section)\` are treated like \`[[Guide]]\` for
+references, backlinks, unresolved-link checks, and MOC coverage. External URLs
+and links inside fenced code are ignored. Progressive Summarization is
+optional: \`summary_layer\` 0-4 and bounded \`summary_highlights\` describe
+how much of the original note has been compressed; the full Markdown body and
+its content digest remain authoritative. GTD Horizons can be recorded with
+\`focus_horizon\` (ground, project, area, goal, vision, purpose),
+\`focus_parent\`, and \`focus_supports\` to connect actions to outcomes.
 
 ## Invariants
 
@@ -328,7 +351,7 @@ export class LlmWikiService {
      */
     async collectReviewBasisLinks(content, references, principal) {
         const candidates = new Set(references);
-        for (const link of extractWikiLinkOccurrences(content)) {
+        for (const link of extractObsidianLinkOccurrences(content)) {
             const matches = await this.fileSystem.findPathForWikiLink(link.target, path => this.access.canAccessPhysicalPath(path, principal));
             if (matches.length === 1)
                 candidates.add(matches[0]);
@@ -459,6 +482,8 @@ export class LlmWikiService {
             ...(params.summary !== undefined && { summary: params.summary }),
             ...(params.keyPoints !== undefined && { keyPoints: params.keyPoints }),
             ...(params.openQuestions !== undefined && { openQuestions: params.openQuestions }),
+            ...(params.summaryLayer !== undefined && { summaryLayer: params.summaryLayer }),
+            ...(params.summaryHighlights !== undefined && { summaryHighlights: params.summaryHighlights }),
             expectedRevision: params.expectedRevision,
         });
         return { ...published, noteKind, distilledFrom: { path: this.access.toPublicPath(sourcePath), revision: source.revision }, nextAction: noteKind === 'literature' ? 'Read and interpret this literature note, then publish an atomic note with the source retained as evidence and this note linked as context.' : 'Verify the cited source and link this note from an appropriate MOC.' };
@@ -557,6 +582,8 @@ export class LlmWikiService {
                     ...(params.summary !== undefined && { summary: params.summary }),
                     ...(params.keyPoints !== undefined && { keyPoints: params.keyPoints }),
                     ...(params.openQuestions !== undefined && { openQuestions: params.openQuestions }),
+                    ...(params.summaryLayer !== undefined && { summaryLayer: params.summaryLayer }),
+                    ...(params.summaryHighlights !== undefined && { summaryHighlights: params.summaryHighlights }),
                     ...(params.nextActions !== undefined && { nextActions: params.nextActions }),
                     ...(params.nextAction !== undefined && { nextAction: params.nextAction }),
                     ...(params.waitingFor !== undefined && { waitingFor: params.waitingFor }),
@@ -587,6 +614,9 @@ export class LlmWikiService {
                     ...(params.mocScope !== undefined && { mocScope: params.mocScope }),
                     ...(params.mocQuestions !== undefined && { mocQuestions: params.mocQuestions }),
                     ...(params.mocParent !== undefined && { mocParent: params.mocParent }),
+                    ...(params.focusHorizon !== undefined && { focusHorizon: params.focusHorizon }),
+                    ...(params.focusParent !== undefined && { focusParent: params.focusParent }),
+                    ...(params.focusSupports !== undefined && { focusSupports: params.focusSupports }),
                     contentDigest: hash(content),
                     status,
                 }),
@@ -686,6 +716,9 @@ export class LlmWikiService {
                 ...(note.frontmatter.moc_scope && { mocScope: note.frontmatter.moc_scope }),
                 ...(Array.isArray(note.frontmatter.moc_questions) && { mocQuestions: note.frontmatter.moc_questions.slice(0, 12) }),
                 ...(note.frontmatter.moc_parent && { mocParent: note.frontmatter.moc_parent }),
+                ...(note.frontmatter.focus_horizon && { focusHorizon: note.frontmatter.focus_horizon }),
+                ...(note.frontmatter.focus_parent && { focusParent: note.frontmatter.focus_parent }),
+                ...(note.frontmatter.focus_supports && { focusSupports: note.frontmatter.focus_supports }),
                 ...(note.frontmatter.triage_disposition && { disposition: note.frontmatter.triage_disposition }),
                 ...(note.frontmatter.review_at && { reviewAt: note.frontmatter.review_at }),
                 updatedAt: note.frontmatter.updated_at || note.frontmatter.captured_at,
@@ -730,7 +763,7 @@ export class LlmWikiService {
                     }
                 }
             }
-            const summaryStale = Boolean(note.frontmatter.summary || note.frontmatter.key_points || note.frontmatter.open_questions)
+            const summaryStale = hasProgressiveProjection(note.frontmatter)
                 && (typeof note.frontmatter.summary_of_content_sha256 !== 'string' || note.frontmatter.summary_of_content_sha256 !== hash(note.content || ''));
             const reviewSignals = await this.reviewChangeSignals(note, principal);
             const reviewTriggers = [];
@@ -993,7 +1026,7 @@ export class LlmWikiService {
         if (note.frontmatter.llm_wiki_type && note.frontmatter.llm_wiki_type !== 'knowledge') {
             throw new Error(`triage_wiki_note cannot classify managed LLM Wiki type '${note.frontmatter.llm_wiki_type}'`);
         }
-        const hasOrganizationInput = [params.noteKind, params.lifecycle, params.moc, params.project, params.reviewAt, params.nextAction, params.waitingFor, params.desiredOutcome, params.taskContext, params.dueAt, params.deferUntil, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.nextActions, params.stableId, params.relations, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent]
+        const hasOrganizationInput = [params.noteKind, params.lifecycle, params.moc, params.project, params.reviewAt, params.nextAction, params.waitingFor, params.desiredOutcome, params.taskContext, params.dueAt, params.deferUntil, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.relations, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
             .some(value => value !== undefined);
         if (!hasOrganizationInput)
             throw new Error('At least one organization field is required');
@@ -1035,6 +1068,8 @@ export class LlmWikiService {
             ...(params.summary !== undefined && { summary: params.summary }),
             ...(params.keyPoints !== undefined && { keyPoints: params.keyPoints }),
             ...(params.openQuestions !== undefined && { openQuestions: params.openQuestions }),
+            ...(params.summaryLayer !== undefined && { summaryLayer: params.summaryLayer }),
+            ...(params.summaryHighlights !== undefined && { summaryHighlights: params.summaryHighlights }),
             ...(params.nextActions !== undefined && { nextActions: params.nextActions }),
             ...(params.waitingFor !== undefined && { waitingFor: params.waitingFor }),
             ...(params.desiredOutcome !== undefined && { desiredOutcome: params.desiredOutcome }),
@@ -1069,6 +1104,9 @@ export class LlmWikiService {
             ...(params.mocScope !== undefined && { mocScope: params.mocScope }),
             ...(params.mocQuestions !== undefined && { mocQuestions: params.mocQuestions }),
             ...(params.mocParent !== undefined && { mocParent: params.mocParent }),
+            ...(params.focusHorizon !== undefined && { focusHorizon: params.focusHorizon }),
+            ...(params.focusParent !== undefined && { focusParent: params.focusParent }),
+            ...(params.focusSupports !== undefined && { focusSupports: params.focusSupports }),
             contentDigest: hash(note.content),
             status: String(note.frontmatter.knowledge_status || note.frontmatter.status || 'draft'),
         });
@@ -1087,6 +1125,9 @@ export class LlmWikiService {
                 ...(updated.frontmatter.moc_scope && { mocScope: updated.frontmatter.moc_scope }),
                 ...(updated.frontmatter.moc_questions && { mocQuestions: updated.frontmatter.moc_questions }),
                 ...(updated.frontmatter.moc_parent && { mocParent: updated.frontmatter.moc_parent }),
+                ...(updated.frontmatter.focus_horizon && { focusHorizon: updated.frontmatter.focus_horizon }),
+                ...(updated.frontmatter.focus_parent && { focusParent: updated.frontmatter.focus_parent }),
+                ...(updated.frontmatter.focus_supports && { focusSupports: updated.frontmatter.focus_supports }),
                 ...(updated.frontmatter.project && { project: updated.frontmatter.project }),
                 ...(updated.frontmatter.review_at && { reviewAt: updated.frontmatter.review_at }),
                 ...(updated.frontmatter.next_action && { nextAction: updated.frontmatter.next_action }),
@@ -1200,6 +1241,8 @@ export class LlmWikiService {
             ...(typeof note.frontmatter.summary === 'string' && { summary: boundedText(note.frontmatter.summary, 2000) }),
             ...(Array.isArray(note.frontmatter.key_points) && { keyPoints: note.frontmatter.key_points.slice(0, 20) }),
             ...(Array.isArray(note.frontmatter.open_questions) && { openQuestions: note.frontmatter.open_questions.slice(0, 20) }),
+            ...(Number.isInteger(note.frontmatter.summary_layer) && { summaryLayer: note.frontmatter.summary_layer }),
+            ...(Array.isArray(note.frontmatter.summary_highlights) && { summaryHighlights: note.frontmatter.summary_highlights.slice(0, 12) }),
             ...(Array.isArray(note.frontmatter.next_actions) && { nextActions: note.frontmatter.next_actions.slice(0, 20) }),
             ...(typeof note.frontmatter.next_action === 'string' && { nextAction: note.frontmatter.next_action }),
             ...(typeof note.frontmatter.waiting_for === 'string' && { waitingFor: note.frontmatter.waiting_for }),
@@ -1223,6 +1266,9 @@ export class LlmWikiService {
             ...(typeof note.frontmatter.moc_scope === 'string' && { mocScope: note.frontmatter.moc_scope }),
             ...(Array.isArray(note.frontmatter.moc_questions) && { mocQuestions: note.frontmatter.moc_questions.slice(0, 12) }),
             ...(typeof note.frontmatter.moc_parent === 'string' && { mocParent: note.frontmatter.moc_parent }),
+            ...(typeof note.frontmatter.focus_horizon === 'string' && { focusHorizon: note.frontmatter.focus_horizon }),
+            ...(typeof note.frontmatter.focus_parent === 'string' && { focusParent: note.frontmatter.focus_parent }),
+            ...(Array.isArray(note.frontmatter.focus_supports) && { focusSupports: note.frontmatter.focus_supports.slice(0, 20) }),
             ...(typeof note.frontmatter.epistemic_status === 'string' && { epistemicStatus: note.frontmatter.epistemic_status }),
             ...(typeof note.frontmatter.knowledge_polarity === 'string' && { polarity: note.frontmatter.knowledge_polarity }),
             ...(typeof note.frontmatter.negative_type === 'string' && { negativeType: note.frontmatter.negative_type }),
@@ -1235,7 +1281,7 @@ export class LlmWikiService {
             ...(typeof note.frontmatter.negative_reusable_lesson === 'string' && { reusableLesson: note.frontmatter.negative_reusable_lesson }),
             ...(typeof note.frontmatter.negative_replacement_path === 'string' && { replacementPath: note.frontmatter.negative_replacement_path }),
             ...(typeof note.frontmatter.summary_of_content_sha256 === 'string' && { summaryFingerprint: note.frontmatter.summary_of_content_sha256 }),
-            ...((note.frontmatter.summary || note.frontmatter.key_points || note.frontmatter.open_questions) && {
+            ...(hasProgressiveProjection(note.frontmatter) && {
                 summaryFresh: typeof note.frontmatter.summary_of_content_sha256 === 'string'
                     ? note.frontmatter.summary_of_content_sha256 === hash(note.content)
                     : false,
@@ -1298,7 +1344,7 @@ export class LlmWikiService {
             const reviewAt = typeof note.frontmatter.review_at === 'string' ? note.frontmatter.review_at : undefined;
             if (reviewAt && !Number.isNaN(Date.parse(reviewAt)) && Date.parse(reviewAt) <= nowMs)
                 reasons.push('review_due');
-            if (Boolean(note.frontmatter.summary || note.frontmatter.key_points || note.frontmatter.open_questions)
+            if (hasProgressiveProjection(note.frontmatter)
                 && (typeof note.frontmatter.summary_of_content_sha256 !== 'string' || note.frontmatter.summary_of_content_sha256 !== hash(note.content || '')))
                 reasons.push('summary_stale');
             const reviewSignals = await this.reviewChangeSignals(note, principal);
@@ -1461,7 +1507,7 @@ export class LlmWikiService {
             if (note.frontmatter.note_kind !== 'moc')
                 continue;
             mocTotal += 1;
-            const links = extractWikiLinkOccurrences(note.content || '').map(link => link.target);
+            const links = extractObsidianLinkOccurrences(note.content || '').map(link => link.target);
             mocDrafts.push({ path: note.path, title: note.frontmatter.title || note.path.split('/').at(-1) || note.path, links });
             if (links.length === 0) {
                 emptyMocTotal += 1;
@@ -1472,20 +1518,46 @@ export class LlmWikiService {
         }
         const mocCoveredKnowledge = new Set();
         const mocCoverageItems = [];
+        const mocPathSet = new Set(mocDrafts.map(moc => normalizePath(moc.path).toLowerCase()));
+        const mocByPath = new Map(mocDrafts.map(moc => [normalizePath(moc.path).toLowerCase(), moc]));
         for (const moc of mocDrafts) {
             const linked = new Set();
+            const direct = new Set();
+            const indirect = new Set();
+            const nestedMocs = new Set();
             let unresolvedTargets = 0;
-            for (const target of moc.links) {
-                const resolvedTargets = resolveWikiLinkTargets(target, visibleNotePaths);
-                if (resolvedTargets.length === 0)
-                    unresolvedTargets += 1;
-                for (const resolved of resolvedTargets)
-                    linked.add(normalizePath(resolved).toLowerCase());
+            const queue = moc.links.map(target => ({ target, depth: 0, direct: true }));
+            const visitedMocs = new Set([normalizePath(moc.path).toLowerCase()]);
+            for (let queueIndex = 0; queueIndex < queue.length; queueIndex += 1) {
+                const current = queue[queueIndex];
+                const resolvedTargets = resolveWikiLinkTargets(current.target, visibleNotePaths);
+                if (resolvedTargets.length === 0) {
+                    if (current.direct)
+                        unresolvedTargets += 1;
+                    continue;
+                }
+                for (const resolved of resolvedTargets) {
+                    const normalized = normalizePath(resolved).toLowerCase();
+                    linked.add(normalized);
+                    if (current.direct)
+                        direct.add(normalized);
+                    else
+                        indirect.add(normalized);
+                    if (current.depth >= 6 || !mocPathSet.has(normalized) || visitedMocs.has(normalized))
+                        continue;
+                    visitedMocs.add(normalized);
+                    nestedMocs.add(normalized);
+                    const child = mocByPath.get(normalized);
+                    for (const target of child?.links || [])
+                        queue.push({ target, depth: current.depth + 1, direct: false });
+                }
             }
             const linkedKnowledge = [...linked].filter(path => knowledgePaths.has(path));
+            const directKnowledge = [...direct].filter(path => knowledgePaths.has(path));
+            const indirectKnowledge = [...indirect].filter(path => knowledgePaths.has(path) && !direct.has(path));
             for (const path of linkedKnowledge)
                 mocCoveredKnowledge.add(path);
-            mocCoverageItems.push({ path: this.access.toPublicPath(moc.path), title: moc.title, linkedNotes: linked.size, linkedKnowledge: linkedKnowledge.length, unresolvedTargets, linkDensity: moc.links.length ? Number((linked.size / moc.links.length).toFixed(3)) : 0, knowledgeCoverage: knowledgePaths.size ? Number((linkedKnowledge.length / knowledgePaths.size).toFixed(3)) : 1 });
+            mocCoverageItems.push({ path: this.access.toPublicPath(moc.path), title: moc.title, linkedNotes: linked.size, linkedKnowledge: linkedKnowledge.length, directKnowledge: directKnowledge.length, indirectKnowledge: indirectKnowledge.length, nestedMocs: nestedMocs.size, unresolvedTargets, linkDensity: moc.links.length ? Number((linked.size / moc.links.length).toFixed(3)) : 0, knowledgeCoverage: knowledgePaths.size ? Number((linkedKnowledge.length / knowledgePaths.size).toFixed(3)) : 1 });
         }
         const uncoveredKnowledge = visibleNotePaths
             .filter(path => knowledgePaths.has(normalizePath(path).toLowerCase()) && !mocCoveredKnowledge.has(normalizePath(path).toLowerCase()))
@@ -1816,7 +1888,7 @@ export class LlmWikiService {
             if (note.frontmatter.llm_wiki_type !== 'knowledge' || !note.content?.trim())
                 continue;
             const summary = typeof note.frontmatter.summary === 'string' ? note.frontmatter.summary.trim() : '';
-            const hasProgressiveFields = Boolean(summary || note.frontmatter.key_points || note.frontmatter.open_questions);
+            const hasProgressiveFields = Boolean(summary || note.frontmatter.key_points || note.frontmatter.open_questions || note.frontmatter.summary_layer !== undefined || note.frontmatter.summary_highlights);
             const summaryFresh = typeof note.frontmatter.summary_of_content_sha256 === 'string'
                 && note.frontmatter.summary_of_content_sha256 === hash(note.content);
             const paragraphs = note.content.split(/\n\s*\n/).map(block => block.trim()).filter(block => block && !block.startsWith('#') && !block.startsWith('```'));

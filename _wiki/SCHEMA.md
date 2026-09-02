@@ -60,14 +60,16 @@ evidence, access, and revision checks remain blocking invariants.
 Use `aliases` for alternate Obsidian names and optional `stable_id` for a
 durable note identity. Keep progressive-read material in `summary`,
 `key_points`, and `open_questions` while preserving the complete Markdown
-body. Whenever a progressive field is present, store
+body. Optional `summary_layer` (0-4) and bounded `summary_highlights` record
+which Progressive Summarization layer a projection represents; the full body
+remains authoritative. Whenever a progressive field is present, store
 `summary_of_content_sha256` as the SHA-256 of the exact Markdown body; a body
 edit makes the projection stale until it is regenerated. Use
 `knowledge_polarity: negative` with `negative_type` to preserve failures,
 rejected approaches, counterexamples, and non-reproducible results. Typed relationship properties explain why a link exists:
 `supports`, `contradicts`, `supersedes`, `derived_from`, `depends_on`,
 `implements`, `blocked_by`, and `related`. Each value should be an Obsidian
-wikilink or a scope-safe note path; the target must remain accessible and
+wikilink, relative Markdown link, or a scope-safe note path; the target must remain accessible and
 resolvable. Use `next_actions` and `waiting_for` on project/task notes rather
 than on ordinary discussions. Use `task_status` (`open`, `next_action`,
 `waiting`, `blocked`, `someday`, `completed`, or `cancelled`) for task execution state;
@@ -90,7 +92,10 @@ questions use `open`/`answered`/`blocked`/`abandoned`, hypotheses use
 `proposed`/`supported`/`refuted`/`inconclusive`, and assumptions use
 `active`/`verified`/`invalidated`/`replaced`. Project and task notes may use
 GTD-style `desired_outcome`, `next_action`, `task_context`, `due_at`, and
-`defer_until`; these describe execution and do not replace `lifecycle`.
+`defer_until`; these describe execution and do not replace `lifecycle`. Optional
+`focus_horizon` (`ground`, `project`, `area`, `goal`, `vision`, `purpose`),
+`focus_parent`, and `focus_supports` connect GTD Horizons to notes without
+changing visibility or permissions.
 Negative knowledge should preserve `negative_attempted`, `negative_observed`,
 `negative_failure_condition`, `negative_affected_scope`,
 `negative_reproduction`, `negative_why_rejected`, `negative_reusable_lesson`,
@@ -118,7 +123,8 @@ For source interpretation, use `distill_wiki_source` to create a literature or
 atomic note from one intact immutable source. The operation records the
 source's current path and revision as provenance and leaves the source
 unchanged. For MOCs, record `moc_purpose`, `moc_scope`, `moc_questions`, and
-optional `moc_parent` alongside ordinary `[[wikilinks]]`; use
+optional `moc_parent` alongside ordinary `[[wikilinks]]` or relative Markdown
+links; nested MOCs are followed to bounded depth by graph health; use
 `get_wiki_moc_candidates` for bounded suggestions, not automatic map creation.
 
 For long or disputed knowledge notes, use claim-level provenance when useful:

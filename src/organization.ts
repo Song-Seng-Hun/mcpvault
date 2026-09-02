@@ -17,6 +17,8 @@ export const HYPOTHESIS_STATUSES = ['proposed', 'supported', 'refuted', 'inconcl
 export const ASSUMPTION_STATUSES = ['active', 'verified', 'invalidated', 'replaced'] as const;
 export const KNOWLEDGE_POLARITIES = ['positive', 'negative'] as const;
 export const NEGATIVE_KINDS = ['failure', 'rejected', 'counterexample', 'non_reproducible', 'superseded'] as const;
+/** GTD horizons from concrete action up to purpose; these are optional focus metadata. */
+export const FOCUS_HORIZONS = ['ground', 'project', 'area', 'goal', 'vision', 'purpose'] as const;
 /** GTD clarification outcomes. These are workflow metadata, not deletion commands. */
 export const CLARIFY_DISPOSITIONS = ['knowledge', 'reference', 'project', 'someday', 'discard', 'delegate'] as const;
 /** Typed relationships are navigation metadata, never an access grant. */
@@ -38,6 +40,7 @@ const knowledgePolaritySet = new Set<string>(KNOWLEDGE_POLARITIES);
 const negativeKindSet = new Set<string>(NEGATIVE_KINDS);
 const clarifyDispositionSet = new Set<string>(CLARIFY_DISPOSITIONS);
 const relationFieldSet = new Set<string>(RELATION_FIELDS);
+const focusHorizonSet = new Set<string>(FOCUS_HORIZONS);
 
 function normalizedList(value: unknown, field: string, maximumItems: number, maximumChars: number): string[] | undefined {
   if (value === undefined || value === null || value === '') return undefined;
@@ -131,6 +134,40 @@ export function normalizeLifecycle(value: unknown, fallback?: Lifecycle): Lifecy
   return normalized as Lifecycle;
 }
 
+export function normalizeFocusHorizon(value: unknown, fallback?: typeof FOCUS_HORIZONS[number]): typeof FOCUS_HORIZONS[number] | undefined {
+  if (value === undefined || value === null || String(value).trim() === '') return fallback;
+  const normalized = String(value).trim().toLowerCase();
+  if (!focusHorizonSet.has(normalized)) throw new Error(`focusHorizon must be one of: ${FOCUS_HORIZONS.join(', ')}`);
+  return normalized as typeof FOCUS_HORIZONS[number];
+}
+
+interface SummaryHighlight {
+  text: string;
+  startLine?: number;
+  endLine?: number;
+  quoteHash?: string;
+}
+
+function normalizedHighlights(value: unknown, field: string): SummaryHighlight[] | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (!Array.isArray(value)) throw new Error(`${field} must be an array of highlight objects`);
+  const result = value.slice(0, 12).map((item, index) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error(`${field}[${index}] must be an object`);
+    const raw = item as Record<string, unknown>;
+    const text = optionalText(raw.text, `${field}[${index}].text`, 600);
+    if (!text) throw new Error(`${field}[${index}].text is required`);
+    const startLine = raw.startLine === undefined ? undefined : Number(raw.startLine);
+    const endLine = raw.endLine === undefined ? undefined : Number(raw.endLine);
+    if (startLine !== undefined && (!Number.isInteger(startLine) || startLine < 1)) throw new Error(`${field}[${index}].startLine must be a positive integer`);
+    if (endLine !== undefined && (!Number.isInteger(endLine) || endLine < 1)) throw new Error(`${field}[${index}].endLine must be a positive integer`);
+    if (startLine !== undefined && endLine !== undefined && endLine < startLine) throw new Error(`${field}[${index}].endLine must be greater than or equal to startLine`);
+    const quoteHash = raw.quoteHash === undefined ? undefined : optionalText(raw.quoteHash, `${field}[${index}].quoteHash`, 128);
+    if (quoteHash && !/^[a-f0-9]{64}$/i.test(quoteHash)) throw new Error(`${field}[${index}].quoteHash must be a SHA-256 hexadecimal digest`);
+    return { text, ...(startLine !== undefined && { startLine }), ...(endLine !== undefined && { endLine }), ...(quoteHash && { quoteHash }) };
+  });
+  return result.length ? result : undefined;
+}
+
 export function lifecycleForKnowledgeStatus(status: string): Lifecycle {
   switch (status.trim().toLowerCase()) {
     case 'verified': return 'evergreen';
@@ -175,6 +212,8 @@ export interface KnowledgeOrganizationInput {
   summary?: unknown;
   keyPoints?: unknown;
   openQuestions?: unknown;
+  summaryLayer?: unknown;
+  summaryHighlights?: unknown;
   nextActions?: unknown;
   nextAction?: unknown;
   waitingFor?: unknown;
@@ -210,6 +249,9 @@ export interface KnowledgeOrganizationInput {
   mocScope?: unknown;
   mocQuestions?: unknown;
   mocParent?: unknown;
+  focusHorizon?: unknown;
+  focusParent?: unknown;
+  focusSupports?: unknown;
   contentDigest?: unknown;
 }
 
@@ -226,6 +268,11 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
   const summary = input.summary === undefined ? optionalText(existing.summary, 'summary', 2000) : optionalText(input.summary, 'summary', 2000);
   const keyPoints = input.keyPoints === undefined ? normalizedList(existing.key_points, 'key_points', 20, 600) : normalizedList(input.keyPoints, 'key_points', 20, 600);
   const openQuestions = input.openQuestions === undefined ? normalizedList(existing.open_questions, 'open_questions', 20, 600) : normalizedList(input.openQuestions, 'open_questions', 20, 600);
+  const summaryLayer = input.summaryLayer === undefined
+    ? (existing.summary_layer === undefined ? undefined : Number(existing.summary_layer))
+    : Number(input.summaryLayer);
+  if (summaryLayer !== undefined && (!Number.isInteger(summaryLayer) || summaryLayer < 0 || summaryLayer > 4)) throw new Error('summaryLayer must be an integer from 0 to 4');
+  const summaryHighlights = input.summaryHighlights === undefined ? normalizedHighlights(existing.summary_highlights, 'summaryHighlights') : normalizedHighlights(input.summaryHighlights, 'summaryHighlights');
   const nextActions = input.nextActions === undefined ? normalizedList(existing.next_actions, 'next_actions', 20, 600) : normalizedList(input.nextActions, 'next_actions', 20, 600);
   const nextAction = input.nextAction === undefined ? optionalText(existing.next_action, 'nextAction', 500) : optionalText(input.nextAction, 'nextAction', 500);
   const waitingFor = input.waitingFor === undefined ? optionalText(existing.waiting_for, 'waiting_for', 500) : optionalText(input.waitingFor, 'waiting_for', 500);
@@ -273,9 +320,12 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
   const mocScope = input.mocScope === undefined ? optionalText(existing.moc_scope, 'mocScope', 500) : optionalText(input.mocScope, 'mocScope', 500);
   const mocQuestions = input.mocQuestions === undefined ? normalizedList(existing.moc_questions, 'mocQuestions', 12, 500) : normalizedList(input.mocQuestions, 'mocQuestions', 12, 500);
   const mocParent = input.mocParent === undefined ? optionalText(existing.moc_parent, 'mocParent', 500) : optionalText(input.mocParent, 'mocParent', 500);
+  const focusHorizon = input.focusHorizon === undefined ? normalizeFocusHorizon(existing.focus_horizon) : normalizeFocusHorizon(input.focusHorizon);
+  const focusParent = input.focusParent === undefined ? optionalText(existing.focus_parent, 'focusParent', 500) : optionalText(input.focusParent, 'focusParent', 500);
+  const focusSupports = input.focusSupports === undefined ? normalizedList(existing.focus_supports, 'focusSupports', 20, 500) : normalizedList(input.focusSupports, 'focusSupports', 20, 500);
   if (negativeType && polarity !== 'negative') throw new Error('negativeType requires polarity=negative');
   if (polarity === 'negative' && !negativeType) throw new Error('polarity=negative requires negativeType');
-  const summaryFieldsPresent = Boolean(summary || keyPoints?.length || openQuestions?.length);
+  const summaryFieldsPresent = Boolean(summary || keyPoints?.length || openQuestions?.length || summaryLayer !== undefined || summaryHighlights?.length);
   const summaryDigest = summaryFieldsPresent && input.contentDigest !== undefined
     ? optionalText(input.contentDigest, 'summary_of_content_sha256', 128)
     : optionalText(existing.summary_of_content_sha256, 'summary_of_content_sha256', 128);
@@ -289,6 +339,8 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
     ...(summary && { summary }),
     ...(keyPoints && { key_points: keyPoints }),
     ...(openQuestions && { open_questions: openQuestions }),
+    ...(summaryLayer !== undefined && { summary_layer: summaryLayer }),
+    ...(summaryHighlights && { summary_highlights: summaryHighlights }),
     ...(nextActions && { next_actions: nextActions }),
     ...(nextAction && { next_action: nextAction }),
     ...(waitingFor && { waiting_for: waitingFor }),
@@ -323,6 +375,9 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
     ...(mocScope && { moc_scope: mocScope }),
     ...(mocQuestions && { moc_questions: mocQuestions }),
     ...(mocParent && { moc_parent: mocParent }),
+    ...(focusHorizon && { focus_horizon: focusHorizon }),
+    ...(focusParent && { focus_parent: focusParent }),
+    ...(focusSupports && { focus_supports: focusSupports }),
     ...(summaryDigest && { summary_of_content_sha256: summaryDigest }),
     ...(relations || {}),
   };
@@ -384,6 +439,33 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
   if (frontmatter.stable_id !== undefined && (typeof frontmatter.stable_id !== 'string' || !/^[a-z0-9][a-z0-9._-]*$/i.test(frontmatter.stable_id))) {
     issues.push({ code: 'invalid_stable_id', detail: 'stable_id must contain only letters, numbers, dots, underscores, and hyphens.' });
   }
+  if (frontmatter.focus_horizon !== undefined && !focusHorizonSet.has(String(frontmatter.focus_horizon).trim().toLowerCase())) {
+    issues.push({ code: 'invalid_focus_horizon', detail: `focus_horizon must be one of: ${FOCUS_HORIZONS.join(', ')}` });
+  }
+  if (frontmatter.focus_supports !== undefined) {
+    try { normalizedList(frontmatter.focus_supports, 'focusSupports', 20, 500); } catch (error) { issues.push({ code: 'invalid_focus_supports', detail: error instanceof Error ? error.message : 'focus_supports must be a string array.' }); }
+  }
+  if (frontmatter.summary_layer !== undefined) {
+    const layer = Number(frontmatter.summary_layer);
+    if (!Number.isInteger(layer) || layer < 0 || layer > 4) issues.push({ code: 'invalid_summary_layer', detail: 'summary_layer must be an integer from 0 to 4.' });
+  }
+  if (frontmatter.summary_highlights !== undefined) {
+    try {
+      const highlights = normalizedHighlights(frontmatter.summary_highlights, 'summaryHighlights') || [];
+      const lines = content.split('\n');
+      for (const highlight of highlights) {
+        if (highlight.startLine === undefined || highlight.endLine === undefined) continue;
+        if (highlight.endLine > lines.length) {
+          issues.push({ code: 'summary_highlight_out_of_range', detail: 'A summary highlight line range exceeds the current note body.' });
+          continue;
+        }
+        if (highlight.quoteHash) {
+          const digest = createHash('sha256').update(lines.slice(highlight.startLine - 1, highlight.endLine).join('\n'), 'utf8').digest('hex');
+          if (digest !== highlight.quoteHash) issues.push({ code: 'stale_summary_highlight', detail: 'A summary highlight quoteHash no longer matches its selected body lines.' });
+        }
+      }
+    } catch (error) { issues.push({ code: 'invalid_summary_highlights', detail: error instanceof Error ? error.message : 'summary_highlights must be bounded highlight objects.' }); }
+  }
   if (frontmatter.task_status !== undefined && !taskStatusSet.has(String(frontmatter.task_status).trim().toLowerCase())) {
     issues.push({ code: 'invalid_task_status', detail: `task_status must be one of: ${TASK_STATUSES.join(', ')}` });
   }
@@ -420,7 +502,7 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
     if (!frontmatter.negative_reusable_lesson) issues.push({ code: 'negative_lesson_missing', detail: 'Negative knowledge should preserve a reusable lesson so future agents do not repeat the failed path.' });
     if (negativeType === 'failure' && !frontmatter.negative_reproduction) issues.push({ code: 'negative_reproduction_missing', detail: 'A failure note should record a bounded reproduction or observation recipe when possible.' });
   }
-  const summaryPresent = typeof frontmatter.summary === 'string' || Array.isArray(frontmatter.key_points) || Array.isArray(frontmatter.open_questions);
+  const summaryPresent = typeof frontmatter.summary === 'string' || Array.isArray(frontmatter.key_points) || Array.isArray(frontmatter.open_questions) || frontmatter.summary_layer !== undefined || Array.isArray(frontmatter.summary_highlights);
   if (summaryPresent && frontmatter.summary_of_content_sha256 === undefined) {
     issues.push({ code: 'summary_fingerprint_missing', detail: 'Progressive summary fields should record summary_of_content_sha256 so stale summaries can be detected after body edits.' });
   } else if (summaryPresent && typeof frontmatter.summary_of_content_sha256 === 'string') {

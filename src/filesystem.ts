@@ -8,7 +8,7 @@ import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
 import { generateObsidianUri } from './uri.js';
 import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, MoveNoteParams, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult, DailyNoteResult, ListTasksParams, ListTasksResult, TaskItem, QueryNotesParams, QueryNotesResult, QueryNote, QueryNotesCursor } from './types.js';
-import { extractWikiLinkOccurrences, findBacklinkMatches, findUnresolvedLinkMatches, resolveWikiLinkTargets } from './backlinks.js';
+import { extractObsidianLinkOccurrences, findBacklinkMatches, findUnresolvedLinkMatches, resolveWikiLinkTargets } from './backlinks.js';
 import { buildDailyNotePath, resolveDailyDate, type DailyDateInput } from './daily.js';
 import type { VaultMetadataIndex } from './vault-index.js';
 import type { VaultGraphIndex } from './vault-graph.js';
@@ -1544,7 +1544,7 @@ export class FileSystemService {
     if (this.graphIndex) return this.graphIndex.getOutlinks(source, limit, canAccessPath);
 
     const note = await this.readNote(source);
-    const allOutlinks = extractWikiLinkOccurrences(note.originalContent);
+    const allOutlinks = extractObsidianLinkOccurrences(note.originalContent);
     // Outlinks are raw authoring data, but a public note must not disclose
     // the names or paths of private notes it happens to mention. Keep links
     // that are unresolved in the caller's visible view (they are useful
@@ -1609,7 +1609,7 @@ export class FileSystemService {
     for (const source of noteFiles) {
       try {
         const content = await readFile(this.resolvePath(source), 'utf-8');
-        for (const { target } of extractWikiLinkOccurrences(content)) {
+        for (const { target } of extractObsidianLinkOccurrences(content)) {
           for (const destination of resolveWikiLinkTargets(target, noteFiles)) {
             if (destination.toLowerCase() !== source.toLowerCase()) {
               const key = destination.toLowerCase();

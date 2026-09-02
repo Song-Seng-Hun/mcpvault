@@ -2,7 +2,7 @@ import { watch, type FSWatcher } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
 import type { BacklinkMatch, OrphanNotesResult, UnresolvedLinksResult, OutlinkMatch } from './types.js';
-import { extractWikiLinkOccurrences } from './backlinks.js';
+import { extractObsidianLinkOccurrences } from './backlinks.js';
 import type { FrontmatterHandler } from './frontmatter.js';
 import type { PathFilter } from './pathfilter.js';
 import type { VaultCatalogChange, VaultFileCatalog, VaultCatalogChangeKind } from './vault-catalog.js';
@@ -421,7 +421,7 @@ export class VaultGraphIndex {
       INLINE_TAG_PATTERN.lastIndex = 0;
       let match: RegExpExecArray | null;
       while ((match = INLINE_TAG_PATTERN.exec(parsed.content)) !== null) tags.push(match[1]!.toLowerCase());
-      const links = extractWikiLinkOccurrences(raw);
+      const links = extractObsidianLinkOccurrences(raw);
       for (const relation of RELATION_FIELDS) {
         const values = Array.isArray(parsed.frontmatter[relation]) ? parsed.frontmatter[relation] : [];
         for (const value of values) {

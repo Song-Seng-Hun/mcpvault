@@ -1,4 +1,4 @@
-import { extractWikiLinkOccurrences } from './backlinks.js';
+import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { RELATION_FIELDS } from './organization.js';
@@ -59,7 +59,7 @@ export class ReferenceService {
             }
             references.push(path);
         }
-        for (const link of extractWikiLinkOccurrences(String(content || ''))) {
+        for (const link of extractObsidianLinkOccurrences(String(content || ''))) {
             try {
                 const path = await this.resolveWikiLinkTarget(link.target, principal);
                 if (!this.access.canReferenceFrom(containerPath, path)) {

@@ -74,7 +74,8 @@ inactive material. This is not a visibility boundary. Keep `_sources/`,
 
 Use YAML `note_kind` and `lifecycle` to describe what a note is and what
 should happen next; use `moc`, `project`, and `review_at` only when useful.
-Use Obsidian `[[wikilinks]]` for navigation and `evidence_paths` for
+Use Obsidian `[[wikilinks]]` or relative Markdown links such as
+`[Guide](Resources/Guide.md#section)` for navigation and `evidence_paths` for
 provenance. The intended loop is Capture -> Organize -> Distill -> Express.
 Use `get_wiki_inbox` to find bounded unprocessed captures, read one, then use
 `clarify_wiki_note` with its revision and one GTD disposition (`knowledge`,
@@ -87,7 +88,12 @@ atomic note so source path and revision remain provenance. Use
 `get_wiki_review_queue` to find bounded due/disputed knowledge, and
 `get_wiki_moc_candidates` before creating a new MOC. MOCs should state
 `mocPurpose`, `mocScope`, `mocQuestions`, and optional `mocParent` and use
-ordinary `[[wikilinks]]`. These are advisory organization hints; source
+ordinary `[[wikilinks]]` or relative Markdown links. Optional
+`focus_horizon` (`ground`, `project`, `area`, `goal`, `vision`, `purpose`),
+`focus_parent`, and `focus_supports` connect GTD execution to higher outcomes;
+they are advisory navigation metadata, not access rules. For progressive
+reading, optional `summary_layer` (0-4) and bounded `summary_highlights` make
+compression explicit while the full body remains authoritative. These are advisory organization hints; source
 integrity, evidence, scope, and revision checks remain the hard gates.
 Zettelkasten-style atomic notes/MOCs suit durable knowledge, while GTD-style
 next actions suit Projects and structured tasks; do not force either format

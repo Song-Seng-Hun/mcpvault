@@ -112,15 +112,25 @@ test('questions, negative knowledge, locators, event review, MOC coverage, and B
       path: 'Knowledge/MOCs/Research.md', content: '# Research MOC\n\n[[Knowledge/Rejected approach]]\n', frontmatter: { note_kind: 'moc', lifecycle: 'evergreen' }, expectedRevision: 'missing', accessToken,
     } });
     expect(mocWrite.isError).toBeFalsy();
+    const childMocWrite = await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/MOCs/Child.md', content: '# Child MOC\n\n[[Knowledge/Rejected approach]]\n', frontmatter: { note_kind: 'moc', lifecycle: 'evergreen' }, expectedRevision: 'missing', accessToken,
+    } });
+    expect(childMocWrite.isError).toBeFalsy();
+    const parentMocWrite = await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/MOCs/Parent.md', content: '# Parent MOC\n\n[Child map](Knowledge/MOCs/Child.md)\n', frontmatter: { note_kind: 'moc', lifecycle: 'evergreen' }, expectedRevision: 'missing', accessToken,
+    } });
+    expect(parentMocWrite.isError).toBeFalsy();
     const graph = await callJson(client, 'get_wiki_graph_health', { limit: 10, maxChars: 5000, accessToken });
     expect(graph.value.mocCoverage).toMatchObject({ knowledgeTotal: 1, knowledgeLinkedFromMoc: 1, ratio: 1 });
+    expect(graph.value.mocCoverage.mocs).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/MOCs/Parent.md', indirectKnowledge: 1, nestedMocs: 1 })]));
 
     const bases = await callJson(client, 'get_wiki_bases_view', { noteKind: 'hypothesis', lifecycle: 'evergreen', limit: 10, accessToken });
     expect(bases.value).toMatchObject({ format: 'obsidian-bases/yaml', suggestedPath: 'Views/LLM Wiki.base', matchingNotes: 1, truncated: false });
     expect(bases.value.content).toContain('type: table');
     expect(bases.value.content).toContain('note.note_kind == "hypothesis"');
     const home = await callJson(client, 'get_wiki_home', { limit: 10, accessToken });
-    expect(home.value).toMatchObject({ suggestedHomePath: 'Home.md', suggestedIndexPath: 'JDex.md', mocs: [expect.objectContaining({ path: 'Knowledge/MOCs/Research.md' })] });
+    expect(home.value).toMatchObject({ suggestedHomePath: 'Home.md', suggestedIndexPath: 'JDex.md' });
+    expect(home.value.mocs).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/MOCs/Research.md' })]));
 
     const related = await callJson(client, 'read_note', { path: 'Knowledge/Related.md', accessToken });
     const changed = await client.callTool({ name: 'write_note', arguments: {
