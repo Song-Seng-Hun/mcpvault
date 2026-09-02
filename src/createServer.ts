@@ -46,6 +46,7 @@ import { isManagedCommunityPath, isModerationHidden, moderationStatus } from "./
 import { ReputationService } from "./reputation.js";
 import { REPUTATION_MUTATING_TOOLS, getReputationTools } from "./reputation-tools.js";
 import { SemanticSearchService, type SemanticSearchOutcome } from "./semantic-search.js";
+import { cleanupStaleDerivedTemps } from './derived-temp-cleanup.js';
 import { boundSearchResults, normalizeSearchMaxChars } from "./search-limits.js";
 import { EndpointRegistry } from "./endpoint-registry.js";
 import { resolve } from "path";
@@ -328,6 +329,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   } = options;
 
   const resolvedVaultPath = resolve(vaultPath);
+  void cleanupStaleDerivedTemps(resolvedVaultPath);
   const scopeAuth = new ScopeAuthService(resolvedVaultPath, moderatorAccounts === undefined ? {} : { moderatorAccounts });
   const scopeAccess = new ScopeAccessPolicy();
   const fileCatalog = new VaultFileCatalog(resolvedVaultPath, pathFilter);
@@ -391,6 +393,23 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const agentTasks = new AgentTaskService(fileSystem, references, scopeAuth);
   const communityFeatures = new CommunityFeaturesService(fileSystem, scopeAccess, scopeAuth, reputation, resolvedVaultPath, notifications, fileCatalog);
   communityFeaturesCache = communityFeatures;
+  // The lexical, metadata, graph, and semantic indexes subscribe to the
+  // catalog themselves. The remaining derived views are intentionally kept
+  // behind this one fan-out so edits made directly by Obsidian (or another
+  // process) cannot leave notifications, reputation, community discovery,
+  // or Wiki catalog/lint caches stale until a restart.
+  const readModelCatalogUnsubscribe = fileCatalog.subscribeBatch(changes => {
+    if (changes) {
+      reputationCache?.invalidateMany(changes);
+      notificationsCache?.invalidateMany(changes);
+      communityFeaturesCache?.invalidateMany(changes);
+    } else {
+      reputationCache?.invalidateMany();
+      notificationsCache?.invalidateMany();
+      communityFeaturesCache?.invalidateMany();
+    }
+    llmWikiCache?.invalidate();
+  });
   const obsidianSearch = new ObsidianSearchService(resolvedVaultPath, pathFilter, scopeAccess, vaultIo);
   const context = new ContextService(social, chat);
   const continuity = new ContinuityService(fileSystem);
@@ -2000,6 +2019,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
   const closeServer = server.close.bind(server);
   server.close = async () => {
+    readModelCatalogUnsubscribe();
     metadataIndex.close();
     searchService.close();
     semanticSearch.close();

@@ -155,6 +155,26 @@ test("search_notes bounds output and prioritizes Wiki notes", async () => {
   }
 });
 
+test("external Markdown edits invalidate the Wiki catalog without a restart", async () => {
+  const { server, client } = await connectClient();
+  try {
+    await mkdir(join(testVaultPath, "_wiki"), { recursive: true });
+    const before = await client.callTool({ name: "get_wiki_catalog", arguments: {} });
+    expect(JSON.parse((before.content as any)[0].text).schemaPresent).toBe(false);
+
+    await writeFile(join(testVaultPath, "_wiki", "SCHEMA.md"), "---\nllm_wiki_type: schema\nschema_version: 1\n---\n# Schema");
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    const after = await client.callTool({ name: "get_wiki_catalog", arguments: {} });
+    const catalog = JSON.parse((after.content as any)[0].text);
+    expect(catalog.schemaPresent).toBe(true);
+    expect(catalog.entries).toContainEqual({ path: "_wiki/SCHEMA.md", type: "schema" });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test("semantic search is optional and falls back to lexical results", async () => {
   const { server, client } = await connectClient();
   try {
