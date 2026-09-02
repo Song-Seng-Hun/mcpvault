@@ -103,11 +103,23 @@ it is derived from Markdown and is not a second index.
 
 Use `capture_wiki_note` when the first priority is not losing an observation:
 it creates a normal Inbox note with `note_kind: fleeting` and
-`lifecycle: inbox`, after which `triage_wiki_note` can classify it without
-rewriting the body. Use `review_wiki_note` after actually checking evidence;
-it refreshes the review baseline and records the outcome without requiring a
-full body resubmission. `get_wiki_review_dashboard` is a bounded Reflect pass
-over Inbox, active work, knowledge review, and graph health.
+`lifecycle: inbox`. Complete the GTD Clarify step with `clarify_wiki_note`,
+selecting one of `knowledge`, `reference`, `project`, `someday`, `discard`, or
+`delegate`; it records the decision and a suggested destination but never
+silently moves or deletes the note. A clarified item leaves the unprocessed
+Inbox view. Use `triage_wiki_note` for ordinary metadata edits and
+`review_wiki_note` after checking evidence to refresh the review baseline.
+Pass `nextLifecycle` when the review should become `evergreen`, `superseded`,
+or another explicit state; otherwise the response keeps the follow-up visible.
+`get_wiki_review_dashboard` is a bounded Reflect pass over Inbox, active work,
+knowledge review, and graph health.
+
+For source interpretation, use `distill_wiki_source` to create a literature or
+atomic note from one intact immutable source. The operation records the
+source's current path and revision as provenance and leaves the source
+unchanged. For MOCs, record `moc_purpose`, `moc_scope`, `moc_questions`, and
+optional `moc_parent` alongside ordinary `[[wikilinks]]`; use
+`get_wiki_moc_candidates` for bounded suggestions, not automatic map creation.
 
 For long or disputed knowledge notes, use claim-level provenance when useful:
 

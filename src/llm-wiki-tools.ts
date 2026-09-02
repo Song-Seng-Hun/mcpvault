@@ -5,7 +5,7 @@ const accessToken = { type: 'string', description: 'Token from login_scope. Omit
 const scopeUri = { type: 'string', description: 'Target scope root; defaults to scope://global/. Private scopes require an authorized accessToken.', default: 'scope://global/' } as const;
 
 export const LLM_WIKI_MUTATING_TOOLS = [
-  'initialize_llm_wiki', 'ingest_source', 'capture_wiki_note', 'publish_knowledge', 'publish_decision_record', 'triage_wiki_note', 'review_wiki_note', 'report_wiki_issue', 'resolve_wiki_issue',
+  'initialize_llm_wiki', 'ingest_source', 'capture_wiki_note', 'clarify_wiki_note', 'distill_wiki_source', 'publish_knowledge', 'publish_decision_record', 'triage_wiki_note', 'review_wiki_note', 'report_wiki_issue', 'resolve_wiki_issue',
 ] as const;
 
 export function getLlmWikiTools(): Tool[] {
@@ -34,6 +34,21 @@ export function getLlmWikiTools(): Tool[] {
       inputSchema: { type: 'object', properties: {
         path: { type: 'string', description: 'Optional path inside Inbox/. Omit to generate a unique Inbox path.' }, title: { type: 'string', maxLength: 300 }, content: { type: 'string' }, references: { type: 'array', items: { type: 'string' }, maxItems: 20 }, capturedBy: { type: 'string' }, expectedRevision: { type: 'string', description: "Optional; use 'missing' for a new capture" }, accessToken, prettyPrint,
       }, required: ['content'] },
+    },
+    {
+      name: 'clarify_wiki_note',
+      description: 'Complete the GTD Clarify step for one Inbox capture. Records a durable disposition and optional PARA/task metadata without deleting or silently moving the note; the response gives a safe suggested destination.',
+      inputSchema: { type: 'object', properties: {
+        path: { type: 'string' }, disposition: { type: 'string', enum: ['knowledge', 'reference', 'project', 'someday', 'discard', 'delegate'] }, clarifiedBy: { type: 'string' }, clarifyNote: { type: 'string', maxLength: 1000 }, targetPath: { type: 'string', description: 'Optional vault-relative destination suggestion; the note is not moved automatically' },
+        noteKind: { type: 'string', enum: ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'] }, lifecycle: { type: 'string', enum: ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'] }, taskStatus: { type: 'string', enum: ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'] }, project: { type: 'string' }, nextAction: { type: 'string', maxLength: 500 }, waitingFor: { type: 'string', maxLength: 500 }, desiredOutcome: { type: 'string', maxLength: 1000 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
+      }, required: ['path', 'disposition', 'expectedRevision'] },
+    },
+    {
+      name: 'distill_wiki_source',
+      description: 'Create an attributed literature or atomic Wiki note from one immutable source snapshot. This makes source interpretation explicit while preserving the source path and revision as provenance.',
+      inputSchema: { type: 'object', properties: {
+        sourcePath: { type: 'string' }, path: { type: 'string' }, title: { type: 'string', maxLength: 300 }, content: { type: 'string' }, author: { type: 'string' }, noteKind: { type: 'string', enum: ['literature', 'atomic', 'knowledge'], default: 'literature' }, references: { type: 'array', items: { type: 'string' }, maxItems: 20 }, summary: { type: 'string', maxLength: 2000 }, keyPoints: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 }, openQuestions: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
+      }, required: ['sourcePath', 'path', 'title', 'content', 'expectedRevision'] },
     },
     {
       name: 'publish_decision_record',
@@ -78,6 +93,7 @@ export function getLlmWikiTools(): Tool[] {
         evidence: { type: 'array', maxItems: 30, description: 'Optional evidence locators; add heading/blockId and, when precise citation matters, 1-based startLine/endLine plus quoteHash (SHA-256 of the selected source lines)', items: { type: 'object', properties: { path: { type: 'string' }, heading: { type: 'string', maxLength: 300 }, blockId: { type: 'string', maxLength: 100 }, revision: { type: 'string', maxLength: 160 }, startLine: { type: 'integer', minimum: 1 }, endLine: { type: 'integer', minimum: 1 }, quoteHash: { type: 'string', pattern: '^[a-fA-F0-9]{64}$' } }, required: ['path'] } },
         stableId: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', maxLength: 80, description: 'Optional stable identity for durable notes; not a security boundary' },
         relations: { type: 'object', description: 'Typed Obsidian link arrays: supports, contradicts, supersedes, derived_from, depends_on, implements, blocked_by, related' },
+        mocPurpose: { type: 'string', maxLength: 1000, description: 'For MOCs: the navigation purpose' }, mocScope: { type: 'string', maxLength: 500, description: 'For MOCs: the knowledge boundary or topic scope' }, mocQuestions: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'For MOCs: representative questions the map should answer' }, mocParent: { type: 'string', maxLength: 500, description: 'Optional parent MOC wikilink' },
         claims: { type: 'array', maxItems: 100, description: 'Optional claim-level provenance. Every claim needs text and at least one intact immutable evidence path.', items: { type: 'object', properties: {
           id: { type: 'string' }, text: { type: 'string' }, evidencePaths: { type: 'array', items: { type: 'string' }, maxItems: 20 }, evidence: { type: 'array', maxItems: 30, items: { type: 'object', properties: { path: { type: 'string' }, heading: { type: 'string', maxLength: 300 }, blockId: { type: 'string', maxLength: 100 }, revision: { type: 'string', maxLength: 160 }, startLine: { type: 'integer', minimum: 1 }, endLine: { type: 'integer', minimum: 1 }, quoteHash: { type: 'string', pattern: '^[a-fA-F0-9]{64}$' } }, required: ['path'] } },
           confidence: { type: 'string', enum: ['low', 'medium', 'high'] }, status: { type: 'string', enum: ['supported', 'disputed', 'unverified', 'superseded'] },
@@ -105,7 +121,7 @@ export function getLlmWikiTools(): Tool[] {
       name: 'review_wiki_note',
       description: 'Record completion of an evidence review without resubmitting the Markdown body. Refreshes the body/link review baseline, records the reviewer and outcome, and can schedule the next review.',
       inputSchema: { type: 'object', properties: {
-        path: { type: 'string' }, reviewOutcome: { type: 'string', enum: ['confirmed', 'revised', 'disputed', 'superseded', 'rescheduled'] }, reviewedBy: { type: 'string' }, reviewAt: { type: 'string', description: 'Optional next review ISO date/time' }, reviewNote: { type: 'string', maxLength: 1000 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
+        path: { type: 'string' }, reviewOutcome: { type: 'string', enum: ['confirmed', 'revised', 'disputed', 'superseded', 'rescheduled'] }, reviewedBy: { type: 'string' }, reviewAt: { type: 'string', description: 'Optional next review ISO date/time' }, nextLifecycle: { type: 'string', enum: ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'], description: 'Optional explicit lifecycle after review; omit to keep the current lifecycle and receive follow-up guidance' }, reviewNote: { type: 'string', maxLength: 1000 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
       }, required: ['path', 'reviewOutcome', 'expectedRevision'] },
     },
     {
@@ -138,7 +154,8 @@ export function getLlmWikiTools(): Tool[] {
         polarity: { type: 'string', enum: ['positive', 'negative'] },
         negativeType: { type: 'string', enum: ['failure', 'rejected', 'counterexample', 'non_reproducible', 'superseded'] },
         attempted: { type: 'string', maxLength: 1200 }, observed: { type: 'string', maxLength: 1200 }, failureCondition: { type: 'string', maxLength: 1200 }, affectedScope: { type: 'string', maxLength: 500 }, reproduction: { type: 'string', maxLength: 1200 }, whyRejected: { type: 'string', maxLength: 1200 }, reusableLesson: { type: 'string', maxLength: 1200 }, replacementPath: { type: 'string', maxLength: 500 },
-        relations: { type: 'object', description: 'Typed Obsidian link arrays' },
+        relations: { type: 'object', description: 'Typed Obsidian link arrays' }, disposition: { type: 'string', enum: ['knowledge', 'reference', 'project', 'someday', 'discard', 'delegate'] }, clarifiedBy: { type: 'string' }, clarifiedAt: { type: 'string' }, clarifyNote: { type: 'string', maxLength: 1000 }, targetPath: { type: 'string' },
+        mocPurpose: { type: 'string', maxLength: 1000 }, mocScope: { type: 'string', maxLength: 500 }, mocQuestions: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12 }, mocParent: { type: 'string', maxLength: 500 },
         waitingFor: { type: 'string', description: 'Optional person/event/resource this project is waiting for' },
         expectedRevision: { type: 'string' }, accessToken, prettyPrint,
       }, required: ['path', 'expectedRevision'] },
@@ -164,6 +181,11 @@ export function getLlmWikiTools(): Tool[] {
       inputSchema: { type: 'object', properties: {
         limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint,
       } },
+    },
+    {
+      name: 'get_wiki_moc_candidates',
+      description: 'Suggest bounded MOC structure notes for knowledge that is not currently covered by a MOC. Suggestions include a purpose and questions but never create or rewrite notes.',
+      inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 30, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint } },
     },
     {
       name: 'get_wiki_organization_health',

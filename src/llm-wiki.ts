@@ -7,7 +7,7 @@ import { normalizeScopeId } from './scopes.js';
 import type { ReferenceService } from './references.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
-import { knowledgeOrganization, normalizeLifecycle, normalizeNoteKind, normalizeReviewAt, normalizeReviewOutcome, normalizeTaskStatus, organizationLintIssues, RELATION_FIELDS } from './organization.js';
+import { knowledgeOrganization, normalizeClarifyDisposition, normalizeLifecycle, normalizeNoteKind, normalizeReviewAt, normalizeReviewOutcome, normalizeTaskStatus, organizationLintIssues, RELATION_FIELDS } from './organization.js';
 import { extractWikiLinkOccurrences, resolveWikiLinkTargets } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
@@ -253,7 +253,22 @@ the existing evidence and integrity invariants.
 
 Use \`aliases\` for stable Obsidian navigation, optional \`stable_id\` for a durable note identity, and compact \`summary\`, \`key_points\`, and \`open_questions\` properties for progressive reads; never replace the full Markdown body with a summary. When any progressive field is present, store \`summary_of_content_sha256\` for the exact Markdown body; a body edit makes the projection stale until it is regenerated. Use \`task_status\` for the operational state of project/task notes (\`open\`, \`next_action\`, \`waiting\`, \`blocked\`, \`someday\`, \`completed\`, or \`cancelled\`); keep it separate from the knowledge \`lifecycle\`. Use \`desired_outcome\`, \`next_action\`, \`task_context\`, \`due_at\`, and \`defer_until\` for GTD-style execution details. Questions, hypotheses, and assumptions should carry \`epistemic_status\` for their kind-specific state. Use \`knowledge_polarity: negative\` with \`negative_type\` plus attempted/observed/failure condition/reproduction/reusable lesson metadata to preserve failed paths instead of deleting them. Typed link arrays such as \`supports\`, \`contradicts\`, \`supersedes\`, \`derived_from\`, \`depends_on\`, \`implements\`, \`blocked_by\`, and \`related\` explain the relationship while ordinary \`[[wikilinks]]\` remain the navigational source. Use \`next_actions\` and \`waiting_for\` on project/task notes only. Evidence can include \`heading\`, \`blockId\`, source \`revision\`, 1-based line ranges, and a \`quoteHash\`; stale locators are reported by lint. Use \`review_policy\` (\`manual\`, \`periodic\`, \`on_source_change\`, \`on_link_change\`, or \`on_any_edit\`) to declare when a note should re-enter review, and record the review outcome after checking evidence; this is a derived policy, not a hidden scheduler. Call \`wiki.home\` for a bounded Home/JDex launchpad and \`wiki.organization_health\` to review property, MOC coverage, atomicity, summary freshness, typed evidence, and link problems.
 
-Use \`capture_wiki_note\` to create a fleeting Inbox note first, then \`triage_wiki_note\` to classify it. Use \`review_wiki_note\` after checking evidence to refresh the review baseline without resubmitting the body. Call \`wiki.review_dashboard\` for one bounded Reflect pass over Inbox, active work, due knowledge, and graph health.
+Use \`capture_wiki_note\` to create a fleeting Inbox note first. Complete the
+GTD Clarify step with \`clarify_wiki_note\`, choosing one disposition:
+knowledge, reference, project, someday, discard, or delegate. It records the
+decision and suggested destination without silently moving or deleting the
+note. Use \`triage_wiki_note\` for ordinary metadata edits. Use
+\`distill_wiki_source\` to create a literature or atomic note from one intact
+immutable source while preserving its path and revision as provenance. Use
+\`review_wiki_note\` after checking evidence and pass \`nextLifecycle\` when
+the note should leave review. Call \`wiki.review_dashboard\` for one bounded
+Reflect pass over Inbox, active work, due knowledge, and graph health.
+
+MOCs should explain their purpose and boundary with \`moc_purpose\`,
+\`moc_scope\`, and \`moc_questions\`, optionally link to a parent with
+\`moc_parent\`, and use ordinary Obsidian [[wikilinks]] for coverage. Call
+\`get_wiki_moc_candidates\` for bounded suggestions; it never creates a map
+automatically.
 
 ## Invariants
 
@@ -465,6 +480,53 @@ export class LlmWikiService {
     return { success: true, created: true, sourceId, path: this.access.toPublicPath(path), contentHash, revision: created.revision };
   }
 
+  /** Turn one immutable source snapshot into an attributed reading note. This
+   * is a convenience boundary, not a second persistence model: the resulting
+   * note remains ordinary Markdown and still points at the source revision. */
+  async distillSource(params: {
+    principal?: ScopePrincipal;
+    sourcePath: string;
+    path: string;
+    title: string;
+    content: string;
+    author: string;
+    noteKind?: string;
+    references?: unknown;
+    summary?: string;
+    keyPoints?: unknown;
+    openQuestions?: unknown;
+    expectedRevision: string;
+  }) {
+    const sourcePath = normalizePath(params.sourcePath);
+    if (!this.access.canAccessPhysicalPath(sourcePath, params.principal)) throw new Error(`Access denied: ${this.access.toPublicPath(sourcePath)}`);
+    const source = await this.fileSystem.readNote(sourcePath);
+    if (source.frontmatter.llm_wiki_type !== 'source' || source.frontmatter.immutable !== true) {
+      throw new Error('sourcePath must point to an immutable LLM Wiki source snapshot');
+    }
+    const noteKind = normalizeNoteKind(params.noteKind || 'literature') || 'literature';
+    if (!['literature', 'atomic', 'knowledge'].includes(noteKind)) throw new Error('distill_wiki_source noteKind must be literature, atomic, or knowledge');
+    const title = boundedText(params.title, 300);
+    const body = String(params.content ?? '').trim();
+    if (!title || !body) throw new Error('title and content are required');
+    const content = /^\s*#\s+/m.test(body) ? `${body}\n` : `# ${title}\n\n${body}\n`;
+    const published = await this.publishKnowledge({
+      ...(params.principal && { principal: params.principal }),
+      path: params.path,
+      content,
+      evidencePaths: [sourcePath],
+      evidence: [{ path: sourcePath, revision: source.revision }],
+      references: params.references,
+      author: params.author,
+      noteKind,
+      lifecycle: noteKind === 'literature' ? 'active' : 'review',
+      ...(params.summary !== undefined && { summary: params.summary }),
+      ...(params.keyPoints !== undefined && { keyPoints: params.keyPoints }),
+      ...(params.openQuestions !== undefined && { openQuestions: params.openQuestions }),
+      expectedRevision: params.expectedRevision,
+    });
+    return { ...published, noteKind, distilledFrom: { path: this.access.toPublicPath(sourcePath), revision: source.revision }, nextAction: noteKind === 'literature' ? 'Read and interpret this literature note, then publish an atomic note with the source retained as evidence and this note linked as context.' : 'Verify the cited source and link this note from an appropriate MOC.' };
+  }
+
   async publishKnowledge(params: {
     principal?: ScopePrincipal;
     path: string;
@@ -509,6 +571,10 @@ export class LlmWikiService {
     whyRejected?: string;
     reusableLesson?: string;
     replacementPath?: string;
+    mocPurpose?: string;
+    mocScope?: string;
+    mocQuestions?: unknown;
+    mocParent?: string;
     evidence?: unknown;
     claims?: WikiClaimInput[];
     expectedRevision: string;
@@ -626,6 +692,10 @@ export class LlmWikiService {
           ...(params.whyRejected !== undefined && { whyRejected: params.whyRejected }),
           ...(params.reusableLesson !== undefined && { reusableLesson: params.reusableLesson }),
           ...(params.replacementPath !== undefined && { replacementPath: params.replacementPath }),
+          ...(params.mocPurpose !== undefined && { mocPurpose: params.mocPurpose }),
+          ...(params.mocScope !== undefined && { mocScope: params.mocScope }),
+          ...(params.mocQuestions !== undefined && { mocQuestions: params.mocQuestions }),
+          ...(params.mocParent !== undefined && { mocParent: params.mocParent }),
           contentDigest: hash(content),
           status,
         }),
@@ -710,6 +780,11 @@ export class LlmWikiService {
         lifecycle,
         ...(note.frontmatter.project && { project: note.frontmatter.project }),
         ...(note.frontmatter.moc && { moc: note.frontmatter.moc }),
+        ...(note.frontmatter.moc_purpose && { mocPurpose: note.frontmatter.moc_purpose }),
+        ...(note.frontmatter.moc_scope && { mocScope: note.frontmatter.moc_scope }),
+        ...(Array.isArray(note.frontmatter.moc_questions) && { mocQuestions: note.frontmatter.moc_questions.slice(0, 12) }),
+        ...(note.frontmatter.moc_parent && { mocParent: note.frontmatter.moc_parent }),
+        ...(note.frontmatter.triage_disposition && { disposition: note.frontmatter.triage_disposition }),
         ...(note.frontmatter.review_at && { reviewAt: note.frontmatter.review_at }),
         updatedAt: note.frontmatter.updated_at || note.frontmatter.captured_at,
       };
@@ -811,6 +886,7 @@ export class LlmWikiService {
       const lifecycle = typeof note.frontmatter.lifecycle === 'string' ? note.frontmatter.lifecycle.toLowerCase() : undefined;
       const isInboxPath = /(^|\/)inbox(?:\/|$)/.test(normalizedPath);
       if ((!isInboxPath || lifecycle) && lifecycle !== 'inbox') continue;
+      if (typeof note.frontmatter.triage_disposition === 'string' && note.frontmatter.triage_disposition.trim()) continue;
       total += 1;
       if (items.length >= boundedLimit) continue;
       const item = {
@@ -871,6 +947,62 @@ export class LlmWikiService {
     return { success: true, path: this.access.toPublicPath(path), title, noteKind: 'fleeting', lifecycle: 'inbox', revision: created.revision, nextAction: 'Read the capture and classify it with triage_wiki_note.' };
   }
 
+  /** Apply the GTD clarification decision to an Inbox capture without
+   * deleting it or silently moving it. The disposition is durable metadata;
+   * the caller can move the note later with the normal revision-checked edit
+   * flow, preserving links and human review. */
+  async clarify(params: {
+    principal?: ScopePrincipal;
+    path: string;
+    disposition: unknown;
+    clarifiedBy: string;
+    clarifyNote?: string;
+    targetPath?: string;
+    noteKind?: string;
+    lifecycle?: string;
+    taskStatus?: unknown;
+    project?: string;
+    nextAction?: string;
+    waitingFor?: string;
+    desiredOutcome?: string;
+    expectedRevision: string;
+  }) {
+    const disposition = normalizeClarifyDisposition(params.disposition);
+    if (!disposition) throw new Error('disposition is required');
+    const path = normalizePath(params.path);
+    if (!/(^|\/)inbox(?:\/|$)/i.test(path)) throw new Error('clarify_wiki_note requires an Inbox note');
+    const targetPath = params.targetPath === undefined ? undefined : normalizePath(params.targetPath);
+    if (targetPath && (/(?:^|\/|\\)\.\.(?:\/|\\|$)/.test(targetPath) || /^(?:[A-Za-z]:[\\/]|[\\/]{1,2})/.test(targetPath))) {
+      throw new Error('targetPath must be a vault-relative path without traversal');
+    }
+    const defaults: Record<string, Record<string, unknown>> = {
+      knowledge: { noteKind: 'atomic', recommendedPath: 'Knowledge/', recommendedLifecycle: 'review' },
+      reference: { noteKind: 'literature', recommendedPath: 'Resources/', recommendedLifecycle: 'active' },
+      project: { noteKind: 'project', recommendedPath: 'Projects/', recommendedLifecycle: 'active' },
+      someday: { noteKind: 'project', taskStatus: 'someday', recommendedPath: 'Projects/Someday/', recommendedLifecycle: 'active' },
+      discard: { recommendedPath: 'Archives/', recommendedLifecycle: 'archived' },
+      delegate: { noteKind: 'task', taskStatus: 'waiting', recommendedPath: 'Projects/Delegated/', recommendedLifecycle: 'active' },
+    };
+    const preset = defaults[disposition]!;
+    const result = await this.triage({
+      ...(params.principal && { principal: params.principal }),
+      path,
+      ...((params.noteKind ?? preset.noteKind) !== undefined && { noteKind: params.noteKind ?? String(preset.noteKind) }),
+      ...((params.lifecycle ?? preset.lifecycle) !== undefined && { lifecycle: params.lifecycle ?? String(preset.lifecycle) }),
+      ...((params.taskStatus ?? preset.taskStatus) !== undefined && { taskStatus: params.taskStatus ?? preset.taskStatus }),
+      ...(params.project !== undefined && { project: params.project }),
+      ...(params.nextAction !== undefined && { nextAction: params.nextAction }),
+      ...(params.waitingFor !== undefined && { waitingFor: params.waitingFor }),
+      ...(params.desiredOutcome !== undefined && { desiredOutcome: params.desiredOutcome }),
+      clarifyDisposition: disposition,
+      clarifiedBy: params.clarifiedBy,
+      ...(params.clarifyNote !== undefined && { clarifyNote: params.clarifyNote }),
+      ...(targetPath !== undefined && { triageTarget: targetPath }),
+      expectedRevision: params.expectedRevision,
+    });
+    return { ...result, disposition, ...(targetPath && { targetPath }), recommendedPath: targetPath || preset.recommendedPath, recommendedLifecycle: preset.recommendedLifecycle, nextAction: params.nextAction || (disposition === 'discard' ? 'Archive or remove this capture only after confirming it is no longer needed.' : 'Move the clarified note with the normal revision-checked note workflow when convenient.') };
+  }
+
   async review(params: {
     principal?: ScopePrincipal;
     path: string;
@@ -878,6 +1010,7 @@ export class LlmWikiService {
     reviewedBy: string;
     reviewAt?: string;
     reviewNote?: string;
+    nextLifecycle?: string;
     expectedRevision: string;
   }) {
     if (!params.expectedRevision) throw new Error('expectedRevision is required; use the current note revision');
@@ -889,6 +1022,7 @@ export class LlmWikiService {
     if (!outcome) throw new Error('reviewOutcome is required');
     const reviewAt = params.reviewAt === undefined ? undefined : normalizeReviewAt(params.reviewAt);
     const reviewNote = params.reviewNote === undefined ? undefined : boundedText(params.reviewNote, 1000);
+    const nextLifecycle = params.nextLifecycle === undefined ? undefined : normalizeLifecycle(params.nextLifecycle);
     const reviewBasisLinks = await this.collectReviewBasisLinks(note.content, Array.isArray(note.frontmatter.references) ? note.frontmatter.references : [], params.principal);
     const timestamp = now();
     await this.fileSystem.updateFrontmatter({
@@ -900,6 +1034,7 @@ export class LlmWikiService {
         last_reviewed_by: boundedText(params.reviewedBy, 200),
         last_reviewed_at: timestamp,
         ...(reviewAt && { review_at: reviewAt }),
+        ...(nextLifecycle && { lifecycle: nextLifecycle }),
         ...(reviewNote && { review_note: reviewNote }),
         updated_by: params.reviewedBy,
         updated_at: timestamp,
@@ -908,7 +1043,8 @@ export class LlmWikiService {
       expectedRevision: params.expectedRevision,
     });
     const updated = await this.fileSystem.readNote(params.path);
-    return { success: true, path: this.access.toPublicPath(params.path), revision: updated.revision, reviewOutcome: outcome, reviewedBy: updated.frontmatter.last_reviewed_by, reviewedAt: updated.frontmatter.last_reviewed_at, ...(reviewAt && { reviewAt }) };
+    const followUpRequired = String(updated.frontmatter.lifecycle || '').toLowerCase() === 'review' && !nextLifecycle;
+    return { success: true, path: this.access.toPublicPath(params.path), revision: updated.revision, reviewOutcome: outcome, reviewedBy: updated.frontmatter.last_reviewed_by, reviewedAt: updated.frontmatter.last_reviewed_at, ...(reviewAt && { reviewAt }), ...(nextLifecycle && { nextLifecycle }), ...(followUpRequired && { followUpRequired, followUp: 'Choose nextLifecycle or revise the note; a confirmed review does not silently remove a note from the review queue.' }) };
   }
 
   async reviewDashboard(principal?: ScopePrincipal, limit = 10, maxChars = 9000) {
@@ -992,6 +1128,15 @@ export class LlmWikiService {
     whyRejected?: string;
     reusableLesson?: string;
     replacementPath?: string;
+    clarifyDisposition?: unknown;
+    clarifiedBy?: string;
+    clarifiedAt?: string;
+    clarifyNote?: string;
+    triageTarget?: string;
+    mocPurpose?: string;
+    mocScope?: string;
+    mocQuestions?: unknown;
+    mocParent?: string;
     expectedRevision: string;
   }) {
     if (!params.expectedRevision) throw new Error("expectedRevision is required; use the revision from read_note");
@@ -1004,7 +1149,7 @@ export class LlmWikiService {
     if (note.frontmatter.llm_wiki_type && note.frontmatter.llm_wiki_type !== 'knowledge') {
       throw new Error(`triage_wiki_note cannot classify managed LLM Wiki type '${note.frontmatter.llm_wiki_type}'`);
     }
-    const hasOrganizationInput = [params.noteKind, params.lifecycle, params.moc, params.project, params.reviewAt, params.nextAction, params.waitingFor, params.desiredOutcome, params.taskContext, params.dueAt, params.deferUntil, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.nextActions, params.stableId, params.relations, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath]
+    const hasOrganizationInput = [params.noteKind, params.lifecycle, params.moc, params.project, params.reviewAt, params.nextAction, params.waitingFor, params.desiredOutcome, params.taskContext, params.dueAt, params.deferUntil, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.nextActions, params.stableId, params.relations, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent]
       .some(value => value !== undefined);
     if (!hasOrganizationInput) throw new Error('At least one organization field is required');
     const patch: Record<string, unknown> = {};
@@ -1016,6 +1161,11 @@ export class LlmWikiService {
     if (params.nextAction !== undefined) patch.next_action = String(params.nextAction).trim().slice(0, 500);
     if (params.waitingFor !== undefined) patch.waiting_for = String(params.waitingFor).trim().slice(0, 500);
     if (params.taskStatus !== undefined) patch.task_status = normalizeTaskStatus(params.taskStatus);
+    if (params.clarifyDisposition !== undefined) patch.triage_disposition = normalizeClarifyDisposition(params.clarifyDisposition);
+    if (params.clarifiedBy !== undefined) patch.clarified_by = boundedText(params.clarifiedBy, 200);
+    if (params.clarifiedAt !== undefined) patch.clarified_at = normalizeReviewAt(params.clarifiedAt);
+    if (params.clarifyNote !== undefined) patch.clarify_note = boundedText(params.clarifyNote, 1000);
+    if (params.triageTarget !== undefined) patch.triage_target = boundedText(params.triageTarget, 500);
     const organization = knowledgeOrganization({
       existing: note.frontmatter,
       ...(params.noteKind !== undefined && { noteKind: params.noteKind }),
@@ -1052,6 +1202,15 @@ export class LlmWikiService {
       ...(params.whyRejected !== undefined && { whyRejected: params.whyRejected }),
       ...(params.reusableLesson !== undefined && { reusableLesson: params.reusableLesson }),
       ...(params.replacementPath !== undefined && { replacementPath: params.replacementPath }),
+      ...(params.clarifyDisposition !== undefined && { clarifyDisposition: params.clarifyDisposition }),
+      ...(params.clarifiedBy !== undefined && { clarifiedBy: params.clarifiedBy }),
+      ...(params.clarifiedAt !== undefined && { clarifiedAt: params.clarifiedAt }),
+      ...(params.clarifyNote !== undefined && { clarifyNote: params.clarifyNote }),
+      ...(params.triageTarget !== undefined && { triageTarget: params.triageTarget }),
+      ...(params.mocPurpose !== undefined && { mocPurpose: params.mocPurpose }),
+      ...(params.mocScope !== undefined && { mocScope: params.mocScope }),
+      ...(params.mocQuestions !== undefined && { mocQuestions: params.mocQuestions }),
+      ...(params.mocParent !== undefined && { mocParent: params.mocParent }),
       contentDigest: hash(note.content),
       status: String(note.frontmatter.knowledge_status || note.frontmatter.status || 'draft'),
     });
@@ -1066,6 +1225,10 @@ export class LlmWikiService {
         noteKind: updated.frontmatter.note_kind,
         lifecycle: updated.frontmatter.lifecycle,
         ...(updated.frontmatter.moc && { moc: updated.frontmatter.moc }),
+        ...(updated.frontmatter.moc_purpose && { mocPurpose: updated.frontmatter.moc_purpose }),
+        ...(updated.frontmatter.moc_scope && { mocScope: updated.frontmatter.moc_scope }),
+        ...(updated.frontmatter.moc_questions && { mocQuestions: updated.frontmatter.moc_questions }),
+        ...(updated.frontmatter.moc_parent && { mocParent: updated.frontmatter.moc_parent }),
         ...(updated.frontmatter.project && { project: updated.frontmatter.project }),
         ...(updated.frontmatter.review_at && { reviewAt: updated.frontmatter.review_at }),
         ...(updated.frontmatter.next_action && { nextAction: updated.frontmatter.next_action }),
@@ -1097,6 +1260,11 @@ export class LlmWikiService {
         ...(updated.frontmatter.negative_why_rejected && { whyRejected: updated.frontmatter.negative_why_rejected }),
         ...(updated.frontmatter.negative_reusable_lesson && { reusableLesson: updated.frontmatter.negative_reusable_lesson }),
         ...(updated.frontmatter.negative_replacement_path && { replacementPath: updated.frontmatter.negative_replacement_path }),
+        ...(updated.frontmatter.triage_disposition && { disposition: updated.frontmatter.triage_disposition }),
+        ...(updated.frontmatter.clarified_by && { clarifiedBy: updated.frontmatter.clarified_by }),
+        ...(updated.frontmatter.clarified_at && { clarifiedAt: updated.frontmatter.clarified_at }),
+        ...(updated.frontmatter.clarify_note && { clarifyNote: updated.frontmatter.clarify_note }),
+        ...(updated.frontmatter.triage_target && { targetPath: updated.frontmatter.triage_target }),
         relations: Object.fromEntries(RELATION_FIELDS
           .filter(field => Array.isArray(updated.frontmatter[field]) && updated.frontmatter[field].length > 0)
           .map(field => [field, updated.frontmatter[field]])),
@@ -1186,6 +1354,15 @@ export class LlmWikiService {
       ...(typeof note.frontmatter.last_reviewed_by === 'string' && { reviewedBy: note.frontmatter.last_reviewed_by }),
       ...(typeof note.frontmatter.last_reviewed_at === 'string' && { reviewedAt: note.frontmatter.last_reviewed_at }),
       ...(typeof note.frontmatter.review_note === 'string' && { reviewNote: note.frontmatter.review_note }),
+      ...(typeof note.frontmatter.triage_disposition === 'string' && { disposition: note.frontmatter.triage_disposition }),
+      ...(typeof note.frontmatter.clarified_by === 'string' && { clarifiedBy: note.frontmatter.clarified_by }),
+      ...(typeof note.frontmatter.clarified_at === 'string' && { clarifiedAt: note.frontmatter.clarified_at }),
+      ...(typeof note.frontmatter.clarify_note === 'string' && { clarifyNote: note.frontmatter.clarify_note }),
+      ...(typeof note.frontmatter.triage_target === 'string' && { targetPath: note.frontmatter.triage_target }),
+      ...(typeof note.frontmatter.moc_purpose === 'string' && { mocPurpose: note.frontmatter.moc_purpose }),
+      ...(typeof note.frontmatter.moc_scope === 'string' && { mocScope: note.frontmatter.moc_scope }),
+      ...(Array.isArray(note.frontmatter.moc_questions) && { mocQuestions: note.frontmatter.moc_questions.slice(0, 12) }),
+      ...(typeof note.frontmatter.moc_parent === 'string' && { mocParent: note.frontmatter.moc_parent }),
       ...(typeof note.frontmatter.epistemic_status === 'string' && { epistemicStatus: note.frontmatter.epistemic_status }),
       ...(typeof note.frontmatter.knowledge_polarity === 'string' && { polarity: note.frontmatter.knowledge_polarity }),
       ...(typeof note.frontmatter.negative_type === 'string' && { negativeType: note.frontmatter.negative_type }),
@@ -1459,6 +1636,40 @@ export class LlmWikiService {
       : { truncated: true, note: `Graph health report exceeded ${boundedChars} characters; inspect one category at a time.` };
   }
 
+  /** Suggest structure notes for knowledge that currently has no MOC path.
+   * Suggestions are deliberately derived and bounded; this method never
+   * creates a MOC or rewrites a note. */
+  async mocCandidates(principal?: ScopePrincipal, limit = 10, maxChars = 6000) {
+    const boundedLimit = Math.min(Math.max(Number(limit) || 10, 1), 30);
+    const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 16000);
+    const graph = await this.graphHealth(principal, Math.min(50, Math.max(boundedLimit * 3, 10)), Math.min(boundedChars, 12000));
+    if (!('mocCoverage' in graph)) return { candidates: [], total: 0, note: graph.note, truncated: true };
+    const uncovered = Array.isArray(graph.mocCoverage.uncoveredKnowledge?.items) ? graph.mocCoverage.uncoveredKnowledge.items as Array<Record<string, unknown>> : [];
+    const paths = new Set(uncovered.map(item => typeof item.path === 'string' ? normalizePath(item.path).toLowerCase() : '').filter(Boolean));
+    const groups = new Map<string, { title: string; basis: string; paths: string[] }>();
+    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+    for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+      if (!paths.has(normalizePath(note.path).toLowerCase())) continue;
+      const project = typeof note.frontmatter.project === 'string' ? note.frontmatter.project.trim() : '';
+      const folder = normalizePath(note.path).split('/')[0] || 'Knowledge';
+      const basis = project || folder;
+      const title = project.replace(/^\[\[|\]\]$/g, '').split('|').at(0)?.trim() || folder;
+      const group = groups.get(basis) || { title: `MOC: ${title}`, basis, paths: [] };
+      if (group.paths.length < 8) group.paths.push(this.access.toPublicPath(note.path));
+      groups.set(basis, group);
+    }
+    const candidates = [...groups.values()]
+      .sort((left, right) => right.paths.length - left.paths.length || left.basis.localeCompare(right.basis))
+      .slice(0, boundedLimit)
+      .map(group => ({ suggestedTitle: group.title, suggestedPurpose: `Orient an agent through the related notes grouped by ${group.basis}.`, suggestedQuestions: [`What is the durable idea shared by these notes?`, `Which note should be the next link or source of truth?`], notePaths: group.paths, reason: 'uncovered_knowledge' }));
+    const selected: Array<Record<string, unknown>> = [];
+    for (const item of candidates) {
+      if (JSON.stringify([...selected, item]).length + 2 > boundedChars) break;
+      selected.push(item);
+    }
+    return { candidates: selected, total: groups.size, uncoveredKnowledgeTotal: Number(graph.mocCoverage.uncoveredKnowledge?.total || 0), truncated: groups.size > selected.length || selected.length < candidates.length };
+  }
+
   /**
    * One-pass organization quality projection. It reuses lint's authoritative
    * scan instead of running separate folder/property scans, and never mutates
@@ -1475,6 +1686,7 @@ export class LlmWikiService {
       'inbox_lifecycle_mismatch', 'invalid_aliases', 'duplicate_aliases',
       'invalid_key_points', 'invalid_open_questions', 'invalid_next_actions',
       'invalid_summary', 'invalid_stable_id', 'summary_fingerprint_missing', 'invalid_summary_fingerprint', 'stale_summary', 'invalid_task_status',
+      'invalid_triage_disposition', 'invalid_clarified_by', 'invalid_clarify_note', 'invalid_triage_target', 'invalid_clarified_at', 'invalid_moc_purpose', 'invalid_moc_scope', 'invalid_moc_questions', 'invalid_moc_parent', 'moc_purpose_missing', 'moc_questions_missing',
       'duplicate_alias_across_notes', 'duplicate_stable_id', 'invalid_review_policy', 'invalid_review_outcome', 'invalid_due_at', 'invalid_defer_until', 'invalid_last_reviewed_at', 'invalid_epistemic_status', 'epistemic_status_wrong_kind', 'invalid_knowledge_polarity', 'invalid_negative_type', 'negative_lesson_missing', 'negative_reproduction_missing',
       'negative_type_without_negative_polarity', 'negative_polarity_without_type', 'atomic_note_may_be_too_broad',
       'invalid_evidence_locator', 'evidence_path_mismatch', 'stale_evidence_revision', 'invalid_claim_evidence_locator', 'stale_claim_evidence_revision', 'epistemic_status_missing',

@@ -195,13 +195,21 @@ collision guidance. `get_wiki_bases_view` emits an optional Obsidian Bases YAML
 view; it is a local presentation file, never a security boundary.
 
 For low-friction capture, `capture_wiki_note` creates an ordinary Markdown
-note in `Inbox/` with `note_kind: fleeting` and `lifecycle: inbox`; classify it
-later with `triage_wiki_note`. `review_wiki_note` records a completed evidence
-review and refreshes its body/link baseline without requiring the agent to
-resubmit the whole body. `get_wiki_review_dashboard` combines Inbox, active
-Projects/Tasks, due knowledge, and MOC/graph health into one bounded Reflect
-pass. `task_status: someday` is reserved for work intentionally deferred from
-the active list.
+note in `Inbox/` with `note_kind: fleeting` and `lifecycle: inbox`. Complete
+the GTD Clarify step with `clarify_wiki_note` and choose exactly one durable
+disposition: `knowledge`, `reference`, `project`, `someday`, `discard`, or
+`delegate`. Clarification records the decision and a suggested PARA destination
+without silently moving or deleting the note; move it later with the normal
+revision-checked workflow after inspecting the result. A clarified capture is
+removed from the unprocessed Inbox queue even while it remains physically in
+Inbox. `review_wiki_note` records a completed evidence review and refreshes its
+body/link baseline without requiring the agent to resubmit the whole body.
+Pass `nextLifecycle` when the review changes the knowledge state (for example,
+`evergreen`, `superseded`, or `archived`); otherwise the response explicitly
+asks for a follow-up decision. `get_wiki_review_dashboard` combines Inbox,
+active Projects/Tasks, due knowledge, and MOC/graph health into one bounded
+Reflect pass. `task_status: someday` is reserved for work intentionally
+deferred from the active list.
 
 Questions, hypotheses, and assumptions can carry `epistemic_status` so their
 state is explicit: questions are open/answered/blocked/abandoned, hypotheses
@@ -220,7 +228,11 @@ launchpad for MOCs, active work, Inbox, review items, and stable IDs.
 The intended loop is **Capture -> Organize -> Distill -> Express**: ingest an
 immutable source or capture a rough note, classify and link it, publish a
 grounded knowledge note, then connect it through an MOC, decision, project, or
-peer discussion. `get_wiki_inbox` finds bounded unprocessed captures and
+peer discussion. `distill_wiki_source` is the explicit source-to-literature or
+source-to-atomic step: it requires an intact immutable source and carries its
+current path and revision into the new note's provenance. The source remains
+unchanged and a later atomic note may link to the literature note with
+`derived_from`. `get_wiki_inbox` finds bounded unprocessed captures and
 `triage_wiki_note` classifies one note with its revision without moving or
 rewriting the body. `get_wiki_catalog` can filter by note kind/lifecycle and
 bound returned entries with `limit`/`maxChars`,
@@ -228,6 +240,13 @@ bound returned entries with `limit`/`maxChars`,
 `lint_wiki` reports missing or inconsistent organization metadata as warnings.
 These organization hints are deliberately non-blocking; source integrity,
 evidence, access, and revision checks remain the hard quality gates.
+
+MOCs are navigation notes, not duplicate summaries. Give an MOC
+`moc_purpose`, `moc_scope`, `moc_questions`, and optional `moc_parent`, then
+link its selected notes with ordinary `[[wikilinks]]`. Use
+`get_wiki_moc_candidates` to receive bounded, non-mutating suggestions for
+uncovered knowledge; accept a suggestion only after checking whether the map
+has a real question and useful boundary.
 
 An optional localhost REST adapter uses the same endpoint registry and
 dispatcher. Start it with `--http` or `--http=PORT`; use `GET /api/capabilities`,

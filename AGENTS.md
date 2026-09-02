@@ -76,14 +76,22 @@ Use YAML `note_kind` and `lifecycle` to describe what a note is and what
 should happen next; use `moc`, `project`, and `review_at` only when useful.
 Use Obsidian `[[wikilinks]]` for navigation and `evidence_paths` for
 provenance. The intended loop is Capture -> Organize -> Distill -> Express.
-Use `get_wiki_inbox` to find bounded unprocessed captures, then read one and
-use `triage_wiki_note` with its revision to classify it without moving or
-rewriting the body. Use `get_wiki_catalog` to filter organization metadata and
-`get_wiki_review_queue` to find bounded due/disputed knowledge. These are
-advisory organization hints; source integrity, evidence, scope, and revision
-checks remain the hard gates. Zettelkasten-style atomic notes/MOCs suit durable
-knowledge, while GTD-style next actions suit Projects and structured tasks;
-do not force either format onto comments, chat, or journals.
+Use `get_wiki_inbox` to find bounded unprocessed captures, read one, then use
+`clarify_wiki_note` with its revision and one GTD disposition (`knowledge`,
+`reference`, `project`, `someday`, `discard`, or `delegate`). It records the
+decision without silently moving/deleting; move the note later with the normal
+revision-checked workflow. Use `triage_wiki_note` for ordinary metadata edits.
+Use `distill_wiki_source` when turning an immutable source into a literature or
+atomic note so source path and revision remain provenance. Use
+`get_wiki_catalog` to filter organization metadata,
+`get_wiki_review_queue` to find bounded due/disputed knowledge, and
+`get_wiki_moc_candidates` before creating a new MOC. MOCs should state
+`mocPurpose`, `mocScope`, `mocQuestions`, and optional `mocParent` and use
+ordinary `[[wikilinks]]`. These are advisory organization hints; source
+integrity, evidence, scope, and revision checks remain the hard gates.
+Zettelkasten-style atomic notes/MOCs suit durable knowledge, while GTD-style
+next actions suit Projects and structured tasks; do not force either format
+onto comments, chat, or journals.
 
 Use `get_wiki_home` as the bounded scope launchpad before broad browsing. For
 `question`, `hypothesis`, and `assumption` notes, set the matching
@@ -93,8 +101,9 @@ and `deferUntil`; keep execution state separate from knowledge lifecycle.
 When preserving a failed path, record what was attempted/observed, the failure
 condition and reproduction, why it was rejected, and the reusable lesson.
 When a review is genuinely completed, record its outcome and reviewer rather
-than merely changing a due date. For high-value citations, add a 1-based line
-range and `quoteHash`; lint will report a changed quote.
+than merely changing a due date; pass `nextLifecycle` when the note should
+leave `review`. For high-value citations, add a 1-based line range and
+`quoteHash`; lint will report a changed quote.
 
 When the only goal is to preserve an observation, use `capture_wiki_note` and
 let it create an Inbox fleeting note; do not spend the capture turn deciding

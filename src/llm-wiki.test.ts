@@ -177,15 +177,46 @@ test('capture, review completion, and bounded Reflect dashboard close the organi
 
     const source = await callJson(client, 'ingest_source', { sourceId: 'reflect-source', title: 'Reflect source', content: 'The reviewable claim is grounded.', capturedBy: 'codex', accessToken });
     const published = await callJson(client, 'publish_knowledge', { path: 'Knowledge/Reviewable.md', content: '# Reviewable\n\nThe claim is grounded.\n', evidencePaths: [source.value.path], noteKind: 'atomic', lifecycle: 'review', reviewPolicy: 'manual', reviewAt: '2030-01-01', expectedRevision: 'missing', author: 'codex', accessToken });
-    const reviewed = await callJson(client, 'review_wiki_note', { path: 'Knowledge/Reviewable.md', reviewOutcome: 'confirmed', reviewedBy: 'codex', reviewAt: '2031-01-01', reviewNote: 'Evidence and body were checked.', expectedRevision: published.value.revision, accessToken });
-    expect(reviewed.value).toMatchObject({ success: true, reviewOutcome: 'confirmed', reviewedBy: 'codex', reviewAt: '2031-01-01' });
+    const reviewed = await callJson(client, 'review_wiki_note', { path: 'Knowledge/Reviewable.md', reviewOutcome: 'confirmed', reviewedBy: 'codex', reviewAt: '2031-01-01', nextLifecycle: 'evergreen', reviewNote: 'Evidence and body were checked.', expectedRevision: published.value.revision, accessToken });
+    expect(reviewed.value).toMatchObject({ success: true, reviewOutcome: 'confirmed', reviewedBy: 'codex', reviewAt: '2031-01-01', nextLifecycle: 'evergreen' });
     const projection = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Reviewable.md', accessToken });
     expect(projection.value).toMatchObject({ reviewOutcome: 'confirmed', reviewedBy: 'codex', reviewNote: 'Evidence and body were checked.' });
 
     await client.callTool({ name: 'write_note', arguments: { path: 'Projects/Unblocked later.md', content: '# Unblocked later\n', frontmatter: { note_kind: 'project', lifecycle: 'active', task_status: 'someday' }, expectedRevision: 'missing', accessToken } });
     await client.callTool({ name: 'write_note', arguments: { path: 'Projects/Needs action.md', content: '# Needs action\n', frontmatter: { note_kind: 'project', lifecycle: 'active' }, expectedRevision: 'missing', accessToken } });
     const dashboard = await callJson(client, 'get_wiki_review_dashboard', { limit: 10, maxChars: 9000, accessToken });
-    expect(dashboard.value.sections).toMatchObject({ inbox: { total: 1 }, projectsAndTasks: { total: 1, items: [expect.objectContaining({ path: 'Projects/Needs action.md', missingNextAction: true })] }, knowledge: { total: 1 } });
+    expect(dashboard.value.sections).toMatchObject({ inbox: { total: 1 }, projectsAndTasks: { total: 1, items: [expect.objectContaining({ path: 'Projects/Needs action.md', missingNextAction: true })] }, knowledge: { total: 0 } });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('clarify, source distillation, and MOC candidates complete the organization loop', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-loop-owner', modelId: 'codex', password: 'organization-loop-password' });
+    const accessToken = registration.value.accessToken;
+    const captured = await callJson(client, 'capture_wiki_note', { path: 'Inbox/Clarify me.md', title: 'Clarify me', content: 'A rough project observation.', capturedBy: 'codex', accessToken });
+    const clarified = await callJson(client, 'clarify_wiki_note', {
+      path: captured.value.path, disposition: 'project', clarifyNote: 'This needs an explicit next action.', expectedRevision: captured.value.revision, accessToken,
+    });
+    expect(clarified.value).toMatchObject({ disposition: 'project', recommendedPath: 'Projects/', recommendedLifecycle: 'active', frontmatter: { noteKind: 'project', lifecycle: 'inbox', disposition: 'project' } });
+    const inbox = await callJson(client, 'get_wiki_inbox', { accessToken });
+    expect(inbox.value).toMatchObject({ total: 0, items: [] });
+
+    const source = await callJson(client, 'ingest_source', { sourceId: 'distill-source', title: 'Distill source', content: '# Evidence\n\nA durable observation.', capturedBy: 'codex', accessToken });
+    const distilled = await callJson(client, 'distill_wiki_source', {
+      sourcePath: source.value.path, path: 'Resources/Distilled.md', title: 'Distilled literature', content: '# Distilled literature\n\nA source-backed interpretation.', noteKind: 'literature', expectedRevision: 'missing', author: 'codex', accessToken,
+    });
+    expect(distilled.value).toMatchObject({ success: true, noteKind: 'literature', distilledFrom: { path: source.value.path, revision: source.value.revision } });
+    const projection = await callJson(client, 'read_wiki_projection', { path: 'Resources/Distilled.md', accessToken });
+    expect(projection.value).toMatchObject({ noteKind: 'literature', evidence: [expect.objectContaining({ path: source.value.path, revision: source.value.revision })] });
+
+    await callJson(client, 'publish_knowledge', { path: 'Knowledge/Alpha.md', content: '# Alpha\n\nA durable idea.', evidencePaths: [source.value.path], noteKind: 'atomic', lifecycle: 'evergreen', author: 'codex', expectedRevision: 'missing', accessToken });
+    await callJson(client, 'publish_knowledge', { path: 'Knowledge/Beta.md', content: '# Beta\n\nAnother durable idea.', evidencePaths: [source.value.path], noteKind: 'atomic', lifecycle: 'evergreen', author: 'codex', expectedRevision: 'missing', accessToken });
+    const candidates = await callJson(client, 'get_wiki_moc_candidates', { limit: 10, accessToken });
+    expect(candidates.value).toMatchObject({ total: 2, candidates: expect.arrayContaining([expect.objectContaining({ suggestedPurpose: expect.any(String), suggestedQuestions: expect.any(Array), notePaths: expect.arrayContaining(['Knowledge/Alpha.md', 'Knowledge/Beta.md']) })]) });
   } finally {
     await client.close();
     await server.close();

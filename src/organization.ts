@@ -17,6 +17,8 @@ export const HYPOTHESIS_STATUSES = ['proposed', 'supported', 'refuted', 'inconcl
 export const ASSUMPTION_STATUSES = ['active', 'verified', 'invalidated', 'replaced'] as const;
 export const KNOWLEDGE_POLARITIES = ['positive', 'negative'] as const;
 export const NEGATIVE_KINDS = ['failure', 'rejected', 'counterexample', 'non_reproducible', 'superseded'] as const;
+/** GTD clarification outcomes. These are workflow metadata, not deletion commands. */
+export const CLARIFY_DISPOSITIONS = ['knowledge', 'reference', 'project', 'someday', 'discard', 'delegate'] as const;
 /** Typed relationships are navigation metadata, never an access grant. */
 export const RELATION_FIELDS = ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'related'] as const;
 export const ORGANIZATION_LIST_FIELDS = ['aliases', 'key_points', 'open_questions', 'next_actions', ...RELATION_FIELDS] as const;
@@ -34,6 +36,7 @@ const hypothesisStatusSet = new Set<string>(HYPOTHESIS_STATUSES);
 const assumptionStatusSet = new Set<string>(ASSUMPTION_STATUSES);
 const knowledgePolaritySet = new Set<string>(KNOWLEDGE_POLARITIES);
 const negativeKindSet = new Set<string>(NEGATIVE_KINDS);
+const clarifyDispositionSet = new Set<string>(CLARIFY_DISPOSITIONS);
 const relationFieldSet = new Set<string>(RELATION_FIELDS);
 
 function normalizedList(value: unknown, field: string, maximumItems: number, maximumChars: number): string[] | undefined {
@@ -105,6 +108,13 @@ export function normalizeNegativeKind(value: unknown, fallback?: typeof NEGATIVE
   const normalized = String(value).trim().toLowerCase();
   if (!negativeKindSet.has(normalized)) throw new Error(`negativeType must be one of: ${NEGATIVE_KINDS.join(', ')}`);
   return normalized as typeof NEGATIVE_KINDS[number];
+}
+
+export function normalizeClarifyDisposition(value: unknown, fallback?: typeof CLARIFY_DISPOSITIONS[number]): typeof CLARIFY_DISPOSITIONS[number] | undefined {
+  if (value === undefined || value === null || String(value).trim() === '') return fallback;
+  const normalized = String(value).trim().toLowerCase();
+  if (!clarifyDispositionSet.has(normalized)) throw new Error(`disposition must be one of: ${CLARIFY_DISPOSITIONS.join(', ')}`);
+  return normalized as typeof CLARIFY_DISPOSITIONS[number];
 }
 
 export function normalizeNoteKind(value: unknown, fallback?: NoteKind): NoteKind | undefined {
@@ -191,6 +201,15 @@ export interface KnowledgeOrganizationInput {
   whyRejected?: unknown;
   reusableLesson?: unknown;
   replacementPath?: unknown;
+  clarifyDisposition?: unknown;
+  clarifiedBy?: unknown;
+  clarifiedAt?: unknown;
+  clarifyNote?: unknown;
+  triageTarget?: unknown;
+  mocPurpose?: unknown;
+  mocScope?: unknown;
+  mocQuestions?: unknown;
+  mocParent?: unknown;
   contentDigest?: unknown;
 }
 
@@ -245,6 +264,15 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
   const whyRejected = input.whyRejected === undefined ? optionalText(existing.negative_why_rejected, 'whyRejected', 1200) : optionalText(input.whyRejected, 'whyRejected', 1200);
   const reusableLesson = input.reusableLesson === undefined ? optionalText(existing.negative_reusable_lesson, 'reusableLesson', 1200) : optionalText(input.reusableLesson, 'reusableLesson', 1200);
   const replacementPath = input.replacementPath === undefined ? optionalText(existing.negative_replacement_path, 'replacementPath', 500) : optionalText(input.replacementPath, 'replacementPath', 500);
+  const clarifyDisposition = input.clarifyDisposition === undefined ? normalizeClarifyDisposition(existing.triage_disposition) : normalizeClarifyDisposition(input.clarifyDisposition);
+  const clarifiedBy = input.clarifiedBy === undefined ? optionalText(existing.clarified_by, 'clarifiedBy', 200) : optionalText(input.clarifiedBy, 'clarifiedBy', 200);
+  const clarifiedAt = input.clarifiedAt === undefined ? normalizeIsoDate(existing.clarified_at, 'clarifiedAt') : normalizeIsoDate(input.clarifiedAt, 'clarifiedAt');
+  const clarifyNote = input.clarifyNote === undefined ? optionalText(existing.clarify_note, 'clarifyNote', 1000) : optionalText(input.clarifyNote, 'clarifyNote', 1000);
+  const triageTarget = input.triageTarget === undefined ? optionalText(existing.triage_target, 'triageTarget', 500) : optionalText(input.triageTarget, 'triageTarget', 500);
+  const mocPurpose = input.mocPurpose === undefined ? optionalText(existing.moc_purpose, 'mocPurpose', 1000) : optionalText(input.mocPurpose, 'mocPurpose', 1000);
+  const mocScope = input.mocScope === undefined ? optionalText(existing.moc_scope, 'mocScope', 500) : optionalText(input.mocScope, 'mocScope', 500);
+  const mocQuestions = input.mocQuestions === undefined ? normalizedList(existing.moc_questions, 'mocQuestions', 12, 500) : normalizedList(input.mocQuestions, 'mocQuestions', 12, 500);
+  const mocParent = input.mocParent === undefined ? optionalText(existing.moc_parent, 'mocParent', 500) : optionalText(input.mocParent, 'mocParent', 500);
   if (negativeType && polarity !== 'negative') throw new Error('negativeType requires polarity=negative');
   if (polarity === 'negative' && !negativeType) throw new Error('polarity=negative requires negativeType');
   const summaryFieldsPresent = Boolean(summary || keyPoints?.length || openQuestions?.length);
@@ -286,6 +314,15 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
     ...(whyRejected && { negative_why_rejected: whyRejected }),
     ...(reusableLesson && { negative_reusable_lesson: reusableLesson }),
     ...(replacementPath && { negative_replacement_path: replacementPath }),
+    ...(clarifyDisposition && { triage_disposition: clarifyDisposition }),
+    ...(clarifiedBy && { clarified_by: clarifiedBy }),
+    ...(clarifiedAt && { clarified_at: clarifiedAt }),
+    ...(clarifyNote && { clarify_note: clarifyNote }),
+    ...(triageTarget && { triage_target: triageTarget }),
+    ...(mocPurpose && { moc_purpose: mocPurpose }),
+    ...(mocScope && { moc_scope: mocScope }),
+    ...(mocQuestions && { moc_questions: mocQuestions }),
+    ...(mocParent && { moc_parent: mocParent }),
     ...(summaryDigest && { summary_of_content_sha256: summaryDigest }),
     ...(relations || {}),
   };
@@ -309,6 +346,19 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
   }
   if (lifecycleValue !== undefined && !lifecycleSet.has(lifecycle || '')) {
     issues.push({ code: 'invalid_lifecycle', detail: `lifecycle must be one of: ${LIFECYCLES.join(', ')}` });
+  }
+  if (frontmatter.triage_disposition !== undefined && !clarifyDispositionSet.has(String(frontmatter.triage_disposition).trim().toLowerCase())) {
+    issues.push({ code: 'invalid_triage_disposition', detail: `triage_disposition must be one of: ${CLARIFY_DISPOSITIONS.join(', ')}` });
+  }
+  for (const [field, label] of [['clarified_at', 'clarifiedAt'] as const]) {
+    if (frontmatter[field] !== undefined) {
+      try { normalizeIsoDate(frontmatter[field], label); } catch (error) { issues.push({ code: `invalid_${field}`, detail: error instanceof Error ? error.message : `${field} must be an ISO date or date-time` }); }
+    }
+  }
+  for (const [field, label, maxItems] of [['moc_questions', 'mocQuestions', 12] as const]) {
+    if (frontmatter[field] !== undefined) {
+      try { normalizedList(frontmatter[field], label, maxItems, 500); } catch (error) { issues.push({ code: `invalid_${field}`, detail: error instanceof Error ? error.message : `${field} must be a string array` }); }
+    }
   }
   for (const field of ORGANIZATION_LIST_FIELDS) {
     const value = frontmatter[field];
@@ -384,6 +434,21 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
   if (kind === 'project' && lifecycle === 'active' && !frontmatter.next_action && !frontmatter.waiting_for) {
     issues.push({ code: 'active_project_without_next_action', detail: 'An active project should declare next_action or waiting_for so another agent can move it forward.' });
   }
+  if (frontmatter.triage_disposition !== undefined && !clarifyDispositionSet.has(String(frontmatter.triage_disposition).trim().toLowerCase())) {
+    issues.push({ code: 'invalid_triage_disposition', detail: `triage_disposition must be one of: ${CLARIFY_DISPOSITIONS.join(', ')}` });
+  }
+  for (const [field, maximum] of [['clarified_by', 200], ['clarify_note', 1000], ['triage_target', 500], ['moc_purpose', 1000], ['moc_scope', 500], ['moc_parent', 500] ] as const) {
+    const value = frontmatter[field];
+    if (value !== undefined && (typeof value !== 'string' || Array.from(value).length > maximum)) {
+      issues.push({ code: `invalid_${field}`, detail: `${field} must be text of ${maximum} Unicode characters or fewer.` });
+    }
+  }
+  if (frontmatter.clarified_at !== undefined && (!/^\d{4}-\d{2}-\d{2}(?:T[^\s]+)?$/.test(String(frontmatter.clarified_at).trim()) || Number.isNaN(Date.parse(String(frontmatter.clarified_at).trim())))) {
+    issues.push({ code: 'invalid_clarified_at', detail: 'clarified_at should be an ISO date or date-time.' });
+  }
+  if (frontmatter.moc_questions !== undefined && (!Array.isArray(frontmatter.moc_questions) || frontmatter.moc_questions.some((item: unknown) => typeof item !== 'string' || !item.trim() || Array.from(item as string).length > 500))) {
+    issues.push({ code: 'invalid_moc_questions', detail: 'moc_questions must be a non-empty string array with entries of 500 Unicode characters or fewer.' });
+  }
   if (type !== 'knowledge') return issues;
 
   if (!kind) issues.push({ code: 'knowledge_note_kind_missing', detail: 'Knowledge notes should declare note_kind so agents can distinguish atomic claims, MOCs, decisions, and other work.' });
@@ -403,6 +468,10 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
 
   if (kind === 'moc' && !/\[\[[^\]]+\]\]/.test(content)) {
     issues.push({ code: 'moc_without_links', detail: 'A MOC should link to at least one related note with Obsidian [[wikilinks]].' });
+  }
+  if (kind === 'moc') {
+    if (!frontmatter.moc_purpose) issues.push({ code: 'moc_purpose_missing', detail: 'A MOC should state what navigation or question it is meant to serve.' });
+    if (!Array.isArray(frontmatter.moc_questions) || frontmatter.moc_questions.length === 0) issues.push({ code: 'moc_questions_missing', detail: 'A MOC should list representative questions so its coverage stays intentional.' });
   }
   if (kind === 'atomic' && content.split(/\n\s*\n/).filter(block => block.trim() && !block.trim().startsWith('#')).length > 8) {
     issues.push({ code: 'atomic_note_may_be_too_broad', detail: 'An atomic note contains many paragraphs; consider splitting durable claims and linking the resulting notes.' });

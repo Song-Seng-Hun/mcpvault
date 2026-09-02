@@ -84,6 +84,45 @@ export declare class LlmWikiService {
         contentHash: string;
         revision: string;
     }>;
+    /** Turn one immutable source snapshot into an attributed reading note. This
+     * is a convenience boundary, not a second persistence model: the resulting
+     * note remains ordinary Markdown and still points at the source revision. */
+    distillSource(params: {
+        principal?: ScopePrincipal;
+        sourcePath: string;
+        path: string;
+        title: string;
+        content: string;
+        author: string;
+        noteKind?: string;
+        references?: unknown;
+        summary?: string;
+        keyPoints?: unknown;
+        openQuestions?: unknown;
+        expectedRevision: string;
+    }): Promise<{
+        noteKind: "area" | "assumption" | "atomic" | "decision" | "fleeting" | "hypothesis" | "journal" | "knowledge" | "literature" | "moc" | "project" | "question" | "resource" | "task";
+        distilledFrom: {
+            path: string;
+            revision: string;
+        };
+        nextAction: string;
+        success: boolean;
+        created: boolean;
+        path: string;
+        evidencePaths: string[];
+        evidence: {
+            heading?: string;
+            blockId?: string;
+            revision?: string;
+            startLine?: number;
+            endLine?: number;
+            quoteHash?: string;
+            path: string;
+        }[];
+        claims?: Record<string, unknown>[];
+        revision: string;
+    }>;
     publishKnowledge(params: {
         principal?: ScopePrincipal;
         path: string;
@@ -128,6 +167,10 @@ export declare class LlmWikiService {
         whyRejected?: string;
         reusableLesson?: string;
         replacementPath?: string;
+        mocPurpose?: string;
+        mocScope?: string;
+        mocQuestions?: unknown;
+        mocParent?: string;
         evidence?: unknown;
         claims?: WikiClaimInput[];
         expectedRevision: string;
@@ -180,6 +223,36 @@ export declare class LlmWikiService {
         revision: string;
         nextAction: string;
     }>;
+    /** Apply the GTD clarification decision to an Inbox capture without
+     * deleting it or silently moving it. The disposition is durable metadata;
+     * the caller can move the note later with the normal revision-checked edit
+     * flow, preserving links and human review. */
+    clarify(params: {
+        principal?: ScopePrincipal;
+        path: string;
+        disposition: unknown;
+        clarifiedBy: string;
+        clarifyNote?: string;
+        targetPath?: string;
+        noteKind?: string;
+        lifecycle?: string;
+        taskStatus?: unknown;
+        project?: string;
+        nextAction?: string;
+        waitingFor?: string;
+        desiredOutcome?: string;
+        expectedRevision: string;
+    }): Promise<{
+        disposition: "delegate" | "discard" | "knowledge" | "project" | "reference" | "someday";
+        targetPath?: string;
+        recommendedPath: unknown;
+        recommendedLifecycle: unknown;
+        nextAction: string;
+        success: boolean;
+        path: string;
+        revision: string;
+        frontmatter: any;
+    }>;
     review(params: {
         principal?: ScopePrincipal;
         path: string;
@@ -187,6 +260,7 @@ export declare class LlmWikiService {
         reviewedBy: string;
         reviewAt?: string;
         reviewNote?: string;
+        nextLifecycle?: string;
         expectedRevision: string;
     }): Promise<{
         success: boolean;
@@ -196,6 +270,9 @@ export declare class LlmWikiService {
         reviewedBy: any;
         reviewedAt: any;
         reviewAt?: string;
+        nextLifecycle?: "active" | "archived" | "evergreen" | "inbox" | "review" | "superseded";
+        followUpRequired?: true;
+        followUp?: string;
     }>;
     reviewDashboard(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
         purpose: string;
@@ -367,6 +444,15 @@ export declare class LlmWikiService {
         whyRejected?: string;
         reusableLesson?: string;
         replacementPath?: string;
+        clarifyDisposition?: unknown;
+        clarifiedBy?: string;
+        clarifiedAt?: string;
+        clarifyNote?: string;
+        triageTarget?: string;
+        mocPurpose?: string;
+        mocScope?: string;
+        mocQuestions?: unknown;
+        mocParent?: string;
         expectedRevision: string;
     }): Promise<{
         success: boolean;
@@ -472,6 +558,22 @@ export declare class LlmWikiService {
     } | {
         truncated: boolean;
         note: string;
+    }>;
+    /** Suggest structure notes for knowledge that currently has no MOC path.
+     * Suggestions are deliberately derived and bounded; this method never
+     * creates a MOC or rewrites a note. */
+    mocCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        candidates: never[];
+        total: number;
+        note: string;
+        truncated: boolean;
+        uncoveredKnowledgeTotal?: never;
+    } | {
+        note?: never;
+        candidates: Record<string, unknown>[];
+        total: number;
+        uncoveredKnowledgeTotal: number;
+        truncated: boolean;
     }>;
     /**
      * One-pass organization quality projection. It reuses lint's authoritative

@@ -15,6 +15,8 @@ export declare const HYPOTHESIS_STATUSES: readonly ['proposed', 'supported', 're
 export declare const ASSUMPTION_STATUSES: readonly ['active', 'verified', 'invalidated', 'replaced'];
 export declare const KNOWLEDGE_POLARITIES: readonly ['positive', 'negative'];
 export declare const NEGATIVE_KINDS: readonly ['failure', 'rejected', 'counterexample', 'non_reproducible', 'superseded'];
+/** GTD clarification outcomes. These are workflow metadata, not deletion commands. */
+export declare const CLARIFY_DISPOSITIONS: readonly ['knowledge', 'reference', 'project', 'someday', 'discard', 'delegate'];
 /** Typed relationships are navigation metadata, never an access grant. */
 export declare const RELATION_FIELDS: readonly ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'related'];
 export declare const ORGANIZATION_LIST_FIELDS: readonly ["aliases", "key_points", "open_questions", "next_actions", "supports", "contradicts", "supersedes", "derived_from", "depends_on", "implements", "blocked_by", "related"];
@@ -26,6 +28,7 @@ export declare function normalizeReviewOutcome(value: unknown, fallback?: typeof
 export declare function normalizeEpistemicStatus(value: unknown, noteKind: NoteKind, fallback?: string): string | undefined;
 export declare function normalizeKnowledgePolarity(value: unknown, fallback?: typeof KNOWLEDGE_POLARITIES[number]): typeof KNOWLEDGE_POLARITIES[number] | undefined;
 export declare function normalizeNegativeKind(value: unknown, fallback?: typeof NEGATIVE_KINDS[number]): typeof NEGATIVE_KINDS[number] | undefined;
+export declare function normalizeClarifyDisposition(value: unknown, fallback?: typeof CLARIFY_DISPOSITIONS[number]): typeof CLARIFY_DISPOSITIONS[number] | undefined;
 export declare function normalizeNoteKind(value: unknown, fallback?: NoteKind): NoteKind | undefined;
 export declare function normalizeLifecycle(value: unknown, fallback?: Lifecycle): Lifecycle | undefined;
 export declare function lifecycleForKnowledgeStatus(status: string): Lifecycle;
@@ -69,6 +72,15 @@ export interface KnowledgeOrganizationInput {
     whyRejected?: unknown;
     reusableLesson?: unknown;
     replacementPath?: unknown;
+    clarifyDisposition?: unknown;
+    clarifiedBy?: unknown;
+    clarifiedAt?: unknown;
+    clarifyNote?: unknown;
+    triageTarget?: unknown;
+    mocPurpose?: unknown;
+    mocScope?: unknown;
+    mocQuestions?: unknown;
+    mocParent?: unknown;
     contentDigest?: unknown;
 }
 export declare function knowledgeOrganization(input: KnowledgeOrganizationInput): Record<string, unknown>;
