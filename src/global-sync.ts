@@ -24,6 +24,7 @@ const RESERVED_ROOTS = new Set(['.git', '.obsidian', '.mcpvault', '_scopes', '_w
 
 export type GlobalSyncOperation = 'upsert' | 'tombstone';
 export type GlobalProposalStatus = 'pending' | 'approved' | 'rejected' | 'conflict';
+export type GlobalSyncCredentialKind = 'proposer' | 'reviewer' | 'admin';
 
 export interface GlobalRevision {
   revisionId: string;
@@ -192,6 +193,23 @@ function normalizeIdempotencyKey(value: string | undefined): string | undefined 
   const key = boundedText(value, 'idempotencyKey', MAX_IDEMPOTENCY_KEY_LENGTH);
   if (!/^[a-zA-Z0-9._:-]+$/.test(key)) throw new Error('idempotencyKey contains unsupported characters');
   return key;
+}
+
+interface CredentialState {
+  digest?: Buffer;
+  expiresAt?: number;
+}
+
+function normalizeExpiry(value: unknown, field: string): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'string') throw new Error(`${field} must be an ISO timestamp`);
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp) || timestamp <= Date.now()) throw new Error(`${field} must be a future ISO timestamp`);
+  return timestamp;
+}
+
+function credentialActive(credential: CredentialState): boolean {
+  return Boolean(credential.digest) && (credential.expiresAt === undefined || credential.expiresAt > Date.now());
 }
 
 function normalizeLimit(value: number | undefined): number {
@@ -611,6 +629,14 @@ export interface GlobalSyncClientOptions {
   baseUrl: string;
   authToken: string;
   reviewerToken?: string;
+  adminToken?: string;
+}
+
+export interface GlobalSyncCredentialMutation {
+  kind: GlobalSyncCredentialKind;
+  reviewerId?: string;
+  token: string;
+  expiresAt?: string;
 }
 
 /** Small HTTP client used by a vault replica; it never sends User or Community paths. */
@@ -618,15 +644,17 @@ export class GlobalSyncClient {
   private readonly baseUrl: string;
   private readonly authToken: string;
   private readonly reviewerToken?: string;
+  private readonly adminToken?: string;
 
   constructor(options: GlobalSyncClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
     this.authToken = boundedText(options.authToken, 'authToken', 4096);
     if (options.reviewerToken) this.reviewerToken = boundedText(options.reviewerToken, 'reviewerToken', 4096);
+    if (options.adminToken) this.adminToken = boundedText(options.adminToken, 'adminToken', 4096);
   }
 
-  private async request<T>(path: string, init: RequestInit = {}, reviewer = false): Promise<T> {
-    const token = reviewer ? this.reviewerToken : this.authToken;
+  private async request<T>(path: string, init: RequestInit = {}, credential: 'proposer' | 'reviewer' | 'admin' = 'proposer'): Promise<T> {
+    const token = credential === 'reviewer' ? this.reviewerToken : credential === 'admin' ? this.adminToken : this.authToken;
     if (!token) throw new Error('reviewerToken is required for this operation');
     const response = await fetch(`${this.baseUrl}${path}`, { ...init, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', ...(init.headers || {}) } });
     const body = await response.text();
@@ -656,15 +684,23 @@ export class GlobalSyncClient {
   }
 
   approveProposal(proposalId: string, reviewer: string, reason: string): Promise<{ status: 'pending' | 'approved' | 'conflict'; proposal: GlobalProposal; revision?: GlobalRevision; currentRevision?: string }> {
-    return this.request(`/v1/global/proposals/${encodeURIComponent(proposalId)}/approve`, { method: 'POST', body: JSON.stringify({ reviewer, reason }) }, true);
+    return this.request(`/v1/global/proposals/${encodeURIComponent(proposalId)}/approve`, { method: 'POST', body: JSON.stringify({ reviewer, reason }) }, 'reviewer');
   }
 
   rejectProposal(proposalId: string, reviewer: string, reason: string): Promise<GlobalProposal> {
-    return this.request<GlobalProposal>(`/v1/global/proposals/${encodeURIComponent(proposalId)}/reject`, { method: 'POST', body: JSON.stringify({ reviewer, reason }) }, true);
+    return this.request<GlobalProposal>(`/v1/global/proposals/${encodeURIComponent(proposalId)}/reject`, { method: 'POST', body: JSON.stringify({ reviewer, reason }) }, 'reviewer');
   }
 
   restoreDocument(documentId: string, targetRevisionId: string, reviewer: string, reason: string, expectedCurrentRevision?: string): Promise<GlobalRevision> {
-    return this.request<GlobalRevision>('/v1/global/restore', { method: 'POST', body: JSON.stringify({ documentId, targetRevisionId, reviewer, reason, expectedCurrentRevision }) }, true);
+    return this.request<GlobalRevision>('/v1/global/restore', { method: 'POST', body: JSON.stringify({ documentId, targetRevisionId, reviewer, reason, expectedCurrentRevision }) }, 'reviewer');
+  }
+
+  rotateCredential(input: GlobalSyncCredentialMutation): Promise<{ ok: true }> {
+    return this.request<{ ok: true }>('/v1/global/credentials/rotate', { method: 'POST', body: JSON.stringify(input) }, 'admin');
+  }
+
+  revokeCredential(kind: GlobalSyncCredentialKind, reviewerId?: string): Promise<{ ok: true }> {
+    return this.request<{ ok: true }>('/v1/global/credentials/revoke', { method: 'POST', body: JSON.stringify({ kind, ...(reviewerId && { reviewerId }) }) }, 'admin');
   }
 }
 
@@ -843,6 +879,10 @@ export interface GlobalSyncHubHttpOptions {
   authToken: string;
   reviewerToken: string;
   reviewerTokens?: Record<string, string>;
+  adminToken?: string;
+  adminTokenExpiresAt?: string;
+  authTokenExpiresAt?: string;
+  reviewerTokenExpiresAt?: Record<string, string>;
   maxBodyBytes?: number;
   hubId?: string;
   signingKeyPath?: string;
@@ -917,15 +957,31 @@ export async function startGlobalSyncHub(root: string, options: GlobalSyncHubHtt
   const authToken = boundedText(options.authToken, 'authToken', 4096);
   const reviewerToken = boundedText(options.reviewerToken, 'reviewerToken', 4096);
   if (constantTimeEqual(authToken, reviewerToken)) throw new Error('authToken and reviewerToken must be different');
-  const reviewerTokens = new Map<string, Buffer>([['reviewer', secretDigest(reviewerToken)]]);
+  const authCredential: CredentialState = { digest: secretDigest(authToken) };
+  const authExpiry = normalizeExpiry(options.authTokenExpiresAt, 'authTokenExpiresAt');
+  if (authExpiry !== undefined) authCredential.expiresAt = authExpiry;
+  const reviewerTokens = new Map<string, CredentialState>([['reviewer', { digest: secretDigest(reviewerToken) }]]);
+  const primaryReviewerExpiry = normalizeExpiry(options.reviewerTokenExpiresAt?.reviewer, 'reviewerTokenExpiresAt.reviewer');
+  if (primaryReviewerExpiry !== undefined) reviewerTokens.get('reviewer')!.expiresAt = primaryReviewerExpiry;
+  let adminCredential: CredentialState | undefined;
+  if (options.adminToken) {
+    const adminToken = boundedText(options.adminToken, 'adminToken', 4096);
+    if (constantTimeEqual(authToken, adminToken) || constantTimeEqual(reviewerToken, adminToken)) throw new Error('adminToken must differ from other credentials');
+    adminCredential = { digest: secretDigest(adminToken) };
+    const adminExpiry = normalizeExpiry(options.adminTokenExpiresAt, 'adminTokenExpiresAt');
+    if (adminExpiry !== undefined) adminCredential.expiresAt = adminExpiry;
+  }
   for (const [reviewerId, token] of Object.entries(options.reviewerTokens || {})) {
     const id = boundedText(reviewerId, 'reviewerId', MAX_AUTHOR_LENGTH);
     if (!/^[a-z0-9][a-z0-9._-]{0,127}$/.test(id)) throw new Error('reviewerId must be a lowercase identifier');
     const normalizedToken = boundedText(token, `reviewerTokens.${id}`, 4096);
     if (constantTimeEqual(authToken, normalizedToken)) throw new Error('reviewer tokens must differ from authToken');
     const normalizedTokenDigest = secretDigest(normalizedToken);
-    if ([...reviewerTokens.values()].some(existing => constantTimeDigestEqual(existing, normalizedTokenDigest))) throw new Error('reviewer tokens must be unique');
-    reviewerTokens.set(id, normalizedTokenDigest);
+    if ([...reviewerTokens.values()].some(existing => existing.digest && constantTimeDigestEqual(existing.digest, normalizedTokenDigest))) throw new Error('reviewer tokens must be unique');
+    const expiry = normalizeExpiry(options.reviewerTokenExpiresAt?.[id], `reviewerTokenExpiresAt.${id}`);
+    const credential: CredentialState = { digest: normalizedTokenDigest };
+    if (expiry !== undefined) credential.expiresAt = expiry;
+    reviewerTokens.set(id, credential);
   }
   const signingKeyPath = resolve(options.signingKeyPath || join(resolve(root), 'signing-key.pem'));
   const proposerOrigin = options.proposerOrigin ? boundedText(options.proposerOrigin, 'proposerOrigin', MAX_ORIGIN_LENGTH) : undefined;
@@ -948,12 +1004,11 @@ export async function startGlobalSyncHub(root: string, options: GlobalSyncHubHtt
   await hub.getManifest(0, 1);
   const host = options.host || '127.0.0.1';
   const maxBodyBytes = Math.min(Math.max(Math.trunc(options.maxBodyBytes ?? 2 * 1024 * 1024), 1024), 2 * 1024 * 1024);
-  const authTokenDigest = secretDigest(authToken);
   const requestWindows = new Map<string, { startedAt: number; count: number }>();
   const reviewerFor = (token: string | undefined): string | undefined => {
     if (!token) return undefined;
     const digest = secretDigest(token);
-    for (const [reviewerId, reviewerSecretDigest] of reviewerTokens) if (constantTimeDigestEqual(digest, reviewerSecretDigest)) return reviewerId;
+    for (const [reviewerId, reviewerCredential] of reviewerTokens) if (credentialActive(reviewerCredential) && reviewerCredential.digest && constantTimeDigestEqual(digest, reviewerCredential.digest)) return reviewerId;
     return undefined;
   };
   const allowedByRate = (key: string): boolean => {
@@ -974,13 +1029,63 @@ export async function startGlobalSyncHub(root: string, options: GlobalSyncHubHtt
     current.count += 1;
     return true;
   };
+  const sameAsConfiguredCredential = (digest: Buffer, exceptReviewerId?: string): boolean => {
+    if (authCredential.digest && constantTimeDigestEqual(digest, authCredential.digest)) return true;
+    if (adminCredential?.digest && constantTimeDigestEqual(digest, adminCredential.digest)) return true;
+    for (const [reviewerId, credential] of reviewerTokens) {
+      if (reviewerId !== exceptReviewerId && credential.digest && constantTimeDigestEqual(digest, credential.digest)) return true;
+    }
+    return false;
+  };
+  const rotateCredential = (body: Record<string, unknown>): void => {
+    const kind = body.kind;
+    if (kind !== 'proposer' && kind !== 'reviewer' && kind !== 'admin') throw new Error('kind must be proposer, reviewer, or admin');
+    if (typeof body.token !== 'string') throw new Error('token is required');
+    const token = boundedText(body.token, 'token', 4096);
+    const digest = secretDigest(token);
+    const reviewerId = kind === 'reviewer' ? boundedText(String(body.reviewerId || ''), 'reviewerId', MAX_AUTHOR_LENGTH) : undefined;
+    if (reviewerId && !/^[a-z0-9][a-z0-9._-]{0,127}$/.test(reviewerId)) throw new Error('reviewerId must be a lowercase identifier');
+    if (sameAsConfiguredCredential(digest, reviewerId)) throw new Error('token must be unique across active credentials');
+    const expiresAt = normalizeExpiry(body.expiresAt, 'expiresAt');
+    if (kind === 'proposer') {
+      authCredential.digest = digest;
+      if (expiresAt === undefined) delete authCredential.expiresAt; else authCredential.expiresAt = expiresAt;
+    } else if (kind === 'reviewer') {
+      reviewerTokens.set(reviewerId!, { digest, ...(expiresAt !== undefined && { expiresAt }) });
+    } else {
+      adminCredential = { digest, ...(expiresAt !== undefined && { expiresAt }) };
+    }
+  };
+  const revokeCredential = (body: Record<string, unknown>): void => {
+    const kind = body.kind;
+    if (kind === 'proposer') {
+      delete authCredential.digest;
+      delete authCredential.expiresAt;
+    } else if (kind === 'reviewer') {
+      const reviewerId = boundedText(String(body.reviewerId || ''), 'reviewerId', MAX_AUTHOR_LENGTH);
+      if (!reviewerTokens.delete(reviewerId)) throw new Error('reviewer credential not found');
+    } else if (kind === 'admin') {
+      adminCredential = undefined;
+    } else {
+      throw new Error('kind must be proposer, reviewer, or admin');
+    }
+  };
   const requestHandler = async (request: IncomingMessage, response: ServerResponse) => {
     try {
       const url = new URL(request.url || '/', `http://${host}`);
       const reviewerRoute = url.pathname === '/v1/global/audit' || (request.method === 'POST' && (url.pathname === '/v1/global/restore' || /\/v1\/global\/proposals\/[^/]+\/(?:approve|reject)$/.test(url.pathname)));
+      const adminRoute = request.method === 'POST' && (url.pathname === '/v1/global/credentials/rotate' || url.pathname === '/v1/global/credentials/revoke');
       const token = bearer(request);
+      if (adminRoute) {
+        if (!adminCredential?.digest || !token || !credentialActive(adminCredential) || !constantTimeDigestEqual(secretDigest(token), adminCredential.digest)) { sendJson(response, 401, { error: 'Unauthorized' }); return; }
+        if (!allowedByRate(`${request.socket.remoteAddress || 'unknown'}:admin`)) { sendJson(response, 429, { error: 'Rate limit exceeded; retry later' }); return; }
+        const body = await jsonBody(request, maxBodyBytes);
+        if (url.pathname.endsWith('/rotate')) rotateCredential(body); else revokeCredential(body);
+        sendJson(response, 200, { ok: true });
+        return;
+      }
       const reviewerId = reviewerFor(token);
-      if (reviewerRoute ? !reviewerId : !token || !constantTimeDigestEqual(secretDigest(token), authTokenDigest)) { sendJson(response, 401, { error: 'Unauthorized' }); return; }
+      if (reviewerRoute ? !reviewerId : !token || !credentialActive(authCredential) || !authCredential.digest || !constantTimeDigestEqual(secretDigest(token), authCredential.digest)) { sendJson(response, 401, { error: 'Unauthorized' }); return; }
       if (!allowedByRate(`${request.socket.remoteAddress || 'unknown'}:${reviewerId || 'proposer'}`)) { sendJson(response, 429, { error: 'Rate limit exceeded; retry later' }); return; }
       if (request.method === 'GET' && url.pathname === '/healthz') { sendJson(response, 200, { ok: true, protocol: PROTOCOL }); return; }
       if (request.method === 'GET' && url.pathname === '/v1/global/manifest') {

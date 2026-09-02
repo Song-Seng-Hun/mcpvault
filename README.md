@@ -1420,6 +1420,12 @@ still restore an older immutable revision, and there is no physical delete.
 Clients may send a bounded `idempotencyKey` with a proposal; retrying the same
 key returns the original proposal, while reusing it for different content or
 metadata is rejected.
+An optional `adminToken` enables the credential endpoints
+`/v1/global/credentials/rotate` and `/v1/global/credentials/revoke`. They can
+rotate or immediately revoke proposer, reviewer, and admin credentials without
+restarting the process; only credential digests are retained in memory. Set
+`MCPVAULT_GLOBAL_SYNC_ADMIN_TOKEN` for the standalone CLI. Expiry timestamps
+are accepted for initial credentials and rotations.
 
 Every manifest and revision is signed with the hub's Ed25519 signing key.
 `startGlobalSyncHub()` persists that private key as `signing-key.pem` (or the

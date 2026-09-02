@@ -2,6 +2,7 @@ import type { Server as NetServer } from 'node:net';
 declare const PROTOCOL: 'mcpvault-global-sync/v1';
 export type GlobalSyncOperation = 'upsert' | 'tombstone';
 export type GlobalProposalStatus = 'pending' | 'approved' | 'rejected' | 'conflict';
+export type GlobalSyncCredentialKind = 'proposer' | 'reviewer' | 'admin';
 export interface GlobalRevision {
     revisionId: string;
     documentId: string;
@@ -129,12 +130,20 @@ export interface GlobalSyncClientOptions {
     baseUrl: string;
     authToken: string;
     reviewerToken?: string;
+    adminToken?: string;
+}
+export interface GlobalSyncCredentialMutation {
+    kind: GlobalSyncCredentialKind;
+    reviewerId?: string;
+    token: string;
+    expiresAt?: string;
 }
 /** Small HTTP client used by a vault replica; it never sends User or Community paths. */
 export declare class GlobalSyncClient {
     private readonly baseUrl;
     private readonly authToken;
     private readonly reviewerToken?;
+    private readonly adminToken?;
     constructor(options: GlobalSyncClientOptions);
     private request;
     getManifest(after?: number, limit?: number): Promise<GlobalManifest>;
@@ -149,6 +158,12 @@ export declare class GlobalSyncClient {
     }>;
     rejectProposal(proposalId: string, reviewer: string, reason: string): Promise<GlobalProposal>;
     restoreDocument(documentId: string, targetRevisionId: string, reviewer: string, reason: string, expectedCurrentRevision?: string): Promise<GlobalRevision>;
+    rotateCredential(input: GlobalSyncCredentialMutation): Promise<{
+        ok: true;
+    }>;
+    revokeCredential(kind: GlobalSyncCredentialKind, reviewerId?: string): Promise<{
+        ok: true;
+    }>;
 }
 export interface GlobalSyncReplicaOptions {
     vaultPath: string;
@@ -191,6 +206,10 @@ export interface GlobalSyncHubHttpOptions {
     authToken: string;
     reviewerToken: string;
     reviewerTokens?: Record<string, string>;
+    adminToken?: string;
+    adminTokenExpiresAt?: string;
+    authTokenExpiresAt?: string;
+    reviewerTokenExpiresAt?: Record<string, string>;
     maxBodyBytes?: number;
     hubId?: string;
     signingKeyPath?: string;

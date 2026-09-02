@@ -161,3 +161,32 @@ test('Global Hub makes proposal retries idempotent and rejects key reuse with di
   expect((await hub.approveProposal(first.proposalId, 'reviewer-b', 'checked')).status).toBe('approved');
   expect(await hub.submitProposal(input)).toEqual(expect.objectContaining({ proposalId: first.proposalId, status: 'approved' }));
 });
+
+test('Global Hub supports administrator credential rotation, expiry metadata, and revocation', async () => {
+  const handle = await startGlobalSyncHub(hubRoot, {
+    authToken: 'proposer-old',
+    reviewerToken: 'reviewer-a-old',
+    reviewerTokens: { 'reviewer-b': 'reviewer-b-old' },
+    adminToken: 'admin-secret',
+  });
+  try {
+    const baseUrl = `http://${handle.host}:${handle.port}`;
+    const proposer = new GlobalSyncClient({ baseUrl, authToken: 'proposer-old' });
+    const reviewerA = new GlobalSyncClient({ baseUrl, authToken: 'proposer-old', reviewerToken: 'reviewer-a-old' });
+    const reviewerBOld = new GlobalSyncClient({ baseUrl, authToken: 'proposer-old', reviewerToken: 'reviewer-b-old' });
+    const reviewerBNew = new GlobalSyncClient({ baseUrl, authToken: 'proposer-old', reviewerToken: 'reviewer-b-new' });
+    const admin = new GlobalSyncClient({ baseUrl, authToken: 'proposer-old', adminToken: 'admin-secret' });
+    const proposal = await proposer.submitProposal({ documentId: 'Knowledge/Credentials.md', content: 'credential test\n', author: 'server-a', reason: 'test', origin: 'server-a' });
+    expect((await reviewerA.approveProposal(proposal.proposalId, 'ignored', 'checked')).status).toBe('pending');
+    await admin.rotateCredential({ kind: 'reviewer', reviewerId: 'reviewer-b', token: 'reviewer-b-new', expiresAt: new Date(Date.now() + 60_000).toISOString() });
+    await expect(reviewerBOld.approveProposal(proposal.proposalId, 'ignored', 'checked')).rejects.toThrow('Unauthorized');
+    expect((await reviewerBNew.approveProposal(proposal.proposalId, 'ignored', 'checked')).status).toBe('approved');
+    await admin.revokeCredential('proposer');
+    await expect(proposer.submitProposal({ documentId: 'Knowledge/Revoked.md', content: 'nope\n', author: 'server-a', reason: 'test', origin: 'server-a' })).rejects.toThrow('Unauthorized');
+    await admin.rotateCredential({ kind: 'proposer', token: 'proposer-new' });
+    const newProposer = new GlobalSyncClient({ baseUrl, authToken: 'proposer-new' });
+    await expect(newProposer.submitProposal({ documentId: 'Knowledge/Restored.md', content: 'works\n', author: 'server-a', reason: 'test', origin: 'server-a' })).resolves.toMatchObject({ status: 'pending' });
+  } finally {
+    await handle.close();
+  }
+});

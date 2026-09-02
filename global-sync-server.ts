@@ -4,7 +4,9 @@ import { readFile } from 'node:fs/promises';
 const root = process.argv[2] || process.env.MCPVAULT_GLOBAL_SYNC_ROOT;
 const authToken = process.env.MCPVAULT_GLOBAL_SYNC_AUTH_TOKEN;
 const reviewerToken = process.env.MCPVAULT_GLOBAL_SYNC_REVIEWER_TOKEN;
+const adminToken = process.env.MCPVAULT_GLOBAL_SYNC_ADMIN_TOKEN;
 const reviewerTokensRaw = process.env.MCPVAULT_GLOBAL_SYNC_REVIEWER_TOKENS;
+const reviewerExpiresRaw = process.env.MCPVAULT_GLOBAL_SYNC_REVIEWER_EXPIRES_AT;
 const tlsKeyPath = process.env.MCPVAULT_GLOBAL_SYNC_TLS_KEY_PATH;
 const tlsCertPath = process.env.MCPVAULT_GLOBAL_SYNC_TLS_CERT_PATH;
 const tlsCaPath = process.env.MCPVAULT_GLOBAL_SYNC_TLS_CA_PATH;
@@ -22,6 +24,13 @@ if (reviewerTokensRaw) {
   reviewerTokens = parsed as Record<string, string>;
 }
 
+let reviewerTokenExpiresAt: Record<string, string> | undefined;
+if (reviewerExpiresRaw) {
+  const parsed: unknown = JSON.parse(reviewerExpiresRaw);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('MCPVAULT_GLOBAL_SYNC_REVIEWER_EXPIRES_AT must be a JSON object');
+  reviewerTokenExpiresAt = parsed as Record<string, string>;
+}
+
 const tls = tlsKeyPath && tlsCertPath
   ? {
       key: await readFile(tlsKeyPath, 'utf8'),
@@ -35,7 +44,11 @@ const handle = await startGlobalSyncHub(root, {
   port: Number(process.env.MCPVAULT_GLOBAL_SYNC_PORT || 0),
   authToken,
   reviewerToken,
+  ...(adminToken && { adminToken }),
+  ...(process.env.MCPVAULT_GLOBAL_SYNC_ADMIN_EXPIRES_AT && { adminTokenExpiresAt: process.env.MCPVAULT_GLOBAL_SYNC_ADMIN_EXPIRES_AT }),
+  ...(process.env.MCPVAULT_GLOBAL_SYNC_AUTH_EXPIRES_AT && { authTokenExpiresAt: process.env.MCPVAULT_GLOBAL_SYNC_AUTH_EXPIRES_AT }),
   ...(reviewerTokens && { reviewerTokens }),
+  ...(reviewerTokenExpiresAt && { reviewerTokenExpiresAt }),
   hubId,
   ...(process.env.MCPVAULT_GLOBAL_SYNC_SIGNING_KEY_PATH && { signingKeyPath: process.env.MCPVAULT_GLOBAL_SYNC_SIGNING_KEY_PATH }),
   proposerOrigin,
