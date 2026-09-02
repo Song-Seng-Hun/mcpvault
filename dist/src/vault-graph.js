@@ -3,6 +3,7 @@ import { join, relative, resolve } from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
 import { extractWikiLinkOccurrences } from './backlinks.js';
 import { VaultIoCoordinator } from './vault-io.js';
+import { RELATION_FIELDS } from './organization.js';
 const GRAPH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
 const NOTE_PATTERN = /\.(?:md|markdown|txt)$/i;
@@ -197,7 +198,7 @@ export class VaultGraphIndex {
                 if (!backlinkMatches(link.target, targetEntry.path))
                     continue;
                 total += 1;
-                const backlink = { path: entry.path, line: link.line, link: link.link, context: link.context };
+                const backlink = { path: entry.path, line: link.line, link: link.link, context: link.context, ...(link.relation && { relation: link.relation }) };
                 addTopMatch(backlinks, backlink, limit, compare);
             }
         }
@@ -417,7 +418,31 @@ export class VaultGraphIndex {
             let match;
             while ((match = INLINE_TAG_PATTERN.exec(parsed.content)) !== null)
                 tags.push(match[1].toLowerCase());
-            return { path: normalized, size: info.size, mtimeMs: info.mtimeMs, links: extractWikiLinkOccurrences(raw), tags };
+            const links = extractWikiLinkOccurrences(raw);
+            for (const relation of RELATION_FIELDS) {
+                const values = Array.isArray(parsed.frontmatter[relation]) ? parsed.frontmatter[relation] : [];
+                for (const value of values) {
+                    if (typeof value !== 'string' || !value.trim())
+                        continue;
+                    const target = value.trim();
+                    const normalizedTarget = target.replace(/^!?\[\[/, '').replace(/\]\]$/, '').split(/[|#]/, 1)[0].trim().replace(/\\/g, '/').toLowerCase();
+                    const existing = links.find(link => link.line === 1 && link.target.replace(/\\/g, '/').toLowerCase() === normalizedTarget && !link.relation);
+                    if (existing) {
+                        existing.relation = relation;
+                        existing.context = `${relation}: ${target}`;
+                    }
+                    else {
+                        links.push({
+                            target: normalizedTarget,
+                            line: 1,
+                            link: /^!?\[\[.+\]\]$/.test(target) ? target : `[[${target}]]`,
+                            context: `${relation}: ${target}`,
+                            relation,
+                        });
+                    }
+                }
+            }
+            return { path: normalized, size: info.size, mtimeMs: info.mtimeMs, links, tags };
         }
         catch {
             return undefined;

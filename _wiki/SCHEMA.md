@@ -56,13 +56,19 @@ evidence, access, and revision checks remain blocking invariants.
 Use `aliases` for alternate Obsidian names and optional `stable_id` for a
 durable note identity. Keep progressive-read material in `summary`,
 `key_points`, and `open_questions` while preserving the complete Markdown
-body. Typed relationship properties explain why a link exists:
+body. Whenever a progressive field is present, store
+`summary_of_content_sha256` as the SHA-256 of the exact Markdown body; a body
+edit makes the projection stale until it is regenerated. Typed relationship properties explain why a link exists:
 `supports`, `contradicts`, `supersedes`, `derived_from`, `depends_on`,
 `implements`, `blocked_by`, and `related`. Each value should be an Obsidian
 wikilink or a scope-safe note path; the target must remain accessible and
 resolvable. Use `next_actions` and `waiting_for` on project/task notes rather
-than on ordinary discussions. Use `get_wiki_organization_health` for one
-bounded report of property, atomic-note, MOC, and typed-link problems.
+than on ordinary discussions. Use `task_status` (`open`, `next_action`,
+`waiting`, `blocked`, `completed`, or `cancelled`) for task execution state;
+keep it separate from the knowledge `lifecycle`. Use
+`get_wiki_organization_health` for one bounded report of property,
+atomic-note, MOC, summary freshness, alias/ID collision, and typed-link
+problems.
 
 For long or disputed knowledge notes, use claim-level provenance when useful:
 

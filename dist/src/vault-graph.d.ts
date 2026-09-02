@@ -1,4 +1,4 @@
-import type { BacklinkMatch, OrphanNotesResult, UnresolvedLinksResult } from './types.js';
+import type { BacklinkMatch, OrphanNotesResult, UnresolvedLinksResult, OutlinkMatch } from './types.js';
 import type { FrontmatterHandler } from './frontmatter.js';
 import type { PathFilter } from './pathfilter.js';
 import type { VaultCatalogChange, VaultFileCatalog, VaultCatalogChangeKind } from './vault-catalog.js';
@@ -33,6 +33,12 @@ export declare class VaultGraphIndex {
     getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean): Promise<{
         target: string;
         backlinks: BacklinkMatch[];
+        total: number;
+        truncated: boolean;
+    }>;
+    getOutlinks(path: string, limit: number, canAccessPath: (path: string) => boolean): Promise<{
+        source: string;
+        outlinks: OutlinkMatch[];
         total: number;
         truncated: boolean;
     }>;

@@ -166,13 +166,19 @@ them, or move Community-managed posts into PARA folders.
 For durable notes, `aliases` provide alternate Obsidian names and optional
 `stable_id` provides an identity that can survive a title change. Keep the
 full Markdown body authoritative while using `summary`, `key_points`, and
-`open_questions` as progressive-read projections. Typed relationship
+`open_questions` as progressive-read projections. Whenever a progressive
+field is present, store `summary_of_content_sha256` as the SHA-256 of the
+exact Markdown body; a body edit makes the projection stale until it is
+regenerated. Typed relationship
 properties (`supports`, `contradicts`, `supersedes`, `derived_from`,
 `depends_on`, `implements`, `blocked_by`, and `related`) explain the meaning
 of a `[[wikilink]]`; they do not grant access and their targets are checked by
-Wiki lint. Use `next_actions` and `waiting_for` for project/task notes. The
-bounded `get_wiki_organization_health` endpoint combines these checks with
-MOC, Inbox, lifecycle, and atomic-note guidance.
+Wiki lint. Use `next_actions` and `waiting_for` for project/task notes, and
+`task_status` (`open`, `next_action`, `waiting`, `blocked`, `completed`, or
+`cancelled`) for their operational state. Keep task status separate from the
+knowledge `lifecycle`. The bounded `get_wiki_organization_health` endpoint
+combines these checks with MOC, Inbox, lifecycle, atomic-note, summary
+freshness, and alias/ID collision guidance.
 
 The intended loop is **Capture -> Organize -> Distill -> Express**: ingest an
 immutable source or capture a rough note, classify and link it, publish a

@@ -63,13 +63,18 @@ test('knowledge organization contract preserves aliases, projections, and typed 
       path: 'Knowledge/Contract.md', content: '# Contract\n\nA compact, linked knowledge note.\n', evidencePaths: [source.value.path],
       aliases: ['Knowledge contract', 'Metadata contract'], summary: 'Properties describe the note and typed links describe why it is related.',
       keyPoints: ['Keep the full Markdown body.', 'Use typed links for meaningful relations.'], openQuestions: ['Which relation needs review next?'],
-      relations: { related: ['[[Knowledge/Existing]]'] }, stableId: 'knowledge-contract', lifecycle: 'evergreen', author: 'codex', expectedRevision: 'missing', accessToken,
+      relations: { related: ['[[Knowledge/Existing]]'] }, stableId: 'knowledge-contract', lifecycle: 'evergreen', taskStatus: 'next_action', author: 'codex', expectedRevision: 'missing', accessToken,
     });
     expect(published.value.success).toBe(true);
     const projection = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Contract.md', view: 'summary', accessToken });
-    expect(projection.value).toMatchObject({ aliases: ['Knowledge contract', 'Metadata contract'], stableId: 'knowledge-contract', relations: { related: ['[[Knowledge/Existing]]'] } });
+    expect(projection.value).toMatchObject({ aliases: ['Knowledge contract', 'Metadata contract'], stableId: 'knowledge-contract', taskStatus: 'next_action', summaryFresh: true, relations: { related: ['[[Knowledge/Existing]]'] } });
     const refs = await callJson(client, 'read_references', { path: 'Knowledge/Contract.md', accessToken });
     expect(refs.value.references).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Existing.md' })]));
+    const backlinks = await callJson(client, 'get_backlinks', { path: 'Knowledge/Existing.md', accessToken });
+    expect(backlinks.value.backlinks).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Contract.md', relation: 'related' })]));
+    const outlinks = await callJson(client, 'get_outlinks', { path: 'Knowledge/Contract.md', accessToken });
+    expect(outlinks.value.outlinks).toEqual(expect.arrayContaining([expect.objectContaining({ relation: 'related' })]));
+    expect(outlinks.value.outlinks.filter((entry: any) => entry.relation === 'related')).toHaveLength(1);
     const health = await callJson(client, 'get_wiki_organization_health', { limit: 20, accessToken });
     expect(health.value).toMatchObject({ healthy: true, organizationIssueTotal: 0 });
   } finally {
@@ -334,6 +339,30 @@ test('claim provenance, progressive projections, duplicate preflight, impact, an
     await callJson(client, 'publish_knowledge', { path: 'Knowledge/Long.md', content: `# Long\n\n${'A durable paragraph without a stored summary. '.repeat(60)}`, evidencePaths: [trustedSource.value.path], author: 'codex', expectedRevision: 'missing', accessToken });
     const summaries = await callJson(client, 'get_wiki_summary_candidates', { accessToken });
     expect(summaries.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Long.md', reason: 'missing_summary' })]));
+
+    await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/Stale.md', content: '# Stale\n\nThe body was edited after the compact projection.\n',
+      frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', summary: 'An old projection.', summary_of_content_sha256: '0000000000000000000000000000000000000000000000000000000000000000' },
+      expectedRevision: 'missing', accessToken,
+    } });
+    await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/Alias-owner.md', content: '# Alias owner\n',
+      frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', aliases: ['Shared concept'], stable_id: 'shared-concept' },
+      expectedRevision: 'missing', accessToken,
+    } });
+    await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/Alias-collision.md', content: '# Alias collision\n',
+      frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', aliases: ['Shared concept'], stable_id: 'shared-concept' },
+      expectedRevision: 'missing', accessToken,
+    } });
+    const organizationHealth = await callJson(client, 'get_wiki_organization_health', { limit: 20, maxChars: 5000, accessToken });
+    expect(organizationHealth.value.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'stale_summary', path: 'Knowledge/Stale.md' }),
+      expect.objectContaining({ code: 'duplicate_alias_across_notes' }),
+      expect.objectContaining({ code: 'duplicate_stable_id' }),
+    ]));
+    const staleSummaries = await callJson(client, 'get_wiki_summary_candidates', { accessToken });
+    expect(staleSummaries.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Stale.md', reason: 'stale_summary', summaryFresh: false })]));
 
     await client.callTool({ name: 'write_note', arguments: { path: 'Knowledge/Old.md', content: '# Old\n\nOld knowledge.', frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', updated_at: '2020-01-01T00:00:00.000Z', created_at: '2020-01-01T00:00:00.000Z' }, expectedRevision: 'missing', accessToken } });
     const unused = await callJson(client, 'get_wiki_unused_knowledge', { olderThanDays: 30, accessToken });

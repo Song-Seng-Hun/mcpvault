@@ -6,7 +6,7 @@ import { normalizeScopeId } from './scopes.js';
 import type { ReferenceService } from './references.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
-import { knowledgeOrganization, normalizeLifecycle, normalizeNoteKind, normalizeReviewAt, organizationLintIssues, RELATION_FIELDS } from './organization.js';
+import { knowledgeOrganization, normalizeLifecycle, normalizeNoteKind, normalizeReviewAt, normalizeTaskStatus, organizationLintIssues, RELATION_FIELDS } from './organization.js';
 import { extractWikiLinkOccurrences } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
@@ -159,7 +159,7 @@ and links) -> Distill (\`publish_knowledge\`/lint) -> Express (MOCs, decisions,
 discussion, and Git). These hints are intentionally non-blocking except for
 the existing evidence and integrity invariants.
 
-Use \`aliases\` for stable Obsidian navigation, optional \`stable_id\` for a durable note identity, and compact \`summary\`, \`key_points\`, and \`open_questions\` properties for progressive reads; never replace the full Markdown body with a summary. Typed link arrays such as \`supports\`, \`contradicts\`, \`supersedes\`, \`derived_from\`, \`depends_on\`, \`implements\`, \`blocked_by\`, and \`related\` explain the relationship while ordinary \`[[wikilinks]]\` remain the navigational source. Use \`next_actions\` and \`waiting_for\` on project/task notes only. Call \`wiki.organization_health\` to review property, MOC, atomicity, and typed-link problems in one bounded report.
+Use \`aliases\` for stable Obsidian navigation, optional \`stable_id\` for a durable note identity, and compact \`summary\`, \`key_points\`, and \`open_questions\` properties for progressive reads; never replace the full Markdown body with a summary. When any progressive field is present, store \`summary_of_content_sha256\` for the exact Markdown body; a body edit makes the projection stale until it is regenerated. Use \`task_status\` for the operational state of project/task notes (\`open\`, \`next_action\`, \`waiting\`, \`blocked\`, \`completed\`, or \`cancelled\`); keep it separate from the knowledge \`lifecycle\`. Typed link arrays such as \`supports\`, \`contradicts\`, \`supersedes\`, \`derived_from\`, \`depends_on\`, \`implements\`, \`blocked_by\`, and \`related\` explain the relationship while ordinary \`[[wikilinks]]\` remain the navigational source. Use \`next_actions\` and \`waiting_for\` on project/task notes only. Call \`wiki.organization_health\` to review property, MOC, atomicity, summary freshness, and typed-link problems in one bounded report.
 
 ## Invariants
 
@@ -358,6 +358,7 @@ export class LlmWikiService {
     waitingFor?: string;
     stableId?: string;
     relations?: unknown;
+    taskStatus?: unknown;
     claims?: WikiClaimInput[];
     expectedRevision: string;
   }) {
@@ -434,6 +435,8 @@ export class LlmWikiService {
           ...(params.waitingFor !== undefined && { waitingFor: params.waitingFor }),
           ...(params.stableId !== undefined && { stableId: params.stableId }),
           ...(params.relations !== undefined && { relations: params.relations }),
+          ...(params.taskStatus !== undefined && { taskStatus: params.taskStatus }),
+          contentDigest: hash(content),
           status,
         }),
         updated_by: params.author,
@@ -625,6 +628,7 @@ export class LlmWikiService {
     nextActions?: unknown;
     stableId?: string;
     relations?: unknown;
+    taskStatus?: unknown;
     expectedRevision: string;
   }) {
     if (!params.expectedRevision) throw new Error("expectedRevision is required; use the revision from read_note");
@@ -637,7 +641,7 @@ export class LlmWikiService {
     if (note.frontmatter.llm_wiki_type && note.frontmatter.llm_wiki_type !== 'knowledge') {
       throw new Error(`triage_wiki_note cannot classify managed LLM Wiki type '${note.frontmatter.llm_wiki_type}'`);
     }
-    const hasOrganizationInput = [params.noteKind, params.lifecycle, params.moc, params.project, params.reviewAt, params.nextAction, params.waitingFor, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.nextActions, params.stableId, params.relations]
+    const hasOrganizationInput = [params.noteKind, params.lifecycle, params.moc, params.project, params.reviewAt, params.nextAction, params.waitingFor, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.nextActions, params.stableId, params.relations, params.taskStatus]
       .some(value => value !== undefined);
     if (!hasOrganizationInput) throw new Error('At least one organization field is required');
     const patch: Record<string, unknown> = {};
@@ -648,6 +652,7 @@ export class LlmWikiService {
     if (params.reviewAt !== undefined) patch.review_at = normalizeReviewAt(params.reviewAt);
     if (params.nextAction !== undefined) patch.next_action = String(params.nextAction).trim().slice(0, 500);
     if (params.waitingFor !== undefined) patch.waiting_for = String(params.waitingFor).trim().slice(0, 500);
+    if (params.taskStatus !== undefined) patch.task_status = normalizeTaskStatus(params.taskStatus);
     const organization = knowledgeOrganization({
       existing: note.frontmatter,
       ...(params.noteKind !== undefined && { noteKind: params.noteKind }),
@@ -663,6 +668,8 @@ export class LlmWikiService {
       ...(params.waitingFor !== undefined && { waitingFor: params.waitingFor }),
       ...(params.stableId !== undefined && { stableId: params.stableId }),
       ...(params.relations !== undefined && { relations: params.relations }),
+      ...(params.taskStatus !== undefined && { taskStatus: params.taskStatus }),
+      contentDigest: hash(note.content),
       status: String(note.frontmatter.knowledge_status || note.frontmatter.status || 'draft'),
     });
     Object.assign(patch, organization);
@@ -686,6 +693,7 @@ export class LlmWikiService {
         ...(updated.frontmatter.open_questions && { openQuestions: updated.frontmatter.open_questions }),
         ...(updated.frontmatter.next_actions && { nextActions: updated.frontmatter.next_actions }),
         ...(updated.frontmatter.stable_id && { stableId: updated.frontmatter.stable_id }),
+        ...(updated.frontmatter.task_status && { taskStatus: updated.frontmatter.task_status }),
         relations: Object.fromEntries(RELATION_FIELDS
           .filter(field => Array.isArray(updated.frontmatter[field]) && updated.frontmatter[field].length > 0)
           .map(field => [field, updated.frontmatter[field]])),
@@ -756,6 +764,13 @@ export class LlmWikiService {
       ...(Array.isArray(note.frontmatter.next_actions) && { nextActions: note.frontmatter.next_actions.slice(0, 20) }),
       ...(typeof note.frontmatter.waiting_for === 'string' && { waitingFor: note.frontmatter.waiting_for }),
       ...(typeof note.frontmatter.stable_id === 'string' && { stableId: note.frontmatter.stable_id }),
+      ...(typeof note.frontmatter.task_status === 'string' && { taskStatus: note.frontmatter.task_status }),
+      ...(typeof note.frontmatter.summary_of_content_sha256 === 'string' && { summaryFingerprint: note.frontmatter.summary_of_content_sha256 }),
+      ...((note.frontmatter.summary || note.frontmatter.key_points || note.frontmatter.open_questions) && {
+        summaryFresh: typeof note.frontmatter.summary_of_content_sha256 === 'string'
+          ? note.frontmatter.summary_of_content_sha256 === hash(note.content)
+          : false,
+      }),
       relations: Object.fromEntries(RELATION_FIELDS
         .filter(field => Array.isArray(note.frontmatter[field]) && note.frontmatter[field].length > 0)
         .map(field => [field, note.frontmatter[field].slice(0, 30)])),
@@ -894,7 +909,8 @@ export class LlmWikiService {
       'knowledge_review_due', 'review_date_missing', 'moc_without_links',
       'inbox_lifecycle_mismatch', 'invalid_aliases', 'duplicate_aliases',
       'invalid_key_points', 'invalid_open_questions', 'invalid_next_actions',
-      'invalid_summary', 'invalid_stable_id', 'atomic_note_may_be_too_broad',
+      'invalid_summary', 'invalid_stable_id', 'summary_fingerprint_missing', 'invalid_summary_fingerprint', 'stale_summary', 'invalid_task_status',
+      'duplicate_alias_across_notes', 'duplicate_stable_id', 'atomic_note_may_be_too_broad',
       'invalid_relation',
       ...RELATION_FIELDS.flatMap(field => [`invalid_${field}`, `duplicate_${field}`, `unsafe_${field}`]),
     ]);
@@ -1122,18 +1138,22 @@ export class LlmWikiService {
     for await (const note of iterateNotes(this.fileSystem, { includeContent: true }, canAccess)) {
       if (note.frontmatter.llm_wiki_type !== 'knowledge' || !note.content?.trim()) continue;
       const summary = typeof note.frontmatter.summary === 'string' ? note.frontmatter.summary.trim() : '';
+      const hasProgressiveFields = Boolean(summary || note.frontmatter.key_points || note.frontmatter.open_questions);
+      const summaryFresh = typeof note.frontmatter.summary_of_content_sha256 === 'string'
+        && note.frontmatter.summary_of_content_sha256 === hash(note.content);
       const paragraphs = note.content.split(/\n\s*\n/).map(block => block.trim()).filter(block => block && !block.startsWith('#') && !block.startsWith('```'));
-      if (summary && note.content.length < 2000) continue;
+      if (summary && note.content.length < 2000 && summaryFresh) continue;
       total += 1;
       candidates.push({
         path: this.access.toPublicPath(note.path),
         title: note.frontmatter.title || note.path.split('/').at(-1),
-        reason: summary ? 'long_without_compact_projection' : 'missing_summary',
+        reason: !hasProgressiveFields ? 'missing_summary' : !summaryFresh ? 'stale_summary' : 'long_without_compact_projection',
         contentChars: note.content.length,
         summaryCandidate: boundedText(summary || paragraphs[0] || note.content, 500),
+        ...(hasProgressiveFields && { summaryFresh }),
       });
     }
-    candidates.sort((left, right) => Number(right.reason === 'missing_summary') - Number(left.reason === 'missing_summary') || right.contentChars - left.contentChars || String(left.path).localeCompare(String(right.path)));
+    candidates.sort((left, right) => Number(right.reason === 'stale_summary') - Number(left.reason === 'stale_summary') || Number(right.reason === 'missing_summary') - Number(left.reason === 'missing_summary') || right.contentChars - left.contentChars || String(left.path).localeCompare(String(right.path)));
     const items: Array<Record<string, unknown>> = [];
     for (const item of candidates.slice(0, boundedLimit)) {
       if (JSON.stringify([...items, item]).length + 2 > boundedChars) break;
@@ -1390,11 +1410,33 @@ export class LlmWikiService {
       if (issues.length > limit) issues.pop();
     };
     const sourceCache = new Map<string, Awaited<ReturnType<FileSystemService['readNote']>>>();
+    const aliasOwners = new Map<string, string>();
+    const stableIdOwners = new Map<string, string>();
 
     for await (const note of iterateNotes(this.fileSystem, { includeContent: true }, canAccess)) {
       const type = note.frontmatter.llm_wiki_type;
-      for (const organizationIssue of organizationLintIssues(this.access.toPublicPath(note.path), note.frontmatter, note.content || '')) {
-        addIssue({ severity: 'warning', code: organizationIssue.code, path: this.access.toPublicPath(note.path), detail: organizationIssue.detail });
+      const publicPath = this.access.toPublicPath(note.path);
+      for (const organizationIssue of organizationLintIssues(publicPath, note.frontmatter, note.content || '')) {
+        addIssue({ severity: 'warning', code: organizationIssue.code, path: publicPath, detail: organizationIssue.detail });
+      }
+      for (const alias of Array.isArray(note.frontmatter.aliases) ? note.frontmatter.aliases : []) {
+        if (typeof alias !== 'string' || !alias.trim()) continue;
+        const key = alias.trim().toLocaleLowerCase();
+        const owner = aliasOwners.get(key);
+        if (owner && owner !== note.path) {
+          addIssue({ severity: 'warning', code: 'duplicate_alias_across_notes', path: publicPath, detail: `Alias '${alias.trim()}' is also used by ${this.access.toPublicPath(owner)}; link resolution may become ambiguous.` });
+        } else {
+          aliasOwners.set(key, note.path);
+        }
+      }
+      if (typeof note.frontmatter.stable_id === 'string' && note.frontmatter.stable_id.trim()) {
+        const key = note.frontmatter.stable_id.trim().toLocaleLowerCase();
+        const owner = stableIdOwners.get(key);
+        if (owner && owner !== note.path) {
+          addIssue({ severity: 'warning', code: 'duplicate_stable_id', path: publicPath, detail: `stable_id '${note.frontmatter.stable_id}' is also used by ${this.access.toPublicPath(owner)}.` });
+        } else {
+          stableIdOwners.set(key, note.path);
+        }
       }
       if (type === 'source') {
         if (note.frontmatter.immutable !== true) {

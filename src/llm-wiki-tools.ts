@@ -55,6 +55,7 @@ export function getLlmWikiTools(): Tool[] {
         openQuestions: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
         nextActions: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
         waitingFor: { type: 'string', maxLength: 500 },
+        taskStatus: { type: 'string', enum: ['open', 'next_action', 'waiting', 'blocked', 'completed', 'cancelled'], description: 'Workflow state for project/task notes; separate from knowledge lifecycle' },
         stableId: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', maxLength: 80, description: 'Optional stable identity for durable notes; not a security boundary' },
         relations: { type: 'object', description: 'Typed Obsidian link arrays: supports, contradicts, supersedes, derived_from, depends_on, implements, blocked_by, related' },
         claims: { type: 'array', maxItems: 100, description: 'Optional claim-level provenance. Every claim needs text and at least one intact immutable evidence path.', items: { type: 'object', properties: {
@@ -98,6 +99,7 @@ export function getLlmWikiTools(): Tool[] {
         openQuestions: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
         nextActions: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
         stableId: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', maxLength: 80 },
+        taskStatus: { type: 'string', enum: ['open', 'next_action', 'waiting', 'blocked', 'completed', 'cancelled'], description: 'Workflow state for project/task notes' },
         relations: { type: 'object', description: 'Typed Obsidian link arrays' },
         nextAction: { type: 'string', description: 'Optional concrete next action for an active project' },
         waitingFor: { type: 'string', description: 'Optional person/event/resource this project is waiting for' },

@@ -223,6 +223,8 @@ export interface BacklinkMatch {
   line: number;
   link: string;
   context: string;
+  /** Typed frontmatter relation such as supports or contradicts. */
+  relation?: string;
 }
 
 export interface BacklinksResult {
@@ -237,6 +239,8 @@ export interface OutlinkMatch {
   line: number;
   link: string;
   context: string;
+  /** Typed frontmatter relation such as supports or contradicts. */
+  relation?: string;
 }
 
 export interface OutlinksResult {

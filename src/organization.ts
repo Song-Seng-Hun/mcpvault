@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 /**
  * Lightweight knowledge-organization vocabulary.
  *
@@ -7,6 +9,7 @@
  */
 export const NOTE_KINDS = ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'decision', 'project', 'area', 'resource', 'journal', 'task'] as const;
 export const LIFECYCLES = ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'] as const;
+export const TASK_STATUSES = ['open', 'next_action', 'waiting', 'blocked', 'completed', 'cancelled'] as const;
 /** Typed relationships are navigation metadata, never an access grant. */
 export const RELATION_FIELDS = ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'related'] as const;
 export const ORGANIZATION_LIST_FIELDS = ['aliases', 'key_points', 'open_questions', 'next_actions', ...RELATION_FIELDS] as const;
@@ -16,6 +19,7 @@ export type Lifecycle = typeof LIFECYCLES[number];
 
 const noteKindSet = new Set<string>(NOTE_KINDS);
 const lifecycleSet = new Set<string>(LIFECYCLES);
+const taskStatusSet = new Set<string>(TASK_STATUSES);
 const relationFieldSet = new Set<string>(RELATION_FIELDS);
 
 function normalizedList(value: unknown, field: string, maximumItems: number, maximumChars: number): string[] | undefined {
@@ -40,6 +44,13 @@ function normalizedRelationMap(value: unknown): Record<string, string[]> | undef
     if (normalized?.length) result[field] = normalized;
   }
   return result;
+}
+
+export function normalizeTaskStatus(value: unknown, fallback?: typeof TASK_STATUSES[number]): typeof TASK_STATUSES[number] | undefined {
+  if (value === undefined || value === null || String(value).trim() === '') return fallback;
+  const normalized = String(value).trim().toLowerCase();
+  if (!taskStatusSet.has(normalized)) throw new Error(`taskStatus must be one of: ${TASK_STATUSES.join(', ')}`);
+  return normalized as typeof TASK_STATUSES[number];
 }
 
 export function normalizeNoteKind(value: unknown, fallback?: NoteKind): NoteKind | undefined {
@@ -97,6 +108,8 @@ export interface KnowledgeOrganizationInput {
   waitingFor?: unknown;
   stableId?: unknown;
   relations?: unknown;
+  taskStatus?: unknown;
+  contentDigest?: unknown;
 }
 
 export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record<string, unknown> {
@@ -120,6 +133,13 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
     ? Object.fromEntries(RELATION_FIELDS.map(field => [field, existing[field]]).filter(([, value]) => value !== undefined))
     : input.relations;
   const relations = normalizedRelationMap(relationsInput);
+  const taskStatus = input.taskStatus === undefined
+    ? normalizeTaskStatus(existing.task_status)
+    : normalizeTaskStatus(input.taskStatus);
+  const summaryFieldsPresent = Boolean(summary || keyPoints?.length || openQuestions?.length);
+  const summaryDigest = summaryFieldsPresent && input.contentDigest !== undefined
+    ? optionalText(input.contentDigest, 'summary_of_content_sha256', 128)
+    : optionalText(existing.summary_of_content_sha256, 'summary_of_content_sha256', 128);
   return {
     note_kind: kind,
     lifecycle,
@@ -133,6 +153,8 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
     ...(nextActions && { next_actions: nextActions }),
     ...(waitingFor && { waiting_for: waitingFor }),
     ...(stableId && { stable_id: stableId }),
+    ...(taskStatus && { task_status: taskStatus }),
+    ...(summaryDigest && { summary_of_content_sha256: summaryDigest }),
     ...(relations || {}),
   };
 }
@@ -179,6 +201,20 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
   }
   if (frontmatter.stable_id !== undefined && (typeof frontmatter.stable_id !== 'string' || !/^[a-z0-9][a-z0-9._-]*$/i.test(frontmatter.stable_id))) {
     issues.push({ code: 'invalid_stable_id', detail: 'stable_id must contain only letters, numbers, dots, underscores, and hyphens.' });
+  }
+  if (frontmatter.task_status !== undefined && !taskStatusSet.has(String(frontmatter.task_status).trim().toLowerCase())) {
+    issues.push({ code: 'invalid_task_status', detail: `task_status must be one of: ${TASK_STATUSES.join(', ')}` });
+  }
+  const summaryPresent = typeof frontmatter.summary === 'string' || Array.isArray(frontmatter.key_points) || Array.isArray(frontmatter.open_questions);
+  if (summaryPresent && frontmatter.summary_of_content_sha256 === undefined) {
+    issues.push({ code: 'summary_fingerprint_missing', detail: 'Progressive summary fields should record summary_of_content_sha256 so stale summaries can be detected after body edits.' });
+  } else if (summaryPresent && typeof frontmatter.summary_of_content_sha256 === 'string') {
+    if (!/^[a-f0-9]{64}$/i.test(frontmatter.summary_of_content_sha256)) {
+      issues.push({ code: 'invalid_summary_fingerprint', detail: 'summary_of_content_sha256 must be a SHA-256 hexadecimal digest of the current Markdown body.' });
+    } else {
+      const digest = createHash('sha256').update(content, 'utf8').digest('hex');
+      if (frontmatter.summary_of_content_sha256 !== digest) issues.push({ code: 'stale_summary', detail: 'The note body changed after its stored progressive summary; regenerate the summary before relying on it.' });
+    }
   }
   if (kind === 'project' && lifecycle === 'active' && !frontmatter.next_action && !frontmatter.waiting_for) {
     issues.push({ code: 'active_project_without_next_action', detail: 'An active project should declare next_action or waiting_for so another agent can move it forward.' });
