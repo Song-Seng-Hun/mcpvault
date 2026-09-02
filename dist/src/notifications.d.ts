@@ -59,6 +59,7 @@ export declare class NotificationService {
     private publicSnapshotInFlight;
     private publicSnapshotUpdate;
     private publicSnapshotWrite;
+    private publicSnapshotPending;
     private publicSnapshotRestoreAttempted;
     constructor(fileSystem: FileSystemService, reputation: ReputationService, vaultPath?: string | undefined, fileCatalog?: VaultFileCatalog | undefined);
     close(): Promise<void>;

@@ -214,6 +214,10 @@ paths. Shared file-stat checks also use a small generation-safe one-second
 cache, immediately evicted when a path changes, which is especially useful on
 NAS-backed vaults without weakening Markdown freshness.
 
+The fair request queue also has a bounded waiting budget. When all lanes are
+busy, a request that cannot start within the queue window is rejected with a
+retryable error and does not remain as an unbounded promise or timer.
+
 Note content loads share an in-flight read coordinator. If a user read,
 Obsidian moderation check, search, metadata, graph, and semantic indexing
 request the same note concurrently, one disk/NAS read satisfies them all; the
@@ -226,6 +230,10 @@ popular-post candidates are streamed through top-K selection instead of first
 creating a transformed array for every visible item. Complete post-reaction
 aggregates also answer post like/dislike totals directly; scoped count scans are
 used only when that derived aggregate is incomplete.
+
+Public discovery snapshot writes are coalesced to the newest derived state while
+an earlier compression/write is in progress, so a burst of community edits does
+not queue one full gzip rewrite per file event.
 
 Pulse fallback discovery streams published-post metadata and retains only its
 bounded active window. Mention fallback discovery merges the comment and chat

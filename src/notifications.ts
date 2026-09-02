@@ -552,6 +552,7 @@ export class NotificationService {
   private publicSnapshotInFlight: Promise<PublicSnapshotIndex> | undefined;
   private publicSnapshotUpdate: Promise<void> | undefined;
   private publicSnapshotWrite: Promise<void> | undefined;
+  private publicSnapshotPending: PublicSnapshotIndex | undefined;
   private publicSnapshotRestoreAttempted = false;
 
   constructor(
@@ -652,8 +653,15 @@ export class NotificationService {
   }
 
   private queuePublicSnapshotSave(value: PublicSnapshotIndex): void {
-    const previous = this.publicSnapshotWrite || Promise.resolve();
-    const write = previous.then(() => this.savePublicSnapshot(value)).catch(() => undefined);
+    this.publicSnapshotPending = value;
+    if (this.publicSnapshotWrite) return;
+    const write = (async () => {
+      while (this.publicSnapshotPending) {
+        const pending = this.publicSnapshotPending;
+        this.publicSnapshotPending = undefined;
+        await this.savePublicSnapshot(pending);
+      }
+    })().catch(() => undefined);
     this.publicSnapshotWrite = write;
     void write.finally(() => {
       if (this.publicSnapshotWrite === write) this.publicSnapshotWrite = undefined;
@@ -982,15 +990,24 @@ export class NotificationService {
     const state = await this.lastReadAt(params.principal);
     const cutoff = state.value || '';
     const candidates = await this.cachedPublicCandidates(params.principal);
-    let visible = candidates.map(candidate => ({ candidate, unread: !cutoff || candidate.createdAt > cutoff }));
-    if (!params.includeRead) visible = visible.filter(item => item.unread);
-    if (params.afterNotificationId) {
-      const index = visible.findIndex(item => item.candidate.notificationId === params.afterNotificationId);
-      if (index >= 0) visible = visible.slice(index + 1);
-    }
     const limit = limitNumber(params.limit, 20, 100);
     const budget = maxChars(params.maxChars);
-    const selectedCandidates = visible.slice(0, limit).map(item => item.candidate);
+    const cursorIndex = params.afterNotificationId
+      ? candidates.findIndex(candidate => candidate.notificationId === params.afterNotificationId
+        && (params.includeRead || !cutoff || candidate.createdAt > cutoff))
+      : -1;
+    const start = cursorIndex >= 0 ? cursorIndex + 1 : 0;
+    const selectedCandidates: NotificationCandidate[] = [];
+    let total = 0;
+    let unreadCount = 0;
+    for (let index = start; index < candidates.length; index += 1) {
+      const candidate = candidates[index]!;
+      const unread = !cutoff || candidate.createdAt > cutoff;
+      if (unread) unreadCount += 1;
+      if (!params.includeRead && !unread) continue;
+      total += 1;
+      if (selectedCandidates.length < limit) selectedCandidates.push(candidate);
+    }
     const hydrated = await this.hydrateCandidates(selectedCandidates, cutoff);
     const selected: NotificationEvent[] = [];
     let used = 0;
@@ -1003,9 +1020,9 @@ export class NotificationService {
     }
     return {
       notifications: selected,
-      unreadCount: visible.filter(item => item.unread).length,
-      total: visible.length,
-      truncated: selected.length < visible.length,
+      unreadCount,
+      total,
+      truncated: selected.length < total,
       lastReadAt: cutoff || undefined,
       nextCursor: selected.at(-1)?.notificationId,
     };
