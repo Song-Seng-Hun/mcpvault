@@ -1346,10 +1346,15 @@ test("delete note with system trash mode", async () => {
   });
 
   expect(result.success).toBe(true);
-  expect(result.message).toContain("system trash");
+  expect(result.message).toMatch(/system trash|vault trash/);
 
   const originalExists = await fileSystem.exists(testPath);
   expect(originalExists).toBe(false);
+
+  if (result.message.includes('vault trash')) {
+    const trashedContent = await readFile(join(testVaultPath, '.trash', testPath), 'utf-8');
+    expect(trashedContent).toBe(content);
+  }
 });
 
 test("delete note with frontmatter", async () => {

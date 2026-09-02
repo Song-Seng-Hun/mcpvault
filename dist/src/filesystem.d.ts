@@ -47,6 +47,7 @@ export declare class FileSystemService {
     listDirectory(path?: string): Promise<DirectoryListing>;
     exists(path: string): Promise<boolean>;
     isDirectory(path: string): Promise<boolean>;
+    private moveNoteToVaultTrash;
     deleteNote(params: DeleteNoteParams): Promise<DeleteResult>;
     moveNote(params: MoveNoteParams): Promise<MoveResult>;
     moveFile(params: MoveFileParams): Promise<MoveResult>;

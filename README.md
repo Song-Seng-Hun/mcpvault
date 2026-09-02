@@ -888,7 +888,9 @@ Delete a note from the vault (requires confirmation for safety).
 **Trash modes:**
 - `none` (default): permanent delete
 - `local`: move to `.trash` inside the vault, preserving folder structure
-- `system`: move to the OS trash/recycle bin
+- `system`: move to the OS trash/recycle bin; if a locked-down Windows
+  environment cannot launch the recycle-bin helper, MCPVault safely falls back
+  to the vault `.trash` and reports that fallback explicitly
 
 **Response (Confirmation Failed):**
 
@@ -1420,7 +1422,9 @@ second database or committed by a separate history system:
    A public note cannot cite private evidence that its readers cannot verify.
 4. Normal `search_notes` and `read_scoped_note` provide the query workflow.
    `get_wiki_catalog` computes the current index from frontmatter instead of
-   maintaining a conflict-prone central index by hand.
+   maintaining a conflict-prone central index by hand. The reserved public
+   `_wiki/SCHEMA.md` path is recognized even in older vaults where that file
+   has no frontmatter.
 5. `lint_wiki` checks source integrity, missing/invalid evidence, and broken
    wikilinks within only the caller's visible scopes.
 6. `report_wiki_issue` and `resolve_wiki_issue` form the durable Error Book for

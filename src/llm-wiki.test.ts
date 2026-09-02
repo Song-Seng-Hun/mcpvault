@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'vitest';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
@@ -27,6 +27,26 @@ async function callJson(client: Client, name: string, arguments_: Record<string,
   const result = await client.callTool({ name, arguments: arguments_ });
   return { result, value: JSON.parse((result.content as any)[0].text) };
 }
+
+test('recognizes a manually maintained public schema without frontmatter', async () => {
+  const { server, client } = await setup();
+  try {
+    await mkdir(join(vault, '_wiki'), { recursive: true });
+    await writeFile(join(vault, '_wiki', 'SCHEMA.md'), '# LLM Wiki schema\n\nPlain Markdown remains a valid public schema.\n');
+
+    const catalog = await callJson(client, 'get_wiki_catalog', {});
+    expect(catalog.value).toMatchObject({ counts: { schema: 1 }, total: 1, schemaPresent: true });
+
+    const orientation = await callJson(client, 'orient_wiki', {});
+    expect(orientation.value.publicOnboarding).toMatchObject({ schemaPath: '_wiki/SCHEMA.md', readableWithoutLogin: true });
+    expect(orientation.value.nextActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ tool: 'notes.read', arguments: { path: '_wiki/SCHEMA.md' } }),
+    ]));
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
 
 test('ingest, publish, catalog, lint, and immutable source enforcement form one workflow', async () => {
   const { server, client } = await setup();

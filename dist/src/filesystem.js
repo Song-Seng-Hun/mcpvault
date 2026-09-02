@@ -739,6 +739,23 @@ export class FileSystemService {
             return false;
         }
     }
+    async moveNoteToVaultTrash(path, fullPath) {
+        const trashDir = join(this.vaultPath, '.trash');
+        const trashPath = join(trashDir, path);
+        await mkdir(dirname(trashPath), { recursive: true });
+        let finalTrashPath = trashPath;
+        try {
+            await access(finalTrashPath, constants.F_OK);
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const ext = path.endsWith('.md') ? '.md' : '';
+            const base = ext ? path.slice(0, -ext.length) : path;
+            finalTrashPath = join(trashDir, `${base}-${timestamp}${ext}`);
+        }
+        catch {
+            // File does not exist in trash, no collision.
+        }
+        await rename(fullPath, finalTrashPath);
+    }
     async deleteNote(params) {
         const { trashMode = 'none' } = params;
         const path = this.normalizePath(params.path);
@@ -770,24 +787,7 @@ export class FileSystemService {
                 };
             }
             if (trashMode === 'local') {
-                const trashDir = join(this.vaultPath, '.trash');
-                const trashPath = join(trashDir, path);
-                // Ensure trash directory exists
-                await mkdir(dirname(trashPath), { recursive: true });
-                // Handle collisions by appending a timestamp
-                let finalTrashPath = trashPath;
-                try {
-                    await access(finalTrashPath, constants.F_OK);
-                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-                    const ext = path.endsWith('.md') ? '.md' : '';
-                    const base = ext ? path.slice(0, -ext.length) : path;
-                    const collidedPath = `${base}-${timestamp}${ext}`;
-                    finalTrashPath = join(trashDir, collidedPath);
-                }
-                catch {
-                    // File does not exist in trash, no collision
-                }
-                await rename(fullPath, finalTrashPath);
+                await this.moveNoteToVaultTrash(path, fullPath);
                 this.notifyNoteChanged(path, 'delete');
                 return {
                     success: true,
@@ -796,12 +796,29 @@ export class FileSystemService {
                 };
             }
             if (trashMode === 'system') {
-                await trash(fullPath);
-                return {
-                    success: true,
-                    path: path,
-                    message: `Successfully moved note to system trash: ${path}`
-                };
+                try {
+                    await trash(fullPath);
+                    this.notifyNoteChanged(path, 'delete');
+                    return {
+                        success: true,
+                        path: path,
+                        message: `Successfully moved note to system trash: ${path}`
+                    };
+                }
+                catch (systemTrashError) {
+                    // Some locked-down Windows environments cannot launch the bundled
+                    // recycle-bin helper. Preserve recoverability by falling back to
+                    // the vault trash, but never claim that the system trash succeeded.
+                    if (!(await this.exists(path)))
+                        throw systemTrashError;
+                    await this.moveNoteToVaultTrash(path, fullPath);
+                    this.notifyNoteChanged(path, 'delete');
+                    return {
+                        success: true,
+                        path: path,
+                        message: `System trash unavailable; moved note to vault trash instead: ${path}`
+                    };
+                }
             }
             // Perform the deletion using Node.js native API
             await unlink(fullPath);

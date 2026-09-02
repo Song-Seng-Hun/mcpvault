@@ -300,15 +300,20 @@ export class LlmWikiService {
     let total = 0;
     let schemaPresent = false;
     for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+      // The public schema is a reserved onboarding document. Older/manual
+      // vaults may contain it as plain Markdown without the frontmatter that
+      // initialize_llm_wiki adds, so recognize it by its canonical path too.
+      const isPublicSchema = normalizePath(note.path).toLowerCase() === PUBLIC_SCHEMA_PATH.toLowerCase();
       const type = note.frontmatter.llm_wiki_type;
-      if (typeof type !== 'string') continue;
+      if (!isPublicSchema && typeof type !== 'string') continue;
+      const catalogType = isPublicSchema ? 'schema' : type as string;
       total += 1;
-      counts[type] = (counts[type] || 0) + 1;
-      if (normalizePath(note.path).toLowerCase() === PUBLIC_SCHEMA_PATH.toLowerCase()) schemaPresent = true;
+      counts[catalogType] = (counts[catalogType] || 0) + 1;
+      if (isPublicSchema) schemaPresent = true;
       if (options.summaryOnly) continue;
       entries.push({
         path: this.access.toPublicPath(note.path),
-        type,
+        type: catalogType,
         title: note.frontmatter.title,
         status: note.frontmatter.knowledge_status || note.frontmatter.status,
         confidence: note.frontmatter.confidence,
