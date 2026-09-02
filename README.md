@@ -144,6 +144,29 @@ also include a private, short-lived `ETag` cache validator and
 receive `304 Not Modified` without downloading the JSON again. `Authorization`
 is included in `Vary`, and mutating/error responses are never cacheable.
 
+### Stateless MCP over HTTP
+
+For Codex or another remote-capable MCP client, start the MCP 2026-07-28
+Stateless Streamable HTTP adapter with `--mcp-http` or `--mcp-http=PORT` (the
+default is `8788`). This exposes MCP JSON-RPC at `/mcp`; it is different from
+the ordinary REST adapter above. The MCP connection has no server-side
+`Mcp-Session-Id`: every request carries its protocol metadata and bearer
+authentication, while MCPVault keeps one long-lived vault runtime for the file
+watcher, Markdown/Git source of truth, and disposable search/vector indexes.
+
+```bash
+npx @bitbonsai/mcpvault "/path/to/vault" --mcp-http=8788
+```
+
+In Codex, open MCP server settings, choose **Streamable HTTP**, and enter
+`http://127.0.0.1:8788/mcp`. For a remote client, expose the same endpoint only
+through an authenticated HTTPS reverse proxy or an MCP-capable tunnel. The
+existing stdio mode remains available during migration, but it is not required
+once every client has been verified against `/mcp`. When binding beyond
+localhost, set `MCPVAULT_MCP_HTTP_HOST` and explicit comma-separated
+`MCPVAULT_ALLOWED_HOSTS`; set `MCPVAULT_ALLOWED_ORIGINS` when browser-origin
+requests are expected.
+
 ## Features
 
 - AST-aware frontmatter updates preserve formatting for unchanged YAML fields.

@@ -879,21 +879,6 @@ export function createServer(vaultPath, options = {}) {
     // Initialize once at construction so fixed control calls work even when an
     // MCP host relies on a cached tools/list response and skips re-listing.
     endpointRegistry.setTools(buildCatalogTools(), CAPABILITY_FOR_TOOL, MUTATING_TOOLS);
-    server.setRequestHandler("tools/list", async () => {
-        const tools = buildCatalogTools();
-        for (const tool of tools) {
-            if (SCOPE_AUTH_TOOL_NAMES.has(tool.name))
-                continue;
-            const schema = tool.inputSchema;
-            schema.properties ||= {};
-            schema.properties.accessToken ||= {
-                type: "string",
-                description: "Optional token from login_scope. Without it, only the public global scope is visible.",
-            };
-        }
-        endpointRegistry.setTools(tools, CAPABILITY_FOR_TOOL, MUTATING_TOOLS);
-        return { tools: FIXED_MCP_TOOLS };
-    });
     const dispatchTool = async (requestedToolName, requestArgs = {}) => {
         const request = { params: { name: requestedToolName, arguments: requestArgs } };
         let toolName = requestedToolName;
@@ -1851,11 +1836,37 @@ export function createServer(vaultPath, options = {}) {
             };
         }
     };
-    server.setRequestHandler("tools/call", async (request) => requestGate.run(() => dispatchTool(request.params.name, (request.params.arguments || {})), requestFairnessKey((request.params.arguments || {}))));
+    const installMcpHandlers = (target) => {
+        target.setRequestHandler("tools/list", async () => {
+            const tools = buildCatalogTools();
+            for (const tool of tools) {
+                if (SCOPE_AUTH_TOOL_NAMES.has(tool.name))
+                    continue;
+                const schema = tool.inputSchema;
+                schema.properties ||= {};
+                schema.properties.accessToken ||= {
+                    type: "string",
+                    description: "Optional token from login_scope. Without it, only the public global scope is visible.",
+                };
+            }
+            endpointRegistry.setTools(tools, CAPABILITY_FOR_TOOL, MUTATING_TOOLS);
+            return { tools: FIXED_MCP_TOOLS };
+        });
+        target.setRequestHandler("tools/call", async (request) => requestGate.run(() => dispatchTool(request.params.name, (request.params.arguments || {})), requestFairnessKey((request.params.arguments || {}))));
+    };
+    installMcpHandlers(server);
     SERVER_RUNTIMES.set(server, {
         endpointRegistry,
         dispatchTool,
         ensureEndpointRegistry: () => endpointRegistry.setTools(buildCatalogTools(), CAPABILITY_FOR_TOOL, MUTATING_TOOLS),
+        createRequestServer: () => {
+            const requestServer = new Server({ name, version }, {
+                capabilities: { tools: {} },
+                instructions: `${SERVER_INSTRUCTIONS} ${SERVER_INSTRUCTIONS_FIRST_ENTRY} ${SERVER_INSTRUCTIONS_COMMUNITY} ${SERVER_INSTRUCTIONS_MOTIVATION}`,
+            });
+            installMcpHandlers(requestServer);
+            return requestServer;
+        },
     });
     const closeServer = server.close.bind(server);
     server.close = async () => {

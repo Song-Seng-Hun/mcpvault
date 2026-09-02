@@ -2,6 +2,7 @@ export interface ParsedCliArgs {
   vaultPathArg: string;
   readOnly: boolean;
   restPort?: number;
+  mcpHttpPort?: number;
 }
 
 /**
@@ -13,6 +14,7 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
   const pathArgs: string[] = [];
   let readOnly = false;
   let restPort: number | undefined;
+  let mcpHttpPort: number | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
@@ -55,6 +57,24 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
       continue;
     }
 
+    if (arg === "--mcp-http") {
+      const next = args[index + 1];
+      if (next && /^\d+$/.test(next)) {
+        mcpHttpPort = Number(next);
+        index += 1;
+      } else {
+        mcpHttpPort = 8788;
+      }
+      continue;
+    }
+
+    if (arg.startsWith("--mcp-http=")) {
+      const value = arg.slice("--mcp-http=".length);
+      if (!/^\d+$/.test(value)) throw new Error("--mcp-http must be a numeric port");
+      mcpHttpPort = Number(value);
+      continue;
+    }
+
     pathArgs.push(arg);
   }
 
@@ -62,5 +82,6 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
     vaultPathArg: pathArgs.join(" ").trim(),
     readOnly,
     ...(restPort !== undefined && { restPort }),
+    ...(mcpHttpPort !== undefined && { mcpHttpPort }),
   };
 }
