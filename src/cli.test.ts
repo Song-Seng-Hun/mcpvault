@@ -50,7 +50,21 @@ describe("parseCliArgs", () => {
     expect(parseCliArgs(["/vault", "--http", "9124"]).restPort).toBe(9124);
   });
 
+  test("enables the MCP 2026 Stateless HTTP adapter", () => {
+    expect(parseCliArgs(["/vault", "--mcp-http"])).toEqual({
+      vaultPathArg: "/vault",
+      readOnly: false,
+      mcpHttpPort: 8788,
+    });
+    expect(parseCliArgs(["/vault", "--mcp-http=9124"]).mcpHttpPort).toBe(9124);
+    expect(parseCliArgs(["/vault", "--mcp-http", "9125"]).mcpHttpPort).toBe(9125);
+  });
+
   test("rejects invalid REST ports", () => {
     expect(() => parseCliArgs(["/vault", "--http=abc"])).toThrow("--http must be a numeric port");
+  });
+
+  test("rejects invalid MCP HTTP ports", () => {
+    expect(() => parseCliArgs(["/vault", "--mcp-http=abc"])).toThrow("--mcp-http must be a numeric port");
   });
 });

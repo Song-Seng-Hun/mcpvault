@@ -311,6 +311,7 @@ export interface ServerRuntime {
   endpointRegistry: EndpointRegistry;
   dispatchTool: (requestedToolName: string, args?: Record<string, unknown>) => Promise<any>;
   ensureEndpointRegistry: () => void;
+  createRequestServer: () => Server;
 }
 
 const SERVER_RUNTIMES = new WeakMap<Server, ServerRuntime>();
@@ -917,23 +918,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   // Initialize once at construction so fixed control calls work even when an
   // MCP host relies on a cached tools/list response and skips re-listing.
   endpointRegistry.setTools(buildCatalogTools(), CAPABILITY_FOR_TOOL, MUTATING_TOOLS);
-
-  server.setRequestHandler("tools/list", async () => {
-    const tools = buildCatalogTools();
-
-    for (const tool of tools) {
-      if (SCOPE_AUTH_TOOL_NAMES.has(tool.name)) continue;
-      const schema = tool.inputSchema as { properties?: Record<string, unknown> };
-      schema.properties ||= {};
-      schema.properties.accessToken ||= {
-        type: "string",
-        description: "Optional token from login_scope. Without it, only the public global scope is visible.",
-      };
-    }
-
-    endpointRegistry.setTools(tools, CAPABILITY_FOR_TOOL, MUTATING_TOOLS);
-    return { tools: FIXED_MCP_TOOLS };
-  });
 
   const dispatchTool = async (requestedToolName: string, requestArgs: Record<string, unknown> = {}): Promise<any> => {
     const request = { params: { name: requestedToolName, arguments: requestArgs } };
@@ -2010,16 +1994,45 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     }
   };
 
-  server.setRequestHandler("tools/call", async (request) =>
-    requestGate.run(
-      () => dispatchTool(request.params.name, (request.params.arguments || {}) as Record<string, unknown>),
-      requestFairnessKey((request.params.arguments || {}) as Record<string, unknown>),
-    ));
+  const installMcpHandlers = (target: Server): void => {
+    target.setRequestHandler("tools/list", async () => {
+      const tools = buildCatalogTools();
+
+      for (const tool of tools) {
+        if (SCOPE_AUTH_TOOL_NAMES.has(tool.name)) continue;
+        const schema = tool.inputSchema as { properties?: Record<string, unknown> };
+        schema.properties ||= {};
+        schema.properties.accessToken ||= {
+          type: "string",
+          description: "Optional token from login_scope. Without it, only the public global scope is visible.",
+        };
+      }
+
+      endpointRegistry.setTools(tools, CAPABILITY_FOR_TOOL, MUTATING_TOOLS);
+      return { tools: FIXED_MCP_TOOLS };
+    });
+
+    target.setRequestHandler("tools/call", async (request) =>
+      requestGate.run(
+        () => dispatchTool(request.params.name, (request.params.arguments || {}) as Record<string, unknown>),
+        requestFairnessKey((request.params.arguments || {}) as Record<string, unknown>),
+      ));
+  };
+
+  installMcpHandlers(server);
 
   SERVER_RUNTIMES.set(server, {
     endpointRegistry,
     dispatchTool,
     ensureEndpointRegistry: () => endpointRegistry.setTools(buildCatalogTools(), CAPABILITY_FOR_TOOL, MUTATING_TOOLS),
+    createRequestServer: () => {
+      const requestServer = new Server({ name, version }, {
+        capabilities: { tools: {} },
+        instructions: `${SERVER_INSTRUCTIONS} ${SERVER_INSTRUCTIONS_FIRST_ENTRY} ${SERVER_INSTRUCTIONS_COMMUNITY} ${SERVER_INSTRUCTIONS_MOTIVATION}`,
+      });
+      installMcpHandlers(requestServer);
+      return requestServer;
+    },
   });
 
   const closeServer = server.close.bind(server);

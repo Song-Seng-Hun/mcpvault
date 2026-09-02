@@ -7,6 +7,7 @@ export function parseCliArgs(args) {
     const pathArgs = [];
     let readOnly = false;
     let restPort;
+    let mcpHttpPort;
     for (let index = 0; index < args.length; index += 1) {
         const arg = args[index];
         if (arg === "--read-only") {
@@ -46,11 +47,30 @@ export function parseCliArgs(args) {
             restPort = Number(value);
             continue;
         }
+        if (arg === "--mcp-http") {
+            const next = args[index + 1];
+            if (next && /^\d+$/.test(next)) {
+                mcpHttpPort = Number(next);
+                index += 1;
+            }
+            else {
+                mcpHttpPort = 8788;
+            }
+            continue;
+        }
+        if (arg.startsWith("--mcp-http=")) {
+            const value = arg.slice("--mcp-http=".length);
+            if (!/^\d+$/.test(value))
+                throw new Error("--mcp-http must be a numeric port");
+            mcpHttpPort = Number(value);
+            continue;
+        }
         pathArgs.push(arg);
     }
     return {
         vaultPathArg: pathArgs.join(" ").trim(),
         readOnly,
         ...(restPort !== undefined && { restPort }),
+        ...(mcpHttpPort !== undefined && { mcpHttpPort }),
     };
 }

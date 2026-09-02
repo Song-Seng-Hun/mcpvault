@@ -2,6 +2,7 @@ export interface ParsedCliArgs {
     vaultPathArg: string;
     readOnly: boolean;
     restPort?: number;
+    mcpHttpPort?: number;
 }
 /**
  * Parse runtime options without importing server.ts, which starts the MCP

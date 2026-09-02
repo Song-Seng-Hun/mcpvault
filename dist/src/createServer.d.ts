@@ -16,6 +16,7 @@ export interface ServerRuntime {
     endpointRegistry: EndpointRegistry;
     dispatchTool: (requestedToolName: string, args?: Record<string, unknown>) => Promise<any>;
     ensureEndpointRegistry: () => void;
+    createRequestServer: () => Server;
 }
 export declare function getServerRuntime(server: Server): ServerRuntime | undefined;
 export declare function createServer(vaultPath: string, options?: CreateServerOptions): Server;
