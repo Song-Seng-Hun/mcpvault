@@ -88,6 +88,18 @@ export declare class SocialService {
         status: string;
         revision: string;
     }>;
+    deleteBlogPost(params: {
+        principal?: ScopePrincipal;
+        slug: string;
+        expectedRevision: string;
+    }): Promise<{
+        success: boolean;
+        slug: string;
+        path: string;
+        deleted: boolean;
+        status: string;
+        revision: string;
+    }>;
     listBlogPosts(params: {
         principal?: ScopePrincipal;
         status?: string;

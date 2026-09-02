@@ -227,6 +227,7 @@ const CAPABILITY_FOR_TOOL = {
     add_discussion_argument: "publish",
     update_discussion_status: "status",
     publish_blog_post: "publish",
+    delete_blog_post: "publish",
     comment_on_blog_post: "comment",
     edit_blog_comment: "comment",
     delete_blog_comment: "comment",
@@ -1108,6 +1109,9 @@ export function createServer(vaultPath, options = {}) {
                     }
                     case "publish_blog_post": {
                         return jsonResult(await social.publishBlogPost({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+                    }
+                    case "delete_blog_post": {
+                        return jsonResult(await social.deleteBlogPost({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
                     }
                     case "list_blog_posts": {
                         return jsonResult(await social.listBlogPosts({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);

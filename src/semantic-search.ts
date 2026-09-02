@@ -250,27 +250,30 @@ function chunkNote(path: string, content: string): SemanticChunk[] {
   return chunks;
 }
 
-async function resultFromRow(row: IndexRow, vaultPath: string, includeRevision: boolean, vaultIo?: VaultIoCoordinator): Promise<SearchResult> {
-  let excerpt = '';
+async function resultFromRow(row: IndexRow, vaultPath: string, includeRevision: boolean, vaultIo?: VaultIoCoordinator): Promise<SearchResult | undefined> {
   try {
-    const content = stripFrontmatter(await (vaultIo ? vaultIo.readUtf8(join(vaultPath, row.path)) : readFile(join(vaultPath, row.path), 'utf8')));
+    const raw = await (vaultIo ? vaultIo.readUtf8(join(vaultPath, row.path)) : readFile(join(vaultPath, row.path), 'utf8'));
+    // A vector row is disposable and may lag behind an Obsidian edit. Never
+    // return a deleted note or an excerpt ranked from an older revision.
+    if (hashContent(raw) !== row.hash) return undefined;
+    const content = stripFrontmatter(raw);
     const lines = content.split(/\r?\n/);
     const start = Math.max(0, row.line - 2);
-    excerpt = compactExcerpt(lines.slice(start, start + 3).join(' '));
+    return {
+      p: row.path,
+      t: row.title,
+      ex: compactExcerpt(lines.slice(start, start + 3).join(' ')),
+      mc: 0,
+      ln: row.line,
+      uri: generateObsidianUri(vaultPath, row.path),
+      ...(row.wiki && { wk: true as const }),
+      vs: true,
+      ...(includeRevision && { rv: row.hash }),
+    };
   } catch {
     // The source may have been removed between vector query and response.
+    return undefined;
   }
-  return {
-    p: row.path,
-    t: row.title,
-    ex: excerpt,
-    mc: 0,
-    ln: row.line,
-    uri: generateObsidianUri(vaultPath, row.path),
-    ...(row.wiki && { wk: true as const }),
-    vs: true,
-    ...(includeRevision && { rv: row.hash }),
-  };
 }
 
 /**
@@ -466,10 +469,9 @@ export class SemanticSearchService {
         .sort((a, b) => a.distance - b.distance)
         .slice(0, limit)
         .map(item => item.row);
-      const results = boundSearchResults(
-        await Promise.all(ordered.map(row => resultFromRow(row, this.vaultPath, params.includeRevisions === true, this.vaultIo))),
-        maxChars,
-      );
+      const hydrated = (await Promise.all(ordered.map(row => resultFromRow(row, this.vaultPath, params.includeRevisions === true, this.vaultIo))))
+        .filter((result): result is SearchResult => result !== undefined);
+      const results = boundSearchResults(hydrated, maxChars);
       this.queryCache.set(cacheKey, {
         expiresAt: Date.now() + SEMANTIC_QUERY_CACHE_TTL_MS,
         generation: this.queryGeneration,

@@ -4,7 +4,7 @@ import { AGORA_STANCES, COMMUNITY_POST_CATEGORIES } from './social.js';
 const prettyPrint = { type: 'boolean', description: 'Format JSON response with indentation', default: false } as const;
 const accessToken = { type: 'string', description: 'Token from login_scope. Required for private journals and community publishing.' } as const;
 
-export const SOCIAL_MUTATING_TOOLS = ['write_journal_entry', 'publish_blog_post', 'comment_on_blog_post', 'edit_blog_comment', 'delete_blog_comment'] as const;
+export const SOCIAL_MUTATING_TOOLS = ['write_journal_entry', 'publish_blog_post', 'delete_blog_post', 'comment_on_blog_post', 'edit_blog_comment', 'delete_blog_comment'] as const;
 
 export function getSocialTools(): Tool[] {
   return [
@@ -47,6 +47,11 @@ export function getSocialTools(): Tool[] {
       name: 'read_blog_post',
       description: 'Read a public community post and its comment count. The response shows the author level and your viewer level when authenticated. Set includeComments to include a bounded comment window with parent context. A draft can only be read by its author.',
       inputSchema: { type: 'object', properties: { slug: { type: 'string' }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, description: 'Optional hard total response budget; oversized post bodies return metadata with truncated=true.' }, includeComments: { type: 'boolean', default: false }, commentLimit: { type: 'integer', minimum: 1, maximum: 100, default: 10 }, commentMaxChars: { type: 'integer', minimum: 1, maximum: 20000, default: 4000 }, includeThreadContext: { type: 'boolean', default: true }, accessToken, prettyPrint }, required: ['slug'] },
+    },
+    {
+      name: 'delete_blog_post',
+      description: 'Soft-delete your own public community post with optimistic concurrency. The post is archived and its body is replaced with [deleted], so normal feeds stop showing it while Markdown and Git history remain recoverable.',
+      inputSchema: { type: 'object', properties: { slug: { type: 'string' }, expectedRevision: { type: 'string', description: 'Revision returned when reading the post' }, accessToken, prettyPrint }, required: ['slug', 'expectedRevision'] },
     },
     {
       name: 'comment_on_blog_post',

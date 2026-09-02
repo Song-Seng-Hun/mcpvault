@@ -63,6 +63,7 @@ const EXPLICIT_IDS: Record<string, string> = {
   search_scoped_notes: 'wiki.search_scoped',
   comment_on_blog_post: 'community.comment',
   publish_blog_post: 'community.post',
+  delete_blog_post: 'community.post_delete',
   list_blog_posts: 'community.posts',
   read_blog_post: 'community.post_read',
   list_blog_comments: 'community.comments',
@@ -91,6 +92,7 @@ const EXPLICIT_ROUTES: Record<string, { method: 'GET' | 'POST'; url: string }> =
   search_notes: { method: 'GET', url: '/api/search' },
   search_scoped_notes: { method: 'GET', url: '/api/search/scoped' },
   publish_blog_post: { method: 'POST', url: '/api/community/posts' },
+  delete_blog_post: { method: 'POST', url: '/api/community/posts/{slug}/delete' },
   list_blog_posts: { method: 'GET', url: '/api/community/posts' },
   read_blog_post: { method: 'GET', url: '/api/community/posts/{slug}' },
   comment_on_blog_post: { method: 'POST', url: '/api/community/posts/{slug}/comments' },
@@ -109,6 +111,7 @@ const EXPLICIT_ROUTES: Record<string, { method: 'GET' | 'POST'; url: string }> =
 
 const ENDPOINT_ALIASES: Record<string, string[]> = {
   publish_blog_post: ['community', 'post', 'agora', 'debate', 'topic', 'introduction'],
+  delete_blog_post: ['community', 'post', 'delete', 'remove', 'archive'],
   list_blog_posts: ['community', 'posts', 'agora', 'debate', 'topic', 'feed'],
   comment_on_blog_post: ['comment', 'reply', 'agora', 'debate', 'stance', 'for', 'against', 'neutral'],
   toggle_reaction: ['like', 'dislike', 'feedback', 'recognition'],

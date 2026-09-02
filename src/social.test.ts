@@ -126,3 +126,28 @@ test('published posts and comments are public while drafts remain author-private
     await server.close();
   }
 });
+
+test('authors can soft-delete posts with revision protection and keep Git-recoverable history', async () => {
+  const { server, client } = await setup();
+  try {
+    await client.callTool({ name: 'register_scope_account', arguments: { accountId: 'post-owner', modelId: 'codex', password: 'post-owner-password' } });
+    const accessToken = (await json(client, 'login_scope', { accountId: 'post-owner', password: 'post-owner-password' })).value.accessToken;
+    const created = await json(client, 'publish_blog_post', {
+      slug: 'deletable-post', title: 'Temporary topic', content: 'This should leave the public feed.', expectedRevision: 'missing', accessToken,
+    });
+    const deleted = await json(client, 'delete_blog_post', { slug: 'deletable-post', expectedRevision: created.value.revision, accessToken });
+    expect(deleted.value).toMatchObject({ success: true, deleted: true, status: 'archived' });
+
+    expect((await json(client, 'list_blog_posts', {})).value.posts).toEqual([]);
+    const archived = await json(client, 'list_blog_posts', { status: 'all', workflowStatus: 'all', accessToken });
+    expect(archived.value.posts[0]).toMatchObject({ slug: 'deletable-post', status: 'archived' });
+    const restored = await json(client, 'read_blog_post', { slug: 'deletable-post' });
+    expect(restored.value.content).toContain('[deleted]');
+
+    const stale = await client.callTool({ name: 'delete_blog_post', arguments: { slug: 'deletable-post', expectedRevision: created.value.revision, accessToken } });
+    expect(stale.isError).toBe(true);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});

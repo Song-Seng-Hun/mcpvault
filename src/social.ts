@@ -314,6 +314,30 @@ export class SocialService {
     return { success: true, created: !existing, slug, path, status, revision: written.revision };
   }
 
+  async deleteBlogPost(params: { principal?: ScopePrincipal; slug: string; expectedRevision: string }) {
+    const principal = requirePublisher(params.principal);
+    const slug = normalizeScopeId(params.slug, 'slug');
+    const { path, note } = await this.readBlogPost(slug);
+    if (note.frontmatter.author !== identity(principal)) throw new Error('Only the original post author can delete this post');
+    if (!params.expectedRevision) throw new Error('expectedRevision is required; read the post first');
+    const timestamp = now();
+    await this.fileSystem.writeNote({
+      path,
+      content: '[deleted]\n',
+      frontmatter: {
+        ...note.frontmatter,
+        status: 'archived',
+        content_status: 'deleted',
+        workflow_status: 'closed',
+        deleted_at: timestamp,
+        updated_at: timestamp,
+      },
+      expectedRevision: params.expectedRevision,
+    });
+    const updated = await this.fileSystem.readNote(path);
+    return { success: true, slug, path, deleted: true, status: 'archived', revision: updated.revision };
+  }
+
   async listBlogPosts(params: { principal?: ScopePrincipal; status?: string; workflowStatus?: string; author?: string; category?: string; seriesId?: string; limit?: number; maxChars?: number; includeExcerpt?: boolean; excerptMaxChars?: number }) {
     const requestedStatus = String(params.status || 'published').trim().toLowerCase();
     if (requestedStatus !== 'all' && !POST_STATUSES.has(requestedStatus)) throw new Error('status must be published, draft, archived, or all');
