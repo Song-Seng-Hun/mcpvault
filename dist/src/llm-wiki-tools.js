@@ -21,7 +21,7 @@ export function getLlmWikiTools() {
             description: 'Capture one immutable raw source snapshot. Re-ingesting identical content is idempotent; changed content requires a new sourceId.',
             inputSchema: { type: 'object', properties: {
                     scopeUri, sourceId: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' },
-                    sourceUrl: { type: 'string' }, capturedBy: { type: 'string' }, capturedAt: { type: 'string' }, mediaType: { type: 'string' }, trustLevel: { type: 'string', enum: ['unrated', 'low', 'medium', 'high', 'verified'], default: 'unrated' }, trustReason: { type: 'string', maxLength: 500 }, accessToken, prettyPrint,
+                    sourceUrl: { type: 'string' }, capturedBy: { type: 'string' }, capturedAt: { type: 'string' }, mediaType: { type: 'string' }, sourceType: { type: 'string', maxLength: 80, description: 'Optional source kind such as paper, web, book, dataset, or code' }, citationKey: { type: 'string', maxLength: 120, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]*$' }, author: { type: 'string', maxLength: 300 }, publishedAt: { type: 'string' }, retrievedAt: { type: 'string' }, trustLevel: { type: 'string', enum: ['unrated', 'low', 'medium', 'high', 'verified'], default: 'unrated' }, trustReason: { type: 'string', maxLength: 500 }, accessToken, prettyPrint,
                 }, required: ['title', 'content'] },
         },
         {
@@ -36,7 +36,7 @@ export function getLlmWikiTools() {
             description: 'Complete the GTD Clarify step for one Inbox capture. Records a durable disposition and optional PARA/task metadata without deleting or silently moving the note; the response gives a safe suggested destination.',
             inputSchema: { type: 'object', properties: {
                     path: { type: 'string' }, disposition: { type: 'string', enum: ['knowledge', 'reference', 'project', 'someday', 'discard', 'delegate'] }, clarifiedBy: { type: 'string' }, clarifyNote: { type: 'string', maxLength: 1000 }, targetPath: { type: 'string', description: 'Optional vault-relative destination suggestion; the note is not moved automatically' },
-                    noteKind: { type: 'string', enum: ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'] }, lifecycle: { type: 'string', enum: ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'] }, taskStatus: { type: 'string', enum: ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'] }, project: { type: 'string' }, nextAction: { type: 'string', maxLength: 500 }, waitingFor: { type: 'string', maxLength: 500 }, desiredOutcome: { type: 'string', maxLength: 1000 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
+                    noteKind: { type: 'string', enum: ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'] }, lifecycle: { type: 'string', enum: ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'] }, taskStatus: { type: 'string', enum: ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'] }, project: { type: 'string' }, nextAction: { type: 'string', maxLength: 500 }, waitingFor: { type: 'string', maxLength: 500 }, desiredOutcome: { type: 'string', maxLength: 1000 }, projectPurpose: { type: 'string', maxLength: 1000 }, projectSupport: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 30 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
                 }, required: ['path', 'disposition', 'expectedRevision'] },
         },
         {
@@ -77,8 +77,11 @@ export function getLlmWikiTools() {
                     nextAction: { type: 'string', maxLength: 500, description: 'One concrete next action for a project/task note' },
                     waitingFor: { type: 'string', maxLength: 500 },
                     desiredOutcome: { type: 'string', maxLength: 1000, description: 'GTD-style observable outcome' },
+                    projectPurpose: { type: 'string', maxLength: 1000, description: 'Optional project purpose/why; keep this separate from the desired outcome' },
+                    projectSupport: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 30, description: 'Optional bounded Obsidian links or paths to project-support material; not the day-to-day action list' },
                     taskContext: { type: 'string', maxLength: 300, description: 'GTD context such as @computer, @research, or a named capability' },
-                    dueAt: { type: 'string', description: 'Optional ISO due date/time' },
+                    dueAt: { type: 'string', description: 'Optional ISO deadline; it is not a calendar appointment' },
+                    scheduledAt: { type: 'string', description: 'Optional ISO date/time when the work should be performed' },
                     deferUntil: { type: 'string', description: 'Optional ISO date/time before which this action should not be revisited' },
                     taskStatus: { type: 'string', enum: ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'], description: 'Workflow state for project/task notes; separate from knowledge lifecycle' },
                     reviewPolicy: { type: 'string', enum: ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit'], description: 'When a knowledge note should re-enter review; this is a derived policy, not a hidden scheduler' },
@@ -129,6 +132,16 @@ export function getLlmWikiTools() {
             inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 50, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 18000, default: 9000 }, accessToken, prettyPrint } },
         },
         {
+            name: 'get_wiki_review_packet',
+            description: 'Return a smaller action-oriented knowledge-review packet. It prioritizes due evidence, Inbox captures, projects without a next action, MOC questions without linked answers, Evergreen quality hints, and graph repairs. It is derived and advisory; it never mutates notes or replaces Git history.',
+            inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 30, default: 8 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
+        },
+        {
+            name: 'get_wiki_project_packet',
+            description: 'Return a bounded GTD/Natural Planning packet for active projects. It separates purpose, desired outcome, brainstorming, project-support references, and next actions, and flags missing planning pieces without rewriting the note.',
+            inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 40, default: 12 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 8000 }, accessToken, prettyPrint } },
+        },
+        {
             name: 'get_wiki_inbox',
             description: 'Return a bounded list of Inbox or lifecycle=inbox notes that still need classification. This is metadata-only and never moves or rewrites files.',
             inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 50, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 5000 }, accessToken, prettyPrint } },
@@ -147,7 +160,7 @@ export function getLlmWikiTools() {
                     keyPoints: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
                     openQuestions: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
                     nextActions: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
-                    desiredOutcome: { type: 'string', maxLength: 1000 }, taskContext: { type: 'string', maxLength: 300 }, dueAt: { type: 'string' }, deferUntil: { type: 'string' },
+                    desiredOutcome: { type: 'string', maxLength: 1000 }, projectPurpose: { type: 'string', maxLength: 1000 }, projectSupport: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 30 }, taskContext: { type: 'string', maxLength: 300 }, dueAt: { type: 'string', description: 'ISO deadline, distinct from scheduledAt' }, scheduledAt: { type: 'string', description: 'ISO execution/calendar time' }, deferUntil: { type: 'string' },
                     stableId: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', maxLength: 80 },
                     taskStatus: { type: 'string', enum: ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'], description: 'Workflow state for project/task notes' },
                     reviewPolicy: { type: 'string', enum: ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit'] },
@@ -198,8 +211,9 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_bases_view',
-            description: 'Return a bounded, optional Obsidian Bases YAML view for visible Wiki notes. This exports a local view definition only; it is not an MCP permission boundary and does not write a file.',
+            description: 'Return a bounded, optional Obsidian Bases YAML view for visible Wiki notes. Standard projections include all, inbox, projects, review, and epistemic. This exports a local view definition only; it is not an MCP permission boundary and does not write a file.',
             inputSchema: { type: 'object', properties: {
+                    view: { type: 'string', enum: ['all', 'inbox', 'projects', 'review', 'epistemic'], default: 'all', description: 'Optional standard Obsidian Bases projection' },
                     noteKind: { type: 'string', description: 'Optional exact note_kind filter' },
                     lifecycle: { type: 'string', description: 'Optional exact lifecycle filter' },
                     limit: { type: 'integer', minimum: 1, maximum: 500, default: 100 },
@@ -223,7 +237,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_source_trust',
-            description: 'List bounded source snapshots with capture-time trust level, reason, integrity, and evidence usage. Trust is advisory metadata; an intact hash and inspectable provenance remain required.',
+            description: 'List bounded source snapshots with citation metadata, capture-time trust level, reason, integrity, and evidence usage. Trust is advisory metadata; an intact hash and inspectable provenance remain required.',
             inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 100, default: 30 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 7000 }, accessToken, prettyPrint } },
         },
         {

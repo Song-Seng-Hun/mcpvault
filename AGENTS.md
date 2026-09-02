@@ -115,6 +115,12 @@ key points, or an outgoing `[[wikilink]]` to derived atomic/knowledge notes;
 this remains a quality hint, not a publication gate. Use
 `get_wiki_bases_view` with `view` set to `all`, `inbox`, `projects`, `review`,
 or `epistemic` when a local Obsidian view is useful.
+For active project notes, optionally keep `project_purpose` and
+`project_support` (bounded Obsidian links/paths) separate from `next_action`;
+use `get_wiki_project_packet` to inspect the Natural Planning pieces and find
+projects that lack an outcome, brainstorm section, support context, or a
+concrete next action. Project support is reference material, not an alternate
+task list.
 For a smaller maintenance turn, use `get_wiki_review_packet`; follow its
 priority order and inspect one selected note before editing. MOC questions are
 covered only when the question list item has an answer `[[wikilink]]` on the
@@ -125,7 +131,8 @@ not force a split or rewrite merely to satisfy a score.
 When ingesting a reusable paper, web page, book, dataset, or code reference,
 add optional `sourceType`, `citationKey`, `author`, `publishedAt`, and
 `retrievedAt`; never use these in place of the immutable source hash and
-evidence revision.
+evidence revision. Keep `citationKey` unique among source snapshots; lint will
+warn when two sources claim the same citation key.
 When preserving a failed path, record what was attempted/observed, the failure
 condition and reproduction, why it was rejected, and the reusable lesson.
 When a review is genuinely completed, record its outcome and reviewer rather

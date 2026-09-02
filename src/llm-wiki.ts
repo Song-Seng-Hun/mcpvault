@@ -620,6 +620,8 @@ export class LlmWikiService {
     nextAction?: string;
     waitingFor?: string;
     desiredOutcome?: string;
+    projectPurpose?: string;
+    projectSupport?: unknown;
     taskContext?: string;
     dueAt?: string;
     scheduledAt?: string;
@@ -747,6 +749,8 @@ export class LlmWikiService {
           ...(params.nextAction !== undefined && { nextAction: params.nextAction }),
           ...(params.waitingFor !== undefined && { waitingFor: params.waitingFor }),
           ...(params.desiredOutcome !== undefined && { desiredOutcome: params.desiredOutcome }),
+          ...(params.projectPurpose !== undefined && { projectPurpose: params.projectPurpose }),
+          ...(params.projectSupport !== undefined && { projectSupport: params.projectSupport }),
           ...(params.taskContext !== undefined && { taskContext: params.taskContext }),
           ...(params.dueAt !== undefined && { dueAt: params.dueAt }),
           ...(params.scheduledAt !== undefined && { scheduledAt: params.scheduledAt }),
@@ -1049,6 +1053,8 @@ export class LlmWikiService {
     nextAction?: string;
     waitingFor?: string;
     desiredOutcome?: string;
+    projectPurpose?: string;
+    projectSupport?: unknown;
     expectedRevision: string;
   }) {
     const disposition = normalizeClarifyDisposition(params.disposition);
@@ -1078,6 +1084,8 @@ export class LlmWikiService {
       ...(params.nextAction !== undefined && { nextAction: params.nextAction }),
       ...(params.waitingFor !== undefined && { waitingFor: params.waitingFor }),
       ...(params.desiredOutcome !== undefined && { desiredOutcome: params.desiredOutcome }),
+      ...(params.projectPurpose !== undefined && { projectPurpose: params.projectPurpose }),
+      ...(params.projectSupport !== undefined && { projectSupport: params.projectSupport }),
       clarifyDisposition: disposition,
       clarifiedBy: params.clarifiedBy,
       ...(params.clarifyNote !== undefined && { clarifyNote: params.clarifyNote }),
@@ -1350,6 +1358,70 @@ export class LlmWikiService {
     };
   }
 
+  /**
+   * Project-support projection for GTD-style planning. It keeps the
+   * day-to-day next action separate from purpose, outcome, brainstorming, and
+   * reference material, and never mutates the project note.
+   */
+  async projectPacket(principal?: ScopePrincipal, limit = 12, maxChars = 8000) {
+    const boundedLimit = Math.min(Math.max(Number(limit) || 12, 1), 40);
+    const boundedChars = Math.min(Math.max(Number(maxChars) || 8000, 512), 16000);
+    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+    const candidates: Array<Record<string, unknown> & { score: number }> = [];
+    let total = 0;
+    const heading = (content: string, names: string[]) => {
+      const wanted = new Set(names.map(name => name.toLowerCase()));
+      return content.split(/\r?\n/).some(line => {
+        const match = line.match(/^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/);
+        return Boolean(match && wanted.has(match[1]!.trim().toLowerCase()));
+      });
+    };
+    for await (const note of iterateNotes(this.fileSystem, { includeContent: true }, canAccess)) {
+      if (note.frontmatter.llm_wiki_type !== 'knowledge' || note.frontmatter.note_kind !== 'project') continue;
+      const lifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
+      if (lifecycle === 'archived' || lifecycle === 'superseded') continue;
+      total += 1;
+      const nextActions = Array.isArray(note.frontmatter.next_actions) ? note.frontmatter.next_actions.filter((item: unknown): item is string => typeof item === 'string').slice(0, 8) : [];
+      const nextAction = typeof note.frontmatter.next_action === 'string' ? note.frontmatter.next_action : undefined;
+      const waitingFor = typeof note.frontmatter.waiting_for === 'string' ? note.frontmatter.waiting_for : undefined;
+      const support = Array.isArray(note.frontmatter.project_support) ? note.frontmatter.project_support.filter((item: unknown): item is string => typeof item === 'string').slice(0, 8) : [];
+      const missing: string[] = [];
+      if (!note.frontmatter.project_purpose) missing.push('purpose');
+      if (!note.frontmatter.desired_outcome) missing.push('desired_outcome');
+      if (!nextAction && nextActions.length === 0 && !waitingFor) missing.push('next_action');
+      if (!heading(note.content || '', ['Brainstorm'])) missing.push('brainstorm_section');
+      if (support.length === 0 && !heading(note.content || '', ['Project support'])) missing.push('project_support');
+      const score = (missing.includes('next_action') ? 100 : 0) + (missing.includes('desired_outcome') ? 20 : 0) + (missing.includes('purpose') ? 10 : 0) + (missing.includes('project_support') ? 5 : 0);
+      candidates.push({
+        path: this.access.toPublicPath(note.path),
+        title: note.frontmatter.title || note.path.split('/').at(-1),
+        lifecycle,
+        ...(note.frontmatter.task_status && { taskStatus: note.frontmatter.task_status }),
+        ...(note.frontmatter.project_purpose && { purpose: boundedText(note.frontmatter.project_purpose, 500) }),
+        ...(note.frontmatter.desired_outcome && { desiredOutcome: boundedText(note.frontmatter.desired_outcome, 500) }),
+        ...(nextAction && { nextAction: boundedText(nextAction, 500) }),
+        ...(nextActions.length > 0 && { nextActions }),
+        ...(waitingFor && { waitingFor: boundedText(waitingFor, 500) }),
+        ...(support.length > 0 && { projectSupport: support }),
+        ...(missing.length > 0 && { missing }),
+        planning: { purpose: Boolean(note.frontmatter.project_purpose), desiredOutcome: Boolean(note.frontmatter.desired_outcome), brainstormSection: heading(note.content || '', ['Brainstorm']), projectSupport: support.length > 0 || heading(note.content || '', ['Project support']) },
+        score,
+      });
+    }
+    candidates.sort((left, right) => right.score - left.score || String(left.path).localeCompare(String(right.path)));
+    const items = candidates.slice(0, boundedLimit).map(({ score: _score, ...item }) => item);
+    const result = {
+      purpose: 'A bounded project-planning packet. Separate purpose/outcome/support from the independent next-action list; this is advisory and does not replace Git history.',
+      items,
+      total,
+      needsPlanning: candidates.filter(item => item.score > 0).length,
+      truncated: total > items.length,
+      generatedAt: now(),
+    };
+    if (JSON.stringify(result).length <= boundedChars) return result;
+    return { ...result, items: items.slice(0, Math.min(5, boundedLimit)), truncated: true };
+  }
+
   async triage(params: {
     principal?: ScopePrincipal;
     path: string;
@@ -1368,6 +1440,8 @@ export class LlmWikiService {
     summaryHighlights?: unknown;
     nextActions?: unknown;
     desiredOutcome?: string;
+    projectPurpose?: string;
+    projectSupport?: unknown;
     taskContext?: string;
     dueAt?: string;
     scheduledAt?: string;
@@ -1415,7 +1489,7 @@ export class LlmWikiService {
     if (note.frontmatter.llm_wiki_type && note.frontmatter.llm_wiki_type !== 'knowledge') {
       throw new Error(`triage_wiki_note cannot classify managed LLM Wiki type '${note.frontmatter.llm_wiki_type}'`);
     }
-    const hasOrganizationInput = [params.noteKind, params.lifecycle, params.moc, params.project, params.reviewAt, params.nextAction, params.waitingFor, params.desiredOutcome, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.relations, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
+    const hasOrganizationInput = [params.noteKind, params.lifecycle, params.moc, params.project, params.reviewAt, params.nextAction, params.waitingFor, params.desiredOutcome, params.projectPurpose, params.projectSupport, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.relations, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
       .some(value => value !== undefined);
     if (!hasOrganizationInput) throw new Error('At least one organization field is required');
     const patch: Record<string, unknown> = {};
@@ -1426,6 +1500,7 @@ export class LlmWikiService {
     if (params.reviewAt !== undefined) patch.review_at = normalizeReviewAt(params.reviewAt);
     if (params.nextAction !== undefined) patch.next_action = String(params.nextAction).trim().slice(0, 500);
     if (params.waitingFor !== undefined) patch.waiting_for = String(params.waitingFor).trim().slice(0, 500);
+    if (params.projectPurpose !== undefined) patch.project_purpose = String(params.projectPurpose).trim().slice(0, 1000);
     if (params.taskStatus !== undefined) patch.task_status = normalizeTaskStatus(params.taskStatus);
     if (params.clarifyDisposition !== undefined) patch.triage_disposition = normalizeClarifyDisposition(params.clarifyDisposition);
     if (params.clarifiedBy !== undefined) patch.clarified_by = boundedText(params.clarifiedBy, 200);
@@ -1448,6 +1523,8 @@ export class LlmWikiService {
       ...(params.nextActions !== undefined && { nextActions: params.nextActions }),
       ...(params.waitingFor !== undefined && { waitingFor: params.waitingFor }),
       ...(params.desiredOutcome !== undefined && { desiredOutcome: params.desiredOutcome }),
+      ...(params.projectPurpose !== undefined && { projectPurpose: params.projectPurpose }),
+      ...(params.projectSupport !== undefined && { projectSupport: params.projectSupport }),
       ...(params.taskContext !== undefined && { taskContext: params.taskContext }),
       ...(params.dueAt !== undefined && { dueAt: params.dueAt }),
       ...(params.scheduledAt !== undefined && { scheduledAt: params.scheduledAt }),
@@ -1509,6 +1586,8 @@ export class LlmWikiService {
         ...(updated.frontmatter.next_action && { nextAction: updated.frontmatter.next_action }),
         ...(updated.frontmatter.waiting_for && { waitingFor: updated.frontmatter.waiting_for }),
         ...(updated.frontmatter.desired_outcome && { desiredOutcome: updated.frontmatter.desired_outcome }),
+        ...(updated.frontmatter.project_purpose && { projectPurpose: updated.frontmatter.project_purpose }),
+        ...(updated.frontmatter.project_support && { projectSupport: updated.frontmatter.project_support }),
         ...(updated.frontmatter.task_context && { taskContext: updated.frontmatter.task_context }),
         ...(updated.frontmatter.due_at && { dueAt: updated.frontmatter.due_at }),
         ...(updated.frontmatter.defer_until && { deferUntil: updated.frontmatter.defer_until }),
@@ -1641,6 +1720,8 @@ export class LlmWikiService {
       ...(typeof note.frontmatter.next_action === 'string' && { nextAction: note.frontmatter.next_action }),
       ...(typeof note.frontmatter.waiting_for === 'string' && { waitingFor: note.frontmatter.waiting_for }),
       ...(typeof note.frontmatter.desired_outcome === 'string' && { desiredOutcome: note.frontmatter.desired_outcome }),
+      ...(typeof note.frontmatter.project_purpose === 'string' && { projectPurpose: note.frontmatter.project_purpose }),
+      ...(Array.isArray(note.frontmatter.project_support) && { projectSupport: note.frontmatter.project_support.slice(0, 30) }),
       ...(typeof note.frontmatter.task_context === 'string' && { taskContext: note.frontmatter.task_context }),
       ...(typeof note.frontmatter.due_at === 'string' && { dueAt: note.frontmatter.due_at }),
       ...(typeof note.frontmatter.scheduled_at === 'string' && { scheduledAt: note.frontmatter.scheduled_at }),
@@ -1805,11 +1886,30 @@ export class LlmWikiService {
             : Number((catalog.organization as any).noteKinds?.question || 0) + Number((catalog.organization as any).noteKinds?.hypothesis || 0) + Number((catalog.organization as any).noteKinds?.assumption || 0);
     const base = {
       filters: { and: filters },
+      formulas: {
+        planning_ready: 'note.note_kind != "project" || note.project_purpose || note.desired_outcome',
+        review_due: 'note.review_at && date(note.review_at) <= now()',
+        has_support: 'note.project_support && note.project_support.length > 0',
+      },
+      properties: {
+        'note.note_kind': { displayName: 'Kind' },
+        'note.lifecycle': { displayName: 'Lifecycle' },
+        'note.task_status': { displayName: 'Task status' },
+        'note.project_purpose': { displayName: 'Purpose' },
+        'note.desired_outcome': { displayName: 'Desired outcome' },
+        'note.next_action': { displayName: 'Next action' },
+        'note.project_support': { displayName: 'Project support' },
+        'formula.planning_ready': { displayName: 'Planning ready' },
+        'formula.review_due': { displayName: 'Review due' },
+        'formula.has_support': { displayName: 'Has support' },
+        'file.mtime': { displayName: 'Modified' },
+      },
       views: [{
         type: 'table',
         name: selectedView.name,
         limit: boundedLimit,
         order: ['file.mtime', 'file.name'],
+        columns: ['file.name', 'note.note_kind', 'note.lifecycle', 'note.task_status', 'note.project_purpose', 'note.desired_outcome', 'note.next_action', 'formula.planning_ready', 'formula.review_due', 'formula.has_support', 'file.mtime'],
       }],
     };
     const content = stringifyYaml(base);
@@ -2316,7 +2416,7 @@ export class LlmWikiService {
     const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
     const lint = await this.lint(principal, Math.max(200, boundedLimit * 4));
     const organizationCodes = new Set([
-      'invalid_note_kind', 'invalid_lifecycle', 'active_project_without_next_action',
+      'invalid_note_kind', 'invalid_lifecycle', 'active_project_without_next_action', 'active_project_without_outcome',
       'knowledge_note_kind_missing', 'knowledge_lifecycle_missing', 'invalid_review_at',
       'knowledge_review_due', 'review_date_missing', 'moc_without_links',
       'inbox_lifecycle_mismatch', 'invalid_aliases', 'duplicate_aliases',
@@ -2327,6 +2427,7 @@ export class LlmWikiService {
       'negative_type_without_negative_polarity', 'negative_polarity_without_type', 'atomic_note_may_be_too_broad',
       'invalid_evidence_locator', 'evidence_path_mismatch', 'stale_evidence_revision', 'invalid_claim_evidence_locator', 'stale_claim_evidence_revision', 'epistemic_status_missing',
       'invalid_relation',
+      'duplicate_citation_key',
       ...RELATION_FIELDS.flatMap(field => [`invalid_${field}`, `duplicate_${field}`, `unsafe_${field}`]),
     ]);
     const issues = lint.issues.filter(issue => organizationCodes.has(issue.code)).slice(0, boundedLimit);
@@ -2334,6 +2435,7 @@ export class LlmWikiService {
     for (const issue of lint.issues) if (organizationCodes.has(issue.code)) byCode[issue.code] = (byCode[issue.code] || 0) + 1;
     const recommendations = [
       ...(byCode.active_project_without_next_action ? ['Add a concrete next_action or waiting_for to each active project.'] : []),
+      ...(byCode.active_project_without_outcome ? ['State the purpose or desired_outcome of each active project so it remains distinguishable from an Area.'] : []),
       ...(byCode.knowledge_review_due || byCode.review_date_missing ? ['Review due or disputed notes and reschedule only after checking their evidence.'] : []),
       ...(byCode.moc_without_links ? ['Give each MOC at least one meaningful [[wikilink]] and remove empty navigation notes.'] : []),
       ...(byCode.atomic_note_may_be_too_broad ? ['Split broad atomic notes into single-claim notes and connect them with typed links.'] : []),
@@ -2874,6 +2976,7 @@ export class LlmWikiService {
     const sourceCache = new Map<string, Awaited<ReturnType<FileSystemService['readNote']>>>();
     const aliasOwners = new Map<string, string>();
     const stableIdOwners = new Map<string, string>();
+    const citationKeyOwners = new Map<string, string>();
 
     for await (const note of iterateNotes(this.fileSystem, { includeContent: true }, canAccess)) {
       const type = note.frontmatter.llm_wiki_type;
@@ -2906,6 +3009,15 @@ export class LlmWikiService {
         }
         if (note.frontmatter.content_sha256 !== hash(note.content || '')) {
           addIssue({ severity: 'error', code: 'source_hash_mismatch', path: this.access.toPublicPath(note.path), detail: 'Source content differs from its captured SHA-256 hash.' });
+        }
+        if (typeof note.frontmatter.citation_key === 'string' && note.frontmatter.citation_key.trim()) {
+          const citationKey = note.frontmatter.citation_key.trim().toLocaleLowerCase();
+          const owner = citationKeyOwners.get(citationKey);
+          if (owner && owner !== note.path) {
+            addIssue({ severity: 'warning', code: 'duplicate_citation_key', path: publicPath, detail: `citation_key '${note.frontmatter.citation_key}' is also used by ${this.access.toPublicPath(owner)}; source references may become ambiguous.` });
+          } else {
+            citationKeyOwners.set(citationKey, note.path);
+          }
         }
       }
       if (type === 'knowledge') {

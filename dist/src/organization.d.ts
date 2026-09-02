@@ -21,7 +21,7 @@ export declare const FOCUS_HORIZONS: readonly ['ground', 'project', 'area', 'goa
 export declare const CLARIFY_DISPOSITIONS: readonly ['knowledge', 'reference', 'project', 'someday', 'discard', 'delegate'];
 /** Typed relationships are navigation metadata, never an access grant. */
 export declare const RELATION_FIELDS: readonly ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'related'];
-export declare const ORGANIZATION_LIST_FIELDS: readonly ["aliases", "key_points", "open_questions", "next_actions", "supports", "contradicts", "supersedes", "derived_from", "depends_on", "implements", "blocked_by", "related"];
+export declare const ORGANIZATION_LIST_FIELDS: readonly ["aliases", "key_points", "open_questions", "next_actions", "project_support", "supports", "contradicts", "supersedes", "derived_from", "depends_on", "implements", "blocked_by", "related"];
 export type NoteKind = typeof NOTE_KINDS[number];
 export type Lifecycle = typeof LIFECYCLES[number];
 export declare function normalizeTaskStatus(value: unknown, fallback?: typeof TASK_STATUSES[number]): typeof TASK_STATUSES[number] | undefined;
@@ -55,8 +55,11 @@ export interface KnowledgeOrganizationInput {
     nextAction?: unknown;
     waitingFor?: unknown;
     desiredOutcome?: unknown;
+    projectPurpose?: unknown;
+    projectSupport?: unknown;
     taskContext?: unknown;
     dueAt?: unknown;
+    scheduledAt?: unknown;
     deferUntil?: unknown;
     stableId?: unknown;
     relations?: unknown;

@@ -40,7 +40,7 @@ export function getLlmWikiTools(): Tool[] {
       description: 'Complete the GTD Clarify step for one Inbox capture. Records a durable disposition and optional PARA/task metadata without deleting or silently moving the note; the response gives a safe suggested destination.',
       inputSchema: { type: 'object', properties: {
         path: { type: 'string' }, disposition: { type: 'string', enum: ['knowledge', 'reference', 'project', 'someday', 'discard', 'delegate'] }, clarifiedBy: { type: 'string' }, clarifyNote: { type: 'string', maxLength: 1000 }, targetPath: { type: 'string', description: 'Optional vault-relative destination suggestion; the note is not moved automatically' },
-        noteKind: { type: 'string', enum: ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'] }, lifecycle: { type: 'string', enum: ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'] }, taskStatus: { type: 'string', enum: ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'] }, project: { type: 'string' }, nextAction: { type: 'string', maxLength: 500 }, waitingFor: { type: 'string', maxLength: 500 }, desiredOutcome: { type: 'string', maxLength: 1000 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
+        noteKind: { type: 'string', enum: ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'] }, lifecycle: { type: 'string', enum: ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'] }, taskStatus: { type: 'string', enum: ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'] }, project: { type: 'string' }, nextAction: { type: 'string', maxLength: 500 }, waitingFor: { type: 'string', maxLength: 500 }, desiredOutcome: { type: 'string', maxLength: 1000 }, projectPurpose: { type: 'string', maxLength: 1000 }, projectSupport: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 30 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
       }, required: ['path', 'disposition', 'expectedRevision'] },
     },
     {
@@ -81,6 +81,8 @@ export function getLlmWikiTools(): Tool[] {
         nextAction: { type: 'string', maxLength: 500, description: 'One concrete next action for a project/task note' },
         waitingFor: { type: 'string', maxLength: 500 },
         desiredOutcome: { type: 'string', maxLength: 1000, description: 'GTD-style observable outcome' },
+        projectPurpose: { type: 'string', maxLength: 1000, description: 'Optional project purpose/why; keep this separate from the desired outcome' },
+        projectSupport: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 30, description: 'Optional bounded Obsidian links or paths to project-support material; not the day-to-day action list' },
         taskContext: { type: 'string', maxLength: 300, description: 'GTD context such as @computer, @research, or a named capability' },
         dueAt: { type: 'string', description: 'Optional ISO deadline; it is not a calendar appointment' },
         scheduledAt: { type: 'string', description: 'Optional ISO date/time when the work should be performed' },
@@ -139,6 +141,11 @@ export function getLlmWikiTools(): Tool[] {
       inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 30, default: 8 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
     },
     {
+      name: 'get_wiki_project_packet',
+      description: 'Return a bounded GTD/Natural Planning packet for active projects. It separates purpose, desired outcome, brainstorming, project-support references, and next actions, and flags missing planning pieces without rewriting the note.',
+      inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 40, default: 12 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 8000 }, accessToken, prettyPrint } },
+    },
+    {
       name: 'get_wiki_inbox',
       description: 'Return a bounded list of Inbox or lifecycle=inbox notes that still need classification. This is metadata-only and never moves or rewrites files.',
       inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 50, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 5000 }, accessToken, prettyPrint } },
@@ -157,7 +164,7 @@ export function getLlmWikiTools(): Tool[] {
         keyPoints: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
         openQuestions: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
         nextActions: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
-        desiredOutcome: { type: 'string', maxLength: 1000 }, taskContext: { type: 'string', maxLength: 300 }, dueAt: { type: 'string', description: 'ISO deadline, distinct from scheduledAt' }, scheduledAt: { type: 'string', description: 'ISO execution/calendar time' }, deferUntil: { type: 'string' },
+        desiredOutcome: { type: 'string', maxLength: 1000 }, projectPurpose: { type: 'string', maxLength: 1000 }, projectSupport: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 30 }, taskContext: { type: 'string', maxLength: 300 }, dueAt: { type: 'string', description: 'ISO deadline, distinct from scheduledAt' }, scheduledAt: { type: 'string', description: 'ISO execution/calendar time' }, deferUntil: { type: 'string' },
         stableId: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', maxLength: 80 },
         taskStatus: { type: 'string', enum: ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'], description: 'Workflow state for project/task notes' },
         reviewPolicy: { type: 'string', enum: ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit'] },

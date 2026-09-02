@@ -23,7 +23,7 @@ export const FOCUS_HORIZONS = ['ground', 'project', 'area', 'goal', 'vision', 'p
 export const CLARIFY_DISPOSITIONS = ['knowledge', 'reference', 'project', 'someday', 'discard', 'delegate'] as const;
 /** Typed relationships are navigation metadata, never an access grant. */
 export const RELATION_FIELDS = ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'related'] as const;
-export const ORGANIZATION_LIST_FIELDS = ['aliases', 'key_points', 'open_questions', 'next_actions', ...RELATION_FIELDS] as const;
+export const ORGANIZATION_LIST_FIELDS = ['aliases', 'key_points', 'open_questions', 'next_actions', 'project_support', ...RELATION_FIELDS] as const;
 
 export type NoteKind = typeof NOTE_KINDS[number];
 export type Lifecycle = typeof LIFECYCLES[number];
@@ -218,6 +218,8 @@ export interface KnowledgeOrganizationInput {
   nextAction?: unknown;
   waitingFor?: unknown;
   desiredOutcome?: unknown;
+  projectPurpose?: unknown;
+  projectSupport?: unknown;
   taskContext?: unknown;
   dueAt?: unknown;
   scheduledAt?: unknown;
@@ -278,6 +280,8 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
   const nextAction = input.nextAction === undefined ? optionalText(existing.next_action, 'nextAction', 500) : optionalText(input.nextAction, 'nextAction', 500);
   const waitingFor = input.waitingFor === undefined ? optionalText(existing.waiting_for, 'waiting_for', 500) : optionalText(input.waitingFor, 'waiting_for', 500);
   const desiredOutcome = input.desiredOutcome === undefined ? optionalText(existing.desired_outcome, 'desiredOutcome', 1000) : optionalText(input.desiredOutcome, 'desiredOutcome', 1000);
+  const projectPurpose = input.projectPurpose === undefined ? optionalText(existing.project_purpose, 'projectPurpose', 1000) : optionalText(input.projectPurpose, 'projectPurpose', 1000);
+  const projectSupport = input.projectSupport === undefined ? normalizedList(existing.project_support, 'projectSupport', 30, 500) : normalizedList(input.projectSupport, 'projectSupport', 30, 500);
   const taskContext = input.taskContext === undefined ? optionalText(existing.task_context, 'taskContext', 300) : optionalText(input.taskContext, 'taskContext', 300);
   const dueAt = input.dueAt === undefined ? normalizeIsoDate(existing.due_at, 'dueAt') : normalizeIsoDate(input.dueAt, 'dueAt');
   const scheduledAt = input.scheduledAt === undefined ? normalizeIsoDate(existing.scheduled_at, 'scheduledAt') : normalizeIsoDate(input.scheduledAt, 'scheduledAt');
@@ -347,6 +351,8 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
     ...(nextAction && { next_action: nextAction }),
     ...(waitingFor && { waiting_for: waitingFor }),
     ...(desiredOutcome && { desired_outcome: desiredOutcome }),
+    ...(projectPurpose && { project_purpose: projectPurpose }),
+    ...(projectSupport && { project_support: projectSupport }),
     ...(taskContext && { task_context: taskContext }),
     ...(dueAt && { due_at: dueAt }),
     ...(scheduledAt && { scheduled_at: scheduledAt }),
@@ -519,10 +525,13 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
   if (kind === 'project' && lifecycle === 'active' && !frontmatter.next_action && !frontmatter.waiting_for) {
     issues.push({ code: 'active_project_without_next_action', detail: 'An active project should declare next_action or waiting_for so another agent can move it forward.' });
   }
+  if (kind === 'project' && lifecycle === 'active' && !frontmatter.project_purpose && !frontmatter.desired_outcome) {
+    issues.push({ code: 'active_project_without_outcome', detail: 'An active project should state its purpose or desired_outcome so planning and review can distinguish it from an area.' });
+  }
   if (frontmatter.triage_disposition !== undefined && !clarifyDispositionSet.has(String(frontmatter.triage_disposition).trim().toLowerCase())) {
     issues.push({ code: 'invalid_triage_disposition', detail: `triage_disposition must be one of: ${CLARIFY_DISPOSITIONS.join(', ')}` });
   }
-  for (const [field, maximum] of [['clarified_by', 200], ['clarify_note', 1000], ['triage_target', 500], ['moc_purpose', 1000], ['moc_scope', 500], ['moc_parent', 500] ] as const) {
+  for (const [field, maximum] of [['clarified_by', 200], ['clarify_note', 1000], ['triage_target', 500], ['moc_purpose', 1000], ['moc_scope', 500], ['moc_parent', 500], ['project_purpose', 1000] ] as const) {
     const value = frontmatter[field];
     if (value !== undefined && (typeof value !== 'string' || Array.from(value).length > maximum)) {
       issues.push({ code: `invalid_${field}`, detail: `${field} must be text of ${maximum} Unicode characters or fewer.` });

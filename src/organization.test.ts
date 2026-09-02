@@ -20,6 +20,21 @@ describe('knowledge organization focus and summary metadata', () => {
     });
   });
 
+  test('keeps project planning support separate from executable actions', () => {
+    expect(knowledgeOrganization({
+      status: 'draft',
+      noteKind: 'project',
+      projectPurpose: 'Make the shared knowledge loop easier to resume.',
+      desiredOutcome: 'An agent can find and complete the next step.',
+      projectSupport: ['[[Knowledge/Planning]]'],
+      nextAction: 'Review the planning packet',
+    })).toMatchObject({
+      project_purpose: 'Make the shared knowledge loop easier to resume.',
+      project_support: ['[[Knowledge/Planning]]'],
+      next_action: 'Review the planning packet',
+    });
+  });
+
   test('lint rejects invalid values without requiring optional metadata', () => {
     const issues = organizationLintIssues('Knowledge/Bad.md', {
       llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen',

@@ -74,6 +74,11 @@ export declare class LlmWikiService {
         capturedBy: string;
         capturedAt?: string;
         mediaType?: string;
+        sourceType?: string;
+        citationKey?: string;
+        author?: string;
+        publishedAt?: string;
+        retrievedAt?: string;
         trustLevel?: string;
         trustReason?: string;
     }): Promise<{
@@ -149,8 +154,11 @@ export declare class LlmWikiService {
         nextAction?: string;
         waitingFor?: string;
         desiredOutcome?: string;
+        projectPurpose?: string;
+        projectSupport?: unknown;
         taskContext?: string;
         dueAt?: string;
+        scheduledAt?: string;
         deferUntil?: string;
         stableId?: string;
         relations?: unknown;
@@ -248,6 +256,8 @@ export declare class LlmWikiService {
         nextAction?: string;
         waitingFor?: string;
         desiredOutcome?: string;
+        projectPurpose?: string;
+        projectSupport?: unknown;
         expectedRevision: string;
     }): Promise<{
         disposition: "delegate" | "discard" | "knowledge" | "project" | "reference" | "someday";
@@ -294,7 +304,17 @@ export declare class LlmWikiService {
                 total: number;
                 truncated: boolean;
             };
+            projectReadiness: {
+                items: Record<string, unknown>[];
+                total: number;
+                truncated: boolean;
+            };
             due: {
+                items: Record<string, unknown>[];
+                total: number;
+                truncated: boolean;
+            };
+            scheduled: {
                 items: Record<string, unknown>[];
                 total: number;
                 truncated: boolean;
@@ -346,6 +366,25 @@ export declare class LlmWikiService {
                     mocs: Record<string, unknown>[];
                     truncated: boolean;
                 };
+                mocQuestionCoverage: {
+                    total: number;
+                    linked: number;
+                    ratio: number;
+                    unlinked: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    mocs: Record<string, unknown>[];
+                    truncated: boolean;
+                };
+                evergreenQuality: {
+                    total: number;
+                    needsAttention: number;
+                    ready: number;
+                    items: Record<string, unknown>[];
+                    truncated: boolean;
+                };
                 unresolvedLinks: {
                     total: number;
                     items: {
@@ -393,6 +432,11 @@ export declare class LlmWikiService {
                         items: Record<string, unknown>[];
                         truncated: boolean;
                     };
+                    reverseMap: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
                 };
                 knowledgeConnectivity: {
                     total: number;
@@ -406,7 +450,17 @@ export declare class LlmWikiService {
                         items: Record<string, unknown>[];
                         truncated: boolean;
                     };
+                    atomicWithoutProjection: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
                     literatureWithoutPermanent: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    literatureWithoutInterpretation: {
                         total: number;
                         items: Record<string, unknown>[];
                         truncated: boolean;
@@ -436,7 +490,17 @@ export declare class LlmWikiService {
                 truncated: boolean;
                 items: Record<string, unknown>[];
             };
+            projectReadiness: {
+                total: number;
+                truncated: boolean;
+                items: Record<string, unknown>[];
+            };
             due: {
+                total: number;
+                truncated: boolean;
+                items: Record<string, unknown>[];
+            };
+            scheduled: {
                 total: number;
                 truncated: boolean;
                 items: Record<string, unknown>[];
@@ -488,6 +552,25 @@ export declare class LlmWikiService {
                     mocs: Record<string, unknown>[];
                     truncated: boolean;
                 };
+                mocQuestionCoverage: {
+                    total: number;
+                    linked: number;
+                    ratio: number;
+                    unlinked: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    mocs: Record<string, unknown>[];
+                    truncated: boolean;
+                };
+                evergreenQuality: {
+                    total: number;
+                    needsAttention: number;
+                    ready: number;
+                    items: Record<string, unknown>[];
+                    truncated: boolean;
+                };
                 unresolvedLinks: {
                     total: number;
                     items: {
@@ -535,6 +618,11 @@ export declare class LlmWikiService {
                         items: Record<string, unknown>[];
                         truncated: boolean;
                     };
+                    reverseMap: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
                 };
                 knowledgeConnectivity: {
                     total: number;
@@ -548,7 +636,17 @@ export declare class LlmWikiService {
                         items: Record<string, unknown>[];
                         truncated: boolean;
                     };
+                    atomicWithoutProjection: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
                     literatureWithoutPermanent: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    literatureWithoutInterpretation: {
                         total: number;
                         items: Record<string, unknown>[];
                         truncated: boolean;
@@ -562,6 +660,103 @@ export declare class LlmWikiService {
             };
         };
         truncated: boolean;
+    }>;
+    /**
+     * A small action-oriented packet for agents that need to decide what to do
+     * next. It is a projection over the existing Reflect/graph reports, not a
+     * new task or history store.
+     */
+    reviewPacket(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        purpose: string;
+        priorities: Record<string, unknown>[];
+        counts: {
+            inbox: number;
+            knowledgeReview: number;
+            due: number;
+            projectNeedsAction: number;
+            unlinkedMocQuestions: number;
+            evergreenNeedsAttention: number;
+        };
+        supportingViews: {
+            inbox: any;
+            knowledge: any;
+            mocQuestions: any;
+            evergreenQuality: any;
+            graph: {
+                unresolvedLinks: any;
+                orphanNotes: any;
+            };
+        };
+        nextActions: string[];
+        sourceTruncated: boolean;
+        generatedAt: string;
+    } | {
+        purpose: string;
+        counts: {
+            inbox: number;
+            knowledgeReview: number;
+            due: number;
+            projectNeedsAction: number;
+            unlinkedMocQuestions: number;
+            evergreenNeedsAttention: number;
+        };
+        nextActions: string[];
+        sourceTruncated: boolean;
+        generatedAt: string;
+        priorities: Record<string, unknown>[];
+        supportingViews: {
+            inbox: {
+                total: any;
+                items: any;
+                truncated: boolean;
+            } | undefined;
+            knowledge: {
+                total: any;
+                items: any;
+                truncated: boolean;
+            } | undefined;
+            mocQuestions: {
+                total: any;
+                linked: any;
+                ratio: any;
+                unlinked: any;
+            } | undefined;
+            evergreenQuality: {
+                total: any;
+                needsAttention: any;
+                ready: any;
+                items: any;
+                truncated: boolean;
+            } | undefined;
+            graph: {
+                unresolvedLinks: {
+                    total: any;
+                    items: any;
+                    truncated: boolean;
+                } | undefined;
+                orphanNotes: {
+                    total: any;
+                    items: any;
+                    truncated: boolean;
+                } | undefined;
+            };
+        };
+        truncated: boolean;
+    }>;
+    /**
+     * Project-support projection for GTD-style planning. It keeps the
+     * day-to-day next action separate from purpose, outcome, brainstorming, and
+     * reference material, and never mutates the project note.
+     */
+    projectPacket(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        purpose: string;
+        items: {
+            [x: string]: unknown;
+        }[];
+        total: number;
+        needsPlanning: number;
+        truncated: boolean;
+        generatedAt: string;
     }>;
     triage(params: {
         principal?: ScopePrincipal;
@@ -581,8 +776,11 @@ export declare class LlmWikiService {
         summaryHighlights?: unknown;
         nextActions?: unknown;
         desiredOutcome?: string;
+        projectPurpose?: string;
+        projectSupport?: unknown;
         taskContext?: string;
         dueAt?: string;
+        scheduledAt?: string;
         deferUntil?: string;
         stableId?: string;
         relations?: unknown;
@@ -647,8 +845,11 @@ export declare class LlmWikiService {
         nextAction?: string;
         waitingFor?: string;
         desiredOutcome?: string;
+        projectPurpose?: string;
+        projectSupport?: any[];
         taskContext?: string;
         dueAt?: string;
+        scheduledAt?: string;
         deferUntil?: string;
         stableId?: string;
         taskStatus?: string;
@@ -711,12 +912,18 @@ export declare class LlmWikiService {
         truncated: boolean;
         generatedAt: string;
     }>;
-    exportBasesView(principal?: ScopePrincipal, noteKind?: string, lifecycle?: string, limit?: number, maxChars?: number): Promise<{
+    exportBasesView(principal?: ScopePrincipal, noteKind?: string, lifecycle?: string, limit?: number, maxChars?: number, requestedView?: string): Promise<{
         format: string;
         suggestedPath: string;
         content: string;
         truncated: boolean;
         matchingNotes: any;
+        view: string;
+        availableViews: {
+            id: string;
+            name: string;
+            suggestedPath: string;
+        }[];
         filter: {
             noteKind?: string;
             lifecycle?: string;
@@ -793,6 +1000,25 @@ export declare class LlmWikiService {
             mocs: Record<string, unknown>[];
             truncated: boolean;
         };
+        mocQuestionCoverage: {
+            total: number;
+            linked: number;
+            ratio: number;
+            unlinked: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+            mocs: Record<string, unknown>[];
+            truncated: boolean;
+        };
+        evergreenQuality: {
+            total: number;
+            needsAttention: number;
+            ready: number;
+            items: Record<string, unknown>[];
+            truncated: boolean;
+        };
         focusHealth: {
             focusedNotes: number;
             parentEdges: number;
@@ -820,6 +1046,11 @@ export declare class LlmWikiService {
                 items: Record<string, unknown>[];
                 truncated: boolean;
             };
+            reverseMap: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
         };
         knowledgeConnectivity: {
             total: number;
@@ -833,7 +1064,17 @@ export declare class LlmWikiService {
                 items: Record<string, unknown>[];
                 truncated: boolean;
             };
+            atomicWithoutProjection: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
             literatureWithoutPermanent: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+            literatureWithoutInterpretation: {
                 total: number;
                 items: Record<string, unknown>[];
                 truncated: boolean;
@@ -871,6 +1112,8 @@ export declare class LlmWikiService {
         issues: WikiLintIssue[];
         recommendations: string[];
         mocCoverage?: Record<string, unknown>;
+        mocQuestionCoverage?: Record<string, any>;
+        evergreenQuality?: Record<string, any>;
         focusHealth?: Record<string, any>;
         knowledgeConnectivity?: Record<string, any>;
         advisoryIssueTotal: number;

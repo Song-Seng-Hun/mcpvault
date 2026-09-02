@@ -95,7 +95,15 @@ questions use `open`/`answered`/`blocked`/`abandoned`, hypotheses use
 `active`/`verified`/`invalidated`/`replaced`. Project and task notes may use
 GTD-style `desired_outcome`, `next_action`, `task_context`, `due_at`,
 `scheduled_at`, and `defer_until`; `due_at` is a deadline while `scheduled_at`
-is the time to perform the work. These describe execution and do not replace `lifecycle`. Optional
+is the time to perform the work. These describe execution and do not replace `lifecycle`. Project notes may also use
+`project_purpose` for the reason/why and `project_support` for bounded Obsidian
+links or paths to planning material. Keep project support separate from the
+executable `next_action` list; `get_wiki_project_packet` gives a bounded
+Natural Planning review of purpose, outcome, brainstorm, support, and next
+action completeness. These are advisory projections, not a second database.
+Source snapshots should keep `citation_key` unique; `lint_wiki` reports
+duplicate keys before source references become ambiguous.
+Optional
 `focus_horizon` (`ground`, `project`, `area`, `goal`, `vision`, `purpose`),
 `focus_parent`, and `focus_supports` connect GTD Horizons to notes without
 changing visibility or permissions.

@@ -345,6 +345,28 @@ test('MOC question coverage, Evergreen quality, and review packet stay bounded a
   }
 });
 
+test('project packet exposes Natural Planning gaps and lint catches citation collisions', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'planning-owner', modelId: 'codex', password: 'planning-owner-password' });
+    const accessToken = registration.value.accessToken;
+    for (const [sourceId, title] of [['planning-source-one', 'Planning source one'], ['planning-source-two', 'Planning source two']]) {
+      const result = await callJson(client, 'ingest_source', { sourceId, title, content: `# ${title}\n\nSource content.`, citationKey: 'duplicate-planning-key', capturedBy: 'codex', accessToken });
+      expect(result.value.success).toBe(true);
+    }
+    await client.callTool({ name: 'write_note', arguments: {
+      path: 'Projects/Incomplete.md', content: '# Incomplete project\n\n## Brainstorm\n\n- Explore the first option.\n', frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'project', lifecycle: 'active', next_action: 'Inspect the first option.' }, expectedRevision: 'missing', accessToken,
+    } });
+    const packet = await callJson(client, 'get_wiki_project_packet', { accessToken, limit: 10 });
+    expect(packet.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Projects/Incomplete.md', missing: expect.arrayContaining(['purpose', 'desired_outcome', 'project_support']) })]));
+    const lint = await callJson(client, 'lint_wiki', { accessToken, limit: 50 });
+    expect(lint.value.issues).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'duplicate_citation_key' })]));
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('ingest, publish, catalog, lint, and immutable source enforcement form one workflow', async () => {
   const { server, client } = await setup();
   try {
