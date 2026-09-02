@@ -115,6 +115,10 @@ key points, or an outgoing `[[wikilink]]` to derived atomic/knowledge notes;
 this remains a quality hint, not a publication gate. Use
 `get_wiki_bases_view` with `view` set to `all`, `inbox`, `projects`, `review`,
 or `epistemic` when a local Obsidian view is useful.
+When ingesting a reusable paper, web page, book, dataset, or code reference,
+add optional `sourceType`, `citationKey`, `author`, `publishedAt`, and
+`retrievedAt`; never use these in place of the immutable source hash and
+evidence revision.
 When preserving a failed path, record what was attempted/observed, the failure
 condition and reproduction, why it was rejected, and the reusable lesson.
 When a review is genuinely completed, record its outcome and reviewer rather

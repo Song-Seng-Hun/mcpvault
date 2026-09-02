@@ -273,6 +273,11 @@ has a real question and useful boundary.
 as a `.base` file only when a local view is useful; Markdown and Git remain the
 source of truth.
 
+`ingest_source` also accepts optional citation metadata: `sourceType`,
+`citationKey`, `author`, `publishedAt`, and `retrievedAt`. Use these to
+identify a reusable source across literature notes; the immutable content
+hash and revision remain the authoritative provenance.
+
 An optional localhost REST adapter uses the same endpoint registry and
 dispatcher. Start it with `--http` or `--http=PORT`; use `GET /api/capabilities`,
 `POST /api/endpoint/{endpointId}`, or one of the documented endpoint URLs. The

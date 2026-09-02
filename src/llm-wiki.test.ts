@@ -102,6 +102,9 @@ test('knowledge organization contract preserves aliases, projections, and typed 
     expect(published.value.success).toBe(true);
     const projection = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Contract.md', view: 'summary', accessToken });
     expect(projection.value).toMatchObject({ aliases: ['Knowledge contract', 'Metadata contract'], stableId: 'knowledge-contract', noteKind: 'question', taskStatus: 'next_action', reviewPolicy: 'periodic', summaryFresh: true, relations: { related: ['[[Knowledge/Existing]]'] } });
+    const progressive = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Contract.md', view: 'progressive', accessToken });
+    expect(progressive.value.content).toContain('Evidence:');
+    expect(progressive.value.content).toContain(source.value.path);
     expect(published.value.evidence[0]).toMatchObject({ path: source.value.path, heading: 'Evidence', blockId: 'contract-evidence', revision: source.value.revision });
     const refs = await callJson(client, 'read_references', { path: 'Knowledge/Contract.md', accessToken });
     expect(refs.value.references).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Existing.md' })]));
@@ -124,8 +127,10 @@ test('questions, negative knowledge, locators, event review, MOC coverage, and B
     const registration = await callJson(client, 'register_scope_account', { accountId: 'remaining-priorities-owner', modelId: 'codex', password: 'remaining-priorities-password' });
     const accessToken = registration.value.accessToken;
     const source = await callJson(client, 'ingest_source', {
-      sourceId: 'remaining-priorities-source', title: 'Remaining priorities source', content: '# Source\n\n## Result\n\nThe rejected approach failed under load. ^remaining-result', capturedBy: 'codex', accessToken,
+      sourceId: 'remaining-priorities-source', title: 'Remaining priorities source', content: '# Source\n\n## Result\n\nThe rejected approach failed under load. ^remaining-result', sourceType: 'paper', citationKey: 'remaining-priorities-2026', author: 'Research Group', publishedAt: '2026-01-01', retrievedAt: '2026-09-03', capturedBy: 'codex', accessToken,
     });
+    const sourceTrust = await callJson(client, 'get_wiki_source_trust', { accessToken });
+    expect(sourceTrust.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ citationKey: 'remaining-priorities-2026', sourceType: 'paper', author: 'Research Group', publishedAt: '2026-01-01', retrievedAt: '2026-09-03' })]));
     await client.callTool({ name: 'write_note', arguments: {
       path: 'Knowledge/Related.md', content: '# Related\n\nThe linked context is stable.\n', expectedRevision: 'missing', accessToken,
     } });

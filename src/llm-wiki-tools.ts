@@ -25,7 +25,7 @@ export function getLlmWikiTools(): Tool[] {
       description: 'Capture one immutable raw source snapshot. Re-ingesting identical content is idempotent; changed content requires a new sourceId.',
       inputSchema: { type: 'object', properties: {
         scopeUri, sourceId: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' },
-        sourceUrl: { type: 'string' }, capturedBy: { type: 'string' }, capturedAt: { type: 'string' }, mediaType: { type: 'string' }, trustLevel: { type: 'string', enum: ['unrated', 'low', 'medium', 'high', 'verified'], default: 'unrated' }, trustReason: { type: 'string', maxLength: 500 }, accessToken, prettyPrint,
+        sourceUrl: { type: 'string' }, capturedBy: { type: 'string' }, capturedAt: { type: 'string' }, mediaType: { type: 'string' }, sourceType: { type: 'string', maxLength: 80, description: 'Optional source kind such as paper, web, book, dataset, or code' }, citationKey: { type: 'string', maxLength: 120, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]*$' }, author: { type: 'string', maxLength: 300 }, publishedAt: { type: 'string' }, retrievedAt: { type: 'string' }, trustLevel: { type: 'string', enum: ['unrated', 'low', 'medium', 'high', 'verified'], default: 'unrated' }, trustReason: { type: 'string', maxLength: 500 }, accessToken, prettyPrint,
       }, required: ['title', 'content'] },
     },
     {
@@ -229,7 +229,7 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_source_trust',
-      description: 'List bounded source snapshots with capture-time trust level, reason, integrity, and evidence usage. Trust is advisory metadata; an intact hash and inspectable provenance remain required.',
+      description: 'List bounded source snapshots with citation metadata, capture-time trust level, reason, integrity, and evidence usage. Trust is advisory metadata; an intact hash and inspectable provenance remain required.',
       inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 100, default: 30 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 7000 }, accessToken, prettyPrint } },
     },
     {

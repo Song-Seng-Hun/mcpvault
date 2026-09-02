@@ -152,6 +152,11 @@ links; nested MOCs are followed to bounded depth by graph health; use
 `review`, and `epistemic`. These are optional local Obsidian `.base` views, not
 another database or permission boundary.
 
+Source notes may optionally declare `source_type`, `citation_key`,
+`source_author`, `published_at`, and `retrieved_at`. These make repeated use of
+the same source easier to identify; they do not replace the immutable content
+hash, source revision, or evidence locator.
+
 For long or disputed knowledge notes, use claim-level provenance when useful:
 
 ```yaml

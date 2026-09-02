@@ -7,7 +7,7 @@ import { normalizeScopeId } from './scopes.js';
 import type { ReferenceService } from './references.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
-import { knowledgeOrganization, normalizeClarifyDisposition, normalizeLifecycle, normalizeNoteKind, normalizeReviewAt, normalizeReviewOutcome, normalizeTaskStatus, organizationLintIssues, RELATION_FIELDS } from './organization.js';
+import { knowledgeOrganization, normalizeClarifyDisposition, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeReviewAt, normalizeReviewOutcome, normalizeTaskStatus, organizationLintIssues, RELATION_FIELDS } from './organization.js';
 import { extractObsidianLinkOccurrences, resolveWikiLinkTargets } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
@@ -460,6 +460,11 @@ export class LlmWikiService {
     capturedBy: string;
     capturedAt?: string;
     mediaType?: string;
+    sourceType?: string;
+    citationKey?: string;
+    author?: string;
+    publishedAt?: string;
+    retrievedAt?: string;
     trustLevel?: string;
     trustReason?: string;
   }) {
@@ -473,6 +478,12 @@ export class LlmWikiService {
     const trustLevel = String(params.trustLevel || 'unrated').trim().toLowerCase();
     if (!sourceTrustLevels.has(trustLevel)) throw new Error('trustLevel must be unrated, low, medium, high, or verified');
     const trustReason = params.trustReason ? boundedText(params.trustReason, 500) : undefined;
+    const sourceType = params.sourceType ? boundedText(params.sourceType, 80).toLowerCase() : undefined;
+    const citationKey = params.citationKey ? boundedText(params.citationKey, 120).toLowerCase() : undefined;
+    if (citationKey && !/^[a-z0-9][a-z0-9._:-]*$/i.test(citationKey)) throw new Error('citationKey may contain only letters, numbers, dots, underscores, colons, and hyphens');
+    const sourceAuthor = params.author ? boundedText(params.author, 300) : undefined;
+    const publishedAt = params.publishedAt ? normalizeIsoDate(params.publishedAt, 'publishedAt') : undefined;
+    const retrievedAt = params.retrievedAt ? normalizeIsoDate(params.retrievedAt, 'retrievedAt') : undefined;
     const sourceId = params.sourceId
       ? normalizeScopeId(params.sourceId, 'sourceId')
       : `source-${contentHash.slice(0, 16)}`;
@@ -500,6 +511,11 @@ export class LlmWikiService {
         captured_at: timestamp,
         ...(params.sourceUrl?.trim() && { source_url: params.sourceUrl.trim() }),
         ...(params.mediaType?.trim() && { media_type: params.mediaType.trim() }),
+        ...(sourceType && { source_type: sourceType }),
+        ...(citationKey && { citation_key: citationKey }),
+        ...(sourceAuthor && { source_author: sourceAuthor }),
+        ...(publishedAt && { published_at: publishedAt }),
+        ...(retrievedAt && { retrieved_at: retrievedAt }),
         trust_level: trustLevel,
         ...(trustReason && { trust_reason: trustReason }),
       },
@@ -1462,7 +1478,13 @@ export class LlmWikiService {
       const claimPoints = claims
         .filter((claim: any) => claim && typeof claim.text === 'string')
         .slice(0, 8)
-        .map((claim: any) => `- ${claim.text} [${claim.status || 'unverified'}]`);
+        .map((claim: any) => {
+          const paths = Array.isArray(claim.evidence_paths) ? claim.evidence_paths.filter((path: unknown): path is string => typeof path === 'string').slice(0, 3) : [];
+          return `- ${claim.text} [${claim.status || 'unverified'}]${paths.length > 0 ? ` (evidence: ${paths.join(', ')})` : ''}`;
+        });
+      const evidencePaths = Array.isArray(note.frontmatter.evidence_paths)
+        ? note.frontmatter.evidence_paths.filter((path: unknown): path is string => typeof path === 'string').slice(0, 8)
+        : [];
       const paragraphs = note.content
         .split(/\n\s*\n/)
         .map(block => block.trim())
@@ -1481,6 +1503,7 @@ export class LlmWikiService {
           summary && `Summary: ${summary}`,
           highlights.length > 0 && `Selected passages:\n${highlights.join('\n')}`,
           claimPoints.length > 0 && `Claims:\n${claimPoints.join('\n')}`,
+          evidencePaths.length > 0 && `Evidence:\n${evidencePaths.map(path => `- ${path}`).join('\n')}`,
           questions.length > 0 && `Open questions:\n${questions.join('\n')}`,
         ].filter(Boolean).join('\n\n') || paragraphs[0] || '';
       } else {
@@ -1933,6 +1956,7 @@ export class LlmWikiService {
     const knowledgeRecords = graphNotes.filter(note => knowledgePaths.has(normalizePath(note.path).toLowerCase()));
     const isolatedKnowledge: Array<Record<string, unknown>> = [];
     const isolatedAtomic: Array<Record<string, unknown>> = [];
+    const atomicWithoutProjection: Array<Record<string, unknown>> = [];
     const literatureWithoutPermanent: Array<Record<string, unknown>> = [];
     const literatureWithoutInterpretation: Array<Record<string, unknown>> = [];
     for (const note of knowledgeRecords) {
@@ -1942,6 +1966,7 @@ export class LlmWikiService {
       const item = { path: this.access.toPublicPath(note.path), title: note.title, noteKind: note.kind, incoming: incomingCount, outgoing };
       if (incomingCount === 0 && outgoing === 0) isolatedKnowledge.push(item);
       if (note.kind === 'atomic' && incomingCount === 0 && outgoing === 0) isolatedAtomic.push(item);
+      if (note.kind === 'atomic' && !note.hasSummary && !note.hasKeyPoints) atomicWithoutProjection.push({ ...item, reason: 'atomic_note_has_no_compact_interpretation' });
       if (note.kind === 'literature') {
         const hasInterpretation = note.hasSummary || note.hasKeyPoints || (resolvedOutgoing.get(key)?.size || 0) > 0;
         if (!hasInterpretation) literatureWithoutInterpretation.push({ ...item, reason: 'literature_note_has_no_interpretation_or_outgoing_link' });
@@ -1964,6 +1989,7 @@ export class LlmWikiService {
       total: knowledgeRecords.length,
       isolated: { total: isolatedKnowledge.length, items: isolatedKnowledge.slice(0, boundedLimit), truncated: isolatedKnowledge.length > boundedLimit },
       isolatedAtomic: { total: isolatedAtomic.length, items: isolatedAtomic.slice(0, boundedLimit), truncated: isolatedAtomic.length > boundedLimit },
+      atomicWithoutProjection: { total: atomicWithoutProjection.length, items: atomicWithoutProjection.slice(0, boundedLimit), truncated: atomicWithoutProjection.length > boundedLimit },
       literatureWithoutPermanent: { total: literatureWithoutPermanent.length, items: literatureWithoutPermanent.slice(0, boundedLimit), truncated: literatureWithoutPermanent.length > boundedLimit },
       literatureWithoutInterpretation: { total: literatureWithoutInterpretation.length, items: literatureWithoutInterpretation.slice(0, boundedLimit), truncated: literatureWithoutInterpretation.length > boundedLimit },
     };
@@ -2039,6 +2065,7 @@ export class LlmWikiService {
         report.focusHealth.reverseMap.items,
         report.knowledgeConnectivity.isolated.items,
         report.knowledgeConnectivity.isolatedAtomic.items,
+        report.knowledgeConnectivity.atomicWithoutProjection.items,
         report.knowledgeConnectivity.literatureWithoutPermanent.items,
         report.knowledgeConnectivity.literatureWithoutInterpretation.items,
       ];
@@ -2140,6 +2167,9 @@ export class LlmWikiService {
     if (knowledgeConnectivity && Number(knowledgeConnectivity.literatureWithoutInterpretation?.total) > 0) {
       recommendations.push('Add a compact interpretation, key_points, or an outgoing [[wikilink]] to each literature note so source capture becomes reusable knowledge.');
     }
+    if (knowledgeConnectivity && Number(knowledgeConnectivity.atomicWithoutProjection?.total) > 0) {
+      recommendations.push('Give atomic notes a compact summary or key_points so their durable claim is discoverable without opening the full body.');
+    }
     const result = {
       healthy: issues.length === 0,
       organizationIssueTotal: Object.values(byCode).reduce((sum, count) => sum + count, 0),
@@ -2150,7 +2180,7 @@ export class LlmWikiService {
       ...(focusHealth && { focusHealth }),
       ...(knowledgeConnectivity && { knowledgeConnectivity }),
       advisoryIssueTotal: (focusHealth ? Number(focusHealth.unresolved?.total || 0) + Number(focusHealth.ambiguous?.total || 0) + Number(focusHealth.unparented?.total || 0) + Number(focusHealth.cycles?.total || 0) : 0)
-        + (knowledgeConnectivity ? Number(knowledgeConnectivity.isolated?.total || 0) + Number(knowledgeConnectivity.literatureWithoutPermanent?.total || 0) + Number(knowledgeConnectivity.literatureWithoutInterpretation?.total || 0) : 0),
+        + (knowledgeConnectivity ? Number(knowledgeConnectivity.isolated?.total || 0) + Number(knowledgeConnectivity.atomicWithoutProjection?.total || 0) + Number(knowledgeConnectivity.literatureWithoutPermanent?.total || 0) + Number(knowledgeConnectivity.literatureWithoutInterpretation?.total || 0) : 0),
       truncated: lint.truncated || Object.values(byCode).reduce((sum, count) => sum + count, 0) > issues.length,
       generatedAt: now(),
     };
@@ -2293,6 +2323,11 @@ export class LlmWikiService {
         trustLevel: sourceTrustLevels.has(String(note.frontmatter.trust_level || '').toLowerCase()) ? String(note.frontmatter.trust_level).toLowerCase() : 'unrated',
         ...(note.frontmatter.trust_reason && { trustReason: boundedText(note.frontmatter.trust_reason, 500) }),
         ...(note.frontmatter.source_url && { sourceUrl: boundedText(note.frontmatter.source_url, 500) }),
+        ...(note.frontmatter.source_type && { sourceType: boundedText(note.frontmatter.source_type, 80) }),
+        ...(note.frontmatter.citation_key && { citationKey: boundedText(note.frontmatter.citation_key, 120) }),
+        ...(note.frontmatter.source_author && { author: boundedText(note.frontmatter.source_author, 300) }),
+        ...(note.frontmatter.published_at && { publishedAt: note.frontmatter.published_at }),
+        ...(note.frontmatter.retrieved_at && { retrievedAt: note.frontmatter.retrieved_at }),
         capturedBy: note.frontmatter.captured_by,
         usedByKnowledgeNotes: usage.get(normalizePath(note.path)) || 0,
         integrity: intact ? 'intact' : 'invalid',
