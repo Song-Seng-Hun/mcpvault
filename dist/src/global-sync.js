@@ -12,6 +12,8 @@ const MAX_IDEMPOTENCY_KEY_LENGTH = 128;
 const MAX_TOTAL_PROPOSALS = 100_000;
 const MAX_PENDING_PROPOSALS = 2_000;
 const MAX_PENDING_BYTES = 64 * 1024 * 1024;
+const DEFAULT_MAX_TOTAL_CONTENT_BYTES = 512 * 1024 * 1024;
+const MAX_CONFIGURED_TOTAL_CONTENT_BYTES = 16 * 1024 * 1024 * 1024;
 const MAX_PROPOSALS_PER_ORIGIN_PER_MINUTE = 120;
 const RATE_WINDOW_MS = 60_000;
 const MAX_HTTP_REQUESTS_PER_MINUTE = 300;
@@ -152,6 +154,13 @@ function normalizeLimit(value) {
     if (!Number.isSafeInteger(number) || number < 1)
         return DEFAULT_BATCH_LIMIT;
     return Math.min(number, MAX_BATCH_LIMIT);
+}
+function normalizeContentQuota(value) {
+    if (value === undefined)
+        return DEFAULT_MAX_TOTAL_CONTENT_BYTES;
+    if (!Number.isSafeInteger(value) || value < 1)
+        throw new Error('maxTotalContentBytes must be a positive safe integer');
+    return Math.min(value, MAX_CONFIGURED_TOTAL_CONTENT_BYTES);
 }
 function emptyState(hubId) {
     return { protocol: PROTOCOL, hubId, nextSequence: 0, heads: {}, revisions: {}, proposals: {} };
@@ -308,6 +317,7 @@ export class GlobalSyncHub {
     signingPrivateKey;
     signingPublicKey;
     approvalQuorum;
+    maxTotalContentBytes;
     originWindows = new Map();
     state;
     lastEventHash = '';
@@ -316,6 +326,7 @@ export class GlobalSyncHub {
     loadPromise;
     processLock;
     closed = false;
+    totalProposalBytes = 0;
     constructor(root, options = {}) {
         this.root = resolve(root);
         this.statePath = join(this.root, 'state.json');
@@ -330,6 +341,7 @@ export class GlobalSyncHub {
             throw new Error('Global Sync signing key must be Ed25519');
         this.signingPublicKey = createPublicKey(this.signingPrivateKey).export({ type: 'spki', format: 'pem' }).toString();
         this.approvalQuorum = 2;
+        this.maxTotalContentBytes = normalizeContentQuota(options.maxTotalContentBytes);
         this.state = emptyState(this.hubId);
     }
     getPublicKey() { return this.signingPublicKey; }
@@ -385,6 +397,7 @@ export class GlobalSyncHub {
                 }
             }
             this.initialized = true;
+            this.totalProposalBytes = Object.values(this.state.proposals).reduce((total, proposal) => total + proposal.byteLength, 0);
         }
         catch (error) {
             if (this.processLock) {
@@ -449,6 +462,8 @@ export class GlobalSyncHub {
         const proposals = Object.values(this.state.proposals);
         if (proposals.length >= MAX_TOTAL_PROPOSALS)
             throw new Error('Global Sync proposal history quota exceeded');
+        if (this.totalProposalBytes > this.maxTotalContentBytes - byteLength)
+            throw new Error('Global Sync total content quota exceeded');
         const pending = proposals.filter(proposal => proposal.status === 'pending');
         if (pending.length >= MAX_PENDING_PROPOSALS)
             throw new Error('Global Sync pending proposal quota exceeded');
@@ -537,6 +552,7 @@ export class GlobalSyncHub {
                 approvals: [],
             };
             await this.appendEvent('proposal.created', { proposal });
+            this.totalProposalBytes += byteLength;
             return proposal;
         });
     }
@@ -1001,70 +1017,77 @@ export async function startGlobalSyncHub(root, options) {
     }
     const credentialStatePath = resolve(options.credentialStatePath || join(resolve(root), 'credentials.json'));
     const credentialAuditPath = resolve(options.credentialAuditPath || join(resolve(root), 'credential-audit.ndjson'));
+    const credentialLockPath = resolve(options.credentialLockPath || join(resolve(root), 'credentials.lock'));
     const persistCredentialState = async () => {
         await writeAtomic(credentialStatePath, `${JSON.stringify(serializeCredentialStore(authCredential, reviewerTokens, adminCredential), null, 2)}\n`);
     };
-    const persistedCredentials = await loadCredentialStore(credentialStatePath);
-    if (persistedCredentials) {
-        if (persistedCredentials.proposer) {
-            const restored = deserializeCredential(persistedCredentials.proposer, 'proposer');
-            authCredential.digest = restored.digest;
-            if (restored.expiresAt === undefined)
-                delete authCredential.expiresAt;
-            else
-                authCredential.expiresAt = restored.expiresAt;
-        }
-        else {
-            delete authCredential.digest;
-            delete authCredential.expiresAt;
-        }
-        reviewerTokens.clear();
-        for (const [reviewerId, credential] of Object.entries(persistedCredentials.reviewers))
-            reviewerTokens.set(reviewerId, deserializeCredential(credential, `reviewers.${reviewerId}`));
-        if (persistedCredentials.admin)
-            adminCredential = deserializeCredential(persistedCredentials.admin, 'admin');
-        else
-            adminCredential = undefined;
-    }
-    else {
-        await persistCredentialState();
-    }
-    const activeCredentialDigests = [];
-    if (authCredential.digest)
-        activeCredentialDigests.push(authCredential.digest);
-    if (adminCredential?.digest)
-        activeCredentialDigests.push(adminCredential.digest);
-    for (const credential of reviewerTokens.values())
-        if (credential.digest)
-            activeCredentialDigests.push(credential.digest);
-    if (new Set(activeCredentialDigests.map(digest => digest.toString('base64url'))).size !== activeCredentialDigests.length)
-        throw new Error('credential state contains duplicate active credentials');
     const signingKeyPath = resolve(options.signingKeyPath || join(resolve(root), 'signing-key.pem'));
     // HTTP callers must never be able to choose the command-center origin by
     // putting a different value in the proposal JSON. A library caller may
     // explicitly configure it; otherwise bind it to the configured hub id.
     const proposerOrigin = boundedText(options.proposerOrigin || options.hubId || 'global-hub', 'proposerOrigin', MAX_ORIGIN_LENGTH).toLowerCase();
     let signingPrivateKey;
+    const credentialLock = await acquireProcessLock(credentialLockPath);
     try {
-        signingPrivateKey = await readFile(signingKeyPath, 'utf8');
-    }
-    catch (error) {
-        if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'))
-            throw error;
-    }
-    const processLockPath = resolve(options.processLockPath || join(resolve(root), 'hub.lock'));
-    let hub = new GlobalSyncHub(root, { ...(options.hubId && { hubId: options.hubId }), ...(signingPrivateKey && { signingPrivateKey }), processLockPath });
-    if (!signingPrivateKey) {
-        await mkdir(dirname(signingKeyPath), { recursive: true, mode: 0o700 });
+        const persistedCredentials = await loadCredentialStore(credentialStatePath);
+        if (persistedCredentials) {
+            if (persistedCredentials.proposer) {
+                const restored = deserializeCredential(persistedCredentials.proposer, 'proposer');
+                authCredential.digest = restored.digest;
+                if (restored.expiresAt === undefined)
+                    delete authCredential.expiresAt;
+                else
+                    authCredential.expiresAt = restored.expiresAt;
+            }
+            else {
+                delete authCredential.digest;
+                delete authCredential.expiresAt;
+            }
+            reviewerTokens.clear();
+            for (const [reviewerId, credential] of Object.entries(persistedCredentials.reviewers))
+                reviewerTokens.set(reviewerId, deserializeCredential(credential, `reviewers.${reviewerId}`));
+            if (persistedCredentials.admin)
+                adminCredential = deserializeCredential(persistedCredentials.admin, 'admin');
+            else
+                adminCredential = undefined;
+        }
+        else {
+            await persistCredentialState();
+        }
+        const activeCredentialDigests = [];
+        if (authCredential.digest)
+            activeCredentialDigests.push(authCredential.digest);
+        if (adminCredential?.digest)
+            activeCredentialDigests.push(adminCredential.digest);
+        for (const credential of reviewerTokens.values())
+            if (credential.digest)
+                activeCredentialDigests.push(credential.digest);
+        if (new Set(activeCredentialDigests.map(digest => digest.toString('base64url'))).size !== activeCredentialDigests.length)
+            throw new Error('credential state contains duplicate active credentials');
         try {
-            await writeFile(signingKeyPath, hub.exportSigningPrivateKey(), { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+            signingPrivateKey = await readFile(signingKeyPath, 'utf8');
         }
         catch (error) {
-            if (!(error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST'))
+            if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'))
                 throw error;
-            hub = new GlobalSyncHub(root, { ...(options.hubId && { hubId: options.hubId }), signingPrivateKey: await readFile(signingKeyPath, 'utf8'), processLockPath });
+            const generated = generateGlobalSyncSigningKeyPair().privateKey;
+            await mkdir(dirname(signingKeyPath), { recursive: true, mode: 0o700 });
+            try {
+                await writeFile(signingKeyPath, generated, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+                signingPrivateKey = generated;
+            }
+            catch (writeError) {
+                if (!(writeError && typeof writeError === 'object' && 'code' in writeError && writeError.code === 'EEXIST'))
+                    throw writeError;
+                signingPrivateKey = await readFile(signingKeyPath, 'utf8');
+            }
         }
     }
+    finally {
+        await releaseProcessLock(credentialLock);
+    }
+    const processLockPath = resolve(options.processLockPath || join(resolve(root), 'hub.lock'));
+    const hub = new GlobalSyncHub(root, { ...(options.hubId && { hubId: options.hubId }), signingPrivateKey: signingPrivateKey, processLockPath, ...(options.maxTotalContentBytes !== undefined && { maxTotalContentBytes: options.maxTotalContentBytes }) });
     await hub.getManifest(0, 1);
     const host = options.host || '127.0.0.1';
     const maxBodyBytes = Math.min(Math.max(Math.trunc(options.maxBodyBytes ?? 2 * 1024 * 1024), 1024), 2 * 1024 * 1024);

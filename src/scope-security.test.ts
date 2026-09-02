@@ -83,8 +83,9 @@ test('stdio registration has persistent account and family quotas', async () => 
     modelId: accountId,
     userId,
     role: 'agent',
-    salt: 'c2FsdA==',
-    passwordHash: 'aGFzaA==',
+    agentId: accountId,
+    salt: Buffer.alloc(16).toString('base64'),
+    passwordHash: Buffer.alloc(32).toString('base64'),
     createdAt: new Date(0).toISOString(),
   });
 
@@ -105,6 +106,17 @@ test('stdio registration has persistent account and family quotas', async () => 
   await expect(globallyLimited.register({
     accountId: 'global-overflow', modelId: 'new-model', password: 'global-overflow-password',
   })).rejects.toThrow('Account capacity');
+});
+
+test('corrupt authentication records fail closed instead of being used as principals', async () => {
+  const authDirectory = join(vault, '.mcpvault');
+  await mkdir(authDirectory, { recursive: true });
+  await writeFile(join(authDirectory, 'scope-auth.json'), JSON.stringify({
+    version: 1,
+    accounts: [{ accountId: 'broken', modelId: 'codex', role: 'agent', agentId: 'broken', salt: 'bad', passwordHash: 'bad', createdAt: new Date().toISOString() }],
+  }));
+  const auth = new ScopeAuthService(vault);
+  await expect(auth.listPrincipals()).rejects.toThrow('corrupt scope authentication database');
 });
 
 test('model accounts provision agent accounts and account hashes survive a server restart', async () => {

@@ -70,6 +70,8 @@ export interface GlobalSyncHubOptions {
     signingPrivateKey?: string;
     /** Optional process lock for a live hub sharing this storage root. */
     processLockPath?: string;
+    /** Conservative cumulative proposal-content quota for this event store. */
+    maxTotalContentBytes?: number;
 }
 export interface GlobalSyncChangeInput {
     documentId: string;
@@ -100,6 +102,7 @@ export declare class GlobalSyncHub {
     private readonly signingPrivateKey;
     private readonly signingPublicKey;
     private readonly approvalQuorum;
+    private readonly maxTotalContentBytes;
     private readonly originWindows;
     private state;
     private lastEventHash;
@@ -108,6 +111,7 @@ export declare class GlobalSyncHub {
     private loadPromise;
     private processLock;
     private closed;
+    private totalProposalBytes;
     constructor(root: string, options?: GlobalSyncHubOptions);
     getPublicKey(): string;
     exportSigningPrivateKey(): string;
@@ -219,6 +223,8 @@ export interface GlobalSyncHubHttpOptions {
     authTokenExpiresAt?: string;
     reviewerTokenExpiresAt?: Record<string, string>;
     maxBodyBytes?: number;
+    /** Conservative cumulative proposal-content quota for this event store. */
+    maxTotalContentBytes?: number;
     hubId?: string;
     signingKeyPath?: string;
     processLockPath?: string;
@@ -226,6 +232,8 @@ export interface GlobalSyncHubHttpOptions {
     credentialStatePath?: string;
     /** Path for metadata-only administrator rotation/revocation events. */
     credentialAuditPath?: string;
+    /** Optional lock path used while initializing credentials and signing keys. */
+    credentialLockPath?: string;
     proposerOrigin?: string;
     tls?: {
         key: string;

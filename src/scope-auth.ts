@@ -49,6 +49,33 @@ interface SessionRecord {
   expiresAt: number;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isStoredAccount(value: unknown): value is StoredAccount {
+  if (!isRecord(value)) return false;
+  if (typeof value.accountId !== 'string' || typeof value.modelId !== 'string' || typeof value.role !== 'string') return false;
+  if (value.role !== 'model' && value.role !== 'agent') return false;
+  if (value.agentId !== undefined && typeof value.agentId !== 'string') return false;
+  if (value.userId !== undefined && typeof value.userId !== 'string') return false;
+  if (value.commandCenterId !== undefined && typeof value.commandCenterId !== 'string') return false;
+  if (typeof value.salt !== 'string' || typeof value.passwordHash !== 'string' || typeof value.createdAt !== 'string') return false;
+  if (Buffer.from(value.salt, 'base64').byteLength !== 16 || Buffer.from(value.passwordHash, 'base64').byteLength !== 32) return false;
+  if (!value.accountId || !value.modelId || !value.createdAt || (value.role === 'agent' && !value.agentId)) return false;
+  if (value.capabilities !== undefined && (!Array.isArray(value.capabilities) || value.capabilities.some(capability => typeof capability !== 'string' || !(SCOPE_CAPABILITIES as readonly string[]).includes(capability)))) return false;
+  try {
+    normalizeScopeId(value.accountId, 'accountId');
+    normalizeScopeId(value.modelId, 'modelId');
+    if (value.agentId) normalizeScopeId(value.agentId, 'agentId');
+    if (value.userId) normalizeScopeId(value.userId, 'userId');
+    if (value.commandCenterId) normalizeScopeId(value.commandCenterId, 'commandCenterId');
+  } catch {
+    return false;
+  }
+  return true;
+}
+
 function tokenDigest(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
@@ -104,7 +131,17 @@ export class ScopeAuthService {
         if (parsed.version !== AUTH_VERSION || !Array.isArray(parsed.accounts)) {
           throw new Error('Unsupported or corrupt scope authentication database');
         }
-        return { version: AUTH_VERSION, accounts: parsed.accounts as StoredAccount[] };
+        if (!parsed.accounts.every(isStoredAccount)) throw new Error('Unsupported or corrupt scope authentication database');
+        const accountIds = new Set<string>();
+        const agentIds = new Set<string>();
+        for (const account of parsed.accounts) {
+          if (accountIds.has(account.accountId) || (account.agentId && agentIds.has(account.agentId))) {
+            throw new Error('Unsupported or corrupt scope authentication database');
+          }
+          accountIds.add(account.accountId);
+          if (account.agentId) agentIds.add(account.agentId);
+        }
+        return { version: AUTH_VERSION, accounts: parsed.accounts };
       } catch (error) {
         if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
           return { version: AUTH_VERSION, accounts: [] };

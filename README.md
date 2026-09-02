@@ -1430,6 +1430,11 @@ still restore an older immutable revision, and there is no physical delete.
 Clients may send a bounded `idempotencyKey` with a proposal; retrying the same
 key returns the original proposal, while reusing it for different content or
 metadata is rejected.
+The hub also enforces a conservative cumulative proposal-content quota of
+512 MiB by default (configurable with `maxTotalContentBytes`, capped at 16 GiB)
+in addition to the pending proposal limits. This bounds long-term object-store
+growth from repeated unique proposals; rejected proposals do not bypass the
+quota.
 An optional `adminToken` enables the credential endpoints
 `/v1/global/credentials/rotate` and `/v1/global/credentials/revoke`. They can
 rotate or immediately revoke proposer, reviewer, and admin credentials without
@@ -1445,7 +1450,13 @@ metadata-only entries in `credential-audit.ndjson` (or
 `MCPVAULT_GLOBAL_SYNC_CREDENTIAL_AUDIT_PATH`), without tokens or request
 bodies. Protect both files with owner-only permissions/ACLs. Set
 `MCPVAULT_GLOBAL_SYNC_ADMIN_TOKEN` for the standalone CLI. Expiry timestamps
-are accepted for initial credentials and rotations.
+are accepted for initial credentials and rotations. Credential and signing-key
+initialization is serialized with a separate lock before the serving-process
+lock is acquired, so concurrent startups cannot race while creating these
+files. The standalone `global-sync-server.ts` also accepts
+`MCPVAULT_GLOBAL_SYNC_MAX_TOTAL_CONTENT_BYTES` and
+`MCPVAULT_GLOBAL_SYNC_CREDENTIAL_LOCK_PATH`; the former is validated as a
+positive safe integer and remains subject to the 16 GiB hard cap.
 
 Every manifest and revision is signed with the hub's Ed25519 signing key.
 `startGlobalSyncHub()` persists that private key as `signing-key.pem` (or the

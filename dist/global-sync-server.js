@@ -9,8 +9,20 @@ const reviewerExpiresRaw = process.env.MCPVAULT_GLOBAL_SYNC_REVIEWER_EXPIRES_AT;
 const tlsKeyPath = process.env.MCPVAULT_GLOBAL_SYNC_TLS_KEY_PATH;
 const tlsCertPath = process.env.MCPVAULT_GLOBAL_SYNC_TLS_CERT_PATH;
 const tlsCaPath = process.env.MCPVAULT_GLOBAL_SYNC_TLS_CA_PATH;
+const maxTotalContentBytesRaw = process.env.MCPVAULT_GLOBAL_SYNC_MAX_TOTAL_CONTENT_BYTES;
 const hubId = process.env.MCPVAULT_GLOBAL_SYNC_HUB_ID || 'global-hub';
 const proposerOrigin = process.env.MCPVAULT_GLOBAL_SYNC_ORIGIN || hubId;
+const parseOptionalPositiveInteger = (name, value) => {
+    if (value === undefined)
+        return undefined;
+    if (!/^\d+$/.test(value))
+        throw new Error(`${name} must be a positive safe integer`);
+    const parsed = Number(value);
+    if (!Number.isSafeInteger(parsed) || parsed < 1)
+        throw new Error(`${name} must be a positive safe integer`);
+    return parsed;
+};
+const maxTotalContentBytes = parseOptionalPositiveInteger('MCPVAULT_GLOBAL_SYNC_MAX_TOTAL_CONTENT_BYTES', maxTotalContentBytesRaw);
 if (!root)
     throw new Error('Usage: mcpvault-global-sync <hub-storage-root>');
 if (!authToken || !reviewerToken)
@@ -53,6 +65,8 @@ const handle = await startGlobalSyncHub(root, {
     ...(process.env.MCPVAULT_GLOBAL_SYNC_LOCK_PATH && { processLockPath: process.env.MCPVAULT_GLOBAL_SYNC_LOCK_PATH }),
     ...(process.env.MCPVAULT_GLOBAL_SYNC_CREDENTIAL_STATE_PATH && { credentialStatePath: process.env.MCPVAULT_GLOBAL_SYNC_CREDENTIAL_STATE_PATH }),
     ...(process.env.MCPVAULT_GLOBAL_SYNC_CREDENTIAL_AUDIT_PATH && { credentialAuditPath: process.env.MCPVAULT_GLOBAL_SYNC_CREDENTIAL_AUDIT_PATH }),
+    ...(maxTotalContentBytes !== undefined && { maxTotalContentBytes }),
+    ...(process.env.MCPVAULT_GLOBAL_SYNC_CREDENTIAL_LOCK_PATH && { credentialLockPath: process.env.MCPVAULT_GLOBAL_SYNC_CREDENTIAL_LOCK_PATH }),
     proposerOrigin,
     ...(tls && { tls }),
 });

@@ -243,6 +243,13 @@ test('Global Sync rejects control characters in signed identity metadata', async
   await expect(hub.submitProposal({ documentId: 'Knowledge/Safe.md', content: 'safe\n', author: 'agent', reason: 'test\u0000', origin: 'server-a' })).rejects.toThrow('control characters');
 });
 
+test('Global Hub enforces a cumulative content quota before storing new objects', async () => {
+  const hub = new GlobalSyncHub(hubRoot, { maxTotalContentBytes: 5 });
+  await hub.submitProposal({ documentId: 'Knowledge/Quota-a.md', content: '12345', author: 'agent-a', reason: 'test', origin: 'server-a' });
+  await expect(hub.submitProposal({ documentId: 'Knowledge/Quota-b.md', content: 'x', author: 'agent-a', reason: 'test', origin: 'server-a' })).rejects.toThrow('total content quota');
+  await expect(readdir(join(hubRoot, 'objects'))).resolves.toHaveLength(1);
+});
+
 test('Global Hub prevents two live processes from sharing one event store', async () => {
   const firstHandle = await startGlobalSyncHub(hubRoot, {
     authToken: 'proposer-secret',
