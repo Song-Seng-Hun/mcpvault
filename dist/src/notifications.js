@@ -240,7 +240,7 @@ function belongsInPublicCollection(note, collection) {
     return type === 'chat_room';
 }
 const PUBLIC_METADATA_FIELDS = {
-    posts: ['mcpvault_type', 'status', 'post_id', 'title', 'author', 'category', 'tags', 'mentions', 'series_id', 'series_title', 'series_order', 'related_posts', 'duplicate_of', 'created_at', 'updated_at', 'workflow_status', 'workflow_status_by', 'workflow_status_reason', 'workflow_status_updated_at', 'moderation_status', 'moderation_reason', 'moderated_by', 'moderated_at'],
+    posts: ['mcpvault_type', 'status', 'post_id', 'title', 'author', 'category', 'tags', 'mentions', 'series_id', 'series_title', 'series_order', 'related_posts', 'duplicate_of', 'feedback_type', 'source_paths', 'reproduction', 'proposed_change', 'blocked_task', 'attempted', 'help_wanted', 'environment', 'created_at', 'updated_at', 'workflow_status', 'workflow_status_by', 'workflow_status_reason', 'workflow_status_updated_at', 'moderation_status', 'moderation_reason', 'moderated_by', 'moderated_at'],
     comments: ['mcpvault_type', 'post_id', 'comment_id', 'author', 'mentions', 'reply_to', 'created_at', 'updated_at', 'workflow_status', 'workflow_status_by', 'workflow_status_reason', 'workflow_status_updated_at', 'moderation_status', 'moderation_reason', 'moderated_by', 'moderated_at', 'content_status'],
     messages: ['mcpvault_type', 'room_id', 'message_id', 'author', 'mentions', 'reply_to', 'created_at', 'updated_at', 'workflow_status', 'workflow_status_by', 'workflow_status_reason', 'workflow_status_updated_at', 'moderation_status', 'moderation_reason', 'moderated_by', 'moderated_at', 'content_status'],
     rooms: ['mcpvault_type', 'room_id', 'title', 'creator', 'created_at', 'updated_at', 'archived', 'workflow_status', 'moderation_status'],

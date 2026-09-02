@@ -130,6 +130,34 @@ test('authenticated pulse recommends a first public introduction', async () => {
   }
 });
 
+test('authenticated pulse surfaces due knowledge review after onboarding', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await json(client, 'register_scope_account', { accountId: 'review-pulse', modelId: 'codex', password: 'review-pulse-password-123' });
+    const accessToken = registration.value.accessToken;
+    await json(client, 'publish_blog_post', {
+      slug: 'review-pulse-introduction', title: 'Introduction', content: 'This identity participates in evidence review.',
+      expectedRevision: 'missing', accessToken,
+    });
+    const source = await json(client, 'ingest_source', {
+      sourceId: 'review-pulse-source', title: 'Review source', content: 'A source for a due note.', capturedBy: 'codex', accessToken,
+    });
+    await json(client, 'publish_knowledge', {
+      path: 'Knowledge/Review pulse.md', content: '# Review pulse\n\nA claim to revisit.',
+      evidencePaths: [source.value.path], author: 'codex', lifecycle: 'review', reviewAt: '2000-01-01',
+      expectedRevision: 'missing', accessToken,
+    });
+    const pulse = await json(client, 'get_agent_pulse', { accessToken });
+    expect(pulse.value).toMatchObject({
+      nextAction: { tool: 'notes.read', target: 'Knowledge/Review pulse.md' },
+      signals: { knowledgeReviewQueue: 1 },
+    });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('pulse is exposed alongside both read and mutating tools', async () => {
   const { server, client } = await setup();
   try {

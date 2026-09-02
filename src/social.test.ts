@@ -151,3 +151,50 @@ test('authors can soft-delete posts with revision protection and keep Git-recove
     await server.close();
   }
 });
+
+test('feedback and forum posts require structured handoff context and preserve it for peers', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await json(client, 'register_scope_account', { accountId: 'workflow-agent', modelId: 'codex', password: 'workflow-agent-password-123' });
+    const accessToken = registration.value.accessToken;
+
+    const missingSource = await client.callTool({ name: 'publish_blog_post', arguments: {
+      slug: 'missing-source', title: 'Missing source', content: 'A report without a source location.', category: 'feedback', expectedRevision: 'missing', accessToken,
+    } });
+    expect(missingSource.isError).toBe(true);
+
+    const feedback = await json(client, 'publish_blog_post', {
+      slug: 'feedback-workflow', title: 'Search result is too terse', content: 'The result needs one more line of local context.', category: 'feedback',
+      feedbackType: 'usability', sourcePaths: ['src/search.ts:120', 'README.md'], reproduction: 'Search for a short query and inspect the first result.', proposedChange: 'Return a bounded nearby excerpt.',
+      expectedRevision: 'missing', accessToken,
+    });
+    expect(feedback.value).toMatchObject({ category: 'feedback', sourcePaths: ['src/search.ts:120', 'README.md'] });
+
+    const absoluteSource = await client.callTool({ name: 'publish_blog_post', arguments: {
+      slug: 'absolute-source', title: 'Unsafe source', content: 'The location must be repository-relative.', category: 'feedback', sourcePaths: ['E:/dev/llm_wiki/src/search.ts'], expectedRevision: 'missing', accessToken,
+    } });
+    expect(absoluteSource.isError).toBe(true);
+
+    const missingBlock = await client.callTool({ name: 'publish_blog_post', arguments: {
+      slug: 'missing-block', title: 'Missing block', content: 'A help request without a task.', category: 'forum', expectedRevision: 'missing', accessToken,
+    } });
+    expect(missingBlock.isError).toBe(true);
+
+    const forum = await json(client, 'publish_blog_post', {
+      slug: 'forum-workflow', title: 'How should I verify a stale index?', content: 'The index does not reflect an external edit.', category: 'forum',
+      blockedTask: 'Verify the stale index after an external Markdown edit.', attempted: 'Restarted the server and reread the note.', helpWanted: 'What bounded diagnostic should I run next?', environment: 'Windows, Obsidian vault, MCP client',
+      expectedRevision: 'missing', accessToken,
+    });
+    expect(forum.value).toMatchObject({ category: 'forum', blockedTask: 'Verify the stale index after an external Markdown edit.' });
+
+    const pulse = await json(client, 'get_agent_pulse', { accessToken, limit: 2, maxChars: 4000 });
+    expect(pulse.value.signals).toMatchObject({ activeFeedback: 1, activeForum: 1 });
+    expect(pulse.value.context).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'feedback', slug: 'feedback-workflow', sourcePaths: ['src/search.ts:120', 'README.md'] }),
+      expect.objectContaining({ kind: 'forum', slug: 'forum-workflow', blockedTask: 'Verify the stale index after an external Markdown edit.' }),
+    ]));
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});

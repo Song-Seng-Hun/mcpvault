@@ -124,7 +124,7 @@ const EXPLICIT_ROUTES: Record<string, { method: 'GET' | 'POST'; url: string }> =
 };
 
 const ENDPOINT_ALIASES: Record<string, string[]> = {
-  publish_blog_post: ['community', 'post', 'agora', 'debate', 'topic', 'introduction'],
+  publish_blog_post: ['community', 'post', 'agora', 'debate', 'topic', 'introduction', 'feedback', 'forum', 'blocked', 'help request', 'source code', 'improvement'],
   delete_blog_post: ['community', 'post', 'delete', 'remove', 'archive'],
   list_blog_posts: ['community', 'posts', 'agora', 'debate', 'topic', 'feed'],
   comment_on_blog_post: ['comment', 'reply', 'agora', 'debate', 'stance', 'for', 'against', 'neutral'],

@@ -10,7 +10,7 @@ const BLOG_ROOT = 'Community/Posts';
 const COMMENTS_ROOT = 'Community/Comments';
 const JOURNAL_KINDS = new Set(['diary', 'log', 'reflection']);
 const POST_STATUSES = new Set(['draft', 'published', 'archived']);
-export const COMMUNITY_POST_CATEGORIES = ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase', 'agora'];
+export const COMMUNITY_POST_CATEGORIES = ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase', 'agora', 'feedback', 'forum'];
 export const AGORA_STANCES = ['for', 'against', 'neutral'];
 export const MAX_COMMUNITY_TEXT_LENGTH = 280;
 const now = () => new Date().toISOString();
@@ -28,6 +28,15 @@ function cleanTags(tags) {
     if (!Array.isArray(tags))
         return [];
     return Array.from(new Set(tags.map(tag => String(tag).trim().toLowerCase()).filter(Boolean))).slice(0, 30);
+}
+function cleanFeedbackSourcePaths(value) {
+    if (!Array.isArray(value))
+        return [];
+    const paths = value.map(item => String(item).trim().replace(/\\/g, '/')).filter(Boolean);
+    if (paths.some(path => /^(?:[a-z]:[\\/]|\\\\|\/|https?:)/i.test(path) || path.split('/').includes('..'))) {
+        throw new Error('sourcePaths must contain repository-relative paths and cannot contain absolute paths or .. segments');
+    }
+    return Array.from(new Set(paths)).slice(0, 20);
 }
 export function extractMentions(content) {
     const mentions = new Set();
@@ -264,6 +273,15 @@ export class SocialService {
         const category = String(params.category ?? existing?.note.frontmatter.category ?? 'discussion').trim().toLowerCase();
         if (!COMMUNITY_POST_CATEGORIES.includes(category))
             throw new Error(`category must be one of: ${COMMUNITY_POST_CATEGORIES.join(', ')}`);
+        const sourcePaths = params.sourcePaths === undefined
+            ? cleanFeedbackSourcePaths(existing?.note.frontmatter.source_paths)
+            : cleanFeedbackSourcePaths(params.sourcePaths);
+        if (category === 'feedback' && sourcePaths.length === 0) {
+            throw new Error('feedback posts must include sourcePaths with one or more repository-relative source code locations');
+        }
+        if (category === 'forum' && !String(params.blockedTask ?? existing?.note.frontmatter.blocked_task ?? '').trim()) {
+            throw new Error('forum posts must include blockedTask so other agents know what is blocked');
+        }
         const seriesId = params.seriesId === undefined ? existing?.note.frontmatter.series_id : (params.seriesId ? normalizeScopeId(params.seriesId, 'seriesId') : undefined);
         const seriesOrder = params.seriesOrder === undefined ? existing?.note.frontmatter.series_order : Number(params.seriesOrder);
         if (seriesId && (!Number.isInteger(seriesOrder) || Number(seriesOrder) < 1))
@@ -293,6 +311,18 @@ export class SocialService {
                 ...(!seriesId && existing?.note.frontmatter.series_id && { series_id: null, series_title: null, series_order: null }),
                 related_posts: relatedPosts,
                 ...(duplicateOf ? { duplicate_of: duplicateOf } : {}),
+                ...(category === 'feedback' && {
+                    source_paths: sourcePaths,
+                    ...(params.feedbackType !== undefined && { feedback_type: String(params.feedbackType).trim().slice(0, 120) }),
+                    ...(params.reproduction !== undefined && { reproduction: String(params.reproduction).trim().slice(0, 1000) }),
+                    ...(params.proposedChange !== undefined && { proposed_change: String(params.proposedChange).trim().slice(0, 1000) }),
+                }),
+                ...(category === 'forum' && {
+                    blocked_task: String(params.blockedTask ?? existing?.note.frontmatter.blocked_task ?? '').trim().slice(0, 500),
+                    ...(params.attempted !== undefined && { attempted: String(params.attempted).trim().slice(0, 1000) }),
+                    ...(params.helpWanted !== undefined && { help_wanted: String(params.helpWanted).trim().slice(0, 1000) }),
+                    ...(params.environment !== undefined && { environment: String(params.environment).trim().slice(0, 500) }),
+                }),
                 references: await this.references.validateAndNormalize(params.references ?? existing?.note.frontmatter.references, path, principal, content),
                 ...(existing ? { updated_at: timestamp } : { created_at: timestamp, updated_at: timestamp }),
                 ...(!existing && { workflow_status: 'open' }),
@@ -300,7 +330,12 @@ export class SocialService {
             expectedRevision: params.expectedRevision,
         });
         const written = await this.fileSystem.readNote(path);
-        return { success: true, created: !existing, slug, path, status, revision: written.revision };
+        return {
+            success: true, created: !existing, slug, path, status, category,
+            ...(category === 'feedback' && { sourcePaths }),
+            ...(category === 'forum' && { blockedTask: written.frontmatter.blocked_task }),
+            revision: written.revision,
+        };
     }
     async deleteBlogPost(params) {
         const principal = requirePublisher(params.principal);
@@ -393,7 +428,22 @@ export class SocialService {
             includeExcerpt: true,
             excerptMaxChars: 240,
         }, queryTruncated, activeTotal);
-        return { ownPublishedPosts, activePosts: active.posts, activeTotal: active.total, activeTruncated: active.truncated };
+        const feedbackNotes = activeNotes.filter(note => String(note.frontmatter.category || '').toLowerCase() === 'feedback');
+        const forumNotes = activeNotes.filter(note => String(note.frontmatter.category || '').toLowerCase() === 'forum');
+        const [feedback, forum] = await Promise.all([
+            this.formatBlogPosts(feedbackNotes, { principal: params.principal, limit: Math.min(params.limit, 3), maxChars: Math.min(params.maxChars, 2500), includeExcerpt: true, excerptMaxChars: 240 }, false, feedbackNotes.length),
+            this.formatBlogPosts(forumNotes, { principal: params.principal, limit: Math.min(params.limit, 3), maxChars: Math.min(params.maxChars, 2500), includeExcerpt: true, excerptMaxChars: 240 }, false, forumNotes.length),
+        ]);
+        return {
+            ownPublishedPosts,
+            activePosts: active.posts,
+            activeTotal: active.total,
+            activeTruncated: active.truncated,
+            feedbackPosts: feedback.posts,
+            feedbackTotal: feedbackNotes.length,
+            forumPosts: forum.posts,
+            forumTotal: forumNotes.length,
+        };
     }
     async formatBlogPosts(visibleNotes, params, queryTruncated, total = visibleNotes.length) {
         const limit = Math.min(Math.max(Number(params.limit || 50), 1), 500);
@@ -428,6 +478,18 @@ export class SocialService {
             seriesOrder: note.frontmatter.series_order,
             relatedPosts: note.frontmatter.related_posts || [],
             duplicateOf: note.frontmatter.duplicate_of,
+            ...(note.frontmatter.category === 'feedback' && {
+                sourcePaths: Array.isArray(note.frontmatter.source_paths) ? note.frontmatter.source_paths : [],
+                feedbackType: note.frontmatter.feedback_type,
+                reproduction: note.frontmatter.reproduction,
+                proposedChange: note.frontmatter.proposed_change,
+            }),
+            ...(note.frontmatter.category === 'forum' && {
+                blockedTask: note.frontmatter.blocked_task,
+                attempted: note.frontmatter.attempted,
+                helpWanted: note.frontmatter.help_wanted,
+                environment: note.frontmatter.environment,
+            }),
             createdAt: note.frontmatter.created_at,
             updatedAt: note.frontmatter.updated_at,
             workflowStatus: workflowStatus(note.frontmatter),
