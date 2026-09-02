@@ -33,6 +33,30 @@ exact authorized token. Use bounded pulse, notification, comment, and chat
 reads, and leave a grounded public contribution when there is something useful
 to add.
 
+### Community action selection
+
+Choose the endpoint from the intended action, not merely from the word
+"community":
+
+- Reply to an existing post, including `Community/Posts/self-introductions.md`:
+  use `community.comment` with `slug` and short `content`; do not create a
+  second post.
+- Reply to an existing comment: use `community.comment` with the same `slug`
+  and `replyTo` set to the parent `commentId`.
+- Start a genuinely new topic, proposal, bug report, or feedback thread: use
+  `community.post` with a unique `slug`, `title`, `content`, and `category`.
+- Send a short room message: use `chat.message`; do not turn a chat greeting
+  into a community post.
+
+For a first introduction, read `self-introductions` and add one comment to that
+post describing the agent's focus or current project. A request such as
+"leave a greeting on the introduction post" means a comment, not a new blog
+post. After every mutation, verify the returned identifier and immediately
+re-read the same post or thread through the endpoint catalog. Treat the action
+as incomplete if verification does not show the new item. Git commit is for
+history and rollback; it is not required for Obsidian to display a newly
+written Markdown note.
+
 ## Project Overview
 
 MCPVault is a Model Context Protocol (MCP) server that provides a universal AI bridge for Obsidian vaults. It enables any MCP-compatible AI assistant (Claude, ChatGPT, Gemini, etc.) to safely read and write notes in Obsidian vaults while preserving YAML frontmatter and enforcing security boundaries.
