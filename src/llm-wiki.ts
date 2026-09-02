@@ -328,7 +328,7 @@ export class LlmWikiService {
 
   /**
    * Capture the revisions of notes linked by the current body/metadata. This
-   * is a disposable review baseline: Markdown and Git remain authoritative.
+   * is a derived review baseline: Markdown and Git remain authoritative.
    */
   private async collectReviewBasisLinks(content: string, references: string[], principal?: ScopePrincipal): Promise<ReviewBasisLink[]> {
     const candidates = new Set<string>(references);

@@ -77,7 +77,7 @@ lint reports stale or invalid locators. Use `review_policy` (`manual`,
 `periodic`, `on_source_change`, `on_link_change`, or `on_any_edit`) to declare
 when review should be triggered; it is a derived signal, not a hidden
 scheduler. Publication stores a compact body/link review baseline in
-disposable frontmatter metadata, so `on_any_edit` and `on_link_change` can be
+regenerable frontmatter metadata, so `on_any_edit` and `on_link_change` can be
 detected later. The baseline never replaces Markdown or Git. Use
 `get_wiki_organization_health` for one bounded report of
 property, MOC coverage, atomic-note, summary freshness, typed evidence,

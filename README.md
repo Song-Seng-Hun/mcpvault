@@ -187,7 +187,7 @@ knowledge `lifecycle`. Evidence can carry `heading`, `blockId`, and source
 Use `review_policy` (`manual`, `periodic`, `on_source_change`,
 `on_link_change`, or `on_any_edit`) to declare review triggers. Publication
 stores a compact body/link review baseline, so later source, link, or body
-changes can be reported as derived triggers. The baseline is disposable
+changes can be reported as derived triggers. The baseline is regenerable
 metadata and never replaces Markdown or Git. The bounded
 `get_wiki_organization_health` endpoint combines these checks with MOC
 coverage, Inbox, lifecycle, atomic-note, summary freshness, and alias/ID
