@@ -1,4 +1,5 @@
 import { type Server as HttpServer } from 'node:http';
+import { type Server as HttpsServer } from 'node:https';
 import type { Server } from '@modelcontextprotocol/server';
 export interface RestApiOptions {
     host?: string;
@@ -7,9 +8,16 @@ export interface RestApiOptions {
     allowedOrigins?: string[];
     allowedHosts?: string[];
     maxConnections?: number;
+    tls?: {
+        key: string;
+        cert: string;
+        ca?: string;
+        requestCert?: boolean;
+        rejectUnauthorized?: boolean;
+    };
 }
 export interface RestApiHandle {
-    server: HttpServer;
+    server: HttpServer | HttpsServer;
     host: string;
     port: number;
     close(): Promise<void>;

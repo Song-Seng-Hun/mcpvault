@@ -151,9 +151,11 @@ receive `304 Not Modified` without downloading the JSON again. `Authorization`
 is included in `Vary`, and mutating/error responses are never cacheable.
 The adapter clamps request bodies to 2 MiB, limits HTTP headers, keep-alive
 requests, connections, and request duration, and rate-limits anonymous account
-registration to five attempts per client address per ten minutes. If the
-adapter is bound beyond localhost through the library API, configure its
-`allowedHosts` and `allowedOrigins` explicitly.
+registration to five attempts per client address per ten minutes and login to
+120 attempts per client address per minute. It refuses non-loopback binding
+unless the library caller supplies TLS credentials; if the adapter is bound
+beyond localhost, configure its `allowedHosts` and `allowedOrigins` explicitly.
+Individual note mutations are also limited to 8 MiB, including stdio calls.
 
 ### Stateless MCP over HTTP
 
@@ -181,7 +183,10 @@ existing stdio mode remains available during migration, but it is not required
 once every client has been verified against `/mcp`. When binding beyond
 localhost, set `MCPVAULT_MCP_HTTP_HOST` and explicit comma-separated
 `MCPVAULT_ALLOWED_HOSTS`; set `MCPVAULT_ALLOWED_ORIGINS` when browser-origin
-requests are expected.
+requests are expected. The library adapter refuses a non-loopback bind unless
+TLS key/certificate options are supplied; the CLI remains localhost-only unless
+you place it behind an authenticated HTTPS reverse proxy or tunnel. Stateless
+MCP HTTP also rate-limits anonymous registration and login attempts.
 
 ## Features
 

@@ -1,4 +1,5 @@
-import { createServer } from 'node:http';
+import { createServer as createHttpServer } from 'node:http';
+import { createServer as createHttpsServer } from 'node:https';
 import { createHash } from 'node:crypto';
 import { URL } from 'node:url';
 import { getServerRuntime } from './createServer.js';
@@ -34,6 +35,11 @@ const MAX_HTTP_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_RATE_BUCKETS = 4_096;
 const REGISTRATION_WINDOW_MS = 10 * 60 * 1_000;
 const MAX_REGISTRATIONS_PER_WINDOW = 5;
+const LOGIN_WINDOW_MS = 60 * 1_000;
+const MAX_LOGINS_PER_WINDOW = 120;
+function isLoopbackHost(host) {
+    return ['127.0.0.1', 'localhost', '::1'].includes(host.trim().toLowerCase());
+}
 function requestHost(request) {
     const host = request.headers.host;
     if (!host)
@@ -88,10 +94,14 @@ export async function startRestApi(server, options = {}) {
         throw new Error('The supplied MCP server has no MCPVault runtime');
     runtime.ensureEndpointRegistry();
     const host = options.host || '127.0.0.1';
+    if (!isLoopbackHost(host) && !options.tls) {
+        throw new Error('REST adapter requires TLS when binding to a non-loopback host');
+    }
     const maxBodyBytes = Math.min(Math.max(Math.trunc(options.maxBodyBytes ?? 1_048_576), 1_024), MAX_HTTP_BODY_BYTES);
     const allowedOrigins = options.allowedOrigins || [];
     const allowedHosts = options.allowedHosts || (host === '127.0.0.1' ? ['127.0.0.1', 'localhost'] : [host]);
     const registrationWindows = new Map();
+    const loginWindows = new Map();
     const registrationAllowed = (key) => {
         const now = Date.now();
         const current = registrationWindows.get(key);
@@ -114,7 +124,29 @@ export async function startRestApi(server, options = {}) {
         current.count += 1;
         return true;
     };
-    const httpServer = createServer(async (request, response) => {
+    const loginAllowed = (key) => {
+        const now = Date.now();
+        const current = loginWindows.get(key);
+        if (!current || now - current.startedAt >= LOGIN_WINDOW_MS) {
+            if (loginWindows.size >= MAX_RATE_BUCKETS) {
+                for (const [bucket, value] of loginWindows) {
+                    if (now - value.startedAt >= LOGIN_WINDOW_MS)
+                        loginWindows.delete(bucket);
+                    if (loginWindows.size < MAX_RATE_BUCKETS)
+                        break;
+                }
+            }
+            if (loginWindows.size >= MAX_RATE_BUCKETS && !loginWindows.has(key))
+                return false;
+            loginWindows.set(key, { startedAt: now, count: 1 });
+            return true;
+        }
+        if (current.count >= MAX_LOGINS_PER_WINDOW)
+            return false;
+        current.count += 1;
+        return true;
+    };
+    const requestHandler = async (request, response) => {
         try {
             const requestUrl = new URL(request.url || '/', `http://${host}`);
             if (!originAllowed(request, allowedOrigins)) {
@@ -167,6 +199,12 @@ export async function startRestApi(server, options = {}) {
                 response.end('Registration rate limit exceeded; retry later');
                 return;
             }
+            if (endpointId === 'auth.login' && !loginAllowed(request.socket.remoteAddress || 'unknown')) {
+                response.statusCode = 429;
+                response.setHeader('retry-after', String(Math.ceil(LOGIN_WINDOW_MS / 1_000)));
+                response.end('Login rate limit exceeded; retry later');
+                return;
+            }
             const queryArguments = Object.fromEntries(requestUrl.searchParams.entries());
             const arguments_ = { ...queryArguments, ...pathArguments, ...body };
             const result = await runtime.dispatchTool('call_endpoint', { endpointId, arguments: arguments_ });
@@ -175,7 +213,10 @@ export async function startRestApi(server, options = {}) {
         catch (error) {
             sendJson(request, response, 400, { error: error instanceof Error ? error.message : 'Unknown error' });
         }
-    });
+    };
+    const httpServer = options.tls
+        ? createHttpsServer({ key: options.tls.key, cert: options.tls.cert, ...(options.tls.ca && { ca: options.tls.ca }), requestCert: options.tls.requestCert ?? Boolean(options.tls.ca), rejectUnauthorized: options.tls.rejectUnauthorized ?? Boolean(options.tls.ca) }, requestHandler)
+        : createHttpServer(requestHandler);
     httpServer.requestTimeout = 30_000;
     httpServer.headersTimeout = 10_000;
     httpServer.keepAliveTimeout = 5_000;

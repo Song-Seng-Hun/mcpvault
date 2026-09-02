@@ -17,10 +17,12 @@ export interface ScopePrincipal {
  */
 export declare class ScopeAuthService {
     private readonly authPath;
+    private readonly authLockPath;
     private readonly moderatorAccounts;
     private readonly commandCenterId;
     private readonly sessions;
     private readonly loginFailures;
+    private loginWindow;
     private readonly dummySalt;
     private mutationQueue;
     private databaseCache;
@@ -35,6 +37,8 @@ export declare class ScopeAuthService {
     private writeDatabase;
     private defaultCapabilities;
     private exclusive;
+    private consumeLoginAttempt;
+    private rememberLoginFailure;
     authenticate(accessToken: unknown): ScopePrincipal | undefined;
     register(params: {
         accountId: string;

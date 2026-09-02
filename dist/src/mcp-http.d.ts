@@ -1,4 +1,5 @@
 import { type Server as HttpServer } from 'node:http';
+import { type Server as HttpsServer } from 'node:https';
 import { type Server } from '@modelcontextprotocol/server';
 export interface McpHttpOptions {
     host?: string;
@@ -8,9 +9,16 @@ export interface McpHttpOptions {
     allowedOrigins?: string[];
     allowedHosts?: string[];
     maxConnections?: number;
+    tls?: {
+        key: string | Buffer;
+        cert: string | Buffer;
+        ca?: string | Buffer;
+        requestCert?: boolean;
+        rejectUnauthorized?: boolean;
+    };
 }
 export interface McpHttpHandle {
-    server: HttpServer;
+    server: HttpServer | HttpsServer;
     host: string;
     port: number;
     path: string;

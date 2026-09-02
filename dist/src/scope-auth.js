@@ -1,5 +1,5 @@
 import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile, chmod } from 'node:fs/promises';
+import { mkdir, readFile, rename, writeFile, chmod, open as openFile, unlink } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { normalizeScopeId } from './scopes.js';
@@ -10,6 +10,10 @@ const PASSWORD_MIN_LENGTH = 12;
 const MAX_LOGIN_FAILURES = 5;
 const LOGIN_BLOCK_MS = 30_000;
 const AUTH_DATABASE_CACHE_TTL_MS = 1_000;
+const AUTH_LOCK_RETRY_COUNT = 2;
+const MAX_LOGIN_FAILURE_ENTRIES = 4_096;
+const LOGIN_WINDOW_MS = 60_000;
+const MAX_LOGIN_ATTEMPTS_PER_WINDOW = 120;
 // Registration can be reached anonymously by design. Keep abuse bounded even
 // when the server is used over stdio, where there is no client IP to rate-limit.
 const MAX_ACCOUNTS = 4_096;
@@ -56,6 +60,73 @@ function isStoredAccount(value) {
     }
     return true;
 }
+function processIsAlive(pid) {
+    try {
+        process.kill(pid, 0);
+        return true;
+    }
+    catch (error) {
+        return !(error && typeof error === 'object' && 'code' in error && error.code === 'ESRCH');
+    }
+}
+async function acquireAuthFileLock(path) {
+    await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+    for (let attempt = 0; attempt < AUTH_LOCK_RETRY_COUNT; attempt += 1) {
+        const nonce = randomBytes(16).toString('hex');
+        try {
+            const handle = await openFile(path, 'wx');
+            try {
+                await handle.writeFile(`${JSON.stringify({ pid: process.pid, nonce })}\n`, 'utf8');
+                await handle.sync();
+            }
+            catch (error) {
+                await handle.close().catch(() => undefined);
+                await unlink(path).catch(() => undefined);
+                throw error;
+            }
+            return { handle, nonce, path };
+        }
+        catch (error) {
+            if (!(error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST'))
+                throw error;
+            let raw;
+            try {
+                raw = await readFile(path, 'utf8');
+            }
+            catch (readError) {
+                if (readError && typeof readError === 'object' && 'code' in readError && readError.code === 'ENOENT')
+                    continue;
+                throw readError;
+            }
+            let record;
+            try {
+                record = JSON.parse(raw);
+            }
+            catch {
+                throw new Error('Scope authentication lock is corrupt; refusing to remove it automatically');
+            }
+            if (!isRecord(record) || typeof record.pid !== 'number' || !Number.isSafeInteger(record.pid) || record.pid <= 0 || typeof record.nonce !== 'string' || !record.nonce) {
+                throw new Error('Scope authentication lock is invalid; refusing to remove it automatically');
+            }
+            if (processIsAlive(record.pid))
+                throw new Error(`Scope authentication database is already in use by process ${record.pid}`);
+            await unlink(path);
+        }
+    }
+    throw new Error('Unable to acquire scope authentication database lock');
+}
+async function releaseAuthFileLock(lock) {
+    await lock.handle.close().catch(() => undefined);
+    try {
+        const record = JSON.parse(await readFile(lock.path, 'utf8'));
+        if (record.nonce === lock.nonce)
+            await unlink(lock.path);
+    }
+    catch (error) {
+        if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'))
+            throw error;
+    }
+}
 function tokenDigest(token) {
     return createHash('sha256').update(token).digest('hex');
 }
@@ -76,10 +147,12 @@ async function passwordDigest(password, salt) {
  */
 export class ScopeAuthService {
     authPath;
+    authLockPath;
     moderatorAccounts;
     commandCenterId;
     sessions = new Map();
     loginFailures = new Map();
+    loginWindow = { startedAt: Date.now(), count: 0 };
     dummySalt = randomBytes(16);
     mutationQueue = Promise.resolve();
     databaseCache;
@@ -87,6 +160,7 @@ export class ScopeAuthService {
     principalCache;
     constructor(vaultPath, options = {}) {
         this.authPath = join(resolve(vaultPath), '.mcpvault', 'scope-auth.json');
+        this.authLockPath = join(resolve(vaultPath), '.mcpvault', 'scope-auth.lock');
         const configured = options.moderatorAccounts || String(process.env.MCPVAULT_MODERATOR_ACCOUNTS || '').split(',');
         this.moderatorAccounts = new Set(configured.map(value => String(value).trim().toLowerCase()).filter(Boolean));
         this.commandCenterId = normalizeScopeId(options.commandCenterId || process.env.MCPVAULT_COMMAND_CENTER_ID || 'local', 'commandCenterId');
@@ -161,12 +235,45 @@ export class ScopeAuthService {
         const previous = this.mutationQueue;
         this.mutationQueue = new Promise((resolvePromise) => { release = resolvePromise; });
         await previous;
+        let fileLock;
         try {
+            fileLock = await acquireAuthFileLock(this.authLockPath);
+            // Another process may have committed while this instance's short cache
+            // was still warm. Always reload under the OS lock before read-modify-write.
+            this.databaseCache = undefined;
+            this.principalCache = undefined;
             return await operation();
         }
         finally {
+            if (fileLock)
+                await releaseAuthFileLock(fileLock).catch(() => undefined);
             release();
         }
+    }
+    consumeLoginAttempt() {
+        const now = Date.now();
+        if (now - this.loginWindow.startedAt >= LOGIN_WINDOW_MS)
+            this.loginWindow = { startedAt: now, count: 0 };
+        if (this.loginWindow.count >= MAX_LOGIN_ATTEMPTS_PER_WINDOW) {
+            throw new Error('Too many login attempts; try again later');
+        }
+        this.loginWindow.count += 1;
+        for (const [accountId, failure] of this.loginFailures) {
+            if (failure.blockedUntil > 0 && failure.blockedUntil <= now)
+                this.loginFailures.delete(accountId);
+        }
+    }
+    rememberLoginFailure(accountId, previous) {
+        if (!this.loginFailures.has(accountId) && this.loginFailures.size >= MAX_LOGIN_FAILURE_ENTRIES) {
+            const oldest = this.loginFailures.keys().next().value;
+            if (typeof oldest === 'string')
+                this.loginFailures.delete(oldest);
+        }
+        const count = (previous?.blockedUntil && previous.blockedUntil <= Date.now() ? 0 : previous?.count || 0) + 1;
+        this.loginFailures.set(accountId, {
+            count,
+            blockedUntil: count >= MAX_LOGIN_FAILURES ? Date.now() + LOGIN_BLOCK_MS : 0,
+        });
     }
     authenticate(accessToken) {
         if (typeof accessToken !== 'string' || !accessToken)
@@ -264,6 +371,7 @@ export class ScopeAuthService {
         if (failure?.blockedUntil && failure.blockedUntil > Date.now()) {
             throw new Error('Too many failed login attempts; try again later');
         }
+        this.consumeLoginAttempt();
         const database = await this.readDatabase();
         const account = database.accounts.find(candidate => candidate.accountId === accountId);
         // Run the same expensive password derivation for missing accounts so
@@ -272,11 +380,7 @@ export class ScopeAuthService {
         const actual = await passwordDigest(password, salt);
         const expected = account ? Buffer.from(account.passwordHash, 'base64') : Buffer.alloc(actual.length);
         if (!account || actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
-            const count = (failure?.blockedUntil && failure.blockedUntil <= Date.now() ? 0 : failure?.count || 0) + 1;
-            this.loginFailures.set(accountId, {
-                count,
-                blockedUntil: count >= MAX_LOGIN_FAILURES ? Date.now() + LOGIN_BLOCK_MS : 0,
-            });
+            this.rememberLoginFailure(accountId, failure);
             throw new Error('Invalid account or password');
         }
         if (account.commandCenterId && account.commandCenterId !== this.commandCenterId) {

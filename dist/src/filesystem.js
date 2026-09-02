@@ -10,6 +10,14 @@ import { generateObsidianUri } from './uri.js';
 import { extractWikiLinkOccurrences, findBacklinkMatches, findUnresolvedLinkMatches, resolveWikiLinkTargets } from './backlinks.js';
 import { buildDailyNotePath, resolveDailyDate } from './daily.js';
 import { VaultIoCoordinator } from './vault-io.js';
+/** Hard per-note write limit so stdio callers cannot exhaust the vault disk. */
+export const MAX_NOTE_CONTENT_BYTES = 8 * 1024 * 1024;
+function assertNoteContentSize(content, path) {
+    const byteLength = Buffer.byteLength(content, 'utf8');
+    if (byteLength > MAX_NOTE_CONTENT_BYTES) {
+        throw new Error(`Note exceeds ${MAX_NOTE_CONTENT_BYTES} bytes: ${path}`);
+    }
+}
 function getFrontmatterValue(frontmatter, key) {
     let current = frontmatter;
     for (const segment of key.split('.')) {
@@ -483,6 +491,7 @@ export class FileSystemService {
                     }
                 }
             }
+            assertNoteContentSize(finalContent, path);
             // Create directories if they don't exist
             await mkdir(dirname(fullPath), { recursive: true });
             await writeFile(fullPath, finalContent, 'utf-8');
@@ -563,6 +572,7 @@ export class FileSystemService {
             const updatedContent = replaceAll
                 ? fullContent.split(oldString).join(newString)
                 : fullContent.replace(oldString, () => newString);
+            assertNoteContentSize(updatedContent, path);
             // Write the updated content
             const fullPath = this.resolveWritablePath(path);
             await writeFile(fullPath, updatedContent, 'utf-8');
@@ -651,6 +661,7 @@ export class FileSystemService {
                 }
             }
             const previewMaxChars = Math.min(Math.max(Number(params.previewMaxChars ?? 1200), 200), 5000);
+            assertNoteContentSize(content, path);
             const revision = createHash('sha256').update(content, 'utf8').digest('hex');
             const result = {
                 success: true,
@@ -1162,6 +1173,7 @@ export class FileSystemService {
         if (merge && note.matter && note.matter.trim() !== '') {
             // Preserve raw formatting for unmodified fields
             const updatedContent = this.frontmatterHandler.preserveStringify(note.matter, frontmatter, note.content);
+            assertNoteContentSize(updatedContent, path);
             await writeFile(fullPath, updatedContent, 'utf-8');
         }
         else {
@@ -1279,6 +1291,7 @@ export class FileSystemService {
                 }
                 updatedContent = this.frontmatterHandler.stringify(updatedFrontmatter, note.content);
             }
+            assertNoteContentSize(updatedContent, path);
             const fullPath = this.resolveWritablePath(path);
             await writeFile(fullPath, updatedContent, 'utf-8');
             return {

@@ -14,6 +14,18 @@ afterEach(async () => {
     await rm(resource.vault, { recursive: true, force: true });
   }
 });
+
+test('refuses non-loopback REST binding without TLS', async () => {
+  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-rest-tls-'));
+  const server = createServer(vault);
+  try {
+    await expect(startRestApi(server, { host: '0.0.0.0', port: 0 })).rejects.toThrow('requires TLS');
+  } finally {
+    await server.close();
+    await rm(vault, { recursive: true, force: true });
+  }
+});
+
 test('REST adapter uses the same dynamic endpoint registry and dispatcher', async () => {
   const vault = await mkdtemp(join(tmpdir(), 'mcpvault-rest-'));
   const server = createServer(vault);

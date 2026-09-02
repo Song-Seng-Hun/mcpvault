@@ -1,4 +1,5 @@
 import { createServer as createHttpServer } from 'node:http';
+import { createServer as createHttpsServer } from 'node:https';
 import { createMcpHandler } from '@modelcontextprotocol/server';
 import { getServerRuntime } from './createServer.js';
 function headerValues(request) {
@@ -28,6 +29,11 @@ const MAX_HTTP_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_RATE_BUCKETS = 4_096;
 const REGISTRATION_WINDOW_MS = 10 * 60 * 1_000;
 const MAX_REGISTRATIONS_PER_WINDOW = 5;
+const LOGIN_WINDOW_MS = 60 * 1_000;
+const MAX_LOGINS_PER_WINDOW = 120;
+function isLoopbackHost(host) {
+    return ['127.0.0.1', 'localhost', '::1'].includes(host.trim().toLowerCase());
+}
 function isRegistrationCall(value) {
     const requests = Array.isArray(value) ? value : [value];
     return requests.some(request => {
@@ -121,6 +127,9 @@ export async function startMcpHttpApi(server, options = {}) {
     if (!runtime)
         throw new Error('The supplied MCP server has no MCPVault runtime');
     const host = options.host || '127.0.0.1';
+    if (!isLoopbackHost(host) && !options.tls) {
+        throw new Error('Stateless MCP HTTP requires TLS when binding to a non-loopback host');
+    }
     const path = options.path || '/mcp';
     const maxBodyBytes = Math.min(Math.max(Math.trunc(options.maxBodyBytes ?? 1_048_576), 1_024), MAX_HTTP_BODY_BYTES);
     const allowedOrigins = options.allowedOrigins || [];
@@ -153,7 +162,30 @@ export async function startMcpHttpApi(server, options = {}) {
         current.count += 1;
         return true;
     };
-    const httpServer = createHttpServer(async (request, response) => {
+    const loginWindows = new Map();
+    const loginAllowed = (key) => {
+        const now = Date.now();
+        const current = loginWindows.get(key);
+        if (!current || now - current.startedAt >= LOGIN_WINDOW_MS) {
+            if (loginWindows.size >= MAX_RATE_BUCKETS) {
+                for (const [bucket, value] of loginWindows) {
+                    if (now - value.startedAt >= LOGIN_WINDOW_MS)
+                        loginWindows.delete(bucket);
+                    if (loginWindows.size < MAX_RATE_BUCKETS)
+                        break;
+                }
+            }
+            if (loginWindows.size >= MAX_RATE_BUCKETS && !loginWindows.has(key))
+                return false;
+            loginWindows.set(key, { startedAt: now, count: 1 });
+            return true;
+        }
+        if (current.count >= MAX_LOGINS_PER_WINDOW)
+            return false;
+        current.count += 1;
+        return true;
+    };
+    const requestHandler = async (request, response) => {
         try {
             const requestUrl = new URL(request.url || '/', `http://${request.headers.host || host}`);
             addCorsHeaders(response, request, allowedOrigins);
@@ -191,6 +223,21 @@ export async function startMcpHttpApi(server, options = {}) {
                     response.end('Registration rate limit exceeded; retry later');
                     return;
                 }
+                const requests = Array.isArray(parsedBody) ? parsedBody : [parsedBody];
+                const isLogin = requests.some(item => {
+                    if (!isRecord(item) || item.method !== 'tools/call' || !isRecord(item.params))
+                        return false;
+                    const params = item.params;
+                    if (params.name !== 'call_endpoint' || !isRecord(params.arguments))
+                        return false;
+                    return params.arguments.endpointId === 'auth.login';
+                });
+                if (isLogin && !loginAllowed(request.socket.remoteAddress || 'unknown')) {
+                    response.statusCode = 429;
+                    response.setHeader('retry-after', String(Math.ceil(LOGIN_WINDOW_MS / 1_000)));
+                    response.end('Login rate limit exceeded; retry later');
+                    return;
+                }
             }
             if (bearer && rawBody) {
                 body = JSON.stringify(injectBearer(JSON.parse(rawBody), bearer));
@@ -216,7 +263,16 @@ export async function startMcpHttpApi(server, options = {}) {
             response.setHeader('content-type', 'application/json; charset=utf-8');
             response.end(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }));
         }
-    });
+    };
+    const httpServer = options.tls
+        ? createHttpsServer({
+            key: options.tls.key,
+            cert: options.tls.cert,
+            ...(options.tls.ca !== undefined ? { ca: options.tls.ca } : {}),
+            requestCert: options.tls.requestCert ?? Boolean(options.tls.ca),
+            rejectUnauthorized: options.tls.rejectUnauthorized ?? Boolean(options.tls.ca),
+        }, requestHandler)
+        : createHttpServer(requestHandler);
     httpServer.requestTimeout = 30_000;
     httpServer.headersTimeout = 10_000;
     httpServer.keepAliveTimeout = 5_000;

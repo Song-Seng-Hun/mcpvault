@@ -1,5 +1,5 @@
 import { test, expect, beforeEach, afterEach, describe } from "vitest";
-import { FileSystemService, classifyWriteError } from "./filesystem.js";
+import { FileSystemService, classifyWriteError, MAX_NOTE_CONTENT_BYTES } from "./filesystem.js";
 import { PathFilter } from "./pathfilter.js";
 import { FrontmatterHandler } from "./frontmatter.js";
 import { VaultMetadataIndex } from "./vault-index.js";
@@ -21,6 +21,12 @@ afterEach(async () => {
   } catch {
     // Ignore cleanup errors
   }
+});
+
+test("rejects note writes beyond the hard content limit", async () => {
+  const oversized = "x".repeat(MAX_NOTE_CONTENT_BYTES + 1);
+  await expect(fileSystem.writeNote({ path: "oversized.md", content: oversized })).rejects.toThrow("Note exceeds");
+  await expect(readFile(join(testVaultPath, "oversized.md"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
 });
 
 // ============================================================================

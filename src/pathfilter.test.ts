@@ -66,6 +66,16 @@ describe("PathFilter", () => {
     expect(filter.isAllowed("script.js")).toBe(false);
     expect(filter.isAllowed("data.json")).toBe(false);
     expect(filter.isAllowed("image.png")).toBe(false);
+    expect(filter.isAllowed("archive.verylongextension")).toBe(false);
+  });
+
+  test("rejects Windows path aliases that can bypass note extension checks", () => {
+    const filter = new PathFilter();
+    if (process.platform !== 'win32') return;
+    expect(filter.isAllowed("safe.md.")).toBe(false);
+    expect(filter.isAllowed("safe.exe.")).toBe(false);
+    expect(filter.isAllowed("safe.md::$DATA")).toBe(false);
+    expect(filter.isAllowed("CON.md")).toBe(false);
   });
 
   test("allows non-note files for directory listing", () => {

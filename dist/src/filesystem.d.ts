@@ -5,6 +5,8 @@ import { type DailyDateInput } from './daily.js';
 import type { VaultMetadataIndex } from './vault-index.js';
 import type { VaultGraphIndex } from './vault-graph.js';
 import { VaultIoCoordinator } from './vault-io.js';
+/** Hard per-note write limit so stdio callers cannot exhaust the vault disk. */
+export declare const MAX_NOTE_CONTENT_BYTES: number;
 /**
  * Map a filesystem write failure to a clear, accurate Error.
  *
