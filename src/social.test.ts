@@ -35,7 +35,7 @@ test('agent journals are private, revision-safe, and separate from global commun
     const modelToken = (await json(client, 'login_scope', { accountId: 'social-model', password: 'social-model-password' })).value.accessToken;
     await client.callTool({ name: 'register_scope_account', arguments: { accountId: 'social-agent-account', modelId: 'codex', agentId: 'diary-agent', password: 'social-agent-password', accessToken: modelToken }, });
     const agentToken = (await json(client, 'login_scope', { accountId: 'social-agent-account', password: 'social-agent-password' })).value.accessToken;
-    await client.callTool({ name: 'write_note', arguments: { path: 'Journal-reference.md', content: 'A public note referenced by a private journal.' } });
+    await client.callTool({ name: 'write_note', arguments: { path: 'Journal-reference.md', content: 'A public note referenced by a private journal.', accessToken: modelToken } });
 
     const created = await json(client, 'write_journal_entry', {
       date: '2026-09-01', kind: 'reflection', title: 'First reflection', content: 'Private working thoughts [[Journal-reference]]', tags: ['daily'], accessToken: agentToken,
@@ -69,7 +69,7 @@ test('published posts and comments are public while drafts remain author-private
   try {
     await client.callTool({ name: 'register_scope_account', arguments: { accountId: 'publisher', modelId: 'claude', password: 'publisher-password' } });
     const publisherToken = (await json(client, 'login_scope', { accountId: 'publisher', password: 'publisher-password' })).value.accessToken;
-    await client.callTool({ name: 'write_note', arguments: { path: 'Evidence.md', content: 'A small public supporting note.' } });
+    await client.callTool({ name: 'write_note', arguments: { path: 'Evidence.md', content: 'A small public supporting note.', accessToken: publisherToken } });
 
     const draft = await json(client, 'publish_blog_post', { slug: 'draft-post', title: 'Draft', content: 'Not public yet', status: 'draft', expectedRevision: 'missing', accessToken: publisherToken });
     expect(draft.value.status).toBe('draft');

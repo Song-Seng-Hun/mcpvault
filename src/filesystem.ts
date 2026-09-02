@@ -1,7 +1,7 @@
 import { join, resolve, relative, dirname } from 'path';
 import { homedir } from 'os';
 import { readdir, stat, readFile, writeFile, unlink, mkdir, access, rename, copyFile } from 'node:fs/promises';
-import { constants, realpathSync } from 'node:fs';
+import { constants, lstatSync, realpathSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import trash from 'trash';
 import { FrontmatterHandler } from './frontmatter.js';
@@ -336,6 +336,31 @@ export class FileSystemService {
     return fullPath;
   }
 
+  /**
+   * Mutation-only symlink defense. Reads may follow an in-vault symlink for
+   * Obsidian compatibility, but writes, deletes, and moves must never use a
+   * symlinked target or parent. This closes the practical symlink escape case
+   * where a validated path is used as a mutation target.
+   */
+  private resolveWritablePath(relativePath: string): string {
+    const fullPath = this.resolvePath(relativePath);
+    const relativePathToVault = relative(this.vaultPath, fullPath);
+    let current = this.vaultPath;
+    for (const component of relativePathToVault.split(/[\\/]+/).filter(Boolean)) {
+      current = join(current, component);
+      try {
+        if (lstatSync(current).isSymbolicLink()) {
+          throw new Error(`Symbolic links are not allowed for mutations: ${relativePath}`);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith('Symbolic links are not allowed')) throw error;
+        if (error && typeof error === 'object' && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT') break;
+        throw error;
+      }
+    }
+    return fullPath;
+  }
+
   async readNote(path: string): Promise<ParsedNote> {
     path = this.normalizePath(path);
     const fullPath = this.resolvePath(path);
@@ -401,7 +426,7 @@ export class FileSystemService {
   private async writeNoteUnlocked(params: NoteWriteParams): Promise<void> {
     const { content, frontmatter, mode = 'overwrite', expectedRevision } = params;
     const path = this.normalizePath(params.path);
-    const fullPath = this.resolvePath(path);
+    const fullPath = this.resolveWritablePath(path);
 
     if (!this.pathFilter.isAllowed(path)) {
       throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
@@ -561,7 +586,7 @@ export class FileSystemService {
         : fullContent.replace(oldString, () => newString);
 
       // Write the updated content
-      const fullPath = this.resolvePath(path);
+      const fullPath = this.resolveWritablePath(path);
       await writeFile(fullPath, updatedContent, 'utf-8');
       this.notifyNoteChanged(path, 'upsert');
 
@@ -659,7 +684,7 @@ export class FileSystemService {
         },
       };
       if (params.dryRun || content === note.originalContent) return result;
-      await writeFile(this.resolvePath(path), content, 'utf-8');
+      await writeFile(this.resolveWritablePath(path), content, 'utf-8');
       this.notifyNoteChanged(path, 'upsert');
       return result;
     } catch (error) {
@@ -795,7 +820,7 @@ export class FileSystemService {
       };
     }
 
-    const fullPath = this.resolvePath(path);
+    const fullPath = this.resolveWritablePath(path);
 
     if (!this.pathFilter.isAllowed(path)) {
       return {
@@ -911,8 +936,8 @@ export class FileSystemService {
       };
     }
 
-    const oldFullPath = this.resolvePath(oldPath);
-    const newFullPath = this.resolvePath(newPath);
+    const oldFullPath = this.resolveWritablePath(oldPath);
+    const newFullPath = this.resolveWritablePath(newPath);
 
     try {
       // Read source content (will throw ENOENT if not found)
@@ -1011,8 +1036,8 @@ export class FileSystemService {
       };
     }
 
-    const oldFullPath = this.resolvePath(oldPath);
-    const newFullPath = this.resolvePath(newPath);
+    const oldFullPath = this.resolveWritablePath(oldPath);
+    const newFullPath = this.resolveWritablePath(newPath);
 
     try {
       const sourceStat = await stat(oldFullPath);
@@ -1198,7 +1223,7 @@ export class FileSystemService {
       throw new Error(`Invalid frontmatter: ${validation.errors.join(', ')}`);
     }
 
-    const fullPath = this.resolvePath(path);
+    const fullPath = this.resolveWritablePath(path);
 
     if (merge && note.matter && note.matter.trim() !== '') {
       // Preserve raw formatting for unmodified fields
@@ -1339,7 +1364,7 @@ export class FileSystemService {
           note.content
         );
       }
-      const fullPath = this.resolvePath(path);
+      const fullPath = this.resolveWritablePath(path);
       await writeFile(fullPath, updatedContent, 'utf-8');
 
       return {

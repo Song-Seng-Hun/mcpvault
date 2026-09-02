@@ -35,6 +35,13 @@ export declare class FileSystemService {
      */
     private normalizePath;
     private resolvePath;
+    /**
+     * Mutation-only symlink defense. Reads may follow an in-vault symlink for
+     * Obsidian compatibility, but writes, deletes, and moves must never use a
+     * symlinked target or parent. This closes the practical symlink escape case
+     * where a validated path is used as a mutation target.
+     */
+    private resolveWritablePath;
     readNote(path: string): Promise<ParsedNote>;
     noteExists(path: string): Promise<boolean>;
     private assertExpectedRevision;

@@ -52,11 +52,30 @@ test("server exposes only the dynamic control plane", async () => {
   const catalog = JSON.parse((capabilities.content as any)[0].text);
   expect(catalog.endpoints.some((endpoint: any) => endpoint.endpointId === "notes.write")).toBe(true);
 
+  const anonymousWrite = await client.callTool({
+    name: "call_endpoint",
+    arguments: {
+      endpointId: "notes.write",
+      arguments: { path: "anonymous.md", content: "# Must be attributed" },
+    },
+  });
+  expect(anonymousWrite.isError).toBe(true);
+  expect((anonymousWrite.content as any)[0].text).toContain("Authentication is required");
+
+  const registration = await client.callTool({
+    name: "call_endpoint",
+    arguments: {
+      endpointId: "auth.register",
+      arguments: { accountId: "dynamic-owner", modelId: "codex", password: "dynamic-owner-password" },
+    },
+  });
+  const accessToken = JSON.parse((registration.content as any)[0].text).accessToken;
+
   const written = await client.callTool({
     name: "call_endpoint",
     arguments: {
       endpointId: "notes.write",
-      arguments: { path: "dynamic.md", content: "# Dynamic" },
+      arguments: { path: "dynamic.md", content: "# Dynamic", accessToken },
     },
   });
   expect(written.isError).toBeFalsy();
@@ -76,8 +95,14 @@ test("server can read and write notes via tools", async () => {
     server.connect(serverTransport),
   ]);
 
+  const registration = await client.callTool({
+    name: "register_scope_account",
+    arguments: { accountId: "notes-owner", modelId: "codex", password: "notes-owner-password" },
+  });
+  const accessToken = JSON.parse((registration.content as any)[0].text).accessToken as string;
+
   // Write a note
-  await client.callTool({ name: "write_note", arguments: { path: "test.md", content: "# Hello World" } });
+  await client.callTool({ name: "write_note", arguments: { path: "test.md", content: "# Hello World", accessToken } });
 
   // Read it back
   const result = await client.callTool({ name: "read_note", arguments: { path: "test.md" } });
@@ -103,11 +128,11 @@ test("server can read and write notes via tools", async () => {
     ok: [{ path: "test.md", unchanged: true, revision: parsed.revision }],
   });
 
-  const unguardedUpdate = await client.callTool({ name: "write_note", arguments: { path: "test.md", content: "# Unsafe overwrite" } });
+  const unguardedUpdate = await client.callTool({ name: "write_note", arguments: { path: "test.md", content: "# Unsafe overwrite", accessToken } });
   expect(unguardedUpdate.isError).toBe(true);
   expect((unguardedUpdate.content as any)[0].text).toContain("requires expectedRevision");
 
-  await client.callTool({ name: "write_note", arguments: { path: "test.md", content: "# Changed", expectedRevision: parsed.revision } });
+  await client.callTool({ name: "write_note", arguments: { path: "test.md", content: "# Changed", expectedRevision: parsed.revision, accessToken } });
   const changedBatch = await client.callTool({ name: "read_multiple_notes", arguments: { paths: ["test.md"], knownRevisions: { "test.md": parsed.revision } } });
   const changedValue = JSON.parse((changedBatch.content as any)[0].text);
   expect(changedValue.ok[0].content).toContain("Changed");
@@ -134,7 +159,12 @@ async function connectClient() {
     client.connect(clientTransport),
     server.connect(serverTransport),
   ]);
-  return { server, client };
+  const registration = await client.callTool({
+    name: "register_scope_account",
+    arguments: { accountId: "test-owner", modelId: "codex", password: "test-owner-password" },
+  });
+  const accessToken = JSON.parse((registration.content as any)[0].text).accessToken as string;
+  return { server, client, accessToken };
 }
 
 test("search_notes bounds output and prioritizes Wiki notes", async () => {
@@ -176,9 +206,9 @@ test("external Markdown edits invalidate the Wiki catalog without a restart", as
 });
 
 test("semantic search is optional and falls back to lexical results", async () => {
-  const { server, client } = await connectClient();
+  const { server, client, accessToken } = await connectClient();
   try {
-    await client.callTool({ name: "write_note", arguments: { path: "korean.md", content: "# 한국어\n\n벡터 검색 장애에도 원문 검색은 계속되어야 합니다." } });
+    await client.callTool({ name: "write_note", arguments: { path: "korean.md", content: "# 한국어\n\n벡터 검색 장애에도 원문 검색은 계속되어야 합니다.", accessToken } });
     const result = await client.callTool({ name: "search_notes", arguments: { query: "벡터 검색", semantic: true, maxChars: 512 } });
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as any)[0].text);
@@ -407,9 +437,9 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
 });
 
 test("generic mutation tools cannot bypass managed community APIs", async () => {
-  const { server, client } = await connectClient();
+  const { server, client, accessToken } = await connectClient();
   try {
-    const result = await client.callTool({ name: "write_note", arguments: { path: "Community/Posts/forbidden.md", content: "forbidden" } });
+    const result = await client.callTool({ name: "write_note", arguments: { path: "Community/Posts/forbidden.md", content: "forbidden", accessToken } });
     expect(result.isError).toBe(true);
     expect((result.content as any)[0].text).toContain("dedicated community tool");
   } finally {
@@ -419,11 +449,11 @@ test("generic mutation tools cannot bypass managed community APIs", async () => 
 });
 
 test("daily_note creates safely, appends, and reads the note", async () => {
-  const { server, client } = await connectClient();
+  const { server, client, accessToken } = await connectClient();
   try {
     const created = await client.callTool({
       name: "daily_note",
-      arguments: { action: "create", date: "2026-09-01", folder: "Journal", content: "# Today" },
+      arguments: { action: "create", date: "2026-09-01", folder: "Journal", content: "# Today", accessToken },
     });
     expect(created.isError).toBeFalsy();
     expect(JSON.parse((created.content as any)[0].text)).toMatchObject({
@@ -432,7 +462,7 @@ test("daily_note creates safely, appends, and reads the note", async () => {
 
     const appended = await client.callTool({
       name: "daily_note",
-      arguments: { action: "append", date: "2026-09-01", folder: "Journal", content: "- Done" },
+      arguments: { action: "append", date: "2026-09-01", folder: "Journal", content: "- Done", accessToken },
     });
     expect(appended.isError).toBeFalsy();
 
@@ -445,7 +475,7 @@ test("daily_note creates safely, appends, and reads the note", async () => {
 
     const noOverwrite = await client.callTool({
       name: "daily_note",
-      arguments: { action: "create", date: "2026-09-01", folder: "Journal", content: "overwritten" },
+      arguments: { action: "create", date: "2026-09-01", folder: "Journal", content: "overwritten", accessToken },
     });
     expect(JSON.parse((noOverwrite.content as any)[0].text).created).toBe(false);
   } finally {
@@ -535,17 +565,17 @@ test("query_notes filters and sorts frontmatter through the MCP tool", async () 
 });
 
 test("revision tools checkpoint ordinary edits and restore one note safely", async () => {
-  const { server, client } = await connectClient();
+  const { server, client, accessToken } = await connectClient();
   try {
     const initialized = await client.callTool({
       name: "initialize_revision_history",
-      arguments: { confirm: true },
+      arguments: { confirm: true, accessToken },
     });
     expect(initialized.isError).toBeFalsy();
 
     await client.callTool({
       name: "write_note",
-      arguments: { path: "Plan.md", content: "version one" },
+      arguments: { path: "Plan.md", content: "version one", accessToken },
     });
     const firstCommit = await client.callTool({
       name: "commit_changes",
@@ -553,6 +583,7 @@ test("revision tools checkpoint ordinary edits and restore one note safely", asy
         reason: "Create the plan",
         authorName: "MCP Test",
         authorEmail: "mcp@example.com",
+        accessToken,
       },
     });
     expect(firstCommit.isError).toBeFalsy();
@@ -562,7 +593,7 @@ test("revision tools checkpoint ordinary edits and restore one note safely", asy
 
     await client.callTool({
       name: "patch_note",
-      arguments: { path: "Plan.md", oldString: "one", newString: "two", expectedRevision: firstNote.revision },
+      arguments: { path: "Plan.md", oldString: "one", newString: "two", expectedRevision: firstNote.revision, accessToken },
     });
     const secondCommit = await client.callTool({
       name: "commit_changes",
@@ -570,6 +601,7 @@ test("revision tools checkpoint ordinary edits and restore one note safely", asy
         reason: "Clarify the plan",
         authorName: "MCP Test",
         authorEmail: "mcp@example.com",
+        accessToken,
       },
     });
     const second = JSON.parse((secondCommit.content as any)[0].text);
@@ -590,11 +622,11 @@ test("revision tools checkpoint ordinary edits and restore one note safely", asy
 
     await client.callTool({
       name: "patch_note",
-      arguments: { path: "Plan.md", oldString: "two", newString: "three", expectedRevision: secondNote.revision },
+      arguments: { path: "Plan.md", oldString: "two", newString: "three", expectedRevision: secondNote.revision, accessToken },
     });
     const protectedRestore = await client.callTool({
       name: "restore_note_revision",
-      arguments: { path: "Plan.md", revision: first.revision, confirmPath: "Plan.md", confirmRevision: first.revision },
+      arguments: { path: "Plan.md", revision: first.revision, confirmPath: "Plan.md", confirmRevision: first.revision, accessToken },
     });
     expect(protectedRestore.isError).toBe(true);
     expect((protectedRestore.content as any)[0].text).toContain("uncommitted change");
@@ -607,6 +639,7 @@ test("revision tools checkpoint ordinary edits and restore one note safely", asy
         confirmPath: "Plan.md",
         confirmRevision: first.revision,
         overwritePending: true,
+        accessToken,
       },
     });
     expect(restored.isError).toBeFalsy();

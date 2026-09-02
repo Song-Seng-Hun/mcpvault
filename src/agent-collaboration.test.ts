@@ -81,8 +81,10 @@ test('profiles, durable notifications, tasks, and capability revocation compose 
 test('generic note mutation cannot bypass task or profile records', async () => {
   const { server, client } = await setup();
   try {
-    const profile = await client.callTool({ name: 'write_note', arguments: { path: 'Community/Agents/agents/researcher.md', content: 'bypass' } });
-    const task = await client.callTool({ name: 'write_note', arguments: { path: 'Community/Tasks/task.md', content: 'bypass' } });
+    const registration = await client.callTool({ name: 'register_scope_account', arguments: { accountId: 'boundary-owner', modelId: 'codex', password: 'boundary-owner-password' } });
+    const accessToken = JSON.parse((registration.content as any)[0].text).accessToken;
+    const profile = await client.callTool({ name: 'write_note', arguments: { path: 'Community/Agents/agents/researcher.md', content: 'bypass', accessToken } });
+    const task = await client.callTool({ name: 'write_note', arguments: { path: 'Community/Tasks/task.md', content: 'bypass', accessToken } });
     expect(profile.isError).toBe(true);
     expect(task.isError).toBe(true);
     expect((profile.content as any)[0].text).toContain('dedicated community tool');

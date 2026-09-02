@@ -46,7 +46,7 @@ test('public chat rooms preserve authenticated model identities and independent 
     const tooLong = await client.callTool({ name: 'send_chat_message', arguments: { roomId: 'architecture', content: 'x'.repeat(281), accessToken: codexToken } });
     expect(tooLong.isError).toBe(true);
 
-    await client.callTool({ name: 'write_note', arguments: { path: 'Design.md', content: 'Markdown-first design notes' } });
+    await client.callTool({ name: 'write_note', arguments: { path: 'Design.md', content: 'Markdown-first design notes', accessToken: codexToken } });
     await client.callTool({ name: 'write_note', arguments: { path: 'scope://model/codex/private-design.md', content: 'Private model notes', accessToken: codexToken } });
     const privateReference = await client.callTool({ name: 'send_chat_message', arguments: { roomId: 'architecture', content: 'This must not leak', references: ['scope://model/codex/private-design.md'], accessToken: codexToken } });
     expect(privateReference.isError).toBe(true);

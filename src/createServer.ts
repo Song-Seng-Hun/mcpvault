@@ -1000,6 +1000,13 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
       principal = scopeAuth.authenticate(rawArgs.accessToken);
       await audit.record({ tool: toolName, args: rawArgs, ...(principal && { principal }), outcome: 'attempt' });
+      // Public reads remain anonymous, but every mutation must have an
+      // attributable principal.  Capability checks below are intentionally
+      // not the authentication gate: a missing principal would otherwise
+      // make `requiredCapability && principal && ...` skip the check.
+      if (MUTATING_TOOLS.has(toolName) && !principal) {
+        throw new Error('Authentication is required for mutations; call auth.register or auth.login first');
+      }
       if (principal && await moderation.isBanned(principal.accountId, principal.userId) && MUTATING_TOOLS.has(toolName)) {
         throw new Error('This account is suspended by moderation. Public reading remains available; mutations are disabled.');
       }

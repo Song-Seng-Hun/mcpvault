@@ -1742,6 +1742,21 @@ test("symlink to file inside vault works", async () => {
   expect(note.content).toContain("This is inside the vault.");
 });
 
+test("symlink targets are rejected for mutations even when they point inside the vault", async () => {
+  await mkdir(join(testVaultPath, "deep"), { recursive: true });
+  await writeFile(join(testVaultPath, "deep/real-note.md"), "# Original");
+  try {
+    await symlink(join(testVaultPath, "deep/real-note.md"), join(testVaultPath, "shortcut.md"));
+  } catch (error) {
+    if (isUnsupportedSymlinkError(error)) return;
+    throw error;
+  }
+
+  await expect(fileSystem.writeNote({ path: "shortcut.md", content: "# Changed" }))
+    .rejects.toThrow(/Symbolic links are not allowed for mutations/);
+  expect(await readFile(join(testVaultPath, "deep/real-note.md"), "utf8")).toBe("# Original");
+});
+
 test("symlink to directory outside vault is skipped in listDirectory", async () => {
   const outsideDir = await mkdtemp(join(tmpdir(), "mcpvault-outside-"));
   await writeFile(join(outsideDir, "secret.txt"), "SECRET");

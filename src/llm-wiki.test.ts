@@ -51,24 +51,26 @@ test('recognizes a manually maintained public schema without frontmatter', async
 test('ingest, publish, catalog, lint, and immutable source enforcement form one workflow', async () => {
   const { server, client } = await setup();
   try {
-    const initialized = await callJson(client, 'initialize_llm_wiki', { actor: 'human' });
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'wiki-owner', modelId: 'codex', password: 'wiki-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const initialized = await callJson(client, 'initialize_llm_wiki', { actor: 'human', accessToken });
     expect(initialized.value).toMatchObject({ success: true, created: true, schemaPath: '_wiki/SCHEMA.md' });
 
     const ingested = await callJson(client, 'ingest_source', {
       sourceId: 'karpathy-idea', title: 'LLM Wiki idea', content: 'Persistent interlinked Markdown compounds knowledge.',
-      sourceUrl: 'https://example.test/idea', capturedBy: 'human',
+      sourceUrl: 'https://example.test/idea', capturedBy: 'human', accessToken,
     });
     expect(ingested.value).toMatchObject({ created: true, path: '_sources/karpathy-idea.md' });
 
     const duplicate = await callJson(client, 'ingest_source', {
-      sourceId: 'karpathy-idea', title: 'LLM Wiki idea', content: 'Persistent interlinked Markdown compounds knowledge.', capturedBy: 'human',
+      sourceId: 'karpathy-idea', title: 'LLM Wiki idea', content: 'Persistent interlinked Markdown compounds knowledge.', capturedBy: 'human', accessToken,
     });
     expect(duplicate.value.created).toBe(false);
 
     const published = await callJson(client, 'publish_knowledge', {
       path: 'Concepts/Compounding Wiki.md',
       content: '# Compounding Wiki\n\nA maintained wiki compounds prior synthesis.',
-      evidencePaths: ['_sources/karpathy-idea.md'], author: 'codex', confidence: 'high', status: 'verified', expectedRevision: 'missing',
+      evidencePaths: ['_sources/karpathy-idea.md'], author: 'codex', confidence: 'high', status: 'verified', expectedRevision: 'missing', accessToken,
     });
     expect(published.result.isError).toBeFalsy();
 
@@ -99,18 +101,18 @@ test('ingest, publish, catalog, lint, and immutable source enforcement form one 
 
     const issue = await callJson(client, 'report_wiki_issue', {
       issueId: 'verify-claim', kind: 'unsupported_claim', title: 'Verify one claim', description: 'The claim needs a second source.', reportedBy: 'reviewer',
-      subjectPath: 'Concepts/Compounding Wiki.md', evidencePaths: ['_sources/karpathy-idea.md'],
+      subjectPath: 'Concepts/Compounding Wiki.md', evidencePaths: ['_sources/karpathy-idea.md'], accessToken,
     });
     const resolved = await callJson(client, 'resolve_wiki_issue', {
-      path: issue.value.path, actor: 'reviewer', resolution: 'The claim was narrowed to match the source.', expectedRevision: issue.value.revision,
+      path: issue.value.path, actor: 'reviewer', resolution: 'The claim was narrowed to match the source.', expectedRevision: issue.value.revision, accessToken,
     });
     expect(resolved.value.status).toBe('resolved');
 
     for (const mutation of [
-      { name: 'write_note', arguments: { path: '_sources/karpathy-idea.md', content: 'tampered' } },
-      { name: 'patch_note', arguments: { path: '_sources/karpathy-idea.md', oldString: 'Persistent', newString: 'Ephemeral' } },
-      { name: 'delete_note', arguments: { path: '_sources/karpathy-idea.md', confirmPath: '_sources/karpathy-idea.md' } },
-      { name: 'move_note', arguments: { oldPath: '_sources/karpathy-idea.md', newPath: 'moved.md' } },
+      { name: 'write_note', arguments: { path: '_sources/karpathy-idea.md', content: 'tampered', accessToken } },
+      { name: 'patch_note', arguments: { path: '_sources/karpathy-idea.md', oldString: 'Persistent', newString: 'Ephemeral', accessToken } },
+      { name: 'delete_note', arguments: { path: '_sources/karpathy-idea.md', confirmPath: '_sources/karpathy-idea.md', accessToken } },
+      { name: 'move_note', arguments: { oldPath: '_sources/karpathy-idea.md', newPath: 'moved.md', accessToken } },
     ]) {
       const blocked = await client.callTool(mutation);
       expect(blocked.isError, mutation.name).toBe(true);
@@ -130,18 +132,20 @@ test('ingest, publish, catalog, lint, and immutable source enforcement form one 
 test('knowledge-related commits are blocked by Wiki errors while ordinary notes remain normal Git changes', async () => {
   const { server, client } = await setup();
   try {
-    const initialized = await client.callTool({ name: 'initialize_revision_history', arguments: { confirm: true } });
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'commit-owner', modelId: 'codex', password: 'commit-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const initialized = await client.callTool({ name: 'initialize_revision_history', arguments: { confirm: true, accessToken } });
     expect(initialized.isError).toBeFalsy();
     await client.callTool({ name: 'write_note', arguments: {
-      path: 'Ordinary.md', content: '# Ordinary note\n', expectedRevision: 'missing',
+      path: 'Ordinary.md', content: '# Ordinary note\n', expectedRevision: 'missing', accessToken,
     } });
-    const ordinaryCommit = await callJson(client, 'commit_changes', { reason: 'Add an ordinary note' });
+    const ordinaryCommit = await callJson(client, 'commit_changes', { reason: 'Add an ordinary note', accessToken });
     expect(ordinaryCommit.value.success).toBe(true);
 
     await client.callTool({ name: 'write_note', arguments: {
-      path: 'Broken knowledge.md', content: '# Unsupported\n', frontmatter: { llm_wiki_type: 'knowledge' }, expectedRevision: 'missing',
+      path: 'Broken knowledge.md', content: '# Unsupported\n', frontmatter: { llm_wiki_type: 'knowledge' }, expectedRevision: 'missing', accessToken,
     } });
-    const blocked = await client.callTool({ name: 'commit_changes', arguments: { reason: 'Attempt to save unsupported knowledge' } });
+    const blocked = await client.callTool({ name: 'commit_changes', arguments: { reason: 'Attempt to save unsupported knowledge', accessToken } });
     expect(blocked.isError).toBe(true);
     expect((blocked.content as any)[0].text).toContain('Wiki validation blocked commit');
     expect((blocked.content as any)[0].text).toContain('knowledge_without_evidence');

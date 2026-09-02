@@ -182,7 +182,7 @@ test('scoped notes use the same Git commit, history, and rollback foundation', a
     await client.callTool({ name: 'register_scope_account', arguments: { accountId: 'gemini-owner', modelId: 'gemini', password: 'gemini-test-password' } });
     const login = await client.callTool({ name: 'login_scope', arguments: { accountId: 'gemini-owner', password: 'gemini-test-password' } });
     const accessToken = JSON.parse((login.content as any)[0].text).accessToken;
-    const initialized = await client.callTool({ name: 'initialize_revision_history', arguments: { confirm: true } });
+    const initialized = await client.callTool({ name: 'initialize_revision_history', arguments: { confirm: true, accessToken } });
     expect(initialized.isError).toBeFalsy();
     const scopedPath = 'scope://model/gemini/Shared Policy.md';
     await client.callTool({ name: 'write_note', arguments: { path: scopedPath, content: 'Initial shared policy', accessToken } });

@@ -10,6 +10,10 @@ const PASSWORD_MIN_LENGTH = 12;
 const MAX_LOGIN_FAILURES = 5;
 const LOGIN_BLOCK_MS = 30_000;
 const AUTH_DATABASE_CACHE_TTL_MS = 1_000;
+// Registration can be reached anonymously by design. Keep abuse bounded even
+// when the server is used over stdio, where there is no client IP to rate-limit.
+const MAX_ACCOUNTS = 4_096;
+const MAX_ACCOUNTS_PER_USER = 512;
 export const SCOPE_CAPABILITIES = ['write', 'publish', 'comment', 'chat', 'status', 'whisper', 'task', 'profile', 'journal', 'moderate'];
 const DEFAULT_MODEL_CAPABILITIES = ['write', 'publish', 'comment', 'chat', 'status', 'whisper', 'task', 'profile'];
 const DEFAULT_AGENT_CAPABILITIES = [...DEFAULT_MODEL_CAPABILITIES, 'journal'];
@@ -151,6 +155,13 @@ export class ScopeAuthService {
         }
         const principal = await this.exclusive(async () => {
             const database = await this.readDatabase();
+            if (database.accounts.length >= MAX_ACCOUNTS) {
+                throw new Error(`Account capacity reached (${MAX_ACCOUNTS}); ask the server operator to remove inactive accounts`);
+            }
+            const accountsForUser = database.accounts.filter(account => (account.userId || account.accountId) === userId).length;
+            if (accountsForUser >= MAX_ACCOUNTS_PER_USER) {
+                throw new Error(`User family account capacity reached (${MAX_ACCOUNTS_PER_USER})`);
+            }
             if (database.accounts.some(account => account.accountId === accountId)) {
                 throw new Error(`Account already exists: ${accountId}`);
             }

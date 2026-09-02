@@ -43,10 +43,18 @@ test('REST adapter uses the same dynamic endpoint registry and dispatcher', asyn
   const continuityProbe = await fetch(`http://127.0.0.1:${api.port}/api/endpoint/continuity.resume`);
   expect(continuityProbe.status).toBe(400);
 
+  const registration = await fetch(`http://127.0.0.1:${api.port}/api/auth/register`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ accountId: 'rest-owner', modelId: 'codex', password: 'rest-owner-password' }),
+  });
+  expect(registration.status).toBe(200);
+  const accessToken = (await registration.json() as any).accessToken as string;
+
   const write = await fetch(`http://127.0.0.1:${api.port}/api/endpoint/notes.write`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ path: 'nested/rest.md', content: '# REST' }),
+    body: JSON.stringify({ path: 'nested/rest.md', content: '# REST', accessToken }),
   });
   expect(write.status).toBe(200);
   expect((await write.json()).message).toContain('Successfully wrote note');
@@ -55,7 +63,7 @@ test('REST adapter uses the same dynamic endpoint registry and dispatcher', asyn
   const routeWrite = await fetch(`http://127.0.0.1:${api.port}/api/notes/nested/route.md`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ content: '# Route' }),
+    body: JSON.stringify({ content: '# Route', accessToken }),
   });
   expect(routeWrite.status).toBe(200);
   expect(await readFile(join(vault, 'nested', 'route.md'), 'utf8')).toContain('# Route');

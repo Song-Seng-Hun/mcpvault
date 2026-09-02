@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, expect, test } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createServer } from './createServer.js';
+import { ScopeAuthService } from './scope-auth.js';
 
 let vault: string;
 
@@ -36,7 +37,7 @@ test('anonymous and authenticated searches never expose another model scope', as
     const alphaToken = (await json(client, 'login_scope', { accountId: 'alpha-owner', password: 'alpha-model-password' })).value.accessToken;
     const betaToken = (await json(client, 'login_scope', { accountId: 'beta-owner', password: 'beta-model-password' })).value.accessToken;
 
-    await client.callTool({ name: 'write_note', arguments: { path: 'Public.md', content: '# shared needle' } });
+    await client.callTool({ name: 'write_note', arguments: { path: 'Public.md', content: '# shared needle', accessToken: alphaToken } });
     await client.callTool({ name: 'write_note', arguments: {
       path: 'scope://model/alpha/Private.md', content: '# alpha-secret-needle\n\n- [ ] alpha task\n\n#alpha_private_tag', accessToken: alphaToken,
     } });
@@ -72,6 +73,38 @@ test('anonymous and authenticated searches never expose another model scope', as
     await client.close();
     await server.close();
   }
+});
+
+test('stdio registration has persistent account and family quotas', async () => {
+  const authDirectory = join(vault, '.mcpvault');
+  await mkdir(authDirectory, { recursive: true });
+  const account = (accountId: string, userId: string) => ({
+    accountId,
+    modelId: accountId,
+    userId,
+    role: 'agent',
+    salt: 'c2FsdA==',
+    passwordHash: 'aGFzaA==',
+    createdAt: new Date(0).toISOString(),
+  });
+
+  await writeFile(join(authDirectory, 'scope-auth.json'), JSON.stringify({
+    version: 1,
+    accounts: Array.from({ length: 512 }, (_, index) => account(`family-agent-${index}`, 'same-family')),
+  }));
+  const familyLimited = new ScopeAuthService(vault);
+  await expect(familyLimited.register({
+    accountId: 'family-overflow', modelId: 'new-model', agentId: 'new-agent', userId: 'same-family', password: 'family-overflow-password',
+  })).rejects.toThrow('family account capacity');
+
+  await writeFile(join(authDirectory, 'scope-auth.json'), JSON.stringify({
+    version: 1,
+    accounts: Array.from({ length: 4_096 }, (_, index) => account(`account-${index}`, `family-${index}`)),
+  }));
+  const globallyLimited = new ScopeAuthService(vault);
+  await expect(globallyLimited.register({
+    accountId: 'global-overflow', modelId: 'new-model', password: 'global-overflow-password',
+  })).rejects.toThrow('Account capacity');
 });
 
 test('model accounts provision agent accounts and account hashes survive a server restart', async () => {
