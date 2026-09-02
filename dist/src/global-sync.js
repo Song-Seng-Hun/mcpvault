@@ -390,7 +390,7 @@ export class GlobalSyncHub {
                 throw new Error('reviewer has already approved this proposal');
             await this.appendEvent('proposal.approval', { proposalId: proposal.proposalId, reviewer: reviewerId, decidedAt: new Date().toISOString() });
             const approvedProposal = this.state.proposals[proposal.proposalId];
-            const requiredApprovals = proposal.operation === 'tombstone' ? this.approvalQuorum : 1;
+            const requiredApprovals = this.approvalQuorum;
             if ((approvedProposal.approvals?.length || 0) < requiredApprovals)
                 return { status: 'pending', proposal: approvedProposal };
             const current = this.currentRevision(proposal.documentId);
@@ -752,6 +752,7 @@ export async function startGlobalSyncHub(root, options) {
         reviewerTokens.set(id, normalizedToken);
     }
     const signingKeyPath = resolve(options.signingKeyPath || join(resolve(root), 'signing-key.pem'));
+    const proposerOrigin = options.proposerOrigin ? boundedText(options.proposerOrigin, 'proposerOrigin', MAX_ORIGIN_LENGTH) : undefined;
     let signingPrivateKey;
     try {
         signingPrivateKey = await readFile(signingKeyPath, 'utf8');
@@ -838,7 +839,7 @@ export async function startGlobalSyncHub(root, options) {
             }
             if (request.method === 'POST' && url.pathname === '/v1/global/proposals') {
                 const body = await jsonBody(request, maxBodyBytes);
-                sendJson(response, 201, await hub.submitProposal(body));
+                sendJson(response, 201, await hub.submitProposal({ ...body, ...(proposerOrigin && { origin: proposerOrigin }) }));
                 return;
             }
             const proposalId = pathParam(url.pathname, '/v1/global/proposals/');
@@ -868,6 +869,9 @@ export async function startGlobalSyncHub(root, options) {
             sendJson(response, 400, { error: error instanceof Error ? error.message : 'Bad request' });
         }
     });
+    server.requestTimeout = 30_000;
+    server.headersTimeout = 10_000;
+    server.keepAliveTimeout = 5_000;
     await new Promise((resolvePromise, reject) => { server.once('error', reject); server.listen(options.port ?? 0, host, () => { server.off('error', reject); resolvePromise(); }); });
     const address = server.address();
     const port = typeof address === 'object' && address ? address.port : options.port || 0;

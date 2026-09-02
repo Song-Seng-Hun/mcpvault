@@ -1413,9 +1413,9 @@ The optional HTTP control plane is started with `startGlobalSyncHub()` and
 requires a proposer bearer token and separate reviewer bearer tokens supplied
 by the host process. The proposer token permits bounded manifest/revision reads
 and proposal submission; reviewer operations derive the reviewer identity from
-the authenticated token, never from a caller-supplied JSON field. Upserts need
-one reviewer approval; tombstones need two distinct reviewer tokens, so a
-single compromised reviewer cannot erase a Global document. Reviewers can
+the authenticated token, never from a caller-supplied JSON field. Every
+proposal, including upserts, needs two distinct reviewer tokens, so one
+compromised reviewer cannot publish or erase a Global document. Reviewers can
 still restore an older immutable revision, and there is no physical delete.
 
 Every manifest and revision is signed with the hub's Ed25519 signing key.
@@ -1434,14 +1434,16 @@ mTLS whenever the hub is not on the same machine. User, Community, `_scopes`,
 `_whispers`, `.mcpvault`, and Git state are rejected at the document boundary.
 The local MCPVault server remains fully usable when the hub is offline;
 synchronization is an explicit pull/propose operation rather than a hidden
-dependency.
+dependency. Set `MCPVAULT_GLOBAL_SYNC_ORIGIN` to bind the HTTP proposer's
+command-center identity instead of trusting the request body's `origin` field.
 
 For a standalone hub process, build the package, set
 `MCPVAULT_GLOBAL_SYNC_AUTH_TOKEN` and
 `MCPVAULT_GLOBAL_SYNC_REVIEWER_TOKEN` in the host environment, then run
 `mcpvault-global-sync <hub-storage-root>`. For tombstone quorum, add a JSON
 object such as
-`MCPVAULT_GLOBAL_SYNC_REVIEWER_TOKENS='{"reviewer-b":"another-secret"}'`.
+`MCPVAULT_GLOBAL_SYNC_REVIEWER_TOKENS='{"reviewer-b":"another-secret"}'`;
+this second reviewer is required for every proposal, not only tombstones.
 Set `MCPVAULT_GLOBAL_SYNC_SIGNING_KEY_PATH` when the private key must live in
 an explicitly ACL-protected location.
 The built-in reviewer token is always the reviewer ID `reviewer`; every extra

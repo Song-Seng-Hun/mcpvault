@@ -24,7 +24,8 @@ test('Global Hub keeps proposals separate, rejects unsafe paths, and restores to
 
   const proposal = await hub.submitProposal({ documentId: 'Knowledge/Answer.md', content: '# First\n', author: 'agent-a', reason: 'Initial grounded note', origin: 'server-a' });
   expect((await hub.getManifest()).entries).toHaveLength(0);
-  const accepted = await hub.approveProposal(proposal.proposalId, 'reviewer', 'Evidence checked');
+  expect((await hub.approveProposal(proposal.proposalId, 'reviewer-a', 'Evidence checked')).status).toBe('pending');
+  const accepted = await hub.approveProposal(proposal.proposalId, 'reviewer-b', 'Evidence checked');
   expect(accepted.status).toBe('approved');
   const first = accepted.revision!;
   expect((await hub.getRevision(first.revisionId)).content).toBe('# First\n');
@@ -51,13 +52,15 @@ test('Global replica never overwrites dirty local work and quarantines remote to
   const replica = new GlobalSyncReplica({ vaultPath: root, client, trustedPublicKey: hub.getPublicKey() });
 
   const firstProposal = await hub.submitProposal({ documentId: 'Knowledge/Answer.md', content: 'first\n', author: 'a', reason: 'first', origin: 'server-a' });
-  const first = (await hub.approveProposal(firstProposal.proposalId, 'reviewer', 'accept')).revision!;
+  expect((await hub.approveProposal(firstProposal.proposalId, 'reviewer-a', 'accept')).status).toBe('pending');
+  const first = (await hub.approveProposal(firstProposal.proposalId, 'reviewer-b', 'accept')).revision!;
   expect((await replica.pull()).applied).toEqual(['Knowledge/Answer.md']);
   expect(await readFile(join(root, 'Knowledge', 'Answer.md'), 'utf8')).toBe('first\n');
 
   await writeFile(join(root, 'Knowledge', 'Answer.md'), 'local unsubmitted edit\n');
   const secondProposal = await hub.submitProposal({ documentId: 'Knowledge/Answer.md', parentRevision: first.revisionId, content: 'remote second\n', author: 'b', reason: 'second', origin: 'server-b' });
-  const second = (await hub.approveProposal(secondProposal.proposalId, 'reviewer', 'accept')).revision!;
+  expect((await hub.approveProposal(secondProposal.proposalId, 'reviewer-a', 'accept')).status).toBe('pending');
+  const second = (await hub.approveProposal(secondProposal.proposalId, 'reviewer-b', 'accept')).revision!;
   const conflict = await replica.pull();
   expect(conflict.conflicts[0]?.documentId).toBe('Knowledge/Answer.md');
   expect(await readFile(join(root, 'Knowledge', 'Answer.md'), 'utf8')).toBe('local unsubmitted edit\n');
@@ -76,14 +79,18 @@ test('Global replica never overwrites dirty local work and quarantines remote to
 });
 
 test('Global Hub HTTP separates proposer and reviewer authority', async () => {
-  const handle = await startGlobalSyncHub(hubRoot, { authToken: 'proposer-secret', reviewerToken: 'reviewer-secret' });
+  const handle = await startGlobalSyncHub(hubRoot, { authToken: 'proposer-secret', reviewerToken: 'reviewer-secret', reviewerTokens: { 'reviewer-b': 'reviewer-b-secret' }, proposerOrigin: 'server-a' });
   try {
     const proposer = new GlobalSyncClient({ baseUrl: `http://${handle.host}:${handle.port}`, authToken: 'proposer-secret' });
     const wrongReviewer = new GlobalSyncClient({ baseUrl: `http://${handle.host}:${handle.port}`, authToken: 'proposer-secret', reviewerToken: 'proposer-secret' });
     const reviewer = new GlobalSyncClient({ baseUrl: `http://${handle.host}:${handle.port}`, authToken: 'proposer-secret', reviewerToken: 'reviewer-secret' });
+    const secondReviewer = new GlobalSyncClient({ baseUrl: `http://${handle.host}:${handle.port}`, authToken: 'proposer-secret', reviewerToken: 'reviewer-b-secret' });
     const proposal = await proposer.submitProposal({ documentId: 'Knowledge/Http.md', content: 'http\n', author: 'server-a', reason: 'test', origin: 'server-a' });
     await expect(wrongReviewer.approveProposal(proposal.proposalId, 'not-authorized', 'no')).rejects.toThrow('Unauthorized');
-    expect((await reviewer.approveProposal(proposal.proposalId, 'reviewer', 'checked')).status).toBe('approved');
+    expect((await reviewer.approveProposal(proposal.proposalId, 'forged', 'checked')).status).toBe('pending');
+    const accepted = await secondReviewer.approveProposal(proposal.proposalId, 'also-forged', 'checked');
+    expect(accepted.status).toBe('approved');
+    expect(accepted.revision?.origin).toBe('server-a');
   } finally {
     await handle.close();
   }
@@ -110,8 +117,9 @@ test('Global Hub persists its signing key and binds reviewer identity to the tok
     const reviewerA = new GlobalSyncClient({ baseUrl, authToken: 'proposer-secret', reviewerToken: 'reviewer-a-secret' });
     const reviewerB = new GlobalSyncClient({ baseUrl, authToken: 'proposer-secret', reviewerToken: 'reviewer-b-secret' });
     const proposal = await proposer.submitProposal({ documentId: 'Knowledge/Quorum.md', content: 'quorum\n', author: 'server-a', reason: 'test', origin: 'server-a' });
-    const accepted = await reviewerA.approveProposal(proposal.proposalId, 'forged-reviewer', 'checked');
-    expect(accepted.proposal.approvals).toEqual(['reviewer']);
+    const pending = await reviewerA.approveProposal(proposal.proposalId, 'forged-reviewer', 'checked');
+    expect(pending.proposal.approvals).toEqual(['reviewer']);
+    const accepted = await reviewerB.approveProposal(proposal.proposalId, 'also-forged', 'checked');
     const deletion = await proposer.submitProposal({ documentId: 'Knowledge/Quorum.md', parentRevision: accepted.revision!.revisionId, operation: 'tombstone', author: 'server-a', reason: 'remove', origin: 'server-a' });
     expect((await reviewerA.approveProposal(deletion.proposalId, 'someone-else', 'checked')).status).toBe('pending');
     expect((await reviewerB.approveProposal(deletion.proposalId, 'still-forged', 'checked')).status).toBe('approved');

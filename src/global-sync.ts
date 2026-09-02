@@ -470,7 +470,7 @@ export class GlobalSyncHub {
       if (proposal.approvals?.includes(reviewerId)) throw new Error('reviewer has already approved this proposal');
       await this.appendEvent('proposal.approval', { proposalId: proposal.proposalId, reviewer: reviewerId, decidedAt: new Date().toISOString() });
       const approvedProposal = this.state.proposals[proposal.proposalId]!;
-      const requiredApprovals = proposal.operation === 'tombstone' ? this.approvalQuorum : 1;
+      const requiredApprovals = this.approvalQuorum;
       if ((approvedProposal.approvals?.length || 0) < requiredApprovals) return { status: 'pending' as const, proposal: approvedProposal };
       const current = this.currentRevision(proposal.documentId);
       const currentId = current?.revisionId;
@@ -808,6 +808,7 @@ export interface GlobalSyncHubHttpOptions {
   maxBodyBytes?: number;
   hubId?: string;
   signingKeyPath?: string;
+  proposerOrigin?: string;
 }
 
 export interface GlobalSyncHubHttpHandle {
@@ -872,6 +873,7 @@ export async function startGlobalSyncHub(root: string, options: GlobalSyncHubHtt
     reviewerTokens.set(id, normalizedToken);
   }
   const signingKeyPath = resolve(options.signingKeyPath || join(resolve(root), 'signing-key.pem'));
+  const proposerOrigin = options.proposerOrigin ? boundedText(options.proposerOrigin, 'proposerOrigin', MAX_ORIGIN_LENGTH) : undefined;
   let signingPrivateKey: string | undefined;
   try {
     signingPrivateKey = await readFile(signingKeyPath, 'utf8');
@@ -934,7 +936,7 @@ export async function startGlobalSyncHub(root: string, options: GlobalSyncHubHtt
       if (request.method === 'GET' && revisionId) { sendJson(response, 200, await hub.getRevision(revisionId)); return; }
       if (request.method === 'POST' && url.pathname === '/v1/global/proposals') {
         const body = await jsonBody(request, maxBodyBytes);
-        sendJson(response, 201, await hub.submitProposal(body as unknown as GlobalSyncChangeInput)); return;
+        sendJson(response, 201, await hub.submitProposal({ ...(body as unknown as GlobalSyncChangeInput), ...(proposerOrigin && { origin: proposerOrigin }) })); return;
       }
       const proposalId = pathParam(url.pathname, '/v1/global/proposals/');
       if (request.method === 'POST' && proposalId?.endsWith('/approve')) {
@@ -955,6 +957,9 @@ export async function startGlobalSyncHub(root: string, options: GlobalSyncHubHtt
       sendJson(response, 400, { error: error instanceof Error ? error.message : 'Bad request' });
     }
   });
+  server.requestTimeout = 30_000;
+  server.headersTimeout = 10_000;
+  server.keepAliveTimeout = 5_000;
   await new Promise<void>((resolvePromise, reject) => { server.once('error', reject); server.listen(options.port ?? 0, host, () => { server.off('error', reject); resolvePromise(); }); });
   const address = server.address();
   const port = typeof address === 'object' && address ? address.port : options.port || 0;

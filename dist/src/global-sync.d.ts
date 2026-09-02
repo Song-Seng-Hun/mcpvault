@@ -190,6 +190,7 @@ export interface GlobalSyncHubHttpOptions {
     maxBodyBytes?: number;
     hubId?: string;
     signingKeyPath?: string;
+    proposerOrigin?: string;
 }
 export interface GlobalSyncHubHttpHandle {
     server: HttpServer;

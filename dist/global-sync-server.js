@@ -22,6 +22,7 @@ const handle = await startGlobalSyncHub(root, {
     ...(reviewerTokens && { reviewerTokens }),
     ...(process.env.MCPVAULT_GLOBAL_SYNC_HUB_ID && { hubId: process.env.MCPVAULT_GLOBAL_SYNC_HUB_ID }),
     ...(process.env.MCPVAULT_GLOBAL_SYNC_SIGNING_KEY_PATH && { signingKeyPath: process.env.MCPVAULT_GLOBAL_SYNC_SIGNING_KEY_PATH }),
+    ...(process.env.MCPVAULT_GLOBAL_SYNC_ORIGIN && { proposerOrigin: process.env.MCPVAULT_GLOBAL_SYNC_ORIGIN }),
 });
 console.error(`Global Sync Hub listening on http://${handle.host}:${handle.port}`);
 console.error(`Global Sync Hub public signing key (pin this on replicas):\n${handle.hub.getPublicKey()}`);
