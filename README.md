@@ -1435,7 +1435,9 @@ mTLS whenever the hub is not on the same machine. User, Community, `_scopes`,
 The local MCPVault server remains fully usable when the hub is offline;
 synchronization is an explicit pull/propose operation rather than a hidden
 dependency. Set `MCPVAULT_GLOBAL_SYNC_ORIGIN` to bind the HTTP proposer's
-command-center identity instead of trusting the request body's `origin` field.
+command-center identity instead of trusting the request body's `origin` field;
+the standalone CLI falls back to its configured hub ID when this variable is
+omitted.
 
 For a standalone hub process, build the package, set
 `MCPVAULT_GLOBAL_SYNC_AUTH_TOKEN` and
@@ -1446,6 +1448,11 @@ object such as
 this second reviewer is required for every proposal, not only tombstones.
 Set `MCPVAULT_GLOBAL_SYNC_SIGNING_KEY_PATH` when the private key must live in
 an explicitly ACL-protected location.
+For built-in HTTPS, set `MCPVAULT_GLOBAL_SYNC_TLS_KEY_PATH` and
+`MCPVAULT_GLOBAL_SYNC_TLS_CERT_PATH`; adding
+`MCPVAULT_GLOBAL_SYNC_TLS_CA_PATH` enables mutual TLS client-certificate
+verification. Without these variables the adapter is plain HTTP and should
+remain localhost-only or sit behind a TLS-terminating reverse proxy.
 The built-in reviewer token is always the reviewer ID `reviewer`; every extra
 map key is another distinct reviewer ID/token pair. Keep the hub storage
 outside every Obsidian vault. The default bind address is localhost; use a

@@ -1,5 +1,6 @@
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, randomUUID, sign, timingSafeEqual, verify } from 'node:crypto';
 import { createServer as createHttpServer } from 'node:http';
+import { createServer as createHttpsServer } from 'node:https';
 import { copyFile, mkdir, open, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 const PROTOCOL = 'mcpvault-global-sync/v1';
@@ -706,6 +707,12 @@ function constantTimeEqual(left, right) {
     const b = Buffer.from(right);
     return a.length === b.length && timingSafeEqual(a, b);
 }
+function secretDigest(value) {
+    return createHash('sha256').update(value, 'utf8').digest();
+}
+function constantTimeDigestEqual(left, right) {
+    return left.length === right.length && timingSafeEqual(left, right);
+}
 async function jsonBody(request, maxBytes) {
     const chunks = [];
     let size = 0;
@@ -739,7 +746,7 @@ export async function startGlobalSyncHub(root, options) {
     const reviewerToken = boundedText(options.reviewerToken, 'reviewerToken', 4096);
     if (constantTimeEqual(authToken, reviewerToken))
         throw new Error('authToken and reviewerToken must be different');
-    const reviewerTokens = new Map([['reviewer', reviewerToken]]);
+    const reviewerTokens = new Map([['reviewer', secretDigest(reviewerToken)]]);
     for (const [reviewerId, token] of Object.entries(options.reviewerTokens || {})) {
         const id = boundedText(reviewerId, 'reviewerId', MAX_AUTHOR_LENGTH);
         if (!/^[a-z0-9][a-z0-9._-]{0,127}$/.test(id))
@@ -747,9 +754,10 @@ export async function startGlobalSyncHub(root, options) {
         const normalizedToken = boundedText(token, `reviewerTokens.${id}`, 4096);
         if (constantTimeEqual(authToken, normalizedToken))
             throw new Error('reviewer tokens must differ from authToken');
-        if ([...reviewerTokens.values()].some(existing => constantTimeEqual(existing, normalizedToken)))
+        const normalizedTokenDigest = secretDigest(normalizedToken);
+        if ([...reviewerTokens.values()].some(existing => constantTimeDigestEqual(existing, normalizedTokenDigest)))
             throw new Error('reviewer tokens must be unique');
-        reviewerTokens.set(id, normalizedToken);
+        reviewerTokens.set(id, normalizedTokenDigest);
     }
     const signingKeyPath = resolve(options.signingKeyPath || join(resolve(root), 'signing-key.pem'));
     const proposerOrigin = options.proposerOrigin ? boundedText(options.proposerOrigin, 'proposerOrigin', MAX_ORIGIN_LENGTH) : undefined;
@@ -775,11 +783,15 @@ export async function startGlobalSyncHub(root, options) {
     }
     await hub.getManifest(0, 1);
     const host = options.host || '127.0.0.1';
-    const maxBodyBytes = options.maxBodyBytes || 2 * 1024 * 1024;
+    const maxBodyBytes = Math.min(Math.max(Math.trunc(options.maxBodyBytes ?? 2 * 1024 * 1024), 1024), 2 * 1024 * 1024);
+    const authTokenDigest = secretDigest(authToken);
     const requestWindows = new Map();
     const reviewerFor = (token) => {
-        for (const [reviewerId, reviewerSecret] of reviewerTokens)
-            if (constantTimeEqual(token, reviewerSecret))
+        if (!token)
+            return undefined;
+        const digest = secretDigest(token);
+        for (const [reviewerId, reviewerSecretDigest] of reviewerTokens)
+            if (constantTimeDigestEqual(digest, reviewerSecretDigest))
                 return reviewerId;
         return undefined;
     };
@@ -805,13 +817,13 @@ export async function startGlobalSyncHub(root, options) {
         current.count += 1;
         return true;
     };
-    const server = createHttpServer(async (request, response) => {
+    const requestHandler = async (request, response) => {
         try {
             const url = new URL(request.url || '/', `http://${host}`);
             const reviewerRoute = url.pathname === '/v1/global/audit' || (request.method === 'POST' && (url.pathname === '/v1/global/restore' || /\/v1\/global\/proposals\/[^/]+\/(?:approve|reject)$/.test(url.pathname)));
             const token = bearer(request);
             const reviewerId = reviewerFor(token);
-            if (reviewerRoute ? !reviewerId : !constantTimeEqual(token, authToken)) {
+            if (reviewerRoute ? !reviewerId : !token || !constantTimeDigestEqual(secretDigest(token), authTokenDigest)) {
                 sendJson(response, 401, { error: 'Unauthorized' });
                 return;
             }
@@ -868,10 +880,16 @@ export async function startGlobalSyncHub(root, options) {
         catch (error) {
             sendJson(response, 400, { error: error instanceof Error ? error.message : 'Bad request' });
         }
-    });
+    };
+    const server = options.tls
+        ? createHttpsServer({ key: options.tls.key, cert: options.tls.cert, ...(options.tls.ca && { ca: options.tls.ca }), requestCert: options.tls.requestCert ?? Boolean(options.tls.ca), rejectUnauthorized: options.tls.rejectUnauthorized ?? Boolean(options.tls.ca) }, requestHandler)
+        : createHttpServer(requestHandler);
     server.requestTimeout = 30_000;
     server.headersTimeout = 10_000;
     server.keepAliveTimeout = 5_000;
+    server.maxHeadersCount = 64;
+    server.maxRequestsPerSocket = 100;
+    server.maxConnections = Math.min(Math.max(Math.trunc(options.maxConnections ?? 256), 1), 2_048);
     await new Promise((resolvePromise, reject) => { server.once('error', reject); server.listen(options.port ?? 0, host, () => { server.off('error', reject); resolvePromise(); }); });
     const address = server.address();
     const port = typeof address === 'object' && address ? address.port : options.port || 0;

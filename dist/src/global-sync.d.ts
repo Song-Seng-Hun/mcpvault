@@ -1,4 +1,4 @@
-import { type Server as HttpServer } from 'node:http';
+import type { Server as NetServer } from 'node:net';
 declare const PROTOCOL: 'mcpvault-global-sync/v1';
 export type GlobalSyncOperation = 'upsert' | 'tombstone';
 export type GlobalProposalStatus = 'pending' | 'approved' | 'rejected' | 'conflict';
@@ -191,9 +191,17 @@ export interface GlobalSyncHubHttpOptions {
     hubId?: string;
     signingKeyPath?: string;
     proposerOrigin?: string;
+    tls?: {
+        key: string;
+        cert: string;
+        ca?: string;
+        requestCert?: boolean;
+        rejectUnauthorized?: boolean;
+    };
+    maxConnections?: number;
 }
 export interface GlobalSyncHubHttpHandle {
-    server: HttpServer;
+    server: NetServer;
     host: string;
     port: number;
     hub: GlobalSyncHub;
