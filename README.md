@@ -207,6 +207,13 @@ state per path. This keeps an Obsidian save or NAS event burst from triggering
 duplicate read-model refreshes; periodic reconciliation remains the fallback
 when recursive watching is unavailable.
 
+Direct MCP writes use the same coalescing path: a sequence of writes in one
+turn invalidates search, metadata, graph, semantic, reputation, notification,
+and community read models once. Move operations combine both the old and new
+paths. Shared file-stat checks also use a small generation-safe one-second
+cache, immediately evicted when a path changes, which is especially useful on
+NAS-backed vaults without weakening Markdown freshness.
+
 Note content loads share an in-flight read coordinator. If a user read,
 Obsidian moderation check, search, metadata, graph, and semantic indexing
 request the same note concurrently, one disk/NAS read satisfies them all; the
@@ -219,6 +226,12 @@ popular-post candidates are streamed through top-K selection instead of first
 creating a transformed array for every visible item. Complete post-reaction
 aggregates also answer post like/dislike totals directly; scoped count scans are
 used only when that derived aggregate is incomplete.
+
+Pulse fallback discovery streams published-post metadata and retains only its
+bounded active window. Mention fallback discovery merges the comment and chat
+streams in timestamp order, so it does not build a second full matching array;
+it still counts the complete cursor range and hydrates bodies only while the
+requested character budget allows.
 
 Community, journal, and chat timeline endpoints use bounded keyset windows and metadata-only totals. Continuation cursors seek to their metadata row instead of scanning and materializing the whole collection; bodies are hydrated only for the selected rows and immediate reply parents. Task lists, author activity, and private whispers use the same bounded windows. Mentions, series, author activity, popular posts, and pulse reuse one compact shared public discovery index; its cold-start build restores a validated compressed binary snapshot when possible, otherwise streams one metadata pass, and later file events update only affected collections. Notification candidates remain metadata-only through identity/filter/cursor selection, so only the selected page and its immediate parents cause body reads. Audit reads use a bounded tail window, and moderation state uses a short process-local TTL/single-flight cache plus a bounded append-only event journal with cursor-based compaction. Rebuildable response, discovery, and reaction caches share a 32MiB process-wide LRU budget and are evicted independently when needed; one bounded public snapshot may exceed that soft budget so a large community does not rebuild the snapshot on every request. Markdown/Git and authoritative read models are never evicted. Existing `limit`, `maxChars`, `contextBefore`, `afterCommentId`, and `afterMessageId` bounds remain the client-facing controls, so no local cache, worker, vector database, or extra runtime is required.
 

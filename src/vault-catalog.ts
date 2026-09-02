@@ -8,6 +8,8 @@ const WATCH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
 const WATCH_EVENT_BATCH_DELAY_MS = 50;
 const WATCH_EVENT_STAT_BATCH_SIZE = 32;
+const STAT_CACHE_TTL_MS = 1_000;
+const STAT_CACHE_MAX_ENTRIES = 8_192;
 const DIRECTORY_SCAN_BATCH_SIZE = 8;
 const DIRECTORY_CACHE_MAX_ENTRIES = 4096;
 
@@ -17,6 +19,12 @@ interface DirectoryCacheEntry {
   entries: Array<{ name: string; directory: boolean; file: boolean }>;
   notes?: string[];
   all?: string[];
+}
+
+interface StatCacheEntry {
+  value: VaultCatalogFileStat | undefined;
+  generation: number;
+  expiresAt: number;
 }
 
 export type VaultCatalogChangeKind = 'upsert' | 'delete';
@@ -67,6 +75,7 @@ export class VaultFileCatalog {
   private readonly directoryCache = new Map<string, DirectoryCacheEntry>();
   private readonly dirtyDirectories = new Set<string>();
   private readonly statInFlight = new Map<string, Promise<VaultCatalogFileStat | undefined>>();
+  private readonly statCache = new Map<string, StatCacheEntry>();
 
   constructor(vaultPath: string, private readonly pathFilter: PathFilter) {
     this.vaultPath = resolve(vaultPath);
@@ -100,10 +109,15 @@ export class VaultFileCatalog {
     this.paths = undefined;
     this.needsRefresh = true;
     if (changes) {
-      for (const change of changes) this.markDirtyDirectories(change.path);
+      for (const change of changes) {
+        const normalized = normalizePath(change.path);
+        this.statCache.delete(normalized);
+        this.markDirtyDirectories(normalized);
+      }
     } else {
       this.directoryCache.clear();
       this.dirtyDirectories.clear();
+      this.statCache.clear();
       derivedCacheBudget.clearOwner(this.cacheOwner);
     }
   }
@@ -173,15 +187,31 @@ export class VaultFileCatalog {
     this.directoryCache.clear();
     this.dirtyDirectories.clear();
     this.statInFlight.clear();
+    this.statCache.clear();
     derivedCacheBudget.clearOwner(this.cacheOwner);
   }
 
   private statPath(path: string): Promise<VaultCatalogFileStat | undefined> {
     const normalized = normalizePath(path);
+    const cached = this.statCache.get(normalized);
+    if (cached && cached.generation === this.changeGeneration && cached.expiresAt > Date.now()) {
+      this.statCache.delete(normalized);
+      this.statCache.set(normalized, cached);
+      return Promise.resolve(cached.value);
+    }
+    if (cached) this.statCache.delete(normalized);
     const running = this.statInFlight.get(normalized);
     if (running) return running;
+    const generation = this.changeGeneration;
     const computation = stat(join(this.vaultPath, normalized))
       .then(info => info.isFile() ? { size: info.size, mtimeMs: info.mtimeMs } : undefined)
+      .then(value => {
+        if (generation === this.changeGeneration) {
+          this.statCache.set(normalized, { value, generation, expiresAt: Date.now() + STAT_CACHE_TTL_MS });
+          while (this.statCache.size > STAT_CACHE_MAX_ENTRIES) this.statCache.delete(this.statCache.keys().next().value!);
+        }
+        return value;
+      })
       .catch(() => undefined);
     this.statInFlight.set(normalized, computation);
     void computation.finally(() => {

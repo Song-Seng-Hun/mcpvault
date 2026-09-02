@@ -7,10 +7,11 @@ import type { ReferenceService } from './references.js';
 import { isClosedWorkflowStatus, matchesWorkflowFilter, workflowStatus } from './community-status.js';
 import { isModerationHidden, moderationStatus } from './moderation-policy.js';
 import { boundItems } from './search-limits.js';
-import { queryAllNotes, queryWindow } from './paged-query.js';
+import { iterateNotes, queryWindow } from './paged-query.js';
 import type { ReputationService } from './reputation.js';
 import { readNotesInBatches } from './batch-read.js';
 import type { NotificationService } from './notifications.js';
+import type { QueryNote } from './types.js';
 
 const JOURNAL_ROOT = '_journal/entries';
 const BLOG_ROOT = 'Community/Posts';
@@ -61,6 +62,34 @@ function windowNumber(value: unknown, fallback: number, maximum: number): number
 
 function identity(principal: ScopePrincipal): string {
   return principal.agentId || principal.modelId;
+}
+
+async function* mergeMentionNotes(fileSystem: FileSystemService, targets: Set<string>, includeClosed: boolean): AsyncGenerator<QueryNote> {
+  const sources = [
+    iterateNotes(fileSystem, { pathPrefix: 'Community/Comments', filters: { mcpvault_type: 'blog_comment' }, sortBy: 'created_at', sortOrder: 'desc' }),
+    iterateNotes(fileSystem, { pathPrefix: 'Community/ChatMessages', filters: { mcpvault_type: 'chat_message' }, sortBy: 'created_at', sortOrder: 'desc' }),
+  ];
+  const nextMatching = async (source: AsyncIterator<QueryNote>): Promise<QueryNote | undefined> => {
+    while (true) {
+      const next = await source.next();
+      if (next.done) return undefined;
+      const note = next.value;
+      if (isModerationHidden(note.frontmatter)
+        || (!includeClosed && isClosedWorkflowStatus(note.frontmatter.workflow_status))
+        || !Array.isArray(note.frontmatter.mentions)
+        || !note.frontmatter.mentions.some((mention: unknown) => targets.has(String(mention).toLowerCase()))) continue;
+      return note;
+    }
+  };
+  let current = await Promise.all(sources.map(nextMatching));
+  while (current.some(Boolean)) {
+    const index = current[1] === undefined
+      || (current[0] !== undefined && String(current[0].frontmatter.created_at).localeCompare(String(current[1].frontmatter.created_at)) >= 0)
+      ? 0 : 1;
+    const note = current[index];
+    if (note) yield note;
+    current[index] = await nextMatching(sources[index]!);
+  }
 }
 
 function requireAgent(principal?: ScopePrincipal): ScopePrincipal & { agentId: string } {
@@ -316,21 +345,35 @@ export class SocialService {
   /** Read the published post set once for pulse's own-post and active-post signals. */
   async pulsePosts(params: { principal: ScopePrincipal; author: string; limit: number; maxChars: number }) {
     const snapshot = this.notifications ? await this.notifications.discoverySnapshot() : undefined;
-    const result = snapshot ? undefined : await queryAllNotes(this.fileSystem, {
-      pathPrefix: BLOG_ROOT, filters: { mcpvault_type: 'blog_post', status: 'published' },
-      sortBy: 'updated_at', sortOrder: 'desc',
-    });
-    const visibleNotes = (snapshot?.posts || result!.notes).filter(note => !isModerationHidden(note.frontmatter) && String(note.frontmatter.status || 'published') === 'published');
-    const ownNotes = visibleNotes.filter(note => String(note.frontmatter.author || '').toLowerCase() === params.author.toLowerCase());
-    const activeNotes = visibleNotes.filter(note => matchesWorkflowFilter(note.frontmatter, 'active'));
+    let ownPublishedPosts = 0;
+    let activeTotal = 0;
+    let activeNotes: QueryNote[] = [];
+    let queryTruncated = false;
+    if (snapshot) {
+      const visibleNotes = snapshot.posts.filter(note => !isModerationHidden(note.frontmatter) && String(note.frontmatter.status || 'published') === 'published');
+      ownPublishedPosts = visibleNotes.filter(note => String(note.frontmatter.author || '').toLowerCase() === params.author.toLowerCase()).length;
+      activeNotes = visibleNotes.filter(note => matchesWorkflowFilter(note.frontmatter, 'active'));
+      activeTotal = activeNotes.length;
+    } else {
+      const activeLimit = Math.min(Math.max(params.limit, 1), 500);
+      for await (const note of iterateNotes(this.fileSystem, { pathPrefix: BLOG_ROOT, filters: { mcpvault_type: 'blog_post', status: 'published' }, sortBy: 'updated_at', sortOrder: 'desc' })) {
+        if (isModerationHidden(note.frontmatter)) continue;
+        if (String(note.frontmatter.author || '').toLowerCase() === params.author.toLowerCase()) ownPublishedPosts += 1;
+        if (matchesWorkflowFilter(note.frontmatter, 'active')) {
+          activeTotal += 1;
+          if (activeNotes.length < activeLimit) activeNotes.push(note);
+        }
+      }
+      queryTruncated = activeNotes.length < activeTotal;
+    }
     const active = await this.formatBlogPosts(activeNotes, {
       principal: params.principal,
       limit: params.limit,
       maxChars: Math.min(params.maxChars, 6000),
       includeExcerpt: true,
       excerptMaxChars: 240,
-    }, Boolean(result?.truncated));
-    return { ownPublishedPosts: ownNotes.length, activePosts: active.posts, activeTotal: active.total, activeTruncated: active.truncated };
+    }, queryTruncated, activeTotal);
+    return { ownPublishedPosts, activePosts: active.posts, activeTotal: active.total, activeTruncated: active.truncated };
   }
 
   private async formatBlogPosts(
@@ -616,23 +659,21 @@ export class SocialService {
     const targets = new Set([identity(principal), principal.modelId, ...(principal.agentId ? [principal.agentId] : [])]);
     const notes = this.notifications
       ? await this.notifications.mentionCandidates(targets, params.includeClosed === true)
-      : [...(await queryAllNotes(this.fileSystem, { pathPrefix: 'Community/Comments', filters: { mcpvault_type: 'blog_comment' }, sortBy: 'created_at', sortOrder: 'desc' })).notes, ...(await queryAllNotes(this.fileSystem, { pathPrefix: 'Community/ChatMessages', filters: { mcpvault_type: 'chat_message' }, sortBy: 'created_at', sortOrder: 'desc' })).notes]
-        .filter(note => !isModerationHidden(note.frontmatter)
-          && (params.includeClosed === true || !isClosedWorkflowStatus(note.frontmatter.workflow_status))
-          && Array.isArray(note.frontmatter.mentions) && note.frontmatter.mentions.some((mention: unknown) => targets.has(String(mention).toLowerCase())))
-        .sort((a, b) => String(b.frontmatter.created_at).localeCompare(String(a.frontmatter.created_at)));
+      : undefined;
+    const noteStream: AsyncIterable<QueryNote> = notes
+      ? (async function* () { yield* notes; }())
+      : mergeMentionNotes(this.fileSystem, targets, params.includeClosed === true);
     const limit = windowNumber(params.limit, 20, 100);
     const maxChars = windowNumber(params.maxChars, 6000, 20000);
-    const cursor = params.afterMentionId
-      ? notes.findIndex(note => (note.frontmatter.message_id || note.frontmatter.comment_id) === params.afterMentionId)
-      : -1;
-    if (params.afterMentionId && cursor < 0) throw new Error(`afterMentionId was not found in mention results: ${params.afterMentionId}`);
     const mentions: Array<Record<string, unknown>> = [];
     let usedChars = 0;
+    let total = 0;
+    let cursorFound = !params.afterMentionId;
+    let outputExhausted = false;
     const contextBefore = Math.min(Math.max(Number(params.contextBefore ?? 1), 0), 3);
     const contextAfter = Math.min(Math.max(Number(params.contextAfter ?? 1), 0), 3);
     const hydrated = new Map<string, any>();
-    const timelines = new Map<string, { key: 'comment_id' | 'message_id'; notes: typeof notes }>();
+    const timelines = new Map<string, { key: 'comment_id' | 'message_id'; notes: QueryNote[] }>();
     const hydrate = async (paths: string[]): Promise<void> => {
       const missing = Array.from(new Set(paths)).filter(path => !hydrated.has(path));
       for (const [path, note] of await readNotesInBatches(this.fileSystem, missing)) hydrated.set(path, note);
@@ -661,8 +702,14 @@ export class SocialService {
       timelines.set(cacheKey, timeline);
       return timeline;
     };
-    for (const note of notes.slice(cursor >= 0 ? cursor + 1 : 0)) {
-      if (mentions.length >= limit) break;
+    for await (const note of noteStream) {
+      total += 1;
+      const noteId = note.frontmatter.message_id || note.frontmatter.comment_id;
+      if (!cursorFound) {
+        if (noteId === params.afterMentionId) cursorFound = true;
+        continue;
+      }
+      if (outputExhausted || mentions.length >= limit) continue;
       const full = hydrated.get(note.path) || await this.fileSystem.readNote(note.path);
       hydrated.set(note.path, full);
       const length = Array.from(full.content).length;
@@ -702,11 +749,15 @@ export class SocialService {
         item.context = context;
       }
       const itemLength = length + (Array.isArray(item.context) ? item.context.reduce((sum, entry) => sum + Array.from(String(entry.content || '')).length, 0) : 0);
-      if (mentions.length > 0 && usedChars + itemLength > maxChars) break;
+      if (mentions.length > 0 && usedChars + itemLength > maxChars) {
+        outputExhausted = true;
+        continue;
+      }
       mentions.push(item);
       usedChars += itemLength;
     }
+    if (params.afterMentionId && !cursorFound) throw new Error(`afterMentionId was not found in mention results: ${params.afterMentionId}`);
     const nextCursor = mentions.at(-1)?.messageId || mentions.at(-1)?.commentId;
-    return { mentions, total: notes.length, truncated: cursor >= 0 || notes.length > mentions.length, nextCursor, targets: Array.from(targets) };
+    return { mentions, total, truncated: Boolean(params.afterMentionId) || total > mentions.length, nextCursor, targets: Array.from(targets) };
   }
 }
