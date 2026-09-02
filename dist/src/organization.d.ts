@@ -7,7 +7,7 @@
  */
 export declare const NOTE_KINDS: readonly ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'];
 export declare const LIFECYCLES: readonly ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'];
-export declare const TASK_STATUSES: readonly ['open', 'next_action', 'waiting', 'blocked', 'completed', 'cancelled'];
+export declare const TASK_STATUSES: readonly ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'];
 export declare const REVIEW_POLICIES: readonly ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit'];
 export declare const REVIEW_OUTCOMES: readonly ['confirmed', 'revised', 'disputed', 'superseded', 'rescheduled'];
 export declare const QUESTION_STATUSES: readonly ['open', 'answered', 'blocked', 'abandoned'];

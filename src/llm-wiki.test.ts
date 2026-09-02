@@ -164,6 +164,34 @@ test('questions, negative knowledge, locators, event review, MOC coverage, and B
   }
 });
 
+test('capture, review completion, and bounded Reflect dashboard close the organization loop', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'reflect-owner', modelId: 'codex', password: 'reflect-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const captured = await callJson(client, 'capture_wiki_note', { title: 'Unprocessed observation', content: 'A rough observation to classify later.', capturedBy: 'codex', accessToken });
+    expect(captured.value).toMatchObject({ noteKind: 'fleeting', lifecycle: 'inbox', nextAction: 'Read the capture and classify it with triage_wiki_note.' });
+    expect(captured.value.path).toMatch(/^Inbox\/capture-/);
+    const inbox = await callJson(client, 'get_wiki_inbox', { accessToken });
+    expect(inbox.value).toMatchObject({ total: 1, items: [expect.objectContaining({ path: captured.value.path, lifecycle: 'inbox' })] });
+
+    const source = await callJson(client, 'ingest_source', { sourceId: 'reflect-source', title: 'Reflect source', content: 'The reviewable claim is grounded.', capturedBy: 'codex', accessToken });
+    const published = await callJson(client, 'publish_knowledge', { path: 'Knowledge/Reviewable.md', content: '# Reviewable\n\nThe claim is grounded.\n', evidencePaths: [source.value.path], noteKind: 'atomic', lifecycle: 'review', reviewPolicy: 'manual', reviewAt: '2030-01-01', expectedRevision: 'missing', author: 'codex', accessToken });
+    const reviewed = await callJson(client, 'review_wiki_note', { path: 'Knowledge/Reviewable.md', reviewOutcome: 'confirmed', reviewedBy: 'codex', reviewAt: '2031-01-01', reviewNote: 'Evidence and body were checked.', expectedRevision: published.value.revision, accessToken });
+    expect(reviewed.value).toMatchObject({ success: true, reviewOutcome: 'confirmed', reviewedBy: 'codex', reviewAt: '2031-01-01' });
+    const projection = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Reviewable.md', accessToken });
+    expect(projection.value).toMatchObject({ reviewOutcome: 'confirmed', reviewedBy: 'codex', reviewNote: 'Evidence and body were checked.' });
+
+    await client.callTool({ name: 'write_note', arguments: { path: 'Projects/Unblocked later.md', content: '# Unblocked later\n', frontmatter: { note_kind: 'project', lifecycle: 'active', task_status: 'someday' }, expectedRevision: 'missing', accessToken } });
+    await client.callTool({ name: 'write_note', arguments: { path: 'Projects/Needs action.md', content: '# Needs action\n', frontmatter: { note_kind: 'project', lifecycle: 'active' }, expectedRevision: 'missing', accessToken } });
+    const dashboard = await callJson(client, 'get_wiki_review_dashboard', { limit: 10, maxChars: 9000, accessToken });
+    expect(dashboard.value.sections).toMatchObject({ inbox: { total: 1 }, projectsAndTasks: { total: 1, items: [expect.objectContaining({ path: 'Projects/Needs action.md', missingNextAction: true })] }, knowledge: { total: 1 } });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('ingest, publish, catalog, lint, and immutable source enforcement form one workflow', async () => {
   const { server, client } = await setup();
   try {

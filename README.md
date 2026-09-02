@@ -180,8 +180,8 @@ properties (`supports`, `contradicts`, `supersedes`, `derived_from`,
 `depends_on`, `implements`, `blocked_by`, and `related`) explain the meaning
 of a `[[wikilink]]`; they do not grant access and their targets are checked by
 Wiki lint. Use `next_actions` and `waiting_for` for project/task notes, and
-`task_status` (`open`, `next_action`, `waiting`, `blocked`, `completed`, or
-`cancelled`) for their operational state. Keep task status separate from the
+`task_status` (`open`, `next_action`, `waiting`, `blocked`, `someday`,
+`completed`, or `cancelled`) for their operational state. Keep task status separate from the
 knowledge `lifecycle`. Evidence can carry `heading`, `blockId`, and source
 `revision` locators; the server validates them and reports stale references.
 Use `review_policy` (`manual`, `periodic`, `on_source_change`,
@@ -193,6 +193,15 @@ metadata and never replaces Markdown or Git. The bounded
 coverage, Inbox, lifecycle, atomic-note, summary freshness, and alias/ID
 collision guidance. `get_wiki_bases_view` emits an optional Obsidian Bases YAML
 view; it is a local presentation file, never a security boundary.
+
+For low-friction capture, `capture_wiki_note` creates an ordinary Markdown
+note in `Inbox/` with `note_kind: fleeting` and `lifecycle: inbox`; classify it
+later with `triage_wiki_note`. `review_wiki_note` records a completed evidence
+review and refreshes its body/link baseline without requiring the agent to
+resubmit the whole body. `get_wiki_review_dashboard` combines Inbox, active
+Projects/Tasks, due knowledge, and MOC/graph health into one bounded Reflect
+pass. `task_status: someday` is reserved for work intentionally deferred from
+the active list.
 
 Questions, hypotheses, and assumptions can carry `epistemic_status` so their
 state is explicit: questions are open/answered/blocked/abandoned, hypotheses

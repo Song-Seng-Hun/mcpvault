@@ -5,7 +5,7 @@ const accessToken = { type: 'string', description: 'Token from login_scope. Omit
 const scopeUri = { type: 'string', description: 'Target scope root; defaults to scope://global/. Private scopes require an authorized accessToken.', default: 'scope://global/' } as const;
 
 export const LLM_WIKI_MUTATING_TOOLS = [
-  'initialize_llm_wiki', 'ingest_source', 'publish_knowledge', 'publish_decision_record', 'triage_wiki_note', 'report_wiki_issue', 'resolve_wiki_issue',
+  'initialize_llm_wiki', 'ingest_source', 'capture_wiki_note', 'publish_knowledge', 'publish_decision_record', 'triage_wiki_note', 'review_wiki_note', 'report_wiki_issue', 'resolve_wiki_issue',
 ] as const;
 
 export function getLlmWikiTools(): Tool[] {
@@ -27,6 +27,13 @@ export function getLlmWikiTools(): Tool[] {
         scopeUri, sourceId: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' },
         sourceUrl: { type: 'string' }, capturedBy: { type: 'string' }, capturedAt: { type: 'string' }, mediaType: { type: 'string' }, trustLevel: { type: 'string', enum: ['unrated', 'low', 'medium', 'high', 'verified'], default: 'unrated' }, trustReason: { type: 'string', maxLength: 500 }, accessToken, prettyPrint,
       }, required: ['title', 'content'] },
+    },
+    {
+      name: 'capture_wiki_note',
+      description: 'Capture a rough observation in Inbox with one call. It defaults to note_kind=fleeting and lifecycle=inbox; classify it later with triage_wiki_note. This reduces capture friction without moving or replacing ordinary Markdown.',
+      inputSchema: { type: 'object', properties: {
+        path: { type: 'string', description: 'Optional path inside Inbox/. Omit to generate a unique Inbox path.' }, title: { type: 'string', maxLength: 300 }, content: { type: 'string' }, references: { type: 'array', items: { type: 'string' }, maxItems: 20 }, capturedBy: { type: 'string' }, expectedRevision: { type: 'string', description: "Optional; use 'missing' for a new capture" }, accessToken, prettyPrint,
+      }, required: ['content'] },
     },
     {
       name: 'publish_decision_record',
@@ -60,7 +67,7 @@ export function getLlmWikiTools(): Tool[] {
         taskContext: { type: 'string', maxLength: 300, description: 'GTD context such as @computer, @research, or a named capability' },
         dueAt: { type: 'string', description: 'Optional ISO due date/time' },
         deferUntil: { type: 'string', description: 'Optional ISO date/time before which this action should not be revisited' },
-        taskStatus: { type: 'string', enum: ['open', 'next_action', 'waiting', 'blocked', 'completed', 'cancelled'], description: 'Workflow state for project/task notes; separate from knowledge lifecycle' },
+        taskStatus: { type: 'string', enum: ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'], description: 'Workflow state for project/task notes; separate from knowledge lifecycle' },
         reviewPolicy: { type: 'string', enum: ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit'], description: 'When a knowledge note should re-enter review; this is a derived policy, not a hidden scheduler' },
         reviewOutcome: { type: 'string', enum: ['confirmed', 'revised', 'disputed', 'superseded', 'rescheduled'], description: 'Outcome of the latest evidence review; records completion without duplicating Git history' },
         reviewedBy: { type: 'string', maxLength: 200 }, reviewedAt: { type: 'string' }, reviewNote: { type: 'string', maxLength: 1000 },
@@ -95,6 +102,18 @@ export function getLlmWikiTools(): Tool[] {
       inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 20, default: 5 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, accessToken, prettyPrint } },
     },
     {
+      name: 'review_wiki_note',
+      description: 'Record completion of an evidence review without resubmitting the Markdown body. Refreshes the body/link review baseline, records the reviewer and outcome, and can schedule the next review.',
+      inputSchema: { type: 'object', properties: {
+        path: { type: 'string' }, reviewOutcome: { type: 'string', enum: ['confirmed', 'revised', 'disputed', 'superseded', 'rescheduled'] }, reviewedBy: { type: 'string' }, reviewAt: { type: 'string', description: 'Optional next review ISO date/time' }, reviewNote: { type: 'string', maxLength: 1000 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
+      }, required: ['path', 'reviewOutcome', 'expectedRevision'] },
+    },
+    {
+      name: 'get_wiki_review_dashboard',
+      description: 'Run one bounded Reflect/weekly-review pass over Inbox, active projects/tasks, due or stale knowledge, and graph/MOC health. It is advisory and never mutates notes.',
+      inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 50, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 18000, default: 9000 }, accessToken, prettyPrint } },
+    },
+    {
       name: 'get_wiki_inbox',
       description: 'Return a bounded list of Inbox or lifecycle=inbox notes that still need classification. This is metadata-only and never moves or rewrites files.',
       inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 50, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 5000 }, accessToken, prettyPrint } },
@@ -113,14 +132,13 @@ export function getLlmWikiTools(): Tool[] {
         nextActions: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
         desiredOutcome: { type: 'string', maxLength: 1000 }, taskContext: { type: 'string', maxLength: 300 }, dueAt: { type: 'string' }, deferUntil: { type: 'string' },
         stableId: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', maxLength: 80 },
-        taskStatus: { type: 'string', enum: ['open', 'next_action', 'waiting', 'blocked', 'completed', 'cancelled'], description: 'Workflow state for project/task notes' },
+        taskStatus: { type: 'string', enum: ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'], description: 'Workflow state for project/task notes' },
         reviewPolicy: { type: 'string', enum: ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit'] },
         reviewOutcome: { type: 'string', enum: ['confirmed', 'revised', 'disputed', 'superseded', 'rescheduled'] }, reviewedBy: { type: 'string', maxLength: 200 }, reviewedAt: { type: 'string' }, reviewNote: { type: 'string', maxLength: 1000 }, epistemicStatus: { type: 'string' },
         polarity: { type: 'string', enum: ['positive', 'negative'] },
         negativeType: { type: 'string', enum: ['failure', 'rejected', 'counterexample', 'non_reproducible', 'superseded'] },
         attempted: { type: 'string', maxLength: 1200 }, observed: { type: 'string', maxLength: 1200 }, failureCondition: { type: 'string', maxLength: 1200 }, affectedScope: { type: 'string', maxLength: 500 }, reproduction: { type: 'string', maxLength: 1200 }, whyRejected: { type: 'string', maxLength: 1200 }, reusableLesson: { type: 'string', maxLength: 1200 }, replacementPath: { type: 'string', maxLength: 500 },
         relations: { type: 'object', description: 'Typed Obsidian link arrays' },
-        nextAction: { type: 'string', description: 'Optional concrete next action for an active project' },
         waitingFor: { type: 'string', description: 'Optional person/event/resource this project is waiting for' },
         expectedRevision: { type: 'string' }, accessToken, prettyPrint,
       }, required: ['path', 'expectedRevision'] },

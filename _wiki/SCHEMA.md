@@ -70,7 +70,7 @@ rejected approaches, counterexamples, and non-reproducible results. Typed relati
 wikilink or a scope-safe note path; the target must remain accessible and
 resolvable. Use `next_actions` and `waiting_for` on project/task notes rather
 than on ordinary discussions. Use `task_status` (`open`, `next_action`,
-`waiting`, `blocked`, `completed`, or `cancelled`) for task execution state;
+`waiting`, `blocked`, `someday`, `completed`, or `cancelled`) for task execution state;
 keep it separate from the knowledge `lifecycle`. Use
 `evidence` locators can add a source `heading`, `blockId`, and `revision`;
 lint reports stale or invalid locators. Use `review_policy` (`manual`,
@@ -100,6 +100,14 @@ and `negative_replacement_path` when known. A completed review can record
 `endLine`, and `quoteHash` (SHA-256 of the selected source lines). The
 `get_wiki_home` endpoint returns a bounded live Home/JDex-style launchpad;
 it is derived from Markdown and is not a second index.
+
+Use `capture_wiki_note` when the first priority is not losing an observation:
+it creates a normal Inbox note with `note_kind: fleeting` and
+`lifecycle: inbox`, after which `triage_wiki_note` can classify it without
+rewriting the body. Use `review_wiki_note` after actually checking evidence;
+it refreshes the review baseline and records the outcome without requiring a
+full body resubmission. `get_wiki_review_dashboard` is a bounded Reflect pass
+over Inbox, active work, knowledge review, and graph health.
 
 For long or disputed knowledge notes, use claim-level provenance when useful:
 

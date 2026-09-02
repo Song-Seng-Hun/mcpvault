@@ -160,6 +160,175 @@ export declare class LlmWikiService {
         total: number;
         truncated: boolean;
     }>;
+    /** Capture first, classify later. The default path deliberately removes
+     * filing decisions from the first interaction and keeps the note ordinary
+     * Markdown so Obsidian and Git remain the source of truth. */
+    capture(params: {
+        principal?: ScopePrincipal;
+        path?: string;
+        title?: string;
+        content: string;
+        capturedBy: string;
+        references?: unknown;
+        expectedRevision?: string;
+    }): Promise<{
+        success: boolean;
+        path: string;
+        title: string;
+        noteKind: string;
+        lifecycle: string;
+        revision: string;
+        nextAction: string;
+    }>;
+    review(params: {
+        principal?: ScopePrincipal;
+        path: string;
+        reviewOutcome: unknown;
+        reviewedBy: string;
+        reviewAt?: string;
+        reviewNote?: string;
+        expectedRevision: string;
+    }): Promise<{
+        success: boolean;
+        path: string;
+        revision: string;
+        reviewOutcome: "confirmed" | "disputed" | "rescheduled" | "revised" | "superseded";
+        reviewedBy: any;
+        reviewedAt: any;
+        reviewAt?: string;
+    }>;
+    reviewDashboard(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        purpose: string;
+        sections: {
+            inbox: {
+                items: Record<string, unknown>[];
+                total: number;
+                truncated: boolean;
+            };
+            projectsAndTasks: {
+                items: Record<string, unknown>[];
+                total: number;
+                truncated: boolean;
+            };
+            knowledge: {
+                items: Record<string, unknown>[];
+                total: number;
+                truncated: boolean;
+            };
+            graph: {
+                mocCoverage: {
+                    knowledgeTotal: number;
+                    knowledgeLinkedFromMoc: number;
+                    ratio: number;
+                    uncoveredKnowledge: {
+                        total: number;
+                        items: {
+                            path: string;
+                        }[];
+                        truncated: boolean;
+                    };
+                    mocs: Record<string, unknown>[];
+                    truncated: boolean;
+                };
+                unresolvedLinks: {
+                    total: number;
+                    items: {
+                        target: string;
+                        line: number;
+                        link: string;
+                        context: string;
+                        relation?: string;
+                        path: string;
+                    }[];
+                    truncated: boolean;
+                };
+                orphanNotes: {
+                    total: number;
+                    items: {
+                        incomingLinks: number;
+                        path: string;
+                    }[];
+                    truncated: boolean;
+                };
+                truncated?: never;
+                note?: never;
+            } | {
+                mocCoverage?: never;
+                unresolvedLinks?: never;
+                orphanNotes?: never;
+                truncated: boolean;
+                note: string;
+            };
+        };
+        nextActions: string[];
+        generatedAt: string;
+    } | {
+        purpose: string;
+        nextActions: string[];
+        generatedAt: string;
+        sections: {
+            inbox: {
+                total: number;
+                truncated: boolean;
+                items: Record<string, unknown>[];
+            };
+            projectsAndTasks: {
+                total: number;
+                truncated: boolean;
+                items: Record<string, unknown>[];
+            };
+            knowledge: {
+                total: number;
+                truncated: boolean;
+                items: Record<string, unknown>[];
+            };
+            graph: {
+                mocCoverage: {
+                    knowledgeTotal: number;
+                    knowledgeLinkedFromMoc: number;
+                    ratio: number;
+                    uncoveredKnowledge: {
+                        total: number;
+                        items: {
+                            path: string;
+                        }[];
+                        truncated: boolean;
+                    };
+                    mocs: Record<string, unknown>[];
+                    truncated: boolean;
+                };
+                unresolvedLinks: {
+                    total: number;
+                    items: {
+                        target: string;
+                        line: number;
+                        link: string;
+                        context: string;
+                        relation?: string;
+                        path: string;
+                    }[];
+                    truncated: boolean;
+                };
+                orphanNotes: {
+                    total: number;
+                    items: {
+                        incomingLinks: number;
+                        path: string;
+                    }[];
+                    truncated: boolean;
+                };
+                truncated?: never;
+                note?: never;
+            } | {
+                mocCoverage?: never;
+                unresolvedLinks?: never;
+                orphanNotes?: never;
+                truncated: boolean;
+                note: string;
+            };
+        };
+        truncated: boolean;
+    }>;
     triage(params: {
         principal?: ScopePrincipal;
         path: string;

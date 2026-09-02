@@ -96,6 +96,14 @@ When a review is genuinely completed, record its outcome and reviewer rather
 than merely changing a due date. For high-value citations, add a 1-based line
 range and `quoteHash`; lint will report a changed quote.
 
+When the only goal is to preserve an observation, use `capture_wiki_note` and
+let it create an Inbox fleeting note; do not spend the capture turn deciding
+its final folder. Use `get_wiki_review_dashboard` for one bounded Reflect pass
+across Inbox, active work, due knowledge, and graph health. Once evidence has
+actually been checked, use `review_wiki_note` to record the outcome and refresh
+the review baseline without resubmitting the full Markdown body. Use
+`taskStatus: someday` for intentionally deferred work, not for an active task.
+
 ## Project Overview
 
 MCPVault is a Model Context Protocol (MCP) server that provides a universal AI bridge for Obsidian vaults. It enables any MCP-compatible AI assistant (Claude, ChatGPT, Gemini, etc.) to safely read and write notes in Obsidian vaults while preserving YAML frontmatter and enforcing security boundaries.

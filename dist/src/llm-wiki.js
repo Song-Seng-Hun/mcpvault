@@ -3,7 +3,7 @@ import { stringify as stringifyYaml } from 'yaml';
 import { normalizeScopeId } from './scopes.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
-import { knowledgeOrganization, normalizeLifecycle, normalizeNoteKind, normalizeReviewAt, normalizeTaskStatus, organizationLintIssues, RELATION_FIELDS } from './organization.js';
+import { knowledgeOrganization, normalizeLifecycle, normalizeNoteKind, normalizeReviewAt, normalizeReviewOutcome, normalizeTaskStatus, organizationLintIssues, RELATION_FIELDS } from './organization.js';
 import { extractWikiLinkOccurrences, resolveWikiLinkTargets } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
@@ -211,7 +211,9 @@ and links) -> Distill (\`publish_knowledge\`/lint) -> Express (MOCs, decisions,
 discussion, and Git). These hints are intentionally non-blocking except for
 the existing evidence and integrity invariants.
 
-Use \`aliases\` for stable Obsidian navigation, optional \`stable_id\` for a durable note identity, and compact \`summary\`, \`key_points\`, and \`open_questions\` properties for progressive reads; never replace the full Markdown body with a summary. When any progressive field is present, store \`summary_of_content_sha256\` for the exact Markdown body; a body edit makes the projection stale until it is regenerated. Use \`task_status\` for the operational state of project/task notes (\`open\`, \`next_action\`, \`waiting\`, \`blocked\`, \`completed\`, or \`cancelled\`); keep it separate from the knowledge \`lifecycle\`. Use \`desired_outcome\`, \`next_action\`, \`task_context\`, \`due_at\`, and \`defer_until\` for GTD-style execution details. Questions, hypotheses, and assumptions should carry \`epistemic_status\` for their kind-specific state. Use \`knowledge_polarity: negative\` with \`negative_type\` plus attempted/observed/failure condition/reproduction/reusable lesson metadata to preserve failed paths instead of deleting them. Typed link arrays such as \`supports\`, \`contradicts\`, \`supersedes\`, \`derived_from\`, \`depends_on\`, \`implements\`, \`blocked_by\`, and \`related\` explain the relationship while ordinary \`[[wikilinks]]\` remain the navigational source. Use \`next_actions\` and \`waiting_for\` on project/task notes only. Evidence can include \`heading\`, \`blockId\`, source \`revision\`, 1-based line ranges, and a \`quoteHash\`; stale locators are reported by lint. Use \`review_policy\` (\`manual\`, \`periodic\`, \`on_source_change\`, \`on_link_change\`, or \`on_any_edit\`) to declare when a note should re-enter review, and record the review outcome after checking evidence; this is a derived policy, not a hidden scheduler. Call \`wiki.home\` for a bounded Home/JDex launchpad and \`wiki.organization_health\` to review property, MOC coverage, atomicity, summary freshness, typed evidence, and link problems.
+Use \`aliases\` for stable Obsidian navigation, optional \`stable_id\` for a durable note identity, and compact \`summary\`, \`key_points\`, and \`open_questions\` properties for progressive reads; never replace the full Markdown body with a summary. When any progressive field is present, store \`summary_of_content_sha256\` for the exact Markdown body; a body edit makes the projection stale until it is regenerated. Use \`task_status\` for the operational state of project/task notes (\`open\`, \`next_action\`, \`waiting\`, \`blocked\`, \`someday\`, \`completed\`, or \`cancelled\`); keep it separate from the knowledge \`lifecycle\`. Use \`desired_outcome\`, \`next_action\`, \`task_context\`, \`due_at\`, and \`defer_until\` for GTD-style execution details. Questions, hypotheses, and assumptions should carry \`epistemic_status\` for their kind-specific state. Use \`knowledge_polarity: negative\` with \`negative_type\` plus attempted/observed/failure condition/reproduction/reusable lesson metadata to preserve failed paths instead of deleting them. Typed link arrays such as \`supports\`, \`contradicts\`, \`supersedes\`, \`derived_from\`, \`depends_on\`, \`implements\`, \`blocked_by\`, and \`related\` explain the relationship while ordinary \`[[wikilinks]]\` remain the navigational source. Use \`next_actions\` and \`waiting_for\` on project/task notes only. Evidence can include \`heading\`, \`blockId\`, source \`revision\`, 1-based line ranges, and a \`quoteHash\`; stale locators are reported by lint. Use \`review_policy\` (\`manual\`, \`periodic\`, \`on_source_change\`, \`on_link_change\`, or \`on_any_edit\`) to declare when a note should re-enter review, and record the review outcome after checking evidence; this is a derived policy, not a hidden scheduler. Call \`wiki.home\` for a bounded Home/JDex launchpad and \`wiki.organization_health\` to review property, MOC coverage, atomicity, summary freshness, typed evidence, and link problems.
+
+Use \`capture_wiki_note\` to create a fleeting Inbox note first, then \`triage_wiki_note\` to classify it. Use \`review_wiki_note\` after checking evidence to refresh the review baseline without resubmitting the body. Call \`wiki.review_dashboard\` for one bounded Reflect pass over Inbox, active work, due knowledge, and graph health.
 
 ## Invariants
 
@@ -752,6 +754,124 @@ export class LlmWikiService {
             used += itemChars;
         }
         return { items, total, truncated: total > items.length };
+    }
+    /** Capture first, classify later. The default path deliberately removes
+     * filing decisions from the first interaction and keeps the note ordinary
+     * Markdown so Obsidian and Git remain the source of truth. */
+    async capture(params) {
+        const content = String(params.content ?? '').replace(/\r\n/g, '\n');
+        if (!content.trim())
+            throw new Error('content is required');
+        const title = String(params.title || content.match(/^#\s+(.+)$/m)?.[1] || 'Unprocessed capture').trim().slice(0, 300);
+        const generatedPath = `Inbox/capture-${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${randomUUID().slice(0, 8)}.md`;
+        const path = normalizePath(params.path || generatedPath);
+        if (!/(^|\/)inbox(?:\/|$)/i.test(path))
+            throw new Error('capture path must be inside Inbox/; use triage_wiki_note after capture to classify it');
+        if (!this.access.canAccessPhysicalPath(path, params.principal))
+            throw new Error(`Access denied: ${this.access.toPublicPath(path)}`);
+        this.access.assertMutationAllowed(path, 'capture_wiki_note');
+        if (await this.fileSystem.noteExists(path))
+            throw new Error(`Capture path already exists: ${this.access.toPublicPath(path)}; choose a new path or read its revision first.`);
+        const references = await this.references.validateAndNormalize(params.references, path, params.principal, content);
+        const timestamp = now();
+        await this.fileSystem.writeNote({
+            path,
+            content: content.endsWith('\n') ? content : `${content}\n`,
+            frontmatter: {
+                title,
+                note_kind: 'fleeting',
+                lifecycle: 'inbox',
+                ...(references.length > 0 && { references }),
+                captured_by: params.capturedBy,
+                captured_at: timestamp,
+                updated_by: params.capturedBy,
+                updated_at: timestamp,
+            },
+            expectedRevision: params.expectedRevision || 'missing',
+        });
+        const created = await this.fileSystem.readNote(path);
+        return { success: true, path: this.access.toPublicPath(path), title, noteKind: 'fleeting', lifecycle: 'inbox', revision: created.revision, nextAction: 'Read the capture and classify it with triage_wiki_note.' };
+    }
+    async review(params) {
+        if (!params.expectedRevision)
+            throw new Error('expectedRevision is required; use the current note revision');
+        if (!this.access.canAccessPhysicalPath(params.path, params.principal))
+            throw new Error(`Access denied: ${this.access.toPublicPath(params.path)}`);
+        this.access.assertMutationAllowed(params.path, 'review_wiki_note');
+        const note = await this.fileSystem.readNote(params.path);
+        if (note.frontmatter.llm_wiki_type !== 'knowledge')
+            throw new Error('review_wiki_note requires an LLM Wiki knowledge note');
+        const outcome = normalizeReviewOutcome(params.reviewOutcome);
+        if (!outcome)
+            throw new Error('reviewOutcome is required');
+        const reviewAt = params.reviewAt === undefined ? undefined : normalizeReviewAt(params.reviewAt);
+        const reviewNote = params.reviewNote === undefined ? undefined : boundedText(params.reviewNote, 1000);
+        const reviewBasisLinks = await this.collectReviewBasisLinks(note.content, Array.isArray(note.frontmatter.references) ? note.frontmatter.references : [], params.principal);
+        const timestamp = now();
+        await this.fileSystem.updateFrontmatter({
+            path: params.path,
+            frontmatter: {
+                review_basis_content_sha256: hash(note.content),
+                review_basis_links: reviewBasisLinks,
+                last_review_outcome: outcome,
+                last_reviewed_by: boundedText(params.reviewedBy, 200),
+                last_reviewed_at: timestamp,
+                ...(reviewAt && { review_at: reviewAt }),
+                ...(reviewNote && { review_note: reviewNote }),
+                updated_by: params.reviewedBy,
+                updated_at: timestamp,
+            },
+            merge: true,
+            expectedRevision: params.expectedRevision,
+        });
+        const updated = await this.fileSystem.readNote(params.path);
+        return { success: true, path: this.access.toPublicPath(params.path), revision: updated.revision, reviewOutcome: outcome, reviewedBy: updated.frontmatter.last_reviewed_by, reviewedAt: updated.frontmatter.last_reviewed_at, ...(reviewAt && { reviewAt }) };
+    }
+    async reviewDashboard(principal, limit = 10, maxChars = 9000) {
+        const boundedLimit = Math.min(Math.max(Number(limit) || 10, 1), 50);
+        const boundedChars = Math.min(Math.max(Number(maxChars) || 9000, 512), 18000);
+        const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        const actionItems = [];
+        let totalActionItems = 0;
+        const nowMs = Date.now();
+        for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+            const kind = String(note.frontmatter.note_kind || '').toLowerCase();
+            if (kind !== 'project' && kind !== 'task')
+                continue;
+            const lifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
+            const taskStatus = String(note.frontmatter.task_status || '').toLowerCase();
+            if (['completed', 'cancelled', 'someday'].includes(taskStatus) || lifecycle === 'archived')
+                continue;
+            const dueAt = typeof note.frontmatter.due_at === 'string' ? note.frontmatter.due_at : undefined;
+            const overdue = Boolean(dueAt && !Number.isNaN(Date.parse(dueAt)) && Date.parse(dueAt) <= nowMs);
+            const missingNextAction = lifecycle === 'active' && !note.frontmatter.next_action && !note.frontmatter.waiting_for;
+            if (!overdue && !missingNextAction)
+                continue;
+            totalActionItems += 1;
+            if (actionItems.length < boundedLimit)
+                actionItems.push({ path: this.access.toPublicPath(note.path), title: note.frontmatter.title || note.path.split('/').at(-1), kind, ...(note.frontmatter.task_status && { taskStatus }), ...(dueAt && { dueAt }), ...(overdue && { overdue: true }), ...(missingNextAction && { missingNextAction: true }) });
+        }
+        const [inbox, knowledgeReview, graph] = await Promise.all([
+            this.inbox(principal, boundedLimit, Math.floor(boundedChars / 4)),
+            this.reviewQueue(principal, boundedLimit, Math.floor(boundedChars / 3)),
+            this.graphHealth(principal, boundedLimit, Math.floor(boundedChars / 3)),
+        ]);
+        const graphView = 'mocCoverage' in graph
+            ? { mocCoverage: graph.mocCoverage, unresolvedLinks: graph.unresolvedLinks, orphanNotes: graph.orphanNotes }
+            : { truncated: true, note: graph.note };
+        const result = {
+            purpose: 'One bounded Reflect/weekly-review projection. It is advisory; inspect each selected note before changing it.',
+            sections: {
+                inbox,
+                projectsAndTasks: { items: actionItems, total: totalActionItems, truncated: totalActionItems > actionItems.length },
+                knowledge: knowledgeReview,
+                graph: graphView,
+            },
+            nextActions: ['Process one Inbox capture.', 'Give one active project a concrete next action or waiting_for.', 'Review one due/stale knowledge note with review_wiki_note.', 'Repair one broken link or MOC gap.'],
+            generatedAt: now(),
+        };
+        const encoded = JSON.stringify(result);
+        return encoded.length <= boundedChars ? result : { ...result, sections: { inbox: { ...inbox, items: inbox.items.slice(0, 3) }, projectsAndTasks: { ...result.sections.projectsAndTasks, items: actionItems.slice(0, 3) }, knowledge: { ...knowledgeReview, items: knowledgeReview.items.slice(0, 3) }, graph: graphView }, truncated: true };
     }
     async triage(params) {
         if (!params.expectedRevision)
