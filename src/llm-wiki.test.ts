@@ -310,6 +310,41 @@ test('clarify, source distillation, and MOC candidates complete the organization
   }
 });
 
+test('MOC question coverage, Evergreen quality, and review packet stay bounded and explicit', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'review-packet-owner', modelId: 'codex', password: 'review-packet-password' });
+    const accessToken = registration.value.accessToken;
+    await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/Atomic concept.md', content: '# Atomic concept\n\nA reusable concept with a compact interpretation.\n',
+      frontmatter: { note_kind: 'atomic', lifecycle: 'evergreen', summary: 'A reusable concept.' }, expectedRevision: 'missing', accessToken,
+    } });
+    await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/Untitled.md', content: '# Untitled\n\nA durable note that still needs organization.\n',
+      frontmatter: { note_kind: 'atomic', lifecycle: 'evergreen' }, expectedRevision: 'missing', accessToken,
+    } });
+    await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/MOCs/Research.md', content: '# Research\n\n## Questions\n\n- [ ] What is the reusable concept?\n  - [[Knowledge/Atomic concept]]\n- [ ] Which gap remains open?\n',
+      frontmatter: { note_kind: 'moc', lifecycle: 'evergreen', moc_purpose: 'Navigate research questions', moc_questions: ['What is the reusable concept?', 'Which gap remains open?'] }, expectedRevision: 'missing', accessToken,
+    } });
+
+    const graph = await callJson(client, 'get_wiki_graph_health', { limit: 20, maxChars: 9000, accessToken });
+    expect(graph.value.mocQuestionCoverage).toMatchObject({ total: 2, linked: 1, ratio: 0.5, unlinked: { total: 1 } });
+    expect(graph.value.mocQuestionCoverage.unlinked.items).toEqual(expect.arrayContaining([expect.objectContaining({ question: 'Which gap remains open?', state: 'unlinked' })]));
+    expect(graph.value.mocCoverage.mocs).toEqual(expect.arrayContaining([expect.objectContaining({ questionTotal: 2, questionLinked: 1, questionCoverage: 0.5 })]));
+    expect(graph.value.evergreenQuality).toMatchObject({ total: 2, needsAttention: 1, ready: 1 });
+    expect(graph.value.evergreenQuality.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Untitled.md', state: 'needs_attention', flags: expect.arrayContaining(['missing_compact_projection', 'generic_concept_title']) })]));
+
+    const packet = await callJson(client, 'get_wiki_review_packet', { limit: 5, maxChars: 7000, accessToken });
+    expect(packet.value).toMatchObject({ counts: { unlinkedMocQuestions: 1, evergreenNeedsAttention: 1 } });
+    expect(packet.value.priorities).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/MOCs/Research.md', reason: 'moc_question_has_no_linked_answer' })]));
+    expect(JSON.stringify(packet.value).length).toBeLessThanOrEqual(7000);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('ingest, publish, catalog, lint, and immutable source enforcement form one workflow', async () => {
   const { server, client } = await setup();
   try {

@@ -115,6 +115,13 @@ key points, or an outgoing `[[wikilink]]` to derived atomic/knowledge notes;
 this remains a quality hint, not a publication gate. Use
 `get_wiki_bases_view` with `view` set to `all`, `inbox`, `projects`, `review`,
 or `epistemic` when a local Obsidian view is useful.
+For a smaller maintenance turn, use `get_wiki_review_packet`; follow its
+priority order and inspect one selected note before editing. MOC questions are
+covered only when the question list item has an answer `[[wikilink]]` on the
+same line or within the next three lines; this is a discoverability signal, not
+proof that the answer is correct. Evergreen quality hints are advisory: prefer
+concept-oriented titles, a compact projection, and meaningful links, but do
+not force a split or rewrite merely to satisfy a score.
 When ingesting a reusable paper, web page, book, dataset, or code reference,
 add optional `sourceType`, `citationKey`, `author`, `publishedAt`, and
 `retrievedAt`; never use these in place of the immutable source hash and

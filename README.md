@@ -194,8 +194,10 @@ stores a compact body/link review baseline, so later source, link, or body
 changes can be reported as derived triggers. The baseline is regenerable
 metadata and never replaces Markdown or Git. The bounded
 `get_wiki_organization_health` endpoint combines these checks with MOC
-coverage, Inbox, lifecycle, atomic-note, summary freshness, and alias/ID
-collision guidance. `get_wiki_bases_view` emits an optional Obsidian Bases YAML
+coverage, Inbox, lifecycle, atomic-note, Evergreen discoverability, summary
+freshness, and alias/ID collision guidance. `get_wiki_review_packet` is a
+smaller priority-ordered maintenance projection for agents that should take
+one bounded next step. `get_wiki_bases_view` emits an optional Obsidian Bases YAML
 view; it is a local presentation file, never a security boundary.
 
 For low-friction capture, `capture_wiki_note` creates an ordinary Markdown
@@ -213,7 +215,11 @@ Pass `nextLifecycle` when the review changes the knowledge state (for example,
 asks for a follow-up decision. `get_wiki_review_dashboard` combines Inbox,
 active Projects/Tasks, due work, waiting/someday items, open
 questions/hypotheses/assumptions, due knowledge, and MOC/graph/focus/
-connectivity health into one bounded Reflect pass. `task_status: someday` is
+connectivity health into one bounded Reflect pass. MOC question coverage is
+explicit: put an answer `[[wikilink]]` on the question list item or within the
+next three lines; a linked note is discoverable context, not proof of an
+answer. Evergreen quality hints flag generic titles, missing compact
+projections, and isolated graph position without blocking publication. `task_status: someday` is
 reserved for work intentionally deferred from the active list. Use
 `read_wiki_projection` with `view: progressive` when a single bounded read
 should include the summary, selected passages, claims, and open questions;

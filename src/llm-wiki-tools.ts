@@ -134,6 +134,11 @@ export function getLlmWikiTools(): Tool[] {
       inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 50, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 18000, default: 9000 }, accessToken, prettyPrint } },
     },
     {
+      name: 'get_wiki_review_packet',
+      description: 'Return a smaller action-oriented knowledge-review packet. It prioritizes due evidence, Inbox captures, projects without a next action, MOC questions without linked answers, Evergreen quality hints, and graph repairs. It is derived and advisory; it never mutates notes or replaces Git history.',
+      inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 30, default: 8 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
+    },
+    {
       name: 'get_wiki_inbox',
       description: 'Return a bounded list of Inbox or lifecycle=inbox notes that still need classification. This is metadata-only and never moves or rewrites files.',
       inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 50, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 5000 }, accessToken, prettyPrint } },

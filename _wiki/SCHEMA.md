@@ -82,8 +82,10 @@ scheduler. Publication stores a compact body/link review baseline in
 regenerable frontmatter metadata, so `on_any_edit` and `on_link_change` can be
 detected later. The baseline never replaces Markdown or Git. Use
 `get_wiki_organization_health` for one bounded report of
-property, MOC coverage, atomic-note, summary freshness, typed evidence,
-alias/ID collision, and typed-link problems. `get_wiki_bases_view` returns an
+property, MOC coverage, atomic-note, Evergreen discoverability, summary
+freshness, typed evidence, alias/ID collision, and typed-link problems.
+`get_wiki_review_packet` returns a smaller priority-ordered maintenance view
+for the next agent. `get_wiki_bases_view` returns an
 optional local Obsidian Bases YAML view; a `.base` view is not a security
 boundary.
 
@@ -147,6 +149,17 @@ unchanged. For MOCs, record `moc_purpose`, `moc_scope`, `moc_questions`, and
 optional `moc_parent` alongside ordinary `[[wikilinks]]` or relative Markdown
 links; nested MOCs are followed to bounded depth by graph health; use
 `get_wiki_moc_candidates` for bounded suggestions, not automatic map creation.
+
+To make question coverage explicit, write each `moc_questions` item as a
+Markdown list item under a Questions section and put one or more answer
+`[[wikilinks]]` on that line or within the next three lines. Graph health
+reports linked versus unlinked questions; a linked note is discoverable
+context, not proof that it answers the question.
+
+Evergreen quality is a bounded advisory signal. It highlights durable notes
+with a generic title, no compact projection (`summary` or `key_points`), or no
+meaningful incoming/outgoing graph connection. It never blocks publication,
+forces atomicity, or rewrites a note automatically.
 
 `get_wiki_bases_view` accepts the standard views `all`, `inbox`, `projects`,
 `review`, and `epistemic`. These are optional local Obsidian `.base` views, not
