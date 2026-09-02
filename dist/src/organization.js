@@ -10,6 +10,10 @@ export const NOTE_KINDS = ['fleeting', 'literature', 'atomic', 'moc', 'knowledge
 export const LIFECYCLES = ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'];
 export const TASK_STATUSES = ['open', 'next_action', 'waiting', 'blocked', 'completed', 'cancelled'];
 export const REVIEW_POLICIES = ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit'];
+export const REVIEW_OUTCOMES = ['confirmed', 'revised', 'disputed', 'superseded', 'rescheduled'];
+export const QUESTION_STATUSES = ['open', 'answered', 'blocked', 'abandoned'];
+export const HYPOTHESIS_STATUSES = ['proposed', 'supported', 'refuted', 'inconclusive'];
+export const ASSUMPTION_STATUSES = ['active', 'verified', 'invalidated', 'replaced'];
 export const KNOWLEDGE_POLARITIES = ['positive', 'negative'];
 export const NEGATIVE_KINDS = ['failure', 'rejected', 'counterexample', 'non_reproducible', 'superseded'];
 /** Typed relationships are navigation metadata, never an access grant. */
@@ -19,6 +23,10 @@ const noteKindSet = new Set(NOTE_KINDS);
 const lifecycleSet = new Set(LIFECYCLES);
 const taskStatusSet = new Set(TASK_STATUSES);
 const reviewPolicySet = new Set(REVIEW_POLICIES);
+const reviewOutcomeSet = new Set(REVIEW_OUTCOMES);
+const questionStatusSet = new Set(QUESTION_STATUSES);
+const hypothesisStatusSet = new Set(HYPOTHESIS_STATUSES);
+const assumptionStatusSet = new Set(ASSUMPTION_STATUSES);
 const knowledgePolaritySet = new Set(KNOWLEDGE_POLARITIES);
 const negativeKindSet = new Set(NEGATIVE_KINDS);
 const relationFieldSet = new Set(RELATION_FIELDS);
@@ -67,6 +75,27 @@ export function normalizeReviewPolicy(value, fallback) {
     if (!reviewPolicySet.has(normalized))
         throw new Error(`reviewPolicy must be one of: ${REVIEW_POLICIES.join(', ')}`);
     return normalized;
+}
+export function normalizeReviewOutcome(value, fallback) {
+    if (value === undefined || value === null || String(value).trim() === '')
+        return fallback;
+    const normalized = String(value).trim().toLowerCase();
+    if (!reviewOutcomeSet.has(normalized))
+        throw new Error(`reviewOutcome must be one of: ${REVIEW_OUTCOMES.join(', ')}`);
+    return normalized;
+}
+export function normalizeEpistemicStatus(value, noteKind, fallback) {
+    const supplied = value === undefined || value === null || String(value).trim() === '' ? fallback : String(value).trim().toLowerCase();
+    if (!supplied)
+        return undefined;
+    const allowed = noteKind === 'question' ? questionStatusSet : noteKind === 'hypothesis' ? hypothesisStatusSet : noteKind === 'assumption' ? assumptionStatusSet : undefined;
+    if (!allowed)
+        throw new Error('epistemicStatus is only valid for noteKind question, hypothesis, or assumption');
+    if (!allowed.has(supplied)) {
+        const choices = noteKind === 'question' ? QUESTION_STATUSES : noteKind === 'hypothesis' ? HYPOTHESIS_STATUSES : ASSUMPTION_STATUSES;
+        throw new Error(`epistemicStatus for ${noteKind} must be one of: ${choices.join(', ')}`);
+    }
+    return supplied;
 }
 export function normalizeKnowledgePolarity(value, fallback) {
     if (value === undefined || value === null || String(value).trim() === '')
@@ -125,6 +154,14 @@ export function normalizeReviewAt(value) {
     }
     return date;
 }
+export function normalizeIsoDate(value, field) {
+    const date = optionalText(value, field, 40);
+    if (!date)
+        return undefined;
+    if (!/^\d{4}-\d{2}-\d{2}(?:T[^\s]+)?$/.test(date) || Number.isNaN(Date.parse(date)))
+        throw new Error(`${field} must be an ISO date or date-time`);
+    return date;
+}
 export function knowledgeOrganization(input) {
     const existing = input.existing || {};
     const existingKind = normalizeNoteKind(existing.note_kind);
@@ -139,7 +176,12 @@ export function knowledgeOrganization(input) {
     const keyPoints = input.keyPoints === undefined ? normalizedList(existing.key_points, 'key_points', 20, 600) : normalizedList(input.keyPoints, 'key_points', 20, 600);
     const openQuestions = input.openQuestions === undefined ? normalizedList(existing.open_questions, 'open_questions', 20, 600) : normalizedList(input.openQuestions, 'open_questions', 20, 600);
     const nextActions = input.nextActions === undefined ? normalizedList(existing.next_actions, 'next_actions', 20, 600) : normalizedList(input.nextActions, 'next_actions', 20, 600);
+    const nextAction = input.nextAction === undefined ? optionalText(existing.next_action, 'nextAction', 500) : optionalText(input.nextAction, 'nextAction', 500);
     const waitingFor = input.waitingFor === undefined ? optionalText(existing.waiting_for, 'waiting_for', 500) : optionalText(input.waitingFor, 'waiting_for', 500);
+    const desiredOutcome = input.desiredOutcome === undefined ? optionalText(existing.desired_outcome, 'desiredOutcome', 1000) : optionalText(input.desiredOutcome, 'desiredOutcome', 1000);
+    const taskContext = input.taskContext === undefined ? optionalText(existing.task_context, 'taskContext', 300) : optionalText(input.taskContext, 'taskContext', 300);
+    const dueAt = input.dueAt === undefined ? normalizeIsoDate(existing.due_at, 'dueAt') : normalizeIsoDate(input.dueAt, 'dueAt');
+    const deferUntil = input.deferUntil === undefined ? normalizeIsoDate(existing.defer_until, 'deferUntil') : normalizeIsoDate(input.deferUntil, 'deferUntil');
     const stableId = input.stableId === undefined ? optionalText(existing.stable_id, 'stable_id', 80) : optionalText(input.stableId, 'stable_id', 80);
     if (stableId && !/^[a-z0-9][a-z0-9._-]*$/i.test(stableId))
         throw new Error('stableId may contain only letters, numbers, dots, underscores, and hyphens');
@@ -153,12 +195,25 @@ export function knowledgeOrganization(input) {
     const reviewPolicy = input.reviewPolicy === undefined
         ? normalizeReviewPolicy(existing.review_policy)
         : normalizeReviewPolicy(input.reviewPolicy);
+    const reviewOutcome = input.reviewOutcome === undefined ? normalizeReviewOutcome(existing.last_review_outcome) : normalizeReviewOutcome(input.reviewOutcome);
+    const reviewedBy = input.reviewedBy === undefined ? optionalText(existing.last_reviewed_by, 'reviewedBy', 200) : optionalText(input.reviewedBy, 'reviewedBy', 200);
+    const reviewedAt = input.reviewedAt === undefined ? normalizeIsoDate(existing.last_reviewed_at, 'reviewedAt') : normalizeIsoDate(input.reviewedAt, 'reviewedAt');
+    const reviewNote = input.reviewNote === undefined ? optionalText(existing.review_note, 'reviewNote', 1000) : optionalText(input.reviewNote, 'reviewNote', 1000);
+    const epistemicStatus = normalizeEpistemicStatus(input.epistemicStatus, kind, existing.epistemic_status);
     const polarity = input.polarity === undefined
         ? normalizeKnowledgePolarity(existing.knowledge_polarity)
         : normalizeKnowledgePolarity(input.polarity);
     const negativeType = input.negativeType === undefined
         ? normalizeNegativeKind(existing.negative_type)
         : normalizeNegativeKind(input.negativeType);
+    const attempted = input.attempted === undefined ? optionalText(existing.negative_attempted, 'attempted', 1200) : optionalText(input.attempted, 'attempted', 1200);
+    const observed = input.observed === undefined ? optionalText(existing.negative_observed, 'observed', 1200) : optionalText(input.observed, 'observed', 1200);
+    const failureCondition = input.failureCondition === undefined ? optionalText(existing.negative_failure_condition, 'failureCondition', 1200) : optionalText(input.failureCondition, 'failureCondition', 1200);
+    const affectedScope = input.affectedScope === undefined ? optionalText(existing.negative_affected_scope, 'affectedScope', 500) : optionalText(input.affectedScope, 'affectedScope', 500);
+    const reproduction = input.reproduction === undefined ? optionalText(existing.negative_reproduction, 'reproduction', 1200) : optionalText(input.reproduction, 'reproduction', 1200);
+    const whyRejected = input.whyRejected === undefined ? optionalText(existing.negative_why_rejected, 'whyRejected', 1200) : optionalText(input.whyRejected, 'whyRejected', 1200);
+    const reusableLesson = input.reusableLesson === undefined ? optionalText(existing.negative_reusable_lesson, 'reusableLesson', 1200) : optionalText(input.reusableLesson, 'reusableLesson', 1200);
+    const replacementPath = input.replacementPath === undefined ? optionalText(existing.negative_replacement_path, 'replacementPath', 500) : optionalText(input.replacementPath, 'replacementPath', 500);
     if (negativeType && polarity !== 'negative')
         throw new Error('negativeType requires polarity=negative');
     if (polarity === 'negative' && !negativeType)
@@ -178,12 +233,30 @@ export function knowledgeOrganization(input) {
         ...(keyPoints && { key_points: keyPoints }),
         ...(openQuestions && { open_questions: openQuestions }),
         ...(nextActions && { next_actions: nextActions }),
+        ...(nextAction && { next_action: nextAction }),
         ...(waitingFor && { waiting_for: waitingFor }),
+        ...(desiredOutcome && { desired_outcome: desiredOutcome }),
+        ...(taskContext && { task_context: taskContext }),
+        ...(dueAt && { due_at: dueAt }),
+        ...(deferUntil && { defer_until: deferUntil }),
         ...(stableId && { stable_id: stableId }),
         ...(taskStatus && { task_status: taskStatus }),
         ...(reviewPolicy && { review_policy: reviewPolicy }),
+        ...(reviewOutcome && { last_review_outcome: reviewOutcome }),
+        ...(reviewedBy && { last_reviewed_by: reviewedBy }),
+        ...(reviewedAt && { last_reviewed_at: reviewedAt }),
+        ...(reviewNote && { review_note: reviewNote }),
+        ...(epistemicStatus && { epistemic_status: epistemicStatus }),
         ...(polarity && { knowledge_polarity: polarity }),
         ...(negativeType && { negative_type: negativeType }),
+        ...(attempted && { negative_attempted: attempted }),
+        ...(observed && { negative_observed: observed }),
+        ...(failureCondition && { negative_failure_condition: failureCondition }),
+        ...(affectedScope && { negative_affected_scope: affectedScope }),
+        ...(reproduction && { negative_reproduction: reproduction }),
+        ...(whyRejected && { negative_why_rejected: whyRejected }),
+        ...(reusableLesson && { negative_reusable_lesson: reusableLesson }),
+        ...(replacementPath && { negative_replacement_path: replacementPath }),
         ...(summaryDigest && { summary_of_content_sha256: summaryDigest }),
         ...(relations || {}),
     };
@@ -233,6 +306,14 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
     if (frontmatter.review_policy !== undefined && !reviewPolicySet.has(String(frontmatter.review_policy).trim().toLowerCase())) {
         issues.push({ code: 'invalid_review_policy', detail: `review_policy must be one of: ${REVIEW_POLICIES.join(', ')}` });
     }
+    if (frontmatter.last_review_outcome !== undefined && !reviewOutcomeSet.has(String(frontmatter.last_review_outcome).trim().toLowerCase())) {
+        issues.push({ code: 'invalid_review_outcome', detail: `last_review_outcome must be one of: ${REVIEW_OUTCOMES.join(', ')}` });
+    }
+    for (const [field, value] of [['due_at', frontmatter.due_at], ['defer_until', frontmatter.defer_until], ['last_reviewed_at', frontmatter.last_reviewed_at]]) {
+        if (value !== undefined && (!/^(?:\d{4}-\d{2}-\d{2})(?:T[^\s]+)?$/.test(String(value).trim()) || Number.isNaN(Date.parse(String(value).trim())))) {
+            issues.push({ code: `invalid_${field}`, detail: `${field} should be an ISO date or date-time.` });
+        }
+    }
     const polarity = frontmatter.knowledge_polarity === undefined ? undefined : String(frontmatter.knowledge_polarity).trim().toLowerCase();
     const negativeType = frontmatter.negative_type === undefined ? undefined : String(frontmatter.negative_type).trim().toLowerCase();
     if (polarity !== undefined && !knowledgePolaritySet.has(polarity)) {
@@ -245,6 +326,26 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
         issues.push({ code: 'negative_type_without_negative_polarity', detail: 'negative_type requires knowledge_polarity: negative.' });
     if (polarity === 'negative' && !negativeType)
         issues.push({ code: 'negative_polarity_without_type', detail: 'Negative knowledge should state whether it is a failure, rejection, counterexample, or non-reproducible result.' });
+    const epistemicStatus = frontmatter.epistemic_status === undefined ? undefined : String(frontmatter.epistemic_status).trim().toLowerCase();
+    if (kind === 'question' || kind === 'hypothesis' || kind === 'assumption') {
+        if (epistemicStatus === undefined)
+            issues.push({ code: 'epistemic_status_missing', detail: `${kind} notes should declare epistemic_status so their uncertainty state is visible.` });
+        try {
+            normalizeEpistemicStatus(epistemicStatus, kind, kind === 'question' ? 'open' : kind === 'hypothesis' ? 'proposed' : 'active');
+        }
+        catch (error) {
+            issues.push({ code: 'invalid_epistemic_status', detail: error instanceof Error ? error.message : 'Invalid epistemic status.' });
+        }
+    }
+    else if (epistemicStatus !== undefined) {
+        issues.push({ code: 'epistemic_status_wrong_kind', detail: 'epistemic_status is only valid for question, hypothesis, or assumption notes.' });
+    }
+    if (polarity === 'negative') {
+        if (!frontmatter.negative_reusable_lesson)
+            issues.push({ code: 'negative_lesson_missing', detail: 'Negative knowledge should preserve a reusable lesson so future agents do not repeat the failed path.' });
+        if (negativeType === 'failure' && !frontmatter.negative_reproduction)
+            issues.push({ code: 'negative_reproduction_missing', detail: 'A failure note should record a bounded reproduction or observation recipe when possible.' });
+    }
     const summaryPresent = typeof frontmatter.summary === 'string' || Array.isArray(frontmatter.key_points) || Array.isArray(frontmatter.open_questions);
     if (summaryPresent && frontmatter.summary_of_content_sha256 === undefined) {
         issues.push({ code: 'summary_fingerprint_missing', detail: 'Progressive summary fields should record summary_of_content_sha256 so stale summaries can be detected after body edits.' });

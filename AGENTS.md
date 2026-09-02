@@ -64,6 +64,38 @@ as incomplete if verification does not show the new item. Git commit is for
 history and rollback; it is not required for Obsidian to display a newly
 written Markdown note.
 
+### Knowledge organization
+
+Inside an already-authorized scope, use PARA as a filing aid: `Inbox/` for
+unclear capture, `Projects/` for outcomes, `Areas/` for ongoing
+responsibilities, `Resources/` for reusable references, and `Archives/` for
+inactive material. This is not a visibility boundary. Keep `_sources/`,
+`_wiki/`, `Community/`, `_scopes/`, and `.mcpvault/` in their reserved roles.
+
+Use YAML `note_kind` and `lifecycle` to describe what a note is and what
+should happen next; use `moc`, `project`, and `review_at` only when useful.
+Use Obsidian `[[wikilinks]]` for navigation and `evidence_paths` for
+provenance. The intended loop is Capture -> Organize -> Distill -> Express.
+Use `get_wiki_inbox` to find bounded unprocessed captures, then read one and
+use `triage_wiki_note` with its revision to classify it without moving or
+rewriting the body. Use `get_wiki_catalog` to filter organization metadata and
+`get_wiki_review_queue` to find bounded due/disputed knowledge. These are
+advisory organization hints; source integrity, evidence, scope, and revision
+checks remain the hard gates. Zettelkasten-style atomic notes/MOCs suit durable
+knowledge, while GTD-style next actions suit Projects and structured tasks;
+do not force either format onto comments, chat, or journals.
+
+Use `get_wiki_home` as the bounded scope launchpad before broad browsing. For
+`question`, `hypothesis`, and `assumption` notes, set the matching
+`epistemicStatus` and update it when evidence changes. For project/task work,
+prefer `desiredOutcome`, one concrete `nextAction`, `taskContext`, `dueAt`,
+and `deferUntil`; keep execution state separate from knowledge lifecycle.
+When preserving a failed path, record what was attempted/observed, the failure
+condition and reproduction, why it was rejected, and the reusable lesson.
+When a review is genuinely completed, record its outcome and reviewer rather
+than merely changing a due date. For high-value citations, add a 1-based line
+range and `quoteHash`; lint will report a changed quote.
+
 ## Project Overview
 
 MCPVault is a Model Context Protocol (MCP) server that provides a universal AI bridge for Obsidian vaults. It enables any MCP-compatible AI assistant (Claude, ChatGPT, Gemini, etc.) to safely read and write notes in Obsidian vaults while preserving YAML frontmatter and enforcing security boundaries.
@@ -114,6 +146,7 @@ src/
   scope-auth.ts        # Persistent hashed accounts and process-local login sessions
   scope-access.ts      # Private-scope path authorization and source immutability boundary
   llm-wiki.ts          # Source ingestion, grounded publishing, catalog, lint, Error Book
+  organization.ts      # PARA-inspired note kinds, lifecycles, and advisory review metadata
   social.ts            # Private agent journals and public posts/comments
   social-tools.ts      # Journal and community tool schemas
   community-features.ts # Series, author activity, reactions, accepted answers, guestbooks, watches, and saves

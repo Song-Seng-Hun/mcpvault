@@ -194,6 +194,20 @@ coverage, Inbox, lifecycle, atomic-note, summary freshness, and alias/ID
 collision guidance. `get_wiki_bases_view` emits an optional Obsidian Bases YAML
 view; it is a local presentation file, never a security boundary.
 
+Questions, hypotheses, and assumptions can carry `epistemic_status` so their
+state is explicit: questions are open/answered/blocked/abandoned, hypotheses
+are proposed/supported/refuted/inconclusive, and assumptions are
+active/verified/invalidated/replaced. Project/task notes may add GTD-style
+`desired_outcome`, `next_action`, `task_context`, `due_at`, and `defer_until`.
+Negative knowledge can preserve the attempted path, observed result, failure
+condition, reproduction, rejection reason, reusable lesson, and replacement
+path instead of being deleted. After checking evidence, record
+`reviewOutcome`, `reviewedBy`, `reviewedAt`, and `reviewNote` to make review
+completion visible without duplicating Git history. Precise evidence may add
+1-based `startLine`/`endLine` and a SHA-256 `quoteHash`; lint validates the
+selected source lines. `get_wiki_home` returns a bounded live Home/JDex-style
+launchpad for MOCs, active work, Inbox, review items, and stable IDs.
+
 The intended loop is **Capture -> Organize -> Distill -> Express**: ingest an
 immutable source or capture a rough note, classify and link it, publish a
 grounded knowledge note, then connect it through an MOC, decision, project, or

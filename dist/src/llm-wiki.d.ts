@@ -23,6 +23,9 @@ export interface WikiEvidenceInput {
     heading?: string;
     blockId?: string;
     revision?: string;
+    startLine?: number;
+    endLine?: number;
+    quoteHash?: string;
 }
 type WikiProjectionView = 'summary' | 'key_points' | 'outline' | 'section' | 'full';
 interface WikiLintIssue {
@@ -52,7 +55,7 @@ export declare class LlmWikiService {
     private principalKey;
     /**
      * Capture the revisions of notes linked by the current body/metadata. This
-     * is a disposable review baseline: Markdown and Git remain authoritative.
+     * is a derived review baseline: Markdown and Git remain authoritative.
      */
     private collectReviewBasisLinks;
     private reviewChangeSignals;
@@ -100,13 +103,31 @@ export declare class LlmWikiService {
         keyPoints?: unknown;
         openQuestions?: unknown;
         nextActions?: unknown;
+        nextAction?: string;
         waitingFor?: string;
+        desiredOutcome?: string;
+        taskContext?: string;
+        dueAt?: string;
+        deferUntil?: string;
         stableId?: string;
         relations?: unknown;
         taskStatus?: unknown;
         reviewPolicy?: unknown;
+        reviewOutcome?: unknown;
+        reviewedBy?: string;
+        reviewedAt?: string;
+        reviewNote?: string;
+        epistemicStatus?: unknown;
         polarity?: unknown;
         negativeType?: unknown;
+        attempted?: string;
+        observed?: string;
+        failureCondition?: string;
+        affectedScope?: string;
+        reproduction?: string;
+        whyRejected?: string;
+        reusableLesson?: string;
+        replacementPath?: string;
         evidence?: unknown;
         claims?: WikiClaimInput[];
         expectedRevision: string;
@@ -119,6 +140,9 @@ export declare class LlmWikiService {
             heading?: string;
             blockId?: string;
             revision?: string;
+            startLine?: number;
+            endLine?: number;
+            quoteHash?: string;
             path: string;
         }[];
         claims?: Record<string, unknown>[];
@@ -151,12 +175,29 @@ export declare class LlmWikiService {
         keyPoints?: unknown;
         openQuestions?: unknown;
         nextActions?: unknown;
+        desiredOutcome?: string;
+        taskContext?: string;
+        dueAt?: string;
+        deferUntil?: string;
         stableId?: string;
         relations?: unknown;
         taskStatus?: unknown;
         reviewPolicy?: unknown;
+        reviewOutcome?: unknown;
+        reviewedBy?: string;
+        reviewedAt?: string;
+        reviewNote?: string;
+        epistemicStatus?: unknown;
         polarity?: unknown;
         negativeType?: unknown;
+        attempted?: string;
+        observed?: string;
+        failureCondition?: string;
+        affectedScope?: string;
+        reproduction?: string;
+        whyRejected?: string;
+        reusableLesson?: string;
+        replacementPath?: string;
         expectedRevision: string;
     }): Promise<{
         success: boolean;
@@ -188,6 +229,35 @@ export declare class LlmWikiService {
             lifecycle?: string;
         };
         note: string;
+    }>;
+    /**
+     * Return a derived launchpad for an authorized scope. This is the
+     * scope-local equivalent of an Obsidian Home note/JDex: it points at live
+     * notes but never creates a competing index or grants access.
+     */
+    home(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        scope: string;
+        purpose: string;
+        suggestedHomePath: string;
+        suggestedIndexPath: string;
+        entrypoints: {
+            path: string;
+            reason: string;
+        }[];
+        counts: {
+            total: number;
+            mocs: number;
+            projects: number;
+            inbox: number;
+            review: number;
+            stableIds: number;
+        };
+        mocs: Record<string, unknown>[];
+        projects: Record<string, unknown>[];
+        inbox: Record<string, unknown>[];
+        review: Record<string, unknown>[];
+        stableIds: Record<string, unknown>[];
+        truncated: boolean;
     }>;
     graphHealth(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
         unresolvedLinks: {
@@ -285,6 +355,9 @@ export declare class LlmWikiService {
             heading?: string;
             blockId?: string;
             revision?: string;
+            startLine?: number;
+            endLine?: number;
+            quoteHash?: string;
             path: string;
         }[];
         claims?: Record<string, unknown>[];

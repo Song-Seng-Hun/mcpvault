@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createServer } from './createServer.js';
+import { createHash } from 'node:crypto';
 
 let vault: string;
 
@@ -63,7 +64,7 @@ test('knowledge organization contract preserves aliases, projections, and typed 
       path: 'Knowledge/Contract.md', content: '# Contract\n\nA compact, linked knowledge note.\n', evidencePaths: [source.value.path],
       aliases: ['Knowledge contract', 'Metadata contract'], summary: 'Properties describe the note and typed links describe why it is related.',
       keyPoints: ['Keep the full Markdown body.', 'Use typed links for meaningful relations.'], openQuestions: ['Which relation needs review next?'],
-      relations: { related: ['[[Knowledge/Existing]]'] }, stableId: 'knowledge-contract', lifecycle: 'evergreen', taskStatus: 'next_action', noteKind: 'question', reviewPolicy: 'periodic', evidence: [{ path: source.value.path, heading: 'Evidence', blockId: 'contract-evidence', revision: source.value.revision }], author: 'codex', expectedRevision: 'missing', accessToken,
+      relations: { related: ['[[Knowledge/Existing]]'] }, stableId: 'knowledge-contract', lifecycle: 'evergreen', taskStatus: 'next_action', noteKind: 'question', epistemicStatus: 'open', reviewPolicy: 'periodic', evidence: [{ path: source.value.path, heading: 'Evidence', blockId: 'contract-evidence', revision: source.value.revision }], author: 'codex', expectedRevision: 'missing', accessToken,
     });
     expect(published.value.success).toBe(true);
     const projection = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Contract.md', view: 'summary', accessToken });
@@ -97,14 +98,15 @@ test('questions, negative knowledge, locators, event review, MOC coverage, and B
     } });
     const negative = await callJson(client, 'publish_knowledge', {
       path: 'Knowledge/Rejected approach.md', content: '# Rejected approach\n\nThis approach is retained as a counterexample. [[Knowledge/Related]]\n',
-      evidence: [{ path: source.value.path, heading: 'Result', blockId: 'remaining-result', revision: source.value.revision }],
+      evidence: [{ path: source.value.path, heading: 'Result', blockId: 'remaining-result', revision: source.value.revision, startLine: 5, endLine: 5, quoteHash: createHash('sha256').update('The rejected approach failed under load. ^remaining-result').digest('hex') }],
       noteKind: 'hypothesis', lifecycle: 'evergreen', polarity: 'negative', negativeType: 'counterexample', reviewPolicy: 'on_link_change',
+      attempted: 'Run the approach under load.', observed: 'The operation failed under load.', failureCondition: 'Concurrent load exceeds the tested threshold.', reproduction: 'Run the documented load test.', reusableLesson: 'Keep a bounded fallback and test concurrency before adoption.', replacementPath: '[[Knowledge/Related]]', epistemicStatus: 'inconclusive',
       expectedRevision: 'missing', author: 'codex', accessToken,
     });
-    expect(negative.value).toMatchObject({ success: true, evidence: [expect.objectContaining({ heading: 'Result', blockId: 'remaining-result', revision: source.value.revision })] });
+    expect(negative.value).toMatchObject({ success: true, evidence: [expect.objectContaining({ heading: 'Result', blockId: 'remaining-result', revision: source.value.revision, startLine: 5, endLine: 5 })] });
 
     const projection = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Rejected approach.md', view: 'summary', accessToken });
-    expect(projection.value).toMatchObject({ noteKind: 'hypothesis', polarity: 'negative', negativeType: 'counterexample', reviewPolicy: 'on_link_change', evidence: [expect.objectContaining({ heading: 'Result', blockId: 'remaining-result', revision: source.value.revision })] });
+    expect(projection.value).toMatchObject({ noteKind: 'hypothesis', epistemicStatus: 'inconclusive', polarity: 'negative', negativeType: 'counterexample', reusableLesson: 'Keep a bounded fallback and test concurrency before adoption.', reviewPolicy: 'on_link_change', evidence: [expect.objectContaining({ heading: 'Result', blockId: 'remaining-result', revision: source.value.revision, quoteHash: expect.any(String) })] });
 
     const mocWrite = await client.callTool({ name: 'write_note', arguments: {
       path: 'Knowledge/MOCs/Research.md', content: '# Research MOC\n\n[[Knowledge/Rejected approach]]\n', frontmatter: { note_kind: 'moc', lifecycle: 'evergreen' }, expectedRevision: 'missing', accessToken,
@@ -117,6 +119,8 @@ test('questions, negative knowledge, locators, event review, MOC coverage, and B
     expect(bases.value).toMatchObject({ format: 'obsidian-bases/yaml', suggestedPath: 'Views/LLM Wiki.base', matchingNotes: 1, truncated: false });
     expect(bases.value.content).toContain('type: table');
     expect(bases.value.content).toContain('note.note_kind == "hypothesis"');
+    const home = await callJson(client, 'get_wiki_home', { limit: 10, accessToken });
+    expect(home.value).toMatchObject({ suggestedHomePath: 'Home.md', suggestedIndexPath: 'JDex.md', mocs: [expect.objectContaining({ path: 'Knowledge/MOCs/Research.md' })] });
 
     const related = await callJson(client, 'read_note', { path: 'Knowledge/Related.md', accessToken });
     const changed = await client.callTool({ name: 'write_note', arguments: {
@@ -130,8 +134,10 @@ test('questions, negative knowledge, locators, event review, MOC coverage, and B
 
     await callJson(client, 'publish_knowledge', {
       path: 'Knowledge/Open question.md', content: '# Open question\n\nShould this result be reproduced independently?\n', evidencePaths: [source.value.path],
-      noteKind: 'question', lifecycle: 'active', reviewPolicy: 'on_any_edit', expectedRevision: 'missing', author: 'codex', accessToken,
+      noteKind: 'question', epistemicStatus: 'open', lifecycle: 'active', reviewPolicy: 'on_any_edit', desiredOutcome: 'Obtain one independent reproduction.', nextAction: 'Ask another agent to rerun the test.', taskContext: '@research', dueAt: '2030-01-01', reviewOutcome: 'confirmed', reviewedBy: 'codex', reviewedAt: '2030-01-01', reviewNote: 'The question remains open and evidence is intact.', expectedRevision: 'missing', author: 'codex', accessToken,
     });
+    const questionProjection = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Open question.md', accessToken });
+    expect(questionProjection.value).toMatchObject({ epistemicStatus: 'open', desiredOutcome: 'Obtain one independent reproduction.', nextAction: 'Ask another agent to rerun the test.', taskContext: '@research', reviewOutcome: 'confirmed', reviewedBy: 'codex' });
     const question = await callJson(client, 'read_note', { path: 'Knowledge/Open question.md', accessToken });
     const editedQuestion = await client.callTool({ name: 'patch_note', arguments: {
       path: 'Knowledge/Open question.md', oldString: 'Should this result be reproduced independently?', newString: 'Should this result be reproduced independently by another agent?', expectedRevision: question.value.revision, accessToken,
@@ -146,6 +152,12 @@ test('questions, negative knowledge, locators, event review, MOC coverage, and B
     } });
     expect(invalidLocator.isError).toBe(true);
     expect((invalidLocator.content as any)[0].text).toContain('heading');
+    const invalidQuote = await client.callTool({ name: 'publish_knowledge', arguments: {
+      path: 'Knowledge/Invalid quote.md', content: '# Invalid quote\n\nA note with a bad quote.\n', evidence: [{ path: source.value.path, startLine: 5, endLine: 5, quoteHash: '0'.repeat(64), revision: source.value.revision }],
+      expectedRevision: 'missing', author: 'codex', accessToken,
+    } });
+    expect(invalidQuote.isError).toBe(true);
+    expect((invalidQuote.content as any)[0].text).toContain('quoteHash');
   } finally {
     await client.close();
     await server.close();

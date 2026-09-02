@@ -85,6 +85,22 @@ alias/ID collision, and typed-link problems. `get_wiki_bases_view` returns an
 optional local Obsidian Bases YAML view; a `.base` view is not a security
 boundary.
 
+Questions, hypotheses, and assumptions should also carry `epistemic_status`:
+questions use `open`/`answered`/`blocked`/`abandoned`, hypotheses use
+`proposed`/`supported`/`refuted`/`inconclusive`, and assumptions use
+`active`/`verified`/`invalidated`/`replaced`. Project and task notes may use
+GTD-style `desired_outcome`, `next_action`, `task_context`, `due_at`, and
+`defer_until`; these describe execution and do not replace `lifecycle`.
+Negative knowledge should preserve `negative_attempted`, `negative_observed`,
+`negative_failure_condition`, `negative_affected_scope`,
+`negative_reproduction`, `negative_why_rejected`, `negative_reusable_lesson`,
+and `negative_replacement_path` when known. A completed review can record
+`last_review_outcome`, `last_reviewed_by`, `last_reviewed_at`, and
+`review_note`. Evidence locators may additionally use 1-based `startLine`,
+`endLine`, and `quoteHash` (SHA-256 of the selected source lines). The
+`get_wiki_home` endpoint returns a bounded live Home/JDex-style launchpad;
+it is derived from Markdown and is not a second index.
+
 For long or disputed knowledge notes, use claim-level provenance when useful:
 
 ```yaml

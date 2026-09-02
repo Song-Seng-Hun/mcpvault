@@ -43,9 +43,12 @@ export interface WikiEvidenceInput {
   heading?: string;
   blockId?: string;
   revision?: string;
+  startLine?: number;
+  endLine?: number;
+  quoteHash?: string;
 }
 
-type NormalizedEvidence = { path: string; heading?: string; blockId?: string; revision?: string };
+type NormalizedEvidence = { path: string; heading?: string; blockId?: string; revision?: string; startLine?: number; endLine?: number; quoteHash?: string };
 
 type WikiProjectionView = 'summary' | 'key_points' | 'outline' | 'section' | 'full';
 
@@ -81,7 +84,7 @@ function normalizeClaims(claims: WikiClaimInput[] | undefined, existing: unknown
       id,
       text: boundedText(claim.text, 1000),
       evidence_paths: evidence.map(item => item.path),
-      ...(evidence.some(item => item.heading || item.blockId || item.revision) && { evidence }),
+      ...(evidence.some(item => item.heading || item.blockId || item.revision || item.startLine || item.endLine || item.quoteHash) && { evidence }),
       confidence,
       status,
     };
@@ -103,11 +106,20 @@ function normalizeEvidenceEntries(value: unknown, fallbackPaths: string[] = []):
     const heading = (raw as any).heading === undefined ? undefined : boundedText((raw as any).heading, 300).replace(/[\r\n]/g, ' ');
     const blockId = (raw as any).blockId === undefined ? undefined : boundedText((raw as any).blockId, 100).replace(/^\^/, '').replace(/[\r\n]/g, '');
     const revision = (raw as any).revision === undefined ? undefined : boundedText((raw as any).revision, 160).replace(/[\r\n]/g, '');
-    if (heading === '' || blockId === '' || revision === '') throw new Error(`evidence[${index}] locator values must not be empty`);
-    const key = `${path.toLowerCase()}|${heading || ''}|${blockId || ''}|${revision || ''}`;
+    const startLine = (raw as any).startLine === undefined ? undefined : Number((raw as any).startLine);
+    const endLine = (raw as any).endLine === undefined ? undefined : Number((raw as any).endLine);
+    const quoteHash = (raw as any).quoteHash === undefined ? undefined : boundedText((raw as any).quoteHash, 64).replace(/[\r\n]/g, '').toLowerCase();
+    if (heading === '' || blockId === '' || revision === '' || quoteHash === '') throw new Error(`evidence[${index}] locator values must not be empty`);
+    if (startLine !== undefined && (!Number.isInteger(startLine) || startLine < 1)) throw new Error(`evidence[${index}].startLine must be a positive integer`);
+    if (endLine !== undefined && (!Number.isInteger(endLine) || endLine < 1)) throw new Error(`evidence[${index}].endLine must be a positive integer`);
+    if ((startLine === undefined) !== (endLine === undefined)) throw new Error(`evidence[${index}] startLine and endLine must be provided together`);
+    if (startLine !== undefined && endLine !== undefined && endLine < startLine) throw new Error(`evidence[${index}] endLine must be greater than or equal to startLine`);
+    if (quoteHash && !/^[a-f0-9]{64}$/i.test(quoteHash)) throw new Error(`evidence[${index}].quoteHash must be a SHA-256 hexadecimal digest`);
+    if (quoteHash && startLine === undefined) throw new Error(`evidence[${index}].quoteHash requires startLine and endLine`);
+    const key = `${path.toLowerCase()}|${heading || ''}|${blockId || ''}|${revision || ''}|${startLine || ''}|${endLine || ''}|${quoteHash || ''}`;
     if (seen.has(key)) return;
     seen.add(key);
-    output.push({ path, ...(heading && { heading }), ...(blockId && { blockId }), ...(revision && { revision }) });
+    output.push({ path, ...(heading && { heading }), ...(blockId && { blockId }), ...(revision && { revision }), ...(startLine !== undefined && { startLine }), ...(endLine !== undefined && { endLine }), ...(quoteHash && { quoteHash }) });
   });
   return output.slice(0, 30);
 }
@@ -122,6 +134,15 @@ function evidenceLocatorError(content: string, evidence: NormalizedEvidence): st
     const block = evidence.blockId.replace(/^\^/, '');
     const escapedBlock = block.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
     if (!new RegExp(`(?:^|\\n)[^\\n]*\\^${escapedBlock}(?:\\s|$)`).test(content)) return `block '${evidence.blockId}' was not found in the source`;
+  }
+  if (evidence.startLine !== undefined && evidence.endLine !== undefined) {
+    const lines = content.split('\n');
+    if (evidence.endLine > lines.length) return `line range ${evidence.startLine}-${evidence.endLine} exceeds source length ${lines.length}`;
+    if (evidence.quoteHash) {
+      const selected = lines.slice(evidence.startLine - 1, evidence.endLine).join('\n');
+      const digest = hash(selected);
+      if (digest !== evidence.quoteHash) return `quoteHash does not match source lines ${evidence.startLine}-${evidence.endLine}`;
+    }
   }
   return undefined;
 }
@@ -230,7 +251,7 @@ and links) -> Distill (\`publish_knowledge\`/lint) -> Express (MOCs, decisions,
 discussion, and Git). These hints are intentionally non-blocking except for
 the existing evidence and integrity invariants.
 
-Use \`aliases\` for stable Obsidian navigation, optional \`stable_id\` for a durable note identity, and compact \`summary\`, \`key_points\`, and \`open_questions\` properties for progressive reads; never replace the full Markdown body with a summary. When any progressive field is present, store \`summary_of_content_sha256\` for the exact Markdown body; a body edit makes the projection stale until it is regenerated. Use \`task_status\` for the operational state of project/task notes (\`open\`, \`next_action\`, \`waiting\`, \`blocked\`, \`completed\`, or \`cancelled\`); keep it separate from the knowledge \`lifecycle\`. Use \`knowledge_polarity: negative\` with \`negative_type\` (\`failure\`, \`rejected\`, \`counterexample\`, \`non_reproducible\`, or \`superseded\`) to preserve failed paths instead of deleting them. Typed link arrays such as \`supports\`, \`contradicts\`, \`supersedes\`, \`derived_from\`, \`depends_on\`, \`implements\`, \`blocked_by\`, and \`related\` explain the relationship while ordinary \`[[wikilinks]]\` remain the navigational source. Use \`next_actions\` and \`waiting_for\` on project/task notes only. Evidence can include \`heading\`, \`blockId\`, and the source \`revision\`; stale locators are reported by lint. Use \`review_policy\` (\`manual\`, \`periodic\`, \`on_source_change\`, \`on_link_change\`, or \`on_any_edit\`) to declare when a note should re-enter review; this is a derived policy, not a hidden scheduler. Call \`wiki.organization_health\` to review property, MOC coverage, atomicity, summary freshness, typed evidence, and link problems.
+Use \`aliases\` for stable Obsidian navigation, optional \`stable_id\` for a durable note identity, and compact \`summary\`, \`key_points\`, and \`open_questions\` properties for progressive reads; never replace the full Markdown body with a summary. When any progressive field is present, store \`summary_of_content_sha256\` for the exact Markdown body; a body edit makes the projection stale until it is regenerated. Use \`task_status\` for the operational state of project/task notes (\`open\`, \`next_action\`, \`waiting\`, \`blocked\`, \`completed\`, or \`cancelled\`); keep it separate from the knowledge \`lifecycle\`. Use \`desired_outcome\`, \`next_action\`, \`task_context\`, \`due_at\`, and \`defer_until\` for GTD-style execution details. Questions, hypotheses, and assumptions should carry \`epistemic_status\` for their kind-specific state. Use \`knowledge_polarity: negative\` with \`negative_type\` plus attempted/observed/failure condition/reproduction/reusable lesson metadata to preserve failed paths instead of deleting them. Typed link arrays such as \`supports\`, \`contradicts\`, \`supersedes\`, \`derived_from\`, \`depends_on\`, \`implements\`, \`blocked_by\`, and \`related\` explain the relationship while ordinary \`[[wikilinks]]\` remain the navigational source. Use \`next_actions\` and \`waiting_for\` on project/task notes only. Evidence can include \`heading\`, \`blockId\`, source \`revision\`, 1-based line ranges, and a \`quoteHash\`; stale locators are reported by lint. Use \`review_policy\` (\`manual\`, \`periodic\`, \`on_source_change\`, \`on_link_change\`, or \`on_any_edit\`) to declare when a note should re-enter review, and record the review outcome after checking evidence; this is a derived policy, not a hidden scheduler. Call \`wiki.home\` for a bounded Home/JDex launchpad and \`wiki.organization_health\` to review property, MOC coverage, atomicity, summary freshness, typed evidence, and link problems.
 
 ## Invariants
 
@@ -461,13 +482,31 @@ export class LlmWikiService {
     keyPoints?: unknown;
     openQuestions?: unknown;
     nextActions?: unknown;
+    nextAction?: string;
     waitingFor?: string;
+    desiredOutcome?: string;
+    taskContext?: string;
+    dueAt?: string;
+    deferUntil?: string;
     stableId?: string;
     relations?: unknown;
     taskStatus?: unknown;
     reviewPolicy?: unknown;
+    reviewOutcome?: unknown;
+    reviewedBy?: string;
+    reviewedAt?: string;
+    reviewNote?: string;
+    epistemicStatus?: unknown;
     polarity?: unknown;
     negativeType?: unknown;
+    attempted?: string;
+    observed?: string;
+    failureCondition?: string;
+    affectedScope?: string;
+    reproduction?: string;
+    whyRejected?: string;
+    reusableLesson?: string;
+    replacementPath?: string;
     evidence?: unknown;
     claims?: WikiClaimInput[];
     expectedRevision: string;
@@ -560,13 +599,31 @@ export class LlmWikiService {
           ...(params.keyPoints !== undefined && { keyPoints: params.keyPoints }),
           ...(params.openQuestions !== undefined && { openQuestions: params.openQuestions }),
           ...(params.nextActions !== undefined && { nextActions: params.nextActions }),
+          ...(params.nextAction !== undefined && { nextAction: params.nextAction }),
           ...(params.waitingFor !== undefined && { waitingFor: params.waitingFor }),
+          ...(params.desiredOutcome !== undefined && { desiredOutcome: params.desiredOutcome }),
+          ...(params.taskContext !== undefined && { taskContext: params.taskContext }),
+          ...(params.dueAt !== undefined && { dueAt: params.dueAt }),
+          ...(params.deferUntil !== undefined && { deferUntil: params.deferUntil }),
           ...(params.stableId !== undefined && { stableId: params.stableId }),
           ...(params.relations !== undefined && { relations: params.relations }),
           ...(params.taskStatus !== undefined && { taskStatus: params.taskStatus }),
           ...(params.reviewPolicy !== undefined && { reviewPolicy: params.reviewPolicy }),
+          ...(params.reviewOutcome !== undefined && { reviewOutcome: params.reviewOutcome }),
+          ...(params.reviewedBy !== undefined && { reviewedBy: params.reviewedBy }),
+          ...(params.reviewedAt !== undefined && { reviewedAt: params.reviewedAt }),
+          ...(params.reviewNote !== undefined && { reviewNote: params.reviewNote }),
+          ...(params.epistemicStatus !== undefined && { epistemicStatus: params.epistemicStatus }),
           ...(params.polarity !== undefined && { polarity: params.polarity }),
           ...(params.negativeType !== undefined && { negativeType: params.negativeType }),
+          ...(params.attempted !== undefined && { attempted: params.attempted }),
+          ...(params.observed !== undefined && { observed: params.observed }),
+          ...(params.failureCondition !== undefined && { failureCondition: params.failureCondition }),
+          ...(params.affectedScope !== undefined && { affectedScope: params.affectedScope }),
+          ...(params.reproduction !== undefined && { reproduction: params.reproduction }),
+          ...(params.whyRejected !== undefined && { whyRejected: params.whyRejected }),
+          ...(params.reusableLesson !== undefined && { reusableLesson: params.reusableLesson }),
+          ...(params.replacementPath !== undefined && { replacementPath: params.replacementPath }),
           contentDigest: hash(content),
           status,
         }),
@@ -785,12 +842,29 @@ export class LlmWikiService {
     keyPoints?: unknown;
     openQuestions?: unknown;
     nextActions?: unknown;
+    desiredOutcome?: string;
+    taskContext?: string;
+    dueAt?: string;
+    deferUntil?: string;
     stableId?: string;
     relations?: unknown;
     taskStatus?: unknown;
     reviewPolicy?: unknown;
+    reviewOutcome?: unknown;
+    reviewedBy?: string;
+    reviewedAt?: string;
+    reviewNote?: string;
+    epistemicStatus?: unknown;
     polarity?: unknown;
     negativeType?: unknown;
+    attempted?: string;
+    observed?: string;
+    failureCondition?: string;
+    affectedScope?: string;
+    reproduction?: string;
+    whyRejected?: string;
+    reusableLesson?: string;
+    replacementPath?: string;
     expectedRevision: string;
   }) {
     if (!params.expectedRevision) throw new Error("expectedRevision is required; use the revision from read_note");
@@ -803,7 +877,7 @@ export class LlmWikiService {
     if (note.frontmatter.llm_wiki_type && note.frontmatter.llm_wiki_type !== 'knowledge') {
       throw new Error(`triage_wiki_note cannot classify managed LLM Wiki type '${note.frontmatter.llm_wiki_type}'`);
     }
-    const hasOrganizationInput = [params.noteKind, params.lifecycle, params.moc, params.project, params.reviewAt, params.nextAction, params.waitingFor, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.nextActions, params.stableId, params.relations, params.taskStatus, params.reviewPolicy, params.polarity, params.negativeType]
+    const hasOrganizationInput = [params.noteKind, params.lifecycle, params.moc, params.project, params.reviewAt, params.nextAction, params.waitingFor, params.desiredOutcome, params.taskContext, params.dueAt, params.deferUntil, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.nextActions, params.stableId, params.relations, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath]
       .some(value => value !== undefined);
     if (!hasOrganizationInput) throw new Error('At least one organization field is required');
     const patch: Record<string, unknown> = {};
@@ -828,12 +902,29 @@ export class LlmWikiService {
       ...(params.openQuestions !== undefined && { openQuestions: params.openQuestions }),
       ...(params.nextActions !== undefined && { nextActions: params.nextActions }),
       ...(params.waitingFor !== undefined && { waitingFor: params.waitingFor }),
+      ...(params.desiredOutcome !== undefined && { desiredOutcome: params.desiredOutcome }),
+      ...(params.taskContext !== undefined && { taskContext: params.taskContext }),
+      ...(params.dueAt !== undefined && { dueAt: params.dueAt }),
+      ...(params.deferUntil !== undefined && { deferUntil: params.deferUntil }),
       ...(params.stableId !== undefined && { stableId: params.stableId }),
       ...(params.relations !== undefined && { relations: params.relations }),
       ...(params.taskStatus !== undefined && { taskStatus: params.taskStatus }),
       ...(params.reviewPolicy !== undefined && { reviewPolicy: params.reviewPolicy }),
+      ...(params.reviewOutcome !== undefined && { reviewOutcome: params.reviewOutcome }),
+      ...(params.reviewedBy !== undefined && { reviewedBy: params.reviewedBy }),
+      ...(params.reviewedAt !== undefined && { reviewedAt: params.reviewedAt }),
+      ...(params.reviewNote !== undefined && { reviewNote: params.reviewNote }),
+      ...(params.epistemicStatus !== undefined && { epistemicStatus: params.epistemicStatus }),
       ...(params.polarity !== undefined && { polarity: params.polarity }),
       ...(params.negativeType !== undefined && { negativeType: params.negativeType }),
+      ...(params.attempted !== undefined && { attempted: params.attempted }),
+      ...(params.observed !== undefined && { observed: params.observed }),
+      ...(params.failureCondition !== undefined && { failureCondition: params.failureCondition }),
+      ...(params.affectedScope !== undefined && { affectedScope: params.affectedScope }),
+      ...(params.reproduction !== undefined && { reproduction: params.reproduction }),
+      ...(params.whyRejected !== undefined && { whyRejected: params.whyRejected }),
+      ...(params.reusableLesson !== undefined && { reusableLesson: params.reusableLesson }),
+      ...(params.replacementPath !== undefined && { replacementPath: params.replacementPath }),
       contentDigest: hash(note.content),
       status: String(note.frontmatter.knowledge_status || note.frontmatter.status || 'draft'),
     });
@@ -852,6 +943,10 @@ export class LlmWikiService {
         ...(updated.frontmatter.review_at && { reviewAt: updated.frontmatter.review_at }),
         ...(updated.frontmatter.next_action && { nextAction: updated.frontmatter.next_action }),
         ...(updated.frontmatter.waiting_for && { waitingFor: updated.frontmatter.waiting_for }),
+        ...(updated.frontmatter.desired_outcome && { desiredOutcome: updated.frontmatter.desired_outcome }),
+        ...(updated.frontmatter.task_context && { taskContext: updated.frontmatter.task_context }),
+        ...(updated.frontmatter.due_at && { dueAt: updated.frontmatter.due_at }),
+        ...(updated.frontmatter.defer_until && { deferUntil: updated.frontmatter.defer_until }),
         ...(updated.frontmatter.aliases && { aliases: updated.frontmatter.aliases }),
         ...(updated.frontmatter.summary && { summary: updated.frontmatter.summary }),
         ...(updated.frontmatter.key_points && { keyPoints: updated.frontmatter.key_points }),
@@ -860,8 +955,21 @@ export class LlmWikiService {
         ...(updated.frontmatter.stable_id && { stableId: updated.frontmatter.stable_id }),
         ...(updated.frontmatter.task_status && { taskStatus: updated.frontmatter.task_status }),
         ...(updated.frontmatter.review_policy && { reviewPolicy: updated.frontmatter.review_policy }),
+        ...(updated.frontmatter.last_review_outcome && { reviewOutcome: updated.frontmatter.last_review_outcome }),
+        ...(updated.frontmatter.last_reviewed_by && { reviewedBy: updated.frontmatter.last_reviewed_by }),
+        ...(updated.frontmatter.last_reviewed_at && { reviewedAt: updated.frontmatter.last_reviewed_at }),
+        ...(updated.frontmatter.review_note && { reviewNote: updated.frontmatter.review_note }),
+        ...(updated.frontmatter.epistemic_status && { epistemicStatus: updated.frontmatter.epistemic_status }),
         ...(updated.frontmatter.knowledge_polarity && { polarity: updated.frontmatter.knowledge_polarity }),
         ...(updated.frontmatter.negative_type && { negativeType: updated.frontmatter.negative_type }),
+        ...(updated.frontmatter.negative_attempted && { attempted: updated.frontmatter.negative_attempted }),
+        ...(updated.frontmatter.negative_observed && { observed: updated.frontmatter.negative_observed }),
+        ...(updated.frontmatter.negative_failure_condition && { failureCondition: updated.frontmatter.negative_failure_condition }),
+        ...(updated.frontmatter.negative_affected_scope && { affectedScope: updated.frontmatter.negative_affected_scope }),
+        ...(updated.frontmatter.negative_reproduction && { reproduction: updated.frontmatter.negative_reproduction }),
+        ...(updated.frontmatter.negative_why_rejected && { whyRejected: updated.frontmatter.negative_why_rejected }),
+        ...(updated.frontmatter.negative_reusable_lesson && { reusableLesson: updated.frontmatter.negative_reusable_lesson }),
+        ...(updated.frontmatter.negative_replacement_path && { replacementPath: updated.frontmatter.negative_replacement_path }),
         relations: Object.fromEntries(RELATION_FIELDS
           .filter(field => Array.isArray(updated.frontmatter[field]) && updated.frontmatter[field].length > 0)
           .map(field => [field, updated.frontmatter[field]])),
@@ -938,12 +1046,30 @@ export class LlmWikiService {
       ...(Array.isArray(note.frontmatter.key_points) && { keyPoints: note.frontmatter.key_points.slice(0, 20) }),
       ...(Array.isArray(note.frontmatter.open_questions) && { openQuestions: note.frontmatter.open_questions.slice(0, 20) }),
       ...(Array.isArray(note.frontmatter.next_actions) && { nextActions: note.frontmatter.next_actions.slice(0, 20) }),
+      ...(typeof note.frontmatter.next_action === 'string' && { nextAction: note.frontmatter.next_action }),
       ...(typeof note.frontmatter.waiting_for === 'string' && { waitingFor: note.frontmatter.waiting_for }),
+      ...(typeof note.frontmatter.desired_outcome === 'string' && { desiredOutcome: note.frontmatter.desired_outcome }),
+      ...(typeof note.frontmatter.task_context === 'string' && { taskContext: note.frontmatter.task_context }),
+      ...(typeof note.frontmatter.due_at === 'string' && { dueAt: note.frontmatter.due_at }),
+      ...(typeof note.frontmatter.defer_until === 'string' && { deferUntil: note.frontmatter.defer_until }),
       ...(typeof note.frontmatter.stable_id === 'string' && { stableId: note.frontmatter.stable_id }),
       ...(typeof note.frontmatter.task_status === 'string' && { taskStatus: note.frontmatter.task_status }),
       ...(typeof note.frontmatter.review_policy === 'string' && { reviewPolicy: note.frontmatter.review_policy }),
+      ...(typeof note.frontmatter.last_review_outcome === 'string' && { reviewOutcome: note.frontmatter.last_review_outcome }),
+      ...(typeof note.frontmatter.last_reviewed_by === 'string' && { reviewedBy: note.frontmatter.last_reviewed_by }),
+      ...(typeof note.frontmatter.last_reviewed_at === 'string' && { reviewedAt: note.frontmatter.last_reviewed_at }),
+      ...(typeof note.frontmatter.review_note === 'string' && { reviewNote: note.frontmatter.review_note }),
+      ...(typeof note.frontmatter.epistemic_status === 'string' && { epistemicStatus: note.frontmatter.epistemic_status }),
       ...(typeof note.frontmatter.knowledge_polarity === 'string' && { polarity: note.frontmatter.knowledge_polarity }),
       ...(typeof note.frontmatter.negative_type === 'string' && { negativeType: note.frontmatter.negative_type }),
+      ...(typeof note.frontmatter.negative_attempted === 'string' && { attempted: note.frontmatter.negative_attempted }),
+      ...(typeof note.frontmatter.negative_observed === 'string' && { observed: note.frontmatter.negative_observed }),
+      ...(typeof note.frontmatter.negative_failure_condition === 'string' && { failureCondition: note.frontmatter.negative_failure_condition }),
+      ...(typeof note.frontmatter.negative_affected_scope === 'string' && { affectedScope: note.frontmatter.negative_affected_scope }),
+      ...(typeof note.frontmatter.negative_reproduction === 'string' && { reproduction: note.frontmatter.negative_reproduction }),
+      ...(typeof note.frontmatter.negative_why_rejected === 'string' && { whyRejected: note.frontmatter.negative_why_rejected }),
+      ...(typeof note.frontmatter.negative_reusable_lesson === 'string' && { reusableLesson: note.frontmatter.negative_reusable_lesson }),
+      ...(typeof note.frontmatter.negative_replacement_path === 'string' && { replacementPath: note.frontmatter.negative_replacement_path }),
       ...(typeof note.frontmatter.summary_of_content_sha256 === 'string' && { summaryFingerprint: note.frontmatter.summary_of_content_sha256 }),
       ...((note.frontmatter.summary || note.frontmatter.key_points || note.frontmatter.open_questions) && {
         summaryFresh: typeof note.frontmatter.summary_of_content_sha256 === 'string'
@@ -1072,6 +1198,62 @@ export class LlmWikiService {
     };
   }
 
+  /**
+   * Return a derived launchpad for an authorized scope. This is the
+   * scope-local equivalent of an Obsidian Home note/JDex: it points at live
+   * notes but never creates a competing index or grants access.
+   */
+  async home(principal?: ScopePrincipal, limit = 20, maxChars = 7000) {
+    const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
+    const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
+    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+    const mocs: Array<Record<string, unknown>> = [];
+    const projects: Array<Record<string, unknown>> = [];
+    const inbox: Array<Record<string, unknown>> = [];
+    const review: Array<Record<string, unknown>> = [];
+    const stableIds: Array<Record<string, unknown>> = [];
+    let total = 0;
+    for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+      const isSchema = normalizePath(note.path).toLowerCase() === PUBLIC_SCHEMA_PATH.toLowerCase();
+      if (!isSchema && typeof note.frontmatter.llm_wiki_type !== 'string' && typeof note.frontmatter.note_kind !== 'string' && note.frontmatter.lifecycle !== 'inbox') continue;
+      total += 1;
+      const item = {
+        path: this.access.toPublicPath(note.path),
+        title: note.frontmatter.title || note.path.split('/').at(-1),
+        ...(note.frontmatter.stable_id && { stableId: note.frontmatter.stable_id }),
+        ...(note.frontmatter.lifecycle && { lifecycle: note.frontmatter.lifecycle }),
+      };
+      if (note.frontmatter.note_kind === 'moc' && mocs.length < boundedLimit) mocs.push(item);
+      if ((note.frontmatter.note_kind === 'project' || note.frontmatter.note_kind === 'task') && projects.length < boundedLimit) projects.push({ ...item, ...(note.frontmatter.task_status && { taskStatus: note.frontmatter.task_status }), ...(note.frontmatter.next_action && { nextAction: note.frontmatter.next_action }) });
+      if (note.frontmatter.lifecycle === 'inbox' || /(^|\/)inbox(?:\/|$)/i.test(note.path)) {
+        if (inbox.length < boundedLimit) inbox.push(item);
+      }
+      if (note.frontmatter.lifecycle === 'review' || note.frontmatter.knowledge_status === 'disputed') {
+        if (review.length < boundedLimit) review.push({ ...item, ...(note.frontmatter.review_at && { reviewAt: note.frontmatter.review_at }) });
+      }
+      if (typeof note.frontmatter.stable_id === 'string' && stableIds.length < boundedLimit) stableIds.push({ stableId: note.frontmatter.stable_id, path: this.access.toPublicPath(note.path), title: item.title });
+    }
+    const result = {
+      scope: principal ? (principal.commandCenterId ? `command-center:${principal.commandCenterId}` : 'authorized-scope') : 'global',
+      purpose: 'A live, bounded launchpad for this scope. It is derived from Markdown and is not a security boundary or a second database.',
+      suggestedHomePath: 'Home.md',
+      suggestedIndexPath: 'JDex.md',
+      entrypoints: [
+        { path: this.access.toPublicPath(PUBLIC_SCHEMA_PATH), reason: 'scope rules and writing contract' },
+        { path: this.access.toPublicPath(WELCOME_NOTE_PATH), reason: 'first-session orientation' },
+      ],
+      counts: { total, mocs: mocs.length, projects: projects.length, inbox: inbox.length, review: review.length, stableIds: stableIds.length },
+      mocs,
+      projects,
+      inbox,
+      review,
+      stableIds,
+      truncated: total > boundedLimit,
+    };
+    if (JSON.stringify(result).length <= boundedChars) return result;
+    return { ...result, mocs: mocs.slice(0, 5), projects: projects.slice(0, 5), inbox: inbox.slice(0, 5), review: review.slice(0, 5), stableIds: stableIds.slice(0, 5), truncated: true };
+  }
+
   async graphHealth(principal?: ScopePrincipal, limit = 20, maxChars = 6000) {
     const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
     const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 16000);
@@ -1104,12 +1286,15 @@ export class LlmWikiService {
     const mocCoverageItems: Array<Record<string, unknown>> = [];
     for (const moc of mocDrafts) {
       const linked = new Set<string>();
+      let unresolvedTargets = 0;
       for (const target of moc.links) {
-        for (const resolved of resolveWikiLinkTargets(target, visibleNotePaths)) linked.add(normalizePath(resolved).toLowerCase());
+        const resolvedTargets = resolveWikiLinkTargets(target, visibleNotePaths);
+        if (resolvedTargets.length === 0) unresolvedTargets += 1;
+        for (const resolved of resolvedTargets) linked.add(normalizePath(resolved).toLowerCase());
       }
       const linkedKnowledge = [...linked].filter(path => knowledgePaths.has(path));
       for (const path of linkedKnowledge) mocCoveredKnowledge.add(path);
-      mocCoverageItems.push({ path: this.access.toPublicPath(moc.path), title: moc.title, linkedNotes: linked.size, linkedKnowledge: linkedKnowledge.length, knowledgeCoverage: knowledgePaths.size ? Number((linkedKnowledge.length / knowledgePaths.size).toFixed(3)) : 1 });
+      mocCoverageItems.push({ path: this.access.toPublicPath(moc.path), title: moc.title, linkedNotes: linked.size, linkedKnowledge: linkedKnowledge.length, unresolvedTargets, linkDensity: moc.links.length ? Number((linked.size / moc.links.length).toFixed(3)) : 0, knowledgeCoverage: knowledgePaths.size ? Number((linkedKnowledge.length / knowledgePaths.size).toFixed(3)) : 1 });
     }
     const uncoveredKnowledge = visibleNotePaths
       .filter(path => knowledgePaths.has(normalizePath(path).toLowerCase()) && !mocCoveredKnowledge.has(normalizePath(path).toLowerCase()))
@@ -1163,9 +1348,9 @@ export class LlmWikiService {
       'inbox_lifecycle_mismatch', 'invalid_aliases', 'duplicate_aliases',
       'invalid_key_points', 'invalid_open_questions', 'invalid_next_actions',
       'invalid_summary', 'invalid_stable_id', 'summary_fingerprint_missing', 'invalid_summary_fingerprint', 'stale_summary', 'invalid_task_status',
-      'duplicate_alias_across_notes', 'duplicate_stable_id', 'invalid_review_policy', 'invalid_knowledge_polarity', 'invalid_negative_type',
+      'duplicate_alias_across_notes', 'duplicate_stable_id', 'invalid_review_policy', 'invalid_review_outcome', 'invalid_due_at', 'invalid_defer_until', 'invalid_last_reviewed_at', 'invalid_epistemic_status', 'epistemic_status_wrong_kind', 'invalid_knowledge_polarity', 'invalid_negative_type', 'negative_lesson_missing', 'negative_reproduction_missing',
       'negative_type_without_negative_polarity', 'negative_polarity_without_type', 'atomic_note_may_be_too_broad',
-      'invalid_evidence_locator', 'evidence_path_mismatch', 'stale_evidence_revision', 'invalid_claim_evidence_locator', 'stale_claim_evidence_revision',
+      'invalid_evidence_locator', 'evidence_path_mismatch', 'stale_evidence_revision', 'invalid_claim_evidence_locator', 'stale_claim_evidence_revision', 'epistemic_status_missing',
       'invalid_relation',
       ...RELATION_FIELDS.flatMap(field => [`invalid_${field}`, `duplicate_${field}`, `unsafe_${field}`]),
     ]);
