@@ -9,6 +9,7 @@ export interface McpHttpOptions {
   maxBodyBytes?: number;
   allowedOrigins?: string[];
   allowedHosts?: string[];
+  maxConnections?: number;
 }
 
 export interface McpHttpHandle {
@@ -41,6 +42,21 @@ async function readBody(request: IncomingMessage, maxBytes: number): Promise<str
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+const MAX_HTTP_BODY_BYTES = 2 * 1024 * 1024;
+const MAX_RATE_BUCKETS = 4_096;
+const REGISTRATION_WINDOW_MS = 10 * 60 * 1_000;
+const MAX_REGISTRATIONS_PER_WINDOW = 5;
+
+function isRegistrationCall(value: unknown): boolean {
+  const requests = Array.isArray(value) ? value : [value];
+  return requests.some(request => {
+    if (!isRecord(request) || request.method !== 'tools/call' || !isRecord(request.params)) return false;
+    const params = request.params;
+    if (params.name !== 'call_endpoint' || !isRecord(params.arguments)) return false;
+    return params.arguments.endpointId === 'auth.register';
+  });
 }
 
 /**
@@ -126,7 +142,7 @@ export async function startMcpHttpApi(server: Server, options: McpHttpOptions = 
 
   const host = options.host || '127.0.0.1';
   const path = options.path || '/mcp';
-  const maxBodyBytes = options.maxBodyBytes || 1_048_576;
+  const maxBodyBytes = Math.min(Math.max(Math.trunc(options.maxBodyBytes ?? 1_048_576), 1_024), MAX_HTTP_BODY_BYTES);
   const allowedOrigins = options.allowedOrigins || [];
   const allowedHosts = options.allowedHosts || (host === '127.0.0.1' ? ['127.0.0.1', 'localhost'] : [host]);
   const mcpHandler = createMcpHandler(
@@ -137,6 +153,25 @@ export async function startMcpHttpApi(server: Server, options: McpHttpOptions = 
       onerror: error => console.error(error),
     },
   );
+  const registrationWindows = new Map<string, { startedAt: number; count: number }>();
+  const registrationAllowed = (key: string): boolean => {
+    const now = Date.now();
+    const current = registrationWindows.get(key);
+    if (!current || now - current.startedAt >= REGISTRATION_WINDOW_MS) {
+      if (registrationWindows.size >= MAX_RATE_BUCKETS) {
+        for (const [bucket, value] of registrationWindows) {
+          if (now - value.startedAt >= REGISTRATION_WINDOW_MS) registrationWindows.delete(bucket);
+          if (registrationWindows.size < MAX_RATE_BUCKETS) break;
+        }
+      }
+      if (registrationWindows.size >= MAX_RATE_BUCKETS && !registrationWindows.has(key)) return false;
+      registrationWindows.set(key, { startedAt: now, count: 1 });
+      return true;
+    }
+    if (current.count >= MAX_REGISTRATIONS_PER_WINDOW) return false;
+    current.count += 1;
+    return true;
+  };
 
   const httpServer = createHttpServer(async (request, response) => {
     try {
@@ -173,6 +208,15 @@ export async function startMcpHttpApi(server: Server, options: McpHttpOptions = 
       const bearer = typeof bearerHeader === 'string' && /^Bearer\s+/i.test(bearerHeader)
         ? bearerHeader.replace(/^Bearer\s+/i, '').trim()
         : undefined;
+      if (rawBody) {
+        const parsedBody: unknown = JSON.parse(rawBody);
+        if (isRegistrationCall(parsedBody) && !registrationAllowed(request.socket.remoteAddress || 'unknown')) {
+          response.statusCode = 429;
+          response.setHeader('retry-after', String(Math.ceil(REGISTRATION_WINDOW_MS / 1_000)));
+          response.end('Registration rate limit exceeded; retry later');
+          return;
+        }
+      }
       if (bearer && rawBody) {
         body = JSON.stringify(injectBearer(JSON.parse(rawBody), bearer));
       }
@@ -198,6 +242,12 @@ export async function startMcpHttpApi(server: Server, options: McpHttpOptions = 
       response.end(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }));
     }
   });
+  httpServer.requestTimeout = 30_000;
+  httpServer.headersTimeout = 10_000;
+  httpServer.keepAliveTimeout = 5_000;
+  httpServer.maxHeadersCount = 64;
+  httpServer.maxRequestsPerSocket = 100;
+  httpServer.maxConnections = Math.min(Math.max(Math.trunc(options.maxConnections ?? 256), 1), 2_048);
 
   await new Promise<void>((resolve, reject) => {
     const onError = (error: Error) => { httpServer.off('listening', onListening); reject(error); };

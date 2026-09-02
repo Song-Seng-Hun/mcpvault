@@ -242,3 +242,27 @@ test('Global Sync rejects control characters in signed identity metadata', async
   await expect(hub.submitProposal({ documentId: 'Knowledge/Safe.md', content: 'safe\n', author: 'agent\nforged', reason: 'test', origin: 'server-a' })).rejects.toThrow('control characters');
   await expect(hub.submitProposal({ documentId: 'Knowledge/Safe.md', content: 'safe\n', author: 'agent', reason: 'test\u0000', origin: 'server-a' })).rejects.toThrow('control characters');
 });
+
+test('Global Hub prevents two live processes from sharing one event store', async () => {
+  const firstHandle = await startGlobalSyncHub(hubRoot, {
+    authToken: 'proposer-secret',
+    reviewerToken: 'reviewer-a-secret',
+    reviewerTokens: { 'reviewer-b': 'reviewer-b-secret' },
+  });
+  try {
+    await expect(startGlobalSyncHub(hubRoot, {
+      authToken: 'proposer-secret',
+      reviewerToken: 'reviewer-a-secret',
+      reviewerTokens: { 'reviewer-b': 'reviewer-b-secret' },
+    })).rejects.toThrow('already in use');
+  } finally {
+    await firstHandle.close();
+  }
+  const restarted = await startGlobalSyncHub(hubRoot, {
+    authToken: 'proposer-secret',
+    reviewerToken: 'reviewer-a-secret',
+    reviewerTokens: { 'reviewer-b': 'reviewer-b-secret' },
+  });
+  await restarted.close();
+  await expect(readFile(join(hubRoot, 'hub.lock'), 'utf8')).rejects.toThrow();
+});

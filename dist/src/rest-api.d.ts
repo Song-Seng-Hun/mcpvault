@@ -4,6 +4,9 @@ export interface RestApiOptions {
     host?: string;
     port?: number;
     maxBodyBytes?: number;
+    allowedOrigins?: string[];
+    allowedHosts?: string[];
+    maxConnections?: number;
 }
 export interface RestApiHandle {
     server: HttpServer;

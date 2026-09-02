@@ -8,6 +8,9 @@ export interface RestApiOptions {
   host?: string;
   port?: number;
   maxBodyBytes?: number;
+  allowedOrigins?: string[];
+  allowedHosts?: string[];
+  maxConnections?: number;
 }
 
 export interface RestApiHandle {
@@ -46,6 +49,22 @@ function tokenFrom(request: IncomingMessage): string | undefined {
   return typeof header === 'string' && /^Bearer\s+/i.test(header) ? header.replace(/^Bearer\s+/i, '').trim() : undefined;
 }
 
+const MAX_HTTP_BODY_BYTES = 2 * 1024 * 1024;
+const MAX_RATE_BUCKETS = 4_096;
+const REGISTRATION_WINDOW_MS = 10 * 60 * 1_000;
+const MAX_REGISTRATIONS_PER_WINDOW = 5;
+
+function requestHost(request: IncomingMessage): string | undefined {
+  const host = request.headers.host;
+  if (!host) return undefined;
+  try { return new URL(`http://${host}`).hostname.toLowerCase(); } catch { return undefined; }
+}
+
+function originAllowed(request: IncomingMessage, allowedOrigins: readonly string[]): boolean {
+  const origin = request.headers.origin;
+  return typeof origin !== 'string' || allowedOrigins.includes(origin);
+}
+
 async function readBody(request: IncomingMessage, maxBytes: number): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = [];
   let size = 0;
@@ -77,11 +96,42 @@ export async function startRestApi(server: Server, options: RestApiOptions = {})
   if (!runtime) throw new Error('The supplied MCP server has no MCPVault runtime');
   runtime.ensureEndpointRegistry();
   const host = options.host || '127.0.0.1';
-  const maxBodyBytes = options.maxBodyBytes || 1_048_576;
+  const maxBodyBytes = Math.min(Math.max(Math.trunc(options.maxBodyBytes ?? 1_048_576), 1_024), MAX_HTTP_BODY_BYTES);
+  const allowedOrigins = options.allowedOrigins || [];
+  const allowedHosts = options.allowedHosts || (host === '127.0.0.1' ? ['127.0.0.1', 'localhost'] : [host]);
+  const registrationWindows = new Map<string, { startedAt: number; count: number }>();
+  const registrationAllowed = (key: string): boolean => {
+    const now = Date.now();
+    const current = registrationWindows.get(key);
+    if (!current || now - current.startedAt >= REGISTRATION_WINDOW_MS) {
+      if (registrationWindows.size >= MAX_RATE_BUCKETS) {
+        for (const [bucket, value] of registrationWindows) {
+          if (now - value.startedAt >= REGISTRATION_WINDOW_MS) registrationWindows.delete(bucket);
+          if (registrationWindows.size < MAX_RATE_BUCKETS) break;
+        }
+      }
+      if (registrationWindows.size >= MAX_RATE_BUCKETS && !registrationWindows.has(key)) return false;
+      registrationWindows.set(key, { startedAt: now, count: 1 });
+      return true;
+    }
+    if (current.count >= MAX_REGISTRATIONS_PER_WINDOW) return false;
+    current.count += 1;
+    return true;
+  };
 
   const httpServer = createServer(async (request, response) => {
     try {
       const requestUrl = new URL(request.url || '/', `http://${host}`);
+      if (!originAllowed(request, allowedOrigins)) {
+        response.statusCode = 403;
+        response.end('Forbidden origin');
+        return;
+      }
+      if (!allowedHosts.includes(requestHost(request) || '')) {
+        response.statusCode = 400;
+        response.end('Invalid host');
+        return;
+      }
       if (request.method === 'GET' && requestUrl.pathname === '/healthz') {
         sendJson(request, response, 200, { ok: true });
         return;
@@ -116,6 +166,12 @@ export async function startRestApi(server: Server, options: RestApiOptions = {})
         sendJson(request, response, 404, { error: 'unknown endpoint route' });
         return;
       }
+      if (endpointId === 'auth.register' && !registrationAllowed(request.socket.remoteAddress || 'unknown')) {
+        response.statusCode = 429;
+        response.setHeader('retry-after', String(Math.ceil(REGISTRATION_WINDOW_MS / 1_000)));
+        response.end('Registration rate limit exceeded; retry later');
+        return;
+      }
 
       const queryArguments = Object.fromEntries(requestUrl.searchParams.entries());
       const arguments_ = { ...queryArguments, ...pathArguments, ...body };
@@ -125,6 +181,12 @@ export async function startRestApi(server: Server, options: RestApiOptions = {})
       sendJson(request, response, 400, { error: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
+  httpServer.requestTimeout = 30_000;
+  httpServer.headersTimeout = 10_000;
+  httpServer.keepAliveTimeout = 5_000;
+  httpServer.maxHeadersCount = 64;
+  httpServer.maxRequestsPerSocket = 100;
+  httpServer.maxConnections = Math.min(Math.max(Math.trunc(options.maxConnections ?? 256), 1), 2_048);
 
   await new Promise<void>((resolve, reject) => {
     const onError = (error: Error) => { httpServer.off('listening', onListening); reject(error); };

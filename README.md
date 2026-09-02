@@ -149,6 +149,11 @@ also include a private, short-lived `ETag` cache validator and
 `Cache-Control: private, max-age=2`; repeat the request with `If-None-Match` to
 receive `304 Not Modified` without downloading the JSON again. `Authorization`
 is included in `Vary`, and mutating/error responses are never cacheable.
+The adapter clamps request bodies to 2 MiB, limits HTTP headers, keep-alive
+requests, connections, and request duration, and rate-limits anonymous account
+registration to five attempts per client address per ten minutes. If the
+adapter is bound beyond localhost through the library API, configure its
+`allowedHosts` and `allowedOrigins` explicitly.
 
 ### Stateless MCP over HTTP
 
@@ -159,6 +164,11 @@ the ordinary REST adapter above. The MCP connection has no server-side
 `Mcp-Session-Id`: every request carries its protocol metadata and bearer
 authentication, while MCPVault keeps one long-lived vault runtime for the file
 watcher, Markdown/Git source of truth, and disposable search/vector indexes.
+The adapter clamps request bodies to 2 MiB, limits headers, keep-alive
+requests, connections, and request duration, and limits anonymous account
+registration to five attempts per client address per ten minutes. These are
+availability guards, not a substitute for an authenticated HTTPS reverse
+proxy when the endpoint is reachable from an untrusted network.
 
 ```bash
 npx @bitbonsai/mcpvault "/path/to/vault" --mcp-http=8788
@@ -1471,6 +1481,11 @@ object such as
 this second reviewer is required for every proposal, not only tombstones.
 Set `MCPVAULT_GLOBAL_SYNC_SIGNING_KEY_PATH` when the private key must live in
 an explicitly ACL-protected location.
+The standalone hub also takes an exclusive process lock at `hub.lock` below
+the hub storage root; override it with
+`MCPVAULT_GLOBAL_SYNC_LOCK_PATH`. A live owner blocks a second hub using the
+same event store, while a stale lock from a dead process can be recovered.
+Malformed lock files are rejected instead of being deleted automatically.
 For built-in HTTPS, set `MCPVAULT_GLOBAL_SYNC_TLS_KEY_PATH` and
 `MCPVAULT_GLOBAL_SYNC_TLS_CERT_PATH`; adding
 `MCPVAULT_GLOBAL_SYNC_TLS_CA_PATH` enables mutual TLS client-certificate

@@ -24,6 +24,21 @@ async function readBody(request, maxBytes) {
 function isRecord(value) {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
+const MAX_HTTP_BODY_BYTES = 2 * 1024 * 1024;
+const MAX_RATE_BUCKETS = 4_096;
+const REGISTRATION_WINDOW_MS = 10 * 60 * 1_000;
+const MAX_REGISTRATIONS_PER_WINDOW = 5;
+function isRegistrationCall(value) {
+    const requests = Array.isArray(value) ? value : [value];
+    return requests.some(request => {
+        if (!isRecord(request) || request.method !== 'tools/call' || !isRecord(request.params))
+            return false;
+        const params = request.params;
+        if (params.name !== 'call_endpoint' || !isRecord(params.arguments))
+            return false;
+        return params.arguments.endpointId === 'auth.register';
+    });
+}
 /**
  * Codex sends bearer credentials in the HTTP envelope while MCPVault's
  * dispatcher intentionally keeps the principal token in tool arguments. Move
@@ -107,7 +122,7 @@ export async function startMcpHttpApi(server, options = {}) {
         throw new Error('The supplied MCP server has no MCPVault runtime');
     const host = options.host || '127.0.0.1';
     const path = options.path || '/mcp';
-    const maxBodyBytes = options.maxBodyBytes || 1_048_576;
+    const maxBodyBytes = Math.min(Math.max(Math.trunc(options.maxBodyBytes ?? 1_048_576), 1_024), MAX_HTTP_BODY_BYTES);
     const allowedOrigins = options.allowedOrigins || [];
     const allowedHosts = options.allowedHosts || (host === '127.0.0.1' ? ['127.0.0.1', 'localhost'] : [host]);
     const mcpHandler = createMcpHandler(() => runtime.createRequestServer(), {
@@ -115,6 +130,29 @@ export async function startMcpHttpApi(server, options = {}) {
         responseMode: 'auto',
         onerror: error => console.error(error),
     });
+    const registrationWindows = new Map();
+    const registrationAllowed = (key) => {
+        const now = Date.now();
+        const current = registrationWindows.get(key);
+        if (!current || now - current.startedAt >= REGISTRATION_WINDOW_MS) {
+            if (registrationWindows.size >= MAX_RATE_BUCKETS) {
+                for (const [bucket, value] of registrationWindows) {
+                    if (now - value.startedAt >= REGISTRATION_WINDOW_MS)
+                        registrationWindows.delete(bucket);
+                    if (registrationWindows.size < MAX_RATE_BUCKETS)
+                        break;
+                }
+            }
+            if (registrationWindows.size >= MAX_RATE_BUCKETS && !registrationWindows.has(key))
+                return false;
+            registrationWindows.set(key, { startedAt: now, count: 1 });
+            return true;
+        }
+        if (current.count >= MAX_REGISTRATIONS_PER_WINDOW)
+            return false;
+        current.count += 1;
+        return true;
+    };
     const httpServer = createHttpServer(async (request, response) => {
         try {
             const requestUrl = new URL(request.url || '/', `http://${request.headers.host || host}`);
@@ -145,6 +183,15 @@ export async function startMcpHttpApi(server, options = {}) {
             const bearer = typeof bearerHeader === 'string' && /^Bearer\s+/i.test(bearerHeader)
                 ? bearerHeader.replace(/^Bearer\s+/i, '').trim()
                 : undefined;
+            if (rawBody) {
+                const parsedBody = JSON.parse(rawBody);
+                if (isRegistrationCall(parsedBody) && !registrationAllowed(request.socket.remoteAddress || 'unknown')) {
+                    response.statusCode = 429;
+                    response.setHeader('retry-after', String(Math.ceil(REGISTRATION_WINDOW_MS / 1_000)));
+                    response.end('Registration rate limit exceeded; retry later');
+                    return;
+                }
+            }
             if (bearer && rawBody) {
                 body = JSON.stringify(injectBearer(JSON.parse(rawBody), bearer));
             }
@@ -170,6 +217,12 @@ export async function startMcpHttpApi(server, options = {}) {
             response.end(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }));
         }
     });
+    httpServer.requestTimeout = 30_000;
+    httpServer.headersTimeout = 10_000;
+    httpServer.keepAliveTimeout = 5_000;
+    httpServer.maxHeadersCount = 64;
+    httpServer.maxRequestsPerSocket = 100;
+    httpServer.maxConnections = Math.min(Math.max(Math.trunc(options.maxConnections ?? 256), 1), 2_048);
     await new Promise((resolve, reject) => {
         const onError = (error) => { httpServer.off('listening', onListening); reject(error); };
         const onListening = () => { httpServer.off('error', onError); resolve(); };

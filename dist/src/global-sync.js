@@ -226,6 +226,73 @@ async function writeObjectIfMissing(path, content) {
             throw error;
     }
 }
+function processIsAlive(pid) {
+    try {
+        process.kill(pid, 0);
+        return true;
+    }
+    catch (error) {
+        return !(error && typeof error === 'object' && 'code' in error && error.code === 'ESRCH');
+    }
+}
+async function acquireProcessLock(path) {
+    await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+        const nonce = randomUUID();
+        try {
+            const handle = await open(path, 'wx');
+            try {
+                await handle.writeFile(`${JSON.stringify({ pid: process.pid, nonce, startedAt: new Date().toISOString() })}\n`, 'utf8');
+                await handle.sync();
+            }
+            catch (error) {
+                await handle.close().catch(() => undefined);
+                await unlink(path).catch(() => undefined);
+                throw error;
+            }
+            return { handle, nonce, path };
+        }
+        catch (error) {
+            if (!(error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST'))
+                throw error;
+            let raw;
+            try {
+                raw = await readFile(path, 'utf8');
+            }
+            catch (readError) {
+                if (readError && typeof readError === 'object' && 'code' in readError && readError.code === 'ENOENT')
+                    continue;
+                throw readError;
+            }
+            let record;
+            try {
+                record = JSON.parse(raw);
+            }
+            catch {
+                throw new Error('Global Sync process lock is corrupt; refusing to remove it automatically');
+            }
+            if (!isRecord(record) || typeof record.pid !== 'number' || !Number.isSafeInteger(record.pid) || record.pid <= 0 || typeof record.nonce !== 'string' || !record.nonce) {
+                throw new Error('Global Sync process lock is invalid; refusing to remove it automatically');
+            }
+            if (processIsAlive(record.pid))
+                throw new Error(`Global Sync storage is already in use by process ${record.pid}`);
+            await unlink(path);
+        }
+    }
+    throw new Error('Unable to acquire Global Sync process lock');
+}
+async function releaseProcessLock(lock) {
+    await lock.handle.close().catch(() => undefined);
+    try {
+        const record = JSON.parse(await readFile(lock.path, 'utf8'));
+        if (record.nonce === lock.nonce)
+            await unlink(lock.path);
+    }
+    catch (error) {
+        if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'))
+            throw error;
+    }
+}
 /**
  * Append-only Global authority. It stores metadata in a rebuildable state
  * snapshot and content in immutable, hash-addressed objects. No physical
@@ -237,6 +304,7 @@ export class GlobalSyncHub {
     eventPath;
     objectRoot;
     hubId;
+    processLockPath;
     signingPrivateKey;
     signingPublicKey;
     approvalQuorum;
@@ -245,12 +313,16 @@ export class GlobalSyncHub {
     lastEventHash = '';
     initialized = false;
     mutationTail = Promise.resolve();
+    loadPromise;
+    processLock;
+    closed = false;
     constructor(root, options = {}) {
         this.root = resolve(root);
         this.statePath = join(this.root, 'state.json');
         this.eventPath = join(this.root, 'events.ndjson');
         this.objectRoot = join(this.root, 'objects');
         this.hubId = boundedText(options.hubId || 'global-hub', 'hubId', MAX_ORIGIN_LENGTH).toLowerCase();
+        this.processLockPath = options.processLockPath ? resolve(options.processLockPath) : undefined;
         if (!/^[a-z0-9][a-z0-9._-]{0,127}$/.test(this.hubId))
             throw new Error('hubId must be a lowercase identifier');
         this.signingPrivateKey = options.signingPrivateKey ? createPrivateKey(options.signingPrivateKey) : createPrivateKey(generateGlobalSyncSigningKeyPair().privateKey);
@@ -264,40 +336,72 @@ export class GlobalSyncHub {
     exportSigningPrivateKey() {
         return this.signingPrivateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
     }
-    async ensureLoaded() {
+    ensureLoaded() {
+        if (this.closed)
+            return Promise.reject(new Error('Global Sync hub is closed'));
         if (this.initialized)
-            return;
-        await mkdir(this.objectRoot, { recursive: true });
-        let snapshotExists = false;
+            return Promise.resolve();
+        if (this.loadPromise)
+            return this.loadPromise;
+        const load = this.loadFromDisk();
+        this.loadPromise = load;
+        return load.finally(() => {
+            if (this.loadPromise === load)
+                this.loadPromise = undefined;
+        });
+    }
+    async loadFromDisk() {
+        if (this.processLockPath)
+            this.processLock = await acquireProcessLock(this.processLockPath);
         try {
-            await stat(this.statePath);
-            snapshotExists = true;
-        }
-        catch {
-            snapshotExists = false;
-        }
-        this.state = emptyState(this.hubId);
-        try {
-            const lines = (await readFile(this.eventPath, 'utf8')).split(/\r?\n/).filter(Boolean);
-            for (const line of lines) {
-                const event = JSON.parse(line);
-                const unsignedEvent = { sequence: event.sequence, type: event.type, payload: event.payload, previousHash: event.previousHash };
-                if (!Number.isSafeInteger(event.sequence) || event.sequence !== this.state.nextSequence + 1 || event.previousHash !== this.lastEventHash || event.eventHash !== eventHash(unsignedEvent) || !event.signature || !verifyPayload(unsignedEvent, event.signature, createPublicKey(this.signingPublicKey)))
-                    throw new Error(`invalid event chain at sequence ${event.sequence}`);
-                applyEvent(this.state, event);
-                this.lastEventHash = event.eventHash;
+            await mkdir(this.objectRoot, { recursive: true });
+            let snapshotExists = false;
+            try {
+                await stat(this.statePath);
+                snapshotExists = true;
             }
+            catch {
+                snapshotExists = false;
+            }
+            this.state = emptyState(this.hubId);
+            try {
+                const lines = (await readFile(this.eventPath, 'utf8')).split(/\r?\n/).filter(Boolean);
+                for (const line of lines) {
+                    const event = JSON.parse(line);
+                    const unsignedEvent = { sequence: event.sequence, type: event.type, payload: event.payload, previousHash: event.previousHash };
+                    if (!Number.isSafeInteger(event.sequence) || event.sequence !== this.state.nextSequence + 1 || event.previousHash !== this.lastEventHash || event.eventHash !== eventHash(unsignedEvent) || !event.signature || !verifyPayload(unsignedEvent, event.signature, createPublicKey(this.signingPublicKey)))
+                        throw new Error(`invalid event chain at sequence ${event.sequence}`);
+                    applyEvent(this.state, event);
+                    this.lastEventHash = event.eventHash;
+                }
+            }
+            catch (error) {
+                if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+                    if (snapshotExists)
+                        throw new Error('Global Sync event log is missing; refusing to trust the state snapshot');
+                }
+                else {
+                    throw error;
+                }
+            }
+            this.initialized = true;
         }
         catch (error) {
-            if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
-                if (snapshotExists)
-                    throw new Error('Global Sync event log is missing; refusing to trust the state snapshot');
+            if (this.processLock) {
+                await releaseProcessLock(this.processLock).catch(() => undefined);
+                this.processLock = undefined;
             }
-            else {
-                throw error;
-            }
+            throw error;
         }
-        this.initialized = true;
+    }
+    async close() {
+        this.closed = true;
+        await this.loadPromise?.catch(() => undefined);
+        if (this.processLock) {
+            const lock = this.processLock;
+            this.processLock = undefined;
+            await releaseProcessLock(lock);
+        }
     }
     async withMutation(task) {
         const previous = this.mutationTail;
@@ -948,7 +1052,8 @@ export async function startGlobalSyncHub(root, options) {
         if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'))
             throw error;
     }
-    let hub = new GlobalSyncHub(root, { ...(options.hubId && { hubId: options.hubId }), ...(signingPrivateKey && { signingPrivateKey }) });
+    const processLockPath = resolve(options.processLockPath || join(resolve(root), 'hub.lock'));
+    let hub = new GlobalSyncHub(root, { ...(options.hubId && { hubId: options.hubId }), ...(signingPrivateKey && { signingPrivateKey }), processLockPath });
     if (!signingPrivateKey) {
         await mkdir(dirname(signingKeyPath), { recursive: true, mode: 0o700 });
         try {
@@ -957,7 +1062,7 @@ export async function startGlobalSyncHub(root, options) {
         catch (error) {
             if (!(error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST'))
                 throw error;
-            hub = new GlobalSyncHub(root, { ...(options.hubId && { hubId: options.hubId }), signingPrivateKey: await readFile(signingKeyPath, 'utf8') });
+            hub = new GlobalSyncHub(root, { ...(options.hubId && { hubId: options.hubId }), signingPrivateKey: await readFile(signingKeyPath, 'utf8'), processLockPath });
         }
     }
     await hub.getManifest(0, 1);
@@ -1200,8 +1305,17 @@ export async function startGlobalSyncHub(root, options) {
     server.maxHeadersCount = 64;
     server.maxRequestsPerSocket = 100;
     server.maxConnections = Math.min(Math.max(Math.trunc(options.maxConnections ?? 256), 1), 2_048);
-    await new Promise((resolvePromise, reject) => { server.once('error', reject); server.listen(options.port ?? 0, host, () => { server.off('error', reject); resolvePromise(); }); });
+    try {
+        await new Promise((resolvePromise, reject) => { server.once('error', reject); server.listen(options.port ?? 0, host, () => { server.off('error', reject); resolvePromise(); }); });
+    }
+    catch (error) {
+        await hub.close().catch(() => undefined);
+        throw error;
+    }
     const address = server.address();
     const port = typeof address === 'object' && address ? address.port : options.port || 0;
-    return { server, host, port, hub, close: async () => new Promise((resolvePromise, reject) => server.close(error => error ? reject(error) : resolvePromise())) };
+    return { server, host, port, hub, close: async () => {
+            await new Promise((resolvePromise, reject) => server.close(error => error ? reject(error) : resolvePromise()));
+            await hub.close();
+        } };
 }

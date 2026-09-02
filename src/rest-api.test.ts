@@ -20,6 +20,9 @@ test('REST adapter uses the same dynamic endpoint registry and dispatcher', asyn
   const api = await startRestApi(server, { port: 0 });
   resources.push({ vault, api, server });
 
+  const rejectedOrigin = await fetch(`http://127.0.0.1:${api.port}/healthz`, { headers: { origin: 'https://untrusted.example' } });
+  expect(rejectedOrigin.status).toBe(403);
+
   const capabilities = await fetch(`http://127.0.0.1:${api.port}/api/capabilities?limit=100&maxChars=20000`);
   expect(capabilities.status).toBe(200);
   const catalog = await capabilities.json() as any;
@@ -56,4 +59,23 @@ test('REST adapter uses the same dynamic endpoint registry and dispatcher', asyn
   });
   expect(routeWrite.status).toBe(200);
   expect(await readFile(join(vault, 'nested', 'route.md'), 'utf8')).toContain('# Route');
+});
+
+test('REST adapter rate-limits anonymous account registration per client address', async () => {
+  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-rest-registration-'));
+  const server = createServer(vault);
+  const api = await startRestApi(server, { port: 0 });
+  resources.push({ vault, api, server });
+
+  const statuses: number[] = [];
+  for (let index = 0; index < 6; index += 1) {
+    const response = await fetch(`http://127.0.0.1:${api.port}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ accountId: `registration-${index}`, modelId: `model-${index}`, agentId: `agent-${index}`, password: `registration-password-${index}` }),
+    });
+    statuses.push(response.status);
+  }
+  expect(statuses.slice(0, 5)).toEqual([200, 200, 200, 200, 200]);
+  expect(statuses[5]).toBe(429);
 });

@@ -50,6 +50,7 @@ const handle = await startGlobalSyncHub(root, {
     ...(reviewerTokenExpiresAt && { reviewerTokenExpiresAt }),
     hubId,
     ...(process.env.MCPVAULT_GLOBAL_SYNC_SIGNING_KEY_PATH && { signingKeyPath: process.env.MCPVAULT_GLOBAL_SYNC_SIGNING_KEY_PATH }),
+    ...(process.env.MCPVAULT_GLOBAL_SYNC_LOCK_PATH && { processLockPath: process.env.MCPVAULT_GLOBAL_SYNC_LOCK_PATH }),
     ...(process.env.MCPVAULT_GLOBAL_SYNC_CREDENTIAL_STATE_PATH && { credentialStatePath: process.env.MCPVAULT_GLOBAL_SYNC_CREDENTIAL_STATE_PATH }),
     ...(process.env.MCPVAULT_GLOBAL_SYNC_CREDENTIAL_AUDIT_PATH && { credentialAuditPath: process.env.MCPVAULT_GLOBAL_SYNC_CREDENTIAL_AUDIT_PATH }),
     proposerOrigin,

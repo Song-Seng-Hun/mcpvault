@@ -7,6 +7,7 @@ export interface McpHttpOptions {
     maxBodyBytes?: number;
     allowedOrigins?: string[];
     allowedHosts?: string[];
+    maxConnections?: number;
 }
 export interface McpHttpHandle {
     server: HttpServer;
