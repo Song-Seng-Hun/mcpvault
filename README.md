@@ -1417,6 +1417,9 @@ the authenticated token, never from a caller-supplied JSON field. Every
 proposal, including upserts, needs two distinct reviewer tokens, so one
 compromised reviewer cannot publish or erase a Global document. Reviewers can
 still restore an older immutable revision, and there is no physical delete.
+Clients may send a bounded `idempotencyKey` with a proposal; retrying the same
+key returns the original proposal, while reusing it for different content or
+metadata is rejected.
 
 Every manifest and revision is signed with the hub's Ed25519 signing key.
 `startGlobalSyncHub()` persists that private key as `signing-key.pem` (or the

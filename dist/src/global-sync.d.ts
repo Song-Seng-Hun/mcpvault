@@ -46,6 +46,7 @@ export interface GlobalProposal {
     author: string;
     reason: string;
     origin: string;
+    idempotencyKey?: string;
     createdAt: string;
     status: GlobalProposalStatus;
     approvals?: string[];
@@ -75,6 +76,7 @@ export interface GlobalSyncChangeInput {
     author: string;
     reason: string;
     origin: string;
+    idempotencyKey?: string;
 }
 export declare function generateGlobalSyncSigningKeyPair(): {
     privateKey: string;

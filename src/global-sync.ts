@@ -10,6 +10,7 @@ const MAX_DOCUMENT_BYTES = 1_048_576;
 const MAX_REASON_LENGTH = 500;
 const MAX_AUTHOR_LENGTH = 128;
 const MAX_ORIGIN_LENGTH = 128;
+const MAX_IDEMPOTENCY_KEY_LENGTH = 128;
 const MAX_TOTAL_PROPOSALS = 100_000;
 const MAX_PENDING_PROPOSALS = 2_000;
 const MAX_PENDING_BYTES = 64 * 1024 * 1024;
@@ -72,6 +73,7 @@ export interface GlobalProposal {
   author: string;
   reason: string;
   origin: string;
+  idempotencyKey?: string;
   createdAt: string;
   status: GlobalProposalStatus;
   approvals?: string[];
@@ -105,6 +107,7 @@ export interface GlobalSyncChangeInput {
   author: string;
   reason: string;
   origin: string;
+  idempotencyKey?: string;
 }
 
 interface HubState {
@@ -182,6 +185,13 @@ function boundedText(value: string, field: string, max: number): string {
   const text = String(value || '').trim();
   if (!text || text.length > max) throw new Error(`${field} is required and must be at most ${max} characters`);
   return text;
+}
+
+function normalizeIdempotencyKey(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const key = boundedText(value, 'idempotencyKey', MAX_IDEMPOTENCY_KEY_LENGTH);
+  if (!/^[a-zA-Z0-9._:-]+$/.test(key)) throw new Error('idempotencyKey contains unsupported characters');
+  return key;
 }
 
 function normalizeLimit(value: number | undefined): number {
@@ -309,18 +319,12 @@ export class GlobalSyncHub {
     this.state = emptyState(this.hubId);
     try {
       const lines = (await readFile(this.eventPath, 'utf8')).split(/\r?\n/).filter(Boolean);
-      for (let index = 0; index < lines.length; index += 1) {
-        const line = lines[index]!;
-        try {
-          const event = JSON.parse(line) as HubEvent;
-          const unsignedEvent = { sequence: event.sequence, type: event.type, payload: event.payload, previousHash: event.previousHash };
-          if (!Number.isSafeInteger(event.sequence) || event.sequence !== this.state.nextSequence + 1 || event.previousHash !== this.lastEventHash || event.eventHash !== eventHash(unsignedEvent) || !event.signature || !verifyPayload(unsignedEvent, event.signature, createPublicKey(this.signingPublicKey))) throw new Error(`invalid event chain at sequence ${event.sequence}`);
-          applyEvent(this.state, event);
-          this.lastEventHash = event.eventHash;
-        } catch (error) {
-          if (index === lines.length - 1 && line.trim().startsWith('{') === false) break;
-          throw error;
-        }
+      for (const line of lines) {
+        const event = JSON.parse(line) as HubEvent;
+        const unsignedEvent = { sequence: event.sequence, type: event.type, payload: event.payload, previousHash: event.previousHash };
+        if (!Number.isSafeInteger(event.sequence) || event.sequence !== this.state.nextSequence + 1 || event.previousHash !== this.lastEventHash || event.eventHash !== eventHash(unsignedEvent) || !event.signature || !verifyPayload(unsignedEvent, event.signature, createPublicKey(this.signingPublicKey))) throw new Error(`invalid event chain at sequence ${event.sequence}`);
+        applyEvent(this.state, event);
+        this.lastEventHash = event.eventHash;
       }
     } catch (error) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
@@ -411,6 +415,7 @@ export class GlobalSyncHub {
       const author = boundedText(input.author, 'author', MAX_AUTHOR_LENGTH);
       const reason = boundedText(input.reason, 'reason', MAX_REASON_LENGTH);
       const origin = boundedText(input.origin, 'origin', MAX_ORIGIN_LENGTH);
+      const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
       const current = this.currentRevision(documentId);
       const parentRevision = input.parentRevision || current?.revisionId;
       if (parentRevision && (!this.state.revisions[parentRevision] || this.state.revisions[parentRevision]!.documentId !== documentId)) throw new Error('parentRevision is unknown or belongs to another document');
@@ -421,6 +426,13 @@ export class GlobalSyncHub {
         byteLength = Buffer.byteLength(input.content, 'utf8');
         if (byteLength > MAX_DOCUMENT_BYTES) throw new Error(`Global document exceeds ${MAX_DOCUMENT_BYTES} bytes`);
         contentHash = sha256(input.content);
+      }
+      if (idempotencyKey) {
+        const existing = Object.values(this.state.proposals).find(candidate => candidate.origin === origin && candidate.idempotencyKey === idempotencyKey);
+        if (existing) {
+          if (existing.documentId !== documentId || (input.parentRevision !== undefined && existing.parentRevision !== parentRevision) || existing.operation !== operation || existing.contentHash !== contentHash || existing.byteLength !== byteLength || existing.author !== author || existing.reason !== reason) throw new Error('idempotencyKey was already used for a different proposal');
+          return existing;
+        }
       }
       const duplicate = Object.values(this.state.proposals).find(candidate => candidate.status === 'pending'
         && candidate.documentId === documentId
@@ -440,6 +452,7 @@ export class GlobalSyncHub {
         author,
         reason,
         origin,
+        ...(idempotencyKey && { idempotencyKey }),
         createdAt: new Date().toISOString(),
         status: 'pending',
         approvals: [],

@@ -150,3 +150,14 @@ test('Global Hub rebuilds from its signed event chain and fails closed on event 
   const broken = new GlobalSyncHub(hubRoot, { signingPrivateKey });
   await expect(broken.getManifest()).rejects.toThrow('invalid event chain');
 });
+
+test('Global Hub makes proposal retries idempotent and rejects key reuse with different content', async () => {
+  const hub = new GlobalSyncHub(hubRoot);
+  const input = { documentId: 'Knowledge/Retry.md', content: 'retry\n', author: 'server-a', reason: 'test', origin: 'server-a', idempotencyKey: 'request-001' };
+  const first = await hub.submitProposal(input);
+  expect(await hub.submitProposal(input)).toEqual(first);
+  await expect(hub.submitProposal({ ...input, content: 'different\n' })).rejects.toThrow('idempotencyKey was already used');
+  expect((await hub.approveProposal(first.proposalId, 'reviewer-a', 'checked')).status).toBe('pending');
+  expect((await hub.approveProposal(first.proposalId, 'reviewer-b', 'checked')).status).toBe('approved');
+  expect(await hub.submitProposal(input)).toEqual(expect.objectContaining({ proposalId: first.proposalId, status: 'approved' }));
+});
