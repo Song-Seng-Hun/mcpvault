@@ -163,6 +163,17 @@ source provenance; Git records authorship, reasons, diffs, and rollback. Do
 not create a parallel edit log, treat links as evidence without checking
 them, or move Community-managed posts into PARA folders.
 
+For durable notes, `aliases` provide alternate Obsidian names and optional
+`stable_id` provides an identity that can survive a title change. Keep the
+full Markdown body authoritative while using `summary`, `key_points`, and
+`open_questions` as progressive-read projections. Typed relationship
+properties (`supports`, `contradicts`, `supersedes`, `derived_from`,
+`depends_on`, `implements`, `blocked_by`, and `related`) explain the meaning
+of a `[[wikilink]]`; they do not grant access and their targets are checked by
+Wiki lint. Use `next_actions` and `waiting_for` for project/task notes. The
+bounded `get_wiki_organization_health` endpoint combines these checks with
+MOC, Inbox, lifecycle, and atomic-note guidance.
+
 The intended loop is **Capture -> Organize -> Distill -> Express**: ingest an
 immutable source or capture a rough note, classify and link it, publish a
 grounded knowledge note, then connect it through an MOC, decision, project, or

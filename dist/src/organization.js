@@ -7,8 +7,42 @@
  */
 export const NOTE_KINDS = ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'decision', 'project', 'area', 'resource', 'journal', 'task'];
 export const LIFECYCLES = ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'];
+/** Typed relationships are navigation metadata, never an access grant. */
+export const RELATION_FIELDS = ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'related'];
+export const ORGANIZATION_LIST_FIELDS = ['aliases', 'key_points', 'open_questions', 'next_actions', ...RELATION_FIELDS];
 const noteKindSet = new Set(NOTE_KINDS);
 const lifecycleSet = new Set(LIFECYCLES);
+const relationFieldSet = new Set(RELATION_FIELDS);
+function normalizedList(value, field, maximumItems, maximumChars) {
+    if (value === undefined || value === null || value === '')
+        return undefined;
+    if (!Array.isArray(value))
+        throw new Error(`${field} must be an array of strings`);
+    const result = value.map((item, index) => {
+        if (typeof item !== 'string' || !item.trim())
+            throw new Error(`${field}[${index}] must be a non-empty string`);
+        const text = item.trim();
+        if (Array.from(text).length > maximumChars)
+            throw new Error(`${field}[${index}] must be ${maximumChars} Unicode characters or fewer`);
+        return text;
+    });
+    return Array.from(new Set(result)).slice(0, maximumItems);
+}
+function normalizedRelationMap(value) {
+    if (value === undefined || value === null)
+        return undefined;
+    if (typeof value !== 'object' || Array.isArray(value))
+        throw new Error('relations must be an object of typed link arrays');
+    const result = {};
+    for (const [field, raw] of Object.entries(value)) {
+        if (!relationFieldSet.has(field))
+            throw new Error(`Unsupported relation field: ${field}`);
+        const normalized = normalizedList(raw, field, 30, 500);
+        if (normalized?.length)
+            result[field] = normalized;
+    }
+    return result;
+}
 export function normalizeNoteKind(value, fallback) {
     if (value === undefined || value === null || String(value).trim() === '')
         return fallback;
@@ -59,12 +93,33 @@ export function knowledgeOrganization(input) {
     const moc = input.moc === undefined ? optionalText(existing.moc, 'moc', 500) : optionalText(input.moc, 'moc', 500);
     const project = input.project === undefined ? optionalText(existing.project, 'project', 500) : optionalText(input.project, 'project', 500);
     const reviewAt = input.reviewAt === undefined ? normalizeReviewAt(existing.review_at) : normalizeReviewAt(input.reviewAt);
+    const aliases = input.aliases === undefined ? normalizedList(existing.aliases, 'aliases', 30, 200) : normalizedList(input.aliases, 'aliases', 30, 200);
+    const summary = input.summary === undefined ? optionalText(existing.summary, 'summary', 2000) : optionalText(input.summary, 'summary', 2000);
+    const keyPoints = input.keyPoints === undefined ? normalizedList(existing.key_points, 'key_points', 20, 600) : normalizedList(input.keyPoints, 'key_points', 20, 600);
+    const openQuestions = input.openQuestions === undefined ? normalizedList(existing.open_questions, 'open_questions', 20, 600) : normalizedList(input.openQuestions, 'open_questions', 20, 600);
+    const nextActions = input.nextActions === undefined ? normalizedList(existing.next_actions, 'next_actions', 20, 600) : normalizedList(input.nextActions, 'next_actions', 20, 600);
+    const waitingFor = input.waitingFor === undefined ? optionalText(existing.waiting_for, 'waiting_for', 500) : optionalText(input.waitingFor, 'waiting_for', 500);
+    const stableId = input.stableId === undefined ? optionalText(existing.stable_id, 'stable_id', 80) : optionalText(input.stableId, 'stable_id', 80);
+    if (stableId && !/^[a-z0-9][a-z0-9._-]*$/i.test(stableId))
+        throw new Error('stableId may contain only letters, numbers, dots, underscores, and hyphens');
+    const relationsInput = input.relations === undefined
+        ? Object.fromEntries(RELATION_FIELDS.map(field => [field, existing[field]]).filter(([, value]) => value !== undefined))
+        : input.relations;
+    const relations = normalizedRelationMap(relationsInput);
     return {
         note_kind: kind,
         lifecycle,
         ...(moc && { moc }),
         ...(project && { project }),
         ...(reviewAt && { review_at: reviewAt }),
+        ...(aliases && { aliases }),
+        ...(summary && { summary }),
+        ...(keyPoints && { key_points: keyPoints }),
+        ...(openQuestions && { open_questions: openQuestions }),
+        ...(nextActions && { next_actions: nextActions }),
+        ...(waitingFor && { waiting_for: waitingFor }),
+        ...(stableId && { stable_id: stableId }),
+        ...(relations || {}),
     };
 }
 export function organizationLintIssues(path, frontmatter, content, nowMs = Date.now()) {
@@ -79,6 +134,32 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
     }
     if (lifecycleValue !== undefined && !lifecycleSet.has(lifecycle || '')) {
         issues.push({ code: 'invalid_lifecycle', detail: `lifecycle must be one of: ${LIFECYCLES.join(', ')}` });
+    }
+    for (const field of ORGANIZATION_LIST_FIELDS) {
+        const value = frontmatter[field];
+        if (value === undefined)
+            continue;
+        if (!Array.isArray(value) || value.some(item => typeof item !== 'string' || !item.trim())) {
+            issues.push({ code: `invalid_${field}`, detail: `${field} must be a non-empty string array.` });
+            continue;
+        }
+        const duplicates = value.length !== new Set(value.map(item => item.trim())).size;
+        if (duplicates)
+            issues.push({ code: `duplicate_${field}`, detail: `${field} contains duplicate values; keep each property value once.` });
+        if (RELATION_FIELDS.includes(field)) {
+            for (const item of value) {
+                if (/^(?:[A-Za-z]:[\\/]|\\\\|\/)/.test(item) || item.includes('..')) {
+                    issues.push({ code: `unsafe_${field}`, detail: `${field} contains an absolute or traversal-like path; references must remain scope-safe.` });
+                    break;
+                }
+            }
+        }
+    }
+    if (frontmatter.summary !== undefined && (typeof frontmatter.summary !== 'string' || Array.from(frontmatter.summary).length > 2000)) {
+        issues.push({ code: 'invalid_summary', detail: 'summary must be a text property of 2000 Unicode characters or fewer.' });
+    }
+    if (frontmatter.stable_id !== undefined && (typeof frontmatter.stable_id !== 'string' || !/^[a-z0-9][a-z0-9._-]*$/i.test(frontmatter.stable_id))) {
+        issues.push({ code: 'invalid_stable_id', detail: 'stable_id must contain only letters, numbers, dots, underscores, and hyphens.' });
     }
     if (kind === 'project' && lifecycle === 'active' && !frontmatter.next_action && !frontmatter.waiting_for) {
         issues.push({ code: 'active_project_without_next_action', detail: 'An active project should declare next_action or waiting_for so another agent can move it forward.' });
@@ -104,6 +185,9 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
     }
     if (kind === 'moc' && !/\[\[[^\]]+\]\]/.test(content)) {
         issues.push({ code: 'moc_without_links', detail: 'A MOC should link to at least one related note with Obsidian [[wikilinks]].' });
+    }
+    if (kind === 'atomic' && content.split(/\n\s*\n/).filter(block => block.trim() && !block.trim().startsWith('#')).length > 8) {
+        issues.push({ code: 'atomic_note_may_be_too_broad', detail: 'An atomic note contains many paragraphs; consider splitting durable claims and linking the resulting notes.' });
     }
     const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
     if (/(^|\/)inbox\//.test(normalizedPath) && lifecycle !== 'inbox') {

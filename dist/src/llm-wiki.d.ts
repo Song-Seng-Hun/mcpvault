@@ -82,6 +82,14 @@ export declare class LlmWikiService {
         moc?: string;
         project?: string;
         reviewAt?: string;
+        aliases?: unknown;
+        summary?: string;
+        keyPoints?: unknown;
+        openQuestions?: unknown;
+        nextActions?: unknown;
+        waitingFor?: string;
+        stableId?: string;
+        relations?: unknown;
         claims?: WikiClaimInput[];
         expectedRevision: string;
     }): Promise<{
@@ -114,6 +122,13 @@ export declare class LlmWikiService {
         reviewAt?: string;
         nextAction?: string;
         waitingFor?: string;
+        aliases?: unknown;
+        summary?: string;
+        keyPoints?: unknown;
+        openQuestions?: unknown;
+        nextActions?: unknown;
+        stableId?: string;
+        relations?: unknown;
         expectedRevision: string;
     }): Promise<{
         success: boolean;
@@ -136,6 +151,16 @@ export declare class LlmWikiService {
         lifecycle: any;
         status: any;
         confidence: any;
+        aliases?: any[];
+        summary?: string;
+        keyPoints?: any[];
+        openQuestions?: any[];
+        nextActions?: any[];
+        waitingFor?: string;
+        stableId?: string;
+        relations: {
+            [k: string]: any;
+        };
         section?: {
             startLine: number;
             endLine: number;
@@ -181,6 +206,20 @@ export declare class LlmWikiService {
     } | {
         truncated: boolean;
         note: string;
+    }>;
+    /**
+     * One-pass organization quality projection. It reuses lint's authoritative
+     * scan instead of running separate folder/property scans, and never mutates
+     * notes or treats organization hints as security boundaries.
+     */
+    organizationHealth(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        healthy: boolean;
+        organizationIssueTotal: number;
+        byCode: Record<string, number>;
+        issues: WikiLintIssue[];
+        recommendations: string[];
+        truncated: boolean;
+        generatedAt: string;
     }>;
     preflightPublish(params: {
         principal?: ScopePrincipal;

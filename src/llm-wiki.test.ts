@@ -48,6 +48,36 @@ test('recognizes a manually maintained public schema without frontmatter', async
   }
 });
 
+test('knowledge organization contract preserves aliases, projections, and typed relations', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-contract-owner', modelId: 'codex', password: 'organization-contract-password' });
+    const accessToken = registration.value.accessToken;
+    const source = await callJson(client, 'ingest_source', {
+      sourceId: 'organization-contract-source', title: 'Organization contract source', content: 'Typed links and compact projections make knowledge easier to maintain.', capturedBy: 'codex', accessToken,
+    });
+    await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/Existing.md', content: '# Existing\n\nA related durable note.\n', expectedRevision: 'missing', accessToken,
+    } });
+    const published = await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Contract.md', content: '# Contract\n\nA compact, linked knowledge note.\n', evidencePaths: [source.value.path],
+      aliases: ['Knowledge contract', 'Metadata contract'], summary: 'Properties describe the note and typed links describe why it is related.',
+      keyPoints: ['Keep the full Markdown body.', 'Use typed links for meaningful relations.'], openQuestions: ['Which relation needs review next?'],
+      relations: { related: ['[[Knowledge/Existing]]'] }, stableId: 'knowledge-contract', lifecycle: 'evergreen', author: 'codex', expectedRevision: 'missing', accessToken,
+    });
+    expect(published.value.success).toBe(true);
+    const projection = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Contract.md', view: 'summary', accessToken });
+    expect(projection.value).toMatchObject({ aliases: ['Knowledge contract', 'Metadata contract'], stableId: 'knowledge-contract', relations: { related: ['[[Knowledge/Existing]]'] } });
+    const refs = await callJson(client, 'read_references', { path: 'Knowledge/Contract.md', accessToken });
+    expect(refs.value.references).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Existing.md' })]));
+    const health = await callJson(client, 'get_wiki_organization_health', { limit: 20, accessToken });
+    expect(health.value).toMatchObject({ healthy: true, organizationIssueTotal: 0 });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('ingest, publish, catalog, lint, and immutable source enforcement form one workflow', async () => {
   const { server, client } = await setup();
   try {

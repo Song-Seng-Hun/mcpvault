@@ -1,6 +1,7 @@
 import { extractWikiLinkOccurrences } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
+import { RELATION_FIELDS } from './organization.js';
 const MAX_REFERENCES = 50;
 function normalize(value) {
     if (value === undefined || value === null)
@@ -83,14 +84,23 @@ export class ReferenceService {
         for (const path of references) {
             if (resolved.length >= Math.min(Math.max(limit, 1), 50))
                 break;
-            if (!this.access.canAccessPhysicalPath(path, principal) || !await this.fileSystem.noteExists(path))
+            let target = path;
+            if (/^!?\[\[.+\]\]$/.test(path)) {
+                try {
+                    target = await this.resolveWikiLinkTarget(parseWikiLink(path.replace(/^!/, '')).document, principal);
+                }
+                catch {
+                    continue;
+                }
+            }
+            if (!this.access.canAccessPhysicalPath(target, principal) || !await this.fileSystem.noteExists(target))
                 continue;
-            const note = await this.fileSystem.readNote(path);
+            const note = await this.fileSystem.readNote(target);
             if (isModerationHidden(note.frontmatter))
                 continue;
             const item = {
-                path: this.access.toPublicPath(path),
-                title: titleFor(path, note.frontmatter),
+                path: this.access.toPublicPath(target),
+                title: titleFor(target, note.frontmatter),
                 type: note.frontmatter.mcpvault_type || note.frontmatter.llm_wiki_type,
                 revision: note.revision,
             };
@@ -115,11 +125,13 @@ export class ReferenceService {
         const references = [
             ...(Array.isArray(note.frontmatter.references) ? note.frontmatter.references : []),
             ...(Array.isArray(note.frontmatter.evidence_paths) ? note.frontmatter.evidence_paths : []),
+            ...RELATION_FIELDS.flatMap(field => Array.isArray(note.frontmatter[field]) ? note.frontmatter[field] : []),
         ];
+        const uniqueReferences = Array.from(new Set(references.filter((item) => typeof item === 'string')));
         return {
             source: this.access.toPublicPath(params.path),
-            references: await this.resolve(references, params.principal, params.includeContent === true, params.limit ?? 10, params.maxChars ?? 4000),
-            total: references.length,
+            references: await this.resolve(uniqueReferences, params.principal, params.includeContent === true, params.limit ?? 10, params.maxChars ?? 4000),
+            total: uniqueReferences.length,
         };
     }
 }

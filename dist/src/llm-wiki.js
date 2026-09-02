@@ -2,9 +2,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import { normalizeScopeId } from './scopes.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
-import { knowledgeOrganization, normalizeLifecycle, normalizeNoteKind, normalizeReviewAt, organizationLintIssues } from './organization.js';
+import { knowledgeOrganization, normalizeLifecycle, normalizeNoteKind, normalizeReviewAt, organizationLintIssues, RELATION_FIELDS } from './organization.js';
 import { extractWikiLinkOccurrences } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
+import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 const KNOWLEDGE_STATUSES = new Set(['draft', 'verified', 'disputed', 'superseded']);
 const CONFIDENCE_LEVELS = new Set(['low', 'medium', 'high']);
 const ISSUE_KINDS = new Set(['contradiction', 'unsupported_claim', 'stale', 'broken_link', 'missing_context', 'other']);
@@ -119,6 +120,8 @@ The working pipeline is Capture (\`ingest_source\`/Inbox) -> Organize (propertie
 and links) -> Distill (\`publish_knowledge\`/lint) -> Express (MOCs, decisions,
 discussion, and Git). These hints are intentionally non-blocking except for
 the existing evidence and integrity invariants.
+
+Use \`aliases\` for stable Obsidian navigation, optional \`stable_id\` for a durable note identity, and compact \`summary\`, \`key_points\`, and \`open_questions\` properties for progressive reads; never replace the full Markdown body with a summary. Typed link arrays such as \`supports\`, \`contradicts\`, \`supersedes\`, \`derived_from\`, \`depends_on\`, \`implements\`, \`blocked_by\`, and \`related\` explain the relationship while ordinary \`[[wikilinks]]\` remain the navigational source. Use \`next_actions\` and \`waiting_for\` on project/task notes only. Call \`wiki.organization_health\` to review property, MOC, atomicity, and typed-link problems in one bounded report.
 
 ## Invariants
 
@@ -349,6 +352,14 @@ export class LlmWikiService {
                     ...(params.moc !== undefined && { moc: params.moc }),
                     ...(params.project !== undefined && { project: params.project }),
                     ...(params.reviewAt !== undefined && { reviewAt: params.reviewAt }),
+                    ...(params.aliases !== undefined && { aliases: params.aliases }),
+                    ...(params.summary !== undefined && { summary: params.summary }),
+                    ...(params.keyPoints !== undefined && { keyPoints: params.keyPoints }),
+                    ...(params.openQuestions !== undefined && { openQuestions: params.openQuestions }),
+                    ...(params.nextActions !== undefined && { nextActions: params.nextActions }),
+                    ...(params.waitingFor !== undefined && { waitingFor: params.waitingFor }),
+                    ...(params.stableId !== undefined && { stableId: params.stableId }),
+                    ...(params.relations !== undefined && { relations: params.relations }),
                     status,
                 }),
                 updated_by: params.author,
@@ -552,7 +563,7 @@ export class LlmWikiService {
         if (note.frontmatter.llm_wiki_type && note.frontmatter.llm_wiki_type !== 'knowledge') {
             throw new Error(`triage_wiki_note cannot classify managed LLM Wiki type '${note.frontmatter.llm_wiki_type}'`);
         }
-        const hasOrganizationInput = [params.noteKind, params.lifecycle, params.moc, params.project, params.reviewAt, params.nextAction, params.waitingFor]
+        const hasOrganizationInput = [params.noteKind, params.lifecycle, params.moc, params.project, params.reviewAt, params.nextAction, params.waitingFor, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.nextActions, params.stableId, params.relations]
             .some(value => value !== undefined);
         if (!hasOrganizationInput)
             throw new Error('At least one organization field is required');
@@ -571,6 +582,24 @@ export class LlmWikiService {
             patch.next_action = String(params.nextAction).trim().slice(0, 500);
         if (params.waitingFor !== undefined)
             patch.waiting_for = String(params.waitingFor).trim().slice(0, 500);
+        const organization = knowledgeOrganization({
+            existing: note.frontmatter,
+            ...(params.noteKind !== undefined && { noteKind: params.noteKind }),
+            ...(params.lifecycle !== undefined && { lifecycle: params.lifecycle }),
+            ...(params.moc !== undefined && { moc: params.moc }),
+            ...(params.project !== undefined && { project: params.project }),
+            ...(params.reviewAt !== undefined && { reviewAt: params.reviewAt }),
+            ...(params.aliases !== undefined && { aliases: params.aliases }),
+            ...(params.summary !== undefined && { summary: params.summary }),
+            ...(params.keyPoints !== undefined && { keyPoints: params.keyPoints }),
+            ...(params.openQuestions !== undefined && { openQuestions: params.openQuestions }),
+            ...(params.nextActions !== undefined && { nextActions: params.nextActions }),
+            ...(params.waitingFor !== undefined && { waitingFor: params.waitingFor }),
+            ...(params.stableId !== undefined && { stableId: params.stableId }),
+            ...(params.relations !== undefined && { relations: params.relations }),
+            status: String(note.frontmatter.knowledge_status || note.frontmatter.status || 'draft'),
+        });
+        Object.assign(patch, organization);
         await this.fileSystem.updateFrontmatter({ path: params.path, frontmatter: patch, merge: true, expectedRevision: params.expectedRevision });
         const updated = await this.fileSystem.readNote(params.path);
         return {
@@ -585,6 +614,15 @@ export class LlmWikiService {
                 ...(updated.frontmatter.review_at && { reviewAt: updated.frontmatter.review_at }),
                 ...(updated.frontmatter.next_action && { nextAction: updated.frontmatter.next_action }),
                 ...(updated.frontmatter.waiting_for && { waitingFor: updated.frontmatter.waiting_for }),
+                ...(updated.frontmatter.aliases && { aliases: updated.frontmatter.aliases }),
+                ...(updated.frontmatter.summary && { summary: updated.frontmatter.summary }),
+                ...(updated.frontmatter.key_points && { keyPoints: updated.frontmatter.key_points }),
+                ...(updated.frontmatter.open_questions && { openQuestions: updated.frontmatter.open_questions }),
+                ...(updated.frontmatter.next_actions && { nextActions: updated.frontmatter.next_actions }),
+                ...(updated.frontmatter.stable_id && { stableId: updated.frontmatter.stable_id }),
+                relations: Object.fromEntries(RELATION_FIELDS
+                    .filter(field => Array.isArray(updated.frontmatter[field]) && updated.frontmatter[field].length > 0)
+                    .map(field => [field, updated.frontmatter[field]])),
             },
         };
     }
@@ -646,6 +684,16 @@ export class LlmWikiService {
             lifecycle: note.frontmatter.lifecycle,
             status: note.frontmatter.knowledge_status || note.frontmatter.status,
             confidence: note.frontmatter.confidence,
+            ...(Array.isArray(note.frontmatter.aliases) && { aliases: note.frontmatter.aliases.slice(0, 30) }),
+            ...(typeof note.frontmatter.summary === 'string' && { summary: boundedText(note.frontmatter.summary, 2000) }),
+            ...(Array.isArray(note.frontmatter.key_points) && { keyPoints: note.frontmatter.key_points.slice(0, 20) }),
+            ...(Array.isArray(note.frontmatter.open_questions) && { openQuestions: note.frontmatter.open_questions.slice(0, 20) }),
+            ...(Array.isArray(note.frontmatter.next_actions) && { nextActions: note.frontmatter.next_actions.slice(0, 20) }),
+            ...(typeof note.frontmatter.waiting_for === 'string' && { waitingFor: note.frontmatter.waiting_for }),
+            ...(typeof note.frontmatter.stable_id === 'string' && { stableId: note.frontmatter.stable_id }),
+            relations: Object.fromEntries(RELATION_FIELDS
+                .filter(field => Array.isArray(note.frontmatter[field]) && note.frontmatter[field].length > 0)
+                .map(field => [field, note.frontmatter[field].slice(0, 30)])),
             ...(sectionRange && { section: { requested: params.section, ...sectionRange } }),
             ...(view !== 'full' && headings.length > 0 && { headings: headings.slice(0, 50) }),
             content: bounded,
@@ -777,6 +825,50 @@ export class LlmWikiService {
         return JSON.stringify(report).length <= boundedChars
             ? report
             : { truncated: true, note: `Graph health report exceeded ${boundedChars} characters; inspect one category at a time.` };
+    }
+    /**
+     * One-pass organization quality projection. It reuses lint's authoritative
+     * scan instead of running separate folder/property scans, and never mutates
+     * notes or treats organization hints as security boundaries.
+     */
+    async organizationHealth(principal, limit = 30, maxChars = 7000) {
+        const boundedLimit = Math.min(Math.max(Number(limit) || 30, 1), 100);
+        const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
+        const lint = await this.lint(principal, Math.max(200, boundedLimit * 4));
+        const organizationCodes = new Set([
+            'invalid_note_kind', 'invalid_lifecycle', 'active_project_without_next_action',
+            'knowledge_note_kind_missing', 'knowledge_lifecycle_missing', 'invalid_review_at',
+            'knowledge_review_due', 'review_date_missing', 'moc_without_links',
+            'inbox_lifecycle_mismatch', 'invalid_aliases', 'duplicate_aliases',
+            'invalid_key_points', 'invalid_open_questions', 'invalid_next_actions',
+            'invalid_summary', 'invalid_stable_id', 'atomic_note_may_be_too_broad',
+            'invalid_relation',
+            ...RELATION_FIELDS.flatMap(field => [`invalid_${field}`, `duplicate_${field}`, `unsafe_${field}`]),
+        ]);
+        const issues = lint.issues.filter(issue => organizationCodes.has(issue.code)).slice(0, boundedLimit);
+        const byCode = {};
+        for (const issue of lint.issues)
+            if (organizationCodes.has(issue.code))
+                byCode[issue.code] = (byCode[issue.code] || 0) + 1;
+        const recommendations = [
+            ...(byCode.active_project_without_next_action ? ['Add a concrete next_action or waiting_for to each active project.'] : []),
+            ...(byCode.knowledge_review_due || byCode.review_date_missing ? ['Review due or disputed notes and reschedule only after checking their evidence.'] : []),
+            ...(byCode.moc_without_links ? ['Give each MOC at least one meaningful [[wikilink]] and remove empty navigation notes.'] : []),
+            ...(byCode.atomic_note_may_be_too_broad ? ['Split broad atomic notes into single-claim notes and connect them with typed links.'] : []),
+            ...(Object.keys(byCode).some(code => code.startsWith('invalid_') || code.startsWith('unsafe_')) ? ['Repair property shapes before relying on catalog filters or projections.'] : []),
+        ];
+        const result = {
+            healthy: issues.length === 0,
+            organizationIssueTotal: Object.values(byCode).reduce((sum, count) => sum + count, 0),
+            byCode,
+            issues,
+            recommendations,
+            truncated: lint.truncated || Object.values(byCode).reduce((sum, count) => sum + count, 0) > issues.length,
+            generatedAt: now(),
+        };
+        return JSON.stringify(result).length <= boundedChars
+            ? result
+            : { ...result, issues: issues.slice(0, Math.max(1, Math.floor(issues.length / 2))), truncated: true };
     }
     async preflightPublish(params) {
         if (!this.access.canAccessPhysicalPath(params.path, params.principal))
@@ -1326,6 +1418,32 @@ export class LlmWikiService {
                     || !canAccess(reference)
                     || !await this.fileSystem.noteExists(reference)) {
                     addIssue({ severity: 'error', code: 'invalid_reference', path: this.access.toPublicPath(note.path), detail: `Missing, inaccessible, or too-private reference: ${this.access.toPublicPath(reference)}` });
+                }
+            }
+            for (const relationField of RELATION_FIELDS) {
+                const relations = Array.isArray(note.frontmatter[relationField])
+                    ? note.frontmatter[relationField].filter((item) => typeof item === 'string')
+                    : [];
+                for (const rawRelation of relations) {
+                    let target = rawRelation;
+                    try {
+                        if (/^!?\[\[.+\]\]$/.test(rawRelation)) {
+                            const parsed = parseWikiLink(rawRelation.replace(/^!/, ''));
+                            const matches = await this.fileSystem.findPathForWikiLink(parsed.document, canAccess);
+                            if (matches.length !== 1) {
+                                addIssue({ severity: 'error', code: 'invalid_relation', path: this.access.toPublicPath(note.path), detail: `${relationField} target is ${matches.length === 0 ? 'missing' : 'ambiguous'}: ${rawRelation}` });
+                                continue;
+                            }
+                            target = matches[0];
+                        }
+                    }
+                    catch {
+                        addIssue({ severity: 'error', code: 'invalid_relation', path: this.access.toPublicPath(note.path), detail: `${relationField} contains malformed Obsidian link: ${rawRelation}` });
+                        continue;
+                    }
+                    if (!this.access.canReferenceFrom(note.path, target) || !canAccess(target) || !await this.fileSystem.noteExists(target)) {
+                        addIssue({ severity: 'error', code: 'invalid_relation', path: this.access.toPublicPath(note.path), detail: `${relationField} points to an inaccessible or missing note: ${rawRelation}` });
+                    }
                 }
             }
         }

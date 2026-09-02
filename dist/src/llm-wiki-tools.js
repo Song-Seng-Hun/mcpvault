@@ -45,6 +45,14 @@ export function getLlmWikiTools() {
                     lifecycle: { type: 'string', enum: ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'] },
                     moc: { type: 'string', description: 'Optional Obsidian [[MOC]] link or path' }, project: { type: 'string', description: 'Optional Obsidian [[Project]] link or path' },
                     reviewAt: { type: 'string', description: 'Optional ISO date/time for evidence review' },
+                    aliases: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 30, description: 'Optional Obsidian aliases for stable navigation' },
+                    summary: { type: 'string', maxLength: 2000, description: 'Optional compact projection; preserve the full Markdown body' },
+                    keyPoints: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
+                    openQuestions: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
+                    nextActions: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
+                    waitingFor: { type: 'string', maxLength: 500 },
+                    stableId: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', maxLength: 80, description: 'Optional stable identity for durable notes; not a security boundary' },
+                    relations: { type: 'object', description: 'Typed Obsidian link arrays: supports, contradicts, supersedes, derived_from, depends_on, implements, blocked_by, related' },
                     claims: { type: 'array', maxItems: 100, description: 'Optional claim-level provenance. Every claim needs text and at least one intact immutable evidence path.', items: { type: 'object', properties: {
                                 id: { type: 'string' }, text: { type: 'string' }, evidencePaths: { type: 'array', items: { type: 'string' }, maxItems: 20 },
                                 confidence: { type: 'string', enum: ['low', 'medium', 'high'] }, status: { type: 'string', enum: ['supported', 'disputed', 'unverified', 'superseded'] },
@@ -80,6 +88,13 @@ export function getLlmWikiTools() {
                     path: { type: 'string' }, noteKind: { type: 'string', enum: ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'decision', 'project', 'area', 'resource', 'journal', 'task'] },
                     lifecycle: { type: 'string', enum: ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'] },
                     moc: { type: 'string' }, project: { type: 'string' }, reviewAt: { type: 'string' },
+                    aliases: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 30 },
+                    summary: { type: 'string', maxLength: 2000 },
+                    keyPoints: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
+                    openQuestions: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
+                    nextActions: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
+                    stableId: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', maxLength: 80 },
+                    relations: { type: 'object', description: 'Typed Obsidian link arrays' },
                     nextAction: { type: 'string', description: 'Optional concrete next action for an active project' },
                     waitingFor: { type: 'string', description: 'Optional person/event/resource this project is waiting for' },
                     expectedRevision: { type: 'string' }, accessToken, prettyPrint,
@@ -105,6 +120,13 @@ export function getLlmWikiTools() {
             description: 'Report broken wikilinks, orphan notes, and empty MOCs with bounded samples. Use it to repair navigation without creating a parallel index.',
             inputSchema: { type: 'object', properties: {
                     limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint,
+                } },
+        },
+        {
+            name: 'get_wiki_organization_health',
+            description: 'Return one bounded report for PARA, Zettelkasten, Properties, and typed-link organization issues. It reuses the live Wiki lint scan, never moves or deletes notes, and treats folders as filing aids rather than security boundaries.',
+            inputSchema: { type: 'object', properties: {
+                    limit: { type: 'integer', minimum: 1, maximum: 100, default: 30 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint,
                 } },
         },
         {

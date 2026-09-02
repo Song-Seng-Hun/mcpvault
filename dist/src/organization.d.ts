@@ -7,6 +7,9 @@
  */
 export declare const NOTE_KINDS: readonly ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'decision', 'project', 'area', 'resource', 'journal', 'task'];
 export declare const LIFECYCLES: readonly ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'];
+/** Typed relationships are navigation metadata, never an access grant. */
+export declare const RELATION_FIELDS: readonly ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'related'];
+export declare const ORGANIZATION_LIST_FIELDS: readonly ["aliases", "key_points", "open_questions", "next_actions", "supports", "contradicts", "supersedes", "derived_from", "depends_on", "implements", "blocked_by", "related"];
 export type NoteKind = typeof NOTE_KINDS[number];
 export type Lifecycle = typeof LIFECYCLES[number];
 export declare function normalizeNoteKind(value: unknown, fallback?: NoteKind): NoteKind | undefined;
@@ -21,6 +24,14 @@ export interface KnowledgeOrganizationInput {
     project?: unknown;
     reviewAt?: unknown;
     status: string;
+    aliases?: unknown;
+    summary?: unknown;
+    keyPoints?: unknown;
+    openQuestions?: unknown;
+    nextActions?: unknown;
+    waitingFor?: unknown;
+    stableId?: unknown;
+    relations?: unknown;
 }
 export declare function knowledgeOrganization(input: KnowledgeOrganizationInput): Record<string, unknown>;
 export interface OrganizationLintIssue {
