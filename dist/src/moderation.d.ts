@@ -1,6 +1,6 @@
 import type { FileSystemService } from './filesystem.js';
 import type { ScopeAuthService, ScopePrincipal } from './scope-auth.js';
-export declare const MODERATION_TARGET_TYPES: readonly ['post', 'comment', 'message', 'account'];
+export declare const MODERATION_TARGET_TYPES: readonly ['post', 'comment', 'message', 'account', 'family'];
 export type ModerationTargetType = typeof MODERATION_TARGET_TYPES[number];
 export declare const MODERATION_REPORT_CATEGORIES: readonly ['prompt_injection', 'malware', 'harassment', 'spam', 'privacy', 'impersonation', 'other'];
 export type ModerationReportCategory = typeof MODERATION_REPORT_CATEGORIES[number];
@@ -89,10 +89,8 @@ export declare class ModerationService {
         moderationStatus: "hidden" | "quarantined" | "removed" | "visible" | "warned";
         revision: string;
         warning: string | undefined;
-        alreadyActive?: never;
-        alreadyInactive?: never;
         accountId?: never;
-        active?: never;
+        alreadyActive?: never;
     } | {
         targetType?: never;
         targetId?: never;
@@ -101,12 +99,9 @@ export declare class ModerationService {
         warning?: never;
         success: boolean;
         action: "ban";
-        accountId: string;
+        accountId: string | undefined;
         alreadyActive: boolean;
-        alreadyInactive?: never;
-        active?: never;
     } | {
-        targetType?: never;
         targetId?: never;
         moderationStatus?: never;
         revision?: never;
@@ -114,23 +109,24 @@ export declare class ModerationService {
         alreadyActive?: never;
         success: boolean;
         action: "unban";
-        accountId: string;
+        targetType: "account" | "family";
+        accountId?: string;
+        familyId?: string;
         alreadyInactive: boolean;
-        active?: never;
     } | {
-        targetType?: never;
         targetId?: never;
         moderationStatus?: never;
         revision?: never;
         warning?: never;
         alreadyActive?: never;
-        alreadyInactive?: never;
         success: boolean;
         action: "ban" | "hide" | "quarantine" | "remove" | "restore" | "unban" | "warn";
-        accountId: string;
+        targetType: "account" | "family";
+        accountId?: string;
+        familyId?: string;
         active: boolean;
     }>;
-    isBanned(accountId: string): Promise<boolean>;
+    isBanned(accountId: string, userId?: string): Promise<boolean>;
     listBannedAccountIds(): Promise<Set<string>>;
 }
 export {};

@@ -14,7 +14,7 @@ export function parseScopePath(value) {
     const raw = String(value || '').trim();
     if (!raw.toLowerCase().startsWith('scope://'))
         return undefined;
-    const match = /^scope:\/\/(global|model|agent)(?:\/([^/]+))?(?:\/(.*))?$/i.exec(raw.replace(/\\/g, '/'));
+    const match = /^scope:\/\/(global|community|user|model|agent)(?:\/([^/]+))?(?:\/(.*))?$/i.exec(raw.replace(/\\/g, '/'));
     if (!match)
         throw new Error(`Invalid scope path: ${raw}`);
     const kind = match[1].toLowerCase();
@@ -47,11 +47,19 @@ export function expandScopePath(value) {
     }
     const id = parsed.id;
     const logical = parsed.logicalPath ? normalizeLogicalPath(parsed.logicalPath) : '';
+    if (kind === 'community') {
+        // Community notes predate command-center scopes and are intentionally kept
+        // in their ordinary Obsidian tree. ScopeAccessPolicy verifies that the
+        // URI targets this server's command center before this path is used.
+        return `Community${logical ? `/${logical}` : ''}`;
+    }
     return `_scopes/${kind}s/${id}${logical ? `/${logical}` : ''}`;
 }
 export function scopeRoot(kind, id) {
     if (kind === 'global')
         return '';
+    if (kind === 'community')
+        return 'Community';
     return `_scopes/${kind}s/${normalizeScopeId(id || '', `${kind}Id`)}`;
 }
 const now = () => new Date().toISOString();
@@ -80,16 +88,20 @@ export class CollaborationService {
         const identity = await this.fileSystem.readNote(path);
         return identity.frontmatter.model_id ? normalizeScopeId(String(identity.frontmatter.model_id), 'modelId') : undefined;
     }
-    getScopeContext(modelId, agentId) {
+    getScopeContext(modelId, agentId, userId, commandCenterId = 'local') {
         const model = modelId ? normalizeScopeId(modelId, 'modelId') : undefined;
         const agent = agentId ? normalizeScopeId(agentId, 'agentId') : undefined;
+        const user = userId ? normalizeScopeId(userId, 'userId') : undefined;
+        const center = normalizeScopeId(commandCenterId, 'commandCenterId');
         return {
-            precedence: ['agent', 'model', 'global'],
+            precedence: ['agent', 'user', 'model', 'community', 'global'],
             global: { uri: 'scope://global/', root: '' },
+            community: { id: center, uri: `scope://community/${center}/`, root: scopeRoot('community', center), sync: 'command-center-only' },
+            ...(user && { user: { id: user, uri: `scope://user/${user}/`, root: scopeRoot('user', user), access: 'same-user-family' } }),
             ...(model && { model: { id: model, uri: `scope://model/${model}/`, root: scopeRoot('model', model) } }),
             ...(agent && { agent: { id: agent, uri: `scope://agent/${agent}/`, root: scopeRoot('agent', agent), identityPath: identityPath(agent) } }),
-            access: model || agent ? 'authenticated-private-plus-global' : 'public-global-only',
-            note: 'Global is public and is the default. Model and agent namespaces are private; login_scope access is required and searches never include another owner\'s scope.',
+            access: user || model || agent ? 'authenticated-user-family-plus-private-legacy-and-global' : 'public-global-community',
+            note: 'Global is the cross-command-center knowledge layer. Community is public only inside this command center. User is private and shared by the same human user\'s agents; model and agent namespaces are legacy/private compatibility areas.',
         };
     }
     async createAgentScope(params) {
@@ -159,8 +171,11 @@ export class CollaborationService {
         const candidates = [];
         if (params.agentId)
             candidates.push({ scope: 'agent', path: `${scopeRoot('agent', params.agentId)}/${logical}` });
+        if (params.userId)
+            candidates.push({ scope: 'user', path: `${scopeRoot('user', params.userId)}/${logical}` });
         if (modelId)
             candidates.push({ scope: 'model', path: `${scopeRoot('model', modelId)}/${logical}` });
+        candidates.push({ scope: 'community', path: `${scopeRoot('community', params.commandCenterId || 'local')}/${logical}` });
         candidates.push({ scope: 'global', path: logical });
         for (const candidate of candidates) {
             if (!await this.fileSystem.noteExists(candidate.path))
@@ -177,8 +192,11 @@ export class CollaborationService {
         const scopes = [];
         if (params.agentId)
             scopes.push({ scope: 'agent', root: scopeRoot('agent', params.agentId) });
+        if (params.userId)
+            scopes.push({ scope: 'user', root: scopeRoot('user', params.userId) });
         if (modelId)
             scopes.push({ scope: 'model', root: scopeRoot('model', modelId) });
+        scopes.push({ scope: 'community', root: scopeRoot('community', params.commandCenterId || 'local') });
         scopes.push({ scope: 'global', root: '' });
         const found = new Set();
         const merged = [];

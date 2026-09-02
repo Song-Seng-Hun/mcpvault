@@ -34,6 +34,7 @@ async function passwordDigest(password, salt) {
 export class ScopeAuthService {
     authPath;
     moderatorAccounts;
+    commandCenterId;
     sessions = new Map();
     loginFailures = new Map();
     dummySalt = randomBytes(16);
@@ -45,6 +46,7 @@ export class ScopeAuthService {
         this.authPath = join(resolve(vaultPath), '.mcpvault', 'scope-auth.json');
         const configured = options.moderatorAccounts || String(process.env.MCPVAULT_MODERATOR_ACCOUNTS || '').split(',');
         this.moderatorAccounts = new Set(configured.map(value => String(value).trim().toLowerCase()).filter(Boolean));
+        this.commandCenterId = normalizeScopeId(options.commandCenterId || process.env.MCPVAULT_COMMAND_CENTER_ID || 'local', 'commandCenterId');
     }
     effectiveCapabilities(principal) {
         const capabilities = Array.from(new Set(principal.capabilities || this.defaultCapabilities(principal.role)));
@@ -130,6 +132,11 @@ export class ScopeAuthService {
         const agentId = params.agentId ? normalizeScopeId(params.agentId, 'agentId') : undefined;
         const password = validatePassword(params.password);
         const sponsor = this.authenticate(params.accessToken);
+        const requestedUserId = params.userId ? normalizeScopeId(params.userId, 'userId') : undefined;
+        const userId = requestedUserId || sponsor?.userId || accountId;
+        if (sponsor?.userId && requestedUserId && sponsor.userId !== requestedUserId) {
+            throw new Error('An agent must use the sponsoring model owner\'s userId; different users cannot share a family scope');
+        }
         if (agentId) {
             if (sponsor && (sponsor.role !== 'model' || sponsor.modelId !== modelId)) {
                 throw new Error('Only an authenticated owner of this model scope may register an agent account under it');
@@ -159,6 +166,8 @@ export class ScopeAuthService {
                 accountId,
                 modelId,
                 ...(agentId && { agentId }),
+                userId,
+                commandCenterId: this.commandCenterId,
                 role: agentId ? 'agent' : 'model',
                 capabilities: this.defaultCapabilities(agentId ? 'agent' : 'model'),
             };
@@ -208,6 +217,9 @@ export class ScopeAuthService {
             });
             throw new Error('Invalid account or password');
         }
+        if (account.commandCenterId && account.commandCenterId !== this.commandCenterId) {
+            throw new Error('This account belongs to a different command center');
+        }
         this.loginFailures.delete(accountId);
         const accessToken = randomBytes(32).toString('base64url');
         const expiresAt = Date.now() + SESSION_TTL_MS;
@@ -215,6 +227,8 @@ export class ScopeAuthService {
             accountId: account.accountId,
             modelId: account.modelId,
             ...(account.agentId && { agentId: account.agentId }),
+            userId: account.userId || account.accountId,
+            commandCenterId: account.commandCenterId || this.commandCenterId,
             role: account.role,
             capabilities: Array.isArray(account.capabilities)
                 ? account.capabilities.filter((capability) => SCOPE_CAPABILITIES.includes(capability))
@@ -242,15 +256,21 @@ export class ScopeAuthService {
             return cached.value.map(principal => ({ ...principal, ...(principal.capabilities && { capabilities: [...principal.capabilities] }) }));
         }
         const database = await this.readDatabase();
-        const value = database.accounts.map(account => ({
+        const value = database.accounts
+            .filter(account => !account.commandCenterId || account.commandCenterId === this.commandCenterId)
+            .map(account => ({
             accountId: account.accountId,
             modelId: account.modelId,
             ...(account.agentId && { agentId: account.agentId }),
+            userId: account.userId || account.accountId,
+            commandCenterId: account.commandCenterId || this.commandCenterId,
             role: account.role,
             capabilities: this.effectiveCapabilities({
                 accountId: account.accountId,
                 modelId: account.modelId,
                 ...(account.agentId && { agentId: account.agentId }),
+                userId: account.userId || account.accountId,
+                commandCenterId: account.commandCenterId || this.commandCenterId,
                 role: account.role,
                 capabilities: Array.isArray(account.capabilities)
                     ? account.capabilities.filter((capability) => SCOPE_CAPABILITIES.includes(capability))
@@ -276,8 +296,9 @@ export class ScopeAuthService {
         return await this.exclusive(async () => {
             const database = await this.readDatabase();
             const account = database.accounts.find(candidate => candidate.agentId === agentId);
-            if (!account || account.modelId !== sponsor.modelId)
-                throw new Error(`Agent account '${agentId}' does not belong to this model scope`);
+            if (!account || account.modelId !== sponsor.modelId || (sponsor.userId && (account.userId || account.accountId) !== sponsor.userId)) {
+                throw new Error(`Agent account '${agentId}' does not belong to this model/user scope`);
+            }
             await this.writeDatabase({
                 ...database,
                 accounts: database.accounts.map(candidate => candidate === account ? { ...candidate, capabilities } : candidate),

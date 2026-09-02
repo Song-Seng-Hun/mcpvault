@@ -23,7 +23,7 @@ export function getModerationTools(): Tool[] {
     },
     {
       name: 'moderate_content',
-      description: 'Enforce a moderator action with a reason and optimistic revision: warn, hide, quarantine, remove, restore, ban, or unban. Removal is soft and Git-recoverable; hidden/quarantined content is excluded from normal reads and search. Ban/unban targets an account and leaves public reading available but blocks mutations.',
+      description: 'Enforce a moderator action with a reason and optimistic revision: warn, hide, quarantine, remove, restore, ban, or unban. Removal is soft and Git-recoverable; hidden/quarantined content is excluded from normal reads and search. Ban/unban may target one account or a whole family (all accounts sharing the same userId), leaving public reading available but blocking mutations for the matching family.',
       inputSchema: { type: 'object', properties: {
         action: { type: 'string', enum: [...MODERATION_ACTIONS] }, targetType: { type: 'string', enum: [...MODERATION_TARGET_TYPES] }, targetId: { type: 'string' }, postId: { type: 'string' }, roomId: { type: 'string' }, reason: { type: 'string', maxLength: 500 }, expectedRevision: { type: 'string', description: 'Required for post/comment/message actions; use the current target revision' }, accessToken, prettyPrint,
       }, required: ['action', 'targetType', 'targetId', 'reason', 'accessToken'] },

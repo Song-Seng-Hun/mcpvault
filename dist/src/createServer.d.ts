@@ -11,6 +11,8 @@ export interface CreateServerOptions {
     readOnly?: boolean;
     /** Account IDs granted the site-wide moderation capability. */
     moderatorAccounts?: string[];
+    /** Stable namespace for this server's private community. */
+    commandCenterId?: string;
 }
 export interface ServerRuntime {
     endpointRegistry: EndpointRegistry;

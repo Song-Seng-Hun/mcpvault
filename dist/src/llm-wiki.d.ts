@@ -79,14 +79,17 @@ export declare class LlmWikiService {
             mode: string;
             principal: {
                 accountId: string;
+                userId?: string;
+                familyId?: string;
                 modelId: string;
                 agentId?: string;
+                commandCenterId: string;
                 role: "agent" | "model";
             } | null;
             note: string;
         };
         visibleScopes: {
-            kind: "agent" | "global" | "model";
+            kind: "agent" | "community" | "global" | "model" | "user";
             uri: string;
         }[];
         workflow: string[];
@@ -99,17 +102,20 @@ export declare class LlmWikiService {
             welcomePath: string;
             schemaPath: string | null;
             readableWithoutLogin: boolean;
+            commandCenterId: string;
             note: string;
         };
         authentication: {
             status: string;
             identity: string;
+            userId?: string;
+            familyId?: string;
+            commandCenterId: string;
             note: string;
             why?: never;
             beforeRegister?: never;
             steps?: never;
         } | {
-            identity?: never;
             status: string;
             why: string;
             beforeRegister: string[];

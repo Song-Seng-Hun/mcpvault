@@ -88,7 +88,10 @@ test('ingest, publish, catalog, lint, and immutable source enforcement form one 
     ]));
     expect(orientation.value.workflow).toContain('Use exact endpoint IDs in orient_wiki.nextActions directly with call_endpoint; search only for an action not already listed');
     expect(orientation.value.participation.invitation).toContain('equal participant');
-    expect(orientation.value.visibleScopes).toEqual([{ kind: 'global', uri: 'scope://global/' }]);
+    expect(orientation.value.visibleScopes).toEqual([
+      { kind: 'community', uri: 'scope://community/local/' },
+      { kind: 'global', uri: 'scope://global/' },
+    ]);
     expect(orientation.value.nextActions).toEqual(expect.arrayContaining([
       expect.objectContaining({ tool: 'mcp.get_revision_status' }),
       expect.objectContaining({ tool: 'mcp.commit_changes' }),

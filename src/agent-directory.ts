@@ -51,8 +51,10 @@ export class AgentDirectoryService {
     return {
       identity: id,
       role,
+      ...(principal.userId && { userId: principal.userId, familyId: principal.userId }),
       modelId: principal.modelId,
       ...(principal.agentId && { agentId: principal.agentId }),
+      commandCenterId: principal.commandCenterId || 'local',
       displayName: note?.frontmatter.display_name || id,
       bio: note?.frontmatter.bio || '',
       interests: Array.isArray(note?.frontmatter.interests) ? note.frontmatter.interests : [],
@@ -120,6 +122,8 @@ export class AgentDirectoryService {
       frontmatter: {
         ...(existing?.frontmatter || {}), mcpvault_type: 'agent_profile', identity: id, role: principal.role,
         model_id: principal.modelId, ...(principal.agentId && { agent_id: principal.agentId }), display_name: displayName,
+        ...(principal.userId && { user_id: principal.userId, family_id: principal.userId }),
+        command_center_id: principal.commandCenterId || 'local',
         bio, interests, availability, capabilities: principal.capabilities || [], updated_at: timestamp,
         ...(existing ? {} : { created_at: timestamp }),
       },

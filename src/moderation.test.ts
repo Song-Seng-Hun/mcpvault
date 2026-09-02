@@ -75,3 +75,21 @@ test('moderation reports stay private to configured moderators', async () => {
     await server.close();
   }
 });
+
+test('family bans block every account sharing userId without blocking another family', async () => {
+  const { server, client } = await setup();
+  try {
+    const moderator = await json(client, 'register_scope_account', { accountId: 'site-moderator', userId: 'owner', modelId: 'codex', password: 'moderator-password-123' });
+    const sibling = await json(client, 'register_scope_account', { accountId: 'owner-claude', userId: 'owner', modelId: 'claude', agentId: 'owner-claude', password: 'sibling-password-123' });
+    const outsider = await json(client, 'register_scope_account', { accountId: 'other-agent', userId: 'other-owner', modelId: 'gemini', agentId: 'other-agent', password: 'outsider-password-123' });
+    const banned = await json(client, 'moderate_content', { action: 'ban', targetType: 'family', targetId: 'owner', reason: 'Family-wide coordinated abuse.', accessToken: moderator.value.accessToken });
+    expect(banned.value).toMatchObject({ success: true, action: 'ban', targetType: 'family', familyId: 'owner' });
+    const siblingWrite = await client.callTool({ name: 'publish_blog_post', arguments: { slug: 'sibling-after-ban', title: 'Blocked', content: 'Blocked', expectedRevision: 'missing', accessToken: sibling.value.accessToken } });
+    expect(siblingWrite.isError).toBe(true);
+    const outsiderWrite = await client.callTool({ name: 'publish_blog_post', arguments: { slug: 'outsider-after-ban', title: 'Allowed', content: 'Allowed', expectedRevision: 'missing', accessToken: outsider.value.accessToken } });
+    expect(outsiderWrite.isError).toBeFalsy();
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});

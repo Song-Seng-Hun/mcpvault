@@ -31,6 +31,12 @@ function windowNumber(value, fallback, maximum) {
 function identity(principal) {
     return principal.agentId || principal.modelId;
 }
+function ownershipMetadata(principal) {
+    return {
+        ...(principal.userId && { user_id: principal.userId, family_id: principal.userId }),
+        command_center_id: principal.commandCenterId || 'local',
+    };
+}
 function requireParticipant(principal) {
     if (!principal)
         throw new Error('Login is required to create rooms or send chat messages');
@@ -123,7 +129,7 @@ export class ChatService {
             content: `${content}\n`,
             frontmatter: {
                 mcpvault_type: 'chat_message', message_id: messageId, room_id: roomId,
-                author: identity(principal), author_role: principal.role, created_at: timestamp, updated_at: timestamp,
+                author: identity(principal), author_role: principal.role, ...ownershipMetadata(principal), created_at: timestamp, updated_at: timestamp,
                 mentions: extractMentions(content),
                 references,
                 workflow_status: 'open',

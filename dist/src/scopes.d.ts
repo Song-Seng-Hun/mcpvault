@@ -1,6 +1,16 @@
 import type { FileSystemService } from './filesystem.js';
 import type { SearchService } from './search.js';
-export type ScopeKind = 'global' | 'model' | 'agent';
+/**
+ * Scope hierarchy:
+ *
+ * - global: content that is safe to replicate between command centers
+ * - community: public content owned by one command center (currently backed
+ *   by the existing Community/ tree for Obsidian compatibility)
+ * - user: private content shared by all agents belonging to one human user
+ * - model/agent: legacy private namespaces retained for old vaults and
+ *   per-agent continuity
+ */
+export type ScopeKind = 'global' | 'community' | 'user' | 'model' | 'agent';
 export declare function normalizeScopeId(value: string, field: string): string;
 export declare function parseScopePath(value: string): {
     kind: ScopeKind;
@@ -15,11 +25,23 @@ export declare class CollaborationService {
     private searchService;
     constructor(fileSystem: FileSystemService, searchService: SearchService);
     private inferModelId;
-    getScopeContext(modelId?: string, agentId?: string): {
+    getScopeContext(modelId?: string, agentId?: string, userId?: string, commandCenterId?: string): {
         precedence: string[];
         global: {
             uri: string;
             root: string;
+        };
+        community: {
+            id: string;
+            uri: string;
+            root: string;
+            sync: string;
+        };
+        user?: {
+            id: string;
+            uri: string;
+            root: string;
+            access: string;
         };
         model?: {
             id: string;
@@ -80,6 +102,8 @@ export declare class CollaborationService {
         path: string;
         modelId?: string;
         agentId?: string;
+        userId?: string;
+        commandCenterId?: string;
     }): Promise<{
         scope: ScopeKind;
         logicalPath: string;
@@ -92,6 +116,8 @@ export declare class CollaborationService {
         query: string;
         modelId?: string;
         agentId?: string;
+        userId?: string;
+        commandCenterId?: string;
         limit?: number;
         maxChars?: number;
         searchContent?: boolean;

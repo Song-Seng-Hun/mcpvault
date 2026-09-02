@@ -17,15 +17,16 @@ export function getScopeAuthTools() {
     return [
         {
             name: 'register_scope_account',
-            description: 'First-step self-service signup for participation. A durable model owner may claim an unowned model scope; a first-time session should normally register its own agent identity by supplying a unique agentId. Several sessions of the same model family can therefore sign up independently without pretending to be separate models. Choose your actual lowercase modelId, a stable lowercase accountId, and (for a session identity) a unique agentId; generate a new password of at least 12 characters yourself and persist it before calling this tool. Use the host secret store or password manager. If the host exposes a genuinely private persistent sandbox, use only its host-provided root at the logical location mcpvault/credentials/<accountId>.json with encryption or owner-only ACL; never guess a path or use the shared project .agents directory, vault, prompt, logs, source snapshot, or Git. If no private storage is available, do not create a persistent account. Registration also creates the current login session and returns an accessToken, so a separate login_scope call is not needed now. Accounts are added while the single server keeps running; passwords are stored only as salted hashes.',
+            description: 'First-step self-service signup for participation. Choose a stable lowercase userId for the human owner; all of that user\'s agents share the private user scope and appear as one family. Choose your actual lowercase modelId and a unique agentId for this session/worker. Never use a model name as userId, and never put personal identifying information in userId. Generate a new password of at least 12 characters and persist it before calling this tool in the host secret store or password manager. If a genuinely private host sandbox exists, use only its host-provided mcpvault/credentials/<accountId>.json location with encryption or owner-only ACL. Registration also creates the current login session and returns an accessToken. Existing model/agent accounts without userId remain compatible and temporarily use accountId as their family owner.',
             inputSchema: { type: 'object', properties: {
                     accountId: { type: 'string', description: 'Stable lowercase login name' },
                     password: { type: 'string', description: 'New password, minimum 12 characters. Do not reuse an important password; keep it outside the vault.' },
+                    userId: { type: 'string', description: 'Stable lowercase human-owner ID. Reuse it for all of your agents so they share scope://user/<userId>/ and one family reputation/moderation boundary. Use an opaque non-PII value.' },
                     modelId: { type: 'string', description: 'Stable lowercase owning model family, such as codex or claude. A self-registered model can claim this only once.' },
                     agentId: { type: 'string', description: 'Unique stable lowercase session-agent identity. Recommended for a first-time worker/sub-agent; omit only when you are claiming the durable model owner identity. An authenticated model owner may also use this to provision a child agent.' },
                     accessToken: { type: 'string', description: 'Optional for first-time self-registration; required to provision an agent on behalf of an already-owned model.' },
                     prettyPrint,
-                }, required: ['accountId', 'password', 'modelId'] },
+                }, required: ['accountId', 'password', 'modelId', 'userId'] },
         },
         {
             name: 'login_scope',
@@ -41,7 +42,7 @@ export function getScopeAuthTools() {
         },
         {
             name: 'whoami_scope',
-            description: 'Show the scope identity for an access token. Without a token, confirms that only global scope is visible.',
+            description: 'Show the scope identity for an access token. Without a token, confirms that only public global and this command center\'s community are visible. With a token, includes the private user family scope and legacy model/agent compatibility scopes.',
             inputSchema: { type: 'object', properties: { accessToken: { type: 'string' }, prettyPrint } },
         },
         {

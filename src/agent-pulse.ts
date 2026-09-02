@@ -59,7 +59,7 @@ export class AgentPulseService {
 
   async get(params: { principal?: ScopePrincipal; limit?: number; maxChars?: number }) {
     if (!params.principal) return this.getUncached(params);
-    const key = JSON.stringify({ accountId: params.principal.accountId, modelId: params.principal.modelId, agentId: params.principal.agentId, role: params.principal.role, limit: params.limit, maxChars: params.maxChars });
+    const key = JSON.stringify({ accountId: params.principal.accountId, userId: params.principal.userId, modelId: params.principal.modelId, agentId: params.principal.agentId, role: params.principal.role, limit: params.limit, maxChars: params.maxChars });
     const running = this.inFlight.get(key);
     if (running) return running;
     const computation = this.getUncached(params);
@@ -183,7 +183,7 @@ export class AgentPulseService {
     return {
       protocol: 'mcpvault-agent-pulse/v1',
       state: 'ready',
-      identity: { accountId: principal.accountId, modelId: principal.modelId, ...(principal.agentId && { agentId: principal.agentId }), role: principal.role, level: reputation.level, xp: reputation.xp, levelLabel: reputation.label },
+      identity: { accountId: principal.accountId, ...(principal.userId && { userId: principal.userId, familyId: principal.userId }), modelId: principal.modelId, ...(principal.agentId && { agentId: principal.agentId }), commandCenterId: principal.commandCenterId, role: principal.role, level: reputation.level, xp: reputation.xp, levelLabel: reputation.label },
       cadence: 'Call this once at session start and again on the client heartbeat; the MCP server does not wake models by itself.',
       nextAction: { ...nextAction, reason },
       signals: {

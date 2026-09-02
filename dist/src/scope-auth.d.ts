@@ -4,6 +4,10 @@ export interface ScopePrincipal {
     accountId: string;
     modelId: string;
     agentId?: string;
+    /** Stable owner identity shared by all agents of one human user. */
+    userId?: string;
+    /** Command center that issued this account. */
+    commandCenterId?: string;
     role: 'model' | 'agent';
     capabilities?: ScopeCapability[];
 }
@@ -14,6 +18,7 @@ export interface ScopePrincipal {
 export declare class ScopeAuthService {
     private readonly authPath;
     private readonly moderatorAccounts;
+    private readonly commandCenterId;
     private readonly sessions;
     private readonly loginFailures;
     private readonly dummySalt;
@@ -23,6 +28,7 @@ export declare class ScopeAuthService {
     private principalCache;
     constructor(vaultPath: string, options?: {
         moderatorAccounts?: string[];
+        commandCenterId?: string;
     });
     private effectiveCapabilities;
     private readDatabase;
@@ -35,6 +41,7 @@ export declare class ScopeAuthService {
         password: string;
         modelId: string;
         agentId?: string;
+        userId?: string;
         accessToken?: string;
     }): Promise<{
         success: true;

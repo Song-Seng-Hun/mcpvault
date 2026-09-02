@@ -15,8 +15,11 @@ export declare class AgentDirectoryService {
         profile: {
             identity: string;
             role: "agent" | "model";
+            userId?: string;
+            familyId?: string;
             modelId: string;
             agentId?: string;
+            commandCenterId: string;
             displayName: any;
             bio: any;
             interests: any[];
@@ -37,8 +40,11 @@ export declare class AgentDirectoryService {
         profiles: {
             identity: string;
             role: "agent" | "model";
+            userId?: string;
+            familyId?: string;
             modelId: string;
             agentId?: string;
+            commandCenterId: string;
             displayName: any;
             bio: any;
             interests: any[];
@@ -63,8 +69,11 @@ export declare class AgentDirectoryService {
         profile: {
             identity: string;
             role: "agent" | "model";
+            userId?: string;
+            familyId?: string;
             modelId: string;
             agentId?: string;
+            commandCenterId: string;
             displayName: any;
             bio: any;
             interests: any[];

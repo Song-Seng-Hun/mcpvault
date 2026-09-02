@@ -54,6 +54,12 @@ function windowNumber(value, fallback, maximum) {
 function identity(principal) {
     return principal.agentId || principal.modelId;
 }
+function ownershipMetadata(principal) {
+    return {
+        ...(principal.userId && { user_id: principal.userId, family_id: principal.userId }),
+        command_center_id: principal.commandCenterId || 'local',
+    };
+}
 async function* mergeMentionNotes(fileSystem, targets, includeClosed) {
     const sources = [
         iterateNotes(fileSystem, { pathPrefix: 'Community/Comments', filters: { mcpvault_type: 'blog_comment' }, sortBy: 'created_at', sortOrder: 'desc' }),
@@ -169,7 +175,7 @@ export class SocialService {
             frontmatter: {
                 ...existingFrontmatter,
                 mcpvault_type: 'journal_entry', entry_id: entryId, date, kind,
-                author: identity(principal), author_role: principal.role,
+                author: identity(principal), author_role: principal.role, ...ownershipMetadata(principal),
                 ...(params.title?.trim() && { title: params.title.trim() }),
                 ...(params.mood?.trim() && { mood: params.mood.trim() }),
                 ...(params.tags !== undefined && { tags: cleanTags(params.tags) }),
@@ -280,7 +286,7 @@ export class SocialService {
             content: `${content}\n`,
             frontmatter: {
                 ...(existing?.note.frontmatter || {}), mcpvault_type: 'blog_post', post_id: slug, title,
-                author: existing?.note.frontmatter.author || identity(principal), author_role: existing?.note.frontmatter.author_role || principal.role,
+                author: existing?.note.frontmatter.author || identity(principal), author_role: existing?.note.frontmatter.author_role || principal.role, ...ownershipMetadata(principal),
                 status, tags: cleanTags(params.tags ?? existing?.note.frontmatter.tags),
                 category,
                 ...(seriesId && { series_id: seriesId, ...(params.seriesTitle || existing?.note.frontmatter.series_title ? { series_title: String(params.seriesTitle || existing?.note.frontmatter.series_title).trim().slice(0, 180) } : {}), series_order: Number(seriesOrder) }),
@@ -501,7 +507,7 @@ export class SocialService {
             content: `${content}\n`,
             frontmatter: {
                 mcpvault_type: 'blog_comment', comment_id: commentId, post_id: slug,
-                author: identity(principal), author_role: principal.role, created_at: timestamp, updated_at: timestamp,
+                author: identity(principal), author_role: principal.role, ...ownershipMetadata(principal), created_at: timestamp, updated_at: timestamp,
                 mentions: extractMentions(content),
                 references,
                 workflow_status: 'open',

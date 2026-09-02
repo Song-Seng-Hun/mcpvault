@@ -45,6 +45,10 @@ interface ReactionRecord {
 
 const now = () => new Date().toISOString();
 const identity = (p: ScopePrincipal) => p.agentId || p.modelId;
+const ownershipMetadata = (p: ScopePrincipal): Record<string, string> => ({
+  ...(p.userId && { user_id: p.userId, family_id: p.userId }),
+  command_center_id: p.commandCenterId || 'local',
+});
 const shortText = (value: unknown, field = 'content', max = MAX_COMMUNITY_TEXT_LENGTH) => {
   const text = String(value ?? '').trim();
   if (!text) throw new Error(`${field} is required`);
@@ -536,7 +540,7 @@ export class CommunityFeaturesService {
       await this.fileSystem.writeNote({ path, content: '[removed]\n', frontmatter: { ...old.frontmatter, active: false, updated_at: now() }, expectedRevision: old.revision });
     } else if (params.active !== false) {
       const old = exists ? await this.fileSystem.readNote(path) : undefined;
-      await this.fileSystem.writeNote({ path, content: `${reaction}\n`, frontmatter: { mcpvault_type: 'reaction', reaction, target_type: params.targetType, target_id: params.targetId, ...(params.targetType === 'comment' && params.postId && { post_id: normalizeScopeId(params.postId, 'postId') }), actor: identity(params.principal), actor_role: params.principal.role, active: true, ...(old ? { created_at: old.frontmatter.created_at } : { created_at: now() }), updated_at: now() }, expectedRevision: old?.revision || 'missing' });
+      await this.fileSystem.writeNote({ path, content: `${reaction}\n`, frontmatter: { mcpvault_type: 'reaction', reaction, target_type: params.targetType, target_id: params.targetId, ...(params.targetType === 'comment' && params.postId && { post_id: normalizeScopeId(params.postId, 'postId') }), actor: identity(params.principal), actor_role: params.principal.role, ...ownershipMetadata(params.principal), active: true, ...(old ? { created_at: old.frontmatter.created_at } : { created_at: now() }), updated_at: now() }, expectedRevision: old?.revision || 'missing' });
     }
     if (params.targetType === 'post') this.invalidate(path);
     return { success: true, active: params.active !== false, reaction, targetType: params.targetType, targetId: params.targetId, actor: identity(params.principal) };
@@ -627,7 +631,7 @@ export class CommunityFeaturesService {
       const entryId = params.entryId ? normalizeScopeId(params.entryId, 'entryId') : `entry-${randomUUID().slice(0, 10)}`;
       const path = `${pathRoot}/${entryId}.md`;
       if (params.replyTo) await this.fileSystem.readNote(`${pathRoot}/${normalizeScopeId(params.replyTo, 'replyTo')}.md`);
-      await this.fileSystem.writeNote({ path, content: `${content}\n`, frontmatter: { mcpvault_type: 'guestbook_entry', guestbook_owner: owner, entry_id: entryId, author: identity(params.principal), author_role: params.principal.role, mentions: extractMentions(content), ...(params.replyTo && { reply_to: normalizeScopeId(params.replyTo, 'replyTo') }), content_status: 'published', created_at: now(), updated_at: now() }, expectedRevision: 'missing' });
+      await this.fileSystem.writeNote({ path, content: `${content}\n`, frontmatter: { mcpvault_type: 'guestbook_entry', guestbook_owner: owner, entry_id: entryId, author: identity(params.principal), author_role: params.principal.role, ...ownershipMetadata(params.principal), mentions: extractMentions(content), ...(params.replyTo && { reply_to: normalizeScopeId(params.replyTo, 'replyTo') }), content_status: 'published', created_at: now(), updated_at: now() }, expectedRevision: 'missing' });
       return { success: true, entryId, owner, path };
     }
     const limit = positive(params.limit, 20, 100);
@@ -660,7 +664,11 @@ export class CommunityFeaturesService {
   }
 
   private ownerRoot(principal: ScopePrincipal, kind: 'subscriptions' | 'saves') {
-    const scope = principal.agentId ? `agents/${normalizeScopeId(principal.agentId, 'agentId')}` : `models/${normalizeScopeId(principal.modelId, 'modelId')}`;
+    const scope = principal.userId
+      ? `users/${normalizeScopeId(principal.userId, 'userId')}`
+      : principal.agentId
+        ? `agents/${normalizeScopeId(principal.agentId, 'agentId')}`
+        : `models/${normalizeScopeId(principal.modelId, 'modelId')}`;
     return `_scopes/${scope}/_${kind}`;
   }
 
@@ -695,7 +703,12 @@ export class CommunityFeaturesService {
 
   async save(params: { principal?: ScopePrincipal; targetPath: string; note?: string; active?: boolean }) {
     if (!params.principal) throw new Error('Login is required to manage saves');
-    const target = this.access.resolveExternalPath(params.targetPath, params.principal);
+    // Keep old clients that bookmark a public physical Community path working,
+    // while all note/search path APIs require an explicit command-center URI.
+    const legacyPublicTarget = String(params.targetPath || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    const target = /^Community\//i.test(legacyPublicTarget) && !legacyPublicTarget.split('/').some(part => part === '.' || part === '..')
+      ? legacyPublicTarget
+      : this.access.resolveExternalPath(params.targetPath, params.principal);
     if (!await this.fileSystem.noteExists(target)) throw new Error(`Saved target was not found: ${target}`);
     const key = stableKey(target);
     const path = `${this.ownerRoot(params.principal, 'saves')}/${key}.md`;

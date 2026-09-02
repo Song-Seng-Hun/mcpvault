@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
@@ -28,9 +28,53 @@ function services() {
 
 test('scope URIs map to ordinary durable vault paths', () => {
   expect(expandScopePath('scope://global/Guide.md')).toBe('Guide.md');
+  expect(expandScopePath('scope://community/team-a/Posts/topic.md')).toBe('Community/Posts/topic.md');
+  expect(expandScopePath('scope://user/alice/Research.md')).toBe('_scopes/users/alice/Research.md');
   expect(expandScopePath('scope://model/codex/Guide.md')).toBe('_scopes/models/codex/Guide.md');
   expect(expandScopePath('scope://agent/reviewer-1/Notes/Guide.md')).toBe('_scopes/agents/reviewer-1/Notes/Guide.md');
   expect(() => expandScopePath('scope://agent/../Guide.md')).toThrow();
+});
+
+test('user scope is shared by one family while command-center community stays local', async () => {
+  const serverA = createServer(vault, { version: '1.0.0', commandCenterId: 'team-a' });
+  const [clientTransportA, serverTransportA] = InMemoryTransport.createLinkedPair();
+  const clientA = new Client({ name: 'scope-family-a', version: '1.0.0' });
+  await Promise.all([clientA.connect(clientTransportA), serverA.connect(serverTransportA)]);
+  try {
+    const first = await clientA.callTool({ name: 'register_scope_account', arguments: { accountId: 'alice-codex', userId: 'alice', modelId: 'codex', agentId: 'codex-worker', password: 'alice-codex-password' } });
+    const firstToken = JSON.parse((first.content as any)[0].text).accessToken;
+    const second = await clientA.callTool({ name: 'register_scope_account', arguments: { accountId: 'alice-claude', userId: 'alice', modelId: 'claude', agentId: 'claude-worker', password: 'alice-claude-password' } });
+    const secondToken = JSON.parse((second.content as any)[0].text).accessToken;
+    const outsider = await clientA.callTool({ name: 'register_scope_account', arguments: { accountId: 'bob-codex', userId: 'bob', modelId: 'codex', agentId: 'bob-worker', password: 'bob-codex-password' } });
+    const outsiderToken = JSON.parse((outsider.content as any)[0].text).accessToken;
+
+    const written = await clientA.callTool({ name: 'write_note', arguments: { path: 'scope://user/alice/shared.md', content: 'family memory', expectedRevision: 'missing', accessToken: firstToken } });
+    expect(written.isError).toBeFalsy();
+    const familyRead = await clientA.callTool({ name: 'read_note', arguments: { path: 'scope://user/alice/shared.md', accessToken: secondToken } });
+    expect(JSON.parse((familyRead.content as any)[0].text).content).toContain('family memory');
+    const outsiderRead = await clientA.callTool({ name: 'read_note', arguments: { path: 'scope://user/alice/shared.md', accessToken: outsiderToken } });
+    expect(outsiderRead.isError).toBe(true);
+
+    await mkdir(join(vault, 'Community', 'Posts'), { recursive: true });
+    await writeFile(join(vault, 'Community', 'Posts', 'local-topic.md'), '---\nmcpvault_type: blog_post\n---\n\nlocal community');
+    const communityRead = await clientA.callTool({ name: 'read_note', arguments: { path: 'scope://community/team-a/Posts/local-topic.md' } });
+    expect(communityRead.isError).toBeFalsy();
+
+    const serverB = createServer(vault, { version: '1.0.0', commandCenterId: 'team-b' });
+    const [clientTransportB, serverTransportB] = InMemoryTransport.createLinkedPair();
+    const clientB = new Client({ name: 'scope-family-b', version: '1.0.0' });
+    await Promise.all([clientB.connect(clientTransportB), serverB.connect(serverTransportB)]);
+    try {
+      const foreignCommunity = await clientB.callTool({ name: 'read_note', arguments: { path: 'scope://community/team-a/Posts/local-topic.md' } });
+      expect(foreignCommunity.isError).toBe(true);
+    } finally {
+      await clientB.close();
+      await serverB.close();
+    }
+  } finally {
+    await clientA.close();
+    await serverA.close();
+  }
 });
 
 test('ordinary tools accept scope URIs and scoped reads use agent-model-global precedence', async () => {
