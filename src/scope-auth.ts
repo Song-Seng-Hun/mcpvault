@@ -70,6 +70,7 @@ export class ScopeAuthService {
   private mutationQueue: Promise<void> = Promise.resolve();
   private databaseCache: { expiresAt: number; value: AuthDatabase } | undefined;
   private databaseInFlight: Promise<AuthDatabase> | undefined;
+  private principalCache: { expiresAt: number; value: ScopePrincipal[] } | undefined;
 
   constructor(vaultPath: string, options: { moderatorAccounts?: string[] } = {}) {
     this.authPath = join(resolve(vaultPath), '.mcpvault', 'scope-auth.json');
@@ -118,6 +119,7 @@ export class ScopeAuthService {
     await writeFile(temporary, `${JSON.stringify(database, null, 2)}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
     await rename(temporary, this.authPath);
     this.databaseCache = { expiresAt: Date.now() + AUTH_DATABASE_CACHE_TTL_MS, value: database };
+    this.principalCache = undefined;
     // Windows may ignore POSIX modes; on Unix this narrows permissions even
     // when the directory already existed with a permissive umask.
     await Promise.allSettled([chmod(directory, 0o700), chmod(this.authPath, 0o600)]);
@@ -288,8 +290,12 @@ export class ScopeAuthService {
   }
 
   async listPrincipals(): Promise<ScopePrincipal[]> {
+    const cached = this.principalCache;
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value.map(principal => ({ ...principal, ...(principal.capabilities && { capabilities: [...principal.capabilities] }) }));
+    }
     const database = await this.readDatabase();
-    return database.accounts.map(account => ({
+    const value = database.accounts.map(account => ({
       accountId: account.accountId,
       modelId: account.modelId,
       ...(account.agentId && { agentId: account.agentId }),
@@ -304,6 +310,8 @@ export class ScopeAuthService {
           : this.defaultCapabilities(account.role),
       }),
     }));
+    this.principalCache = { expiresAt: Date.now() + AUTH_DATABASE_CACHE_TTL_MS, value };
+    return value.map(principal => ({ ...principal, ...(principal.capabilities && { capabilities: [...principal.capabilities] }) }));
   }
 
   async updateAgentCapabilities(params: { accessToken: string; agentId: string; capabilities: unknown }): Promise<{ success: true; agentId: string; capabilities: ScopeCapability[] }> {

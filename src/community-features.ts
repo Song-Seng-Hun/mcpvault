@@ -10,6 +10,7 @@ import { boundItems, boundedTopK } from './search-limits.js';
 import { MAX_COMMUNITY_TEXT_LENGTH, extractMentions } from './social.js';
 import type { ReputationService } from './reputation.js';
 import type { NotificationService } from './notifications.js';
+import type { VaultFileCatalog } from './vault-catalog.js';
 import { iterateNotes, queryAllNotes, queryWindow } from './paged-query.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 
@@ -146,6 +147,7 @@ export class CommunityFeaturesService {
     private readonly reputation: ReputationService,
     private readonly vaultPath: string,
     private readonly notifications?: NotificationService,
+    private readonly fileCatalog?: VaultFileCatalog,
   ) {}
 
   async close(): Promise<void> {
@@ -171,11 +173,18 @@ export class CommunityFeaturesService {
       const chapter = { slug: note.frontmatter.post_id, title: note.frontmatter.title, author: note.frontmatter.author, order, path: note.path, moderationStatus: moderationStatus(note.frontmatter) } as Record<string, any>;
       const current = groups.get(id) || { seriesId: id, title: note.frontmatter.series_title || id, chapters: [], totalChapters: 0, chaptersTruncated: false };
       current.totalChapters += 1;
-      current.chapters.push(chapter);
       // Keep the earliest chapters without retaining an unbounded per-series
       // array. The count remains exact even when the returned chapter window
       // is truncated.
-      current.chapters.sort((a: any, b: any) => a.order - b.order || String(a.slug).localeCompare(String(b.slug)));
+      let low = 0;
+      let high = current.chapters.length;
+      const compare = (left: any, right: any) => left.order - right.order || String(left.slug).localeCompare(String(right.slug));
+      while (low < high) {
+        const middle = (low + high) >>> 1;
+        if (compare(current.chapters[middle], chapter) <= 0) low = middle + 1;
+        else high = middle;
+      }
+      current.chapters.splice(low, 0, chapter);
       if (current.chapters.length > chapterLimit) {
         current.chapters.pop();
         current.chaptersTruncated = true;
@@ -358,6 +367,15 @@ export class CommunityFeaturesService {
     const root = join(this.vaultPath, REACTIONS, 'post');
     const entries: ReactionSnapshotEntry[] = [];
     try {
+      if (this.fileCatalog) {
+        const paths = (await this.fileCatalog.notePathsSnapshot())
+          .filter(path => path.startsWith(`${REACTIONS}/post/`))
+          .sort((a, b) => a.localeCompare(b));
+        if (paths.length > MAX_REACTION_SNAPSHOT_ENTRIES) return undefined;
+        const stats = await this.fileCatalog.statPaths(paths);
+        if (stats.size !== paths.length) return undefined;
+        return paths.map(path => ({ path, ...stats.get(path)! }));
+      }
       const targets = (await readdir(root, { withFileTypes: true })).filter(target => target.isDirectory());
       // Reaction snapshots are disposable, but their cold-start scan should
       // not serialize every post directory on a busy community. Keep both

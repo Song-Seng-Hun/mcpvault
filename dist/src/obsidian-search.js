@@ -176,6 +176,7 @@ export class ObsidianSearchService {
             candidates.push({ ...entry, path });
         }
         const visibleEntries = [];
+        let verificationTruncated = false;
         for (let offset = 0; offset < candidates.length; offset += OBSIDIAN_VERIFY_BATCH_SIZE) {
             const batch = candidates.slice(offset, offset + OBSIDIAN_VERIFY_BATCH_SIZE);
             const verified = await Promise.all(batch.map(async (entry) => {
@@ -192,13 +193,17 @@ export class ObsidianSearchService {
             for (const entry of verified)
                 if (entry)
                     visibleEntries.push(entry);
+            if (visibleEntries.length >= limit) {
+                verificationTruncated = offset + batch.length < candidates.length;
+                break;
+            }
         }
         const results = boundSearchResults(visibleEntries.slice(0, limit).map(entry => ({
             p: entry.path,
             ...(entry.line !== undefined && { ln: entry.line }),
             ...(entry.text !== undefined && { ex: entry.text }),
         })), maxChars);
-        return { backend: 'obsidian', query, context: params.context === true, results, total: results.length, truncated: parserTruncated || visibleEntries.length > results.length || entries.length > visibleEntries.length };
+        return { backend: 'obsidian', query, context: params.context === true, results, total: results.length, truncated: parserTruncated || verificationTruncated || visibleEntries.length > results.length || entries.length > visibleEntries.length };
     }
     deleteCache(cacheKey) {
         if (this.cache.delete(cacheKey))

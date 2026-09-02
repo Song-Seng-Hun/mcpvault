@@ -225,6 +225,16 @@ and stat reaction files in bounded parallel batches, reducing latency without
 turning a large reaction tree into an unbounded I/O burst. Obsidian CLI search
 fallback parsing also splits its text output only once.
 
+Authentication also caches the derived principal list for the same short
+window as the database read and clears it immediately after account or
+capability changes. This reduces repeated identity mapping during directory,
+pulse, moderation, and reputation reads without delaying authorization updates.
+
+Authentication also caches the derived principal list for the same short
+window as the database read and clears it immediately after account or
+capability changes. This reduces repeated identity mapping during directory,
+pulse, moderation, and reputation reads without delaying authorization updates.
+
 The fair request queue also has a bounded waiting budget. When all lanes are
 busy, a request that cannot start within the queue window is rejected with a
 retryable error and does not remain as an unbounded promise or timer.

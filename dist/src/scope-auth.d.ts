@@ -20,6 +20,7 @@ export declare class ScopeAuthService {
     private mutationQueue;
     private databaseCache;
     private databaseInFlight;
+    private principalCache;
     constructor(vaultPath: string, options?: {
         moderatorAccounts?: string[];
     });
