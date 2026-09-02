@@ -10,12 +10,12 @@ describe('bounded response helpers', () => {
     expect(boundItems(items, exactBudget)).toEqual({ items: items.slice(0, 2), truncated: true });
   });
 
-  test('keeps an oversized first item for compatibility with existing bounds', () => {
+  test('does not return an oversized first item', () => {
     const item = { text: 'long item' };
     const budget = JSON.stringify([item]).length - 1;
 
-    expect(boundSearchResults([item, { text: 'later' }], budget)).toEqual([item]);
-    expect(boundItems([item, { text: 'later' }], budget)).toEqual({ items: [item], truncated: true });
+    expect(boundSearchResults([item, { text: 'later' }], budget)).toEqual([]);
+    expect(boundItems([item, { text: 'later' }], budget)).toEqual({ items: [], truncated: true });
   });
 });
 

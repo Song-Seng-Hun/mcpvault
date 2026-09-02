@@ -103,7 +103,11 @@ test("server can read and write notes via tools", async () => {
     ok: [{ path: "test.md", unchanged: true, revision: parsed.revision }],
   });
 
-  await client.callTool({ name: "write_note", arguments: { path: "test.md", content: "# Changed" } });
+  const unguardedUpdate = await client.callTool({ name: "write_note", arguments: { path: "test.md", content: "# Unsafe overwrite" } });
+  expect(unguardedUpdate.isError).toBe(true);
+  expect((unguardedUpdate.content as any)[0].text).toContain("requires expectedRevision");
+
+  await client.callTool({ name: "write_note", arguments: { path: "test.md", content: "# Changed", expectedRevision: parsed.revision } });
   const changedBatch = await client.callTool({ name: "read_multiple_notes", arguments: { paths: ["test.md"], knownRevisions: { "test.md": parsed.revision } } });
   const changedValue = JSON.parse((changedBatch.content as any)[0].text);
   expect(changedValue.ok[0].content).toContain("Changed");
@@ -534,10 +538,11 @@ test("revision tools checkpoint ordinary edits and restore one note safely", asy
     expect(firstCommit.isError).toBeFalsy();
     const first = JSON.parse((firstCommit.content as any)[0].text);
     expect(first).toMatchObject({ committed: true, paths: ["Plan.md"] });
+    const firstNote = JSON.parse(((await client.callTool({ name: "read_note", arguments: { path: "Plan.md" } })).content as any)[0].text);
 
     await client.callTool({
       name: "patch_note",
-      arguments: { path: "Plan.md", oldString: "one", newString: "two" },
+      arguments: { path: "Plan.md", oldString: "one", newString: "two", expectedRevision: firstNote.revision },
     });
     const secondCommit = await client.callTool({
       name: "commit_changes",
@@ -549,6 +554,7 @@ test("revision tools checkpoint ordinary edits and restore one note safely", asy
     });
     const second = JSON.parse((secondCommit.content as any)[0].text);
     expect(second.committed).toBe(true);
+    const secondNote = JSON.parse(((await client.callTool({ name: "read_note", arguments: { path: "Plan.md" } })).content as any)[0].text);
 
     const history = await client.callTool({ name: "get_note_history", arguments: { path: "Plan.md" } });
     expect(JSON.parse((history.content as any)[0].text).map((entry: any) => entry.reason)).toEqual([
@@ -564,7 +570,7 @@ test("revision tools checkpoint ordinary edits and restore one note safely", asy
 
     await client.callTool({
       name: "patch_note",
-      arguments: { path: "Plan.md", oldString: "two", newString: "three" },
+      arguments: { path: "Plan.md", oldString: "two", newString: "three", expectedRevision: secondNote.revision },
     });
     const protectedRestore = await client.callTool({
       name: "restore_note_revision",
@@ -590,7 +596,7 @@ test("revision tools checkpoint ordinary edits and restore one note safely", asy
     await client.close();
     await server.close();
   }
-});
+}, 15000);
 
 test("find_orphan_notes excludes linked notes and self-links", async () => {
   const { server, client } = await connectClient();

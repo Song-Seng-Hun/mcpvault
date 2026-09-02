@@ -549,7 +549,10 @@ export class SocialService {
             const before = contextBefore > 0
                 ? await queryWindow(this.fileSystem, { pathPrefix: commentsRoot(slug), filters, sortBy: 'created_at', sortOrder: 'desc', limit: contextBefore, after: cursor }, visible)
                 : { notes: [], truncated: false };
-            const forwardLimit = Math.max(1, limit - before.notes.length - 1);
+            // Keep the requested number of new comments independent from the
+            // context overlap. Otherwise limit=1 can return an older context item
+            // and hand the caller a backwards cursor.
+            const forwardLimit = limit;
             const forward = await queryWindow(this.fileSystem, { pathPrefix: commentsRoot(slug), filters, sortBy: 'created_at', sortOrder: 'asc', limit: forwardLimit, after: cursor }, visible);
             notes = [...before.notes].reverse();
             notes.push(cursorNote, ...forward.notes);
@@ -574,14 +577,15 @@ export class SocialService {
             throw new Error(`afterCommentId was not found in post: ${params.afterCommentId}`);
         const start = cursorIndex >= 0 ? Math.max(0, cursorIndex - contextBefore) : Math.max(0, notes.length - limit);
         const selected = [];
+        const selectedLimit = cursorIndex >= 0 ? limit + contextBefore + 1 : limit;
         let usedChars = 0;
         const candidates = notes.slice(start);
         let stop = false;
-        for (let batchStart = 0; batchStart < candidates.length && selected.length < limit && !stop; batchStart += 10) {
+        for (let batchStart = 0; batchStart < candidates.length && selected.length < selectedLimit && !stop; batchStart += 10) {
             const batchNotes = candidates.slice(batchStart, batchStart + 10);
             const fullByPath = await readNotesInBatches(this.fileSystem, batchNotes.map(note => note.path));
             for (const note of batchNotes) {
-                if (selected.length >= limit)
+                if (selected.length >= selectedLimit)
                     break;
                 const full = fullByPath.get(note.path);
                 if (!full)

@@ -99,11 +99,15 @@ test('published posts and comments are public while drafts remain author-private
     const reopened = await json(client, 'update_community_status', { targetType: 'comment', slug: 'hello-agents', commentId: comment.value.commentId, workflowStatus: 'open', reason: 'A follow-up is still welcome.', expectedRevision: comments.value.comments[0].revision, accessToken: publisherToken });
     expect(reopened.value).toMatchObject({ workflowStatus: 'open', closed: false });
     const reply = await json(client, 'comment_on_blog_post', { slug: 'hello-agents', content: 'Following up on that point.', replyTo: comment.value.commentId, accessToken: publisherToken });
+    const thirdComment = await json(client, 'comment_on_blog_post', { slug: 'hello-agents', content: 'A third bounded reply.', accessToken: publisherToken });
+    const smallCommentPage = await json(client, 'list_blog_comments', { slug: 'hello-agents', afterCommentId: reply.value.commentId, contextBefore: 2, limit: 1 });
+    expect(smallCommentPage.value.comments.map((item: any) => item.commentId)).toEqual([comment.value.commentId, reply.value.commentId, thirdComment.value.commentId]);
+    expect(smallCommentPage.value.nextCursor).toBe(thirdComment.value.commentId);
     const threaded = await json(client, 'list_blog_comments', { slug: 'hello-agents' });
     expect(threaded.value.comments[1]).toMatchObject({ commentId: reply.value.commentId, replyTo: comment.value.commentId });
     expect(threaded.value.comments[1].parent).toMatchObject({ commentId: comment.value.commentId, content: expect.stringContaining('Useful idea [[Evidence]]') });
     const withComments = await json(client, 'read_blog_post', { slug: 'hello-agents', includeComments: true, commentLimit: 5, accessToken: publisherToken });
-    expect(withComments.value.comments).toHaveLength(2);
+    expect(withComments.value.comments).toHaveLength(3);
     await json(client, 'comment_on_blog_post', { slug: 'hello-agents', content: 'Another mention @claude', accessToken: publisherToken });
     const mentions = await json(client, 'list_mentions', { accessToken: publisherToken });
     const originalMention = mentions.value.mentions.find((item: any) => item.commentId === comment.value.commentId);

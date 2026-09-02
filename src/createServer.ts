@@ -259,6 +259,9 @@ const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
   save_work_state: "journal",
   report_content: "comment",
   moderate_content: "moderate",
+  create_agent_scope: "profile",
+  handoff_agent_scope: "profile",
+  resume_agent_scope: "profile",
 };
 
 const FIXED_MCP_TOOL_NAMES = new Set([
@@ -409,6 +412,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             properties: {
               path: { type: "string", description: "Path to the note relative to vault root" },
               knownRevision: { type: "string", description: "Optional revision previously returned by read_note. If unchanged, returns notModified without the note body." },
+              maxChars: { type: "integer", minimum: 512, maximum: 20000, description: "Optional hard response budget. Oversized note bodies return metadata with truncated=true; use get_note_outline/read_note_lines for the needed section." },
               prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
             },
             required: ["path"]
@@ -424,7 +428,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
               content: { type: "string", description: "Content of the note" },
               frontmatter: { type: "object", description: "Frontmatter object (optional)" },
               mode: { type: "string", enum: ["overwrite", "append", "prepend"], description: "Write mode: 'overwrite' (default), 'append', or 'prepend'", default: "overwrite" },
-              expectedRevision: { type: "string", description: "Optional revision from read_note; use 'missing' to create only if absent" }
+              expectedRevision: { type: "string", description: "Required when updating an existing note; use the revision from read_note, or 'missing' when creating" }
             },
             required: ["path", "content"]
           }
@@ -447,7 +451,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
               }, required: ["oldString", "newString"] } },
               dryRun: { type: "boolean", description: "Validate and preview the patch without writing the note", default: false },
               previewMaxChars: { type: "integer", minimum: 200, maximum: 5000, description: "Maximum characters per before/after preview", default: 1200 },
-              expectedRevision: { type: "string", description: "Revision from read_note; strongly recommended to reject stale updates" }
+              expectedRevision: { type: "string", description: "Required when patching an existing note; use the revision from read_note, or 'missing' when creating" }
             },
             required: ["path"]
           }
@@ -536,6 +540,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
               includeContent: { type: "boolean", description: "Include note content (default: true)", default: true },
               includeFrontmatter: { type: "boolean", description: "Include frontmatter (default: true)", default: true },
               knownRevisions: { type: "object", description: "Optional map of paths to previously returned revisions. Unchanged notes return only metadata; changed notes include their new revision.", additionalProperties: { type: "string" } },
+              maxChars: { type: "integer", minimum: 512, maximum: 20000, description: "Optional hard total response budget. Use includeContent=false or smaller batches for large notes." },
               prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
             },
             required: ["paths"]
@@ -996,6 +1001,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       const canAccessPath = (path: string) => scopeAccess.canAccessPhysicalPath(path, principal);
       assertImmutableSourceBoundary(toolName, trimmedArgs, scopeAccess);
       assertManagedCommunityBoundary(toolName, trimmedArgs);
+      const toolResponse = await (async () => {
       switch (toolName) {
         case "get_scope_context": {
           return jsonResult(collaboration.getScopeContext(principal?.modelId, principal?.agentId), trimmedArgs.prettyPrint);
@@ -1445,6 +1451,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "write_note": {
+          await requireExpectedRevisionForExisting(fileSystem, trimmedArgs.path, trimmedArgs.expectedRevision, 'write_note');
           const fm = parseFrontmatter(trimmedArgs.frontmatter);
           await fileSystem.writeNote({
             path: trimmedArgs.path,
@@ -1459,6 +1466,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "patch_note": {
+          await requireExpectedRevisionForExisting(fileSystem, trimmedArgs.path, trimmedArgs.expectedRevision, 'patch_note');
           const result = await fileSystem.patchNote({
             path: trimmedArgs.path,
             ...(trimmedArgs.oldString !== undefined && { oldString: trimmedArgs.oldString as string }),
@@ -1668,6 +1676,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "update_frontmatter": {
+          await requireExpectedRevisionForExisting(fileSystem, trimmedArgs.path, trimmedArgs.expectedRevision, 'update_frontmatter');
           const fm = parseFrontmatter(trimmedArgs.frontmatter);
           if (!fm) {
             throw new Error('frontmatter is required');
@@ -1966,6 +1975,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         default:
           throw new Error(`Unknown tool: ${toolName}`);
       }
+      })();
+      return enforceResponseBudget(toolResponse, trimmedArgs.maxChars);
     } catch (error) {
       await audit.record({ tool: toolName, ...(principal && { principal }), args: rawArgs, outcome: 'error', error });
       return {
@@ -2110,6 +2121,69 @@ function assertReadableCommunityNote(frontmatter: Record<string, unknown>, path:
   }
 }
 
+async function requireExpectedRevisionForExisting(
+  fileSystem: FileSystemService,
+  pathInput: unknown,
+  expectedRevision: unknown,
+  toolName: string,
+): Promise<void> {
+  if (expectedRevision !== undefined && expectedRevision !== null && String(expectedRevision).trim()) return;
+  const path = String(pathInput || '').trim();
+  if (!path || !(await fileSystem.noteExists(path))) return;
+  throw new Error(`${toolName} requires expectedRevision when updating an existing note. Read the note first and pass its revision.`);
+}
+
 function jsonResult(value: unknown, prettyPrint?: boolean) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(value, null, prettyPrint ? 2 : undefined) }] };
+}
+
+function enforceResponseBudget(response: any, requestedMaxChars: unknown): any {
+  const maxChars = Number(requestedMaxChars);
+  if (!Number.isInteger(maxChars) || maxChars < 1 || !response?.content) return response;
+  const textBlocks = response.content.filter((block: any) => block?.type === 'text');
+  const totalLength = textBlocks.reduce((total: number, block: any) => total + String(block.text || '').length, 0);
+  if (totalLength <= maxChars) return response;
+
+  let value: unknown;
+  try {
+    value = JSON.parse(String(textBlocks[0]?.text || ''));
+  } catch {
+    value = undefined;
+  }
+  const compact = compactOverflowValue(value, maxChars);
+  let text = JSON.stringify(compact);
+  if (text.length > maxChars) text = maxChars >= 2 ? '{"truncated":true}' : '0';
+  return {
+    ...response,
+    content: [{ type: 'text' as const, text }],
+  };
+}
+
+function compactOverflowValue(value: unknown, maxChars: number): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { truncated: true, maxChars };
+  }
+  const source = value as Record<string, unknown>;
+  const compact: Record<string, unknown> = { truncated: true, maxChars };
+  for (const key of ['protocol', 'state', 'path', 'revision', 'roomId', 'messageId', 'commentId', 'slug', 'total', 'totalMessages', 'nextCursor', 'contextBefore']) {
+    const candidate = source[key];
+    if (typeof candidate === 'string' || typeof candidate === 'number' || typeof candidate === 'boolean') compact[key] = candidate;
+  }
+  if (source.identity && typeof source.identity === 'object' && !Array.isArray(source.identity)) {
+    const identity = source.identity as Record<string, unknown>;
+    compact.identity = Object.fromEntries(['accountId', 'modelId', 'agentId', 'level', 'xp', 'levelLabel'].filter(key => identity[key] !== undefined).map(key => [key, identity[key]]));
+  }
+  if (source.signals && typeof source.signals === 'object' && !Array.isArray(source.signals)) compact.signals = source.signals;
+  if (source.nextAction && typeof source.nextAction === 'object' && !Array.isArray(source.nextAction)) {
+    const action = source.nextAction as Record<string, unknown>;
+    compact.nextAction = Object.fromEntries(['tool', 'target', 'followUpTool', 'reason'].filter(key => action[key] !== undefined).map(key => [key, typeof action[key] === 'string' ? String(action[key]).slice(0, 160) : action[key]]));
+  }
+  if (Array.isArray(source.endpoints)) {
+    compact.endpoints = source.endpoints.slice(0, 3).map(endpoint => {
+      if (!endpoint || typeof endpoint !== 'object') return endpoint;
+      const item = endpoint as Record<string, unknown>;
+      return Object.fromEntries(['endpointId', 'method', 'url', 'available', 'state', 'requires', 'reason', 'schemaOmitted'].filter(key => item[key] !== undefined).map(key => [key, item[key]]));
+    });
+  }
+  return compact;
 }

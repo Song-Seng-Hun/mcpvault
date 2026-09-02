@@ -104,8 +104,24 @@ function routeFor(tool) {
     const explicit = EXPLICIT_ROUTES[tool.name];
     if (explicit)
         return explicit;
-    const mutating = tool.name.includes('write') || tool.name.includes('create') || tool.name.includes('update') || tool.name.includes('delete') || tool.name.includes('send') || tool.name.includes('publish') || tool.name.includes('commit') || tool.name.includes('restore') || tool.name.includes('move') || tool.name.includes('manage') || tool.name.includes('toggle') || tool.name.includes('save') || tool.name.includes('watch') || tool.name.includes('accept') || tool.name.includes('resolve') || tool.name.includes('report') || tool.name.includes('initialize');
+    const mutating = tool.name.includes('write') || tool.name.includes('create') || tool.name.includes('update') || tool.name.includes('delete') || tool.name.includes('send') || tool.name.includes('publish') || tool.name.includes('commit') || tool.name.includes('restore') || tool.name.includes('move') || tool.name.includes('manage') || tool.name.includes('toggle') || tool.name.includes('save') || tool.name.includes('watch') || tool.name.includes('accept') || tool.name.includes('resolve') || tool.name.includes('report') || tool.name.includes('initialize') || tool.name.includes('handoff') || tool.name.includes('resume');
     return { method: mutating ? 'POST' : 'GET', url: `/api/mcp/${tool.name}` };
+}
+function compactEndpoint(endpoint) {
+    // At very small budgets the full input schema cannot fit. Keep the stable
+    // identifier and route so the caller can retry with a larger budget rather
+    // than violating maxChars with one oversized first result.
+    return {
+        endpointId: endpoint.endpointId,
+        method: endpoint.method,
+        url: endpoint.url,
+        available: endpoint.available,
+        state: endpoint.state,
+        ...(endpoint.requires.length > 0 && { requires: endpoint.requires }),
+        ...(endpoint.reason && { reason: endpoint.reason }),
+        schemaOmitted: true,
+        hint: 'Retry with a larger maxChars to receive the input schema.',
+    };
 }
 export class EndpointRegistry {
     descriptors = new Map();
@@ -185,7 +201,10 @@ export class EndpointRegistry {
             return { ...item, available, state, ...(reason && { reason }) };
         })
             .filter(item => !activeOnly || item.available);
-        const bounded = boundSearchResults(endpoints, maxChars).slice(0, limit);
+        let bounded = boundSearchResults(endpoints, maxChars).slice(0, limit);
+        if (bounded.length === 0 && endpoints.length > 0) {
+            bounded = boundSearchResults(endpoints.map(compactEndpoint), maxChars).slice(0, limit);
+        }
         return { endpoints: bounded, total: endpoints.length, truncated: bounded.length < endpoints.length };
     }
     size() {

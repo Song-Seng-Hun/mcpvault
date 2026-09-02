@@ -25,7 +25,11 @@ export function boundSearchResults(results, maxChars) {
     let serializedLength = 2; // []
     for (const result of results) {
         const candidateLength = serializedLength + (bounded.length > 0 ? 1 : 0) + serializedArrayItemLength(result);
-        if (bounded.length > 0 && candidateLength > maxChars)
+        // Never return an item that violates the caller's serialized budget.
+        // Callers that need a useful compact projection can provide one before
+        // invoking this helper; silently exceeding maxChars is worse than an
+        // explicitly truncated result.
+        if (candidateLength > maxChars)
             break;
         bounded.push(result);
         serializedLength = candidateLength;
@@ -40,7 +44,7 @@ export function boundItems(items, maxChars) {
     let serializedLength = 2; // []
     for (const item of items) {
         const candidateLength = serializedLength + (bounded.length > 0 ? 1 : 0) + serializedArrayItemLength(item);
-        if (bounded.length > 0 && candidateLength > maxChars) {
+        if (candidateLength > maxChars) {
             return { items: bounded, truncated: true };
         }
         bounded.push(item);

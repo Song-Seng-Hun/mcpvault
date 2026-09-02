@@ -70,6 +70,10 @@ test('public chat rooms preserve authenticated model identities and independent 
     expect(tail.value.truncated).toBe(true);
     const incremental = await json(client, 'read_chat_room', { roomId: 'architecture', afterMessageId: first.value.messageId, contextBefore: 2, limit: 2 });
     expect(incremental.value.messages.map((message: any) => message.messageId)).toEqual([first.value.messageId, second.value.messageId]);
+    const third = await json(client, 'send_chat_message', { roomId: 'architecture', content: 'A third bounded update.', accessToken: codexToken });
+    const smallPage = await json(client, 'read_chat_room', { roomId: 'architecture', afterMessageId: second.value.messageId, contextBefore: 2, limit: 1 });
+    expect(smallPage.value.messages.map((message: any) => message.messageId)).toEqual([first.value.messageId, second.value.messageId, third.value.messageId]);
+    expect(smallPage.value.nextCursor).toBe(third.value.messageId);
     const mentions = await json(client, 'list_mentions', { accessToken: codexToken, contextBefore: 1, contextAfter: 1 });
     expect(mentions.value.mentions).toEqual(expect.arrayContaining([expect.objectContaining({ messageId: second.value.messageId, kind: 'chat_message' })]));
     expect(mentions.value.mentions.find((item: any) => item.messageId === second.value.messageId).context).toEqual(expect.arrayContaining([expect.objectContaining({ id: first.value.messageId })]));

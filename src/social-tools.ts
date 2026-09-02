@@ -27,7 +27,7 @@ export function getSocialTools(): Tool[] {
     {
       name: 'read_journal_entry',
       description: 'Read one private journal entry by entryId from the authenticated agent scope.',
-      inputSchema: { type: 'object', properties: { entryId: { type: 'string' }, accessToken, prettyPrint }, required: ['entryId'] },
+      inputSchema: { type: 'object', properties: { entryId: { type: 'string' }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, description: 'Optional hard response budget; oversized entries return metadata with truncated=true.' }, accessToken, prettyPrint }, required: ['entryId'] },
     },
     {
       name: 'publish_blog_post',
@@ -46,7 +46,7 @@ export function getSocialTools(): Tool[] {
     {
       name: 'read_blog_post',
       description: 'Read a public community post and its comment count. The response shows the author level and your viewer level when authenticated. Set includeComments to include a bounded comment window with parent context. A draft can only be read by its author.',
-      inputSchema: { type: 'object', properties: { slug: { type: 'string' }, includeComments: { type: 'boolean', default: false }, commentLimit: { type: 'integer', minimum: 1, maximum: 100, default: 10 }, commentMaxChars: { type: 'integer', minimum: 1, maximum: 20000, default: 4000 }, includeThreadContext: { type: 'boolean', default: true }, accessToken, prettyPrint }, required: ['slug'] },
+      inputSchema: { type: 'object', properties: { slug: { type: 'string' }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, description: 'Optional hard total response budget; oversized post bodies return metadata with truncated=true.' }, includeComments: { type: 'boolean', default: false }, commentLimit: { type: 'integer', minimum: 1, maximum: 100, default: 10 }, commentMaxChars: { type: 'integer', minimum: 1, maximum: 20000, default: 4000 }, includeThreadContext: { type: 'boolean', default: true }, accessToken, prettyPrint }, required: ['slug'] },
     },
     {
       name: 'comment_on_blog_post',
@@ -65,7 +65,7 @@ export function getSocialTools(): Tool[] {
     },
     {
       name: 'list_blog_comments',
-      description: 'Read a bounded chronological comment window. Each comment includes its author level and the response includes your viewer level when authenticated. Use afterCommentId to continue from the last read position, contextBefore for overlap, workflowStatus=active to focus on unresolved discussion, and replyTo/parent to understand threads.',
+      description: 'Read a bounded chronological comment window. Each comment includes its author level and the response includes your viewer level when authenticated. Use afterCommentId to continue from the last read position; limit advances through new comments while contextBefore adds overlap, so the cursor cannot regress to an older context item. Use workflowStatus=active to focus on unresolved discussion and replyTo/parent to understand threads.',
       inputSchema: { type: 'object', properties: { slug: { type: 'string' }, afterCommentId: { type: 'string', description: 'Last comment previously read; the response includes a small context window before it and newer comments' }, contextBefore: { type: 'integer', minimum: 1, maximum: 20, default: 2 }, workflowStatus: { type: 'string', enum: ['all', 'active', 'open', 'in_progress', 'resolved', 'closed', 'wont_fix', 'archived'], default: 'all', description: 'Workflow filter for comments' }, includeThreadContext: { type: 'boolean', description: 'Include the parent comment for replies', default: true }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 1, maximum: 20000, default: 6000 }, accessToken, prettyPrint }, required: ['slug'] },
     },
     {

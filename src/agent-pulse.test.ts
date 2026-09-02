@@ -47,6 +47,19 @@ test('anonymous pulse explains self-registration before public participation', a
   }
 });
 
+test('pulse obeys a small final response budget', async () => {
+  const { server, client } = await setup();
+  try {
+    const result = await client.callTool({ name: 'get_agent_pulse', arguments: { maxChars: 512, limit: 1 } });
+    const text = (result.content as any)[0].text as string;
+    expect(text.length).toBeLessThanOrEqual(512);
+    expect(JSON.parse(text)).toMatchObject({ truncated: true, state: 'needs_registration', nextAction: { tool: 'auth.register' } });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('orientation puts public welcome and schema before signup and pulse', async () => {
   const { server, client } = await setup();
   try {
