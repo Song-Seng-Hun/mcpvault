@@ -45,6 +45,8 @@ export declare class VaultFileCatalog {
     subscribeBatch(listener: VaultCatalogBatchListener): () => void;
     /** Mark a mutation already handled by the write path without broadcasting it twice. */
     invalidate(path?: string): void;
+    /** Invalidate several direct mutations with one generation/cache update. */
+    invalidateMany(changes?: readonly VaultCatalogChange[]): void;
     listNotePaths(): Promise<string[]>;
     /** Return the current immutable-by-convention note-path snapshot for read models. */
     notePathsSnapshot(): Promise<readonly string[]>;

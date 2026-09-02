@@ -1,7 +1,7 @@
 import type { PathFilter } from './pathfilter.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import { ScopeAccessPolicy } from './scope-access.js';
-import type { VaultFileCatalog } from './vault-catalog.js';
+import type { VaultCatalogChange, VaultFileCatalog } from './vault-catalog.js';
 import type { SearchParams, SearchResult } from './types.js';
 import { VaultIoCoordinator } from './vault-io.js';
 type ChangeKind = 'upsert' | 'delete';
@@ -75,7 +75,7 @@ export declare class SemanticSearchService {
     private readonly catalogUnsubscribe;
     constructor(vaultPath: string, pathFilter: PathFilter, accessPolicy?: ScopeAccessPolicy, catalog?: VaultFileCatalog | undefined, vaultIo?: VaultIoCoordinator);
     notifyChange(path: string, kind: ChangeKind): void;
-    private notifyChanges;
+    notifyChanges(changes: readonly VaultCatalogChange[]): void;
     close(): void;
     private clearQueryCache;
     private clearVectorCache;

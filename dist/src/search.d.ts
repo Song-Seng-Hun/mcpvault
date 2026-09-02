@@ -1,6 +1,6 @@
 import type { PathFilter } from './pathfilter.js';
 import type { SearchParams, SearchResult } from './types.js';
-import type { VaultFileCatalog } from './vault-catalog.js';
+import type { VaultCatalogChange, VaultFileCatalog } from './vault-catalog.js';
 import { VaultIoCoordinator } from './vault-io.js';
 export declare class SearchService {
     private pathFilter;
@@ -45,7 +45,7 @@ export declare class SearchService {
      * the TTL also covers edits made directly in Obsidian.
      */
     invalidate(path?: string, kind?: 'upsert' | 'delete'): void;
-    private invalidateMany;
+    invalidateMany(changes?: readonly VaultCatalogChange[]): void;
     close(): void;
     private loadSnapshot;
     private restoreSnapshot;

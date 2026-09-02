@@ -231,7 +231,7 @@ export class VaultMetadataIndex {
     this.invalidateMany([{ path, kind }]);
   }
 
-  private invalidateMany(changes: readonly VaultCatalogChange[]): void {
+  invalidateMany(changes: readonly VaultCatalogChange[]): void {
     this.clearQueryCaches();
     for (const change of changes) {
       const normalized = normalizePath(change.path);

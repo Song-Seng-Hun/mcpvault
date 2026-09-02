@@ -160,6 +160,7 @@ test('persists and restores the public discovery snapshot after restart', async 
     }
     expect(snapshot).toBeDefined();
     expect(gunzipSync(snapshot!).subarray(0, 8).toString('ascii')).toBe('MCPVPUB1');
+    expect(gunzipSync(snapshot!).readUInt32LE(8)).toBe(2);
   } finally {
     await first.client.close();
     await first.server.close();

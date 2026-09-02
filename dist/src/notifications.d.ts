@@ -73,6 +73,10 @@ export declare class NotificationService {
     private clearPublicSnapshotCache;
     private trackPublicSnapshotCache;
     invalidate(path?: string, kind?: 'upsert' | 'delete'): void;
+    invalidateMany(changes?: readonly {
+        path: string;
+        kind: 'upsert' | 'delete';
+    }[]): void;
     private cachedPublicSnapshot;
     private updatePublicSnapshot;
     private hydrateNotes;

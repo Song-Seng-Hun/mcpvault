@@ -48,18 +48,25 @@ export class ReputationService {
         this.auth = auth;
         this.moderation = moderation;
     }
-    invalidate(path, _kind = 'upsert') {
-        if (path && !/^Community\/(Posts|Comments|Reactions)\//i.test(path.replace(/\\/g, '/')))
+    invalidate(path, kind = 'upsert') {
+        this.invalidateMany(path ? [{ path, kind }] : undefined);
+    }
+    invalidateMany(changes) {
+        if (changes && !changes.some(change => /^Community\/(Posts|Comments|Reactions)\//i.test(change.path.replace(/\\/g, '/'))))
             return;
         this.cacheGeneration += 1;
         this.reputationCache = undefined;
         this.reputationInFlight.clear();
-        if (!path) {
+        if (!changes) {
             this.reputationIndex = undefined;
             this.dirtyPaths.clear();
             return;
         }
-        this.dirtyPaths.add(path.replace(/\\/g, '/'));
+        for (const change of changes) {
+            if (/^Community\/(Posts|Comments|Reactions)\//i.test(change.path.replace(/\\/g, '/'))) {
+                this.dirtyPaths.add(change.path.replace(/\\/g, '/'));
+            }
+        }
     }
     async getForPrincipal(principal) {
         return (await this.getMany([identityOf(principal)])).get(identityOf(principal));

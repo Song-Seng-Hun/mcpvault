@@ -328,7 +328,7 @@ export class SearchService {
     else this.invalidateMany();
   }
 
-  private invalidateMany(changes?: readonly VaultCatalogChange[]): void {
+  invalidateMany(changes?: readonly VaultCatalogChange[]): void {
     this.cacheGeneration += 1;
     this.cache.clear();
     derivedCacheBudget.clearOwner(this.cacheOwner);

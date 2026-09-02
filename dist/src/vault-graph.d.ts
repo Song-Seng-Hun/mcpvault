@@ -1,7 +1,7 @@
 import type { BacklinkMatch, OrphanNotesResult, UnresolvedLinksResult } from './types.js';
 import type { FrontmatterHandler } from './frontmatter.js';
 import type { PathFilter } from './pathfilter.js';
-import type { VaultFileCatalog, VaultCatalogChangeKind } from './vault-catalog.js';
+import type { VaultCatalogChange, VaultFileCatalog, VaultCatalogChangeKind } from './vault-catalog.js';
 import { VaultIoCoordinator } from './vault-io.js';
 /**
  * Incremental Obsidian graph read model for backlinks, tags, unresolved links,
@@ -28,7 +28,7 @@ export declare class VaultGraphIndex {
     private readonly catalogUnsubscribe;
     constructor(vaultPath: string, pathFilter: PathFilter, frontmatter: FrontmatterHandler, catalog?: VaultFileCatalog | undefined, vaultIo?: VaultIoCoordinator);
     invalidate(path?: string, kind?: VaultCatalogChangeKind): void;
-    private invalidateMany;
+    invalidateMany(changes: readonly VaultCatalogChange[]): void;
     close(): void;
     getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean): Promise<{
         target: string;

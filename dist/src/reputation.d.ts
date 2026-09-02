@@ -35,7 +35,11 @@ export declare class ReputationService {
     private reputationIndexInFlight;
     private readonly dirtyPaths;
     constructor(fileSystem: FileSystemService, auth: ScopeAuthService, moderation: ModerationService);
-    invalidate(path?: string, _kind?: 'upsert' | 'delete'): void;
+    invalidate(path?: string, kind?: 'upsert' | 'delete'): void;
+    invalidateMany(changes?: readonly {
+        path: string;
+        kind: 'upsert' | 'delete';
+    }[]): void;
     getForPrincipal(principal: ScopePrincipal): Promise<ReputationSnapshot>;
     getPublic(identity: string): Promise<ReputationSnapshot>;
     getMany(identities: string[]): Promise<Map<string, ReputationSnapshot>>;

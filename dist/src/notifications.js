@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { gzip, gunzip } from 'node:zlib';
 import { promisify } from 'node:util';
 import { normalizeScopeId } from './scopes.js';
-import { iterateNotes, queryAllNotes } from './paged-query.js';
+import { iterateNotes } from './paged-query.js';
 import { isClosedWorkflowStatus } from './community-status.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
@@ -15,7 +15,7 @@ const EVENT_CACHE_MAX_ENTRIES = 64;
 const HYDRATE_BATCH_SIZE = 32;
 const PUBLIC_SNAPSHOT_FILE = '.mcpvault/public-discovery.snapshot.bin';
 const PUBLIC_SNAPSHOT_MAGIC = Buffer.from('MCPVPUB1', 'ascii');
-const PUBLIC_SNAPSHOT_VERSION = 1;
+const PUBLIC_SNAPSHOT_VERSION = 2;
 const PUBLIC_SNAPSHOT_MAX_ENTRIES = 200_000;
 const PUBLIC_SNAPSHOT_MAX_BYTES = 128 * 1024 * 1024;
 function identity(principal) {
@@ -61,23 +61,47 @@ function decodeSnapshotString(buffer, offset) {
 const COLLECTION_CODES = { posts: 0, comments: 1, messages: 2, rooms: 3 };
 const CODE_COLLECTIONS = ['posts', 'comments', 'messages', 'rooms'];
 function encodePublicSnapshot(snapshot) {
+    const strings = [];
+    const stringIds = new Map();
+    const intern = (value) => {
+        const existing = stringIds.get(value);
+        if (existing !== undefined)
+            return existing;
+        const id = strings.length;
+        strings.push(value);
+        stringIds.set(value, id);
+        return id;
+    };
+    const manifestIds = snapshot.manifest.map(entry => intern(entry.path));
+    const noteIds = snapshot.notes.map(note => ({ path: intern(note.path), frontmatter: intern(JSON.stringify(note.frontmatter)) }));
+    if (strings.length > PUBLIC_SNAPSHOT_MAX_ENTRIES)
+        throw new Error('public discovery snapshot string table is too large');
     const chunks = [PUBLIC_SNAPSHOT_MAGIC];
-    const header = Buffer.allocUnsafe(12);
+    const header = Buffer.allocUnsafe(16);
     header.writeUInt32LE(PUBLIC_SNAPSHOT_VERSION, 0);
     header.writeUInt32LE(snapshot.manifest.length, 4);
     header.writeUInt32LE(snapshot.notes.length, 8);
+    header.writeUInt32LE(strings.length, 12);
     chunks.push(header);
-    for (const entry of snapshot.manifest) {
-        chunks.push(encodeSnapshotString(entry.path));
+    for (const value of strings)
+        chunks.push(encodeSnapshotString(value));
+    for (let index = 0; index < snapshot.manifest.length; index += 1) {
+        const entry = snapshot.manifest[index];
+        const pathId = Buffer.allocUnsafe(4);
+        pathId.writeUInt32LE(manifestIds[index], 0);
+        chunks.push(pathId);
         const metadata = Buffer.allocUnsafe(16);
         metadata.writeDoubleLE(entry.size, 0);
         metadata.writeDoubleLE(entry.mtimeMs, 8);
         chunks.push(metadata);
     }
-    for (const note of snapshot.notes) {
+    for (let index = 0; index < snapshot.notes.length; index += 1) {
+        const note = snapshot.notes[index];
         chunks.push(Buffer.from([COLLECTION_CODES[note.collection]]));
-        chunks.push(encodeSnapshotString(note.path));
-        chunks.push(encodeSnapshotString(JSON.stringify(note.frontmatter)));
+        const ids = Buffer.allocUnsafe(8);
+        ids.writeUInt32LE(noteIds[index].path, 0);
+        ids.writeUInt32LE(noteIds[index].frontmatter, 4);
+        chunks.push(ids);
     }
     return Buffer.concat(chunks);
 }
@@ -89,35 +113,81 @@ function decodePublicSnapshot(buffer) {
     const version = buffer.readUInt32LE(offset);
     const manifestCount = buffer.readUInt32LE(offset + 4);
     const noteCount = buffer.readUInt32LE(offset + 8);
-    offset += 12;
-    if (version !== PUBLIC_SNAPSHOT_VERSION || manifestCount > PUBLIC_SNAPSHOT_MAX_ENTRIES || noteCount > PUBLIC_SNAPSHOT_MAX_ENTRIES) {
+    if (version === 1) {
+        offset += 12;
+        if (manifestCount > PUBLIC_SNAPSHOT_MAX_ENTRIES || noteCount > PUBLIC_SNAPSHOT_MAX_ENTRIES)
+            throw new Error('unsupported public discovery snapshot');
+        const manifest = [];
+        for (let index = 0; index < manifestCount; index += 1) {
+            const path = decodeSnapshotString(buffer, offset);
+            offset = path.offset;
+            if (offset + 16 > buffer.length)
+                throw new Error('invalid public discovery snapshot');
+            manifest.push({ path: path.value, size: buffer.readDoubleLE(offset), mtimeMs: buffer.readDoubleLE(offset + 8) });
+            offset += 16;
+        }
+        const notes = [];
+        for (let index = 0; index < noteCount; index += 1) {
+            if (offset + 1 > buffer.length)
+                throw new Error('invalid public discovery snapshot');
+            const collection = CODE_COLLECTIONS[buffer[offset]];
+            if (!collection)
+                throw new Error('invalid public discovery snapshot collection');
+            offset += 1;
+            const path = decodeSnapshotString(buffer, offset);
+            offset = path.offset;
+            const rawFrontmatter = decodeSnapshotString(buffer, offset);
+            offset = rawFrontmatter.offset;
+            const parsed = JSON.parse(rawFrontmatter.value);
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+                throw new Error('invalid public discovery snapshot frontmatter');
+            notes.push({ collection, path: path.value, frontmatter: parsed });
+        }
+        return { manifest, notes };
+    }
+    if (version !== PUBLIC_SNAPSHOT_VERSION || offset + 4 > buffer.length || manifestCount > PUBLIC_SNAPSHOT_MAX_ENTRIES || noteCount > PUBLIC_SNAPSHOT_MAX_ENTRIES) {
         throw new Error('unsupported public discovery snapshot');
     }
+    const stringCount = buffer.readUInt32LE(offset);
+    offset += 4;
+    if (stringCount > PUBLIC_SNAPSHOT_MAX_ENTRIES)
+        throw new Error('unsupported public discovery snapshot');
+    const strings = [];
+    for (let index = 0; index < stringCount; index += 1) {
+        const value = decodeSnapshotString(buffer, offset);
+        offset = value.offset;
+        strings.push(value.value);
+    }
+    const stringAt = (id) => {
+        const value = strings[id];
+        if (value === undefined)
+            throw new Error('invalid public discovery snapshot string id');
+        return value;
+    };
     const manifest = [];
     for (let index = 0; index < manifestCount; index += 1) {
-        const path = decodeSnapshotString(buffer, offset);
-        offset = path.offset;
-        if (offset + 16 > buffer.length)
+        if (offset + 20 > buffer.length)
             throw new Error('invalid public discovery snapshot');
-        manifest.push({ path: path.value, size: buffer.readDoubleLE(offset), mtimeMs: buffer.readDoubleLE(offset + 8) });
+        const pathId = buffer.readUInt32LE(offset);
+        offset += 4;
+        manifest.push({ path: stringAt(pathId), size: buffer.readDoubleLE(offset), mtimeMs: buffer.readDoubleLE(offset + 8) });
         offset += 16;
     }
     const notes = [];
     for (let index = 0; index < noteCount; index += 1) {
-        if (offset + 1 > buffer.length)
+        if (offset + 9 > buffer.length)
             throw new Error('invalid public discovery snapshot');
         const collection = CODE_COLLECTIONS[buffer[offset]];
         if (!collection)
             throw new Error('invalid public discovery snapshot collection');
         offset += 1;
-        const path = decodeSnapshotString(buffer, offset);
-        offset = path.offset;
-        const rawFrontmatter = decodeSnapshotString(buffer, offset);
-        offset = rawFrontmatter.offset;
-        const parsed = JSON.parse(rawFrontmatter.value);
+        const pathId = buffer.readUInt32LE(offset);
+        const frontmatterId = buffer.readUInt32LE(offset + 4);
+        offset += 8;
+        const parsed = JSON.parse(stringAt(frontmatterId));
         if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
             throw new Error('invalid public discovery snapshot frontmatter');
-        notes.push({ collection, path: path.value, frontmatter: parsed });
+        notes.push({ collection, path: stringAt(pathId), frontmatter: parsed });
     }
     return { manifest, notes };
 }
@@ -574,15 +644,24 @@ export class NotificationService {
         }, { allowOversized: true });
     }
     invalidate(path, kind = 'upsert') {
+        this.invalidateMany(path ? [{ path, kind }] : undefined);
+    }
+    invalidateMany(changes) {
         this.clearCandidateCache();
-        const collection = path ? publicCollectionForPath(path) : undefined;
-        if (!path || !collection) {
-            if (!path)
-                this.clearPublicSnapshotCache();
+        if (!changes) {
+            this.clearPublicSnapshotCache();
             return;
         }
+        const relevant = changes
+            .map(change => ({ ...change, collection: publicCollectionForPath(change.path) }))
+            .filter((change) => Boolean(change.collection));
+        if (relevant.length === 0)
+            return;
         const previous = this.publicSnapshotUpdate || Promise.resolve();
-        const update = previous.then(() => this.updatePublicSnapshot(path, kind, collection)).catch(() => {
+        const update = previous.then(async () => {
+            for (const change of relevant)
+                await this.updatePublicSnapshot(change.path, change.kind, change.collection);
+        }).catch(() => {
             this.publicSnapshotCache = undefined;
         });
         this.publicSnapshotUpdate = update;
@@ -723,10 +802,7 @@ export class NotificationService {
         const ownerRoot = principal.agentId
             ? `_scopes/agents/${normalizeScopeId(principal.agentId, 'agentId')}/_subscriptions`
             : `_scopes/models/${normalizeScopeId(principal.modelId, 'modelId')}/_subscriptions`;
-        const [snapshot, subscriptions] = await Promise.all([
-            this.cachedPublicSnapshot(),
-            queryAllNotes(this.fileSystem, { pathPrefix: ownerRoot, filters: { mcpvault_type: 'subscription', active: true } }),
-        ]);
+        const snapshot = await this.cachedPublicSnapshot();
         const { messages, postsByPostId, postsBySeriesId, postsByAuthor, postsByTag, postsByMention, commentsByPostId, commentsByCommentId, commentsByAuthor, commentsByMention, commentsByReplyTo, messagesByMessageId, messagesByMention, messagesByReplyTo, postTitles, roomTitles } = snapshot;
         const targetKey = target.toLowerCase();
         const ownedPostIds = new Set((postsByAuthor.get(targetKey) || []).map(note => text(note.frontmatter.post_id)));
@@ -736,7 +812,7 @@ export class NotificationService {
         const watchedSeriesIds = new Set();
         const watchedAuthors = new Set();
         const watchedTags = new Set();
-        for (const subscription of subscriptions.notes) {
+        for await (const subscription of iterateNotes(this.fileSystem, { pathPrefix: ownerRoot, filters: { mcpvault_type: 'subscription', active: true } })) {
             const type = text(subscription.frontmatter.target_type).toLowerCase();
             const value = text(subscription.frontmatter.target_id).toLowerCase();
             if (!value)
@@ -850,7 +926,7 @@ export class NotificationService {
         for (const note of relevantPosts)
             addCandidate(note, 'activity', text(note.frontmatter.post_id));
         const watchedEvents = new Set();
-        for (const subscription of subscriptions.notes) {
+        for await (const subscription of iterateNotes(this.fileSystem, { pathPrefix: ownerRoot, filters: { mcpvault_type: 'subscription', active: true } })) {
             const type = text(subscription.frontmatter.target_type);
             const target = text(subscription.frontmatter.target_id).toLowerCase();
             const sources = watchedSources(type, target);

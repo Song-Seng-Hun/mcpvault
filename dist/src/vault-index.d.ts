@@ -1,6 +1,6 @@
 import type { FrontmatterHandler } from './frontmatter.js';
 import type { PathFilter } from './pathfilter.js';
-import type { VaultFileCatalog } from './vault-catalog.js';
+import type { VaultCatalogChange, VaultFileCatalog } from './vault-catalog.js';
 import { VaultIoCoordinator } from './vault-io.js';
 export interface VaultIndexEntry {
     path: string;
@@ -43,7 +43,7 @@ export declare class VaultMetadataIndex {
     private firstList;
     constructor(vaultPath: string, pathFilter: PathFilter, frontmatter: FrontmatterHandler, catalog?: VaultFileCatalog | undefined, vaultIo?: VaultIoCoordinator);
     invalidate(path: string, kind: 'upsert' | 'delete'): void;
-    private invalidateMany;
+    invalidateMany(changes: readonly VaultCatalogChange[]): void;
     private clearQueryCaches;
     list(filters?: Record<string, unknown>, pathPrefix?: string): Promise<VaultIndexEntry[]>;
     /** Count metadata candidates without sorting or reading note bodies. */

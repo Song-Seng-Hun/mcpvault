@@ -63,6 +63,10 @@ export declare class CommunityFeaturesService {
     private invalidateReactionAggregates;
     private trackReactionAggregateCache;
     invalidate(path?: string): void;
+    invalidateMany(changes?: readonly {
+        path: string;
+        kind: 'upsert' | 'delete';
+    }[]): void;
     private adjustReactionCount;
     private refreshReactionRecord;
     private reactionFiles;

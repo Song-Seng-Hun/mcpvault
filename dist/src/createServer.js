@@ -272,21 +272,36 @@ export function createServer(vaultPath, options = {}) {
     const searchService = new SearchService(resolvedVaultPath, pathFilter, fileCatalog, vaultIo);
     const metadataIndex = new VaultMetadataIndex(resolvedVaultPath, pathFilter, frontmatterHandler, fileCatalog, vaultIo);
     const graphIndex = new VaultGraphIndex(resolvedVaultPath, pathFilter, frontmatterHandler, fileCatalog, vaultIo);
+    const pendingReadModelChanges = new Map();
+    let readModelFlushQueued = false;
+    const flushReadModelChanges = () => {
+        readModelFlushQueued = false;
+        if (pendingReadModelChanges.size === 0)
+            return;
+        const changes = [...pendingReadModelChanges.values()];
+        pendingReadModelChanges.clear();
+        fileCatalog.invalidateMany(changes);
+        metadataIndex.invalidateMany(changes);
+        searchService.invalidateMany(changes);
+        semanticSearch.notifyChanges(changes);
+        reputationCache?.invalidateMany(changes);
+        notificationsCache?.invalidateMany(changes);
+        communityFeaturesCache?.invalidateMany(changes);
+        llmWikiCache?.invalidate();
+        graphIndex.invalidateMany(changes);
+    };
+    const queueReadModelChange = (path, kind) => {
+        pendingReadModelChanges.set(path.replace(/\\/g, '/'), { path, kind });
+        if (readModelFlushQueued)
+            return;
+        readModelFlushQueued = true;
+        queueMicrotask(flushReadModelChanges);
+    };
     let reputationCache;
     let notificationsCache;
     let communityFeaturesCache;
     let llmWikiCache;
-    const fileSystem = new FileSystemService(resolvedVaultPath, pathFilter, frontmatterHandler, (path, kind) => {
-        fileCatalog.invalidate(path);
-        metadataIndex.invalidate(path, kind);
-        searchService.invalidate(path, kind);
-        semanticSearch.notifyChange(path, kind);
-        reputationCache?.invalidate(path, kind);
-        notificationsCache?.invalidate(path, kind);
-        communityFeaturesCache?.invalidate(path);
-        llmWikiCache?.invalidate();
-        graphIndex.invalidate(path, kind);
-    }, metadataIndex, graphIndex, vaultIo);
+    const fileSystem = new FileSystemService(resolvedVaultPath, pathFilter, frontmatterHandler, queueReadModelChange, metadataIndex, graphIndex, vaultIo);
     const gitHistory = new GitHistoryService(resolvedVaultPath, pathFilter);
     const collaboration = new CollaborationService(fileSystem, searchService);
     const references = new ReferenceService(fileSystem, scopeAccess);

@@ -284,16 +284,25 @@ export class CommunityFeaturesService {
         derivedCacheBudget.register(this.reactionCacheOwner, 'current', estimateCacheBytes(counts) + this.reactionRecords.size * 96 + 256, () => this.invalidateReactionAggregates());
     }
     invalidate(path) {
-        const normalizedPath = path?.replace(/\\/g, '/');
-        if (normalizedPath && !/^Community\/Reactions\//i.test(normalizedPath))
-            return;
-        if (!normalizedPath || !this.reactionIndexReady) {
+        this.invalidateMany(path ? [{ path, kind: 'upsert' }] : undefined);
+    }
+    invalidateMany(changes) {
+        const paths = changes?.map(change => change.path) || [];
+        const reactionPaths = paths
+            .filter(path => /^Community\/Reactions\//i.test(path.replace(/\\/g, '/')))
+            .map(path => path.replace(/\\/g, '/'));
+        if (!changes || reactionPaths.length === 0 || !this.reactionIndexReady) {
+            if (changes && reactionPaths.length === 0)
+                return;
             this.invalidateReactionAggregates();
             return;
         }
         this.reactionAggregateGeneration += 1;
         const previous = this.reactionIndexUpdate;
-        const update = previous.then(() => this.refreshReactionRecord(normalizedPath)).catch(() => {
+        const update = previous.then(async () => {
+            for (const path of reactionPaths)
+                await this.refreshReactionRecord(path);
+        }).catch(() => {
             this.invalidateReactionAggregates();
         });
         this.reactionIndexUpdate = update;
@@ -678,9 +687,13 @@ export class CommunityFeaturesService {
     async listWatches(principal, maxChars) {
         if (!principal)
             throw new Error('Login is required');
-        const result = await queryAllNotes(this.fileSystem, { pathPrefix: this.ownerRoot(principal, 'subscriptions'), filters: { mcpvault_type: 'subscription', active: true }, sortBy: 'updated_at', sortOrder: 'desc' });
-        const bounded = boundItems(result.notes.map(n => ({ targetType: n.frontmatter.target_type, targetId: n.frontmatter.target_id, updatedAt: n.frontmatter.updated_at })), positive(maxChars, 6000, 20000));
-        return { watches: bounded.items, total: result.total, truncated: result.truncated || bounded.truncated };
+        const query = { pathPrefix: this.ownerRoot(principal, 'subscriptions'), filters: { mcpvault_type: 'subscription', active: true }, sortBy: 'updated_at', sortOrder: 'desc' };
+        const [window, total] = await Promise.all([
+            queryWindow(this.fileSystem, { ...query, limit: 500 }),
+            this.fileSystem.countNotes(query),
+        ]);
+        const bounded = boundItems(window.notes.map(n => ({ targetType: n.frontmatter.target_type, targetId: n.frontmatter.target_id, updatedAt: n.frontmatter.updated_at })), positive(maxChars, 6000, 20000));
+        return { watches: bounded.items, total, truncated: window.truncated || window.notes.length < total || bounded.truncated };
     }
     async save(params) {
         if (!params.principal)
@@ -704,9 +717,13 @@ export class CommunityFeaturesService {
     async listSaves(principal, maxChars) {
         if (!principal)
             throw new Error('Login is required');
-        const result = await queryAllNotes(this.fileSystem, { pathPrefix: this.ownerRoot(principal, 'saves'), filters: { mcpvault_type: 'saved_item', active: true }, sortBy: 'updated_at', sortOrder: 'desc' });
-        const bounded = boundItems(result.notes.map(n => ({ targetPath: n.frontmatter.target_path, note: n.frontmatter.note, savedAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at })), positive(maxChars, 6000, 20000));
-        return { saves: bounded.items, total: result.total, truncated: result.truncated || bounded.truncated };
+        const query = { pathPrefix: this.ownerRoot(principal, 'saves'), filters: { mcpvault_type: 'saved_item', active: true }, sortBy: 'updated_at', sortOrder: 'desc' };
+        const [window, total] = await Promise.all([
+            queryWindow(this.fileSystem, { ...query, limit: 500 }),
+            this.fileSystem.countNotes(query),
+        ]);
+        const bounded = boundItems(window.notes.map(n => ({ targetPath: n.frontmatter.target_path, note: n.frontmatter.note, savedAt: n.frontmatter.created_at, updatedAt: n.frontmatter.updated_at })), positive(maxChars, 6000, 20000));
+        return { saves: bounded.items, total, truncated: window.truncated || window.notes.length < total || bounded.truncated };
     }
 }
 export { CATEGORIES };

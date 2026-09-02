@@ -87,11 +87,21 @@ export class VaultFileCatalog {
 
   /** Mark a mutation already handled by the write path without broadcasting it twice. */
   invalidate(path?: string): void {
+    if (path) {
+      this.invalidateMany([{ path, kind: 'upsert' }]);
+      return;
+    }
+    this.invalidateMany();
+  }
+
+  /** Invalidate several direct mutations with one generation/cache update. */
+  invalidateMany(changes?: readonly VaultCatalogChange[]): void {
     this.changeGeneration += 1;
     this.paths = undefined;
     this.needsRefresh = true;
-    if (path) this.markDirtyDirectories(path);
-    else {
+    if (changes) {
+      for (const change of changes) this.markDirtyDirectories(change.path);
+    } else {
       this.directoryCache.clear();
       this.dirtyDirectories.clear();
       derivedCacheBudget.clearOwner(this.cacheOwner);

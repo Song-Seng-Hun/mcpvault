@@ -102,17 +102,25 @@ export class ReputationService {
     private readonly moderation: ModerationService,
   ) {}
 
-  invalidate(path?: string, _kind: 'upsert' | 'delete' = 'upsert'): void {
-    if (path && !/^Community\/(Posts|Comments|Reactions)\//i.test(path.replace(/\\/g, '/'))) return;
+  invalidate(path?: string, kind: 'upsert' | 'delete' = 'upsert'): void {
+    this.invalidateMany(path ? [{ path, kind }] : undefined);
+  }
+
+  invalidateMany(changes?: readonly { path: string; kind: 'upsert' | 'delete' }[]): void {
+    if (changes && !changes.some(change => /^Community\/(Posts|Comments|Reactions)\//i.test(change.path.replace(/\\/g, '/')))) return;
     this.cacheGeneration += 1;
     this.reputationCache = undefined;
     this.reputationInFlight.clear();
-    if (!path) {
+    if (!changes) {
       this.reputationIndex = undefined;
       this.dirtyPaths.clear();
       return;
     }
-    this.dirtyPaths.add(path.replace(/\\/g, '/'));
+    for (const change of changes) {
+      if (/^Community\/(Posts|Comments|Reactions)\//i.test(change.path.replace(/\\/g, '/'))) {
+        this.dirtyPaths.add(change.path.replace(/\\/g, '/'));
+      }
+    }
   }
 
   async getForPrincipal(principal: ScopePrincipal): Promise<ReputationSnapshot> {

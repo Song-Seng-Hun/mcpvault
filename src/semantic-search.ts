@@ -347,7 +347,7 @@ export class SemanticSearchService {
     this.notifyChanges([{ path, kind }]);
   }
 
-  private notifyChanges(changes: readonly VaultCatalogChange[]): void {
+  notifyChanges(changes: readonly VaultCatalogChange[]): void {
     this.queryGeneration += 1;
     this.clearQueryCache();
     for (const change of changes) {

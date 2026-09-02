@@ -178,7 +178,7 @@ export class VaultGraphIndex {
     if (isNote(normalized) || this.pathFilter.isAllowed(normalized)) this.dirty.add(normalized);
   }
 
-  private invalidateMany(changes: readonly VaultCatalogChange[]): void {
+  invalidateMany(changes: readonly VaultCatalogChange[]): void {
     this.changeGeneration += 1;
     for (const change of changes) {
       const normalized = normalizePath(change.path);

@@ -50,7 +50,7 @@ import { boundSearchResults, normalizeSearchMaxChars } from "./search-limits.js"
 import { EndpointRegistry } from "./endpoint-registry.js";
 import { resolve } from "path";
 import { VaultMetadataIndex } from "./vault-index.js";
-import { VaultFileCatalog } from "./vault-catalog.js";
+import { VaultFileCatalog, type VaultCatalogChange } from "./vault-catalog.js";
 import { VaultGraphIndex } from "./vault-graph.js";
 import { VaultIoCoordinator } from "./vault-io.js";
 
@@ -301,6 +301,29 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const searchService = new SearchService(resolvedVaultPath, pathFilter, fileCatalog, vaultIo);
   const metadataIndex = new VaultMetadataIndex(resolvedVaultPath, pathFilter, frontmatterHandler, fileCatalog, vaultIo);
   const graphIndex = new VaultGraphIndex(resolvedVaultPath, pathFilter, frontmatterHandler, fileCatalog, vaultIo);
+  const pendingReadModelChanges = new Map<string, VaultCatalogChange>();
+  let readModelFlushQueued = false;
+  const flushReadModelChanges = () => {
+    readModelFlushQueued = false;
+    if (pendingReadModelChanges.size === 0) return;
+    const changes = [...pendingReadModelChanges.values()];
+    pendingReadModelChanges.clear();
+    fileCatalog.invalidateMany(changes);
+    metadataIndex.invalidateMany(changes);
+    searchService.invalidateMany(changes);
+    semanticSearch.notifyChanges(changes);
+    reputationCache?.invalidateMany(changes);
+    notificationsCache?.invalidateMany(changes);
+    communityFeaturesCache?.invalidateMany(changes);
+    llmWikiCache?.invalidate();
+    graphIndex.invalidateMany(changes);
+  };
+  const queueReadModelChange = (path: string, kind: VaultCatalogChange['kind']) => {
+    pendingReadModelChanges.set(path.replace(/\\/g, '/'), { path, kind });
+    if (readModelFlushQueued) return;
+    readModelFlushQueued = true;
+    queueMicrotask(flushReadModelChanges);
+  };
   let reputationCache: ReputationService | undefined;
   let notificationsCache: NotificationService | undefined;
   let communityFeaturesCache: CommunityFeaturesService | undefined;
@@ -309,17 +332,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     resolvedVaultPath,
     pathFilter,
     frontmatterHandler,
-    (path, kind) => {
-      fileCatalog.invalidate(path);
-      metadataIndex.invalidate(path, kind);
-      searchService.invalidate(path, kind);
-      semanticSearch.notifyChange(path, kind);
-      reputationCache?.invalidate(path, kind);
-      notificationsCache?.invalidate(path, kind);
-      communityFeaturesCache?.invalidate(path);
-      llmWikiCache?.invalidate();
-      graphIndex.invalidate(path, kind);
-    },
+    queueReadModelChange,
     metadataIndex,
     graphIndex,
     vaultIo,
