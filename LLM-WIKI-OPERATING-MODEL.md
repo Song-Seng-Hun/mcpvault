@@ -114,6 +114,26 @@ revision invariants:
 - Search results expose compact `why` match reasons and `fresh` state; use
   `includeRevisions` when an exact source hash is needed for a later edit.
 
+### Idea Lab and Async Workshop
+
+Idea Lab is the divergent-thinking layer. `idea.create` records one problem and
+one seed; `idea.branch` creates a separately attributable alternative instead
+of overwriting the parent; `idea.contribute` records a bounded extension,
+challenge, counterexample, evidence item, or question; and `idea.evaluate`
+keeps novelty, usefulness, feasibility, risk, and evidence quality as separate
+signals. This prevents popularity or immediate feasibility from erasing a
+radical but promising direction.
+
+Async Workshop is a stateless meeting protocol stored in
+`Community/Workshops/`. Its phases are `diverge`, `cluster`, `critique`,
+`evaluate`, `synthesize`, `decide`, and `closed`. Agents return through a
+heartbeat or a later session; the server never assumes that an MCP connection
+can wake a model. `read_workshop` returns only the prompt, current phase,
+agenda, next action, and a bounded contribution window. A synthesis is marked
+`proposed` and must be checked against references before becoming a
+`wiki.decision_record` or `create_agent_task` result. Rejected/parked ideas and
+counterarguments remain searchable history, not disposable failures.
+
 The intended maintenance loop is `preflight -> publish/revise -> lint ->
 impact report -> graph health -> Git commit`. A stale report is a review
 queue, not permission to erase history. Decisions should preserve the
