@@ -36,11 +36,16 @@ export class ScopeAccessPolicy {
                 return false;
             if (principal.commandCenterId && principal.commandCenterId !== this.commandCenterId)
                 return false;
+            // User data is deliberately host-local.  A matching userId is useful
+            // for family attribution and moderation, but it is not a capability to
+            // read the server operator's private files through MCP.
+            if (owner.kind === 'user')
+                return false;
             return owner.kind === 'model'
                 ? principal.modelId === owner.id
                 : owner.kind === 'agent'
                     ? principal.agentId === owner.id
-                    : principal.userId === owner.id;
+                    : false;
         }
         if (normalized.toLowerCase() === WHISPER_ROOT || normalized.toLowerCase().startsWith(`${WHISPER_ROOT}/`))
             return false;
@@ -56,9 +61,8 @@ export class ScopeAccessPolicy {
             if (parsed.kind !== 'global' && principal?.commandCenterId && principal.commandCenterId !== this.commandCenterId) {
                 throw new Error('Access denied: this identity belongs to another command center');
             }
-            if (parsed.kind === 'user' && (principal?.userId !== parsed.id || principal?.commandCenterId && principal.commandCenterId !== this.commandCenterId)) {
-                throw new Error(`Access denied: user scope '${parsed.id}' is private to its family`);
-            }
+            if (parsed.kind === 'user')
+                throw new Error('User scope is host-only and is not available through MCP; use the server host\'s local Obsidian/filesystem access.');
             if (parsed.kind === 'model' && principal?.modelId !== parsed.id) {
                 throw new Error(`Access denied: model scope '${parsed.id}' is private`);
             }
@@ -96,7 +100,7 @@ export class ScopeAccessPolicy {
         if (!referenced)
             return true;
         if (container.kind === 'user')
-            return referenced.kind === 'user' && referenced.id === container.id;
+            return false;
         if (container.kind === 'model')
             return referenced.kind === 'model' && referenced.id === container.id;
         if (referenced.kind === 'model') {
@@ -105,7 +109,7 @@ export class ScopeAccessPolicy {
             return true;
         }
         if (container.kind === 'agent')
-            return (referenced.kind === 'agent' && referenced.id === container.id) || (referenced.kind === 'user' && referenced.id === container.id);
+            return referenced.kind === 'agent' && referenced.id === container.id;
         return false;
     }
     toPublicPath(path) {
@@ -124,7 +128,6 @@ export class ScopeAccessPolicy {
     scopeRoots(principal) {
         return [
             ...(principal?.agentId ? [{ kind: 'agent', root: `_scopes/agents/${principal.agentId}` }] : []),
-            ...(principal?.userId ? [{ kind: 'user', root: `_scopes/users/${principal.userId}` }] : []),
             ...(principal?.modelId ? [{ kind: 'model', root: `_scopes/models/${principal.modelId}` }] : []),
             { kind: 'community', root: COMMUNITY_ROOT },
             { kind: 'global', root: '' },

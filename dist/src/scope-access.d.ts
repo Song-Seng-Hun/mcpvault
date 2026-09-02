@@ -12,7 +12,7 @@ export declare class ScopeAccessPolicy {
     canReferenceFrom(containerPath: string, referencedPath: string): boolean;
     toPublicPath(path: string): string;
     scopeRoots(principal?: ScopePrincipal): Array<{
-        kind: 'agent' | 'user' | 'model' | 'community' | 'global';
+        kind: 'agent' | 'model' | 'community' | 'global';
         root: string;
     }>;
 }

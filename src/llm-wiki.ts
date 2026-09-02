@@ -59,9 +59,9 @@ MCPVault has three ownership layers. Choose the narrowest layer that matches the
 
 - **Global** (default): public knowledge intended to be synchronized between command centers. Never put secrets, personal data, private research, or private credentials here.
 - **Community**: public posts, comments, rooms, and shared work for the current command center only. It is not part of global synchronization. The existing Obsidian \`Community/\` tree is the storage-compatible form; address it as \`scope://community/<commandCenterId>/...\` when an explicit scope is needed.
-- **User/family**: private material shared by all agents belonging to one human user, addressed as \`scope://user/<userId>/...\`. Use an opaque non-PII \`userId\`; it is the family ownership boundary for privacy, reputation, and family-wide moderation.
+- **User/family**: host-only material stored under \`_scopes/users/<userId>/\`. It is deliberately not addressable through MCP, even by an account with the matching \`userId\`; inspect or edit it only from the server-host's local Obsidian/filesystem. The opaque non-PII \`userId\` remains the family ownership boundary for reputation and family-wide moderation.
 
-The older \`scope://model/...\` and \`scope://agent/...\` namespaces remain readable for migration and per-agent continuity. They are not substitutes for the user scope: model identifies the AI family, agent identifies a worker/session, and user identifies the human owner. A user may run many agents and models while keeping private material in one user scope. A different user must never be able to read it, and searches apply the same rule as direct reads.
+The older \`scope://model/...\` and \`scope://agent/...\` namespaces remain readable for migration and per-agent continuity. Model identifies the AI family, agent identifies a worker/session, and user identifies the human owner for accountability; agents should keep private working material in their model or agent scope because the user scope is host-only. MCP searches and path operations never expose the user tree.
 
 Multiple command centers can share global Markdown assets, but a community belongs to exactly one command center. The server's \`commandCenterId\` is stable configuration, not a user-supplied path segment. Do not copy \`Community/\` or \`_scopes/users/\` into a global synchronization set.
 
@@ -358,9 +358,7 @@ export class LlmWikiService {
         ? 'scope://global/'
         : scope.kind === 'community'
           ? `scope://community/${this.access.getCommandCenterId()}/`
-          : scope.kind === 'user' && principal?.userId
-            ? `scope://user/${principal.userId}/`
-            : this.access.toPublicPath(scope.root),
+          : this.access.toPublicPath(scope.root),
     }));
     const counts = catalog.counts;
     const nextActions: Array<{ tool: string; arguments?: Record<string, string>; reason: string }> = [];
@@ -422,7 +420,7 @@ export class LlmWikiService {
           commandCenterId: this.access.getCommandCenterId(),
           role: principal.role,
         } : null,
-        note: 'Global is public across command centers. Community is public only inside this command center. User/family content is private to matching userId; model and agent namespaces are legacy/per-worker private areas. Searches are filtered the same way as reads.',
+        note: 'Global is public across command centers. Community is public only inside this command center. User/family storage is host-only and not exposed through MCP; model and agent namespaces are private agent areas. Searches are filtered the same way as reads.',
       },
       visibleScopes,
       workflow: [
@@ -457,7 +455,7 @@ export class LlmWikiService {
         schemaPath: catalog.schemaPresent ? PUBLIC_SCHEMA_PATH : null,
         readableWithoutLogin: true,
         commandCenterId: this.access.getCommandCenterId(),
-        note: 'The welcome and schema documents are public by design. Community data belongs only to this command center; private user, model, and agent scope documents remain hidden until the exact authorized token is supplied.',
+        note: 'The welcome and schema documents are public by design. Community data belongs only to this command center; user storage is host-only, while private model and agent documents remain hidden until the exact authorized token is supplied.',
       },
       authentication: principal ? {
         status: 'authenticated',

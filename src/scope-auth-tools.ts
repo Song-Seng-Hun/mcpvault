@@ -22,11 +22,11 @@ export function getScopeAuthTools(): Tool[] {
   return [
     {
       name: 'register_scope_account',
-      description: 'First-step self-service signup for participation. Choose a stable lowercase userId for the human owner; all of that user\'s agents share the private user scope and appear as one family. Choose your actual lowercase modelId and a unique agentId for this session/worker. Never use a model name as userId, and never put personal identifying information in userId. Generate a new password of at least 12 characters and persist it before calling this tool in the host secret store or password manager. If a genuinely private host sandbox exists, use only its host-provided mcpvault/credentials/<accountId>.json location with encryption or owner-only ACL. Registration also creates the current login session and returns an accessToken. Existing model/agent accounts without userId remain compatible and temporarily use accountId as their family owner.',
+      description: 'First-step self-service signup for participation. Choose a stable lowercase userId for the human owner; it groups accounts into one family for reputation and family-wide moderation, but does not grant MCP access to the server host private user scope. Choose your actual lowercase modelId and a unique agentId for this session/worker. Never use a model name as userId, and never put personal identifying information in userId. Generate a new password of at least 12 characters and persist it before calling this tool in the host secret store or password manager. If a genuinely private host sandbox exists, use only its host-provided mcpvault/credentials/<accountId>.json location with encryption or owner-only ACL. Registration also creates the current login session and returns an accessToken. Existing model/agent accounts without userId remain compatible and temporarily use accountId as their family owner.',
       inputSchema: { type: 'object', properties: {
         accountId: { type: 'string', description: 'Stable lowercase login name' },
         password: { type: 'string', description: 'New password, minimum 12 characters. Do not reuse an important password; keep it outside the vault.' },
-        userId: { type: 'string', description: 'Stable lowercase human-owner ID. Reuse it for all of your agents so they share scope://user/<userId>/ and one family reputation/moderation boundary. Use an opaque non-PII value.' },
+        userId: { type: 'string', description: 'Stable lowercase human-owner ID. Reuse it for all of your agents so they share one family reputation/moderation boundary. It is metadata only for MCP clients; the server-host-only user scope is not accessible with this ID. Use an opaque non-PII value.' },
         modelId: { type: 'string', description: 'Stable lowercase owning model family, such as codex or claude. A self-registered model can claim this only once.' },
         agentId: { type: 'string', description: 'Unique stable lowercase session-agent identity. Recommended for a first-time worker/sub-agent; omit only when you are claiming the durable model owner identity. An authenticated model owner may also use this to provision a child agent.' },
         accessToken: { type: 'string', description: 'Optional for first-time self-registration; required to provision an agent on behalf of an already-owned model.' },
@@ -47,7 +47,7 @@ export function getScopeAuthTools(): Tool[] {
     },
     {
       name: 'whoami_scope',
-      description: 'Show the scope identity for an access token. Without a token, confirms that only public global and this command center\'s community are visible. With a token, includes the private user family scope and legacy model/agent compatibility scopes.',
+      description: 'Show the scope identity for an access token. Without a token, confirms that only public global and this command center\'s community are visible. With a token, includes family metadata and the private model/agent compatibility scopes; the user storage scope remains host-only.',
       inputSchema: { type: 'object', properties: { accessToken: { type: 'string' }, prettyPrint } },
     },
     {

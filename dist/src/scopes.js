@@ -94,14 +94,14 @@ export class CollaborationService {
         const user = userId ? normalizeScopeId(userId, 'userId') : undefined;
         const center = normalizeScopeId(commandCenterId, 'commandCenterId');
         return {
-            precedence: ['agent', 'user', 'model', 'community', 'global'],
+            precedence: ['agent', 'model', 'community', 'global'],
             global: { uri: 'scope://global/', root: '' },
             community: { id: center, uri: `scope://community/${center}/`, root: scopeRoot('community', center), sync: 'command-center-only' },
-            ...(user && { user: { id: user, uri: `scope://user/${user}/`, root: scopeRoot('user', user), access: 'same-user-family' } }),
+            ...(user && { user: { id: user, uri: `scope://user/${user}/`, root: scopeRoot('user', user), access: 'host-only' } }),
             ...(model && { model: { id: model, uri: `scope://model/${model}/`, root: scopeRoot('model', model) } }),
             ...(agent && { agent: { id: agent, uri: `scope://agent/${agent}/`, root: scopeRoot('agent', agent), identityPath: identityPath(agent) } }),
-            access: user || model || agent ? 'authenticated-user-family-plus-private-legacy-and-global' : 'public-global-community',
-            note: 'Global is the cross-command-center knowledge layer. Community is public only inside this command center. User is private and shared by the same human user\'s agents; model and agent namespaces are legacy/private compatibility areas.',
+            access: model || agent ? 'authenticated-private-legacy-and-global' : 'public-global-community',
+            note: 'Global is the cross-command-center knowledge layer. Community is public only inside this command center. User storage is host-only and not exposed through MCP; model and agent namespaces provide private agent access.',
         };
     }
     async createAgentScope(params) {
@@ -171,8 +171,6 @@ export class CollaborationService {
         const candidates = [];
         if (params.agentId)
             candidates.push({ scope: 'agent', path: `${scopeRoot('agent', params.agentId)}/${logical}` });
-        if (params.userId)
-            candidates.push({ scope: 'user', path: `${scopeRoot('user', params.userId)}/${logical}` });
         if (modelId)
             candidates.push({ scope: 'model', path: `${scopeRoot('model', modelId)}/${logical}` });
         candidates.push({ scope: 'community', path: `${scopeRoot('community', params.commandCenterId || 'local')}/${logical}` });
@@ -192,8 +190,6 @@ export class CollaborationService {
         const scopes = [];
         if (params.agentId)
             scopes.push({ scope: 'agent', root: scopeRoot('agent', params.agentId) });
-        if (params.userId)
-            scopes.push({ scope: 'user', root: scopeRoot('user', params.userId) });
         if (modelId)
             scopes.push({ scope: 'model', root: scopeRoot('model', modelId) });
         scopes.push({ scope: 'community', root: scopeRoot('community', params.commandCenterId || 'local') });

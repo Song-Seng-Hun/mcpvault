@@ -35,7 +35,7 @@ test('scope URIs map to ordinary durable vault paths', () => {
   expect(() => expandScopePath('scope://agent/../Guide.md')).toThrow();
 });
 
-test('user scope is shared by one family while command-center community stays local', async () => {
+test('user scope is host-only while command-center community stays local', async () => {
   const serverA = createServer(vault, { version: '1.0.0', commandCenterId: 'team-a' });
   const [clientTransportA, serverTransportA] = InMemoryTransport.createLinkedPair();
   const clientA = new Client({ name: 'scope-family-a', version: '1.0.0' });
@@ -48,12 +48,18 @@ test('user scope is shared by one family while command-center community stays lo
     const outsider = await clientA.callTool({ name: 'register_scope_account', arguments: { accountId: 'bob-codex', userId: 'bob', modelId: 'codex', agentId: 'bob-worker', password: 'bob-codex-password' } });
     const outsiderToken = JSON.parse((outsider.content as any)[0].text).accessToken;
 
-    const written = await clientA.callTool({ name: 'write_note', arguments: { path: 'scope://user/alice/shared.md', content: 'family memory', expectedRevision: 'missing', accessToken: firstToken } });
-    expect(written.isError).toBeFalsy();
+    await mkdir(join(vault, '_scopes', 'users', 'alice'), { recursive: true });
+    await writeFile(join(vault, '_scopes', 'users', 'alice', 'shared.md'), 'family memory');
+    const written = await clientA.callTool({ name: 'write_note', arguments: { path: 'scope://user/alice/shared.md', content: 'blocked', expectedRevision: 'missing', accessToken: firstToken } });
+    expect(written.isError).toBe(true);
     const familyRead = await clientA.callTool({ name: 'read_note', arguments: { path: 'scope://user/alice/shared.md', accessToken: secondToken } });
-    expect(JSON.parse((familyRead.content as any)[0].text).content).toContain('family memory');
+    expect(familyRead.isError).toBe(true);
     const outsiderRead = await clientA.callTool({ name: 'read_note', arguments: { path: 'scope://user/alice/shared.md', accessToken: outsiderToken } });
     expect(outsiderRead.isError).toBe(true);
+    const hiddenSearch = await clientA.callTool({ name: 'search_notes', arguments: { query: 'family memory', accessToken: secondToken } });
+    expect(JSON.stringify(hiddenSearch)).not.toContain('shared.md');
+    const context = await clientA.callTool({ name: 'get_scope_context', arguments: { accessToken: secondToken } });
+    expect(JSON.stringify(context)).not.toContain('scope://user/alice/');
 
     await mkdir(join(vault, 'Community', 'Posts'), { recursive: true });
     await writeFile(join(vault, 'Community', 'Posts', 'local-topic.md'), '---\nmcpvault_type: blog_post\n---\n\nlocal community');

@@ -664,9 +664,7 @@ export class CommunityFeaturesService {
   }
 
   private ownerRoot(principal: ScopePrincipal, kind: 'subscriptions' | 'saves') {
-    const scope = principal.userId
-      ? `users/${normalizeScopeId(principal.userId, 'userId')}`
-      : principal.agentId
+    const scope = principal.agentId
         ? `agents/${normalizeScopeId(principal.agentId, 'agentId')}`
         : `models/${normalizeScopeId(principal.modelId, 'modelId')}`;
     return `_scopes/${scope}/_${kind}`;

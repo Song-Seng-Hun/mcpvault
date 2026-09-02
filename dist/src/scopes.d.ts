@@ -6,7 +6,7 @@ import type { SearchService } from './search.js';
  * - global: content that is safe to replicate between command centers
  * - community: public content owned by one command center (currently backed
  *   by the existing Community/ tree for Obsidian compatibility)
- * - user: private content shared by all agents belonging to one human user
+ * - user: host-only private content; never exposed through MCP
  * - model/agent: legacy private namespaces retained for old vaults and
  *   per-agent continuity
  */

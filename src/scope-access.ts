@@ -40,11 +40,15 @@ export class ScopeAccessPolicy {
       const owner = privateOwner(normalized);
       if (!owner || !principal) return false;
       if (principal.commandCenterId && principal.commandCenterId !== this.commandCenterId) return false;
+      // User data is deliberately host-local.  A matching userId is useful
+      // for family attribution and moderation, but it is not a capability to
+      // read the server operator's private files through MCP.
+      if (owner.kind === 'user') return false;
       return owner.kind === 'model'
         ? principal.modelId === owner.id
         : owner.kind === 'agent'
           ? principal.agentId === owner.id
-          : principal.userId === owner.id;
+          : false;
     }
     if (normalized.toLowerCase() === WHISPER_ROOT || normalized.toLowerCase().startsWith(`${WHISPER_ROOT}/`)) return false;
     return true;
@@ -60,9 +64,7 @@ export class ScopeAccessPolicy {
       if (parsed.kind !== 'global' && principal?.commandCenterId && principal.commandCenterId !== this.commandCenterId) {
         throw new Error('Access denied: this identity belongs to another command center');
       }
-      if (parsed.kind === 'user' && (principal?.userId !== parsed.id || principal?.commandCenterId && principal.commandCenterId !== this.commandCenterId)) {
-        throw new Error(`Access denied: user scope '${parsed.id}' is private to its family`);
-      }
+      if (parsed.kind === 'user') throw new Error('User scope is host-only and is not available through MCP; use the server host\'s local Obsidian/filesystem access.');
       if (parsed.kind === 'model' && principal?.modelId !== parsed.id) {
         throw new Error(`Access denied: model scope '${parsed.id}' is private`);
       }
@@ -100,14 +102,14 @@ export class ScopeAccessPolicy {
     const referenced = privateOwner(referencedPath);
     if (!container) return !referenced;
     if (!referenced) return true;
-    if (container.kind === 'user') return referenced.kind === 'user' && referenced.id === container.id;
+    if (container.kind === 'user') return false;
     if (container.kind === 'model') return referenced.kind === 'model' && referenced.id === container.id;
     if (referenced.kind === 'model') {
       // Agent accounts can only access their own parent model, so a model
       // reference that reached this check is the correct parent.
       return true;
     }
-    if (container.kind === 'agent') return (referenced.kind === 'agent' && referenced.id === container.id) || (referenced.kind === 'user' && referenced.id === container.id);
+    if (container.kind === 'agent') return referenced.kind === 'agent' && referenced.id === container.id;
     return false;
   }
 
@@ -122,10 +124,9 @@ export class ScopeAccessPolicy {
     return normalized;
   }
 
-  scopeRoots(principal?: ScopePrincipal): Array<{ kind: 'agent' | 'user' | 'model' | 'community' | 'global'; root: string }> {
+  scopeRoots(principal?: ScopePrincipal): Array<{ kind: 'agent' | 'model' | 'community' | 'global'; root: string }> {
     return [
       ...(principal?.agentId ? [{ kind: 'agent' as const, root: `_scopes/agents/${principal.agentId}` }] : []),
-      ...(principal?.userId ? [{ kind: 'user' as const, root: `_scopes/users/${principal.userId}` }] : []),
       ...(principal?.modelId ? [{ kind: 'model' as const, root: `_scopes/models/${principal.modelId}` }] : []),
       { kind: 'community' as const, root: COMMUNITY_ROOT },
       { kind: 'global' as const, root: '' },

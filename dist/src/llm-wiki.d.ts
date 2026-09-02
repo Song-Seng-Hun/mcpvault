@@ -89,7 +89,7 @@ export declare class LlmWikiService {
             note: string;
         };
         visibleScopes: {
-            kind: "agent" | "community" | "global" | "model" | "user";
+            kind: "agent" | "community" | "global" | "model";
             uri: string;
         }[];
         workflow: string[];

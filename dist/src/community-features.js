@@ -696,11 +696,9 @@ export class CommunityFeaturesService {
         return { owner, entries: bounded.items, total, truncated: windowTruncated || selected.length < total || bounded.truncated, nextCursor: bounded.items.at(-1)?.entryId };
     }
     ownerRoot(principal, kind) {
-        const scope = principal.userId
-            ? `users/${normalizeScopeId(principal.userId, 'userId')}`
-            : principal.agentId
-                ? `agents/${normalizeScopeId(principal.agentId, 'agentId')}`
-                : `models/${normalizeScopeId(principal.modelId, 'modelId')}`;
+        const scope = principal.agentId
+            ? `agents/${normalizeScopeId(principal.agentId, 'agentId')}`
+            : `models/${normalizeScopeId(principal.modelId, 'modelId')}`;
         return `_scopes/${scope}/_${kind}`;
     }
     async watch(params) {
