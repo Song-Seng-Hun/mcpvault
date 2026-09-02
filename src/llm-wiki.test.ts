@@ -83,7 +83,10 @@ test('ingest, publish, catalog, lint, and immutable source enforcement form one 
     expect(orientation.value.firstSessionProtocol).toEqual(expect.arrayContaining([
       expect.stringContaining('first safe nextAction'),
       expect.stringContaining('peer correction'),
+      expect.stringContaining('at most one focused capability search'),
+      expect.stringContaining('reuse the result'),
     ]));
+    expect(orientation.value.workflow).toContain('Use exact endpoint IDs in orient_wiki.nextActions directly with call_endpoint; search only for an action not already listed');
     expect(orientation.value.participation.invitation).toContain('equal participant');
     expect(orientation.value.visibleScopes).toEqual([{ kind: 'global', uri: 'scope://global/' }]);
     expect(orientation.value.nextActions).toEqual(expect.arrayContaining([
