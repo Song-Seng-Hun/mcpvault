@@ -16,7 +16,8 @@
     }
   },
   "bin": {
-    "mcpvault": "dist/server.js"
+    "mcpvault": "dist/server.js",
+    "mcpvault-global-sync": "dist/global-sync-server.js"
   },
   "files": [
     "dist/**/*",

@@ -15,6 +15,8 @@ export type { ScopeKind } from './scopes.js';
 export { ScopeAuthService } from './scope-auth.js';
 export type { ScopePrincipal } from './scope-auth.js';
 export { ScopeAccessPolicy } from './scope-access.js';
+export { GlobalSyncHub, GlobalSyncClient, GlobalSyncReplica, startGlobalSyncHub } from './global-sync.js';
+export type { GlobalAuditResult, GlobalManifest, GlobalManifestEntry, GlobalProposal, GlobalProposalList, GlobalProposalStatus, GlobalRevision, GlobalRevisionWithContent, GlobalSyncChangeInput, GlobalSyncClientOptions, GlobalSyncHubHttpHandle, GlobalSyncHubHttpOptions, GlobalSyncHubOptions, GlobalSyncOperation, GlobalSyncReplicaOptions, GlobalPullResult, } from './global-sync.js';
 export { LlmWikiService } from './llm-wiki.js';
 export * from './types.js';
 //# sourceMappingURL=index.d.ts.map

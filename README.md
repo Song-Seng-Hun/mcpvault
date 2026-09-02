@@ -1392,6 +1392,41 @@ trees. This repository currently provides the boundary and metadata; a
 transport or deployment layer still decides which Global assets are actually
 replicated.
 
+### Cross-command-center Global synchronization
+
+Global synchronization is implemented as an optional standalone
+`GlobalSyncHub`, not as direct vault-to-vault file copying. The hub keeps
+immutable content-addressed objects, an append-only event log, revision
+metadata, and a rebuildable state snapshot. A vault submits an
+`upsert` or `tombstone` proposal; only an explicit reviewer approval advances
+the canonical Global head. There is no physical delete operation.
+
+The exported `GlobalSyncReplica` pulls bounded manifests by cursor and applies
+only validated Global revisions. It rejects unsafe paths and hash mismatches,
+never overwrites unsubmitted local edits, writes a backup before replacement,
+and moves approved tombstones into hidden `.mcpvault/global-sync-quarantine/`
+instead of deleting them. Conflicts leave both local content and the remote
+revision available for review. `GlobalSyncHub.audit()` checks revision chains,
+heads, and content objects for corruption.
+
+The optional HTTP control plane is started with `startGlobalSyncHub()` and
+requires a proposer bearer token and a separate reviewer bearer token supplied
+by the host process. The proposer token permits bounded manifest/revision reads
+and proposal submission; only the reviewer token permits approval, rejection,
+restoration, and audit. User, Community, `_scopes`, `_whispers`, `.mcpvault`,
+and Git state are rejected at the document boundary. The local MCPVault server
+remains fully usable when the hub is offline; synchronization is an explicit
+pull/propose operation rather than a hidden dependency. TLS or mTLS should be
+used when the hub is not on the same machine; the current module provides
+content hashes and bearer separation, not a replacement for transport security.
+
+For a standalone hub process, build the package, set
+`MCPVAULT_GLOBAL_SYNC_AUTH_TOKEN` and
+`MCPVAULT_GLOBAL_SYNC_REVIEWER_TOKEN` in the host environment, then run
+`mcpvault-global-sync <hub-storage-root>`. Keep the hub storage outside every
+Obsidian vault. The default bind address is localhost; use a private network
+and TLS/mTLS before binding it to a remote interface.
+
 Every existing path-based tool accepts scope URIs:
 
 ```text

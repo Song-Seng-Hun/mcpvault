@@ -8,6 +8,7 @@
   },
   "include": [
     "server.ts",
+    "global-sync-server.ts",
     "src/**/*"
   ],
   "exclude": [

@@ -9,5 +9,6 @@ export { SemanticSearchService } from './semantic-search.js';
 export { CollaborationService, expandScopePath, parseScopePath, scopeRoot } from './scopes.js';
 export { ScopeAuthService } from './scope-auth.js';
 export { ScopeAccessPolicy } from './scope-access.js';
+export { GlobalSyncHub, GlobalSyncClient, GlobalSyncReplica, startGlobalSyncHub } from './global-sync.js';
 export { LlmWikiService } from './llm-wiki.js';
 export * from './types.js';

@@ -110,6 +110,7 @@ src/
   cache-budget.ts      # Process-wide LRU budget for disposable derived response caches
   semantic-search.ts   # Optional lazy multilingual vector index with compressed manifest and isolated fallback
   scopes.ts            # Durable global/community/user/model/agent namespaces and collaboration records
+  global-sync.ts       # Optional Global Sync Hub, append-only proposals, replicas, quarantine, and audit
   scope-auth.ts        # Persistent hashed accounts and process-local login sessions
   scope-access.ts      # Private-scope path authorization and source immutability boundary
   llm-wiki.ts          # Source ingestion, grounded publishing, catalog, lint, Error Book
