@@ -28,6 +28,7 @@ export interface GlobalManifest {
     protocol: typeof PROTOCOL;
     hubId: string;
     cursor: number;
+    latestSequence: number;
     entries: GlobalManifestEntry[];
     hasMore: boolean;
     signature: string;
@@ -95,6 +96,7 @@ export declare class GlobalSyncHub {
     private readonly approvalQuorum;
     private readonly originWindows;
     private state;
+    private lastEventHash;
     private initialized;
     private mutationTail;
     constructor(root: string, options?: GlobalSyncHubOptions);

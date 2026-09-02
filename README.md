@@ -1427,6 +1427,10 @@ sequence order, and parent chains before applying anything. Keep the private
 key in an owner-only/ACL-protected directory and rotate it only with an
 explicit migration plan, because changing it invalidates old signatures.
 
+The local state snapshot is disposable: on startup the hub rebuilds it from a
+strictly sequenced, hash-chained, hub-signed event log and refuses to serve a
+tampered or missing log instead of trusting a manipulated snapshot.
+
 The HTTP adapter applies per-client request limits and the hub bounds total,
 pending, per-origin, and pending-content proposal volume. These are availability
 guards, not a replacement for a reverse proxy, WAF, TLS, or mTLS. Use TLS or

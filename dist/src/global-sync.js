@@ -34,6 +34,9 @@ export function generateGlobalSyncSigningKeyPair() {
 function signaturePayload(value) {
     return Buffer.from(JSON.stringify(value), 'utf8');
 }
+function eventHash(value) {
+    return sha256(JSON.stringify(value));
+}
 function signPayload(value, privateKey) {
     return sign(null, signaturePayload(value), privateKey).toString('base64url');
 }
@@ -166,6 +169,7 @@ export class GlobalSyncHub {
     approvalQuorum;
     originWindows = new Map();
     state;
+    lastEventHash = '';
     initialized = false;
     mutationTail = Promise.resolve();
     constructor(root, options = {}) {
@@ -177,6 +181,8 @@ export class GlobalSyncHub {
         if (!/^[a-z0-9][a-z0-9._-]{0,127}$/.test(this.hubId))
             throw new Error('hubId must be a lowercase identifier');
         this.signingPrivateKey = options.signingPrivateKey ? createPrivateKey(options.signingPrivateKey) : createPrivateKey(generateGlobalSyncSigningKeyPair().privateKey);
+        if (this.signingPrivateKey.asymmetricKeyType !== 'ed25519')
+            throw new Error('Global Sync signing key must be Ed25519');
         this.signingPublicKey = createPublicKey(this.signingPrivateKey).export({ type: 'spki', format: 'pem' }).toString();
         this.approvalQuorum = 2;
         this.state = emptyState(this.hubId);
@@ -189,30 +195,42 @@ export class GlobalSyncHub {
         if (this.initialized)
             return;
         await mkdir(this.objectRoot, { recursive: true });
+        let snapshotExists = false;
         try {
-            const parsed = JSON.parse(await readFile(this.statePath, 'utf8'));
-            if (isRecord(parsed) && parsed.protocol === PROTOCOL && parsed.hubId === this.hubId)
-                this.state = parsed;
+            await stat(this.statePath);
+            snapshotExists = true;
         }
         catch {
-            this.state = emptyState(this.hubId);
+            snapshotExists = false;
         }
+        this.state = emptyState(this.hubId);
         try {
             const lines = (await readFile(this.eventPath, 'utf8')).split(/\r?\n/).filter(Boolean);
-            for (const line of lines) {
+            for (let index = 0; index < lines.length; index += 1) {
+                const line = lines[index];
                 try {
                     const event = JSON.parse(line);
-                    if (Number.isSafeInteger(event.sequence) && event.sequence > this.state.nextSequence)
-                        applyEvent(this.state, event);
+                    const unsignedEvent = { sequence: event.sequence, type: event.type, payload: event.payload, previousHash: event.previousHash };
+                    if (!Number.isSafeInteger(event.sequence) || event.sequence !== this.state.nextSequence + 1 || event.previousHash !== this.lastEventHash || event.eventHash !== eventHash(unsignedEvent) || !event.signature || !verifyPayload(unsignedEvent, event.signature, createPublicKey(this.signingPublicKey)))
+                        throw new Error(`invalid event chain at sequence ${event.sequence}`);
+                    applyEvent(this.state, event);
+                    this.lastEventHash = event.eventHash;
                 }
-                catch {
-                    // A partial final line from a crashed write is ignored; audit reports
-                    // only missing authoritative state, never invents a revision.
+                catch (error) {
+                    if (index === lines.length - 1 && line.trim().startsWith('{') === false)
+                        break;
+                    throw error;
                 }
             }
         }
-        catch {
-            // A new hub has no event log yet.
+        catch (error) {
+            if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+                if (snapshotExists)
+                    throw new Error('Global Sync event log is missing; refusing to trust the state snapshot');
+            }
+            else {
+                throw error;
+            }
         }
         this.initialized = true;
     }
@@ -230,7 +248,8 @@ export class GlobalSyncHub {
         }
     }
     async appendEvent(type, payload) {
-        const event = { sequence: this.state.nextSequence + 1, type, payload };
+        const unsignedEvent = { sequence: this.state.nextSequence + 1, type, payload, previousHash: this.lastEventHash };
+        const event = { ...unsignedEvent, eventHash: eventHash(unsignedEvent), signature: signPayload(unsignedEvent, this.signingPrivateKey) };
         await mkdir(dirname(this.eventPath), { recursive: true });
         const handle = await open(this.eventPath, 'a');
         try {
@@ -241,6 +260,7 @@ export class GlobalSyncHub {
             await handle.close();
         }
         applyEvent(this.state, event);
+        this.lastEventHash = event.eventHash;
         await writeAtomic(this.statePath, `${JSON.stringify(this.state, null, 2)}\n`);
     }
     objectPath(contentHash) {
@@ -350,6 +370,7 @@ export class GlobalSyncHub {
             protocol: PROTOCOL,
             hubId: this.hubId,
             cursor: bounded.at(-1)?.sequence || cursor,
+            latestSequence: this.state.nextSequence,
             entries: bounded.map(revision => ({ documentId: revision.documentId, revisionId: revision.revisionId, sequence: revision.sequence, ...(revision.parentRevision && { parentRevision: revision.parentRevision }), operation: revision.operation, ...(revision.contentHash && { contentHash: revision.contentHash }) })),
             hasMore: revisions.length > bounded.length,
         };
@@ -614,7 +635,7 @@ export class GlobalSyncReplica {
     async pull(limit) {
         await this.load();
         const manifest = await this.client.getManifest(this.state.cursor, normalizeLimit(limit));
-        if (manifest.protocol !== PROTOCOL || !manifest.signature || !verifyPayload(withoutSignature(manifest), manifest.signature, this.trustedPublicKey)) {
+        if (manifest.protocol !== PROTOCOL || !Number.isSafeInteger(manifest.latestSequence) || manifest.latestSequence < this.state.cursor || !manifest.signature || !verifyPayload(withoutSignature(manifest), manifest.signature, this.trustedPublicKey)) {
             return { applied: [], conflicts: [{ documentId: '', revisionId: '', reason: 'Remote manifest failed protocol or signature validation.' }], cursor: this.state.cursor, hasMore: true };
         }
         if (manifest.entries.length > 0 && manifest.cursor !== manifest.entries.at(-1).sequence) {

@@ -127,3 +127,26 @@ test('Global Hub persists its signing key and binds reviewer identity to the tok
     await secondHandle.close();
   }
 });
+
+test('Global Hub rebuilds from its signed event chain and fails closed on event tampering', async () => {
+  const hub = new GlobalSyncHub(hubRoot);
+  const proposal = await hub.submitProposal({ documentId: 'Knowledge/Integrity.md', content: 'integrity\n', author: 'server-a', reason: 'test', origin: 'server-a' });
+  expect((await hub.approveProposal(proposal.proposalId, 'reviewer-a', 'checked')).status).toBe('pending');
+  expect((await hub.approveProposal(proposal.proposalId, 'reviewer-b', 'checked')).status).toBe('approved');
+
+  const statePath = join(hubRoot, 'state.json');
+  const state = JSON.parse(await readFile(statePath, 'utf8')) as Record<string, unknown>;
+  state.nextSequence = 999_999;
+  state.heads = {};
+  await writeFile(statePath, JSON.stringify(state));
+  const signingPrivateKey = hub.exportSigningPrivateKey();
+  const recovered = new GlobalSyncHub(hubRoot, { signingPrivateKey });
+  expect((await recovered.getManifest()).entries).toHaveLength(1);
+
+  const eventPath = join(hubRoot, 'events.ndjson');
+  const firstEvent = JSON.parse((await readFile(eventPath, 'utf8')).split(/\r?\n/)[0]!) as Record<string, unknown>;
+  firstEvent.payload = { tampered: true };
+  await writeFile(eventPath, `${JSON.stringify(firstEvent)}\n`);
+  const broken = new GlobalSyncHub(hubRoot, { signingPrivateKey });
+  await expect(broken.getManifest()).rejects.toThrow('invalid event chain');
+});
