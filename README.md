@@ -211,9 +211,14 @@ body/link baseline without requiring the agent to resubmit the whole body.
 Pass `nextLifecycle` when the review changes the knowledge state (for example,
 `evergreen`, `superseded`, or `archived`); otherwise the response explicitly
 asks for a follow-up decision. `get_wiki_review_dashboard` combines Inbox,
-active Projects/Tasks, due knowledge, and MOC/graph health into one bounded
-Reflect pass. `task_status: someday` is reserved for work intentionally
-deferred from the active list.
+active Projects/Tasks, due work, waiting/someday items, open
+questions/hypotheses/assumptions, due knowledge, and MOC/graph/focus/
+connectivity health into one bounded Reflect pass. `task_status: someday` is
+reserved for work intentionally deferred from the active list. Use
+`read_wiki_projection` with `view: progressive` when a single bounded read
+should include the summary, selected passages, claims, and open questions;
+its `summaryFresh`/`summaryStale` fields make stale compression visible
+before it is used.
 
 Questions, hypotheses, and assumptions can carry `epistemic_status` so their
 state is explicit: questions are open/answered/blocked/abandoned, hypotheses
@@ -222,7 +227,11 @@ active/verified/invalidated/replaced. Project/task notes may add GTD-style
 `desired_outcome`, `next_action`, `task_context`, `due_at`, and `defer_until`.
 Optional `focus_horizon` (`ground`, `project`, `area`, `goal`, `vision`, or
 `purpose`) plus `focus_parent`/`focus_supports` maps concrete GTD work to the
-higher outcome it serves without becoming a security boundary.
+higher outcome it serves without becoming a security boundary. Graph health
+resolves those links and reports unresolved, ambiguous, unparented, and cyclic
+focus relationships. It also reports isolated durable/atomic notes and
+literature notes that have not yet led to a permanent knowledge note. These
+are advisory signals, not storage requirements.
 Negative knowledge can preserve the attempted path, observed result, failure
 condition, reproduction, rejection reason, reusable lesson, and replacement
 path instead of being deleted. After checking evidence, record

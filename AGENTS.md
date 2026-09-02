@@ -113,8 +113,11 @@ leave `review`. For high-value citations, add a 1-based line range and
 
 When the only goal is to preserve an observation, use `capture_wiki_note` and
 let it create an Inbox fleeting note; do not spend the capture turn deciding
-its final folder. Use `get_wiki_review_dashboard` for one bounded Reflect pass
-across Inbox, active work, due knowledge, and graph health. Once evidence has
+its final folder. Use `get_wiki_review_dashboard` for one bounded Reflect pass across Inbox,
+next actions, due work, waiting/someday items, open questions or hypotheses,
+due knowledge, and graph/focus/connectivity health. Use
+`read_wiki_projection` with `view: progressive` when one bounded context packet
+should combine a summary, selected passages, claims, and open questions. Once evidence has
 actually been checked, use `review_wiki_note` to record the outcome and refresh
 the review baseline without resubmitting the full Markdown body. Use
 `taskStatus: someday` for intentionally deferred work, not for an active task.

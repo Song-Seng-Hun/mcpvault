@@ -125,7 +125,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_review_dashboard',
-            description: 'Run one bounded Reflect/weekly-review pass over Inbox, active projects/tasks, due or stale knowledge, and graph/MOC health. It is advisory and never mutates notes.',
+            description: 'Run one bounded GTD Reflect/weekly-review pass over Inbox, next actions, due work, waiting/someday items, open questions/hypotheses, due or stale knowledge, and graph/MOC/focus health. It is advisory and never mutates notes.',
             inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 50, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 18000, default: 9000 }, accessToken, prettyPrint } },
         },
         {
@@ -166,7 +166,7 @@ export function getLlmWikiTools() {
             name: 'read_wiki_projection',
             description: 'Read one Wiki note progressively. Start with summary or key_points, then request outline or one section; full content is explicit and bounded. Returns the current revision so edits can use optimistic concurrency.',
             inputSchema: { type: 'object', properties: {
-                    path: { type: 'string' }, view: { type: 'string', enum: ['summary', 'key_points', 'outline', 'section', 'full'], default: 'summary' },
+                    path: { type: 'string' }, view: { type: 'string', enum: ['summary', 'progressive', 'key_points', 'outline', 'section', 'full'], default: 'summary', description: 'Use progressive for one bounded packet containing summary, selected passages, claims, and open questions.' },
                     section: { type: 'string', description: 'Heading text when view=section' }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, accessToken, prettyPrint,
                 }, required: ['path'] },
         },
@@ -179,7 +179,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_graph_health',
-            description: 'Report broken wikilinks, orphan notes, and empty MOCs with bounded samples. Use it to repair navigation without creating a parallel index.',
+            description: 'Report broken links, orphan notes, empty MOCs, GTD focus problems, and Zettelkasten connectivity gaps with bounded samples. Use it to repair navigation without creating a parallel index.',
             inputSchema: { type: 'object', properties: {
                     limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint,
                 } },
@@ -191,7 +191,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_organization_health',
-            description: 'Return one bounded report for PARA, Zettelkasten, Properties, and typed-link organization issues. It reuses the live Wiki lint scan, never moves or deletes notes, and treats folders as filing aids rather than security boundaries.',
+            description: 'Return one bounded report for PARA, Zettelkasten, Properties, typed links, GTD focus alignment, and progressive knowledge organization issues. It reuses the live Wiki lint scan plus derived graph signals, never moves or deletes notes, and treats folders as filing aids rather than security boundaries.',
             inputSchema: { type: 'object', properties: {
                     limit: { type: 'integer', minimum: 1, maximum: 100, default: 30 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint,
                 } },

@@ -136,7 +136,7 @@ test('questions, negative knowledge, locators, event review, MOC coverage, and B
     const changed = await client.callTool({ name: 'write_note', arguments: {
       path: 'Knowledge/Related.md', content: '# Related\n\nThe linked context changed.\n', expectedRevision: related.value.revision, accessToken,
     } });
-    expect(changed.isError).toBeFalsy();
+    if (changed.isError) throw new Error(JSON.stringify(changed));
     const impact = await callJson(client, 'get_wiki_impact_report', { limit: 10, maxChars: 6000, accessToken });
     expect(impact.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Rejected approach.md', reasons: expect.arrayContaining(['link_changed']), reviewTriggered: true, reviewTrigger: 'link_changed' })]));
     const queue = await callJson(client, 'get_wiki_review_queue', { limit: 10, maxChars: 6000, accessToken });
@@ -196,6 +196,45 @@ test('capture, review completion, and bounded Reflect dashboard close the organi
     await client.callTool({ name: 'write_note', arguments: { path: 'Projects/Needs action.md', content: '# Needs action\n', frontmatter: { note_kind: 'project', lifecycle: 'active' }, expectedRevision: 'missing', accessToken } });
     const dashboard = await callJson(client, 'get_wiki_review_dashboard', { limit: 10, maxChars: 9000, accessToken });
     expect(dashboard.value.sections).toMatchObject({ inbox: { total: 1 }, projectsAndTasks: { total: 1, items: [expect.objectContaining({ path: 'Projects/Needs action.md', missingNextAction: true })] }, knowledge: { total: 0 } });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('organization health exposes GTD focus, Zettelkasten connectivity, and progressive context', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-health-owner', modelId: 'codex', password: 'organization-health-password' });
+    const accessToken = registration.value.accessToken;
+    const source = await callJson(client, 'ingest_source', { sourceId: 'organization-health-source', title: 'Organization health source', content: 'A stable source claim.', capturedBy: 'codex', accessToken });
+    const progressive = await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Progressive.md', content: '# Progressive\n\nA durable claim.\n', evidencePaths: [source.value.path], noteKind: 'atomic', lifecycle: 'evergreen',
+      summary: 'A compact durable claim.', summaryLayer: 3, summaryHighlights: [{ text: 'A durable claim.', startLine: 3, endLine: 3 }], openQuestions: ['Does a second agent agree?'], expectedRevision: 'missing', author: 'codex', accessToken,
+    });
+    const progressiveRead = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Progressive.md', view: 'progressive', accessToken });
+    expect(progressiveRead.value).toMatchObject({ view: 'progressive', summaryFresh: true, summaryStale: false });
+    expect(progressiveRead.value.content).toContain('Selected passages:');
+    expect(progressiveRead.value.content).toContain('Does a second agent agree?');
+    const changed = await client.callTool({ name: 'patch_note', arguments: { path: 'Knowledge/Progressive.md', oldString: 'A durable claim.\n', newString: 'A changed durable claim.\n', replaceAll: true, expectedRevision: progressive.value.revision, accessToken } });
+    expect(changed.isError).toBeFalsy();
+    const staleRead = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Progressive.md', view: 'progressive', accessToken });
+    expect(staleRead.value).toMatchObject({ summaryFresh: false, summaryStale: true });
+
+    await client.callTool({ name: 'write_note', arguments: { path: 'Projects/Focus.md', content: '# Focus\n', frontmatter: { note_kind: 'project', lifecycle: 'active', focus_horizon: 'project', focus_parent: '[[Goals/Missing]]' }, expectedRevision: 'missing', accessToken } });
+    await client.callTool({ name: 'write_note', arguments: { path: 'Goals/One.md', content: '# One\n', frontmatter: { note_kind: 'goal', lifecycle: 'active', focus_horizon: 'goal', focus_parent: '[[Goals/Two]]' }, expectedRevision: 'missing', accessToken } });
+    await client.callTool({ name: 'write_note', arguments: { path: 'Goals/Two.md', content: '# Two\n', frontmatter: { note_kind: 'goal', lifecycle: 'active', focus_horizon: 'goal', focus_parent: '[[Goals/One]]' }, expectedRevision: 'missing', accessToken } });
+    const graph = await callJson(client, 'get_wiki_graph_health', { limit: 20, accessToken });
+    expect(graph.value.focusHealth).toMatchObject({ unresolved: { total: 1 }, cycles: { total: 1 }, unparented: { total: 0 } });
+    expect(graph.value.knowledgeConnectivity).toMatchObject({ total: 1, isolated: { total: 1 }, isolatedAtomic: { total: 1 } });
+    const health = await callJson(client, 'get_wiki_organization_health', { limit: 20, accessToken });
+    expect(health.value).toMatchObject({ advisoryIssueTotal: expect.any(Number), focusHealth: expect.objectContaining({ cycles: expect.objectContaining({ total: 1 }) }), knowledgeConnectivity: expect.objectContaining({ isolatedAtomic: expect.objectContaining({ total: 1 }) }) });
+
+    await client.callTool({ name: 'write_note', arguments: { path: 'Projects/Waiting.md', content: '# Waiting\n', frontmatter: { note_kind: 'project', lifecycle: 'active', task_status: 'waiting', waiting_for: 'another agent' }, expectedRevision: 'missing', accessToken } });
+    await client.callTool({ name: 'write_note', arguments: { path: 'Projects/Someday.md', content: '# Someday\n', frontmatter: { note_kind: 'project', lifecycle: 'active', task_status: 'someday' }, expectedRevision: 'missing', accessToken } });
+    await client.callTool({ name: 'write_note', arguments: { path: 'Knowledge/Question.md', content: '# Question\n', frontmatter: { note_kind: 'question', lifecycle: 'review', epistemic_status: 'open' }, expectedRevision: 'missing', accessToken } });
+    const dashboard = await callJson(client, 'get_wiki_review_dashboard', { limit: 20, accessToken });
+    expect(dashboard.value.sections).toMatchObject({ waiting: { total: 1 }, someday: { total: 1 }, epistemic: { questions: { total: 1 } } });
   } finally {
     await client.close();
     await server.close();

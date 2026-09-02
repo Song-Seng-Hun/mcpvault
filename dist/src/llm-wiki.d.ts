@@ -27,7 +27,7 @@ export interface WikiEvidenceInput {
     endLine?: number;
     quoteHash?: string;
 }
-type WikiProjectionView = 'summary' | 'key_points' | 'outline' | 'section' | 'full';
+type WikiProjectionView = 'summary' | 'progressive' | 'key_points' | 'outline' | 'section' | 'full';
 interface WikiLintIssue {
     severity: 'error' | 'warning';
     code: string;
@@ -294,6 +294,38 @@ export declare class LlmWikiService {
                 total: number;
                 truncated: boolean;
             };
+            due: {
+                items: Record<string, unknown>[];
+                total: number;
+                truncated: boolean;
+            };
+            waiting: {
+                items: Record<string, unknown>[];
+                total: number;
+                truncated: boolean;
+            };
+            someday: {
+                items: Record<string, unknown>[];
+                total: number;
+                truncated: boolean;
+            };
+            epistemic: {
+                questions: {
+                    items: Record<string, unknown>[];
+                    total: number;
+                    truncated: boolean;
+                };
+                hypotheses: {
+                    items: Record<string, unknown>[];
+                    total: number;
+                    truncated: boolean;
+                };
+                assumptions: {
+                    items: Record<string, unknown>[];
+                    total: number;
+                    truncated: boolean;
+                };
+            };
             knowledge: {
                 items: Record<string, unknown>[];
                 total: number;
@@ -334,12 +366,55 @@ export declare class LlmWikiService {
                     }[];
                     truncated: boolean;
                 };
+                focusHealth: {
+                    focusedNotes: number;
+                    parentEdges: number;
+                    supportEdges: number;
+                    horizonCounts: {
+                        [k: string]: number;
+                    };
+                    unresolved: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    ambiguous: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    unparented: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    cycles: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                };
+                knowledgeConnectivity: {
+                    total: number;
+                    isolated: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    isolatedAtomic: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    literatureWithoutPermanent: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                };
                 truncated?: never;
                 note?: never;
             } | {
-                mocCoverage?: never;
-                unresolvedLinks?: never;
-                orphanNotes?: never;
                 truncated: boolean;
                 note: string;
             };
@@ -361,6 +436,38 @@ export declare class LlmWikiService {
                 truncated: boolean;
                 items: Record<string, unknown>[];
             };
+            due: {
+                total: number;
+                truncated: boolean;
+                items: Record<string, unknown>[];
+            };
+            waiting: {
+                total: number;
+                truncated: boolean;
+                items: Record<string, unknown>[];
+            };
+            someday: {
+                total: number;
+                truncated: boolean;
+                items: Record<string, unknown>[];
+            };
+            epistemic: {
+                questions: {
+                    total: number;
+                    truncated: boolean;
+                    items: Record<string, unknown>[];
+                };
+                hypotheses: {
+                    total: number;
+                    truncated: boolean;
+                    items: Record<string, unknown>[];
+                };
+                assumptions: {
+                    total: number;
+                    truncated: boolean;
+                    items: Record<string, unknown>[];
+                };
+            };
             knowledge: {
                 total: number;
                 truncated: boolean;
@@ -401,12 +508,55 @@ export declare class LlmWikiService {
                     }[];
                     truncated: boolean;
                 };
+                focusHealth: {
+                    focusedNotes: number;
+                    parentEdges: number;
+                    supportEdges: number;
+                    horizonCounts: {
+                        [k: string]: number;
+                    };
+                    unresolved: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    ambiguous: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    unparented: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    cycles: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                };
+                knowledgeConnectivity: {
+                    total: number;
+                    isolated: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    isolatedAtomic: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    literatureWithoutPermanent: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                };
                 truncated?: never;
                 note?: never;
             } | {
-                mocCoverage?: never;
-                unresolvedLinks?: never;
-                orphanNotes?: never;
                 truncated: boolean;
                 note: string;
             };
@@ -532,6 +682,7 @@ export declare class LlmWikiService {
         replacementPath?: string;
         summaryFingerprint?: string;
         summaryFresh?: boolean;
+        summaryStale?: boolean;
         relations: {
             [k: string]: any;
         };
@@ -642,6 +793,52 @@ export declare class LlmWikiService {
             mocs: Record<string, unknown>[];
             truncated: boolean;
         };
+        focusHealth: {
+            focusedNotes: number;
+            parentEdges: number;
+            supportEdges: number;
+            horizonCounts: {
+                [k: string]: number;
+            };
+            unresolved: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+            ambiguous: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+            unparented: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+            cycles: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+        };
+        knowledgeConnectivity: {
+            total: number;
+            isolated: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+            isolatedAtomic: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+            literatureWithoutPermanent: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+        };
     } | {
         truncated: boolean;
         note: string;
@@ -674,6 +871,9 @@ export declare class LlmWikiService {
         issues: WikiLintIssue[];
         recommendations: string[];
         mocCoverage?: Record<string, unknown>;
+        focusHealth?: Record<string, any>;
+        knowledgeConnectivity?: Record<string, any>;
+        advisoryIssueTotal: number;
         truncated: boolean;
         generatedAt: string;
     }>;

@@ -116,8 +116,20 @@ Inbox view. Use `triage_wiki_note` for ordinary metadata edits and
 `review_wiki_note` after checking evidence to refresh the review baseline.
 Pass `nextLifecycle` when the review should become `evergreen`, `superseded`,
 or another explicit state; otherwise the response keeps the follow-up visible.
-`get_wiki_review_dashboard` is a bounded Reflect pass over Inbox, active work,
-knowledge review, and graph health.
+`get_wiki_review_dashboard` is a bounded Reflect pass over Inbox, next actions,
+due work, waiting/someday items, open questions/hypotheses/assumptions,
+knowledge review, and graph/focus/connectivity health. `focus_parent` and
+`focus_supports` are resolved against the visible Obsidian graph and report
+unresolved, ambiguous, unparented, or cyclic focus links without becoming
+mandatory properties. `get_wiki_graph_health` also reports isolated durable
+knowledge, isolated atomic notes, and literature notes that have not yet been
+linked to a permanent knowledge note. These are advisory signals: an
+intentionally standalone note remains valid.
+
+`read_wiki_projection` accepts `view: progressive` for one bounded context
+packet containing the compact summary, selected highlights, claims, and open
+questions. It also reports `summaryFresh`/`summaryStale`; never treat a stale
+projection as current knowledge until it is regenerated from the current body.
 
 For source interpretation, use `distill_wiki_source` to create a literature or
 atomic note from one intact immutable source. The operation records the

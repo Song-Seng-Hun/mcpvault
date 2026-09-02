@@ -50,7 +50,7 @@ export interface WikiEvidenceInput {
 
 type NormalizedEvidence = { path: string; heading?: string; blockId?: string; revision?: string; startLine?: number; endLine?: number; quoteHash?: string };
 
-type WikiProjectionView = 'summary' | 'key_points' | 'outline' | 'section' | 'full';
+type WikiProjectionView = 'summary' | 'progressive' | 'key_points' | 'outline' | 'section' | 'full';
 
 const CLAIM_STATUSES = new Set(['supported', 'disputed', 'unverified', 'superseded']);
 
@@ -275,7 +275,10 @@ note. Use \`triage_wiki_note\` for ordinary metadata edits. Use
 immutable source while preserving its path and revision as provenance. Use
 \`review_wiki_note\` after checking evidence and pass \`nextLifecycle\` when
 the note should leave review. Call \`wiki.review_dashboard\` for one bounded
-Reflect pass over Inbox, active work, due knowledge, and graph health.
+Reflect pass over Inbox, next actions, due work, waiting/someday items, open
+questions or hypotheses, due knowledge, and graph/focus/connectivity health.
+Use \`read_wiki_projection\` with \`view: progressive\` when one bounded
+packet should combine summary, selected passages, claims, and open questions.
 
 MOCs should explain their purpose and boundary with \`moc_purpose\`,
 \`moc_scope\`, and \`moc_questions\`, optionally link to a parent with
@@ -291,7 +294,8 @@ references, backlinks, unresolved-link checks, and MOC coverage. External URLs
 and links inside fenced code are ignored. Progressive Summarization is
 optional: \`summary_layer\` 0-4 and bounded \`summary_highlights\` describe
 how much of the original note has been compressed; the full Markdown body and
-its content digest remain authoritative. GTD Horizons can be recorded with
+its content digest remain authoritative. The progressive projection reports
+freshness and must not be treated as current when stale. GTD Horizons can be recorded with
 \`focus_horizon\` (ground, project, area, goal, vision, purpose),
 \`focus_parent\`, and \`focus_supports\` to connect actions to outcomes.
 
@@ -1094,20 +1098,68 @@ export class LlmWikiService {
     const boundedChars = Math.min(Math.max(Number(maxChars) || 9000, 512), 18000);
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
     const actionItems: Array<Record<string, unknown>> = [];
+    const dueItems: Array<Record<string, unknown>> = [];
+    const waitingItems: Array<Record<string, unknown>> = [];
+    const somedayItems: Array<Record<string, unknown>> = [];
+    const questionItems: Array<Record<string, unknown>> = [];
+    const hypothesisItems: Array<Record<string, unknown>> = [];
+    const assumptionItems: Array<Record<string, unknown>> = [];
     let totalActionItems = 0;
+    let totalDue = 0;
+    let totalWaiting = 0;
+    let totalSomeday = 0;
+    let totalQuestions = 0;
+    let totalHypotheses = 0;
+    let totalAssumptions = 0;
     const nowMs = Date.now();
+    const pushBounded = (items: Array<Record<string, unknown>>, item: Record<string, unknown>) => {
+      if (items.length < boundedLimit) items.push(item);
+    };
     for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
       const kind = String(note.frontmatter.note_kind || '').toLowerCase();
-      if (kind !== 'project' && kind !== 'task') continue;
       const lifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
       const taskStatus = String(note.frontmatter.task_status || '').toLowerCase();
-      if (['completed', 'cancelled', 'someday'].includes(taskStatus) || lifecycle === 'archived') continue;
-      const dueAt = typeof note.frontmatter.due_at === 'string' ? note.frontmatter.due_at : undefined;
-      const overdue = Boolean(dueAt && !Number.isNaN(Date.parse(dueAt)) && Date.parse(dueAt) <= nowMs);
-      const missingNextAction = lifecycle === 'active' && !note.frontmatter.next_action && !note.frontmatter.waiting_for;
-      if (!overdue && !missingNextAction) continue;
-      totalActionItems += 1;
-      if (actionItems.length < boundedLimit) actionItems.push({ path: this.access.toPublicPath(note.path), title: note.frontmatter.title || note.path.split('/').at(-1), kind, ...(note.frontmatter.task_status && { taskStatus }), ...(dueAt && { dueAt }), ...(overdue && { overdue: true }), ...(missingNextAction && { missingNextAction: true }) });
+      const title = note.frontmatter.title || note.path.split('/').at(-1);
+      const item = { path: this.access.toPublicPath(note.path), title, kind, ...(note.frontmatter.task_status && { taskStatus }) };
+      if (kind === 'project' || kind === 'task') {
+        if (taskStatus === 'someday') {
+          totalSomeday += 1;
+          pushBounded(somedayItems, item);
+        }
+        if (lifecycle !== 'archived' && !['completed', 'cancelled', 'someday'].includes(taskStatus)) {
+          const dueAt = typeof note.frontmatter.due_at === 'string' ? note.frontmatter.due_at : undefined;
+          const overdue = Boolean(dueAt && !Number.isNaN(Date.parse(dueAt)) && Date.parse(dueAt) <= nowMs);
+          const waiting = taskStatus === 'waiting' || Boolean(note.frontmatter.waiting_for);
+          const missingNextAction = lifecycle === 'active' && !note.frontmatter.next_action && !waiting;
+          const workItem = { ...item, ...(dueAt && { dueAt }) };
+          if (overdue) {
+            totalDue += 1;
+            pushBounded(dueItems, { ...workItem, overdue: true });
+          }
+          if (waiting) {
+            totalWaiting += 1;
+            pushBounded(waitingItems, { ...workItem, ...(note.frontmatter.waiting_for && { waitingFor: note.frontmatter.waiting_for }) });
+          }
+          if (missingNextAction) {
+            totalActionItems += 1;
+            pushBounded(actionItems, { ...workItem, missingNextAction: true });
+          }
+        }
+      }
+      const epistemicStatus = String(note.frontmatter.epistemic_status || '').toLowerCase();
+      const epistemicItem = { ...item, epistemicStatus };
+      if (kind === 'question' && (epistemicStatus === 'open' || epistemicStatus === 'blocked')) {
+        totalQuestions += 1;
+        pushBounded(questionItems, epistemicItem);
+      }
+      if (kind === 'hypothesis' && (epistemicStatus === 'proposed' || epistemicStatus === 'inconclusive')) {
+        totalHypotheses += 1;
+        pushBounded(hypothesisItems, epistemicItem);
+      }
+      if (kind === 'assumption' && epistemicStatus === 'active') {
+        totalAssumptions += 1;
+        pushBounded(assumptionItems, epistemicItem);
+      }
     }
     const [inbox, knowledgeReview, graph] = await Promise.all([
       this.inbox(principal, boundedLimit, Math.floor(boundedChars / 4)),
@@ -1115,21 +1167,46 @@ export class LlmWikiService {
       this.graphHealth(principal, boundedLimit, Math.floor(boundedChars / 3)),
     ]);
     const graphView = 'mocCoverage' in graph
-      ? { mocCoverage: graph.mocCoverage, unresolvedLinks: graph.unresolvedLinks, orphanNotes: graph.orphanNotes }
+      ? { mocCoverage: graph.mocCoverage, unresolvedLinks: graph.unresolvedLinks, orphanNotes: graph.orphanNotes, ...(graph.focusHealth && { focusHealth: graph.focusHealth }), ...(graph.knowledgeConnectivity && { knowledgeConnectivity: graph.knowledgeConnectivity }) }
       : { truncated: true, note: graph.note };
     const result = {
-      purpose: 'One bounded Reflect/weekly-review projection. It is advisory; inspect each selected note before changing it.',
+      purpose: 'One bounded GTD Reflect/weekly-review projection. It is advisory; inspect each selected note before changing it.',
       sections: {
         inbox,
         projectsAndTasks: { items: actionItems, total: totalActionItems, truncated: totalActionItems > actionItems.length },
+        due: { items: dueItems, total: totalDue, truncated: totalDue > dueItems.length },
+        waiting: { items: waitingItems, total: totalWaiting, truncated: totalWaiting > waitingItems.length },
+        someday: { items: somedayItems, total: totalSomeday, truncated: totalSomeday > somedayItems.length },
+        epistemic: {
+          questions: { items: questionItems, total: totalQuestions, truncated: totalQuestions > questionItems.length },
+          hypotheses: { items: hypothesisItems, total: totalHypotheses, truncated: totalHypotheses > hypothesisItems.length },
+          assumptions: { items: assumptionItems, total: totalAssumptions, truncated: totalAssumptions > assumptionItems.length },
+        },
         knowledge: knowledgeReview,
         graph: graphView,
       },
-      nextActions: ['Process one Inbox capture.', 'Give one active project a concrete next action or waiting_for.', 'Review one due/stale knowledge note with review_wiki_note.', 'Repair one broken link or MOC gap.'],
+      nextActions: ['Process one Inbox capture.', 'Give one active project a concrete next action or waiting_for.', 'Review one due/stale knowledge note with review_wiki_note.', 'Resolve one waiting/someday item or open question.', 'Repair one broken link, MOC gap, or focus alignment issue.'],
       generatedAt: now(),
     };
     const encoded = JSON.stringify(result);
-    return encoded.length <= boundedChars ? result : { ...result, sections: { inbox: { ...inbox, items: inbox.items.slice(0, 3) }, projectsAndTasks: { ...result.sections.projectsAndTasks, items: actionItems.slice(0, 3) }, knowledge: { ...knowledgeReview, items: knowledgeReview.items.slice(0, 3) }, graph: graphView }, truncated: true };
+    return encoded.length <= boundedChars ? result : {
+      ...result,
+      sections: {
+        inbox: { ...inbox, items: inbox.items.slice(0, 2) },
+        projectsAndTasks: { ...result.sections.projectsAndTasks, items: actionItems.slice(0, 2) },
+        due: { ...result.sections.due, items: dueItems.slice(0, 2) },
+        waiting: { ...result.sections.waiting, items: waitingItems.slice(0, 2) },
+        someday: { ...result.sections.someday, items: somedayItems.slice(0, 2) },
+        epistemic: {
+          questions: { ...result.sections.epistemic.questions, items: questionItems.slice(0, 2) },
+          hypotheses: { ...result.sections.epistemic.hypotheses, items: hypothesisItems.slice(0, 2) },
+          assumptions: { ...result.sections.epistemic.assumptions, items: assumptionItems.slice(0, 2) },
+        },
+        knowledge: { ...knowledgeReview, items: knowledgeReview.items.slice(0, 2) },
+        graph: graphView,
+      },
+      truncated: true,
+    };
   }
 
   async triage(params: {
@@ -1336,7 +1413,7 @@ export class LlmWikiService {
   }) {
     if (!this.access.canAccessPhysicalPath(params.path, params.principal)) throw new Error(`Access denied: ${this.access.toPublicPath(params.path)}`);
     const view = params.view || 'summary';
-    if (!['summary', 'key_points', 'outline', 'section', 'full'].includes(view)) throw new Error('view must be summary, key_points, outline, section, or full');
+    if (!['summary', 'progressive', 'key_points', 'outline', 'section', 'full'].includes(view)) throw new Error('view must be summary, progressive, key_points, outline, section, or full');
     if (view === 'section' && !params.section?.trim()) throw new Error('section is required when view=section');
     const maxChars = Math.min(Math.max(Number(params.maxChars) || 4000, 512), 12000);
     const note = await this.fileSystem.readNote(params.path);
@@ -1366,10 +1443,23 @@ export class LlmWikiService {
         .split(/\n\s*\n/)
         .map(block => block.trim())
         .filter(block => block && !block.startsWith('#') && !block.startsWith('```'));
+      const summary = typeof note.frontmatter.summary === 'string' ? note.frontmatter.summary : '';
+      const highlights = Array.isArray(note.frontmatter.summary_highlights)
+        ? note.frontmatter.summary_highlights.filter((item: any) => item && typeof item.text === 'string').slice(0, 8).map((item: any) => `- ${item.text}`)
+        : [];
+      const questions = Array.isArray(note.frontmatter.open_questions)
+        ? note.frontmatter.open_questions.filter((item: unknown): item is string => typeof item === 'string').slice(0, 8).map(item => `- ${item}`)
+        : [];
       if (view === 'key_points') {
         content = claimPoints.length > 0 ? claimPoints.join('\n') : paragraphs.slice(0, 5).join('\n\n');
+      } else if (view === 'progressive') {
+        content = [
+          summary && `Summary: ${summary}`,
+          highlights.length > 0 && `Selected passages:\n${highlights.join('\n')}`,
+          claimPoints.length > 0 && `Claims:\n${claimPoints.join('\n')}`,
+          questions.length > 0 && `Open questions:\n${questions.join('\n')}`,
+        ].filter(Boolean).join('\n\n') || paragraphs[0] || '';
       } else {
-        const summary = typeof note.frontmatter.summary === 'string' ? note.frontmatter.summary : '';
         content = summary || (claimPoints.length > 0 ? claimPoints.join('\n') : paragraphs[0] || '');
       }
     }
@@ -1439,6 +1529,8 @@ export class LlmWikiService {
         summaryFresh: typeof note.frontmatter.summary_of_content_sha256 === 'string'
           ? note.frontmatter.summary_of_content_sha256 === hash(note.content)
           : false,
+        summaryStale: typeof note.frontmatter.summary_of_content_sha256 !== 'string'
+          || note.frontmatter.summary_of_content_sha256 !== hash(note.content),
       }),
       relations: Object.fromEntries(RELATION_FIELDS
         .filter(field => Array.isArray(note.frontmatter[field]) && note.frontmatter[field].length > 0)
@@ -1630,14 +1722,28 @@ export class LlmWikiService {
     const mocDrafts: Array<{ path: string; title: string; links: string[] }> = [];
     const visibleNotePaths: string[] = [];
     const knowledgePaths = new Set<string>();
+    const graphNotes: Array<{ path: string; title: string; kind: string; managedType: string; lifecycle: string; horizon: string; focusParent?: string; focusSupports: string[]; links: string[] }> = [];
     let mocTotal = 0;
     let emptyMocTotal = 0;
     for await (const note of iterateNotes(this.fileSystem, { includeContent: true }, canAccess)) {
       visibleNotePaths.push(note.path);
-      if (note.frontmatter.llm_wiki_type === 'knowledge') knowledgePaths.add(normalizePath(note.path).toLowerCase());
+      const kind = String(note.frontmatter.note_kind || '').toLowerCase();
+      const managedType = String(note.frontmatter.llm_wiki_type || '').toLowerCase();
+      const links = extractObsidianLinkOccurrences(note.content || '').map(link => link.target);
+      graphNotes.push({
+        path: note.path,
+        title: String(note.frontmatter.title || note.path.split('/').at(-1) || note.path),
+        kind,
+        managedType,
+        lifecycle: String(note.frontmatter.lifecycle || '').toLowerCase(),
+        horizon: String(note.frontmatter.focus_horizon || '').toLowerCase(),
+        ...(typeof note.frontmatter.focus_parent === 'string' && { focusParent: note.frontmatter.focus_parent }),
+        focusSupports: Array.isArray(note.frontmatter.focus_supports) ? note.frontmatter.focus_supports.filter((item: unknown): item is string => typeof item === 'string') : [],
+        links,
+      });
+      if (managedType === 'knowledge' || ['atomic', 'knowledge', 'decision'].includes(kind)) knowledgePaths.add(normalizePath(note.path).toLowerCase());
       if (note.frontmatter.note_kind !== 'moc') continue;
       mocTotal += 1;
-      const links = extractObsidianLinkOccurrences(note.content || '').map(link => link.target);
       mocDrafts.push({ path: note.path, title: note.frontmatter.title || note.path.split('/').at(-1) || note.path, links });
       if (links.length === 0) {
         emptyMocTotal += 1;
@@ -1646,6 +1752,104 @@ export class LlmWikiService {
         }
       }
     }
+
+    const graphByPath = new Map(graphNotes.map(note => [normalizePath(note.path).toLowerCase(), note]));
+    const incoming = new Map<string, number>();
+    const resolvedOutgoing = new Map<string, Set<string>>();
+    for (const note of graphNotes) {
+      const targets = new Set<string>();
+      for (const link of note.links) {
+        for (const target of resolveWikiLinkTargets(link, visibleNotePaths)) {
+          const normalized = normalizePath(target).toLowerCase();
+          if (normalized === normalizePath(note.path).toLowerCase()) continue;
+          targets.add(normalized);
+          incoming.set(normalized, (incoming.get(normalized) || 0) + 1);
+        }
+      }
+      resolvedOutgoing.set(normalizePath(note.path).toLowerCase(), targets);
+    }
+
+    const focusUnresolved: Array<Record<string, unknown>> = [];
+    const focusAmbiguous: Array<Record<string, unknown>> = [];
+    const focusUnparented: Array<Record<string, unknown>> = [];
+    const focusParentEdges = new Map<string, string>();
+    const focusSupportEdges = new Map<string, string[]>();
+    const focusHorizonRank = new Map(['ground', 'project', 'area', 'goal', 'vision', 'purpose'].map((value, index) => [value, index]));
+    const resolveFocus = (rawValue: string): string[] => {
+      let target = rawValue.trim();
+      try { target = parseWikiLink(target).document; } catch { /* lint will report malformed links elsewhere */ }
+      return resolveWikiLinkTargets(target, visibleNotePaths).map(path => normalizePath(path).toLowerCase());
+    };
+    for (const note of graphNotes) {
+      const publicPath = this.access.toPublicPath(note.path);
+      const parent = note.focusParent?.trim();
+      const parentTargets = parent ? resolveFocus(parent) : [];
+      if (parent && parentTargets.length === 0) focusUnresolved.push({ path: publicPath, field: 'focus_parent', target: parent });
+      if (parentTargets.length > 1) focusAmbiguous.push({ path: publicPath, field: 'focus_parent', target: parent, matches: parentTargets.slice(0, boundedLimit).map(path => this.access.toPublicPath(path)) });
+      if (parentTargets.length === 1) focusParentEdges.set(normalizePath(note.path).toLowerCase(), parentTargets[0]!);
+      if (note.horizon && !['ground', 'purpose'].includes(note.horizon) && !parent) {
+        focusUnparented.push({ path: publicPath, title: note.title, focusHorizon: note.horizon, reason: 'higher-horizon-note-has-no-focus_parent' });
+      }
+      const supports: string[] = [];
+      for (const rawSupport of note.focusSupports) {
+        const targets = resolveFocus(rawSupport);
+        if (targets.length === 0) focusUnresolved.push({ path: publicPath, field: 'focus_supports', target: rawSupport });
+        else if (targets.length > 1) focusAmbiguous.push({ path: publicPath, field: 'focus_supports', target: rawSupport, matches: targets.slice(0, boundedLimit).map(path => this.access.toPublicPath(path)) });
+        else supports.push(targets[0]!);
+      }
+      if (supports.length > 0) focusSupportEdges.set(normalizePath(note.path).toLowerCase(), supports);
+    }
+    const focusCycles: Array<Record<string, unknown>> = [];
+    const visitedFocus = new Set<string>();
+    const activeFocus = new Set<string>();
+    const walkFocus = (path: string, trail: string[]) => {
+      if (activeFocus.has(path)) {
+        const start = trail.indexOf(path);
+        const cycle = (start >= 0 ? trail.slice(start) : trail).map(item => this.access.toPublicPath(item));
+        if (cycle.length > 0 && !focusCycles.some(item => JSON.stringify(item.nodes) === JSON.stringify(cycle))) focusCycles.push({ nodes: cycle, reason: 'focus_parent_cycle' });
+        return;
+      }
+      if (visitedFocus.has(path)) return;
+      visitedFocus.add(path);
+      activeFocus.add(path);
+      const parent = focusParentEdges.get(path);
+      if (parent) walkFocus(parent, [...trail, path]);
+      activeFocus.delete(path);
+    };
+    for (const path of focusParentEdges.keys()) walkFocus(path, []);
+
+    const knowledgeRecords = graphNotes.filter(note => knowledgePaths.has(normalizePath(note.path).toLowerCase()));
+    const isolatedKnowledge: Array<Record<string, unknown>> = [];
+    const isolatedAtomic: Array<Record<string, unknown>> = [];
+    const literatureWithoutPermanent: Array<Record<string, unknown>> = [];
+    for (const note of knowledgeRecords) {
+      const key = normalizePath(note.path).toLowerCase();
+      const outgoing = resolvedOutgoing.get(key)?.size || 0;
+      const incomingCount = incoming.get(key) || 0;
+      const item = { path: this.access.toPublicPath(note.path), title: note.title, noteKind: note.kind, incoming: incomingCount, outgoing };
+      if (incomingCount === 0 && outgoing === 0) isolatedKnowledge.push(item);
+      if (note.kind === 'atomic' && incomingCount === 0 && outgoing === 0) isolatedAtomic.push(item);
+      if (note.kind === 'literature') {
+        const linksToPermanent = [...(resolvedOutgoing.get(key) || [])].some(target => ['atomic', 'knowledge', 'decision'].includes(graphByPath.get(target)?.kind || '') || graphByPath.get(target)?.managedType === 'knowledge');
+        if (!linksToPermanent) literatureWithoutPermanent.push({ ...item, reason: 'literature_note_has_no_link_to_atomic_or_knowledge_note' });
+      }
+    }
+    const focusHealth = {
+      focusedNotes: graphNotes.filter(note => note.horizon).length,
+      parentEdges: focusParentEdges.size,
+      supportEdges: [...focusSupportEdges.values()].reduce((sum, values) => sum + values.length, 0),
+      horizonCounts: Object.fromEntries([...focusHorizonRank.keys()].map(horizon => [horizon, graphNotes.filter(note => note.horizon === horizon).length])),
+      unresolved: { total: focusUnresolved.length, items: focusUnresolved.slice(0, boundedLimit), truncated: focusUnresolved.length > boundedLimit },
+      ambiguous: { total: focusAmbiguous.length, items: focusAmbiguous.slice(0, boundedLimit), truncated: focusAmbiguous.length > boundedLimit },
+      unparented: { total: focusUnparented.length, items: focusUnparented.slice(0, boundedLimit), truncated: focusUnparented.length > boundedLimit },
+      cycles: { total: focusCycles.length, items: focusCycles.slice(0, boundedLimit), truncated: focusCycles.length > boundedLimit },
+    };
+    const knowledgeConnectivity = {
+      total: knowledgeRecords.length,
+      isolated: { total: isolatedKnowledge.length, items: isolatedKnowledge.slice(0, boundedLimit), truncated: isolatedKnowledge.length > boundedLimit },
+      isolatedAtomic: { total: isolatedAtomic.length, items: isolatedAtomic.slice(0, boundedLimit), truncated: isolatedAtomic.length > boundedLimit },
+      literatureWithoutPermanent: { total: literatureWithoutPermanent.length, items: literatureWithoutPermanent.slice(0, boundedLimit), truncated: literatureWithoutPermanent.length > boundedLimit },
+    };
     const mocCoveredKnowledge = new Set<string>();
     const mocCoverageItems: Array<Record<string, unknown>> = [];
     const mocPathSet = new Set(mocDrafts.map(moc => normalizePath(moc.path).toLowerCase()));
@@ -1701,6 +1905,8 @@ export class LlmWikiService {
         mocs: mocCoverageItems.slice(0, boundedLimit),
         truncated: mocCoverageItems.length > boundedLimit,
       },
+      focusHealth,
+      knowledgeConnectivity,
     };
     while (JSON.stringify(report).length > boundedChars) {
       const arrays: Array<Array<Record<string, unknown>>> = [
@@ -1709,6 +1915,13 @@ export class LlmWikiService {
         report.emptyMocs.items,
         report.mocCoverage.uncoveredKnowledge.items,
         report.mocCoverage.mocs,
+        report.focusHealth.unresolved.items,
+        report.focusHealth.ambiguous.items,
+        report.focusHealth.unparented.items,
+        report.focusHealth.cycles.items,
+        report.knowledgeConnectivity.isolated.items,
+        report.knowledgeConnectivity.isolatedAtomic.items,
+        report.knowledgeConnectivity.literatureWithoutPermanent.items,
       ];
       const largest = arrays.sort((left, right) => right.length - left.length)[0];
       if (!largest || largest.length === 0) break;
@@ -1788,8 +2001,22 @@ export class LlmWikiService {
     ];
     const graph = await this.graphHealth(principal, Math.min(boundedLimit, 20), Math.min(boundedChars, 12000));
     const mocCoverage = 'mocCoverage' in graph ? graph.mocCoverage as Record<string, unknown> : undefined;
+    const focusHealth = 'focusHealth' in graph ? graph.focusHealth as Record<string, any> : undefined;
+    const knowledgeConnectivity = 'knowledgeConnectivity' in graph ? graph.knowledgeConnectivity as Record<string, any> : undefined;
     if (mocCoverage && Number(mocCoverage.knowledgeTotal) > 0 && Number(mocCoverage.ratio) < 1) {
       recommendations.push('Add uncovered knowledge notes to an appropriate MOC or explain why they intentionally remain uncurated.');
+    }
+    if (focusHealth && (Number(focusHealth.unresolved?.total) > 0 || Number(focusHealth.ambiguous?.total) > 0 || Number(focusHealth.cycles?.total) > 0)) {
+      recommendations.push('Repair unresolved, ambiguous, or cyclic focus_parent/focus_supports links before using the GTD horizon map for prioritization.');
+    }
+    if (focusHealth && Number(focusHealth.unparented?.total) > 0) {
+      recommendations.push('Give focused project, area, goal, or vision notes a focus_parent, or explicitly keep them as a root note.');
+    }
+    if (knowledgeConnectivity && Number(knowledgeConnectivity.isolated?.total) > 0) {
+      recommendations.push('Connect isolated durable knowledge to an existing note, MOC, or decision, or explain why it intentionally remains standalone.');
+    }
+    if (knowledgeConnectivity && Number(knowledgeConnectivity.literatureWithoutPermanent?.total) > 0) {
+      recommendations.push('Interpret literature notes into an atomic or knowledge note when they contain a reusable conclusion; keep the literature note as source context.');
     }
     const result = {
       healthy: issues.length === 0,
@@ -1798,6 +2025,10 @@ export class LlmWikiService {
       issues,
       recommendations,
       ...(mocCoverage && { mocCoverage }),
+      ...(focusHealth && { focusHealth }),
+      ...(knowledgeConnectivity && { knowledgeConnectivity }),
+      advisoryIssueTotal: (focusHealth ? Number(focusHealth.unresolved?.total || 0) + Number(focusHealth.ambiguous?.total || 0) + Number(focusHealth.unparented?.total || 0) + Number(focusHealth.cycles?.total || 0) : 0)
+        + (knowledgeConnectivity ? Number(knowledgeConnectivity.isolated?.total || 0) + Number(knowledgeConnectivity.literatureWithoutPermanent?.total || 0) : 0),
       truncated: lint.truncated || Object.values(byCode).reduce((sum, count) => sum + count, 0) > issues.length,
       generatedAt: now(),
     };
