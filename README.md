@@ -224,14 +224,18 @@ Questions, hypotheses, and assumptions can carry `epistemic_status` so their
 state is explicit: questions are open/answered/blocked/abandoned, hypotheses
 are proposed/supported/refuted/inconclusive, and assumptions are
 active/verified/invalidated/replaced. Project/task notes may add GTD-style
-`desired_outcome`, `next_action`, `task_context`, `due_at`, and `defer_until`.
+`desired_outcome`, `next_action`, `task_context`, `due_at`, `scheduled_at`, and
+`defer_until`. `due_at` means a deadline; `scheduled_at` means when the work is
+intended to happen.
 Optional `focus_horizon` (`ground`, `project`, `area`, `goal`, `vision`, or
 `purpose`) plus `focus_parent`/`focus_supports` maps concrete GTD work to the
 higher outcome it serves without becoming a security boundary. Graph health
 resolves those links and reports unresolved, ambiguous, unparented, and cyclic
 focus relationships. It also reports isolated durable/atomic notes and
-literature notes that have not yet led to a permanent knowledge note. These
-are advisory signals, not storage requirements.
+literature notes that have not yet led to a permanent knowledge note or
+received a compact interpretation. The focus reverse map also lets an agent
+start from a goal or area and discover its projects, actions, waiting items,
+and supporting notes. These are advisory signals, not storage requirements.
 Negative knowledge can preserve the attempted path, observed result, failure
 condition, reproduction, rejection reason, reusable lesson, and replacement
 path instead of being deleted. After checking evidence, record
@@ -263,6 +267,11 @@ link its selected notes with ordinary `[[wikilinks]]`. Use
 `get_wiki_moc_candidates` to receive bounded, non-mutating suggestions for
 uncovered knowledge; accept a suggestion only after checking whether the map
 has a real question and useful boundary.
+
+`get_wiki_bases_view` can generate standard local Obsidian Bases projections:
+`all`, `inbox`, `projects`, `review`, and `epistemic`. Save the returned YAML
+as a `.base` file only when a local view is useful; Markdown and Git remain the
+source of truth.
 
 An optional localhost REST adapter uses the same endpoint registry and
 dispatcher. Start it with `--http` or `--http=PORT`; use `GET /api/capabilities`,

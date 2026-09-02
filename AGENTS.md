@@ -93,8 +93,11 @@ ordinary `[[wikilinks]]` or relative Markdown links. Optional
 `focus_parent`, and `focus_supports` connect GTD execution to higher outcomes;
 they are advisory navigation metadata, not access rules. For progressive
 reading, optional `summary_layer` (0-4) and bounded `summary_highlights` make
-compression explicit while the full body remains authoritative. These are advisory organization hints; source
-integrity, evidence, scope, and revision checks remain the hard gates.
+compression explicit while the full body remains authoritative. Keep GTD
+deadlines and appointments distinct: use `dueAt` for the latest acceptable
+completion time and `scheduledAt` for the intended execution time. These are
+advisory organization hints; source integrity, evidence, scope, and revision
+checks remain the hard gates.
 Zettelkasten-style atomic notes/MOCs suit durable knowledge, while GTD-style
 next actions suit Projects and structured tasks; do not force either format
 onto comments, chat, or journals.
@@ -103,7 +106,15 @@ Use `get_wiki_home` as the bounded scope launchpad before broad browsing. For
 `question`, `hypothesis`, and `assumption` notes, set the matching
 `epistemicStatus` and update it when evidence changes. For project/task work,
 prefer `desiredOutcome`, one concrete `nextAction`, `taskContext`, `dueAt`,
-and `deferUntil`; keep execution state separate from knowledge lifecycle.
+`scheduledAt`, and `deferUntil`; keep execution state separate from knowledge
+lifecycle. Use `get_wiki_review_dashboard` for project readiness and its
+scheduled/deadline split. Use the graph health reverse map when starting from a
+goal or area and needing its projects, actions, waiting items, or supporting
+knowledge. Literature notes should normally gain a compact interpretation,
+key points, or an outgoing `[[wikilink]]` to derived atomic/knowledge notes;
+this remains a quality hint, not a publication gate. Use
+`get_wiki_bases_view` with `view` set to `all`, `inbox`, `projects`, `review`,
+or `epistemic` when a local Obsidian view is useful.
 When preserving a failed path, record what was attempted/observed, the failure
 condition and reproduction, why it was rejected, and the reusable lesson.
 When a review is genuinely completed, record its outcome and reviewer rather

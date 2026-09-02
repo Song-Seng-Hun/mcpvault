@@ -220,6 +220,7 @@ export interface KnowledgeOrganizationInput {
   desiredOutcome?: unknown;
   taskContext?: unknown;
   dueAt?: unknown;
+  scheduledAt?: unknown;
   deferUntil?: unknown;
   stableId?: unknown;
   relations?: unknown;
@@ -279,6 +280,7 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
   const desiredOutcome = input.desiredOutcome === undefined ? optionalText(existing.desired_outcome, 'desiredOutcome', 1000) : optionalText(input.desiredOutcome, 'desiredOutcome', 1000);
   const taskContext = input.taskContext === undefined ? optionalText(existing.task_context, 'taskContext', 300) : optionalText(input.taskContext, 'taskContext', 300);
   const dueAt = input.dueAt === undefined ? normalizeIsoDate(existing.due_at, 'dueAt') : normalizeIsoDate(input.dueAt, 'dueAt');
+  const scheduledAt = input.scheduledAt === undefined ? normalizeIsoDate(existing.scheduled_at, 'scheduledAt') : normalizeIsoDate(input.scheduledAt, 'scheduledAt');
   const deferUntil = input.deferUntil === undefined ? normalizeIsoDate(existing.defer_until, 'deferUntil') : normalizeIsoDate(input.deferUntil, 'deferUntil');
   const stableId = input.stableId === undefined ? optionalText(existing.stable_id, 'stable_id', 80) : optionalText(input.stableId, 'stable_id', 80);
   if (stableId && !/^[a-z0-9][a-z0-9._-]*$/i.test(stableId)) throw new Error('stableId may contain only letters, numbers, dots, underscores, and hyphens');
@@ -347,6 +349,7 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
     ...(desiredOutcome && { desired_outcome: desiredOutcome }),
     ...(taskContext && { task_context: taskContext }),
     ...(dueAt && { due_at: dueAt }),
+    ...(scheduledAt && { scheduled_at: scheduledAt }),
     ...(deferUntil && { defer_until: deferUntil }),
     ...(stableId && { stable_id: stableId }),
     ...(taskStatus && { task_status: taskStatus }),
@@ -475,7 +478,7 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
   if (frontmatter.last_review_outcome !== undefined && !reviewOutcomeSet.has(String(frontmatter.last_review_outcome).trim().toLowerCase())) {
     issues.push({ code: 'invalid_review_outcome', detail: `last_review_outcome must be one of: ${REVIEW_OUTCOMES.join(', ')}` });
   }
-  for (const [field, value] of [['due_at', frontmatter.due_at], ['defer_until', frontmatter.defer_until], ['last_reviewed_at', frontmatter.last_reviewed_at]] as const) {
+  for (const [field, value] of [['due_at', frontmatter.due_at], ['scheduled_at', frontmatter.scheduled_at], ['defer_until', frontmatter.defer_until], ['last_reviewed_at', frontmatter.last_reviewed_at]] as const) {
     if (value !== undefined && (!/^(?:\d{4}-\d{2}-\d{2})(?:T[^\s]+)?$/.test(String(value).trim()) || Number.isNaN(Date.parse(String(value).trim())))) {
       issues.push({ code: `invalid_${field}`, detail: `${field} should be an ISO date or date-time.` });
     }

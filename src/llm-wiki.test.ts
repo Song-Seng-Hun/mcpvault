@@ -12,6 +12,39 @@ beforeEach(async () => {
   vault = await mkdtemp(join(tmpdir(), 'mcpvault-llm-wiki-'));
 });
 
+test('weekly review separates schedule from deadline and exposes reverse focus context', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'focus-review-owner', modelId: 'codex', password: 'focus-review-password' });
+    const accessToken = registration.value.accessToken;
+    const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
+      const result = await client.callTool({ name: 'write_note', arguments: { path, content, frontmatter, expectedRevision: 'missing', accessToken } });
+      expect(result.isError).toBeFalsy();
+    };
+    await write('Goals/Launch.md', '# Launch goal\n', { note_kind: 'knowledge', lifecycle: 'evergreen', focus_horizon: 'goal' });
+    await write('Projects/Build.md', '# Build project\n', { llm_wiki_type: 'knowledge', note_kind: 'project', lifecycle: 'active', focus_horizon: 'project', focus_parent: '[[Goals/Launch]]' });
+    await write('Tasks/Run.md', '# Run task\n', { llm_wiki_type: 'knowledge', note_kind: 'task', lifecycle: 'active', focus_horizon: 'ground', focus_parent: '[[Projects/Build]]', task_status: 'next_action', next_action: 'Run the test', scheduled_at: '2030-01-02T10:00:00.000Z', due_at: '2030-01-03T10:00:00.000Z' });
+    await write('Knowledge/Reason.md', '# Reason\n', { note_kind: 'atomic', lifecycle: 'evergreen', focus_horizon: 'ground', focus_supports: ['[[Projects/Build]]'], summary: 'The test has a reusable rationale.' });
+
+    const dashboard = await callJson(client, 'get_wiki_review_dashboard', { limit: 20, accessToken });
+    expect(dashboard.value.sections.scheduled).toMatchObject({ total: 1, items: [expect.objectContaining({ path: 'Tasks/Run.md', scheduledAt: '2030-01-02T10:00:00.000Z', dueAt: '2030-01-03T10:00:00.000Z', readiness: 'ready' })] });
+    expect(dashboard.value.sections.projectReadiness.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Tasks/Run.md', readiness: 'ready' })]));
+
+    const graph = await callJson(client, 'get_wiki_graph_health', { limit: 20, accessToken });
+    expect(graph.value.focusHealth.reverseMap.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Projects/Build.md', children: expect.arrayContaining(['tasks/run.md']), supportingNotes: expect.arrayContaining(['knowledge/reason.md']) }),
+    ]));
+    expect(graph.value.knowledgeConnectivity.literatureWithoutInterpretation.total).toBe(0);
+
+    const bases = await callJson(client, 'get_wiki_bases_view', { view: 'projects', accessToken });
+    expect(bases.value).toMatchObject({ view: 'projects', suggestedPath: 'Views/LLM Wiki Projects.base', matchingNotes: 2 });
+    expect(bases.value.content).toContain('note.note_kind == "project" || note.note_kind == "task"');
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 afterEach(async () => {
   await rm(vault, { recursive: true, force: true });
 });

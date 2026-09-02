@@ -91,8 +91,9 @@ Questions, hypotheses, and assumptions should also carry `epistemic_status`:
 questions use `open`/`answered`/`blocked`/`abandoned`, hypotheses use
 `proposed`/`supported`/`refuted`/`inconclusive`, and assumptions use
 `active`/`verified`/`invalidated`/`replaced`. Project and task notes may use
-GTD-style `desired_outcome`, `next_action`, `task_context`, `due_at`, and
-`defer_until`; these describe execution and do not replace `lifecycle`. Optional
+GTD-style `desired_outcome`, `next_action`, `task_context`, `due_at`,
+`scheduled_at`, and `defer_until`; `due_at` is a deadline while `scheduled_at`
+is the time to perform the work. These describe execution and do not replace `lifecycle`. Optional
 `focus_horizon` (`ground`, `project`, `area`, `goal`, `vision`, `purpose`),
 `focus_parent`, and `focus_supports` connect GTD Horizons to notes without
 changing visibility or permissions.
@@ -123,8 +124,16 @@ knowledge review, and graph/focus/connectivity health. `focus_parent` and
 unresolved, ambiguous, unparented, or cyclic focus links without becoming
 mandatory properties. `get_wiki_graph_health` also reports isolated durable
 knowledge, isolated atomic notes, and literature notes that have not yet been
-linked to a permanent knowledge note. These are advisory signals: an
+linked to a permanent knowledge note, or given a compact interpretation/key
+points/outgoing link. Its focus reverse map lets an agent start at a goal or
+area and find child projects, next actions, waiting items, and supporting notes.
+These are advisory signals: an
 intentionally standalone note remains valid.
+
+`get_wiki_review_dashboard` includes a bounded project-readiness projection
+and separates scheduled work from deadlines. Use `scheduled_at` only for a
+real execution/calendar commitment; use `due_at` for the latest acceptable
+completion time.
 
 `read_wiki_projection` accepts `view: progressive` for one bounded context
 packet containing the compact summary, selected highlights, claims, and open
@@ -138,6 +147,10 @@ unchanged. For MOCs, record `moc_purpose`, `moc_scope`, `moc_questions`, and
 optional `moc_parent` alongside ordinary `[[wikilinks]]` or relative Markdown
 links; nested MOCs are followed to bounded depth by graph health; use
 `get_wiki_moc_candidates` for bounded suggestions, not automatic map creation.
+
+`get_wiki_bases_view` accepts the standard views `all`, `inbox`, `projects`,
+`review`, and `epistemic`. These are optional local Obsidian `.base` views, not
+another database or permission boundary.
 
 For long or disputed knowledge notes, use claim-level provenance when useful:
 
