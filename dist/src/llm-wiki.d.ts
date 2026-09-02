@@ -14,8 +14,15 @@ export interface WikiClaimInput {
     id?: string;
     text: string;
     evidencePaths?: string[];
+    evidence?: WikiEvidenceInput[];
     confidence?: string;
     status?: string;
+}
+export interface WikiEvidenceInput {
+    path: string;
+    heading?: string;
+    blockId?: string;
+    revision?: string;
 }
 type WikiProjectionView = 'summary' | 'key_points' | 'outline' | 'section' | 'full';
 interface WikiLintIssue {
@@ -43,6 +50,12 @@ export declare class LlmWikiService {
     constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, references: ReferenceService);
     invalidate(): void;
     private principalKey;
+    /**
+     * Capture the revisions of notes linked by the current body/metadata. This
+     * is a disposable review baseline: Markdown and Git remain authoritative.
+     */
+    private collectReviewBasisLinks;
+    private reviewChangeSignals;
     initialize(scopeRoot: string, actor: string): Promise<{
         success: boolean;
         created: boolean;
@@ -90,6 +103,11 @@ export declare class LlmWikiService {
         waitingFor?: string;
         stableId?: string;
         relations?: unknown;
+        taskStatus?: unknown;
+        reviewPolicy?: unknown;
+        polarity?: unknown;
+        negativeType?: unknown;
+        evidence?: unknown;
         claims?: WikiClaimInput[];
         expectedRevision: string;
     }): Promise<{
@@ -97,6 +115,12 @@ export declare class LlmWikiService {
         created: boolean;
         path: string;
         evidencePaths: string[];
+        evidence: {
+            heading?: string;
+            blockId?: string;
+            revision?: string;
+            path: string;
+        }[];
         claims?: Record<string, unknown>[];
         revision: string;
     }>;
@@ -129,6 +153,10 @@ export declare class LlmWikiService {
         nextActions?: unknown;
         stableId?: string;
         relations?: unknown;
+        taskStatus?: unknown;
+        reviewPolicy?: unknown;
+        polarity?: unknown;
+        negativeType?: unknown;
         expectedRevision: string;
     }): Promise<{
         success: boolean;
@@ -142,40 +170,24 @@ export declare class LlmWikiService {
         view?: WikiProjectionView;
         section?: string;
         maxChars?: number;
-    }): Promise<{
-        path: string;
-        title: string;
-        view: WikiProjectionView;
-        revision: string;
-        noteKind: any;
-        lifecycle: any;
-        status: any;
-        confidence: any;
-        aliases?: any[];
-        summary?: string;
-        keyPoints?: any[];
-        openQuestions?: any[];
-        nextActions?: any[];
-        waitingFor?: string;
-        stableId?: string;
-        relations: {
-            [k: string]: any;
-        };
-        section?: {
-            startLine: number;
-            endLine: number;
-            requested: string | undefined;
-        };
-        headings?: import("./types.js").NoteHeading[];
-        content: string;
-        truncated: boolean;
-        references: string[];
-    }>;
+    }): Promise<any>;
     impactReport(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
         items: Record<string, unknown>[];
         total: number;
         truncated: boolean;
         generatedAt: string;
+    }>;
+    exportBasesView(principal?: ScopePrincipal, noteKind?: string, lifecycle?: string, limit?: number, maxChars?: number): Promise<{
+        format: string;
+        suggestedPath: string;
+        content: string;
+        truncated: boolean;
+        matchingNotes: any;
+        filter: {
+            noteKind?: string;
+            lifecycle?: string;
+        };
+        note: string;
     }>;
     graphHealth(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
         unresolvedLinks: {
@@ -185,6 +197,7 @@ export declare class LlmWikiService {
                 line: number;
                 link: string;
                 context: string;
+                relation?: string;
                 path: string;
             }[];
             truncated: boolean;
@@ -203,6 +216,20 @@ export declare class LlmWikiService {
             truncated: boolean;
         };
         mocCount: number;
+        mocCoverage: {
+            knowledgeTotal: number;
+            knowledgeLinkedFromMoc: number;
+            ratio: number;
+            uncoveredKnowledge: {
+                total: number;
+                items: {
+                    path: string;
+                }[];
+                truncated: boolean;
+            };
+            mocs: Record<string, unknown>[];
+            truncated: boolean;
+        };
     } | {
         truncated: boolean;
         note: string;
@@ -218,6 +245,7 @@ export declare class LlmWikiService {
         byCode: Record<string, number>;
         issues: WikiLintIssue[];
         recommendations: string[];
+        mocCoverage?: Record<string, unknown>;
         truncated: boolean;
         generatedAt: string;
     }>;
@@ -253,6 +281,12 @@ export declare class LlmWikiService {
         created: boolean;
         path: string;
         evidencePaths: string[];
+        evidence: {
+            heading?: string;
+            blockId?: string;
+            revision?: string;
+            path: string;
+        }[];
         claims?: Record<string, unknown>[];
         revision: string;
     }>;

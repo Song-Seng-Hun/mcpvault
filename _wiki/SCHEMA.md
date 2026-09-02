@@ -30,8 +30,12 @@ Keep `_sources/`, `_wiki/`, `Community/`, `_scopes/`, and `.mcpvault/` in
 their reserved roles. Do not move Community posts or system-managed files
 into PARA folders. Use YAML properties and Obsidian links together:
 
+Use `question` for an unresolved question, `hypothesis` for a testable
+proposition, and `assumption` for a working premise. Keep these note kinds
+separate from accepted facts until evidence supports them.
+
 ```yaml
-note_kind: atomic       # fleeting, literature, moc, knowledge, decision, project, area, resource, journal, task
+note_kind: atomic       # fleeting, literature, atomic, moc, knowledge, question, hypothesis, assumption, decision, project, area, resource, journal, task
 lifecycle: review       # inbox, active, review, evergreen, superseded, archived
 moc: "[[Knowledge/MOCs/LLM Wiki]]"
 project: "[[Projects/MCPVault]]"
@@ -58,7 +62,9 @@ durable note identity. Keep progressive-read material in `summary`,
 `key_points`, and `open_questions` while preserving the complete Markdown
 body. Whenever a progressive field is present, store
 `summary_of_content_sha256` as the SHA-256 of the exact Markdown body; a body
-edit makes the projection stale until it is regenerated. Typed relationship properties explain why a link exists:
+edit makes the projection stale until it is regenerated. Use
+`knowledge_polarity: negative` with `negative_type` to preserve failures,
+rejected approaches, counterexamples, and non-reproducible results. Typed relationship properties explain why a link exists:
 `supports`, `contradicts`, `supersedes`, `derived_from`, `depends_on`,
 `implements`, `blocked_by`, and `related`. Each value should be an Obsidian
 wikilink or a scope-safe note path; the target must remain accessible and
@@ -66,9 +72,18 @@ resolvable. Use `next_actions` and `waiting_for` on project/task notes rather
 than on ordinary discussions. Use `task_status` (`open`, `next_action`,
 `waiting`, `blocked`, `completed`, or `cancelled`) for task execution state;
 keep it separate from the knowledge `lifecycle`. Use
-`get_wiki_organization_health` for one bounded report of property,
-atomic-note, MOC, summary freshness, alias/ID collision, and typed-link
-problems.
+`evidence` locators can add a source `heading`, `blockId`, and `revision`;
+lint reports stale or invalid locators. Use `review_policy` (`manual`,
+`periodic`, `on_source_change`, `on_link_change`, or `on_any_edit`) to declare
+when review should be triggered; it is a derived signal, not a hidden
+scheduler. Publication stores a compact body/link review baseline in
+disposable frontmatter metadata, so `on_any_edit` and `on_link_change` can be
+detected later. The baseline never replaces Markdown or Git. Use
+`get_wiki_organization_health` for one bounded report of
+property, MOC coverage, atomic-note, summary freshness, typed evidence,
+alias/ID collision, and typed-link problems. `get_wiki_bases_view` returns an
+optional local Obsidian Bases YAML view; a `.base` view is not a security
+boundary.
 
 For long or disputed knowledge notes, use claim-level provenance when useful:
 

@@ -5,15 +5,21 @@
  * These fields describe how an agent should work with a note inside an
  * already-authorized scope; they never grant access or replace Git history.
  */
-export declare const NOTE_KINDS: readonly ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'decision', 'project', 'area', 'resource', 'journal', 'task'];
+export declare const NOTE_KINDS: readonly ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'];
 export declare const LIFECYCLES: readonly ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'];
 export declare const TASK_STATUSES: readonly ['open', 'next_action', 'waiting', 'blocked', 'completed', 'cancelled'];
+export declare const REVIEW_POLICIES: readonly ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit'];
+export declare const KNOWLEDGE_POLARITIES: readonly ['positive', 'negative'];
+export declare const NEGATIVE_KINDS: readonly ['failure', 'rejected', 'counterexample', 'non_reproducible', 'superseded'];
 /** Typed relationships are navigation metadata, never an access grant. */
 export declare const RELATION_FIELDS: readonly ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'related'];
 export declare const ORGANIZATION_LIST_FIELDS: readonly ["aliases", "key_points", "open_questions", "next_actions", "supports", "contradicts", "supersedes", "derived_from", "depends_on", "implements", "blocked_by", "related"];
 export type NoteKind = typeof NOTE_KINDS[number];
 export type Lifecycle = typeof LIFECYCLES[number];
 export declare function normalizeTaskStatus(value: unknown, fallback?: typeof TASK_STATUSES[number]): typeof TASK_STATUSES[number] | undefined;
+export declare function normalizeReviewPolicy(value: unknown, fallback?: typeof REVIEW_POLICIES[number]): typeof REVIEW_POLICIES[number] | undefined;
+export declare function normalizeKnowledgePolarity(value: unknown, fallback?: typeof KNOWLEDGE_POLARITIES[number]): typeof KNOWLEDGE_POLARITIES[number] | undefined;
+export declare function normalizeNegativeKind(value: unknown, fallback?: typeof NEGATIVE_KINDS[number]): typeof NEGATIVE_KINDS[number] | undefined;
 export declare function normalizeNoteKind(value: unknown, fallback?: NoteKind): NoteKind | undefined;
 export declare function normalizeLifecycle(value: unknown, fallback?: Lifecycle): Lifecycle | undefined;
 export declare function lifecycleForKnowledgeStatus(status: string): Lifecycle;
@@ -35,6 +41,9 @@ export interface KnowledgeOrganizationInput {
     stableId?: unknown;
     relations?: unknown;
     taskStatus?: unknown;
+    reviewPolicy?: unknown;
+    polarity?: unknown;
+    negativeType?: unknown;
     contentDigest?: unknown;
 }
 export declare function knowledgeOrganization(input: KnowledgeOrganizationInput): Record<string, unknown>;

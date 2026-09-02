@@ -6,15 +6,21 @@ import { createHash } from 'node:crypto';
  * These fields describe how an agent should work with a note inside an
  * already-authorized scope; they never grant access or replace Git history.
  */
-export const NOTE_KINDS = ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'decision', 'project', 'area', 'resource', 'journal', 'task'];
+export const NOTE_KINDS = ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'];
 export const LIFECYCLES = ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'];
 export const TASK_STATUSES = ['open', 'next_action', 'waiting', 'blocked', 'completed', 'cancelled'];
+export const REVIEW_POLICIES = ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit'];
+export const KNOWLEDGE_POLARITIES = ['positive', 'negative'];
+export const NEGATIVE_KINDS = ['failure', 'rejected', 'counterexample', 'non_reproducible', 'superseded'];
 /** Typed relationships are navigation metadata, never an access grant. */
 export const RELATION_FIELDS = ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'related'];
 export const ORGANIZATION_LIST_FIELDS = ['aliases', 'key_points', 'open_questions', 'next_actions', ...RELATION_FIELDS];
 const noteKindSet = new Set(NOTE_KINDS);
 const lifecycleSet = new Set(LIFECYCLES);
 const taskStatusSet = new Set(TASK_STATUSES);
+const reviewPolicySet = new Set(REVIEW_POLICIES);
+const knowledgePolaritySet = new Set(KNOWLEDGE_POLARITIES);
+const negativeKindSet = new Set(NEGATIVE_KINDS);
 const relationFieldSet = new Set(RELATION_FIELDS);
 function normalizedList(value, field, maximumItems, maximumChars) {
     if (value === undefined || value === null || value === '')
@@ -52,6 +58,30 @@ export function normalizeTaskStatus(value, fallback) {
     const normalized = String(value).trim().toLowerCase();
     if (!taskStatusSet.has(normalized))
         throw new Error(`taskStatus must be one of: ${TASK_STATUSES.join(', ')}`);
+    return normalized;
+}
+export function normalizeReviewPolicy(value, fallback) {
+    if (value === undefined || value === null || String(value).trim() === '')
+        return fallback;
+    const normalized = String(value).trim().toLowerCase();
+    if (!reviewPolicySet.has(normalized))
+        throw new Error(`reviewPolicy must be one of: ${REVIEW_POLICIES.join(', ')}`);
+    return normalized;
+}
+export function normalizeKnowledgePolarity(value, fallback) {
+    if (value === undefined || value === null || String(value).trim() === '')
+        return fallback;
+    const normalized = String(value).trim().toLowerCase();
+    if (!knowledgePolaritySet.has(normalized))
+        throw new Error(`polarity must be one of: ${KNOWLEDGE_POLARITIES.join(', ')}`);
+    return normalized;
+}
+export function normalizeNegativeKind(value, fallback) {
+    if (value === undefined || value === null || String(value).trim() === '')
+        return fallback;
+    const normalized = String(value).trim().toLowerCase();
+    if (!negativeKindSet.has(normalized))
+        throw new Error(`negativeType must be one of: ${NEGATIVE_KINDS.join(', ')}`);
     return normalized;
 }
 export function normalizeNoteKind(value, fallback) {
@@ -120,6 +150,19 @@ export function knowledgeOrganization(input) {
     const taskStatus = input.taskStatus === undefined
         ? normalizeTaskStatus(existing.task_status)
         : normalizeTaskStatus(input.taskStatus);
+    const reviewPolicy = input.reviewPolicy === undefined
+        ? normalizeReviewPolicy(existing.review_policy)
+        : normalizeReviewPolicy(input.reviewPolicy);
+    const polarity = input.polarity === undefined
+        ? normalizeKnowledgePolarity(existing.knowledge_polarity)
+        : normalizeKnowledgePolarity(input.polarity);
+    const negativeType = input.negativeType === undefined
+        ? normalizeNegativeKind(existing.negative_type)
+        : normalizeNegativeKind(input.negativeType);
+    if (negativeType && polarity !== 'negative')
+        throw new Error('negativeType requires polarity=negative');
+    if (polarity === 'negative' && !negativeType)
+        throw new Error('polarity=negative requires negativeType');
     const summaryFieldsPresent = Boolean(summary || keyPoints?.length || openQuestions?.length);
     const summaryDigest = summaryFieldsPresent && input.contentDigest !== undefined
         ? optionalText(input.contentDigest, 'summary_of_content_sha256', 128)
@@ -138,6 +181,9 @@ export function knowledgeOrganization(input) {
         ...(waitingFor && { waiting_for: waitingFor }),
         ...(stableId && { stable_id: stableId }),
         ...(taskStatus && { task_status: taskStatus }),
+        ...(reviewPolicy && { review_policy: reviewPolicy }),
+        ...(polarity && { knowledge_polarity: polarity }),
+        ...(negativeType && { negative_type: negativeType }),
         ...(summaryDigest && { summary_of_content_sha256: summaryDigest }),
         ...(relations || {}),
     };
@@ -184,6 +230,21 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
     if (frontmatter.task_status !== undefined && !taskStatusSet.has(String(frontmatter.task_status).trim().toLowerCase())) {
         issues.push({ code: 'invalid_task_status', detail: `task_status must be one of: ${TASK_STATUSES.join(', ')}` });
     }
+    if (frontmatter.review_policy !== undefined && !reviewPolicySet.has(String(frontmatter.review_policy).trim().toLowerCase())) {
+        issues.push({ code: 'invalid_review_policy', detail: `review_policy must be one of: ${REVIEW_POLICIES.join(', ')}` });
+    }
+    const polarity = frontmatter.knowledge_polarity === undefined ? undefined : String(frontmatter.knowledge_polarity).trim().toLowerCase();
+    const negativeType = frontmatter.negative_type === undefined ? undefined : String(frontmatter.negative_type).trim().toLowerCase();
+    if (polarity !== undefined && !knowledgePolaritySet.has(polarity)) {
+        issues.push({ code: 'invalid_knowledge_polarity', detail: `knowledge_polarity must be one of: ${KNOWLEDGE_POLARITIES.join(', ')}` });
+    }
+    if (negativeType !== undefined && !negativeKindSet.has(negativeType)) {
+        issues.push({ code: 'invalid_negative_type', detail: `negative_type must be one of: ${NEGATIVE_KINDS.join(', ')}` });
+    }
+    if (negativeType && polarity !== 'negative')
+        issues.push({ code: 'negative_type_without_negative_polarity', detail: 'negative_type requires knowledge_polarity: negative.' });
+    if (polarity === 'negative' && !negativeType)
+        issues.push({ code: 'negative_polarity_without_type', detail: 'Negative knowledge should state whether it is a failure, rejection, counterexample, or non-reproducible result.' });
     const summaryPresent = typeof frontmatter.summary === 'string' || Array.isArray(frontmatter.key_points) || Array.isArray(frontmatter.open_questions);
     if (summaryPresent && frontmatter.summary_of_content_sha256 === undefined) {
         issues.push({ code: 'summary_fingerprint_missing', detail: 'Progressive summary fields should record summary_of_content_sha256 so stale summaries can be detected after body edits.' });

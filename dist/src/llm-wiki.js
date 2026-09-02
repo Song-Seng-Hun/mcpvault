@@ -1,9 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { stringify as stringifyYaml } from 'yaml';
 import { normalizeScopeId } from './scopes.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
 import { knowledgeOrganization, normalizeLifecycle, normalizeNoteKind, normalizeReviewAt, normalizeTaskStatus, organizationLintIssues, RELATION_FIELDS } from './organization.js';
-import { extractWikiLinkOccurrences } from './backlinks.js';
+import { extractWikiLinkOccurrences, resolveWikiLinkTargets } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 const KNOWLEDGE_STATUSES = new Set(['draft', 'verified', 'disputed', 'superseded']);
@@ -43,14 +44,77 @@ function normalizeClaims(claims, existing) {
             throw new Error(`claims[${index}].confidence must be low, medium, or high`);
         if (!CLAIM_STATUSES.has(status))
             throw new Error(`claims[${index}].status must be supported, disputed, unverified, or superseded`);
+        const evidencePaths = Array.from(new Set((claim.evidencePaths || claim.evidence_paths || []).map(String).map(path => path.trim()).filter(Boolean))).slice(0, 20);
+        const evidence = normalizeEvidenceEntries(claim.evidence, evidencePaths);
         return {
             id,
             text: boundedText(claim.text, 1000),
-            evidence_paths: Array.from(new Set((claim.evidencePaths || claim.evidence_paths || []).map(String).map(path => path.trim()).filter(Boolean))).slice(0, 20),
+            evidence_paths: evidence.map(item => item.path),
+            ...(evidence.some(item => item.heading || item.blockId || item.revision) && { evidence }),
             confidence,
             status,
         };
     });
+}
+function normalizeEvidenceEntries(value, fallbackPaths = []) {
+    const input = value === undefined
+        ? fallbackPaths.map(path => ({ path }))
+        : Array.isArray(value) ? value : (() => { throw new Error('evidence must be an array of paths or locator objects'); })();
+    const seen = new Set();
+    const output = [];
+    input.forEach((item, index) => {
+        const raw = typeof item === 'string' ? { path: item } : item;
+        if (!raw || typeof raw !== 'object' || typeof raw.path !== 'string' || !raw.path.trim()) {
+            throw new Error(`evidence[${index}].path is required`);
+        }
+        const path = String(raw.path).trim();
+        const heading = raw.heading === undefined ? undefined : boundedText(raw.heading, 300).replace(/[\r\n]/g, ' ');
+        const blockId = raw.blockId === undefined ? undefined : boundedText(raw.blockId, 100).replace(/^\^/, '').replace(/[\r\n]/g, '');
+        const revision = raw.revision === undefined ? undefined : boundedText(raw.revision, 160).replace(/[\r\n]/g, '');
+        if (heading === '' || blockId === '' || revision === '')
+            throw new Error(`evidence[${index}] locator values must not be empty`);
+        const key = `${path.toLowerCase()}|${heading || ''}|${blockId || ''}|${revision || ''}`;
+        if (seen.has(key))
+            return;
+        seen.add(key);
+        output.push({ path, ...(heading && { heading }), ...(blockId && { blockId }), ...(revision && { revision }) });
+    });
+    return output.slice(0, 30);
+}
+function evidenceLocatorError(content, evidence) {
+    if (evidence.heading) {
+        const wanted = evidence.heading.replace(/^#+\s*/, '').trim().toLowerCase();
+        const headingFound = content.split('\n').some(line => /^ {0,3}#{1,6}\s+/.test(line) && line.replace(/^ {0,3}#{1,6}\s+/, '').replace(/\s+#+\s*$/, '').trim().toLowerCase() === wanted);
+        if (!headingFound)
+            return `heading '${evidence.heading}' was not found in the source`;
+    }
+    if (evidence.blockId) {
+        const block = evidence.blockId.replace(/^\^/, '');
+        const escapedBlock = block.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
+        if (!new RegExp(`(?:^|\\n)[^\\n]*\\^${escapedBlock}(?:\\s|$)`).test(content))
+            return `block '${evidence.blockId}' was not found in the source`;
+    }
+    return undefined;
+}
+function normalizeReviewBasisLinks(value) {
+    if (!Array.isArray(value))
+        return [];
+    const seen = new Set();
+    const links = [];
+    for (const item of value) {
+        if (!item || typeof item !== 'object')
+            continue;
+        const path = typeof item.path === 'string' ? item.path.trim() : '';
+        const revision = typeof item.revision === 'string' ? item.revision.trim() : '';
+        if (!path || !revision)
+            continue;
+        const key = path.toLowerCase();
+        if (seen.has(key))
+            continue;
+        seen.add(key);
+        links.push({ path, revision });
+    }
+    return links.slice(0, 50).sort((left, right) => left.path.localeCompare(right.path));
 }
 function normalizedWords(value) {
     return new Set(value.toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}_-]{1,}/gu) || []);
@@ -109,7 +173,7 @@ posts or system folders into PARA folders.
 
 Use YAML properties and Obsidian links together:
 
-- \`note_kind\`: fleeting, literature, atomic, moc, knowledge, decision, project, area, resource, journal, or task.
+- \`note_kind\`: fleeting, literature, atomic, moc, knowledge, question, hypothesis, assumption, decision, project, area, resource, journal, or task.
 - \`lifecycle\`: inbox, active, review, evergreen, superseded, or archived.
 - \`project\`, \`moc\`, and \`review_at\`: optional navigation and review hints.
 - A knowledge note remains grounded by \`evidence_paths\`; links are not evidence by themselves.
@@ -121,7 +185,7 @@ and links) -> Distill (\`publish_knowledge\`/lint) -> Express (MOCs, decisions,
 discussion, and Git). These hints are intentionally non-blocking except for
 the existing evidence and integrity invariants.
 
-Use \`aliases\` for stable Obsidian navigation, optional \`stable_id\` for a durable note identity, and compact \`summary\`, \`key_points\`, and \`open_questions\` properties for progressive reads; never replace the full Markdown body with a summary. When any progressive field is present, store \`summary_of_content_sha256\` for the exact Markdown body; a body edit makes the projection stale until it is regenerated. Use \`task_status\` for the operational state of project/task notes (\`open\`, \`next_action\`, \`waiting\`, \`blocked\`, \`completed\`, or \`cancelled\`); keep it separate from the knowledge \`lifecycle\`. Typed link arrays such as \`supports\`, \`contradicts\`, \`supersedes\`, \`derived_from\`, \`depends_on\`, \`implements\`, \`blocked_by\`, and \`related\` explain the relationship while ordinary \`[[wikilinks]]\` remain the navigational source. Use \`next_actions\` and \`waiting_for\` on project/task notes only. Call \`wiki.organization_health\` to review property, MOC, atomicity, summary freshness, and typed-link problems in one bounded report.
+Use \`aliases\` for stable Obsidian navigation, optional \`stable_id\` for a durable note identity, and compact \`summary\`, \`key_points\`, and \`open_questions\` properties for progressive reads; never replace the full Markdown body with a summary. When any progressive field is present, store \`summary_of_content_sha256\` for the exact Markdown body; a body edit makes the projection stale until it is regenerated. Use \`task_status\` for the operational state of project/task notes (\`open\`, \`next_action\`, \`waiting\`, \`blocked\`, \`completed\`, or \`cancelled\`); keep it separate from the knowledge \`lifecycle\`. Use \`knowledge_polarity: negative\` with \`negative_type\` (\`failure\`, \`rejected\`, \`counterexample\`, \`non_reproducible\`, or \`superseded\`) to preserve failed paths instead of deleting them. Typed link arrays such as \`supports\`, \`contradicts\`, \`supersedes\`, \`derived_from\`, \`depends_on\`, \`implements\`, \`blocked_by\`, and \`related\` explain the relationship while ordinary \`[[wikilinks]]\` remain the navigational source. Use \`next_actions\` and \`waiting_for\` on project/task notes only. Evidence can include \`heading\`, \`blockId\`, and the source \`revision\`; stale locators are reported by lint. Use \`review_policy\` (\`manual\`, \`periodic\`, \`on_source_change\`, \`on_link_change\`, or \`on_any_edit\`) to declare when a note should re-enter review; this is a derived policy, not a hidden scheduler. Call \`wiki.organization_health\` to review property, MOC coverage, atomicity, summary freshness, typed evidence, and link problems.
 
 ## Invariants
 
@@ -215,6 +279,43 @@ export class LlmWikiService {
     principalKey(principal) {
         return JSON.stringify(principal ? [principal.accountId, principal.userId || '', principal.modelId, principal.agentId || '', principal.commandCenterId || '', principal.role] : ['anonymous']);
     }
+    /**
+     * Capture the revisions of notes linked by the current body/metadata. This
+     * is a disposable review baseline: Markdown and Git remain authoritative.
+     */
+    async collectReviewBasisLinks(content, references, principal) {
+        const candidates = new Set(references);
+        for (const link of extractWikiLinkOccurrences(content)) {
+            const matches = await this.fileSystem.findPathForWikiLink(link.target, path => this.access.canAccessPhysicalPath(path, principal));
+            if (matches.length === 1)
+                candidates.add(matches[0]);
+        }
+        const result = [];
+        for (const path of [...candidates].slice(0, 50)) {
+            if (!this.access.canAccessPhysicalPath(path, principal) || !await this.fileSystem.noteExists(path))
+                continue;
+            const note = await this.fileSystem.readNote(path);
+            result.push({ path, revision: note.revision });
+        }
+        return normalizeReviewBasisLinks(result);
+    }
+    async reviewChangeSignals(note, principal) {
+        const policy = typeof note.frontmatter.review_policy === 'string' ? note.frontmatter.review_policy.toLowerCase() : 'manual';
+        const bodyDigest = hash(note.content || '');
+        const baselineDigest = typeof note.frontmatter.review_basis_content_sha256 === 'string'
+            ? note.frontmatter.review_basis_content_sha256
+            : undefined;
+        const bodyChanged = baselineDigest !== undefined && baselineDigest !== bodyDigest;
+        if (policy !== 'on_link_change')
+            return { policy, bodyChanged, linkChanged: false };
+        const baseline = normalizeReviewBasisLinks(note.frontmatter.review_basis_links);
+        if (note.frontmatter.review_basis_links === undefined)
+            return { policy, bodyChanged, linkChanged: true };
+        const current = await this.collectReviewBasisLinks(note.content || '', Array.isArray(note.frontmatter.references) ? note.frontmatter.references : [], principal);
+        const previous = JSON.stringify(baseline);
+        const next = JSON.stringify(current);
+        return { policy, bodyChanged, linkChanged: previous !== next };
+    }
     async initialize(scopeRoot, actor) {
         const schemaPath = joinRoot(scopeRoot, '_wiki/SCHEMA.md');
         if (await this.fileSystem.noteExists(schemaPath)) {
@@ -289,16 +390,24 @@ export class LlmWikiService {
             throw new Error('content is required');
         if (!params.expectedRevision)
             throw new Error("expectedRevision is required; use 'missing' for a new knowledge note");
-        const evidencePaths = Array.from(new Set(params.evidencePaths || []));
-        if (evidencePaths.length === 0)
-            throw new Error('At least one immutable source evidence path is required');
         const confidence = params.confidence || 'medium';
         const status = params.status || 'draft';
         if (!CONFIDENCE_LEVELS.has(confidence))
             throw new Error('confidence must be low, medium, or high');
         if (!KNOWLEDGE_STATUSES.has(status))
             throw new Error('status must be draft, verified, disputed, or superseded');
-        for (const evidencePath of evidencePaths) {
+        const exists = await this.fileSystem.noteExists(params.path);
+        const existing = exists ? await this.fileSystem.readNote(params.path) : undefined;
+        if (existing && existing.frontmatter.llm_wiki_type && existing.frontmatter.llm_wiki_type !== 'knowledge') {
+            throw new Error(`Refusing to replace LLM Wiki ${existing.frontmatter.llm_wiki_type} metadata at ${this.access.toPublicPath(params.path)}`);
+        }
+        const previousEvidence = Array.isArray(existing?.frontmatter.evidence) ? existing.frontmatter.evidence : undefined;
+        const evidence = normalizeEvidenceEntries(params.evidence, params.evidencePaths?.length ? params.evidencePaths : previousEvidence || []);
+        const evidencePaths = Array.from(new Set(evidence.map(item => item.path)));
+        if (evidencePaths.length === 0)
+            throw new Error('At least one immutable source evidence path is required');
+        for (const evidenceItem of evidence) {
+            const evidencePath = evidenceItem.path;
             if (!this.access.canReferenceFrom(params.path, evidencePath)) {
                 throw new Error(`A more-private source cannot ground a more-public knowledge note: ${this.access.toPublicPath(evidencePath)}`);
             }
@@ -309,21 +418,25 @@ export class LlmWikiService {
             if (evidence.frontmatter.content_sha256 !== hash(evidence.content)) {
                 throw new Error(`Evidence source failed its integrity hash: ${this.access.toPublicPath(evidencePath)}`);
             }
-        }
-        const exists = await this.fileSystem.noteExists(params.path);
-        const existing = exists ? await this.fileSystem.readNote(params.path) : undefined;
-        if (existing && existing.frontmatter.llm_wiki_type && existing.frontmatter.llm_wiki_type !== 'knowledge') {
-            throw new Error(`Refusing to replace LLM Wiki ${existing.frontmatter.llm_wiki_type} metadata at ${this.access.toPublicPath(params.path)}`);
+            if (evidenceItem.revision && evidenceItem.revision !== evidence.revision) {
+                throw new Error(`Evidence revision is stale for ${this.access.toPublicPath(evidencePath)}; read the source again before publishing.`);
+            }
+            const locatorError = evidenceLocatorError(evidence.content, evidenceItem);
+            if (locatorError)
+                throw new Error(`Evidence locator is invalid for ${this.access.toPublicPath(evidencePath)}: ${locatorError}`);
         }
         const timestamp = now();
         const references = await this.references.validateAndNormalize(params.references ?? existing?.frontmatter.references, params.path, params.principal, content);
+        const reviewBasisLinks = await this.collectReviewBasisLinks(content, references, params.principal);
         const claims = normalizeClaims(params.claims, existing?.frontmatter.claims);
         if (claims) {
             for (const claim of claims) {
                 if (!Array.isArray(claim.evidence_paths) || claim.evidence_paths.length === 0) {
                     throw new Error(`Claim '${String(claim.id)}' must include at least one evidence path`);
                 }
-                for (const evidencePath of claim.evidence_paths) {
+                const claimEvidence = normalizeEvidenceEntries(claim.evidence, claim.evidence_paths);
+                for (const evidenceItem of claimEvidence) {
+                    const evidencePath = evidenceItem.path;
                     if (!this.access.canReferenceFrom(params.path, evidencePath)) {
                         throw new Error(`A more-private claim evidence cannot be exposed: ${this.access.toPublicPath(evidencePath)}`);
                     }
@@ -331,6 +444,12 @@ export class LlmWikiService {
                     if (evidence.frontmatter.llm_wiki_type !== 'source' || evidence.frontmatter.immutable !== true || evidence.frontmatter.content_sha256 !== hash(evidence.content)) {
                         throw new Error(`Claim evidence is not an intact immutable source: ${this.access.toPublicPath(evidencePath)}`);
                     }
+                    if (evidenceItem.revision && evidenceItem.revision !== evidence.revision) {
+                        throw new Error(`Claim evidence revision is stale for ${this.access.toPublicPath(evidencePath)}; read the source again before publishing.`);
+                    }
+                    const locatorError = evidenceLocatorError(evidence.content, evidenceItem);
+                    if (locatorError)
+                        throw new Error(`Claim evidence locator is invalid for ${this.access.toPublicPath(evidencePath)}: ${locatorError}`);
                 }
             }
         }
@@ -341,7 +460,10 @@ export class LlmWikiService {
                 ...(existing?.frontmatter || {}),
                 llm_wiki_type: 'knowledge',
                 evidence_paths: evidencePaths,
+                evidence,
                 references,
+                review_basis_content_sha256: hash(content),
+                review_basis_links: reviewBasisLinks,
                 ...(claims && { claims }),
                 confidence,
                 knowledge_status: status,
@@ -361,6 +483,9 @@ export class LlmWikiService {
                     ...(params.stableId !== undefined && { stableId: params.stableId }),
                     ...(params.relations !== undefined && { relations: params.relations }),
                     ...(params.taskStatus !== undefined && { taskStatus: params.taskStatus }),
+                    ...(params.reviewPolicy !== undefined && { reviewPolicy: params.reviewPolicy }),
+                    ...(params.polarity !== undefined && { polarity: params.polarity }),
+                    ...(params.negativeType !== undefined && { negativeType: params.negativeType }),
                     contentDigest: hash(content),
                     status,
                 }),
@@ -376,6 +501,7 @@ export class LlmWikiService {
             created: !exists,
             path: this.access.toPublicPath(params.path),
             evidencePaths: evidencePaths.map(path => this.access.toPublicPath(path)),
+            evidence: evidence.map(item => ({ ...item, path: this.access.toPublicPath(item.path) })),
             ...(claims && { claims }),
             revision: updated.revision,
         };
@@ -483,7 +609,34 @@ export class LlmWikiService {
             const lifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
             const reviewAt = note.frontmatter.review_at ? String(note.frontmatter.review_at) : undefined;
             const due = reviewAt !== undefined && !Number.isNaN(Date.parse(reviewAt)) && Date.parse(reviewAt) <= nowMs;
-            if (lifecycle !== 'review' && !due)
+            const reviewPolicy = typeof note.frontmatter.review_policy === 'string' ? note.frontmatter.review_policy.toLowerCase() : 'manual';
+            let sourceChanged = false;
+            if (reviewPolicy === 'on_source_change') {
+                for (const sourcePath of Array.isArray(note.frontmatter.evidence_paths) ? note.frontmatter.evidence_paths : []) {
+                    if (typeof sourcePath !== 'string' || !canAccess(sourcePath) || !await this.fileSystem.noteExists(sourcePath)) {
+                        sourceChanged = true;
+                        break;
+                    }
+                    const source = await this.fileSystem.readNote(sourcePath);
+                    if (source.frontmatter.content_sha256 !== hash(source.content)) {
+                        sourceChanged = true;
+                        break;
+                    }
+                }
+            }
+            const summaryStale = Boolean(note.frontmatter.summary || note.frontmatter.key_points || note.frontmatter.open_questions)
+                && (typeof note.frontmatter.summary_of_content_sha256 !== 'string' || note.frontmatter.summary_of_content_sha256 !== hash(note.content || ''));
+            const reviewSignals = await this.reviewChangeSignals(note, principal);
+            const reviewTriggers = [];
+            if (reviewPolicy === 'on_source_change' && sourceChanged)
+                reviewTriggers.push('source_changed');
+            if (reviewPolicy === 'on_link_change' && reviewSignals.linkChanged)
+                reviewTriggers.push('link_changed');
+            if (reviewPolicy === 'on_any_edit' && reviewSignals.bodyChanged)
+                reviewTriggers.push('note_edited');
+            if (summaryStale)
+                reviewTriggers.push('summary_stale');
+            if (lifecycle !== 'review' && !due && !sourceChanged && reviewTriggers.length === 0)
                 continue;
             total += 1;
             const item = {
@@ -495,6 +648,10 @@ export class LlmWikiService {
                 confidence: note.frontmatter.confidence,
                 ...(reviewAt && { reviewAt }),
                 overdue: due,
+                reviewPolicy,
+                ...(reviewTriggers.length > 0 && { reviewTriggered: true, reviewTriggers, reviewTrigger: reviewTriggers[0] }),
+                ...(typeof note.frontmatter.knowledge_polarity === 'string' && { polarity: note.frontmatter.knowledge_polarity }),
+                ...(typeof note.frontmatter.negative_type === 'string' && { negativeType: note.frontmatter.negative_type }),
                 ...(note.frontmatter.project && { project: note.frontmatter.project }),
             };
             const position = candidates.findIndex(candidate => Number(item.overdue) > Number(candidate.overdue)
@@ -565,7 +722,7 @@ export class LlmWikiService {
         if (note.frontmatter.llm_wiki_type && note.frontmatter.llm_wiki_type !== 'knowledge') {
             throw new Error(`triage_wiki_note cannot classify managed LLM Wiki type '${note.frontmatter.llm_wiki_type}'`);
         }
-        const hasOrganizationInput = [params.noteKind, params.lifecycle, params.moc, params.project, params.reviewAt, params.nextAction, params.waitingFor, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.nextActions, params.stableId, params.relations, params.taskStatus]
+        const hasOrganizationInput = [params.noteKind, params.lifecycle, params.moc, params.project, params.reviewAt, params.nextAction, params.waitingFor, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.nextActions, params.stableId, params.relations, params.taskStatus, params.reviewPolicy, params.polarity, params.negativeType]
             .some(value => value !== undefined);
         if (!hasOrganizationInput)
             throw new Error('At least one organization field is required');
@@ -602,6 +759,9 @@ export class LlmWikiService {
             ...(params.stableId !== undefined && { stableId: params.stableId }),
             ...(params.relations !== undefined && { relations: params.relations }),
             ...(params.taskStatus !== undefined && { taskStatus: params.taskStatus }),
+            ...(params.reviewPolicy !== undefined && { reviewPolicy: params.reviewPolicy }),
+            ...(params.polarity !== undefined && { polarity: params.polarity }),
+            ...(params.negativeType !== undefined && { negativeType: params.negativeType }),
             contentDigest: hash(note.content),
             status: String(note.frontmatter.knowledge_status || note.frontmatter.status || 'draft'),
         });
@@ -627,6 +787,9 @@ export class LlmWikiService {
                 ...(updated.frontmatter.next_actions && { nextActions: updated.frontmatter.next_actions }),
                 ...(updated.frontmatter.stable_id && { stableId: updated.frontmatter.stable_id }),
                 ...(updated.frontmatter.task_status && { taskStatus: updated.frontmatter.task_status }),
+                ...(updated.frontmatter.review_policy && { reviewPolicy: updated.frontmatter.review_policy }),
+                ...(updated.frontmatter.knowledge_polarity && { polarity: updated.frontmatter.knowledge_polarity }),
+                ...(updated.frontmatter.negative_type && { negativeType: updated.frontmatter.negative_type }),
                 relations: Object.fromEntries(RELATION_FIELDS
                     .filter(field => Array.isArray(updated.frontmatter[field]) && updated.frontmatter[field].length > 0)
                     .map(field => [field, updated.frontmatter[field]])),
@@ -682,6 +845,15 @@ export class LlmWikiService {
             }
         }
         const bounded = boundedText(content, maxChars);
+        let evidence = [];
+        try {
+            evidence = normalizeEvidenceEntries(note.frontmatter.evidence, Array.isArray(note.frontmatter.evidence_paths) ? note.frontmatter.evidence_paths : []);
+        }
+        catch {
+            evidence = Array.isArray(note.frontmatter.evidence_paths)
+                ? note.frontmatter.evidence_paths.filter((item) => typeof item === 'string').slice(0, 30).map(path => ({ path }))
+                : [];
+        }
         return {
             path: this.access.toPublicPath(params.path),
             title,
@@ -699,6 +871,9 @@ export class LlmWikiService {
             ...(typeof note.frontmatter.waiting_for === 'string' && { waitingFor: note.frontmatter.waiting_for }),
             ...(typeof note.frontmatter.stable_id === 'string' && { stableId: note.frontmatter.stable_id }),
             ...(typeof note.frontmatter.task_status === 'string' && { taskStatus: note.frontmatter.task_status }),
+            ...(typeof note.frontmatter.review_policy === 'string' && { reviewPolicy: note.frontmatter.review_policy }),
+            ...(typeof note.frontmatter.knowledge_polarity === 'string' && { polarity: note.frontmatter.knowledge_polarity }),
+            ...(typeof note.frontmatter.negative_type === 'string' && { negativeType: note.frontmatter.negative_type }),
             ...(typeof note.frontmatter.summary_of_content_sha256 === 'string' && { summaryFingerprint: note.frontmatter.summary_of_content_sha256 }),
             ...((note.frontmatter.summary || note.frontmatter.key_points || note.frontmatter.open_questions) && {
                 summaryFresh: typeof note.frontmatter.summary_of_content_sha256 === 'string'
@@ -715,6 +890,7 @@ export class LlmWikiService {
             references: Array.isArray(note.frontmatter.references)
                 ? note.frontmatter.references.filter((item) => typeof item === 'string').slice(0, 20).map(path => this.access.toPublicPath(path))
                 : [],
+            evidence: evidence.map(item => ({ ...item, path: this.access.toPublicPath(item.path) })),
         };
     }
     async impactReport(principal, limit = 20, maxChars = 6000) {
@@ -762,15 +938,31 @@ export class LlmWikiService {
             const reviewAt = typeof note.frontmatter.review_at === 'string' ? note.frontmatter.review_at : undefined;
             if (reviewAt && !Number.isNaN(Date.parse(reviewAt)) && Date.parse(reviewAt) <= nowMs)
                 reasons.push('review_due');
+            if (Boolean(note.frontmatter.summary || note.frontmatter.key_points || note.frontmatter.open_questions)
+                && (typeof note.frontmatter.summary_of_content_sha256 !== 'string' || note.frontmatter.summary_of_content_sha256 !== hash(note.content || '')))
+                reasons.push('summary_stale');
+            const reviewSignals = await this.reviewChangeSignals(note, principal);
+            const reviewPolicy = reviewSignals.policy;
+            if (reviewPolicy === 'on_source_change' && reasons.includes('source_changed'))
+                reasons.push('review_source_changed');
+            if (reviewPolicy === 'on_link_change' && reviewSignals.linkChanged)
+                reasons.push('link_changed');
+            if (reviewPolicy === 'on_any_edit' && reviewSignals.bodyChanged)
+                reasons.push('note_edited');
             if (reasons.length === 0)
                 continue;
             total += 1;
             const uniqueReasons = [...new Set(reasons)];
+            const reviewTriggers = uniqueReasons.filter(reason => ['review_source_changed', 'link_changed', 'note_edited', 'summary_stale'].includes(reason));
             const item = {
                 path: this.access.toPublicPath(note.path),
                 title: note.frontmatter.title || note.path.split('/').at(-1),
                 severity: uniqueReasons.includes('missing_evidence') || uniqueReasons.includes('source_changed') ? 'high' : 'medium',
                 reasons: uniqueReasons,
+                reviewPolicy: note.frontmatter.review_policy || 'manual',
+                ...(reviewTriggers.length > 0 && { reviewTriggered: true, reviewTriggers, reviewTrigger: reviewTriggers[0] }),
+                ...(note.frontmatter.knowledge_polarity && { polarity: note.frontmatter.knowledge_polarity }),
+                ...(note.frontmatter.negative_type && { negativeType: note.frontmatter.negative_type }),
                 ...(affectedSources.length > 0 && { affectedSources: [...new Set(affectedSources)].map(path => this.access.toPublicPath(path)).slice(0, 10) }),
                 ...(reviewAt && { reviewAt }),
             };
@@ -797,6 +989,35 @@ export class LlmWikiService {
         }
         return { items: boundedItems, total, truncated: total > boundedItems.length, generatedAt: now() };
     }
+    async exportBasesView(principal, noteKind, lifecycle, limit = 100, maxChars = 12000) {
+        const boundedLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
+        const boundedChars = Math.min(Math.max(Number(maxChars) || 12000, 512), 20000);
+        const catalog = await this.catalog(principal, { summaryOnly: true, ...(noteKind && { noteKind }), ...(lifecycle && { lifecycle }), limit: boundedLimit, maxChars: boundedChars });
+        const filters = ['file.ext == "md"'];
+        if (noteKind)
+            filters.push(`note.note_kind == ${JSON.stringify(String(noteKind).trim())}`);
+        if (lifecycle)
+            filters.push(`note.lifecycle == ${JSON.stringify(String(lifecycle).trim())}`);
+        const base = {
+            filters: { and: filters },
+            views: [{
+                    type: 'table',
+                    name: 'LLM Wiki',
+                    limit: boundedLimit,
+                    order: ['file.mtime', 'file.name'],
+                }],
+        };
+        const content = stringifyYaml(base);
+        return {
+            format: 'obsidian-bases/yaml',
+            suggestedPath: 'Views/LLM Wiki.base',
+            content: content.length <= boundedChars ? content : content.slice(0, boundedChars),
+            truncated: content.length > boundedChars,
+            matchingNotes: catalog.total,
+            filter: { ...(noteKind && { noteKind }), ...(lifecycle && { lifecycle }) },
+            note: 'This is a local Obsidian view definition, not an MCP access boundary. Save it as a .base file only where the local viewer may see the selected scope.',
+        };
+    }
     async graphHealth(principal, limit = 20, maxChars = 6000) {
         const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
         const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 16000);
@@ -806,30 +1027,66 @@ export class LlmWikiService {
             this.fileSystem.findOrphanNotes(boundedLimit, canAccess),
         ]);
         const emptyMocs = [];
+        const mocDrafts = [];
+        const visibleNotePaths = [];
+        const knowledgePaths = new Set();
         let mocTotal = 0;
         let emptyMocTotal = 0;
         for await (const note of iterateNotes(this.fileSystem, { includeContent: true }, canAccess)) {
+            visibleNotePaths.push(note.path);
+            if (note.frontmatter.llm_wiki_type === 'knowledge')
+                knowledgePaths.add(normalizePath(note.path).toLowerCase());
             if (note.frontmatter.note_kind !== 'moc')
                 continue;
             mocTotal += 1;
-            if (extractWikiLinkOccurrences(note.content || '').length === 0) {
+            const links = extractWikiLinkOccurrences(note.content || '').map(link => link.target);
+            mocDrafts.push({ path: note.path, title: note.frontmatter.title || note.path.split('/').at(-1) || note.path, links });
+            if (links.length === 0) {
                 emptyMocTotal += 1;
                 if (emptyMocs.length < boundedLimit) {
                     emptyMocs.push({ path: this.access.toPublicPath(note.path), title: note.frontmatter.title || note.path.split('/').at(-1) });
                 }
             }
         }
+        const mocCoveredKnowledge = new Set();
+        const mocCoverageItems = [];
+        for (const moc of mocDrafts) {
+            const linked = new Set();
+            for (const target of moc.links) {
+                for (const resolved of resolveWikiLinkTargets(target, visibleNotePaths))
+                    linked.add(normalizePath(resolved).toLowerCase());
+            }
+            const linkedKnowledge = [...linked].filter(path => knowledgePaths.has(path));
+            for (const path of linkedKnowledge)
+                mocCoveredKnowledge.add(path);
+            mocCoverageItems.push({ path: this.access.toPublicPath(moc.path), title: moc.title, linkedNotes: linked.size, linkedKnowledge: linkedKnowledge.length, knowledgeCoverage: knowledgePaths.size ? Number((linkedKnowledge.length / knowledgePaths.size).toFixed(3)) : 1 });
+        }
+        const uncoveredKnowledge = visibleNotePaths
+            .filter(path => knowledgePaths.has(normalizePath(path).toLowerCase()) && !mocCoveredKnowledge.has(normalizePath(path).toLowerCase()))
+            .sort((left, right) => left.localeCompare(right))
+            .slice(0, boundedLimit)
+            .map(path => ({ path: this.access.toPublicPath(path) }));
         const report = {
             unresolvedLinks: { total: unresolved.total, items: unresolved.unresolved.slice(0, boundedLimit).map(item => ({ ...item, path: this.access.toPublicPath(item.path) })), truncated: unresolved.truncated },
             orphanNotes: { total: orphans.total, items: orphans.orphans.slice(0, boundedLimit).map(item => ({ ...item, path: this.access.toPublicPath(item.path) })), truncated: orphans.truncated },
             emptyMocs: { total: emptyMocTotal, items: emptyMocs, truncated: emptyMocTotal > emptyMocs.length },
             mocCount: mocTotal,
+            mocCoverage: {
+                knowledgeTotal: knowledgePaths.size,
+                knowledgeLinkedFromMoc: mocCoveredKnowledge.size,
+                ratio: knowledgePaths.size ? Number((mocCoveredKnowledge.size / knowledgePaths.size).toFixed(3)) : 1,
+                uncoveredKnowledge: { total: Math.max(0, knowledgePaths.size - mocCoveredKnowledge.size), items: uncoveredKnowledge, truncated: knowledgePaths.size - mocCoveredKnowledge.size > uncoveredKnowledge.length },
+                mocs: mocCoverageItems.slice(0, boundedLimit),
+                truncated: mocCoverageItems.length > boundedLimit,
+            },
         };
         while (JSON.stringify(report).length > boundedChars) {
             const arrays = [
                 report.unresolvedLinks.items,
                 report.orphanNotes.items,
                 report.emptyMocs.items,
+                report.mocCoverage.uncoveredKnowledge.items,
+                report.mocCoverage.mocs,
             ];
             const largest = arrays.sort((left, right) => right.length - left.length)[0];
             if (!largest || largest.length === 0)
@@ -856,7 +1113,9 @@ export class LlmWikiService {
             'inbox_lifecycle_mismatch', 'invalid_aliases', 'duplicate_aliases',
             'invalid_key_points', 'invalid_open_questions', 'invalid_next_actions',
             'invalid_summary', 'invalid_stable_id', 'summary_fingerprint_missing', 'invalid_summary_fingerprint', 'stale_summary', 'invalid_task_status',
-            'duplicate_alias_across_notes', 'duplicate_stable_id', 'atomic_note_may_be_too_broad',
+            'duplicate_alias_across_notes', 'duplicate_stable_id', 'invalid_review_policy', 'invalid_knowledge_polarity', 'invalid_negative_type',
+            'negative_type_without_negative_polarity', 'negative_polarity_without_type', 'atomic_note_may_be_too_broad',
+            'invalid_evidence_locator', 'evidence_path_mismatch', 'stale_evidence_revision', 'invalid_claim_evidence_locator', 'stale_claim_evidence_revision',
             'invalid_relation',
             ...RELATION_FIELDS.flatMap(field => [`invalid_${field}`, `duplicate_${field}`, `unsafe_${field}`]),
         ]);
@@ -872,12 +1131,18 @@ export class LlmWikiService {
             ...(byCode.atomic_note_may_be_too_broad ? ['Split broad atomic notes into single-claim notes and connect them with typed links.'] : []),
             ...(Object.keys(byCode).some(code => code.startsWith('invalid_') || code.startsWith('unsafe_')) ? ['Repair property shapes before relying on catalog filters or projections.'] : []),
         ];
+        const graph = await this.graphHealth(principal, Math.min(boundedLimit, 20), Math.min(boundedChars, 12000));
+        const mocCoverage = 'mocCoverage' in graph ? graph.mocCoverage : undefined;
+        if (mocCoverage && Number(mocCoverage.knowledgeTotal) > 0 && Number(mocCoverage.ratio) < 1) {
+            recommendations.push('Add uncovered knowledge notes to an appropriate MOC or explain why they intentionally remain uncurated.');
+        }
         const result = {
             healthy: issues.length === 0,
             organizationIssueTotal: Object.values(byCode).reduce((sum, count) => sum + count, 0),
             byCode,
             issues,
             recommendations,
+            ...(mocCoverage && { mocCoverage }),
             truncated: lint.truncated || Object.values(byCode).reduce((sum, count) => sum + count, 0) > issues.length,
             generatedAt: now(),
         };
@@ -1423,6 +1688,30 @@ export class LlmWikiService {
                         addIssue({ severity: 'error', code: 'invalid_evidence_type', path: this.access.toPublicPath(note.path), detail: `Evidence is not a source snapshot: ${this.access.toPublicPath(evidencePath)}` });
                     }
                 }
+                if (note.frontmatter.evidence !== undefined) {
+                    let evidenceLocators = [];
+                    try {
+                        evidenceLocators = normalizeEvidenceEntries(note.frontmatter.evidence, []);
+                    }
+                    catch (error) {
+                        addIssue({ severity: 'warning', code: 'invalid_evidence_locator', path: this.access.toPublicPath(note.path), detail: error instanceof Error ? error.message : 'Evidence locator metadata is invalid.' });
+                    }
+                    for (const locator of evidenceLocators) {
+                        if (!evidence.includes(locator.path)) {
+                            addIssue({ severity: 'warning', code: 'evidence_path_mismatch', path: this.access.toPublicPath(note.path), detail: `Evidence locator is not listed in evidence_paths: ${this.access.toPublicPath(locator.path)}` });
+                            continue;
+                        }
+                        const source = sourceCache.get(locator.path);
+                        if (!source)
+                            continue;
+                        if (locator.revision && locator.revision !== source.revision) {
+                            addIssue({ severity: 'warning', code: 'stale_evidence_revision', path: this.access.toPublicPath(note.path), detail: `Evidence locator revision is stale: ${this.access.toPublicPath(locator.path)}` });
+                        }
+                        const locatorError = evidenceLocatorError(source.content, locator);
+                        if (locatorError)
+                            addIssue({ severity: 'warning', code: 'invalid_evidence_locator', path: this.access.toPublicPath(note.path), detail: `${this.access.toPublicPath(locator.path)}: ${locatorError}` });
+                    }
+                }
                 if (Array.isArray(note.frontmatter.claims)) {
                     for (let claimIndex = 0; claimIndex < note.frontmatter.claims.length; claimIndex += 1) {
                         const claim = note.frontmatter.claims[claimIndex];
@@ -1440,6 +1729,15 @@ export class LlmWikiService {
                             addIssue({ severity: 'error', code: 'claim_without_evidence', path: this.access.toPublicPath(note.path), detail: `Claim ${String(claim.id || claimIndex + 1)} has no evidence_paths.` });
                             continue;
                         }
+                        let claimLocators = [];
+                        if (claim.evidence !== undefined) {
+                            try {
+                                claimLocators = normalizeEvidenceEntries(claim.evidence, []);
+                            }
+                            catch (error) {
+                                addIssue({ severity: 'warning', code: 'invalid_claim_evidence_locator', path: this.access.toPublicPath(note.path), detail: error instanceof Error ? error.message : `Claim ${String(claim.id || claimIndex + 1)} evidence locator metadata is invalid.` });
+                            }
+                        }
                         for (const evidencePath of claimEvidence) {
                             if (!canAccess(evidencePath) || !await this.fileSystem.noteExists(evidencePath)) {
                                 addIssue({ severity: 'error', code: 'missing_claim_evidence', path: this.access.toPublicPath(note.path), detail: `Claim ${String(claim.id || claimIndex + 1)} references missing evidence: ${this.access.toPublicPath(evidencePath)}` });
@@ -1449,6 +1747,13 @@ export class LlmWikiService {
                             sourceCache.set(evidencePath, source);
                             if (source.frontmatter.llm_wiki_type !== 'source' || source.frontmatter.immutable !== true || source.frontmatter.content_sha256 !== hash(source.content)) {
                                 addIssue({ severity: 'error', code: 'invalid_claim_evidence', path: this.access.toPublicPath(note.path), detail: `Claim ${String(claim.id || claimIndex + 1)} references an altered or non-source note: ${this.access.toPublicPath(evidencePath)}` });
+                            }
+                            for (const locator of claimLocators.filter(item => item.path === evidencePath)) {
+                                if (locator.revision && locator.revision !== source.revision)
+                                    addIssue({ severity: 'warning', code: 'stale_claim_evidence_revision', path: this.access.toPublicPath(note.path), detail: `Claim ${String(claim.id || claimIndex + 1)} evidence revision is stale: ${this.access.toPublicPath(evidencePath)}` });
+                                const locatorError = evidenceLocatorError(source.content, locator);
+                                if (locatorError)
+                                    addIssue({ severity: 'warning', code: 'invalid_claim_evidence_locator', path: this.access.toPublicPath(note.path), detail: `Claim ${String(claim.id || claimIndex + 1)} ${this.access.toPublicPath(evidencePath)}: ${locatorError}` });
                             }
                         }
                     }

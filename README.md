@@ -154,8 +154,8 @@ reserved Wiki, Community, scope, or `.mcpvault` folders:
 - `Archives/` is for inactive material kept for future retrieval.
 
 Classify notes with YAML properties such as `note_kind` (`fleeting`,
-`literature`, `atomic`, `moc`, `knowledge`, `decision`, `project`, `area`,
-`resource`, `journal`, or `task`) and `lifecycle` (`inbox`, `active`,
+`literature`, `atomic`, `moc`, `knowledge`, `question`, `hypothesis`,
+`assumption`, `decision`, `project`, `area`, `resource`, `journal`, or `task`) and `lifecycle` (`inbox`, `active`,
 `review`, `evergreen`, `superseded`, or `archived`). Optional `moc`,
 `project`, and `review_at` properties make related notes and review work
 discoverable. `[[wikilinks]]` express relationships; `evidence_paths` express
@@ -163,22 +163,36 @@ source provenance; Git records authorship, reasons, diffs, and rollback. Do
 not create a parallel edit log, treat links as evidence without checking
 them, or move Community-managed posts into PARA folders.
 
+Use `question` for an unresolved question, `hypothesis` for a testable
+proposition, and `assumption` for a working premise. Keep these visibly
+different from verified knowledge until evidence supports them.
+
 For durable notes, `aliases` provide alternate Obsidian names and optional
 `stable_id` provides an identity that can survive a title change. Keep the
 full Markdown body authoritative while using `summary`, `key_points`, and
 `open_questions` as progressive-read projections. Whenever a progressive
 field is present, store `summary_of_content_sha256` as the SHA-256 of the
 exact Markdown body; a body edit makes the projection stale until it is
-regenerated. Typed relationship
+regenerated. For failed paths, use `knowledge_polarity: negative` with a
+`negative_type` such as `failure`, `rejected`, `counterexample`, or
+`non_reproducible`; preserve the note so later agents do not repeat it. Typed relationship
 properties (`supports`, `contradicts`, `supersedes`, `derived_from`,
 `depends_on`, `implements`, `blocked_by`, and `related`) explain the meaning
 of a `[[wikilink]]`; they do not grant access and their targets are checked by
 Wiki lint. Use `next_actions` and `waiting_for` for project/task notes, and
 `task_status` (`open`, `next_action`, `waiting`, `blocked`, `completed`, or
 `cancelled`) for their operational state. Keep task status separate from the
-knowledge `lifecycle`. The bounded `get_wiki_organization_health` endpoint
-combines these checks with MOC, Inbox, lifecycle, atomic-note, summary
-freshness, and alias/ID collision guidance.
+knowledge `lifecycle`. Evidence can carry `heading`, `blockId`, and source
+`revision` locators; the server validates them and reports stale references.
+Use `review_policy` (`manual`, `periodic`, `on_source_change`,
+`on_link_change`, or `on_any_edit`) to declare review triggers. Publication
+stores a compact body/link review baseline, so later source, link, or body
+changes can be reported as derived triggers. The baseline is disposable
+metadata and never replaces Markdown or Git. The bounded
+`get_wiki_organization_health` endpoint combines these checks with MOC
+coverage, Inbox, lifecycle, atomic-note, summary freshness, and alias/ID
+collision guidance. `get_wiki_bases_view` emits an optional Obsidian Bases YAML
+view; it is a local presentation file, never a security boundary.
 
 The intended loop is **Capture -> Organize -> Distill -> Express**: ingest an
 immutable source or capture a rough note, classify and link it, publish a

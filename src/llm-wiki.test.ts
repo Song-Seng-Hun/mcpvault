@@ -54,7 +54,7 @@ test('knowledge organization contract preserves aliases, projections, and typed 
     const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-contract-owner', modelId: 'codex', password: 'organization-contract-password' });
     const accessToken = registration.value.accessToken;
     const source = await callJson(client, 'ingest_source', {
-      sourceId: 'organization-contract-source', title: 'Organization contract source', content: 'Typed links and compact projections make knowledge easier to maintain.', capturedBy: 'codex', accessToken,
+      sourceId: 'organization-contract-source', title: 'Organization contract source', content: '# Source\n\n## Evidence\n\nTyped links and compact projections make knowledge easier to maintain. ^contract-evidence', capturedBy: 'codex', accessToken,
     });
     await client.callTool({ name: 'write_note', arguments: {
       path: 'Knowledge/Existing.md', content: '# Existing\n\nA related durable note.\n', expectedRevision: 'missing', accessToken,
@@ -63,11 +63,12 @@ test('knowledge organization contract preserves aliases, projections, and typed 
       path: 'Knowledge/Contract.md', content: '# Contract\n\nA compact, linked knowledge note.\n', evidencePaths: [source.value.path],
       aliases: ['Knowledge contract', 'Metadata contract'], summary: 'Properties describe the note and typed links describe why it is related.',
       keyPoints: ['Keep the full Markdown body.', 'Use typed links for meaningful relations.'], openQuestions: ['Which relation needs review next?'],
-      relations: { related: ['[[Knowledge/Existing]]'] }, stableId: 'knowledge-contract', lifecycle: 'evergreen', taskStatus: 'next_action', author: 'codex', expectedRevision: 'missing', accessToken,
+      relations: { related: ['[[Knowledge/Existing]]'] }, stableId: 'knowledge-contract', lifecycle: 'evergreen', taskStatus: 'next_action', noteKind: 'question', reviewPolicy: 'periodic', evidence: [{ path: source.value.path, heading: 'Evidence', blockId: 'contract-evidence', revision: source.value.revision }], author: 'codex', expectedRevision: 'missing', accessToken,
     });
     expect(published.value.success).toBe(true);
     const projection = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Contract.md', view: 'summary', accessToken });
-    expect(projection.value).toMatchObject({ aliases: ['Knowledge contract', 'Metadata contract'], stableId: 'knowledge-contract', taskStatus: 'next_action', summaryFresh: true, relations: { related: ['[[Knowledge/Existing]]'] } });
+    expect(projection.value).toMatchObject({ aliases: ['Knowledge contract', 'Metadata contract'], stableId: 'knowledge-contract', noteKind: 'question', taskStatus: 'next_action', reviewPolicy: 'periodic', summaryFresh: true, relations: { related: ['[[Knowledge/Existing]]'] } });
+    expect(published.value.evidence[0]).toMatchObject({ path: source.value.path, heading: 'Evidence', blockId: 'contract-evidence', revision: source.value.revision });
     const refs = await callJson(client, 'read_references', { path: 'Knowledge/Contract.md', accessToken });
     expect(refs.value.references).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Existing.md' })]));
     const backlinks = await callJson(client, 'get_backlinks', { path: 'Knowledge/Existing.md', accessToken });
@@ -77,6 +78,74 @@ test('knowledge organization contract preserves aliases, projections, and typed 
     expect(outlinks.value.outlinks.filter((entry: any) => entry.relation === 'related')).toHaveLength(1);
     const health = await callJson(client, 'get_wiki_organization_health', { limit: 20, accessToken });
     expect(health.value).toMatchObject({ healthy: true, organizationIssueTotal: 0 });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('questions, negative knowledge, locators, event review, MOC coverage, and Bases export stay connected', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'remaining-priorities-owner', modelId: 'codex', password: 'remaining-priorities-password' });
+    const accessToken = registration.value.accessToken;
+    const source = await callJson(client, 'ingest_source', {
+      sourceId: 'remaining-priorities-source', title: 'Remaining priorities source', content: '# Source\n\n## Result\n\nThe rejected approach failed under load. ^remaining-result', capturedBy: 'codex', accessToken,
+    });
+    await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/Related.md', content: '# Related\n\nThe linked context is stable.\n', expectedRevision: 'missing', accessToken,
+    } });
+    const negative = await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Rejected approach.md', content: '# Rejected approach\n\nThis approach is retained as a counterexample. [[Knowledge/Related]]\n',
+      evidence: [{ path: source.value.path, heading: 'Result', blockId: 'remaining-result', revision: source.value.revision }],
+      noteKind: 'hypothesis', lifecycle: 'evergreen', polarity: 'negative', negativeType: 'counterexample', reviewPolicy: 'on_link_change',
+      expectedRevision: 'missing', author: 'codex', accessToken,
+    });
+    expect(negative.value).toMatchObject({ success: true, evidence: [expect.objectContaining({ heading: 'Result', blockId: 'remaining-result', revision: source.value.revision })] });
+
+    const projection = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Rejected approach.md', view: 'summary', accessToken });
+    expect(projection.value).toMatchObject({ noteKind: 'hypothesis', polarity: 'negative', negativeType: 'counterexample', reviewPolicy: 'on_link_change', evidence: [expect.objectContaining({ heading: 'Result', blockId: 'remaining-result', revision: source.value.revision })] });
+
+    const mocWrite = await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/MOCs/Research.md', content: '# Research MOC\n\n[[Knowledge/Rejected approach]]\n', frontmatter: { note_kind: 'moc', lifecycle: 'evergreen' }, expectedRevision: 'missing', accessToken,
+    } });
+    expect(mocWrite.isError).toBeFalsy();
+    const graph = await callJson(client, 'get_wiki_graph_health', { limit: 10, maxChars: 5000, accessToken });
+    expect(graph.value.mocCoverage).toMatchObject({ knowledgeTotal: 1, knowledgeLinkedFromMoc: 1, ratio: 1 });
+
+    const bases = await callJson(client, 'get_wiki_bases_view', { noteKind: 'hypothesis', lifecycle: 'evergreen', limit: 10, accessToken });
+    expect(bases.value).toMatchObject({ format: 'obsidian-bases/yaml', suggestedPath: 'Views/LLM Wiki.base', matchingNotes: 1, truncated: false });
+    expect(bases.value.content).toContain('type: table');
+    expect(bases.value.content).toContain('note.note_kind == "hypothesis"');
+
+    const related = await callJson(client, 'read_note', { path: 'Knowledge/Related.md', accessToken });
+    const changed = await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/Related.md', content: '# Related\n\nThe linked context changed.\n', expectedRevision: related.value.revision, accessToken,
+    } });
+    expect(changed.isError).toBeFalsy();
+    const impact = await callJson(client, 'get_wiki_impact_report', { limit: 10, maxChars: 6000, accessToken });
+    expect(impact.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Rejected approach.md', reasons: expect.arrayContaining(['link_changed']), reviewTriggered: true, reviewTrigger: 'link_changed' })]));
+    const queue = await callJson(client, 'get_wiki_review_queue', { limit: 10, maxChars: 6000, accessToken });
+    expect(queue.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Rejected approach.md', reviewTrigger: 'link_changed' })]));
+
+    await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Open question.md', content: '# Open question\n\nShould this result be reproduced independently?\n', evidencePaths: [source.value.path],
+      noteKind: 'question', lifecycle: 'active', reviewPolicy: 'on_any_edit', expectedRevision: 'missing', author: 'codex', accessToken,
+    });
+    const question = await callJson(client, 'read_note', { path: 'Knowledge/Open question.md', accessToken });
+    const editedQuestion = await client.callTool({ name: 'patch_note', arguments: {
+      path: 'Knowledge/Open question.md', oldString: 'Should this result be reproduced independently?', newString: 'Should this result be reproduced independently by another agent?', expectedRevision: question.value.revision, accessToken,
+    } });
+    expect(editedQuestion.isError).toBeFalsy();
+    const editedImpact = await callJson(client, 'get_wiki_impact_report', { limit: 10, maxChars: 8000, accessToken });
+    expect(editedImpact.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Open question.md', reviewTrigger: 'note_edited' })]));
+
+    const invalidLocator = await client.callTool({ name: 'publish_knowledge', arguments: {
+      path: 'Knowledge/Invalid locator.md', content: '# Invalid locator\n\nA note with a bad locator.\n', evidence: [{ path: source.value.path, heading: 'Does not exist', revision: source.value.revision }],
+      expectedRevision: 'missing', author: 'codex', accessToken,
+    } });
+    expect(invalidLocator.isError).toBe(true);
+    expect((invalidLocator.content as any)[0].text).toContain('heading');
   } finally {
     await client.close();
     await server.close();
