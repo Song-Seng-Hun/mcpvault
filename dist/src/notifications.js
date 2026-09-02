@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { gzip, gunzip } from 'node:zlib';
 import { promisify } from 'node:util';
@@ -510,6 +510,7 @@ export class NotificationService {
     publicSnapshotUpdate;
     publicSnapshotWrite;
     publicSnapshotPending;
+    publicManifestCache;
     publicSnapshotRestoreAttempted = false;
     constructor(fileSystem, reputation, vaultPath, fileCatalog) {
         this.fileSystem = fileSystem;
@@ -547,23 +548,14 @@ export class NotificationService {
     async publicManifest() {
         if (!this.vaultPath || !this.fileCatalog)
             return undefined;
+        if (this.publicManifestCache && this.publicManifestCache.expiresAt > Date.now())
+            return this.publicManifestCache.entries;
         const paths = (await this.fileCatalog.notePathsSnapshot()).filter(isPublicRootNotePath).sort((a, b) => a.localeCompare(b));
-        const entries = [];
-        for (let start = 0; start < paths.length; start += HYDRATE_BATCH_SIZE) {
-            const batch = paths.slice(start, start + HYDRATE_BATCH_SIZE);
-            const stats = await Promise.all(batch.map(async (path) => {
-                try {
-                    const info = await stat(join(this.vaultPath, path));
-                    return info.isFile() ? { path, size: info.size, mtimeMs: info.mtimeMs } : undefined;
-                }
-                catch {
-                    return undefined;
-                }
-            }));
-            if (stats.some(entry => !entry))
-                return undefined;
-            entries.push(...stats);
-        }
+        const stats = await this.fileCatalog.statPaths(paths);
+        if (stats.size !== paths.length)
+            return undefined;
+        const entries = paths.map(path => ({ path, ...stats.get(path) }));
+        this.publicManifestCache = { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, entries };
         return entries;
     }
     async loadPublicSnapshot() {
@@ -644,6 +636,7 @@ export class NotificationService {
     }
     clearPublicSnapshotCache() {
         this.publicSnapshotCache = undefined;
+        this.publicManifestCache = undefined;
         derivedCacheBudget.clearOwner(this.publicSnapshotCacheOwner);
     }
     trackPublicSnapshotCache(value) {
@@ -666,6 +659,7 @@ export class NotificationService {
             .filter((change) => Boolean(change.collection));
         if (relevant.length === 0)
             return;
+        this.publicManifestCache = undefined;
         const previous = this.publicSnapshotUpdate || Promise.resolve();
         const update = previous.then(async () => {
             for (const change of relevant)
@@ -769,7 +763,7 @@ export class NotificationService {
         const cached = this.candidateCache.get(key);
         if (cached && cached.expiresAt > Date.now()) {
             derivedCacheBudget.touch(this.candidateCacheOwner, key);
-            return cached.candidates.map(candidate => ({ ...candidate }));
+            return cached.candidates;
         }
         if (cached) {
             this.candidateCache.delete(key);
@@ -777,7 +771,7 @@ export class NotificationService {
         }
         const running = this.candidateInFlight.get(key);
         if (running)
-            return (await running).map(candidate => ({ ...candidate }));
+            return running;
         const computation = this.publicCandidates(principal);
         this.candidateInFlight.set(key, computation);
         try {

@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { gzip, gunzip } from 'node:zlib';
 import { promisify } from 'node:util';
@@ -553,6 +553,7 @@ export class NotificationService {
   private publicSnapshotUpdate: Promise<void> | undefined;
   private publicSnapshotWrite: Promise<void> | undefined;
   private publicSnapshotPending: PublicSnapshotIndex | undefined;
+  private publicManifestCache: { expiresAt: number; entries: PublicSnapshotManifestEntry[] } | undefined;
   private publicSnapshotRestoreAttempted = false;
 
   constructor(
@@ -590,21 +591,12 @@ export class NotificationService {
 
   private async publicManifest(): Promise<PublicSnapshotManifestEntry[] | undefined> {
     if (!this.vaultPath || !this.fileCatalog) return undefined;
+    if (this.publicManifestCache && this.publicManifestCache.expiresAt > Date.now()) return this.publicManifestCache.entries;
     const paths = (await this.fileCatalog.notePathsSnapshot()).filter(isPublicRootNotePath).sort((a, b) => a.localeCompare(b));
-    const entries: PublicSnapshotManifestEntry[] = [];
-    for (let start = 0; start < paths.length; start += HYDRATE_BATCH_SIZE) {
-      const batch = paths.slice(start, start + HYDRATE_BATCH_SIZE);
-      const stats = await Promise.all(batch.map(async path => {
-        try {
-          const info = await stat(join(this.vaultPath!, path));
-          return info.isFile() ? { path, size: info.size, mtimeMs: info.mtimeMs } : undefined;
-        } catch {
-          return undefined;
-        }
-      }));
-      if (stats.some(entry => !entry)) return undefined;
-      entries.push(...stats as PublicSnapshotManifestEntry[]);
-    }
+    const stats = await this.fileCatalog.statPaths(paths);
+    if (stats.size !== paths.length) return undefined;
+    const entries = paths.map(path => ({ path, ...stats.get(path)! }));
+    this.publicManifestCache = { expiresAt: Date.now() + EVENT_CACHE_TTL_MS, entries };
     return entries;
   }
 
@@ -676,6 +668,7 @@ export class NotificationService {
 
   private clearPublicSnapshotCache(): void {
     this.publicSnapshotCache = undefined;
+    this.publicManifestCache = undefined;
     derivedCacheBudget.clearOwner(this.publicSnapshotCacheOwner);
   }
 
@@ -700,6 +693,7 @@ export class NotificationService {
       .map(change => ({ ...change, collection: publicCollectionForPath(change.path) }))
       .filter((change): change is typeof change & { collection: PublicCollection } => Boolean(change.collection));
     if (relevant.length === 0) return;
+    this.publicManifestCache = undefined;
     const previous = this.publicSnapshotUpdate || Promise.resolve();
     const update = previous.then(async () => {
       for (const change of relevant) await this.updatePublicSnapshot(change.path, change.kind, change.collection);
@@ -795,14 +789,14 @@ export class NotificationService {
     const cached = this.candidateCache.get(key);
     if (cached && cached.expiresAt > Date.now()) {
       derivedCacheBudget.touch(this.candidateCacheOwner, key);
-      return cached.candidates.map(candidate => ({ ...candidate }));
+      return cached.candidates;
     }
     if (cached) {
       this.candidateCache.delete(key);
       derivedCacheBudget.remove(this.candidateCacheOwner, key);
     }
     const running = this.candidateInFlight.get(key);
-    if (running) return (await running).map(candidate => ({ ...candidate }));
+    if (running) return running;
     const computation = this.publicCandidates(principal);
     this.candidateInFlight.set(key, computation);
     try {

@@ -214,6 +214,11 @@ paths. Shared file-stat checks also use a small generation-safe one-second
 cache, immediately evicted when a path changes, which is especially useful on
 NAS-backed vaults without weakening Markdown freshness.
 
+Public discovery snapshot restore and save reuse the catalog stat results and
+a short manifest cache, so the same public file set is not independently
+`stat`-checked by every derived service. Cached notification candidates are
+read-only and reused without creating a per-request clone.
+
 The fair request queue also has a bounded waiting budget. When all lanes are
 busy, a request that cannot start within the queue window is rejected with a
 retryable error and does not remain as an unbounded promise or timer.
