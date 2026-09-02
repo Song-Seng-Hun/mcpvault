@@ -42,6 +42,29 @@ test('Global Hub keeps proposals separate, rejects unsafe paths, and restores to
   expect((await hub.audit()).ok).toBe(true);
 });
 
+test('Global Sync carries signed Wiki provenance through proposals, manifests, and revisions', async () => {
+  const hub = new GlobalSyncHub(hubRoot, { hubId: 'provenance-hub' });
+  const provenance = {
+    evidencePaths: ['_sources/design.md'],
+    sourceIds: ['design-source-v1'],
+    references: ['Knowledge/Read-policy.md'],
+  };
+  const proposal = await hub.submitProposal({
+    documentId: 'Knowledge/Provenance.md',
+    content: '---\nevidence_paths: [_sources/design.md]\n---\nA globally shared claim.\n',
+    author: 'server-a', reason: 'Publish grounded knowledge', origin: 'server-a', provenance,
+  });
+  expect(proposal.provenance).toEqual(provenance);
+  await hub.approveProposal(proposal.proposalId, 'reviewer-a', 'Evidence checked');
+  const accepted = await hub.approveProposal(proposal.proposalId, 'reviewer-b', 'Evidence checked');
+  expect((await hub.getManifest()).entries[0]?.provenance).toEqual(provenance);
+  expect(accepted.revision?.provenance).toEqual(provenance);
+  const revision = await hub.getRevision(accepted.revision!.revisionId);
+  expect(revision.provenance).toEqual(provenance);
+  expect(revision.content).toContain('evidence_paths');
+  expect((await hub.audit()).ok).toBe(true);
+});
+
 test('Global replica never overwrites dirty local work and quarantines remote tombstones', async () => {
   const hub = new GlobalSyncHub(hubRoot);
   const client = {

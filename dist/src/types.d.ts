@@ -116,6 +116,10 @@ export interface SearchResult {
     wk?: true;
     /** Present when this result was found or reinforced by the semantic index. */
     vs?: true;
+    /** Compact explanation of why the result was returned. */
+    why?: string[];
+    /** Freshness of the derived result relative to the Markdown source. */
+    fresh?: 'current' | 'verified';
     /** SHA-256 of the source note, included only when requested by the client. */
     rv?: string;
 }

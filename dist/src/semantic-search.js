@@ -175,6 +175,8 @@ async function resultFromRow(row, vaultPath, includeRevision, vaultIo) {
             uri: generateObsidianUri(vaultPath, row.path),
             ...(row.wiki && { wk: true }),
             vs: true,
+            why: ['semantic_match'],
+            fresh: 'verified',
             ...(includeRevision && { rv: row.hash }),
         };
     }

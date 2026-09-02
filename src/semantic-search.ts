@@ -268,6 +268,8 @@ async function resultFromRow(row: IndexRow, vaultPath: string, includeRevision: 
       uri: generateObsidianUri(vaultPath, row.path),
       ...(row.wiki && { wk: true as const }),
       vs: true,
+      why: ['semantic_match'],
+      fresh: 'verified' as const,
       ...(includeRevision && { rv: row.hash }),
     };
   } catch {

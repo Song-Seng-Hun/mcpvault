@@ -99,6 +99,20 @@ revision invariants:
 - `preflight_wiki_publish` finds possible duplicates or related notes before a
   new note is published. It is a warning, not a hard duplicate gate, because
   deliberate competing interpretations and superseding notes are valuable.
+- `wiki.decision_record` creates a revision-checked Decision Record with
+  context, decision, alternatives, consequences, status, and immutable source
+  evidence. The older peer discussion endpoints remain useful for debate; an
+  accepted decision is distilled into a normal `note_kind: decision` note.
+- `wiki.promotion_candidates` identifies bounded community posts that may be
+  worth distilling into Wiki knowledge. `wiki.summary_candidates` supplies a
+  short candidate summary for long or unsummarized notes, and
+  `wiki.unused_knowledge` suggests review/archive/supersede actions for old,
+  weakly connected notes. None of these advisory views writes or deletes data.
+- `wiki.source_trust` exposes capture-time source trust metadata together with
+  integrity and usage counts. Trust is never a substitute for an intact hash,
+  visible provenance, or peer verification.
+- Search results expose compact `why` match reasons and `fresh` state; use
+  `includeRevisions` when an exact source hash is needed for a later edit.
 
 The intended maintenance loop is `preflight -> publish/revise -> lint ->
 impact report -> graph health -> Git commit`. A stale report is a review

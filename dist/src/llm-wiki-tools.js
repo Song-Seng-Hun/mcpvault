@@ -2,7 +2,7 @@ const prettyPrint = { type: 'boolean', description: 'Format JSON response with i
 const accessToken = { type: 'string', description: 'Token from login_scope. Omit for public global scope only.' };
 const scopeUri = { type: 'string', description: 'Target scope root; defaults to scope://global/. Private scopes require an authorized accessToken.', default: 'scope://global/' };
 export const LLM_WIKI_MUTATING_TOOLS = [
-    'initialize_llm_wiki', 'ingest_source', 'publish_knowledge', 'triage_wiki_note', 'report_wiki_issue', 'resolve_wiki_issue',
+    'initialize_llm_wiki', 'ingest_source', 'publish_knowledge', 'publish_decision_record', 'triage_wiki_note', 'report_wiki_issue', 'resolve_wiki_issue',
 ];
 export function getLlmWikiTools() {
     return [
@@ -21,8 +21,18 @@ export function getLlmWikiTools() {
             description: 'Capture one immutable raw source snapshot. Re-ingesting identical content is idempotent; changed content requires a new sourceId.',
             inputSchema: { type: 'object', properties: {
                     scopeUri, sourceId: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' },
-                    sourceUrl: { type: 'string' }, capturedBy: { type: 'string' }, capturedAt: { type: 'string' }, mediaType: { type: 'string' }, accessToken, prettyPrint,
+                    sourceUrl: { type: 'string' }, capturedBy: { type: 'string' }, capturedAt: { type: 'string' }, mediaType: { type: 'string' }, trustLevel: { type: 'string', enum: ['unrated', 'low', 'medium', 'high', 'verified'], default: 'unrated' }, trustReason: { type: 'string', maxLength: 500 }, accessToken, prettyPrint,
                 }, required: ['title', 'content'] },
+        },
+        {
+            name: 'publish_decision_record',
+            description: 'Create or update a structured Decision Record as an evidence-grounded knowledge note. Record context, the decision, alternatives, consequences, status, and evidence so later agents can audit or supersede it without duplicating Git history.',
+            inputSchema: { type: 'object', properties: {
+                    path: { type: 'string' }, title: { type: 'string' }, context: { type: 'string', maxLength: 4000 }, decision: { type: 'string', maxLength: 4000 },
+                    alternatives: { type: 'array', items: { type: 'string', maxLength: 1000 }, maxItems: 12 }, consequences: { type: 'array', items: { type: 'string', maxLength: 1000 }, maxItems: 12 },
+                    status: { type: 'string', enum: ['proposed', 'accepted', 'rejected', 'superseded'], default: 'proposed' }, evidencePaths: { type: 'array', items: { type: 'string' }, maxItems: 20 }, references: { type: 'array', items: { type: 'string' } },
+                    author: { type: 'string' }, reviewAt: { type: 'string' }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
+                }, required: ['path', 'title', 'context', 'decision', 'evidencePaths', 'expectedRevision'] },
         },
         {
             name: 'publish_knowledge',
@@ -103,6 +113,26 @@ export function getLlmWikiTools() {
             inputSchema: { type: 'object', properties: {
                     path: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' }, limit: { type: 'integer', minimum: 1, maximum: 10, default: 3 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, accessToken, prettyPrint,
                 }, required: ['path', 'content'] },
+        },
+        {
+            name: 'get_wiki_source_trust',
+            description: 'List bounded source snapshots with capture-time trust level, reason, integrity, and evidence usage. Trust is advisory metadata; an intact hash and inspectable provenance remain required.',
+            inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 100, default: 30 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 7000 }, accessToken, prettyPrint } },
+        },
+        {
+            name: 'get_wiki_promotion_candidates',
+            description: 'Return bounded community posts that may deserve promotion into durable Wiki knowledge. This is an advisory candidate list; an agent must verify the post, preserve provenance, and publish a separate knowledge note.',
+            inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 30, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint } },
+        },
+        {
+            name: 'get_wiki_summary_candidates',
+            description: 'Find bounded knowledge notes missing a compact summary or too long for progressive reads, and return a candidate summary for an agent to verify and write.',
+            inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 30, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint } },
+        },
+        {
+            name: 'get_wiki_unused_knowledge',
+            description: 'Suggest bounded review actions for knowledge notes older than a threshold with weak incoming links or references. It never archives or deletes anything automatically.',
+            inputSchema: { type: 'object', properties: { olderThanDays: { type: 'integer', minimum: 1, maximum: 3650, default: 180 }, limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
         },
         {
             name: 'lint_wiki',

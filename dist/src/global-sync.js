@@ -9,6 +9,8 @@ const MAX_REASON_LENGTH = 500;
 const MAX_AUTHOR_LENGTH = 128;
 const MAX_ORIGIN_LENGTH = 128;
 const MAX_IDEMPOTENCY_KEY_LENGTH = 128;
+const MAX_PROVENANCE_ITEMS = 32;
+const MAX_PROVENANCE_VALUE_LENGTH = 500;
 const MAX_TOTAL_PROPOSALS = 100_000;
 const MAX_PENDING_PROPOSALS = 2_000;
 const MAX_PENDING_BYTES = 64 * 1024 * 1024;
@@ -90,6 +92,30 @@ function normalizeIdempotencyKey(value) {
     if (!/^[a-zA-Z0-9._:-]+$/.test(key))
         throw new Error('idempotencyKey contains unsupported characters');
     return key;
+}
+function normalizeProvenance(value) {
+    if (value === undefined)
+        return undefined;
+    if (!isRecord(value))
+        throw new Error('provenance must be an object');
+    const list = (field) => {
+        const raw = value[field];
+        if (raw === undefined)
+            return undefined;
+        if (!Array.isArray(raw))
+            throw new Error(`provenance.${field} must be an array`);
+        return Array.from(new Set(raw.map(item => boundedText(String(item), `provenance.${field}`, MAX_PROVENANCE_VALUE_LENGTH)))).slice(0, MAX_PROVENANCE_ITEMS);
+    };
+    const evidencePaths = list('evidencePaths');
+    const sourceIds = list('sourceIds');
+    const references = list('references');
+    if (!evidencePaths?.length && !sourceIds?.length && !references?.length)
+        return undefined;
+    return {
+        ...(evidencePaths?.length ? { evidencePaths } : {}),
+        ...(sourceIds?.length ? { sourceIds } : {}),
+        ...(references?.length ? { references } : {}),
+    };
 }
 function serializeCredential(credential) {
     if (!credential?.digest)
@@ -507,6 +533,7 @@ export class GlobalSyncHub {
             const author = boundedText(input.author, 'author', MAX_AUTHOR_LENGTH);
             const reason = boundedText(input.reason, 'reason', MAX_REASON_LENGTH);
             const origin = boundedText(input.origin, 'origin', MAX_ORIGIN_LENGTH);
+            const provenance = normalizeProvenance(input.provenance);
             const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
             const current = this.currentRevision(documentId);
             const parentRevision = input.parentRevision || current?.revisionId;
@@ -525,7 +552,7 @@ export class GlobalSyncHub {
             if (idempotencyKey) {
                 const existing = Object.values(this.state.proposals).find(candidate => candidate.origin === origin && candidate.idempotencyKey === idempotencyKey);
                 if (existing) {
-                    if (existing.documentId !== documentId || (input.parentRevision !== undefined && existing.parentRevision !== parentRevision) || existing.operation !== operation || existing.contentHash !== contentHash || existing.byteLength !== byteLength || existing.author !== author || existing.reason !== reason)
+                    if (existing.documentId !== documentId || (input.parentRevision !== undefined && existing.parentRevision !== parentRevision) || existing.operation !== operation || existing.contentHash !== contentHash || existing.byteLength !== byteLength || existing.author !== author || existing.reason !== reason || JSON.stringify(existing.provenance) !== JSON.stringify(provenance))
                         throw new Error('idempotencyKey was already used for a different proposal');
                     return existing;
                 }
@@ -550,6 +577,7 @@ export class GlobalSyncHub {
                 author,
                 reason,
                 origin,
+                ...(provenance && { provenance }),
                 ...(idempotencyKey && { idempotencyKey }),
                 createdAt: new Date().toISOString(),
                 status: 'pending',
@@ -570,7 +598,7 @@ export class GlobalSyncHub {
             hubId: this.hubId,
             cursor: bounded.at(-1)?.sequence || cursor,
             latestSequence: this.state.nextSequence,
-            entries: bounded.map(revision => ({ documentId: revision.documentId, revisionId: revision.revisionId, sequence: revision.sequence, ...(revision.parentRevision && { parentRevision: revision.parentRevision }), operation: revision.operation, ...(revision.contentHash && { contentHash: revision.contentHash }) })),
+            entries: bounded.map(revision => ({ documentId: revision.documentId, revisionId: revision.revisionId, sequence: revision.sequence, ...(revision.parentRevision && { parentRevision: revision.parentRevision }), operation: revision.operation, ...(revision.contentHash && { contentHash: revision.contentHash }), ...(revision.provenance && { provenance: revision.provenance }) })),
             hasMore: revisions.length > bounded.length,
         };
         return { ...unsignedManifest, signature: signPayload(unsignedManifest, this.signingPrivateKey) };
@@ -632,6 +660,7 @@ export class GlobalSyncHub {
                 author: proposal.author,
                 reason: boundedText(reason || proposal.reason, 'decision reason', MAX_REASON_LENGTH),
                 origin: proposal.origin,
+                ...(proposal.provenance && { provenance: proposal.provenance }),
                 createdAt: new Date().toISOString(),
             };
             const revision = { ...unsignedRevision, signature: signPayload(unsignedRevision, this.signingPrivateKey) };
@@ -673,6 +702,7 @@ export class GlobalSyncHub {
                 author: boundedText(reviewer, 'reviewer', MAX_AUTHOR_LENGTH),
                 reason: boundedText(reason, 'reason', MAX_REASON_LENGTH),
                 origin: this.hubId,
+                ...(target.provenance && { provenance: target.provenance }),
                 createdAt: new Date().toISOString(),
             };
             const revision = { ...unsignedRevision, signature: signPayload(unsignedRevision, this.signingPrivateKey) };

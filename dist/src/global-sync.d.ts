@@ -14,6 +14,7 @@ export interface GlobalRevision {
     author: string;
     reason: string;
     origin: string;
+    provenance?: GlobalProvenance;
     createdAt: string;
     signature: string;
 }
@@ -24,6 +25,12 @@ export interface GlobalManifestEntry {
     parentRevision?: string;
     operation: GlobalSyncOperation;
     contentHash?: string;
+    provenance?: GlobalProvenance;
+}
+export interface GlobalProvenance {
+    evidencePaths?: string[];
+    sourceIds?: string[];
+    references?: string[];
 }
 export interface GlobalManifest {
     protocol: typeof PROTOCOL;
@@ -47,6 +54,7 @@ export interface GlobalProposal {
     author: string;
     reason: string;
     origin: string;
+    provenance?: GlobalProvenance;
     idempotencyKey?: string;
     createdAt: string;
     status: GlobalProposalStatus;
@@ -81,6 +89,7 @@ export interface GlobalSyncChangeInput {
     author: string;
     reason: string;
     origin: string;
+    provenance?: GlobalProvenance;
     idempotencyKey?: string;
 }
 export declare function generateGlobalSyncSigningKeyPair(): {

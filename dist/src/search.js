@@ -1122,6 +1122,13 @@ export class SearchService {
             ln: lineNumber,
             uri: generateObsidianUri(this.vaultPath, document.relativePath),
             ...(document.isWiki && { wk: true }),
+            why: [
+                ...(document.isWiki ? ['wiki_priority'] : []),
+                ...(candidate.filenameMatch ? ['title_match'] : []),
+                ...(candidate.firstIndex !== -1 && searchFrontmatter && candidate.firstIndex < (document.frontmatterText || '').length ? ['frontmatter_match'] : []),
+                ...(candidate.firstIndex !== -1 && (!searchFrontmatter || candidate.firstIndex >= (document.frontmatterText || '').length) ? ['content_match'] : []),
+            ],
+            fresh: 'current',
             ...(includeRevision && { rv: document.revision }),
         };
     }

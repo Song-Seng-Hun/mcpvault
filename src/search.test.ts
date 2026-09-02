@@ -295,6 +295,15 @@ describe("SearchService", () => {
     expect(results[0]!.rv).toMatch(/^[a-f0-9]{64}$/);
   });
 
+  test("explains lexical match reasons and freshness", async () => {
+    await writeNote("reason.md", "---\ntags: [reason]\n---\n# Reason\n\nThe target is in content.");
+
+    const results = await searchService.search({ query: "target", limit: 10 });
+
+    expect(results[0]!.why).toContain("content_match");
+    expect(results[0]!.fresh).toBe("current");
+  });
+
   test("excerpt contains context around match", async () => {
     await writeNote("note.md", "# Note\n\nSome words before target some words after.");
 

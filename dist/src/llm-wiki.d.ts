@@ -2,6 +2,7 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ReferenceService } from './references.js';
+export declare const SOURCE_TRUST_LEVELS: readonly ['unrated', 'low', 'medium', 'high', 'verified'];
 export interface WikiCatalogOptions {
     summaryOnly?: boolean;
     noteKind?: string;
@@ -57,6 +58,8 @@ export declare class LlmWikiService {
         capturedBy: string;
         capturedAt?: string;
         mediaType?: string;
+        trustLevel?: string;
+        trustReason?: string;
     }): Promise<{
         success: boolean;
         created: boolean;
@@ -191,6 +194,49 @@ export declare class LlmWikiService {
         candidates: Record<string, unknown>[];
         recommendation: string;
         truncated: boolean;
+    }>;
+    publishDecisionRecord(params: {
+        principal?: ScopePrincipal;
+        path: string;
+        title: string;
+        context: string;
+        decision: string;
+        alternatives?: unknown;
+        consequences?: unknown;
+        status?: string;
+        evidencePaths: string[];
+        references?: unknown;
+        author: string;
+        reviewAt?: string;
+        expectedRevision: string;
+    }): Promise<{
+        success: boolean;
+        created: boolean;
+        path: string;
+        evidencePaths: string[];
+        claims?: Record<string, unknown>[];
+        revision: string;
+    }>;
+    sourceTrust(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        items: Record<string, unknown>[];
+        total: number;
+        truncated: boolean;
+    }>;
+    promotionCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        items: Record<string, unknown>[];
+        total: number;
+        truncated: boolean;
+    }>;
+    summaryCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        items: Record<string, unknown>[];
+        total: number;
+        truncated: boolean;
+    }>;
+    unusedKnowledge(principal?: ScopePrincipal, olderThanDays?: number, limit?: number, maxChars?: number): Promise<{
+        items: Record<string, unknown>[];
+        total: number;
+        truncated: boolean;
+        olderThanDays: number;
     }>;
     orient(principal?: ScopePrincipal): Promise<{
         protocol: string;

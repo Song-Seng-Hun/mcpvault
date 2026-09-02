@@ -36,6 +36,7 @@ const EXPLICIT_IDS = {
     search_scoped_notes: 'wiki.search_scoped',
     comment_on_blog_post: 'community.comment',
     publish_blog_post: 'community.post',
+    publish_decision_record: 'wiki.decision_record',
     delete_blog_post: 'community.post_delete',
     list_blog_posts: 'community.posts',
     read_blog_post: 'community.post_read',
@@ -56,6 +57,10 @@ const EXPLICIT_IDS = {
     get_wiki_impact_report: 'wiki.impact_report',
     get_wiki_graph_health: 'wiki.graph_health',
     preflight_wiki_publish: 'wiki.preflight',
+    get_wiki_source_trust: 'wiki.source_trust',
+    get_wiki_promotion_candidates: 'wiki.promotion_candidates',
+    get_wiki_summary_candidates: 'wiki.summary_candidates',
+    get_wiki_unused_knowledge: 'wiki.unused_knowledge',
     read_context: 'context.read',
     save_work_state: 'continuity.save',
     resume_work_state: 'continuity.resume',
@@ -71,6 +76,7 @@ const EXPLICIT_ROUTES = {
     search_notes: { method: 'GET', url: '/api/search' },
     search_scoped_notes: { method: 'GET', url: '/api/search/scoped' },
     publish_blog_post: { method: 'POST', url: '/api/community/posts' },
+    publish_decision_record: { method: 'POST', url: '/api/wiki/decision-record' },
     delete_blog_post: { method: 'POST', url: '/api/community/posts/{slug}/delete' },
     list_blog_posts: { method: 'GET', url: '/api/community/posts' },
     read_blog_post: { method: 'GET', url: '/api/community/posts/{slug}' },
@@ -93,6 +99,10 @@ const EXPLICIT_ROUTES = {
     get_wiki_impact_report: { method: 'GET', url: '/api/wiki/impact' },
     get_wiki_graph_health: { method: 'GET', url: '/api/wiki/graph-health' },
     preflight_wiki_publish: { method: 'GET', url: '/api/wiki/preflight' },
+    get_wiki_source_trust: { method: 'GET', url: '/api/wiki/source-trust' },
+    get_wiki_promotion_candidates: { method: 'GET', url: '/api/wiki/promotion-candidates' },
+    get_wiki_summary_candidates: { method: 'GET', url: '/api/wiki/summary-candidates' },
+    get_wiki_unused_knowledge: { method: 'GET', url: '/api/wiki/unused-knowledge' },
 };
 const ENDPOINT_ALIASES = {
     publish_blog_post: ['community', 'post', 'agora', 'debate', 'topic', 'introduction', 'feedback', 'forum', 'blocked', 'help request', 'source code', 'improvement'],
@@ -120,6 +130,11 @@ const ENDPOINT_ALIASES = {
     get_wiki_impact_report: ['wiki', 'impact', 'stale', 'freshness', 'evidence', 'changed source', 'dependencies'],
     get_wiki_graph_health: ['wiki', 'graph', 'health', 'orphan', 'broken link', 'moc', 'navigation'],
     preflight_wiki_publish: ['wiki', 'duplicate', 'similar', 'conflict', 'preflight', 'related note'],
+    publish_decision_record: ['wiki', 'decision', 'decision record', 'adr', 'architecture', 'choice'],
+    get_wiki_source_trust: ['wiki', 'source', 'trust', 'provenance', 'reliability'],
+    get_wiki_promotion_candidates: ['wiki', 'community', 'promote', 'promotion', 'candidate', 'knowledge'],
+    get_wiki_summary_candidates: ['wiki', 'summary', 'summarize', 'projection', 'long note'],
+    get_wiki_unused_knowledge: ['wiki', 'unused', 'old', 'stale', 'archive', 'cleanup', 'maintenance'],
 };
 export function endpointIdForTool(toolName) {
     return EXPLICIT_IDS[toolName] || `mcp.${toolName}`;
