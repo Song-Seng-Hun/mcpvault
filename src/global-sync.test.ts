@@ -190,3 +190,55 @@ test('Global Hub supports administrator credential rotation, expiry metadata, an
     await handle.close();
   }
 });
+
+test('Global Hub persists credential revocations and rotations without storing tokens', async () => {
+  const firstHandle = await startGlobalSyncHub(hubRoot, {
+    authToken: 'proposer-old',
+    reviewerToken: 'reviewer-a-old',
+    reviewerTokens: { 'reviewer-b': 'reviewer-b-old' },
+    adminToken: 'admin-secret',
+  });
+  const firstBaseUrl = `http://${firstHandle.host}:${firstHandle.port}`;
+  const proposer = new GlobalSyncClient({ baseUrl: firstBaseUrl, authToken: 'proposer-old' });
+  const reviewerA = new GlobalSyncClient({ baseUrl: firstBaseUrl, authToken: 'proposer-old', reviewerToken: 'reviewer-a-old' });
+  const admin = new GlobalSyncClient({ baseUrl: firstBaseUrl, authToken: 'proposer-old', adminToken: 'admin-secret' });
+  const proposal = await proposer.submitProposal({ documentId: 'Knowledge/PersistedCredentials.md', content: 'persisted\n', author: 'server-a', reason: 'test', origin: 'server-a' });
+  expect((await reviewerA.approveProposal(proposal.proposalId, 'ignored', 'checked')).status).toBe('pending');
+  await admin.rotateCredential({ kind: 'reviewer', reviewerId: 'reviewer-b', token: 'reviewer-b-new' });
+  await admin.revokeCredential('proposer');
+  await firstHandle.close();
+
+  const secondHandle = await startGlobalSyncHub(hubRoot, {
+    authToken: 'proposer-old',
+    reviewerToken: 'reviewer-a-old',
+    reviewerTokens: { 'reviewer-b': 'reviewer-b-old' },
+    adminToken: 'admin-secret',
+  });
+  try {
+    const secondBaseUrl = `http://${secondHandle.host}:${secondHandle.port}`;
+    const oldProposer = new GlobalSyncClient({ baseUrl: secondBaseUrl, authToken: 'proposer-old' });
+    const oldReviewerB = new GlobalSyncClient({ baseUrl: secondBaseUrl, authToken: 'proposer-old', reviewerToken: 'reviewer-b-old' });
+    const newReviewerB = new GlobalSyncClient({ baseUrl: secondBaseUrl, authToken: 'proposer-old', reviewerToken: 'reviewer-b-new' });
+    const restartedAdmin = new GlobalSyncClient({ baseUrl: secondBaseUrl, authToken: 'proposer-old', adminToken: 'admin-secret' });
+    await expect(oldProposer.submitProposal({ documentId: 'Knowledge/ShouldStayRevoked.md', content: 'nope\n', author: 'server-a', reason: 'test', origin: 'server-a' })).rejects.toThrow('Unauthorized');
+    await expect(oldReviewerB.approveProposal(proposal.proposalId, 'ignored', 'checked')).rejects.toThrow('Unauthorized');
+    expect((await newReviewerB.approveProposal(proposal.proposalId, 'ignored', 'checked')).status).toBe('approved');
+    await restartedAdmin.rotateCredential({ kind: 'proposer', token: 'proposer-new' });
+    const newProposer = new GlobalSyncClient({ baseUrl: secondBaseUrl, authToken: 'proposer-new' });
+    await expect(newProposer.submitProposal({ documentId: 'Knowledge/AfterRestart.md', content: 'works\n', author: 'server-a', reason: 'test', origin: 'server-a' })).resolves.toMatchObject({ status: 'pending' });
+    const credentialState = await readFile(join(hubRoot, 'credentials.json'), 'utf8');
+    expect(credentialState).not.toContain('proposer-old');
+    expect(credentialState).not.toContain('reviewer-b-new');
+    const auditLines = (await readFile(join(hubRoot, 'credential-audit.ndjson'), 'utf8')).trim().split(/\r?\n/);
+    expect(auditLines).toHaveLength(3);
+    expect(auditLines.join('\n')).not.toMatch(/proposer-old|reviewer-b-new|admin-secret/);
+  } finally {
+    await secondHandle.close();
+  }
+});
+
+test('Global Sync rejects control characters in signed identity metadata', async () => {
+  const hub = new GlobalSyncHub(hubRoot);
+  await expect(hub.submitProposal({ documentId: 'Knowledge/Safe.md', content: 'safe\n', author: 'agent\nforged', reason: 'test', origin: 'server-a' })).rejects.toThrow('control characters');
+  await expect(hub.submitProposal({ documentId: 'Knowledge/Safe.md', content: 'safe\n', author: 'agent', reason: 'test\u0000', origin: 'server-a' })).rejects.toThrow('control characters');
+});

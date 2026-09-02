@@ -1,7 +1,7 @@
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, randomUUID, sign, timingSafeEqual, verify } from 'node:crypto';
 import { createServer as createHttpServer } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
-import { copyFile, mkdir, open, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { appendFile, copyFile, mkdir, open, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 const PROTOCOL = 'mcpvault-global-sync/v1';
 const MAX_DOCUMENT_BYTES = 1_048_576;
@@ -73,6 +73,8 @@ function boundedText(value, field, max) {
     const text = String(value || '').trim();
     if (!text || text.length > max)
         throw new Error(`${field} is required and must be at most ${max} characters`);
+    if (/[\u0000-\u001f\u007f]/.test(text))
+        throw new Error(`${field} contains unsupported control characters`);
     return text;
 }
 function normalizeIdempotencyKey(value) {
@@ -82,6 +84,55 @@ function normalizeIdempotencyKey(value) {
     if (!/^[a-zA-Z0-9._:-]+$/.test(key))
         throw new Error('idempotencyKey contains unsupported characters');
     return key;
+}
+function serializeCredential(credential) {
+    if (!credential?.digest)
+        return undefined;
+    return { digest: credential.digest.toString('base64url'), ...(credential.expiresAt !== undefined && { expiresAt: credential.expiresAt }) };
+}
+function deserializeCredential(value, field) {
+    if (!isRecord(value) || typeof value.digest !== 'string')
+        throw new Error(`${field} is invalid`);
+    const digest = Buffer.from(value.digest, 'base64url');
+    if (digest.byteLength !== 32)
+        throw new Error(`${field}.digest is invalid`);
+    const expiresAt = value.expiresAt;
+    if (expiresAt !== undefined && (typeof expiresAt !== 'number' || !Number.isSafeInteger(expiresAt) || expiresAt <= 0))
+        throw new Error(`${field}.expiresAt is invalid`);
+    return { digest, ...(typeof expiresAt === 'number' && { expiresAt }) };
+}
+function serializeCredentialStore(authCredential, reviewerTokens, adminCredential) {
+    const reviewers = {};
+    for (const [reviewerId, credential] of reviewerTokens) {
+        const serialized = serializeCredential(credential);
+        if (serialized)
+            reviewers[reviewerId] = serialized;
+    }
+    const proposer = serializeCredential(authCredential);
+    const admin = serializeCredential(adminCredential);
+    return { version: 1, reviewers, ...(proposer ? { proposer } : {}), ...(admin ? { admin } : {}) };
+}
+async function loadCredentialStore(path) {
+    try {
+        const parsed = JSON.parse(await readFile(path, 'utf8'));
+        if (!isRecord(parsed) || parsed.version !== 1 || !isRecord(parsed.reviewers))
+            throw new Error('credential state has an unsupported format');
+        const reviewers = {};
+        for (const [reviewerId, value] of Object.entries(parsed.reviewers)) {
+            if (!/^[a-z0-9][a-z0-9._-]{0,127}$/.test(reviewerId))
+                throw new Error('credential state contains an invalid reviewer id');
+            const credential = deserializeCredential(value, `reviewers.${reviewerId}`);
+            reviewers[reviewerId] = serializeCredential(credential);
+        }
+        const proposer = parsed.proposer === undefined ? undefined : serializeCredential(deserializeCredential(parsed.proposer, 'proposer'));
+        const admin = parsed.admin === undefined ? undefined : serializeCredential(deserializeCredential(parsed.admin, 'admin'));
+        return { version: 1, ...(proposer && { proposer }), reviewers, ...(admin && { admin }) };
+    }
+    catch (error) {
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
+            return undefined;
+        throw error;
+    }
 }
 function normalizeExpiry(value, field) {
     if (value === undefined || value === null || value === '')
@@ -791,6 +842,16 @@ function sendJson(response, status, value) {
     response.setHeader('cache-control', 'no-store');
     response.end(body);
 }
+async function appendCredentialAudit(path, action, kind, reviewerId) {
+    await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+    const entry = {
+        timestamp: new Date().toISOString(),
+        action,
+        kind,
+        ...(reviewerId && { reviewerId }),
+    };
+    await appendFile(path, `${JSON.stringify(entry)}\n`, { encoding: 'utf8', mode: 0o600 });
+}
 function pathParam(pathname, prefix) {
     return pathname.startsWith(prefix) ? decodeURIComponent(pathname.slice(prefix.length).replace(/^\/+/, '')) : undefined;
 }
@@ -834,8 +895,51 @@ export async function startGlobalSyncHub(root, options) {
             credential.expiresAt = expiry;
         reviewerTokens.set(id, credential);
     }
+    const credentialStatePath = resolve(options.credentialStatePath || join(resolve(root), 'credentials.json'));
+    const credentialAuditPath = resolve(options.credentialAuditPath || join(resolve(root), 'credential-audit.ndjson'));
+    const persistCredentialState = async () => {
+        await writeAtomic(credentialStatePath, `${JSON.stringify(serializeCredentialStore(authCredential, reviewerTokens, adminCredential), null, 2)}\n`);
+    };
+    const persistedCredentials = await loadCredentialStore(credentialStatePath);
+    if (persistedCredentials) {
+        if (persistedCredentials.proposer) {
+            const restored = deserializeCredential(persistedCredentials.proposer, 'proposer');
+            authCredential.digest = restored.digest;
+            if (restored.expiresAt === undefined)
+                delete authCredential.expiresAt;
+            else
+                authCredential.expiresAt = restored.expiresAt;
+        }
+        else {
+            delete authCredential.digest;
+            delete authCredential.expiresAt;
+        }
+        reviewerTokens.clear();
+        for (const [reviewerId, credential] of Object.entries(persistedCredentials.reviewers))
+            reviewerTokens.set(reviewerId, deserializeCredential(credential, `reviewers.${reviewerId}`));
+        if (persistedCredentials.admin)
+            adminCredential = deserializeCredential(persistedCredentials.admin, 'admin');
+        else
+            adminCredential = undefined;
+    }
+    else {
+        await persistCredentialState();
+    }
+    const activeCredentialDigests = [];
+    if (authCredential.digest)
+        activeCredentialDigests.push(authCredential.digest);
+    if (adminCredential?.digest)
+        activeCredentialDigests.push(adminCredential.digest);
+    for (const credential of reviewerTokens.values())
+        if (credential.digest)
+            activeCredentialDigests.push(credential.digest);
+    if (new Set(activeCredentialDigests.map(digest => digest.toString('base64url'))).size !== activeCredentialDigests.length)
+        throw new Error('credential state contains duplicate active credentials');
     const signingKeyPath = resolve(options.signingKeyPath || join(resolve(root), 'signing-key.pem'));
-    const proposerOrigin = options.proposerOrigin ? boundedText(options.proposerOrigin, 'proposerOrigin', MAX_ORIGIN_LENGTH) : undefined;
+    // HTTP callers must never be able to choose the command-center origin by
+    // putting a different value in the proposal JSON. A library caller may
+    // explicitly configure it; otherwise bind it to the configured hub id.
+    const proposerOrigin = boundedText(options.proposerOrigin || options.hubId || 'global-hub', 'proposerOrigin', MAX_ORIGIN_LENGTH).toLowerCase();
     let signingPrivateKey;
     try {
         signingPrivateKey = await readFile(signingKeyPath, 'utf8');
@@ -902,7 +1006,7 @@ export async function startGlobalSyncHub(root, options) {
         }
         return false;
     };
-    const rotateCredential = (body) => {
+    const rotateCredential = async (body) => {
         const kind = body.kind;
         if (kind !== 'proposer' && kind !== 'reviewer' && kind !== 'admin')
             throw new Error('kind must be proposer, reviewer, or admin');
@@ -916,6 +1020,10 @@ export async function startGlobalSyncHub(root, options) {
         if (sameAsConfiguredCredential(digest, reviewerId))
             throw new Error('token must be unique across active credentials');
         const expiresAt = normalizeExpiry(body.expiresAt, 'expiresAt');
+        const previousAuthDigest = authCredential.digest;
+        const previousAuthExpiry = authCredential.expiresAt;
+        const previousReviewers = new Map(reviewerTokens);
+        const previousAdmin = adminCredential;
         if (kind === 'proposer') {
             authCredential.digest = digest;
             if (expiresAt === undefined)
@@ -929,15 +1037,39 @@ export async function startGlobalSyncHub(root, options) {
         else {
             adminCredential = { digest, ...(expiresAt !== undefined && { expiresAt }) };
         }
+        try {
+            await persistCredentialState();
+        }
+        catch (error) {
+            if (previousAuthDigest)
+                authCredential.digest = previousAuthDigest;
+            else
+                delete authCredential.digest;
+            if (previousAuthExpiry === undefined)
+                delete authCredential.expiresAt;
+            else
+                authCredential.expiresAt = previousAuthExpiry;
+            reviewerTokens.clear();
+            for (const [reviewerId, credential] of previousReviewers)
+                reviewerTokens.set(reviewerId, credential);
+            adminCredential = previousAdmin;
+            throw error;
+        }
+        await appendCredentialAudit(credentialAuditPath, 'rotate', kind, reviewerId);
     };
-    const revokeCredential = (body) => {
+    const revokeCredential = async (body) => {
         const kind = body.kind;
+        const previousAuthDigest = authCredential.digest;
+        const previousAuthExpiry = authCredential.expiresAt;
+        const previousReviewers = new Map(reviewerTokens);
+        const previousAdmin = adminCredential;
+        let reviewerId;
         if (kind === 'proposer') {
             delete authCredential.digest;
             delete authCredential.expiresAt;
         }
         else if (kind === 'reviewer') {
-            const reviewerId = boundedText(String(body.reviewerId || ''), 'reviewerId', MAX_AUTHOR_LENGTH);
+            reviewerId = boundedText(String(body.reviewerId || ''), 'reviewerId', MAX_AUTHOR_LENGTH);
             if (!reviewerTokens.delete(reviewerId))
                 throw new Error('reviewer credential not found');
         }
@@ -946,6 +1078,38 @@ export async function startGlobalSyncHub(root, options) {
         }
         else {
             throw new Error('kind must be proposer, reviewer, or admin');
+        }
+        try {
+            await persistCredentialState();
+        }
+        catch (error) {
+            if (previousAuthDigest)
+                authCredential.digest = previousAuthDigest;
+            else
+                delete authCredential.digest;
+            if (previousAuthExpiry === undefined)
+                delete authCredential.expiresAt;
+            else
+                authCredential.expiresAt = previousAuthExpiry;
+            reviewerTokens.clear();
+            for (const [previousReviewerId, credential] of previousReviewers)
+                reviewerTokens.set(previousReviewerId, credential);
+            adminCredential = previousAdmin;
+            throw error;
+        }
+        await appendCredentialAudit(credentialAuditPath, 'revoke', kind, reviewerId);
+    };
+    let credentialMutationTail = Promise.resolve();
+    const withCredentialMutation = async (task) => {
+        const previous = credentialMutationTail;
+        let release;
+        credentialMutationTail = new Promise(resolvePromise => { release = resolvePromise; });
+        await previous;
+        try {
+            await task();
+        }
+        finally {
+            release();
         }
     };
     const requestHandler = async (request, response) => {
@@ -964,10 +1128,7 @@ export async function startGlobalSyncHub(root, options) {
                     return;
                 }
                 const body = await jsonBody(request, maxBodyBytes);
-                if (url.pathname.endsWith('/rotate'))
-                    rotateCredential(body);
-                else
-                    revokeCredential(body);
+                await withCredentialMutation(() => url.pathname.endsWith('/rotate') ? rotateCredential(body) : revokeCredential(body));
                 sendJson(response, 200, { ok: true });
                 return;
             }

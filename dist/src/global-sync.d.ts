@@ -213,6 +213,10 @@ export interface GlobalSyncHubHttpOptions {
     maxBodyBytes?: number;
     hubId?: string;
     signingKeyPath?: string;
+    /** Path for the local credential-digest state. Plaintext tokens are never written. */
+    credentialStatePath?: string;
+    /** Path for metadata-only administrator rotation/revocation events. */
+    credentialAuditPath?: string;
     proposerOrigin?: string;
     tls?: {
         key: string;

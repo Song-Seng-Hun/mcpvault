@@ -1423,7 +1423,17 @@ metadata is rejected.
 An optional `adminToken` enables the credential endpoints
 `/v1/global/credentials/rotate` and `/v1/global/credentials/revoke`. They can
 rotate or immediately revoke proposer, reviewer, and admin credentials without
-restarting the process; only credential digests are retained in memory. Set
+restarting the process. The resulting credential state is also persisted at
+`credentials.json` below the hub storage root (or the path supplied through
+`MCPVAULT_GLOBAL_SYNC_CREDENTIAL_STATE_PATH`); it contains only SHA-256
+digests and expiry timestamps, never plaintext tokens. This makes revocation
+and rotation survive a hub restart. An existing state file is authoritative,
+so changing an environment variable does not silently resurrect a revoked
+credential; use the admin rotation endpoint or an explicit operator-managed
+state migration. Successful admin rotations and revocations are recorded as
+metadata-only entries in `credential-audit.ndjson` (or
+`MCPVAULT_GLOBAL_SYNC_CREDENTIAL_AUDIT_PATH`), without tokens or request
+bodies. Protect both files with owner-only permissions/ACLs. Set
 `MCPVAULT_GLOBAL_SYNC_ADMIN_TOKEN` for the standalone CLI. Expiry timestamps
 are accepted for initial credentials and rotations.
 
@@ -1447,10 +1457,10 @@ mTLS whenever the hub is not on the same machine. User, Community, `_scopes`,
 `_whispers`, `.mcpvault`, and Git state are rejected at the document boundary.
 The local MCPVault server remains fully usable when the hub is offline;
 synchronization is an explicit pull/propose operation rather than a hidden
-dependency. Set `MCPVAULT_GLOBAL_SYNC_ORIGIN` to bind the HTTP proposer's
-command-center identity instead of trusting the request body's `origin` field;
-the standalone CLI falls back to its configured hub ID when this variable is
-omitted.
+dependency. Set `MCPVAULT_GLOBAL_SYNC_ORIGIN` to choose the HTTP proposer's
+command-center identity. If it is omitted, the adapter binds `origin` to the
+configured hub ID, so a proposal body cannot impersonate another command
+center.
 
 For a standalone hub process, build the package, set
 `MCPVAULT_GLOBAL_SYNC_AUTH_TOKEN` and
