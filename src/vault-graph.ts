@@ -231,6 +231,29 @@ export class VaultGraphIndex {
     return { target, backlinks, total, truncated: total > backlinks.length };
   }
 
+  async getOutlinks(path: string, limit: number, canAccessPath: (path: string) => boolean): Promise<{ source: string; outlinks: OutlinkMatch[]; total: number; truncated: boolean }> {
+    await this.ensure();
+    const source = normalizePath(path);
+    const entry = this.entries.get(source);
+    if (!entry) throw new Error(`File not found: ${source}`);
+    if (!canAccessPath(source)) throw new Error(`Access denied: ${source}`);
+
+    const visible = this.visibilityContext(canAccessPath);
+    const allResolver = buildResolver([...this.allPaths]);
+    const outlinks = entry.links.filter(link => {
+      if (/^scope:\/\/(?:model|agent|user)\//i.test(link.target.trim())) return false;
+      const anyMatches = resolveTargets(link.target, allResolver);
+      if (anyMatches.length === 0) return true;
+      return resolveTargets(link.target, visible.resolver).length > 0;
+    });
+    return {
+      source,
+      outlinks: outlinks.slice(0, limit),
+      total: outlinks.length,
+      truncated: outlinks.length > limit,
+    };
+  }
+
   async findUnresolvedLinks(limit: number, canAccessPath: (path: string) => boolean): Promise<UnresolvedLinksResult> {
     await this.ensure();
     const { paths: visiblePaths, pathSet: visible, resolver } = this.visibilityContext(canAccessPath);

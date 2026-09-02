@@ -1541,6 +1541,8 @@ export class FileSystemService {
     }
     if (!canAccessPath(source)) throw new Error(`Access denied: ${source}`);
 
+    if (this.graphIndex) return this.graphIndex.getOutlinks(source, limit, canAccessPath);
+
     const note = await this.readNote(source);
     const allOutlinks = extractWikiLinkOccurrences(note.originalContent);
     // Outlinks are raw authoring data, but a public note must not disclose
