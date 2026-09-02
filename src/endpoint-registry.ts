@@ -76,6 +76,13 @@ const EXPLICIT_IDS: Record<string, string> = {
   list_notifications: 'notifications.list',
   mark_notifications_read: 'notifications.mark_read',
   semantic_search_status: 'wiki.semantic_status',
+  get_wiki_review_queue: 'wiki.review_queue',
+  get_wiki_inbox: 'wiki.inbox',
+  triage_wiki_note: 'wiki.triage',
+  read_wiki_projection: 'wiki.read_projection',
+  get_wiki_impact_report: 'wiki.impact_report',
+  get_wiki_graph_health: 'wiki.graph_health',
+  preflight_wiki_publish: 'wiki.preflight',
   read_context: 'context.read',
   save_work_state: 'continuity.save',
   resume_work_state: 'continuity.resume',
@@ -107,6 +114,13 @@ const EXPLICIT_ROUTES: Record<string, { method: 'GET' | 'POST'; url: string }> =
   resume_work_state: { method: 'GET', url: '/api/continuity' },
   save_work_state: { method: 'POST', url: '/api/continuity' },
   list_notifications: { method: 'GET', url: '/api/notifications' },
+  get_wiki_review_queue: { method: 'GET', url: '/api/wiki/review-queue' },
+  get_wiki_inbox: { method: 'GET', url: '/api/wiki/inbox' },
+  triage_wiki_note: { method: 'POST', url: '/api/wiki/triage' },
+  read_wiki_projection: { method: 'GET', url: '/api/wiki/projection' },
+  get_wiki_impact_report: { method: 'GET', url: '/api/wiki/impact' },
+  get_wiki_graph_health: { method: 'GET', url: '/api/wiki/graph-health' },
+  preflight_wiki_publish: { method: 'GET', url: '/api/wiki/preflight' },
 };
 
 const ENDPOINT_ALIASES: Record<string, string[]> = {
@@ -128,6 +142,13 @@ const ENDPOINT_ALIASES: Record<string, string[]> = {
   read_references: ['reference', 'citation', 'evidence', 'wikilink'],
   list_blog_series: ['series', 'chapters', 'episodes'],
   list_author_activity: ['author', 'profile', 'activity', 'posts by user'],
+  get_wiki_review_queue: ['wiki', 'knowledge', 'review', 'due', 'stale', 'evidence', 'inbox'],
+  get_wiki_inbox: ['wiki', 'inbox', 'capture', 'unprocessed', 'triage'],
+  triage_wiki_note: ['wiki', 'triage', 'classify', 'organize', 'para', 'lifecycle'],
+  read_wiki_projection: ['wiki', 'read', 'summary', 'key points', 'outline', 'section', 'progressive', 'context'],
+  get_wiki_impact_report: ['wiki', 'impact', 'stale', 'freshness', 'evidence', 'changed source', 'dependencies'],
+  get_wiki_graph_health: ['wiki', 'graph', 'health', 'orphan', 'broken link', 'moc', 'navigation'],
+  preflight_wiki_publish: ['wiki', 'duplicate', 'similar', 'conflict', 'preflight', 'related note'],
 };
 
 export function endpointIdForTool(toolName: string): string {

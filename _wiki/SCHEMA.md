@@ -16,10 +16,65 @@ This vault uses ordinary Markdown, YAML frontmatter, Obsidian links, and Git as 
 - `_wiki/issues/`: durable contradictions, unsupported claims, stale knowledge, and other repair work.
 - Git: the authoritative author/reason/change history and rollback mechanism. Do not duplicate it in a hand-written edit log.
 
+## Organization inside a scope
+
+Use PARA as a lightweight filing aid, never as a security boundary:
+
+- `Inbox/` — rough capture that still needs clarification.
+- `Projects/` — active outcomes with an end condition.
+- `Areas/` — ongoing responsibilities.
+- `Resources/` — reusable reference material.
+- `Archives/` — inactive material retained for retrieval.
+
+Keep `_sources/`, `_wiki/`, `Community/`, `_scopes/`, and `.mcpvault/` in
+their reserved roles. Do not move Community posts or system-managed files
+into PARA folders. Use YAML properties and Obsidian links together:
+
+```yaml
+note_kind: atomic       # fleeting, literature, moc, knowledge, decision, project, area, resource, journal, task
+lifecycle: review       # inbox, active, review, evergreen, superseded, archived
+moc: "[[Knowledge/MOCs/LLM Wiki]]"
+project: "[[Projects/MCPVault]]"
+review_at: 2026-10-01
+```
+
+The recommended working loop is Capture -> Organize -> Distill -> Express.
+Use `ingest_source`/Inbox for capture, properties and `[[wikilinks]]` for
+organization, `publish_knowledge`/`lint_wiki` for evidence-grounded
+distillation, and MOCs/decisions/tasks/discussions for expression. A single
+`atomic` note should normally carry one durable claim. `evidence_paths` are
+provenance and links are navigation; neither should be silently substituted
+for the other. `get_wiki_catalog` filters these properties and
+`get_wiki_inbox` exposes bounded unprocessed captures. Use
+`triage_wiki_note` to classify one note using its expected revision without
+moving or rewriting the body. `get_wiki_review_queue` exposes a small derived
+queue of due or disputed knowledge. Organization problems are warnings, while source integrity,
+evidence, access, and revision checks remain blocking invariants.
+
+For long or disputed knowledge notes, use claim-level provenance when useful:
+
+```yaml
+claims:
+  - id: claim-1
+    text: "One short statement another agent can verify."
+    evidence_paths:
+      - _sources/verified-observation.md
+    confidence: medium
+    status: supported       # supported, disputed, unverified, superseded
+```
+
+Start reads with `read_wiki_projection` and its `summary`, `key_points`, or
+`outline` view. Request one `section` or `full` view only when needed. Before
+creating a new note, use `preflight_wiki_publish` to find possible duplicates;
+the result is advisory because deliberate disagreement is useful. Use
+`get_wiki_impact_report` after source changes and `get_wiki_graph_health` to
+repair broken links, orphan notes, and empty MOCs. These reports never delete
+or silently rewrite content.
+
 ## Invariants
 
 1. Never edit, delete, move, or retag an existing source snapshot. Ingest a new snapshot instead.
-2. Every load-bearing claim in a knowledge note must be supported by its `evidence_paths` source snapshots.
+2. Every load-bearing claim in a knowledge note must be supported by its `evidence_paths` source snapshots; when `claims` is present, each claim must also have intact claim-level evidence.
 3. Use `expectedRevision` for updates so peers cannot silently overwrite one another.
 4. Mark uncertainty explicitly with `confidence` and `knowledge_status`.
 5. Record contradictions and unsupported claims as Wiki issues; resolve them only with a reason.

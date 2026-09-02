@@ -2,6 +2,21 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ReferenceService } from './references.js';
+export interface WikiCatalogOptions {
+    summaryOnly?: boolean;
+    noteKind?: string;
+    lifecycle?: string;
+    limit?: number;
+    maxChars?: number;
+}
+export interface WikiClaimInput {
+    id?: string;
+    text: string;
+    evidencePaths?: string[];
+    confidence?: string;
+    status?: string;
+}
+type WikiProjectionView = 'summary' | 'key_points' | 'outline' | 'section' | 'full';
 interface WikiLintIssue {
     severity: 'error' | 'warning';
     code: string;
@@ -59,18 +74,124 @@ export declare class LlmWikiService {
         author: string;
         confidence?: string;
         status?: string;
+        noteKind?: string;
+        lifecycle?: string;
+        moc?: string;
+        project?: string;
+        reviewAt?: string;
+        claims?: WikiClaimInput[];
         expectedRevision: string;
     }): Promise<{
         success: boolean;
         created: boolean;
         path: string;
         evidencePaths: string[];
+        claims?: Record<string, unknown>[];
         revision: string;
     }>;
-    catalog(principal?: ScopePrincipal, options?: {
-        summaryOnly?: boolean;
-    }): Promise<any>;
+    catalog(principal?: ScopePrincipal, options?: WikiCatalogOptions): Promise<any>;
     private computeCatalog;
+    reviewQueue(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        items: Record<string, unknown>[];
+        total: number;
+        truncated: boolean;
+    }>;
+    inbox(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        items: Record<string, unknown>[];
+        total: number;
+        truncated: boolean;
+    }>;
+    triage(params: {
+        principal?: ScopePrincipal;
+        path: string;
+        noteKind?: string;
+        lifecycle?: string;
+        moc?: string;
+        project?: string;
+        reviewAt?: string;
+        nextAction?: string;
+        waitingFor?: string;
+        expectedRevision: string;
+    }): Promise<{
+        success: boolean;
+        path: string;
+        revision: string;
+        frontmatter: any;
+    }>;
+    readProjection(params: {
+        principal?: ScopePrincipal;
+        path: string;
+        view?: WikiProjectionView;
+        section?: string;
+        maxChars?: number;
+    }): Promise<{
+        path: string;
+        title: string;
+        view: WikiProjectionView;
+        revision: string;
+        noteKind: any;
+        lifecycle: any;
+        status: any;
+        confidence: any;
+        section?: {
+            startLine: number;
+            endLine: number;
+            requested: string | undefined;
+        };
+        headings?: import("./types.js").NoteHeading[];
+        content: string;
+        truncated: boolean;
+        references: string[];
+    }>;
+    impactReport(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        items: Record<string, unknown>[];
+        total: number;
+        truncated: boolean;
+        generatedAt: string;
+    }>;
+    graphHealth(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        unresolvedLinks: {
+            total: number;
+            items: {
+                target: string;
+                line: number;
+                link: string;
+                context: string;
+                path: string;
+            }[];
+            truncated: boolean;
+        };
+        orphanNotes: {
+            total: number;
+            items: {
+                incomingLinks: number;
+                path: string;
+            }[];
+            truncated: boolean;
+        };
+        emptyMocs: {
+            total: number;
+            items: Record<string, unknown>[];
+            truncated: boolean;
+        };
+        mocCount: number;
+    } | {
+        truncated: boolean;
+        note: string;
+    }>;
+    preflightPublish(params: {
+        principal?: ScopePrincipal;
+        path: string;
+        title?: string;
+        content: string;
+        limit?: number;
+        maxChars?: number;
+    }): Promise<{
+        path: string;
+        candidates: Record<string, unknown>[];
+        recommendation: string;
+        truncated: boolean;
+    }>;
     orient(principal?: ScopePrincipal): Promise<{
         protocol: string;
         purpose: string;

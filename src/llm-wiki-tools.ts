@@ -5,7 +5,7 @@ const accessToken = { type: 'string', description: 'Token from login_scope. Omit
 const scopeUri = { type: 'string', description: 'Target scope root; defaults to scope://global/. Private scopes require an authorized accessToken.', default: 'scope://global/' } as const;
 
 export const LLM_WIKI_MUTATING_TOOLS = [
-  'initialize_llm_wiki', 'ingest_source', 'publish_knowledge', 'report_wiki_issue', 'resolve_wiki_issue',
+  'initialize_llm_wiki', 'ingest_source', 'publish_knowledge', 'triage_wiki_note', 'report_wiki_issue', 'resolve_wiki_issue',
 ] as const;
 
 export function getLlmWikiTools(): Tool[] {
@@ -35,13 +35,78 @@ export function getLlmWikiTools(): Tool[] {
         path: { type: 'string' }, content: { type: 'string', description: 'Obsidian Markdown; resolvable [[Note]] links are automatically recorded as references' }, evidencePaths: { type: 'array', items: { type: 'string' } }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths or Obsidian [[Note]] references' },
         author: { type: 'string' }, confidence: { type: 'string', enum: ['low', 'medium', 'high'], default: 'medium' },
         status: { type: 'string', enum: ['draft', 'verified', 'disputed', 'superseded'], default: 'draft' },
+        noteKind: { type: 'string', enum: ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'decision', 'project', 'area', 'resource', 'journal', 'task'], default: 'knowledge' },
+        lifecycle: { type: 'string', enum: ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'] },
+        moc: { type: 'string', description: 'Optional Obsidian [[MOC]] link or path' }, project: { type: 'string', description: 'Optional Obsidian [[Project]] link or path' },
+        reviewAt: { type: 'string', description: 'Optional ISO date/time for evidence review' },
+        claims: { type: 'array', maxItems: 100, description: 'Optional claim-level provenance. Every claim needs text and at least one intact immutable evidence path.', items: { type: 'object', properties: {
+          id: { type: 'string' }, text: { type: 'string' }, evidencePaths: { type: 'array', items: { type: 'string' }, maxItems: 20 },
+          confidence: { type: 'string', enum: ['low', 'medium', 'high'] }, status: { type: 'string', enum: ['supported', 'disputed', 'unverified', 'superseded'] },
+        }, required: ['text', 'evidencePaths'] } },
         expectedRevision: { type: 'string', description: "Required revision, or 'missing' for a new note" }, accessToken, prettyPrint,
       }, required: ['path', 'content', 'evidencePaths', 'expectedRevision'] },
     },
     {
       name: 'get_wiki_catalog',
       description: 'Build a live scope-aware catalog from frontmatter instead of maintaining a stale hand-written index.',
-      inputSchema: { type: 'object', properties: { accessToken, prettyPrint } },
+      inputSchema: { type: 'object', properties: {
+        noteKind: { type: 'string', enum: ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'decision', 'project', 'area', 'resource', 'journal', 'task'] },
+        lifecycle: { type: 'string', enum: ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'] },
+        limit: { type: 'integer', minimum: 1, maximum: 500, default: 100 },
+        maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 12000 },
+        accessToken, prettyPrint,
+      } },
+    },
+    {
+      name: 'get_wiki_review_queue',
+      description: 'Return a bounded review queue of knowledge notes that are disputed, in review, or due for evidence review. Read the selected note before revising it; this is a derived view, not a second database.',
+      inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 20, default: 5 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, accessToken, prettyPrint } },
+    },
+    {
+      name: 'get_wiki_inbox',
+      description: 'Return a bounded list of Inbox or lifecycle=inbox notes that still need classification. This is metadata-only and never moves or rewrites files.',
+      inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 50, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 5000 }, accessToken, prettyPrint } },
+    },
+    {
+      name: 'triage_wiki_note',
+      description: 'Classify one ordinary Markdown note with PARA/Zettelkasten-style metadata without changing its body or moving it. Use expectedRevision to avoid overwriting another agent.',
+      inputSchema: { type: 'object', properties: {
+        path: { type: 'string' }, noteKind: { type: 'string', enum: ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'decision', 'project', 'area', 'resource', 'journal', 'task'] },
+        lifecycle: { type: 'string', enum: ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'] },
+        moc: { type: 'string' }, project: { type: 'string' }, reviewAt: { type: 'string' },
+        nextAction: { type: 'string', description: 'Optional concrete next action for an active project' },
+        waitingFor: { type: 'string', description: 'Optional person/event/resource this project is waiting for' },
+        expectedRevision: { type: 'string' }, accessToken, prettyPrint,
+      }, required: ['path', 'expectedRevision'] },
+    },
+    {
+      name: 'read_wiki_projection',
+      description: 'Read one Wiki note progressively. Start with summary or key_points, then request outline or one section; full content is explicit and bounded. Returns the current revision so edits can use optimistic concurrency.',
+      inputSchema: { type: 'object', properties: {
+        path: { type: 'string' }, view: { type: 'string', enum: ['summary', 'key_points', 'outline', 'section', 'full'], default: 'summary' },
+        section: { type: 'string', description: 'Heading text when view=section' }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, accessToken, prettyPrint,
+      }, required: ['path'] },
+    },
+    {
+      name: 'get_wiki_impact_report',
+      description: 'Find knowledge notes affected by missing or altered evidence, overdue review, or other freshness problems. This is a bounded derived report; it never rewrites or deletes notes.',
+      inputSchema: { type: 'object', properties: {
+        limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint,
+      } },
+    },
+    {
+      name: 'get_wiki_graph_health',
+      description: 'Report broken wikilinks, orphan notes, and empty MOCs with bounded samples. Use it to repair navigation without creating a parallel index.',
+      inputSchema: { type: 'object', properties: {
+        limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint,
+      } },
+    },
+    {
+      name: 'preflight_wiki_publish',
+      description: 'Compare a proposed Wiki note with existing accessible notes and return bounded possible duplicates or related notes. This is advisory and never blocks publication.',
+      inputSchema: { type: 'object', properties: {
+        path: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' }, limit: { type: 'integer', minimum: 1, maximum: 10, default: 3 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, accessToken, prettyPrint,
+      }, required: ['path', 'content'] },
     },
     {
       name: 'lint_wiki',

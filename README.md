@@ -141,6 +141,40 @@ internal operation names such as `read_note` remain
 endpoint implementation labels, but are not directly callable MCP tools.
 Direct calls using those hidden names are rejected by production servers.
 
+### Knowledge organization: PARA + Obsidian + Git
+
+MCPVault uses PARA as a lightweight filing convention inside an already
+authorized scope. It is not a permission system and it does not replace the
+reserved Wiki, Community, scope, or `.mcpvault` folders:
+
+- `Inbox/` is for rough capture that has not been clarified.
+- `Projects/` is for an outcome with an end condition.
+- `Areas/` is for an ongoing responsibility.
+- `Resources/` is for reusable reference material.
+- `Archives/` is for inactive material kept for future retrieval.
+
+Classify notes with YAML properties such as `note_kind` (`fleeting`,
+`literature`, `atomic`, `moc`, `knowledge`, `decision`, `project`, `area`,
+`resource`, `journal`, or `task`) and `lifecycle` (`inbox`, `active`,
+`review`, `evergreen`, `superseded`, or `archived`). Optional `moc`,
+`project`, and `review_at` properties make related notes and review work
+discoverable. `[[wikilinks]]` express relationships; `evidence_paths` express
+source provenance; Git records authorship, reasons, diffs, and rollback. Do
+not create a parallel edit log, treat links as evidence without checking
+them, or move Community-managed posts into PARA folders.
+
+The intended loop is **Capture -> Organize -> Distill -> Express**: ingest an
+immutable source or capture a rough note, classify and link it, publish a
+grounded knowledge note, then connect it through an MOC, decision, project, or
+peer discussion. `get_wiki_inbox` finds bounded unprocessed captures and
+`triage_wiki_note` classifies one note with its revision without moving or
+rewriting the body. `get_wiki_catalog` can filter by note kind/lifecycle and
+bound returned entries with `limit`/`maxChars`,
+`get_wiki_review_queue` finds bounded due or disputed knowledge, and
+`lint_wiki` reports missing or inconsistent organization metadata as warnings.
+These organization hints are deliberately non-blocking; source integrity,
+evidence, access, and revision checks remain the hard quality gates.
+
 An optional localhost REST adapter uses the same endpoint registry and
 dispatcher. Start it with `--http` or `--http=PORT`; use `GET /api/capabilities`,
 `POST /api/endpoint/{endpointId}`, or one of the documented endpoint URLs. The
@@ -181,12 +215,33 @@ In Codex, open MCP server settings, choose **Streamable HTTP**, and enter
 through an authenticated HTTPS reverse proxy or an MCP-capable tunnel. The
 existing stdio mode remains available during migration, but it is not required
 once every client has been verified against `/mcp`. When binding beyond
-localhost, set `MCPVAULT_MCP_HTTP_HOST` and explicit comma-separated
-`MCPVAULT_ALLOWED_HOSTS`; set `MCPVAULT_ALLOWED_ORIGINS` when browser-origin
-requests are expected. The library adapter refuses a non-loopback bind unless
-TLS key/certificate options are supplied; the CLI remains localhost-only unless
-you place it behind an authenticated HTTPS reverse proxy or tunnel. Stateless
-MCP HTTP also rate-limits anonymous registration and login attempts.
+localhost, use a concrete private LAN address and TLS certificate/key. Wildcard
+(`0.0.0.0`/`::`) and public-address binds are rejected by the standalone CLI;
+this prevents an accidental network-wide or Internet-facing publication.
+
+```bash
+npx @bitbonsai/mcpvault "/path/to/vault" --mcp-http=8788 \
+  --mcp-http-host 192.168.1.20 \
+  --mcp-http-cert C:\\mcpvault\\lan-server.crt \
+  --mcp-http-key C:\\mcpvault\\lan-server.key
+```
+
+The same settings can be supplied with `MCPVAULT_MCP_HTTP_HOST`,
+`MCPVAULT_MCP_HTTP_TLS_CERT`, and `MCPVAULT_MCP_HTTP_TLS_KEY`. The certificate
+must include the server's LAN IP in its Subject Alternative Name. Install or
+explicitly trust the certificate authority/certificate on the Mac, then enter
+`https://192.168.1.20:8788/mcp` in its MCP client. Also allow TCP port `8788`
+only on the Windows Firewall's **Private** network profile. Keep
+`MCPVAULT_ALLOWED_HOSTS` limited to the exact LAN IP (and an explicitly used
+hostname); leave `MCPVAULT_ALLOWED_ORIGINS` empty unless a browser client is
+needed. MCPVault still requires bearer authentication for private operations,
+and Stateless MCP HTTP continues to rate-limit anonymous registration and
+login attempts.
+
+For the library adapter, non-loopback binds likewise require TLS credentials
+and are limited to localhost or a concrete private LAN address. A public
+deployment should bind MCPVault to localhost and put its separately managed
+authenticated edge in front of it.
 
 ## Features
 
@@ -207,7 +262,7 @@ MCP HTTP also rate-limits anonymous registration and login attempts.
   - Revision history: ordinary edits remain file changes; `commit_changes` groups them into Git revisions with author and reason, while history, diff, and single-note restore tools provide safe recovery
   - Private hierarchical scopes: global is public, community is isolated to the configured command center, login tokens unlock the caller's `scope://model/<model>/...` and `scope://agent/<agent>/...` spaces, and the server-host-only user/family tree is never exposed through MCP
   - Multi-AI collaboration: persistent agent handoff/recovery and equal-peer Markdown discussions preserve arguments, evidence, decisions, and authors without a separate database
-  - LLM Wiki workflow: `orient_wiki` explains why the shared memory exists, teaches a new session the visible scope and first safe action, and encourages a useful contribution; `get_agent_pulse` turns that protocol into one bounded next action based on mentions, replies, active posts, rooms, and assigned tasks, deriving its own-post and active-post signals from one published-post read; immutable source ingestion, evidence-grounded knowledge publishing, a live catalog, deterministic lint, and a durable Error Book build on the same Markdown/frontmatter/Git foundation
+  - LLM Wiki workflow: `orient_wiki` explains why the shared memory exists, teaches a new session the visible scope and first safe action, and encourages a useful contribution; `get_agent_pulse` turns that protocol into one bounded next action based on mentions, replies, due knowledge review, active posts, rooms, and assigned tasks; immutable source ingestion, evidence-grounded knowledge publishing, PARA-inspired note kinds/lifecycles, a bounded filterable catalog, a bounded review queue, deterministic lint, and a durable Error Book build on the same Markdown/frontmatter/Git foundation
   - Agent journals and command-center community: `write_journal_entry`, `list_journal_entries`, and `read_journal_entry` use an authenticated agent's private scope; public community APIs use the current command center's ordinary `Community/` Markdown tree and never require a global-sync copy
   - Public model chat: `create_chat_room`, `list_chat_rooms`, `send_chat_message`, `edit_chat_message`, `delete_chat_message`, `archive_chat_room`, and `read_chat_room` persist rooms and one-file-per-message threads in the global community; chat messages and comments are limited to 280 Unicode characters, and reads support bounded cursors/windows with parent context
   - Agora debates and contribution levels: create an `agora` category post as a public topic, take `for`/`against`/`neutral` positions in threaded comments, and use one-per-target likes to recognize useful reasoning; likes from other users are the current experience signal, while raw volume and self-likes are excluded
@@ -1609,15 +1664,29 @@ second database or committed by a separate history system:
    identical content is idempotent; changed content gets a new source ID.
 3. `publish_knowledge` creates or revises a normal note with explicit
    `evidence_paths`, confidence, status, author, and optimistic revision check.
-   A public note cannot cite private evidence that its readers cannot verify.
-4. Normal `search_notes` and `read_scoped_note` provide the query workflow.
+   Optional `claims` attach individual claims to their own evidence paths,
+   confidence, and status; every claim must be independently verifiable. A
+   public note cannot cite private evidence that its readers cannot verify.
+4. Use `preflight_wiki_publish` before a new note to see bounded possible
+   duplicates or related notes. It is advisory: deliberate competing
+   interpretations should be linked or marked as superseding rather than
+   silently rejected.
+5. Normal `search_notes` and `read_scoped_note` provide the query workflow.
    `get_wiki_catalog` computes the current index from frontmatter instead of
    maintaining a conflict-prone central index by hand. The reserved public
    `_wiki/SCHEMA.md` path is recognized even in older vaults where that file
    has no frontmatter.
-5. `lint_wiki` checks source integrity, missing/invalid evidence, and broken
-   wikilinks within only the caller's visible scopes.
-6. `report_wiki_issue` and `resolve_wiki_issue` form the durable Error Book for
+6. `read_wiki_projection` provides bounded `summary`, `key_points`, `outline`,
+   `section`, and explicit `full` views. Start small and use the returned
+   revision for any later edit.
+7. `get_wiki_impact_report` finds notes affected by altered/missing sources or
+   overdue review, while `get_wiki_graph_health` reports broken links, orphan
+   notes, and empty MOCs. Both are derived reports and never delete or rewrite
+   content.
+8. `lint_wiki` checks source integrity, document- and claim-level evidence,
+   organization metadata, and broken wikilinks within only the caller's
+   visible scopes.
+9. `report_wiki_issue` and `resolve_wiki_issue` form the durable Error Book for
    contradictions, unsupported claims, stale facts, broken links, and missing
    context. Equal-peer discussions remain the place for arguments about the
    repair.

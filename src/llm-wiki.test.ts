@@ -129,6 +129,64 @@ test('ingest, publish, catalog, lint, and immutable source enforcement form one 
   }
 });
 
+test('organization metadata, catalog facets, review queue, and lint warnings stay bounded and discoverable', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-owner', modelId: 'codex', password: 'organization-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const source = await callJson(client, 'ingest_source', {
+      sourceId: 'organization-source', title: 'Organization source', content: 'PARA and linked notes help agents find durable knowledge.', capturedBy: 'codex', accessToken,
+    });
+    await client.callTool({ name: 'write_note', arguments: {
+      path: 'Projects/MCPVault.md', content: '# MCPVault project\n', expectedRevision: 'missing', accessToken,
+    } });
+    await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/MOCs/LLM Wiki.md', content: '# LLM Wiki MOC\n\n[[Projects/MCPVault]]\n', expectedRevision: 'missing', accessToken,
+    } });
+    await client.callTool({ name: 'write_note', arguments: {
+      path: 'Inbox/Rough capture.md', content: '# Rough capture\n\nSort this later.\n', expectedRevision: 'missing', accessToken,
+    } });
+    const inbox = await callJson(client, 'get_wiki_inbox', { limit: 2, maxChars: 1600, accessToken });
+    expect(inbox.value).toMatchObject({ total: 1, items: [expect.objectContaining({ path: 'Inbox/Rough capture.md' })] });
+    const rough = await callJson(client, 'read_note', { path: 'Inbox/Rough capture.md', accessToken });
+    const triaged = await callJson(client, 'triage_wiki_note', {
+      path: 'Inbox/Rough capture.md', noteKind: 'literature', lifecycle: 'active', project: '[[Projects/MCPVault]]',
+      expectedRevision: rough.value.revision, accessToken,
+    });
+    expect(triaged.value).toMatchObject({ success: true, frontmatter: { noteKind: 'literature', lifecycle: 'active' } });
+    const inboxAfterTriage = await callJson(client, 'get_wiki_inbox', { limit: 2, maxChars: 1600, accessToken });
+    expect(inboxAfterTriage.value).toMatchObject({ total: 0, items: [] });
+    const stalledWrite = await client.callTool({ name: 'write_note', arguments: {
+      path: 'Projects/Stalled.md', content: '# Stalled\n', frontmatter: { note_kind: 'project', lifecycle: 'active' }, expectedRevision: 'missing', accessToken,
+    } });
+    expect(stalledWrite.isError).toBeFalsy();
+    await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Atomic/Organization.md',
+      content: '# Organization\n\n[[Projects/MCPVault]] is the active implementation project.',
+      evidencePaths: [source.value.path], references: ['[[Projects/MCPVault]]'], author: 'codex',
+      status: 'disputed', confidence: 'medium', noteKind: 'atomic', lifecycle: 'review',
+      moc: '[[Knowledge/MOCs/LLM Wiki]]', project: '[[Projects/MCPVault]]', reviewAt: '2000-01-01',
+      expectedRevision: 'missing', accessToken,
+    });
+
+    const catalog = await callJson(client, 'get_wiki_catalog', { noteKind: 'atomic', lifecycle: 'review', accessToken });
+    expect(catalog.value).toMatchObject({ total: 1, organization: { noteKinds: { atomic: 1 }, lifecycles: { review: 1 } } });
+    expect(catalog.value.entries[0]).toMatchObject({ noteKind: 'atomic', lifecycle: 'review', project: '[[Projects/MCPVault]]' });
+
+    const queue = await callJson(client, 'get_wiki_review_queue', { limit: 1, maxChars: 1200, accessToken });
+    expect(queue.value).toMatchObject({ total: 1, truncated: false, items: [expect.objectContaining({ noteKind: 'atomic', lifecycle: 'review', overdue: true })] });
+
+    const lint = await callJson(client, 'lint_wiki', { accessToken });
+    expect(lint.value.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'knowledge_review_due' }),
+      expect.objectContaining({ code: 'active_project_without_next_action', path: 'Projects/Stalled.md' }),
+    ]));
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('knowledge-related commits are blocked by Wiki errors while ordinary notes remain normal Git changes', async () => {
   const { server, client } = await setup();
   try {
@@ -184,6 +242,50 @@ test('private source and knowledge workflows are visible only to their logged-in
     expect(anonymousCatalog.value.total).toBe(0);
     const betaRead = await client.callTool({ name: 'read_note', arguments: { path: 'scope://model/alpha/Private Knowledge.md', accessToken: betaToken } });
     expect(betaRead.isError).toBe(true);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('claim provenance, progressive projections, duplicate preflight, impact, and graph health stay bounded', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'quality-owner', modelId: 'codex', password: 'quality-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const source = await callJson(client, 'ingest_source', {
+      sourceId: 'quality-source', title: 'Quality source', content: 'A durable wiki should preserve evidence, revisions, and links.', capturedBy: 'codex', accessToken,
+    });
+    const published = await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Quality.md', title: 'Quality', content: '# Quality\n\nA durable wiki preserves evidence, revisions, and links.\n\n## Details\n\nThe details remain inspectable.\n',
+      evidencePaths: [source.value.path], claims: [{ id: 'durability', text: 'A durable wiki preserves evidence.', evidencePaths: [source.value.path], confidence: 'high', status: 'supported' }],
+      author: 'codex', status: 'verified', confidence: 'high', expectedRevision: 'missing', accessToken,
+    });
+    expect(published.value.claims).toEqual([expect.objectContaining({ id: 'durability', status: 'supported' })]);
+
+    const summary = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Quality.md', view: 'summary', maxChars: 1200, accessToken });
+    expect(summary.value).toMatchObject({ view: 'summary', path: 'Knowledge/Quality.md', content: expect.stringContaining('A durable wiki preserves evidence') });
+    const outline = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Quality.md', view: 'outline', accessToken });
+    expect(outline.value.content).toContain('Details');
+    const section = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Quality.md', view: 'section', section: 'Details', accessToken });
+    expect(section.value.content).toContain('details remain inspectable');
+
+    const preflight = await callJson(client, 'preflight_wiki_publish', {
+      path: 'Knowledge/Quality-copy.md', title: 'Quality copy', content: 'A durable wiki preserves evidence, revisions, and links.', accessToken,
+    });
+    expect(preflight.value.candidates[0]).toMatchObject({ path: 'Knowledge/Quality.md', relation: 'possible_duplicate' });
+
+    await writeFile(join(vault, '_sources', 'quality-source.md'), (await readFile(join(vault, '_sources', 'quality-source.md'), 'utf8')).replace('A durable wiki should preserve', 'A changed source should preserve'), 'utf8');
+    const impact = await callJson(client, 'get_wiki_impact_report', { limit: 5, maxChars: 2500, accessToken });
+    expect(impact.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Quality.md', reasons: expect.arrayContaining(['source_changed']) })]));
+    const lint = await callJson(client, 'lint_wiki', { accessToken });
+    expect(lint.value.issues).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'invalid_claim_evidence', path: 'Knowledge/Quality.md' })]));
+
+    await client.callTool({ name: 'write_note', arguments: { path: 'Knowledge/Empty MOC.md', content: '# Empty MOC\n', frontmatter: { note_kind: 'moc' }, expectedRevision: 'missing', accessToken } });
+    await client.callTool({ name: 'write_note', arguments: { path: 'Knowledge/Broken.md', content: '# Broken\n\n[[Missing target]]\n', expectedRevision: 'missing', accessToken } });
+    const graph = await callJson(client, 'get_wiki_graph_health', { limit: 10, maxChars: 4000, accessToken });
+    expect(graph.value.emptyMocs.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Empty MOC.md' })]));
+    expect(graph.value.unresolvedLinks.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Broken.md' })]));
   } finally {
     await client.close();
     await server.close();

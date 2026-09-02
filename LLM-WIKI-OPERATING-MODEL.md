@@ -42,6 +42,70 @@ backlinks, and ordinary file edits remain valid. MCPVault adds the protocol,
 scope checks, source integrity checks, and Git quality gate around that
 foundation.
 
+## Organization model: PARA without losing the Wiki graph
+
+PARA is used as a low-cost filing aid within each scope, not as a second
+database or a security boundary. `Inbox/` holds unprocessed capture,
+`Projects/` holds active outcomes, `Areas/` holds ongoing responsibilities,
+`Resources/` holds reusable references, and `Archives/` holds inactive
+material. The reserved `_sources/`, `_wiki/`, `Community/`, `_scopes/`, and
+`.mcpvault/` trees keep their existing meanings and must not be moved into
+PARA folders.
+
+The folder answers “where is this work filed?”, while properties answer “what
+kind of note is it and what should happen next?” Use `note_kind` for fleeting,
+literature, atomic, MOC, knowledge, decision, project, area, resource,
+journal, or task notes. Use `lifecycle` for inbox, active, review, evergreen,
+superseded, or archived. `moc`, `project`, and `review_at` are optional
+navigation/review hints. `[[wikilinks]]` remain the relationship layer and
+`evidence_paths` remain the provenance layer; neither replaces the other.
+
+The practical CODE loop is Capture -> Organize -> Distill -> Express. Capture
+with `ingest_source` or Inbox; organize with properties and links; distill
+with `publish_knowledge` and `lint_wiki`; express the result through MOCs,
+decisions, tasks, and community discussion. Zettelkasten-style atomic notes
+and MOCs are recommended for durable knowledge, but not imposed on short
+chat, comments, journals, or Community-managed records. GTD-style next
+actions belong in Projects and structured tasks, not in every note.
+
+`get_wiki_catalog` provides bounded kind/lifecycle facets,
+`get_wiki_review_queue` provides a bounded derived queue for due or disputed
+knowledge. `get_wiki_inbox` and `triage_wiki_note` make capture processing
+explicit without silently moving notes or changing their body. `orient_wiki`/
+`get_agent_pulse` surface review and Inbox work when it is useful. Organization
+metadata is advisory and lint reports it as warnings;
+source immutability, evidence grounding, scope access, and expected revisions
+remain the hard gates. Markdown and Git remain authoritative, so a direct
+Obsidian edit is still valid and can be repaired or rolled back normally.
+
+## Quality layer: prove, project, and repair
+
+The Wiki now has a bounded quality layer above the Markdown source of truth.
+It is deliberately advisory except for the existing evidence, scope, and
+revision invariants:
+
+- `claims` can attach a short durable claim to its own `evidence_paths`,
+  confidence, and status. This avoids treating a long note's document-level
+  citation as proof for every sentence.
+- `read_wiki_projection` supports `summary`, `key_points`, `outline`,
+  `section`, and explicit `full` views. Agents should start with the smallest
+  useful view and spend context only when a decision requires more detail.
+- `get_wiki_impact_report` finds knowledge affected by missing/altered source
+  snapshots or overdue review. It reports stale work; it never deletes or
+  silently rewrites dependent notes.
+- `get_wiki_graph_health` reports broken links, orphan notes, and empty MOCs
+  with bounded samples. It uses Obsidian links as the navigation graph rather
+  than creating a second index of truth.
+- `preflight_wiki_publish` finds possible duplicates or related notes before a
+  new note is published. It is a warning, not a hard duplicate gate, because
+  deliberate competing interpretations and superseding notes are valuable.
+
+The intended maintenance loop is `preflight -> publish/revise -> lint ->
+impact report -> graph health -> Git commit`. A stale report is a review
+queue, not permission to erase history. Decisions should preserve the
+strongest counterargument and use `supersedes`/`references` links when one
+conclusion replaces another.
+
 ## Scope and visibility
 
 The visibility order for an authenticated agent is:
@@ -129,7 +193,8 @@ tool descriptions provide the minimum operating protocol at runtime.
 - `expectedRevision` is used for note updates so two agents do not silently
   overwrite each other.
 - `lint_wiki` is deterministic and checks source hashes, source immutability,
-  evidence existence/type, and broken wikilinks.
+  document- and claim-level evidence existence/type, organization metadata,
+  and broken wikilinks.
 - `commit_changes` automatically runs the Wiki gate when the selected change
   touches `_sources`, `_wiki`, or a knowledge note. A commit is rejected when
   lint has errors; ordinary non-Wiki notes are not held hostage by unrelated

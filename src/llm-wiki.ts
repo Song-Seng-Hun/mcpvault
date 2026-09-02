@@ -6,12 +6,79 @@ import { normalizeScopeId } from './scopes.js';
 import type { ReferenceService } from './references.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
+import { knowledgeOrganization, normalizeLifecycle, normalizeNoteKind, normalizeReviewAt, organizationLintIssues } from './organization.js';
+import { extractWikiLinkOccurrences } from './backlinks.js';
 
 const KNOWLEDGE_STATUSES = new Set(['draft', 'verified', 'disputed', 'superseded']);
 const CONFIDENCE_LEVELS = new Set(['low', 'medium', 'high']);
 const ISSUE_KINDS = new Set(['contradiction', 'unsupported_claim', 'stale', 'broken_link', 'missing_context', 'other']);
 const WELCOME_NOTE_PATH = '환영합니다!.md';
 const PUBLIC_SCHEMA_PATH = '_wiki/SCHEMA.md';
+
+export interface WikiCatalogOptions {
+  summaryOnly?: boolean;
+  noteKind?: string;
+  lifecycle?: string;
+  limit?: number;
+  maxChars?: number;
+}
+
+export interface WikiClaimInput {
+  id?: string;
+  text: string;
+  evidencePaths?: string[];
+  confidence?: string;
+  status?: string;
+}
+
+type WikiProjectionView = 'summary' | 'key_points' | 'outline' | 'section' | 'full';
+
+const CLAIM_STATUSES = new Set(['supported', 'disputed', 'unverified', 'superseded']);
+
+function boundedText(value: unknown, maxChars: number): string {
+  const text = String(value ?? '').trim();
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
+}
+
+function claimId(value: string | undefined, index: number): string {
+  const normalized = String(value || `claim-${index + 1}`).trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
+  return normalized.slice(0, 80) || `claim-${index + 1}`;
+}
+
+function normalizeClaims(claims: WikiClaimInput[] | undefined, existing: unknown): Array<Record<string, unknown>> | undefined {
+  if (claims === undefined && existing === undefined) return undefined;
+  const input = claims !== undefined ? claims : (Array.isArray(existing) ? existing as WikiClaimInput[] : []);
+  const seen = new Set<string>();
+  return input.map((claim, index) => {
+    if (!claim || typeof claim !== 'object' || !String(claim.text || '').trim()) throw new Error(`claims[${index}].text is required`);
+    const id = claimId(claim.id, index);
+    if (seen.has(id)) throw new Error(`Duplicate claim id: ${id}`);
+    seen.add(id);
+    const confidence = claim.confidence || 'medium';
+    const status = claim.status || 'unverified';
+    if (!CONFIDENCE_LEVELS.has(confidence)) throw new Error(`claims[${index}].confidence must be low, medium, or high`);
+    if (!CLAIM_STATUSES.has(status)) throw new Error(`claims[${index}].status must be supported, disputed, unverified, or superseded`);
+    return {
+      id,
+      text: boundedText(claim.text, 1000),
+      evidence_paths: Array.from(new Set(((claim.evidencePaths || (claim as any).evidence_paths || []) as unknown[]).map(String).map(path => path.trim()).filter(Boolean))).slice(0, 20),
+      confidence,
+      status,
+    };
+  });
+}
+
+function normalizedWords(value: string): Set<string> {
+  return new Set(value.toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}_-]{1,}/gu) || []);
+}
+
+function jaccard(left: Set<string>, right: Set<string>): number {
+  if (left.size === 0 || right.size === 0) return 0;
+  let intersection = 0;
+  for (const word of left) if (right.has(word)) intersection += 1;
+  return intersection / (left.size + right.size - intersection);
+}
 
 interface WikiLintIssue {
   severity: 'error' | 'warning';
@@ -64,6 +131,28 @@ MCPVault has three ownership layers. Choose the narrowest layer that matches the
 The older \`scope://model/...\` and \`scope://agent/...\` namespaces remain readable for migration and per-agent continuity. Model identifies the AI family, agent identifies a worker/session, and user identifies the human owner for accountability; agents should keep private working material in their model or agent scope because the user scope is host-only. MCP searches and path operations never expose the user tree.
 
 Multiple command centers can share global Markdown assets, but a community belongs to exactly one command center. The server's \`commandCenterId\` is stable configuration, not a user-supplied path segment. Do not copy \`Community/\` or \`_scopes/users/\` into a global synchronization set.
+
+## Organization and note lifecycle
+
+PARA is a lightweight filing aid inside each authorized scope, not a new
+security boundary. Use Projects for active outcomes, Areas for ongoing
+responsibilities, Resources for reusable references, Archives for inactive
+material, and Inbox for unprocessed capture. Do not move Community-managed
+posts or system folders into PARA folders.
+
+Use YAML properties and Obsidian links together:
+
+- \`note_kind\`: fleeting, literature, atomic, moc, knowledge, decision, project, area, resource, journal, or task.
+- \`lifecycle\`: inbox, active, review, evergreen, superseded, or archived.
+- \`project\`, \`moc\`, and \`review_at\`: optional navigation and review hints.
+- A knowledge note remains grounded by \`evidence_paths\`; links are not evidence by themselves.
+
+Write one durable claim per \`atomic\` note, use \`moc\` notes as linked maps, and keep unfinished reasoning in Inbox or a private journal. Review uncertain or overdue knowledge; do not silently delete it.
+
+The working pipeline is Capture (\`ingest_source\`/Inbox) -> Organize (properties
+and links) -> Distill (\`publish_knowledge\`/lint) -> Express (MOCs, decisions,
+discussion, and Git). These hints are intentionally non-blocking except for
+the existing evidence and integrity invariants.
 
 ## Invariants
 
@@ -239,6 +328,12 @@ export class LlmWikiService {
     author: string;
     confidence?: string;
     status?: string;
+    noteKind?: string;
+    lifecycle?: string;
+    moc?: string;
+    project?: string;
+    reviewAt?: string;
+    claims?: WikiClaimInput[];
     expectedRevision: string;
   }) {
     const content = String(params.content ?? '');
@@ -271,6 +366,23 @@ export class LlmWikiService {
     }
     const timestamp = now();
     const references = await this.references.validateAndNormalize(params.references ?? existing?.frontmatter.references, params.path, params.principal, content);
+    const claims = normalizeClaims(params.claims, existing?.frontmatter.claims);
+    if (claims) {
+      for (const claim of claims) {
+        if (!Array.isArray(claim.evidence_paths) || claim.evidence_paths.length === 0) {
+          throw new Error(`Claim '${String(claim.id)}' must include at least one evidence path`);
+        }
+        for (const evidencePath of claim.evidence_paths as string[]) {
+          if (!this.access.canReferenceFrom(params.path, evidencePath)) {
+            throw new Error(`A more-private claim evidence cannot be exposed: ${this.access.toPublicPath(evidencePath)}`);
+          }
+          const evidence = await this.fileSystem.readNote(evidencePath);
+          if (evidence.frontmatter.llm_wiki_type !== 'source' || evidence.frontmatter.immutable !== true || evidence.frontmatter.content_sha256 !== hash(evidence.content)) {
+            throw new Error(`Claim evidence is not an intact immutable source: ${this.access.toPublicPath(evidencePath)}`);
+          }
+        }
+      }
+    }
     await this.fileSystem.writeNote({
       path: params.path,
       content,
@@ -279,8 +391,18 @@ export class LlmWikiService {
         llm_wiki_type: 'knowledge',
         evidence_paths: evidencePaths,
         references,
+        ...(claims && { claims }),
         confidence,
         knowledge_status: status,
+        ...knowledgeOrganization({
+          ...(existing && { existing: existing.frontmatter }),
+          ...(params.noteKind !== undefined && { noteKind: params.noteKind }),
+          ...(params.lifecycle !== undefined && { lifecycle: params.lifecycle }),
+          ...(params.moc !== undefined && { moc: params.moc }),
+          ...(params.project !== undefined && { project: params.project }),
+          ...(params.reviewAt !== undefined && { reviewAt: params.reviewAt }),
+          status,
+        }),
         updated_by: params.author,
         updated_at: timestamp,
         ...(!existing && { created_by: params.author, created_at: timestamp }),
@@ -293,19 +415,20 @@ export class LlmWikiService {
       created: !exists,
       path: this.access.toPublicPath(params.path),
       evidencePaths: evidencePaths.map(path => this.access.toPublicPath(path)),
+      ...(claims && { claims }),
       revision: updated.revision,
     };
   }
 
-  async catalog(principal?: ScopePrincipal, options: { summaryOnly?: boolean } = {}) {
-    if (!options.summaryOnly) return this.computeCatalog(principal);
-    const key = this.principalKey(principal);
+  async catalog(principal?: ScopePrincipal, options: WikiCatalogOptions = {}) {
+    if (!options.summaryOnly) return this.computeCatalog(principal, options);
+    const key = `${this.principalKey(principal)}|${options.noteKind || ''}|${options.lifecycle || ''}|${options.limit || ''}|${options.maxChars || ''}`;
     const cached = this.catalogSummaryCache.get(key);
     if (cached?.generation === this.generation) return cached.value;
     const running = this.catalogSummaryInFlight.get(key);
     if (running) return running;
     const generation = this.generation;
-    const computation = this.computeCatalog(principal, { summaryOnly: true });
+    const computation = this.computeCatalog(principal, { ...options, summaryOnly: true });
     this.catalogSummaryInFlight.set(key, computation);
     try {
       const value = await computation;
@@ -316,12 +439,18 @@ export class LlmWikiService {
     }
   }
 
-  private async computeCatalog(principal?: ScopePrincipal, options: { summaryOnly?: boolean } = {}) {
+  private async computeCatalog(principal?: ScopePrincipal, options: WikiCatalogOptions = {}) {
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
     const entries: Array<Record<string, unknown>> = [];
     const counts: Record<string, number> = {};
     let total = 0;
     let schemaPresent = false;
+    const noteKinds: Record<string, number> = {};
+    const lifecycles: Record<string, number> = {};
+    const boundedLimit = Math.min(Math.max(Number(options.limit) || 100, 1), 500);
+    const boundedChars = Math.min(Math.max(Number(options.maxChars) || 12000, 512), 20000);
+    let responseChars = 2;
+    let responseTruncated = false;
     for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
       // The public schema is a reserved onboarding document. Older/manual
       // vaults may contain it as plain Markdown without the frontmatter that
@@ -330,20 +459,390 @@ export class LlmWikiService {
       const type = note.frontmatter.llm_wiki_type;
       if (!isPublicSchema && typeof type !== 'string') continue;
       const catalogType = isPublicSchema ? 'schema' : type as string;
+      const noteKind = typeof note.frontmatter.note_kind === 'string' ? note.frontmatter.note_kind : undefined;
+      const lifecycle = typeof note.frontmatter.lifecycle === 'string' ? note.frontmatter.lifecycle : undefined;
+      if (options.noteKind && noteKind !== options.noteKind) continue;
+      if (options.lifecycle && lifecycle !== options.lifecycle) continue;
       total += 1;
       counts[catalogType] = (counts[catalogType] || 0) + 1;
       if (isPublicSchema) schemaPresent = true;
+      if (noteKind) noteKinds[noteKind] = (noteKinds[noteKind] || 0) + 1;
+      if (lifecycle) lifecycles[lifecycle] = (lifecycles[lifecycle] || 0) + 1;
       if (options.summaryOnly) continue;
-      entries.push({
+      if (entries.length >= boundedLimit) {
+        responseTruncated = true;
+        continue;
+      }
+      const entry = {
         path: this.access.toPublicPath(note.path),
         type: catalogType,
         title: note.frontmatter.title,
         status: note.frontmatter.knowledge_status || note.frontmatter.status,
         confidence: note.frontmatter.confidence,
+        noteKind,
+        lifecycle,
+        ...(note.frontmatter.project && { project: note.frontmatter.project }),
+        ...(note.frontmatter.moc && { moc: note.frontmatter.moc }),
+        ...(note.frontmatter.review_at && { reviewAt: note.frontmatter.review_at }),
         updatedAt: note.frontmatter.updated_at || note.frontmatter.captured_at,
-      });
+      };
+      const entryChars = JSON.stringify(entry).length + 1;
+      if (responseChars + entryChars > boundedChars) {
+        responseTruncated = true;
+        continue;
+      }
+      entries.push(entry);
+      responseChars += entryChars;
     }
-    return { counts, entries, total, truncated: false, schemaPresent };
+    return { counts, organization: { noteKinds, lifecycles }, entries, total, truncated: responseTruncated, schemaPresent };
+  }
+
+  async reviewQueue(principal?: ScopePrincipal, limit = 5, maxChars = 4000) {
+    const boundedLimit = Math.min(Math.max(Number(limit) || 5, 1), 20);
+    const boundedChars = Math.min(Math.max(Number(maxChars) || 4000, 512), 12000);
+    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+    // Keep only the bounded best candidates while scanning. Review queues are
+    // a derived view, so a large vault must not create a second full array.
+    const candidates: Array<Record<string, unknown>> = [];
+    let total = 0;
+    const nowMs = Date.now();
+    for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+      if (note.frontmatter.llm_wiki_type !== 'knowledge') continue;
+      const lifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
+      const reviewAt = note.frontmatter.review_at ? String(note.frontmatter.review_at) : undefined;
+      const due = reviewAt !== undefined && !Number.isNaN(Date.parse(reviewAt)) && Date.parse(reviewAt) <= nowMs;
+      if (lifecycle !== 'review' && !due) continue;
+      total += 1;
+      const item = {
+        path: this.access.toPublicPath(note.path),
+        title: note.frontmatter.title || note.path.split('/').at(-1),
+        noteKind: note.frontmatter.note_kind,
+        lifecycle: lifecycle || undefined,
+        status: note.frontmatter.knowledge_status,
+        confidence: note.frontmatter.confidence,
+        ...(reviewAt && { reviewAt }),
+        overdue: due,
+        ...(note.frontmatter.project && { project: note.frontmatter.project }),
+      };
+      const position = candidates.findIndex(candidate =>
+        Number(item.overdue) > Number(candidate.overdue)
+          || (Number(item.overdue) === Number(candidate.overdue) && String(item.path).localeCompare(String(candidate.path)) < 0));
+      if (position === -1) {
+        if (candidates.length < boundedLimit) candidates.push(item);
+      } else {
+        candidates.splice(position, 0, item);
+        if (candidates.length > boundedLimit) candidates.pop();
+      }
+    }
+    const items: Array<Record<string, unknown>> = [];
+    let used = 2;
+    for (const item of candidates) {
+      const encoded = JSON.stringify(item);
+      if (used + encoded.length + 1 > boundedChars) break;
+      items.push(item);
+      used += encoded.length + 1;
+    }
+    return { items, total, truncated: total > items.length };
+  }
+
+  async inbox(principal?: ScopePrincipal, limit = 10, maxChars = 5000) {
+    const boundedLimit = Math.min(Math.max(Number(limit) || 10, 1), 50);
+    const boundedChars = Math.min(Math.max(Number(maxChars) || 5000, 512), 12000);
+    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+    const items: Array<Record<string, unknown>> = [];
+    let total = 0;
+    let used = 2;
+    for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+      const normalizedPath = normalizePath(note.path).toLowerCase();
+      const lifecycle = typeof note.frontmatter.lifecycle === 'string' ? note.frontmatter.lifecycle.toLowerCase() : undefined;
+      const isInboxPath = /(^|\/)inbox(?:\/|$)/.test(normalizedPath);
+      if ((!isInboxPath || lifecycle) && lifecycle !== 'inbox') continue;
+      total += 1;
+      if (items.length >= boundedLimit) continue;
+      const item = {
+        path: this.access.toPublicPath(note.path),
+        title: note.frontmatter.title || note.path.split('/').at(-1),
+        type: note.frontmatter.llm_wiki_type,
+        noteKind: note.frontmatter.note_kind,
+        lifecycle,
+        updatedAt: note.frontmatter.updated_at || note.frontmatter.captured_at,
+      };
+      const itemChars = JSON.stringify(item).length + 1;
+      if (used + itemChars > boundedChars) continue;
+      items.push(item);
+      used += itemChars;
+    }
+    return { items, total, truncated: total > items.length };
+  }
+
+  async triage(params: {
+    principal?: ScopePrincipal;
+    path: string;
+    noteKind?: string;
+    lifecycle?: string;
+    moc?: string;
+    project?: string;
+    reviewAt?: string;
+    nextAction?: string;
+    waitingFor?: string;
+    expectedRevision: string;
+  }) {
+    if (!params.expectedRevision) throw new Error("expectedRevision is required; use the revision from read_note");
+    if (!this.access.canAccessPhysicalPath(params.path, params.principal)) throw new Error(`Access denied: ${this.access.toPublicPath(params.path)}`);
+    if (this.access.isCommunityPath(params.path) || isWikiControlPath(params.path)) {
+      throw new Error('triage_wiki_note only classifies ordinary notes; use the dedicated Wiki or Community endpoint for managed content');
+    }
+    this.access.assertMutationAllowed(params.path, 'triage_wiki_note');
+    const note = await this.fileSystem.readNote(params.path);
+    if (note.frontmatter.llm_wiki_type && note.frontmatter.llm_wiki_type !== 'knowledge') {
+      throw new Error(`triage_wiki_note cannot classify managed LLM Wiki type '${note.frontmatter.llm_wiki_type}'`);
+    }
+    const hasOrganizationInput = [params.noteKind, params.lifecycle, params.moc, params.project, params.reviewAt, params.nextAction, params.waitingFor]
+      .some(value => value !== undefined);
+    if (!hasOrganizationInput) throw new Error('At least one organization field is required');
+    const patch: Record<string, unknown> = {};
+    if (params.noteKind !== undefined) patch.note_kind = normalizeNoteKind(params.noteKind);
+    if (params.lifecycle !== undefined) patch.lifecycle = normalizeLifecycle(params.lifecycle);
+    if (params.moc !== undefined) patch.moc = String(params.moc).trim().slice(0, 500);
+    if (params.project !== undefined) patch.project = String(params.project).trim().slice(0, 500);
+    if (params.reviewAt !== undefined) patch.review_at = normalizeReviewAt(params.reviewAt);
+    if (params.nextAction !== undefined) patch.next_action = String(params.nextAction).trim().slice(0, 500);
+    if (params.waitingFor !== undefined) patch.waiting_for = String(params.waitingFor).trim().slice(0, 500);
+    await this.fileSystem.updateFrontmatter({ path: params.path, frontmatter: patch, merge: true, expectedRevision: params.expectedRevision });
+    const updated = await this.fileSystem.readNote(params.path);
+    return {
+      success: true,
+      path: this.access.toPublicPath(params.path),
+      revision: updated.revision,
+      frontmatter: {
+        noteKind: updated.frontmatter.note_kind,
+        lifecycle: updated.frontmatter.lifecycle,
+        ...(updated.frontmatter.moc && { moc: updated.frontmatter.moc }),
+        ...(updated.frontmatter.project && { project: updated.frontmatter.project }),
+        ...(updated.frontmatter.review_at && { reviewAt: updated.frontmatter.review_at }),
+        ...(updated.frontmatter.next_action && { nextAction: updated.frontmatter.next_action }),
+        ...(updated.frontmatter.waiting_for && { waitingFor: updated.frontmatter.waiting_for }),
+      },
+    };
+  }
+
+  async readProjection(params: {
+    principal?: ScopePrincipal;
+    path: string;
+    view?: WikiProjectionView;
+    section?: string;
+    maxChars?: number;
+  }) {
+    if (!this.access.canAccessPhysicalPath(params.path, params.principal)) throw new Error(`Access denied: ${this.access.toPublicPath(params.path)}`);
+    const view = params.view || 'summary';
+    if (!['summary', 'key_points', 'outline', 'section', 'full'].includes(view)) throw new Error('view must be summary, key_points, outline, section, or full');
+    if (view === 'section' && !params.section?.trim()) throw new Error('section is required when view=section');
+    const maxChars = Math.min(Math.max(Number(params.maxChars) || 4000, 512), 12000);
+    const note = await this.fileSystem.readNote(params.path);
+    const title = String(note.frontmatter.title || params.path.split('/').at(-1) || params.path);
+    const headings = await this.fileSystem.getNoteOutline(params.path);
+    const lines = note.originalContent.split('\n');
+    let content = '';
+    let sectionRange: { startLine: number; endLine: number } | undefined;
+    if (view === 'full') {
+      content = note.content;
+    } else if (view === 'outline') {
+      content = headings.map(heading => `${'#'.repeat(heading.level)} ${heading.text} (line ${heading.line})`).join('\n');
+    } else if (view === 'section') {
+      const requested = params.section!.trim().replace(/^#+\s*/, '').toLowerCase();
+      const selected = headings.find(heading => heading.text.toLowerCase() === requested || heading.text.toLowerCase().includes(requested));
+      if (!selected) throw new Error(`Section not found: ${params.section}`);
+      const next = headings.find(heading => heading.line > selected.line && heading.level <= selected.level);
+      sectionRange = { startLine: selected.line, endLine: (next?.line || lines.length + 1) - 1 };
+      content = lines.slice(sectionRange.startLine - 1, sectionRange.endLine).join('\n').trim();
+    } else {
+      const claims = Array.isArray(note.frontmatter.claims) ? note.frontmatter.claims : [];
+      const claimPoints = claims
+        .filter((claim: any) => claim && typeof claim.text === 'string')
+        .slice(0, 8)
+        .map((claim: any) => `- ${claim.text} [${claim.status || 'unverified'}]`);
+      const paragraphs = note.content
+        .split(/\n\s*\n/)
+        .map(block => block.trim())
+        .filter(block => block && !block.startsWith('#') && !block.startsWith('```'));
+      if (view === 'key_points') {
+        content = claimPoints.length > 0 ? claimPoints.join('\n') : paragraphs.slice(0, 5).join('\n\n');
+      } else {
+        const summary = typeof note.frontmatter.summary === 'string' ? note.frontmatter.summary : '';
+        content = summary || (claimPoints.length > 0 ? claimPoints.join('\n') : paragraphs[0] || '');
+      }
+    }
+    const bounded = boundedText(content, maxChars);
+    return {
+      path: this.access.toPublicPath(params.path),
+      title,
+      view,
+      revision: note.revision,
+      noteKind: note.frontmatter.note_kind,
+      lifecycle: note.frontmatter.lifecycle,
+      status: note.frontmatter.knowledge_status || note.frontmatter.status,
+      confidence: note.frontmatter.confidence,
+      ...(sectionRange && { section: { requested: params.section, ...sectionRange } }),
+      ...(view !== 'full' && headings.length > 0 && { headings: headings.slice(0, 50) }),
+      content: bounded,
+      truncated: bounded.length < content.length,
+      references: Array.isArray(note.frontmatter.references)
+        ? note.frontmatter.references.filter((item: unknown): item is string => typeof item === 'string').slice(0, 20).map(path => this.access.toPublicPath(path))
+        : [],
+    };
+  }
+
+  async impactReport(principal?: ScopePrincipal, limit = 20, maxChars = 6000) {
+    const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
+    const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 16000);
+    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+    const sourceState = new Map<string, { ok: boolean; reason?: string }>();
+    const items: Array<Record<string, unknown>> = [];
+    let total = 0;
+    const nowMs = Date.now();
+    for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+      if (note.frontmatter.llm_wiki_type !== 'knowledge') continue;
+      const evidencePaths = Array.isArray(note.frontmatter.evidence_paths)
+        ? note.frontmatter.evidence_paths.filter((item: unknown): item is string => typeof item === 'string')
+        : [];
+      const reasons: string[] = [];
+      const affectedSources: string[] = [];
+      for (const sourcePath of evidencePaths) {
+        const cached = sourceState.get(sourcePath);
+        if (cached) {
+          if (!cached.ok) { reasons.push(cached.reason || 'source_invalid'); affectedSources.push(sourcePath); }
+          continue;
+        }
+        if (!canAccess(sourcePath) || !await this.fileSystem.noteExists(sourcePath)) {
+          sourceState.set(sourcePath, { ok: false, reason: 'missing_evidence' });
+          reasons.push('missing_evidence');
+          affectedSources.push(sourcePath);
+          continue;
+        }
+        const source = await this.fileSystem.readNote(sourcePath);
+        const intact = source.frontmatter.llm_wiki_type === 'source'
+          && source.frontmatter.immutable === true
+          && source.frontmatter.content_sha256 === hash(source.content);
+        const reason = intact ? undefined : 'source_changed';
+        sourceState.set(sourcePath, { ok: intact, ...(reason && { reason }) });
+        if (!intact) { reasons.push(reason!); affectedSources.push(sourcePath); }
+      }
+      const reviewAt = typeof note.frontmatter.review_at === 'string' ? note.frontmatter.review_at : undefined;
+      if (reviewAt && !Number.isNaN(Date.parse(reviewAt)) && Date.parse(reviewAt) <= nowMs) reasons.push('review_due');
+      if (reasons.length === 0) continue;
+      total += 1;
+      const uniqueReasons = [...new Set(reasons)];
+      const item = {
+        path: this.access.toPublicPath(note.path),
+        title: note.frontmatter.title || note.path.split('/').at(-1),
+        severity: uniqueReasons.includes('missing_evidence') || uniqueReasons.includes('source_changed') ? 'high' : 'medium',
+        reasons: uniqueReasons,
+        ...(affectedSources.length > 0 && { affectedSources: [...new Set(affectedSources)].map(path => this.access.toPublicPath(path)).slice(0, 10) }),
+        ...(reviewAt && { reviewAt }),
+      };
+      const score = item.severity === 'high' ? 0 : 1;
+      const position = items.findIndex(existing => score < (existing.severity === 'high' ? 0 : 1));
+      if (position === -1) {
+        if (items.length < boundedLimit) items.push(item);
+      } else {
+        items.splice(position, 0, item);
+        if (items.length > boundedLimit) items.pop();
+      }
+    }
+    let used = 2;
+    const boundedItems: Array<Record<string, unknown>> = [];
+    for (const item of items) {
+      const size = JSON.stringify(item).length + 1;
+      if (used + size > boundedChars) break;
+      boundedItems.push(item);
+      used += size;
+    }
+    return { items: boundedItems, total, truncated: total > boundedItems.length, generatedAt: now() };
+  }
+
+  async graphHealth(principal?: ScopePrincipal, limit = 20, maxChars = 6000) {
+    const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
+    const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 16000);
+    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+    const [unresolved, orphans] = await Promise.all([
+      this.fileSystem.findUnresolvedLinks(boundedLimit, canAccess),
+      this.fileSystem.findOrphanNotes(boundedLimit, canAccess),
+    ]);
+    const emptyMocs: Array<Record<string, unknown>> = [];
+    let mocTotal = 0;
+    let emptyMocTotal = 0;
+    for await (const note of iterateNotes(this.fileSystem, { includeContent: true }, canAccess)) {
+      if (note.frontmatter.note_kind !== 'moc') continue;
+      mocTotal += 1;
+      if (extractWikiLinkOccurrences(note.content || '').length === 0) {
+        emptyMocTotal += 1;
+        if (emptyMocs.length < boundedLimit) {
+          emptyMocs.push({ path: this.access.toPublicPath(note.path), title: note.frontmatter.title || note.path.split('/').at(-1) });
+        }
+      }
+    }
+    const report = {
+      unresolvedLinks: { total: unresolved.total, items: unresolved.unresolved.slice(0, boundedLimit).map(item => ({ ...item, path: this.access.toPublicPath(item.path) })), truncated: unresolved.truncated },
+      orphanNotes: { total: orphans.total, items: orphans.orphans.slice(0, boundedLimit).map(item => ({ ...item, path: this.access.toPublicPath(item.path) })), truncated: orphans.truncated },
+      emptyMocs: { total: emptyMocTotal, items: emptyMocs, truncated: emptyMocTotal > emptyMocs.length },
+      mocCount: mocTotal,
+    };
+    while (JSON.stringify(report).length > boundedChars) {
+      const arrays: Array<Array<Record<string, unknown>>> = [
+        report.unresolvedLinks.items as Array<Record<string, unknown>>,
+        report.orphanNotes.items as Array<Record<string, unknown>>,
+        report.emptyMocs.items,
+      ];
+      const largest = arrays.sort((left, right) => right.length - left.length)[0];
+      if (!largest || largest.length === 0) break;
+      largest.pop();
+    }
+    return JSON.stringify(report).length <= boundedChars
+      ? report
+      : { truncated: true, note: `Graph health report exceeded ${boundedChars} characters; inspect one category at a time.` };
+  }
+
+  async preflightPublish(params: { principal?: ScopePrincipal; path: string; title?: string; content: string; limit?: number; maxChars?: number }) {
+    if (!this.access.canAccessPhysicalPath(params.path, params.principal)) throw new Error(`Access denied: ${this.access.toPublicPath(params.path)}`);
+    const boundedLimit = Math.min(Math.max(Number(params.limit) || 3, 1), 10);
+    const boundedChars = Math.min(Math.max(Number(params.maxChars) || 4000, 512), 12000);
+    const incoming = normalizedWords(`${params.title || params.path} ${params.content}`);
+    const candidates: Array<Record<string, unknown> & { score: number }> = [];
+    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, params.principal);
+    for await (const note of iterateNotes(this.fileSystem, { includeContent: true }, canAccess)) {
+      if (normalizePath(note.path).toLowerCase() === normalizePath(params.path).toLowerCase()) continue;
+      if (note.frontmatter.llm_wiki_type === 'source' || note.frontmatter.llm_wiki_type === 'schema' || note.frontmatter.llm_wiki_type === 'issue') continue;
+      if (!note.content?.trim()) continue;
+      const title = String(note.frontmatter.title || note.path.split('/').at(-1) || '');
+      const score = jaccard(incoming, normalizedWords(`${title} ${note.content.slice(0, 8000)}`));
+      if (score < 0.18) continue;
+      const item = {
+        path: this.access.toPublicPath(note.path),
+        title,
+        score: Number(score.toFixed(3)),
+        relation: score >= 0.55 ? 'possible_duplicate' : 'possibly_related',
+        noteKind: note.frontmatter.note_kind,
+        lifecycle: note.frontmatter.lifecycle,
+      };
+      candidates.push({ ...item, score });
+      candidates.sort((a, b) => b.score - a.score || String(a.path).localeCompare(String(b.path)));
+      if (candidates.length > boundedLimit) candidates.pop();
+    }
+    const items: Array<Record<string, unknown>> = [];
+    let used = 2;
+    for (const candidate of candidates) {
+      const { score: _score, ...item } = candidate;
+      const size = JSON.stringify(item).length + 1;
+      if (used + size > boundedChars) break;
+      items.push(item);
+      used += size;
+    }
+    return {
+      path: this.access.toPublicPath(params.path),
+      candidates: items,
+      recommendation: items.some(item => item.relation === 'possible_duplicate') ? 'review_existing_before_publish' : items.length > 0 ? 'consider_linking_or_distinguishing' : 'no_strong_match',
+      truncated: candidates.length > items.length,
+    };
   }
 
   async orient(principal?: ScopePrincipal) {
@@ -400,6 +899,7 @@ export class LlmWikiService {
       nextActions.push({ tool: endpointIdForTool('commit_changes'), reason: 'Commit a coherent accepted change with a concise reason; Git is the edit log.' });
     }
     if (counts.knowledge) {
+      nextActions.push({ tool: endpointIdForTool('get_wiki_review_queue'), reason: 'Review one bounded due or disputed knowledge note before starting unrelated work; inspect evidence and revise with expectedRevision.' });
       nextActions.push({ tool: endpointIdForTool('create_discussion'), reason: 'Use an equal-peer discussion for competing interpretations or challenges.' });
     }
     if (!principal) {
@@ -428,6 +928,7 @@ export class LlmWikiService {
         'Use exact endpoint IDs in orient_wiki.nextActions directly with call_endpoint; search only for an action not already listed',
         'call_endpoint(auth.register) or call_endpoint(auth.login) when participation needs identity',
         'call_endpoint(mcp.ingest_source) for new evidence and call_endpoint(mcp.publish_knowledge) for grounded notes',
+        'Use call_endpoint(wiki.review_queue) for due or disputed knowledge; classify durable notes with note_kind/lifecycle and connect them with Obsidian wikilinks',
         'call_endpoint(mcp.create_discussion) and call_endpoint(mcp.add_discussion_argument) for peer review',
         'call_endpoint(mcp.lint_wiki), then call_endpoint(mcp.get_revision_status) and call_endpoint(mcp.commit_changes)',
         'call_endpoint(mcp.write_journal_entry) for private agent continuity',
@@ -444,6 +945,7 @@ export class LlmWikiService {
         'When you have a useful observation, add an evidence-backed note or concise threaded community contribution and invite peer correction.',
         'Use mentions, references, and replies to make the reason and context discoverable to the next agent.',
         'Use a private journal for unfinished personal reasoning and shared Markdown/Git for accepted knowledge.',
+        'Use PARA folders only as filing aids inside the authorized scope: Inbox, Projects, Areas, Resources, and Archives; do not move Community or system-managed files.',
         'Check the author level and your own level when evaluating community context, but inspect evidence and moderation markers before accepting claims.',
       ],
       participation: {
@@ -550,6 +1052,9 @@ export class LlmWikiService {
 
     for await (const note of iterateNotes(this.fileSystem, { includeContent: true }, canAccess)) {
       const type = note.frontmatter.llm_wiki_type;
+      for (const organizationIssue of organizationLintIssues(this.access.toPublicPath(note.path), note.frontmatter, note.content || '')) {
+        addIssue({ severity: 'warning', code: organizationIssue.code, path: this.access.toPublicPath(note.path), detail: organizationIssue.detail });
+      }
       if (type === 'source') {
         if (note.frontmatter.immutable !== true) {
           addIssue({ severity: 'error', code: 'source_not_immutable', path: this.access.toPublicPath(note.path), detail: 'Source metadata must set immutable: true.' });
@@ -572,6 +1077,36 @@ export class LlmWikiService {
           sourceCache.set(evidencePath, source);
           if (source.frontmatter.llm_wiki_type !== 'source') {
             addIssue({ severity: 'error', code: 'invalid_evidence_type', path: this.access.toPublicPath(note.path), detail: `Evidence is not a source snapshot: ${this.access.toPublicPath(evidencePath)}` });
+          }
+        }
+        if (Array.isArray(note.frontmatter.claims)) {
+          for (let claimIndex = 0; claimIndex < note.frontmatter.claims.length; claimIndex += 1) {
+            const claim = note.frontmatter.claims[claimIndex];
+            if (!claim || typeof claim !== 'object' || typeof claim.text !== 'string' || !claim.text.trim()) {
+              addIssue({ severity: 'error', code: 'invalid_claim', path: this.access.toPublicPath(note.path), detail: `Claim ${claimIndex + 1} has no usable text.` });
+              continue;
+            }
+            if (!CLAIM_STATUSES.has(String(claim.status || 'unverified'))) {
+              addIssue({ severity: 'error', code: 'invalid_claim_status', path: this.access.toPublicPath(note.path), detail: `Claim ${String(claim.id || claimIndex + 1)} has an unsupported status.` });
+            }
+            const claimEvidence = Array.isArray(claim.evidence_paths)
+              ? claim.evidence_paths.filter((item: unknown): item is string => typeof item === 'string')
+              : [];
+            if (claimEvidence.length === 0) {
+              addIssue({ severity: 'error', code: 'claim_without_evidence', path: this.access.toPublicPath(note.path), detail: `Claim ${String(claim.id || claimIndex + 1)} has no evidence_paths.` });
+              continue;
+            }
+            for (const evidencePath of claimEvidence) {
+              if (!canAccess(evidencePath) || !await this.fileSystem.noteExists(evidencePath)) {
+                addIssue({ severity: 'error', code: 'missing_claim_evidence', path: this.access.toPublicPath(note.path), detail: `Claim ${String(claim.id || claimIndex + 1)} references missing evidence: ${this.access.toPublicPath(evidencePath)}` });
+                continue;
+              }
+              const source = sourceCache.get(evidencePath) || await this.fileSystem.readNote(evidencePath);
+              sourceCache.set(evidencePath, source);
+              if (source.frontmatter.llm_wiki_type !== 'source' || source.frontmatter.immutable !== true || source.frontmatter.content_sha256 !== hash(source.content)) {
+                addIssue({ severity: 'error', code: 'invalid_claim_evidence', path: this.access.toPublicPath(note.path), detail: `Claim ${String(claim.id || claimIndex + 1)} references an altered or non-source note: ${this.access.toPublicPath(evidencePath)}` });
+              }
+            }
           }
         }
       }
