@@ -1,6 +1,6 @@
-import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, randomUUID, sign, timingSafeEqual, verify, type KeyObject } from 'node:crypto';
 import { createServer as createHttpServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from 'node:http';
-import { copyFile, mkdir, open, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, open, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 
 const PROTOCOL = 'mcpvault-global-sync/v1' as const;
@@ -8,6 +8,13 @@ const MAX_DOCUMENT_BYTES = 1_048_576;
 const MAX_REASON_LENGTH = 500;
 const MAX_AUTHOR_LENGTH = 128;
 const MAX_ORIGIN_LENGTH = 128;
+const MAX_TOTAL_PROPOSALS = 100_000;
+const MAX_PENDING_PROPOSALS = 2_000;
+const MAX_PENDING_BYTES = 64 * 1024 * 1024;
+const MAX_PROPOSALS_PER_ORIGIN_PER_MINUTE = 120;
+const RATE_WINDOW_MS = 60_000;
+const MAX_HTTP_REQUESTS_PER_MINUTE = 300;
+const MAX_RATE_BUCKETS = 4_096;
 const DEFAULT_BATCH_LIMIT = 100;
 const MAX_BATCH_LIMIT = 200;
 const RESERVED_ROOTS = new Set(['.git', '.obsidian', '.mcpvault', '_scopes', '_whispers', 'community', 'node_modules']);
@@ -27,6 +34,7 @@ export interface GlobalRevision {
   reason: string;
   origin: string;
   createdAt: string;
+  signature: string;
 }
 
 export interface GlobalManifestEntry {
@@ -44,6 +52,7 @@ export interface GlobalManifest {
   cursor: number;
   entries: GlobalManifestEntry[];
   hasMore: boolean;
+  signature: string;
 }
 
 export interface GlobalRevisionWithContent extends GlobalRevision {
@@ -62,6 +71,7 @@ export interface GlobalProposal {
   origin: string;
   createdAt: string;
   status: GlobalProposalStatus;
+  approvals?: string[];
   decisionReason?: string;
   decidedAt?: string;
 }
@@ -81,6 +91,7 @@ export interface GlobalProposalList {
 
 export interface GlobalSyncHubOptions {
   hubId?: string;
+  signingPrivateKey?: string;
 }
 
 export interface GlobalSyncChangeInput {
@@ -104,7 +115,7 @@ interface HubState {
 
 interface HubEvent {
   sequence: number;
-  type: 'proposal.created' | 'proposal.approved' | 'proposal.rejected' | 'proposal.conflict' | 'revision.restored';
+  type: 'proposal.created' | 'proposal.approval' | 'proposal.approved' | 'proposal.rejected' | 'proposal.conflict' | 'revision.restored';
   payload: unknown;
 }
 
@@ -114,6 +125,36 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function sha256(content: string): string {
   return `sha256:${createHash('sha256').update(content, 'utf8').digest('hex')}`;
+}
+
+export function generateGlobalSyncSigningKeyPair(): { privateKey: string; publicKey: string } {
+  const pair = generateKeyPairSync('ed25519');
+  return {
+    privateKey: pair.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+    publicKey: pair.publicKey.export({ type: 'spki', format: 'pem' }).toString(),
+  };
+}
+
+function signaturePayload(value: unknown): Buffer {
+  return Buffer.from(JSON.stringify(value), 'utf8');
+}
+
+function signPayload(value: unknown, privateKey: KeyObject): string {
+  return sign(null, signaturePayload(value), privateKey).toString('base64url');
+}
+
+function verifyPayload(value: unknown, signature: string, publicKey: KeyObject): boolean {
+  try { return verify(null, signaturePayload(value), publicKey, Buffer.from(signature, 'base64url')); } catch { return false; }
+}
+
+function withoutSignature<T extends { signature: string }>(value: T): Omit<T, 'signature'> {
+  const { signature: _signature, ...unsigned } = value;
+  return unsigned;
+}
+
+function withoutRevisionContent(value: GlobalRevisionWithContent): Omit<GlobalRevisionWithContent, 'signature' | 'content'> {
+  const { signature: _signature, content: _content, ...unsigned } = value;
+  return unsigned;
 }
 
 function normalizeId(value: string, field: string): string {
@@ -154,7 +195,10 @@ function applyEvent(state: HubState, event: HubEvent): void {
   const proposalId = typeof payload.proposalId === 'string' ? payload.proposalId : undefined;
   if (proposalId && state.proposals[proposalId]) {
     const proposal = state.proposals[proposalId]!;
-    if (event.type === 'proposal.approved') {
+    if (event.type === 'proposal.approval') {
+      const reviewer = typeof payload.reviewer === 'string' ? payload.reviewer : undefined;
+      if (reviewer && !proposal.approvals?.includes(reviewer)) proposal.approvals = [...(proposal.approvals || []), reviewer];
+    } else if (event.type === 'proposal.approved') {
       proposal.status = 'approved';
       const revision = payload.revision;
       if (isRecord(revision) && typeof revision.revisionId === 'string' && typeof revision.documentId === 'string') {
@@ -183,20 +227,20 @@ function applyEvent(state: HubState, event: HubEvent): void {
 }
 
 async function writeAtomic(path: string, content: string): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
   try {
-    await writeFile(temporary, content, { encoding: 'utf8', flag: 'wx' });
+    await writeFile(temporary, content, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
     await rename(temporary, path);
   } finally {
-    await import('node:fs/promises').then(fs => fs.unlink(temporary).catch(() => undefined));
+    await unlink(temporary).catch(() => undefined);
   }
 }
 
 async function writeObjectIfMissing(path: string, content: string): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   try {
-    await writeFile(path, content, { encoding: 'utf8', flag: 'wx' });
+    await writeFile(path, content, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
   } catch (error) {
     if (!(error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST')) throw error;
   }
@@ -213,6 +257,10 @@ export class GlobalSyncHub {
   private readonly eventPath: string;
   private readonly objectRoot: string;
   private readonly hubId: string;
+  private readonly signingPrivateKey: KeyObject;
+  private readonly signingPublicKey: string;
+  private readonly approvalQuorum: number;
+  private readonly originWindows = new Map<string, { startedAt: number; count: number }>();
   private state: HubState;
   private initialized = false;
   private mutationTail: Promise<void> = Promise.resolve();
@@ -224,7 +272,16 @@ export class GlobalSyncHub {
     this.objectRoot = join(this.root, 'objects');
     this.hubId = boundedText(options.hubId || 'global-hub', 'hubId', MAX_ORIGIN_LENGTH).toLowerCase();
     if (!/^[a-z0-9][a-z0-9._-]{0,127}$/.test(this.hubId)) throw new Error('hubId must be a lowercase identifier');
+    this.signingPrivateKey = options.signingPrivateKey ? createPrivateKey(options.signingPrivateKey) : createPrivateKey(generateGlobalSyncSigningKeyPair().privateKey);
+    this.signingPublicKey = createPublicKey(this.signingPrivateKey).export({ type: 'spki', format: 'pem' }).toString();
+    this.approvalQuorum = 2;
     this.state = emptyState(this.hubId);
+  }
+
+  getPublicKey(): string { return this.signingPublicKey; }
+
+  exportSigningPrivateKey(): string {
+    return this.signingPrivateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
   }
 
   private async ensureLoaded(): Promise<void> {
@@ -293,6 +350,30 @@ export class GlobalSyncHub {
     return { contentHash, byteLength };
   }
 
+  private enforceProposalQuota(origin: string, byteLength: number): void {
+    const proposals = Object.values(this.state.proposals);
+    if (proposals.length >= MAX_TOTAL_PROPOSALS) throw new Error('Global Sync proposal history quota exceeded');
+    const pending = proposals.filter(proposal => proposal.status === 'pending');
+    if (pending.length >= MAX_PENDING_PROPOSALS) throw new Error('Global Sync pending proposal quota exceeded');
+    const pendingBytes = pending.reduce((total, proposal) => total + proposal.byteLength, 0);
+    if (pendingBytes + byteLength > MAX_PENDING_BYTES) throw new Error('Global Sync pending content quota exceeded');
+    const now = Date.now();
+    const window = this.originWindows.get(origin);
+    if (!window || now - window.startedAt >= RATE_WINDOW_MS) {
+      if (this.originWindows.size >= MAX_RATE_BUCKETS) {
+        for (const [key, value] of this.originWindows) {
+          if (now - value.startedAt >= RATE_WINDOW_MS) this.originWindows.delete(key);
+          if (this.originWindows.size < MAX_RATE_BUCKETS) break;
+        }
+      }
+      if (this.originWindows.size >= MAX_RATE_BUCKETS && !this.originWindows.has(origin)) throw new Error('Global Sync proposal rate limiter is at capacity');
+      this.originWindows.set(origin, { startedAt: now, count: 1 });
+      return;
+    }
+    if (window.count >= MAX_PROPOSALS_PER_ORIGIN_PER_MINUTE) throw new Error('Global Sync proposal rate limit exceeded for origin');
+    window.count += 1;
+  }
+
   private currentRevision(documentId: string): GlobalRevision | undefined {
     const head = this.state.heads[documentId];
     return head ? this.state.revisions[head] : undefined;
@@ -313,10 +394,18 @@ export class GlobalSyncHub {
       let byteLength = 0;
       if (operation === 'upsert') {
         if (typeof input.content !== 'string') throw new Error('content is required for an upsert');
-        const stored = await this.storeContent(input.content);
-        contentHash = stored.contentHash;
-        byteLength = stored.byteLength;
+        byteLength = Buffer.byteLength(input.content, 'utf8');
+        if (byteLength > MAX_DOCUMENT_BYTES) throw new Error(`Global document exceeds ${MAX_DOCUMENT_BYTES} bytes`);
+        contentHash = sha256(input.content);
       }
+      const duplicate = Object.values(this.state.proposals).find(candidate => candidate.status === 'pending'
+        && candidate.documentId === documentId
+        && candidate.parentRevision === parentRevision
+        && candidate.operation === operation
+        && candidate.contentHash === contentHash);
+      if (duplicate) return duplicate;
+      this.enforceProposalQuota(origin, byteLength);
+      if (operation === 'upsert' && typeof input.content === 'string') await this.storeContent(input.content);
       const proposal: GlobalProposal = {
         proposalId: `proposal_${randomUUID()}`,
         documentId,
@@ -329,6 +418,7 @@ export class GlobalSyncHub {
         origin,
         createdAt: new Date().toISOString(),
         status: 'pending',
+        approvals: [],
       };
       await this.appendEvent('proposal.created', { proposal });
       return proposal;
@@ -340,23 +430,25 @@ export class GlobalSyncHub {
     const cursor = Number.isSafeInteger(Number(after)) && Number(after) >= 0 ? Number(after) : 0;
     const revisions = Object.values(this.state.revisions).filter(revision => revision.sequence > cursor).sort((a, b) => a.sequence - b.sequence);
     const bounded = revisions.slice(0, normalizeLimit(limit));
-    return {
+    const unsignedManifest = {
       protocol: PROTOCOL,
       hubId: this.hubId,
       cursor: bounded.at(-1)?.sequence || cursor,
       entries: bounded.map(revision => ({ documentId: revision.documentId, revisionId: revision.revisionId, sequence: revision.sequence, ...(revision.parentRevision && { parentRevision: revision.parentRevision }), operation: revision.operation, ...(revision.contentHash && { contentHash: revision.contentHash }) })),
       hasMore: revisions.length > bounded.length,
     };
+    return { ...unsignedManifest, signature: signPayload(unsignedManifest, this.signingPrivateKey) };
   }
 
   async getRevision(revisionId: string): Promise<GlobalRevisionWithContent> {
     await this.ensureLoaded();
     const revision = this.state.revisions[String(revisionId || '').trim()];
     if (!revision) throw new Error('revision not found');
+    if (!revision.signature || !verifyPayload(withoutSignature(revision), revision.signature, createPublicKey(this.signingPublicKey))) throw new Error(`revision signature mismatch for ${revision.revisionId}`);
     if (revision.operation === 'tombstone') return { ...revision };
     if (!revision.contentHash) throw new Error('upsert revision has no content hash');
     const content = await readFile(this.objectPath(revision.contentHash), 'utf8');
-    if (sha256(content) !== revision.contentHash) throw new Error(`content hash mismatch for ${revision.revisionId}`);
+    if (sha256(content) !== revision.contentHash || Buffer.byteLength(content, 'utf8') !== revision.byteLength) throw new Error(`content validation failed for ${revision.revisionId}`);
     return { ...revision, content };
   }
 
@@ -369,11 +461,17 @@ export class GlobalSyncHub {
     return { proposals: bounded, total: all.length, truncated: bounded.length < all.length };
   }
 
-  async approveProposal(proposalId: string, reviewer: string, reason: string): Promise<{ status: 'approved' | 'conflict'; proposal: GlobalProposal; revision?: GlobalRevision; currentRevision?: string }> {
+  async approveProposal(proposalId: string, reviewer: string, reason: string): Promise<{ status: 'pending' | 'approved' | 'conflict'; proposal: GlobalProposal; revision?: GlobalRevision; currentRevision?: string }> {
     return this.withMutation(async () => {
       const proposal = this.state.proposals[String(proposalId || '').trim()];
       if (!proposal) throw new Error('proposal not found');
       if (proposal.status !== 'pending') throw new Error(`proposal is already ${proposal.status}`);
+      const reviewerId = boundedText(reviewer, 'reviewer', MAX_AUTHOR_LENGTH);
+      if (proposal.approvals?.includes(reviewerId)) throw new Error('reviewer has already approved this proposal');
+      await this.appendEvent('proposal.approval', { proposalId: proposal.proposalId, reviewer: reviewerId, decidedAt: new Date().toISOString() });
+      const approvedProposal = this.state.proposals[proposal.proposalId]!;
+      const requiredApprovals = proposal.operation === 'tombstone' ? this.approvalQuorum : 1;
+      if ((approvedProposal.approvals?.length || 0) < requiredApprovals) return { status: 'pending' as const, proposal: approvedProposal };
       const current = this.currentRevision(proposal.documentId);
       const currentId = current?.revisionId;
       if ((proposal.parentRevision || undefined) !== currentId) {
@@ -381,7 +479,7 @@ export class GlobalSyncHub {
         await this.appendEvent('proposal.conflict', { proposalId: proposal.proposalId, reason: decisionReason, decidedAt: new Date().toISOString() });
         return { status: 'conflict' as const, proposal: this.state.proposals[proposal.proposalId]!, ...(currentId && { currentRevision: currentId }) };
       }
-      const revision: GlobalRevision = {
+      const unsignedRevision = {
         revisionId: `rev_${randomUUID()}`,
         documentId: proposal.documentId,
         sequence: this.state.nextSequence + 1,
@@ -394,7 +492,8 @@ export class GlobalSyncHub {
         origin: proposal.origin,
         createdAt: new Date().toISOString(),
       };
-      await this.appendEvent('proposal.approved', { proposalId: proposal.proposalId, revision, decidedAt: new Date().toISOString(), reviewer: boundedText(reviewer, 'reviewer', MAX_AUTHOR_LENGTH) });
+      const revision: GlobalRevision = { ...unsignedRevision, signature: signPayload(unsignedRevision, this.signingPrivateKey) };
+      await this.appendEvent('proposal.approved', { proposalId: proposal.proposalId, revision, decidedAt: new Date().toISOString(), reviewer: reviewerId });
       return { status: 'approved' as const, proposal: this.state.proposals[proposal.proposalId]!, revision };
     });
   }
@@ -414,14 +513,16 @@ export class GlobalSyncHub {
       const documentId = normalizeId(documentIdInput, 'documentId');
       const target = this.state.revisions[String(targetRevisionId || '').trim()];
       if (!target || target.documentId !== documentId || target.operation !== 'upsert' || !target.contentHash) throw new Error('targetRevisionId must identify an existing upsert of this document');
+      const targetContent = await readFile(this.objectPath(target.contentHash), 'utf8');
+      if (sha256(targetContent) !== target.contentHash || Buffer.byteLength(targetContent, 'utf8') !== target.byteLength) throw new Error('target revision object failed content validation');
       const current = this.currentRevision(documentId);
       if ((expectedCurrentRevision || undefined) !== current?.revisionId) throw new Error(`restore conflict: expected ${expectedCurrentRevision || 'none'}, current ${current?.revisionId || 'none'}`);
-      const revision: GlobalRevision = {
+      const unsignedRevision = {
         revisionId: `rev_${randomUUID()}`,
         documentId,
         sequence: this.state.nextSequence + 1,
         ...(current && { parentRevision: current.revisionId }),
-        operation: 'upsert',
+        operation: 'upsert' as const,
         contentHash: target.contentHash,
         byteLength: target.byteLength,
         author: boundedText(reviewer, 'reviewer', MAX_AUTHOR_LENGTH),
@@ -429,8 +530,9 @@ export class GlobalSyncHub {
         origin: this.hubId,
         createdAt: new Date().toISOString(),
       };
+      const revision: GlobalRevision = { ...unsignedRevision, signature: signPayload(unsignedRevision, this.signingPrivateKey) };
       await this.appendEvent('revision.restored', { revision });
-      return revision;
+      return this.state.revisions[revision.revisionId]!;
     });
   }
 
@@ -442,6 +544,7 @@ export class GlobalSyncHub {
     for (const revision of revisions) {
       try {
         normalizeId(revision.documentId, 'documentId');
+        if (!revision.signature || !verifyPayload(withoutSignature(revision), revision.signature, createPublicKey(this.signingPublicKey))) throw new Error('signature mismatch');
         if (revision.parentRevision) {
           const parent = this.state.revisions[revision.parentRevision];
           if (!parent || parent.documentId !== revision.documentId || parent.sequence >= revision.sequence) errors.push(`invalid parent chain at ${revision.revisionId}`);
@@ -450,7 +553,7 @@ export class GlobalSyncHub {
           if (!revision.contentHash) throw new Error('missing content hash');
           const content = await readFile(this.objectPath(revision.contentHash), 'utf8');
           checkedObjects += 1;
-          if (sha256(content) !== revision.contentHash) errors.push(`content hash mismatch at ${revision.revisionId}`);
+          if (sha256(content) !== revision.contentHash || Buffer.byteLength(content, 'utf8') !== revision.byteLength) errors.push(`content validation failed at ${revision.revisionId}`);
         }
       } catch (error) {
         errors.push(`${revision.revisionId}: ${error instanceof Error ? error.message : 'invalid revision'}`);
@@ -514,7 +617,7 @@ export class GlobalSyncClient {
     return this.request<GlobalProposalList>(`/v1/global/proposals?${params}`);
   }
 
-  approveProposal(proposalId: string, reviewer: string, reason: string): Promise<{ status: 'approved' | 'conflict'; proposal: GlobalProposal; revision?: GlobalRevision; currentRevision?: string }> {
+  approveProposal(proposalId: string, reviewer: string, reason: string): Promise<{ status: 'pending' | 'approved' | 'conflict'; proposal: GlobalProposal; revision?: GlobalRevision; currentRevision?: string }> {
     return this.request(`/v1/global/proposals/${encodeURIComponent(proposalId)}/approve`, { method: 'POST', body: JSON.stringify({ reviewer, reason }) }, true);
   }
 
@@ -530,6 +633,7 @@ export class GlobalSyncClient {
 export interface GlobalSyncReplicaOptions {
   vaultPath: string;
   client: Pick<GlobalSyncClient, 'getManifest' | 'getRevision' | 'submitProposal'>;
+  trustedPublicKey: string;
 }
 
 interface ReplicaDocumentState {
@@ -558,6 +662,7 @@ export class GlobalSyncReplica {
   private readonly backupRoot: string;
   private readonly quarantineRoot: string;
   private readonly client: GlobalSyncReplicaOptions['client'];
+  private readonly trustedPublicKey: KeyObject;
   private state: ReplicaState = { version: 1, cursor: 0, documents: {} };
   private loaded = false;
 
@@ -567,6 +672,7 @@ export class GlobalSyncReplica {
     this.backupRoot = join(this.vaultPath, '.mcpvault', 'global-sync-backups');
     this.quarantineRoot = join(this.vaultPath, '.mcpvault', 'global-sync-quarantine');
     this.client = options.client;
+    this.trustedPublicKey = createPublicKey(options.trustedPublicKey);
   }
 
   private async load(): Promise<void> {
@@ -611,9 +717,20 @@ export class GlobalSyncReplica {
   async pull(limit?: number): Promise<GlobalPullResult> {
     await this.load();
     const manifest = await this.client.getManifest(this.state.cursor, normalizeLimit(limit));
+    if (manifest.protocol !== PROTOCOL || !manifest.signature || !verifyPayload(withoutSignature(manifest), manifest.signature, this.trustedPublicKey)) {
+      return { applied: [], conflicts: [{ documentId: '', revisionId: '', reason: 'Remote manifest failed protocol or signature validation.' }], cursor: this.state.cursor, hasMore: true };
+    }
+    if (manifest.entries.length > 0 && manifest.cursor !== manifest.entries.at(-1)!.sequence) {
+      return { applied: [], conflicts: [{ documentId: '', revisionId: '', reason: 'Remote manifest cursor does not match its final entry.' }], cursor: this.state.cursor, hasMore: true };
+    }
+    let expectedSequence = this.state.cursor;
     const applied: string[] = [];
     const conflicts: GlobalPullResult['conflicts'] = [];
     for (const entry of manifest.entries) {
+      if (!Number.isSafeInteger(entry.sequence) || entry.sequence <= expectedSequence) {
+        conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: 'Remote manifest sequence is not strictly increasing.' });
+        break;
+      }
       const path = this.localPath(entry.documentId);
       const previous = this.state.documents[entry.documentId];
       const current = await this.currentContent(path);
@@ -628,7 +745,7 @@ export class GlobalSyncReplica {
       }
       if (entry.operation === 'upsert') {
         const revision = await this.client.getRevision(entry.revisionId);
-        if (revision.revisionId !== entry.revisionId || revision.documentId !== entry.documentId || revision.sequence !== entry.sequence || revision.parentRevision !== entry.parentRevision || revision.operation !== 'upsert' || !revision.content || !revision.contentHash || sha256(revision.content) !== revision.contentHash || revision.contentHash !== entry.contentHash) {
+        if (!revision.signature || !verifyPayload(withoutRevisionContent(revision), revision.signature, this.trustedPublicKey) || revision.revisionId !== entry.revisionId || revision.documentId !== entry.documentId || revision.sequence !== entry.sequence || revision.parentRevision !== entry.parentRevision || (previous?.revisionId || undefined) !== (revision.parentRevision || undefined) || revision.operation !== 'upsert' || typeof revision.content !== 'string' || !revision.contentHash || revision.byteLength !== Buffer.byteLength(revision.content, 'utf8') || sha256(revision.content) !== revision.contentHash || revision.contentHash !== entry.contentHash) {
           conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: 'Remote revision failed identity or content-hash validation.' });
           break;
         }
@@ -642,6 +759,11 @@ export class GlobalSyncReplica {
         await writeAtomic(path, revision.content);
         this.state.documents[entry.documentId] = { revisionId: entry.revisionId, operation: 'upsert', contentHash: revision.contentHash };
       } else {
+        const revision = await this.client.getRevision(entry.revisionId);
+        if (!revision.signature || !verifyPayload(withoutRevisionContent(revision), revision.signature, this.trustedPublicKey) || revision.revisionId !== entry.revisionId || revision.documentId !== entry.documentId || revision.sequence !== entry.sequence || revision.parentRevision !== entry.parentRevision || (previous?.revisionId || undefined) !== (revision.parentRevision || undefined) || revision.operation !== 'tombstone' || revision.byteLength !== 0 || entry.contentHash !== undefined) {
+          conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: 'Remote tombstone failed identity, chain, or signature validation.' });
+          break;
+        }
         const localDirty = current.exists && (!previous || current.hash !== previous.contentHash);
         if (localDirty) {
           conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: 'Local document has unsubmitted changes; remote tombstone was not applied.' });
@@ -655,6 +777,7 @@ export class GlobalSyncReplica {
         this.state.documents[entry.documentId] = { revisionId: entry.revisionId, operation: 'tombstone' };
       }
       this.state.cursor = entry.sequence;
+      expectedSequence = entry.sequence;
       await this.save();
       applied.push(entry.documentId);
     }
@@ -681,8 +804,10 @@ export interface GlobalSyncHubHttpOptions {
   port?: number;
   authToken: string;
   reviewerToken: string;
+  reviewerTokens?: Record<string, string>;
   maxBodyBytes?: number;
   hubId?: string;
+  signingKeyPath?: string;
 }
 
 export interface GlobalSyncHubHttpHandle {
@@ -736,15 +861,67 @@ function pathParam(pathname: string, prefix: string): string | undefined {
 export async function startGlobalSyncHub(root: string, options: GlobalSyncHubHttpOptions): Promise<GlobalSyncHubHttpHandle> {
   const authToken = boundedText(options.authToken, 'authToken', 4096);
   const reviewerToken = boundedText(options.reviewerToken, 'reviewerToken', 4096);
-  const hub = new GlobalSyncHub(root, { ...(options.hubId && { hubId: options.hubId }) });
+  if (constantTimeEqual(authToken, reviewerToken)) throw new Error('authToken and reviewerToken must be different');
+  const reviewerTokens = new Map<string, string>([['reviewer', reviewerToken]]);
+  for (const [reviewerId, token] of Object.entries(options.reviewerTokens || {})) {
+    const id = boundedText(reviewerId, 'reviewerId', MAX_AUTHOR_LENGTH);
+    if (!/^[a-z0-9][a-z0-9._-]{0,127}$/.test(id)) throw new Error('reviewerId must be a lowercase identifier');
+    const normalizedToken = boundedText(token, `reviewerTokens.${id}`, 4096);
+    if (constantTimeEqual(authToken, normalizedToken)) throw new Error('reviewer tokens must differ from authToken');
+    if ([...reviewerTokens.values()].some(existing => constantTimeEqual(existing, normalizedToken))) throw new Error('reviewer tokens must be unique');
+    reviewerTokens.set(id, normalizedToken);
+  }
+  const signingKeyPath = resolve(options.signingKeyPath || join(resolve(root), 'signing-key.pem'));
+  let signingPrivateKey: string | undefined;
+  try {
+    signingPrivateKey = await readFile(signingKeyPath, 'utf8');
+  } catch (error) {
+    if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) throw error;
+  }
+  let hub = new GlobalSyncHub(root, { ...(options.hubId && { hubId: options.hubId }), ...(signingPrivateKey && { signingPrivateKey }) });
+  if (!signingPrivateKey) {
+    await mkdir(dirname(signingKeyPath), { recursive: true, mode: 0o700 });
+    try {
+      await writeFile(signingKeyPath, hub.exportSigningPrivateKey(), { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+    } catch (error) {
+      if (!(error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST')) throw error;
+      hub = new GlobalSyncHub(root, { ...(options.hubId && { hubId: options.hubId }), signingPrivateKey: await readFile(signingKeyPath, 'utf8') });
+    }
+  }
   await hub.getManifest(0, 1);
   const host = options.host || '127.0.0.1';
   const maxBodyBytes = options.maxBodyBytes || 2 * 1024 * 1024;
+  const requestWindows = new Map<string, { startedAt: number; count: number }>();
+  const reviewerFor = (token: string | undefined): string | undefined => {
+    for (const [reviewerId, reviewerSecret] of reviewerTokens) if (constantTimeEqual(token, reviewerSecret)) return reviewerId;
+    return undefined;
+  };
+  const allowedByRate = (key: string): boolean => {
+    const now = Date.now();
+    const current = requestWindows.get(key);
+    if (!current || now - current.startedAt >= RATE_WINDOW_MS) {
+      if (requestWindows.size >= MAX_RATE_BUCKETS) {
+        for (const [bucket, value] of requestWindows) {
+          if (now - value.startedAt >= RATE_WINDOW_MS) requestWindows.delete(bucket);
+          if (requestWindows.size < MAX_RATE_BUCKETS) break;
+        }
+      }
+      if (requestWindows.size >= MAX_RATE_BUCKETS && !requestWindows.has(key)) return false;
+      requestWindows.set(key, { startedAt: now, count: 1 });
+      return true;
+    }
+    if (current.count >= MAX_HTTP_REQUESTS_PER_MINUTE) return false;
+    current.count += 1;
+    return true;
+  };
   const server = createHttpServer(async (request, response) => {
     try {
       const url = new URL(request.url || '/', `http://${host}`);
       const reviewerRoute = url.pathname === '/v1/global/audit' || (request.method === 'POST' && (url.pathname === '/v1/global/restore' || /\/v1\/global\/proposals\/[^/]+\/(?:approve|reject)$/.test(url.pathname)));
-      if (!constantTimeEqual(bearer(request), reviewerRoute ? reviewerToken : authToken)) { sendJson(response, 401, { error: 'Unauthorized' }); return; }
+      const token = bearer(request);
+      const reviewerId = reviewerFor(token);
+      if (reviewerRoute ? !reviewerId : !constantTimeEqual(token, authToken)) { sendJson(response, 401, { error: 'Unauthorized' }); return; }
+      if (!allowedByRate(`${request.socket.remoteAddress || 'unknown'}:${reviewerId || 'proposer'}`)) { sendJson(response, 429, { error: 'Rate limit exceeded; retry later' }); return; }
       if (request.method === 'GET' && url.pathname === '/healthz') { sendJson(response, 200, { ok: true, protocol: PROTOCOL }); return; }
       if (request.method === 'GET' && url.pathname === '/v1/global/manifest') {
         sendJson(response, 200, await hub.getManifest(Number(url.searchParams.get('after') || 0), Number(url.searchParams.get('limit') || DEFAULT_BATCH_LIMIT))); return;
@@ -762,15 +939,15 @@ export async function startGlobalSyncHub(root: string, options: GlobalSyncHubHtt
       const proposalId = pathParam(url.pathname, '/v1/global/proposals/');
       if (request.method === 'POST' && proposalId?.endsWith('/approve')) {
         const body = await jsonBody(request, maxBodyBytes);
-        sendJson(response, 200, await hub.approveProposal(proposalId.slice(0, -'/approve'.length), String(body.reviewer || ''), String(body.reason || ''))); return;
+        sendJson(response, 200, await hub.approveProposal(proposalId.slice(0, -'/approve'.length), reviewerId!, String(body.reason || ''))); return;
       }
       if (request.method === 'POST' && proposalId?.endsWith('/reject')) {
         const body = await jsonBody(request, maxBodyBytes);
-        sendJson(response, 200, await hub.rejectProposal(proposalId.slice(0, -'/reject'.length), String(body.reviewer || ''), String(body.reason || ''))); return;
+        sendJson(response, 200, await hub.rejectProposal(proposalId.slice(0, -'/reject'.length), reviewerId!, String(body.reason || ''))); return;
       }
       if (request.method === 'POST' && url.pathname === '/v1/global/restore') {
         const body = await jsonBody(request, maxBodyBytes);
-        sendJson(response, 200, await hub.restoreDocument(String(body.documentId || ''), String(body.targetRevisionId || ''), String(body.reviewer || ''), String(body.reason || ''), typeof body.expectedCurrentRevision === 'string' ? body.expectedCurrentRevision : undefined)); return;
+        sendJson(response, 200, await hub.restoreDocument(String(body.documentId || ''), String(body.targetRevisionId || ''), reviewerId!, String(body.reason || ''), typeof body.expectedCurrentRevision === 'string' ? body.expectedCurrentRevision : undefined)); return;
       }
       if ((request.method === 'GET' || request.method === 'POST') && url.pathname === '/v1/global/audit') { sendJson(response, 200, await hub.audit()); return; }
       response.statusCode = 404; response.end('Not found');

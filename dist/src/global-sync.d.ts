@@ -14,6 +14,7 @@ export interface GlobalRevision {
     reason: string;
     origin: string;
     createdAt: string;
+    signature: string;
 }
 export interface GlobalManifestEntry {
     documentId: string;
@@ -29,6 +30,7 @@ export interface GlobalManifest {
     cursor: number;
     entries: GlobalManifestEntry[];
     hasMore: boolean;
+    signature: string;
 }
 export interface GlobalRevisionWithContent extends GlobalRevision {
     content?: string;
@@ -45,6 +47,7 @@ export interface GlobalProposal {
     origin: string;
     createdAt: string;
     status: GlobalProposalStatus;
+    approvals?: string[];
     decisionReason?: string;
     decidedAt?: string;
 }
@@ -61,6 +64,7 @@ export interface GlobalProposalList {
 }
 export interface GlobalSyncHubOptions {
     hubId?: string;
+    signingPrivateKey?: string;
 }
 export interface GlobalSyncChangeInput {
     documentId: string;
@@ -71,6 +75,10 @@ export interface GlobalSyncChangeInput {
     reason: string;
     origin: string;
 }
+export declare function generateGlobalSyncSigningKeyPair(): {
+    privateKey: string;
+    publicKey: string;
+};
 /**
  * Append-only Global authority. It stores metadata in a rebuildable state
  * snapshot and content in immutable, hash-addressed objects. No physical
@@ -82,22 +90,29 @@ export declare class GlobalSyncHub {
     private readonly eventPath;
     private readonly objectRoot;
     private readonly hubId;
+    private readonly signingPrivateKey;
+    private readonly signingPublicKey;
+    private readonly approvalQuorum;
+    private readonly originWindows;
     private state;
     private initialized;
     private mutationTail;
     constructor(root: string, options?: GlobalSyncHubOptions);
+    getPublicKey(): string;
+    exportSigningPrivateKey(): string;
     private ensureLoaded;
     private withMutation;
     private appendEvent;
     private objectPath;
     private storeContent;
+    private enforceProposalQuota;
     private currentRevision;
     submitProposal(input: GlobalSyncChangeInput): Promise<GlobalProposal>;
     getManifest(after?: number, limit?: number): Promise<GlobalManifest>;
     getRevision(revisionId: string): Promise<GlobalRevisionWithContent>;
     listProposals(status?: GlobalProposalStatus, limit?: number): Promise<GlobalProposalList>;
     approveProposal(proposalId: string, reviewer: string, reason: string): Promise<{
-        status: 'approved' | 'conflict';
+        status: 'pending' | 'approved' | 'conflict';
         proposal: GlobalProposal;
         revision?: GlobalRevision;
         currentRevision?: string;
@@ -123,7 +138,7 @@ export declare class GlobalSyncClient {
     submitProposal(input: GlobalSyncChangeInput): Promise<GlobalProposal>;
     listProposals(status?: GlobalProposalStatus, limit?: number): Promise<GlobalProposalList>;
     approveProposal(proposalId: string, reviewer: string, reason: string): Promise<{
-        status: 'approved' | 'conflict';
+        status: 'pending' | 'approved' | 'conflict';
         proposal: GlobalProposal;
         revision?: GlobalRevision;
         currentRevision?: string;
@@ -134,6 +149,7 @@ export declare class GlobalSyncClient {
 export interface GlobalSyncReplicaOptions {
     vaultPath: string;
     client: Pick<GlobalSyncClient, 'getManifest' | 'getRevision' | 'submitProposal'>;
+    trustedPublicKey: string;
 }
 export interface GlobalPullResult {
     applied: string[];
@@ -152,6 +168,7 @@ export declare class GlobalSyncReplica {
     private readonly backupRoot;
     private readonly quarantineRoot;
     private readonly client;
+    private readonly trustedPublicKey;
     private state;
     private loaded;
     constructor(options: GlobalSyncReplicaOptions);
@@ -169,8 +186,10 @@ export interface GlobalSyncHubHttpOptions {
     port?: number;
     authToken: string;
     reviewerToken: string;
+    reviewerTokens?: Record<string, string>;
     maxBodyBytes?: number;
     hubId?: string;
+    signingKeyPath?: string;
 }
 export interface GlobalSyncHubHttpHandle {
     server: HttpServer;

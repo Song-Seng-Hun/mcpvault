@@ -30,7 +30,8 @@ test('Global Hub keeps proposals separate, rejects unsafe paths, and restores to
   expect((await hub.getRevision(first.revisionId)).content).toBe('# First\n');
 
   const deletion = await hub.submitProposal({ documentId: 'Knowledge/Answer.md', parentRevision: first.revisionId, operation: 'tombstone', author: 'agent-a', reason: 'Superseded', origin: 'server-a' });
-  const deleted = await hub.approveProposal(deletion.proposalId, 'reviewer', 'Superseded note retained as tombstone');
+  expect((await hub.approveProposal(deletion.proposalId, 'reviewer-a', 'Superseded note retained as tombstone')).status).toBe('pending');
+  const deleted = await hub.approveProposal(deletion.proposalId, 'reviewer-b', 'Superseded note retained as tombstone');
   expect(deleted.status).toBe('approved');
   const tombstone = deleted.revision!;
   expect((await hub.getRevision(tombstone.revisionId)).content).toBeUndefined();
@@ -47,7 +48,7 @@ test('Global replica never overwrites dirty local work and quarantines remote to
     getRevision: (revisionId: string) => hub.getRevision(revisionId),
     submitProposal: (input: Parameters<typeof hub.submitProposal>[0]) => hub.submitProposal(input),
   };
-  const replica = new GlobalSyncReplica({ vaultPath: root, client });
+  const replica = new GlobalSyncReplica({ vaultPath: root, client, trustedPublicKey: hub.getPublicKey() });
 
   const firstProposal = await hub.submitProposal({ documentId: 'Knowledge/Answer.md', content: 'first\n', author: 'a', reason: 'first', origin: 'server-a' });
   const first = (await hub.approveProposal(firstProposal.proposalId, 'reviewer', 'accept')).revision!;
@@ -64,7 +65,8 @@ test('Global replica never overwrites dirty local work and quarantines remote to
   await writeFile(join(root, 'Knowledge', 'Answer.md'), 'first\n');
   expect((await replica.pull()).applied).toEqual(['Knowledge/Answer.md']);
   const deletionProposal = await hub.submitProposal({ documentId: 'Knowledge/Answer.md', parentRevision: second.revisionId, operation: 'tombstone', author: 'reviewer', reason: 'Remove obsolete copy', origin: 'server-a' });
-  await hub.approveProposal(deletionProposal.proposalId, 'reviewer', 'accept');
+  expect((await hub.approveProposal(deletionProposal.proposalId, 'reviewer-a', 'accept')).status).toBe('pending');
+  await hub.approveProposal(deletionProposal.proposalId, 'reviewer-b', 'accept');
   const tombstonePull = await replica.pull();
   expect(tombstonePull.applied).toEqual(['Knowledge/Answer.md']);
   await expect(readFile(join(root, 'Knowledge', 'Answer.md'), 'utf8')).rejects.toThrow();
@@ -84,5 +86,36 @@ test('Global Hub HTTP separates proposer and reviewer authority', async () => {
     expect((await reviewer.approveProposal(proposal.proposalId, 'reviewer', 'checked')).status).toBe('approved');
   } finally {
     await handle.close();
+  }
+});
+
+test('Global Hub persists its signing key and binds reviewer identity to the token', async () => {
+  const firstHandle = await startGlobalSyncHub(hubRoot, {
+    authToken: 'proposer-secret',
+    reviewerToken: 'reviewer-a-secret',
+    reviewerTokens: { 'reviewer-b': 'reviewer-b-secret' },
+  });
+  const publicKey = firstHandle.hub.getPublicKey();
+  await firstHandle.close();
+
+  const secondHandle = await startGlobalSyncHub(hubRoot, {
+    authToken: 'proposer-secret',
+    reviewerToken: 'reviewer-a-secret',
+    reviewerTokens: { 'reviewer-b': 'reviewer-b-secret' },
+  });
+  expect(secondHandle.hub.getPublicKey()).toBe(publicKey);
+  try {
+    const baseUrl = `http://${secondHandle.host}:${secondHandle.port}`;
+    const proposer = new GlobalSyncClient({ baseUrl, authToken: 'proposer-secret' });
+    const reviewerA = new GlobalSyncClient({ baseUrl, authToken: 'proposer-secret', reviewerToken: 'reviewer-a-secret' });
+    const reviewerB = new GlobalSyncClient({ baseUrl, authToken: 'proposer-secret', reviewerToken: 'reviewer-b-secret' });
+    const proposal = await proposer.submitProposal({ documentId: 'Knowledge/Quorum.md', content: 'quorum\n', author: 'server-a', reason: 'test', origin: 'server-a' });
+    const accepted = await reviewerA.approveProposal(proposal.proposalId, 'forged-reviewer', 'checked');
+    expect(accepted.proposal.approvals).toEqual(['reviewer']);
+    const deletion = await proposer.submitProposal({ documentId: 'Knowledge/Quorum.md', parentRevision: accepted.revision!.revisionId, operation: 'tombstone', author: 'server-a', reason: 'remove', origin: 'server-a' });
+    expect((await reviewerA.approveProposal(deletion.proposalId, 'someone-else', 'checked')).status).toBe('pending');
+    expect((await reviewerB.approveProposal(deletion.proposalId, 'still-forged', 'checked')).status).toBe('approved');
+  } finally {
+    await secondHandle.close();
   }
 });

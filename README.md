@@ -1410,22 +1410,45 @@ revision available for review. `GlobalSyncHub.audit()` checks revision chains,
 heads, and content objects for corruption.
 
 The optional HTTP control plane is started with `startGlobalSyncHub()` and
-requires a proposer bearer token and a separate reviewer bearer token supplied
+requires a proposer bearer token and separate reviewer bearer tokens supplied
 by the host process. The proposer token permits bounded manifest/revision reads
-and proposal submission; only the reviewer token permits approval, rejection,
-restoration, and audit. User, Community, `_scopes`, `_whispers`, `.mcpvault`,
-and Git state are rejected at the document boundary. The local MCPVault server
-remains fully usable when the hub is offline; synchronization is an explicit
-pull/propose operation rather than a hidden dependency. TLS or mTLS should be
-used when the hub is not on the same machine; the current module provides
-content hashes and bearer separation, not a replacement for transport security.
+and proposal submission; reviewer operations derive the reviewer identity from
+the authenticated token, never from a caller-supplied JSON field. Upserts need
+one reviewer approval; tombstones need two distinct reviewer tokens, so a
+single compromised reviewer cannot erase a Global document. Reviewers can
+still restore an older immutable revision, and there is no physical delete.
+
+Every manifest and revision is signed with the hub's Ed25519 signing key.
+`startGlobalSyncHub()` persists that private key as `signing-key.pem` (or the
+configured `signingKeyPath`) with restrictive file creation permissions; the
+server prints only the public key. Replicas must be constructed with the
+operator-pinned `trustedPublicKey` and verify signatures, hashes, byte lengths,
+sequence order, and parent chains before applying anything. Keep the private
+key in an owner-only/ACL-protected directory and rotate it only with an
+explicit migration plan, because changing it invalidates old signatures.
+
+The HTTP adapter applies per-client request limits and the hub bounds total,
+pending, per-origin, and pending-content proposal volume. These are availability
+guards, not a replacement for a reverse proxy, WAF, TLS, or mTLS. Use TLS or
+mTLS whenever the hub is not on the same machine. User, Community, `_scopes`,
+`_whispers`, `.mcpvault`, and Git state are rejected at the document boundary.
+The local MCPVault server remains fully usable when the hub is offline;
+synchronization is an explicit pull/propose operation rather than a hidden
+dependency.
 
 For a standalone hub process, build the package, set
 `MCPVAULT_GLOBAL_SYNC_AUTH_TOKEN` and
 `MCPVAULT_GLOBAL_SYNC_REVIEWER_TOKEN` in the host environment, then run
-`mcpvault-global-sync <hub-storage-root>`. Keep the hub storage outside every
-Obsidian vault. The default bind address is localhost; use a private network
-and TLS/mTLS before binding it to a remote interface.
+`mcpvault-global-sync <hub-storage-root>`. For tombstone quorum, add a JSON
+object such as
+`MCPVAULT_GLOBAL_SYNC_REVIEWER_TOKENS='{"reviewer-b":"another-secret"}'`.
+Set `MCPVAULT_GLOBAL_SYNC_SIGNING_KEY_PATH` when the private key must live in
+an explicitly ACL-protected location.
+The built-in reviewer token is always the reviewer ID `reviewer`; every extra
+map key is another distinct reviewer ID/token pair. Keep the hub storage
+outside every Obsidian vault. The default bind address is localhost; use a
+private network and TLS/mTLS before binding it to a remote interface. Pin the
+public signing key printed at startup in each replica's deployment config.
 
 Every existing path-based tool accepts scope URIs:
 
