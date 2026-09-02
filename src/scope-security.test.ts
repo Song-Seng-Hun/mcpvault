@@ -75,6 +75,20 @@ test('anonymous and authenticated searches never expose another model scope', as
   }
 });
 
+test('global scope URIs cannot address private service directories', async () => {
+  const { server, client } = await connect();
+  try {
+    for (const path of ['scope://global/_scopes/agents/other/private.md', 'scope://global/_whispers/secret.md']) {
+      const result = await client.callTool({ name: 'read_note', arguments: { path } });
+      expect(result.isError).toBe(true);
+      expect((result.content as any)[0].text).toMatch(/private|service/i);
+    }
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('stdio registration has persistent account and family quotas', async () => {
   const authDirectory = join(vault, '.mcpvault');
   await mkdir(authDirectory, { recursive: true });
@@ -173,4 +187,13 @@ test('scope login throttles repeated password guessing without revealing account
     await client.close();
     await server.close();
   }
+});
+
+test('stdio registration is rate limited before password hashing can be abused', async () => {
+  const auth = new ScopeAuthService(vault);
+  await expect(auth.register({ accountId: 'registration-limit', modelId: 'codex', password: 'registration-password' })).resolves.toMatchObject({ success: true });
+  for (let attempt = 1; attempt < 32; attempt += 1) {
+    await expect(auth.register({ accountId: 'registration-limit', modelId: 'codex', password: 'registration-password' })).rejects.toThrow('Account already exists');
+  }
+  await expect(auth.register({ accountId: 'registration-limit-next', modelId: 'codex-next', password: 'registration-password' })).rejects.toThrow('Too many registration attempts');
 });

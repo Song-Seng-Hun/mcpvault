@@ -18,6 +18,8 @@ const LOGIN_WINDOW_MS = 60_000;
 const MAX_LOGIN_ATTEMPTS_PER_WINDOW = 120;
 // Registration can be reached anonymously by design. Keep abuse bounded even
 // when the server is used over stdio, where there is no client IP to rate-limit.
+const REGISTRATION_WINDOW_MS = 10 * 60_000;
+const MAX_REGISTRATION_ATTEMPTS_PER_WINDOW = 32;
 const MAX_ACCOUNTS = 4_096;
 const MAX_ACCOUNTS_PER_USER = 512;
 
@@ -168,6 +170,7 @@ export class ScopeAuthService {
   private readonly sessions = new Map<string, SessionRecord>();
   private readonly loginFailures = new Map<string, { count: number; blockedUntil: number }>();
   private loginWindow: { startedAt: number; count: number } = { startedAt: Date.now(), count: 0 };
+  private registrationWindow: { startedAt: number; count: number } = { startedAt: Date.now(), count: 0 };
   private readonly dummySalt = randomBytes(16);
   private mutationQueue: Promise<void> = Promise.resolve();
   private databaseCache: { expiresAt: number; value: AuthDatabase } | undefined;
@@ -274,6 +277,17 @@ export class ScopeAuthService {
     }
   }
 
+  private consumeRegistrationAttempt(): void {
+    const now = Date.now();
+    if (now - this.registrationWindow.startedAt >= REGISTRATION_WINDOW_MS) {
+      this.registrationWindow = { startedAt: now, count: 0 };
+    }
+    if (this.registrationWindow.count >= MAX_REGISTRATION_ATTEMPTS_PER_WINDOW) {
+      throw new Error('Too many registration attempts; try again later');
+    }
+    this.registrationWindow.count += 1;
+  }
+
   private rememberLoginFailure(accountId: string, previous?: { count: number; blockedUntil: number }): void {
     if (!this.loginFailures.has(accountId) && this.loginFailures.size >= MAX_LOGIN_FAILURE_ENTRIES) {
       const oldest = this.loginFailures.keys().next().value;
@@ -335,6 +349,8 @@ export class ScopeAuthService {
     } else if (sponsor) {
       throw new Error('A model account is self-registered only while its model scope is unclaimed');
     }
+
+    this.consumeRegistrationAttempt();
 
     const principal = await this.exclusive(async () => {
       const database = await this.readDatabase();

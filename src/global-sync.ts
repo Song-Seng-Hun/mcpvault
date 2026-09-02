@@ -24,6 +24,11 @@ const DEFAULT_BATCH_LIMIT = 100;
 const MAX_BATCH_LIMIT = 200;
 const RESERVED_ROOTS = new Set(['.git', '.obsidian', '.mcpvault', '_scopes', '_whispers', 'community', 'node_modules']);
 
+function isLoopbackHost(host: string): boolean {
+  const normalized = host.trim().toLowerCase().replace(/^\[|\]$/g, '');
+  return normalized === '127.0.0.1' || normalized === 'localhost' || normalized === '::1';
+}
+
 export type GlobalSyncOperation = 'upsert' | 'tombstone';
 export type GlobalProposalStatus = 'pending' | 'approved' | 'rejected' | 'conflict';
 export type GlobalSyncCredentialKind = 'proposer' | 'reviewer' | 'admin';
@@ -815,6 +820,11 @@ export class GlobalSyncClient {
   private readonly adminToken?: string;
 
   constructor(options: GlobalSyncClientOptions) {
+    const parsed = new URL(options.baseUrl);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('baseUrl must use http or https');
+    if (parsed.protocol === 'http:' && !isLoopbackHost(parsed.hostname)) {
+      throw new Error('Global Sync client requires HTTPS for non-loopback URLs');
+    }
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
     this.authToken = boundedText(options.authToken, 'authToken', 4096);
     if (options.reviewerToken) this.reviewerToken = boundedText(options.reviewerToken, 'reviewerToken', 4096);
@@ -1229,6 +1239,10 @@ export async function startGlobalSyncHub(root: string, options: GlobalSyncHubHtt
   const hub = new GlobalSyncHub(root, { ...(options.hubId && { hubId: options.hubId }), signingPrivateKey: signingPrivateKey!, processLockPath, ...(options.maxTotalContentBytes !== undefined && { maxTotalContentBytes: options.maxTotalContentBytes }) });
   await hub.getManifest(0, 1);
   const host = options.host || '127.0.0.1';
+  if (!isLoopbackHost(host) && !options.tls) {
+    await hub.close();
+    throw new Error('Global Sync HTTP requires TLS when binding to a non-loopback host');
+  }
   const maxBodyBytes = Math.min(Math.max(Math.trunc(options.maxBodyBytes ?? 2 * 1024 * 1024), 1024), 2 * 1024 * 1024);
   const requestWindows = new Map<string, { startedAt: number; count: number }>();
   const reviewerFor = (token: string | undefined): string | undefined => {

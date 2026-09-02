@@ -23,6 +23,7 @@ export declare class ScopeAuthService {
     private readonly sessions;
     private readonly loginFailures;
     private loginWindow;
+    private registrationWindow;
     private readonly dummySalt;
     private mutationQueue;
     private databaseCache;
@@ -38,6 +39,7 @@ export declare class ScopeAuthService {
     private defaultCapabilities;
     private exclusive;
     private consumeLoginAttempt;
+    private consumeRegistrationAttempt;
     private rememberLoginFailure;
     authenticate(accessToken: unknown): ScopePrincipal | undefined;
     register(params: {

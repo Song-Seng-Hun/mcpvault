@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { appendFile, chmod, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { appendFile, chmod, mkdir, open, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { normalizeScopeId } from './scopes.js';
 import {} from './moderation-policy.js';
@@ -9,15 +9,89 @@ export const MODERATION_ACTIONS = ['warn', 'hide', 'quarantine', 'remove', 'rest
 const MODERATION_DATABASE_CACHE_TTL_MS = 1_000;
 const MODERATION_EVENT_COMPACT_COUNT = 512;
 const MODERATION_EVENT_COMPACT_BYTES = 1 * 1024 * 1024;
+const MODERATION_LOCK_RETRY_COUNT = 2;
 const emptyDatabase = () => ({ version: 1, reports: [], actions: [], bans: [] });
 const actorName = (principal) => principal.agentId || principal.modelId || principal.accountId;
 const boundedText = (value, max) => String(value || '').trim().slice(0, max);
 const keyFor = (targetType, targetId, postId, roomId) => `${targetType}:${postId || roomId || ''}:${targetId}`;
+function processIsAlive(pid) {
+    try {
+        process.kill(pid, 0);
+        return true;
+    }
+    catch (error) {
+        return !(error && typeof error === 'object' && 'code' in error && error.code === 'ESRCH');
+    }
+}
+async function acquireModerationFileLock(path) {
+    await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+    for (let attempt = 0; attempt < MODERATION_LOCK_RETRY_COUNT; attempt += 1) {
+        const nonce = randomBytes(16).toString('hex');
+        try {
+            const handle = await open(path, 'wx');
+            try {
+                await handle.writeFile(`${JSON.stringify({ pid: process.pid, nonce })}\n`, 'utf8');
+                await handle.sync();
+            }
+            catch (error) {
+                await handle.close().catch(() => undefined);
+                await unlink(path).catch(() => undefined);
+                throw error;
+            }
+            return { handle, nonce, path };
+        }
+        catch (error) {
+            if (!(error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST'))
+                throw error;
+            let raw;
+            try {
+                raw = await readFile(path, 'utf8');
+            }
+            catch (readError) {
+                if (readError && typeof readError === 'object' && 'code' in readError && readError.code === 'ENOENT')
+                    continue;
+                throw readError;
+            }
+            let record;
+            try {
+                record = JSON.parse(raw);
+            }
+            catch {
+                throw new Error('Moderation lock is corrupt; refusing to remove it automatically');
+            }
+            if (!record || typeof record !== 'object' || Array.isArray(record)
+                || typeof record.pid !== 'number'
+                || !Number.isSafeInteger(record.pid)
+                || record.pid <= 0
+                || typeof record.nonce !== 'string'
+                || !record.nonce) {
+                throw new Error('Moderation lock is invalid; refusing to remove it automatically');
+            }
+            if (processIsAlive(record.pid))
+                throw new Error(`Moderation database is already in use by process ${record.pid}`);
+            await unlink(path);
+        }
+    }
+    throw new Error('Unable to acquire moderation database lock');
+}
+async function releaseModerationFileLock(lock) {
+    await lock.handle.close().catch(() => undefined);
+    try {
+        const record = JSON.parse(await readFile(lock.path, 'utf8'));
+        if (record.nonce === lock.nonce)
+            await unlink(lock.path);
+    }
+    catch (error) {
+        if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'))
+            throw error;
+    }
+}
 export class ModerationService {
     fileSystem;
     scopeAuth;
     databasePath;
     eventPath;
+    lockPath;
     mutationQueue = Promise.resolve();
     databaseCache;
     databaseInFlight;
@@ -28,6 +102,7 @@ export class ModerationService {
         this.scopeAuth = scopeAuth;
         this.databasePath = join(resolve(vaultPath), '.mcpvault', 'moderation.json');
         this.eventPath = join(resolve(vaultPath), '.mcpvault', 'moderation.events.ndjson');
+        this.lockPath = join(resolve(vaultPath), '.mcpvault', 'moderation.lock');
     }
     applyEvent(database, event) {
         if (event.kind === 'report') {
@@ -154,10 +229,21 @@ export class ModerationService {
         const previous = this.mutationQueue;
         this.mutationQueue = new Promise(resolvePromise => { release = resolvePromise; });
         await previous;
+        let fileLock;
         try {
+            fileLock = await acquireModerationFileLock(this.lockPath);
+            // A different server process may have appended events after this
+            // instance's short-lived cache was populated. Reload under the OS lock
+            // before the read-modify-write operation.
+            if (this.databaseInFlight)
+                await this.databaseInFlight.catch(() => undefined);
+            this.databaseCache = undefined;
+            this.databaseInFlight = undefined;
             return await operation();
         }
         finally {
+            if (fileLock)
+                await releaseModerationFileLock(fileLock).catch(() => undefined);
             release();
         }
     }

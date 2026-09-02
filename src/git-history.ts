@@ -165,7 +165,9 @@ export class GitHistoryService {
   }
 
   private async rejectExecutableFilters(): Promise<void> {
-    const result = await this.runGit(['config', '--local', '--get-regexp', '^filter\..*\.(clean|process)$'], { allowFailure: true });
+    // Use the merged Git config, not only .git/config. Global and system
+    // filters are equally capable of executing during `git add`.
+    const result = await this.runGit(['config', '--get-regexp', '^filter\..*\.(clean|process|smudge)$'], { allowFailure: true });
     if (result.exitCode !== 0 && !result.stdout.trim()) return;
     const unsafe = result.stdout
       .split(/\r?\n/)
@@ -181,7 +183,8 @@ export class GitHistoryService {
         const normalizedKey = key.toLowerCase();
         const standardLfs =
           (normalizedKey === 'filter.lfs.clean' && /^git-lfs clean(?:\s|$)/.test(command)) ||
-          (normalizedKey === 'filter.lfs.process' && /^git-lfs filter-process(?:\s|$)/.test(command));
+          (normalizedKey === 'filter.lfs.process' && /^git-lfs filter-process(?:\s|$)/.test(command)) ||
+          (normalizedKey === 'filter.lfs.smudge' && /^git-lfs smudge(?:\s|$)/.test(command));
         return !standardLfs;
       });
     if (unsafe) {

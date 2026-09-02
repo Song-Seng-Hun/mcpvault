@@ -1478,8 +1478,10 @@ tampered or missing log instead of trusting a manipulated snapshot.
 
 The HTTP adapter applies per-client request limits and the hub bounds total,
 pending, per-origin, and pending-content proposal volume. These are availability
-guards, not a replacement for a reverse proxy, WAF, TLS, or mTLS. Use TLS or
-mTLS whenever the hub is not on the same machine. User, Community, `_scopes`,
+guards, not a replacement for a reverse proxy, WAF, TLS, or mTLS. The library
+refuses to bind a non-loopback host without built-in TLS, and
+`GlobalSyncClient` rejects remote `http://` URLs before sending a bearer token.
+Use TLS or mTLS whenever the hub is not on the same machine. User, Community, `_scopes`,
 `_whispers`, `.mcpvault`, and Git state are rejected at the document boundary.
 The local MCPVault server remains fully usable when the hub is offline;
 synchronization is an explicit pull/propose operation rather than a hidden
@@ -1505,8 +1507,9 @@ Malformed lock files are rejected instead of being deleted automatically.
 For built-in HTTPS, set `MCPVAULT_GLOBAL_SYNC_TLS_KEY_PATH` and
 `MCPVAULT_GLOBAL_SYNC_TLS_CERT_PATH`; adding
 `MCPVAULT_GLOBAL_SYNC_TLS_CA_PATH` enables mutual TLS client-certificate
-verification. Without these variables the adapter is plain HTTP and should
-remain localhost-only or sit behind a TLS-terminating reverse proxy.
+verification. Without these variables the adapter is plain HTTP and is
+accepted only on localhost; use a TLS-terminating reverse proxy if the hub
+must be exposed remotely.
 The built-in reviewer token is always the reviewer ID `reviewer`; every extra
 map key is another distinct reviewer ID/token pair. Keep the hub storage
 outside every Obsidian vault. The default bind address is localhost; use a
@@ -1660,8 +1663,9 @@ The workflow is:
 
 `commit_changes` never pushes to a remote. Restricted paths such as `.git`,
 `.obsidian`, `.trash`, and other dotfiles are excluded. Git hooks and commit
-signing are disabled for MCP-created revisions, and repository-local executable
-clean filters other than standard Git LFS filters are rejected before staging. The vault must itself be the Git
+signing are disabled for MCP-created revisions, and executable
+clean/process/smudge filters from merged Git configuration other than standard
+Git LFS filters are rejected before staging. The vault must itself be the Git
 repository root; MCPVault refuses to operate on a vault nested inside a broader
 repository so sibling files cannot be committed accidentally.
 

@@ -26,6 +26,7 @@ export declare class ModerationService {
     private readonly scopeAuth;
     private readonly databasePath;
     private readonly eventPath;
+    private readonly lockPath;
     private mutationQueue;
     private databaseCache;
     private databaseInFlight;

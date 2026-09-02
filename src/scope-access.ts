@@ -71,21 +71,33 @@ export class ScopeAccessPolicy {
       if (parsed.kind === 'agent' && principal?.agentId !== parsed.id) {
         throw new Error(`Access denied: agent scope '${parsed.id}' is private`);
       }
-      return expandScopePath(raw);
+      const expanded = expandScopePath(raw);
+      if (parsed.kind === 'global' && this.isPrivateServicePath(expanded)) {
+        throw new Error('Private and service paths are not addressable through the global scope');
+      }
+      return expanded;
     }
 
     const normalized = normalizePhysicalPath(raw);
-    if (normalized.toLowerCase() === PRIVATE_ROOT || normalized.toLowerCase().startsWith(`${PRIVATE_ROOT}/`)) {
+    if (this.isPrivateServicePath(normalized)) {
+      if (normalized.toLowerCase() === WHISPER_ROOT || normalized.toLowerCase().startsWith(`${WHISPER_ROOT}/`)) {
+        throw new Error('Direct _whispers paths are private; use list_whispers');
+      }
       throw new Error('Direct _scopes paths are private; use an authorized scope:// URI');
-    }
-    if (normalized.toLowerCase() === WHISPER_ROOT || normalized.toLowerCase().startsWith(`${WHISPER_ROOT}/`)) {
-      throw new Error('Direct _whispers paths are private; use list_whispers');
     }
     // Legacy clients still pass physical Community paths to reference/bookmark
     // APIs. Managed community mutations are blocked separately; the canonical
     // scoped form for reads and path arguments remains
     // scope://community/<commandCenterId>/... .
     return raw;
+  }
+
+  private isPrivateServicePath(path: string): boolean {
+    const normalized = normalizePhysicalPath(path).toLowerCase();
+    return normalized === PRIVATE_ROOT
+      || normalized.startsWith(`${PRIVATE_ROOT}/`)
+      || normalized === WHISPER_ROOT
+      || normalized.startsWith(`${WHISPER_ROOT}/`);
   }
 
   assertMutationAllowed(path: string, operation: string): void {

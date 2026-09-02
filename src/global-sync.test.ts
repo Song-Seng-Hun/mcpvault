@@ -273,3 +273,17 @@ test('Global Hub prevents two live processes from sharing one event store', asyn
   await restarted.close();
   await expect(readFile(join(hubRoot, 'hub.lock'), 'utf8')).rejects.toThrow();
 });
+
+test('Global Hub requires TLS for non-loopback HTTP binding', async () => {
+  await expect(startGlobalSyncHub(hubRoot, {
+    host: '0.0.0.0',
+    authToken: 'proposer-secret',
+    reviewerToken: 'reviewer-secret',
+  })).rejects.toThrow('requires TLS');
+  await expect(readFile(join(hubRoot, 'hub.lock'), 'utf8')).rejects.toThrow();
+});
+
+test('Global Sync client rejects remote plaintext URLs', () => {
+  expect(() => new GlobalSyncClient({ baseUrl: 'http://sync.example.test', authToken: 'proposer-secret' })).toThrow('requires HTTPS');
+  expect(() => new GlobalSyncClient({ baseUrl: 'http://127.0.0.1:8080', authToken: 'proposer-secret' })).not.toThrow();
+});
