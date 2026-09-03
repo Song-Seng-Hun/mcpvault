@@ -214,7 +214,7 @@ function parseClaimReference(value: unknown): ParsedClaimReference {
   if (inner.includes('\\')) throw new Error(`invalid claim relation link: ${raw}`);
   const marker = inner.lastIndexOf('#^');
   if (marker < 0) throw new Error(`claim relation target must include a #^block-id: ${raw}`);
-  const document = inner.slice(0, marker).trim().replace(/^\.\//, '');
+  const document = inner.slice(0, marker).trim();
   const blockId = inner.slice(marker + 2).trim().toLowerCase();
   if (!blockId || blockId.length > 80 || !/^[a-z0-9_-]+$/.test(blockId)) {
     throw new Error(`claim relation block id must use 1-80 letters, numbers, hyphens, or underscores: ${raw}`);
@@ -250,6 +250,49 @@ function claimRelationValues(claim: Record<string, any>, property: ClaimRelation
   const definition = CLAIM_RELATION_FIELDS.find(item => item.property === property)!;
   const value = claim[property] ?? claim[definition.input];
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())).slice(0, 20) : [];
+}
+
+interface ClaimDependencyReference {
+  raw: string;
+  sourceClaimId: string;
+  document?: string;
+  targetClaimId?: string;
+  error?: string;
+}
+
+function claimDependencyReferences(frontmatter: Record<string, any>, limit = 120): { items: ClaimDependencyReference[]; truncated: boolean } {
+  const items: ClaimDependencyReference[] = [];
+  let truncated = false;
+  const claims = Array.isArray(frontmatter.claims) ? frontmatter.claims : [];
+  outer: for (let claimIndex = 0; claimIndex < claims.length; claimIndex += 1) {
+    const claim = claims[claimIndex];
+    if (!claim || typeof claim !== 'object') continue;
+    const sourceClaimId = claimId(typeof claim.id === 'string' ? claim.id : undefined, claimIndex);
+    for (const raw of claimRelationValues(claim, 'depends_on_claims')) {
+      if (items.length >= limit) {
+        truncated = true;
+        break outer;
+      }
+      try {
+        const parsed = parseClaimReference(raw);
+        items.push({ raw, sourceClaimId, document: parsed.document, targetClaimId: parsed.blockId });
+      } catch (error) {
+        items.push({ raw, sourceClaimId, error: error instanceof Error ? error.message : 'Invalid claim dependency link' });
+      }
+    }
+  }
+  return { items, truncated };
+}
+
+function structuredClaimIdCount(frontmatter: Record<string, any>, targetClaimId: string): number {
+  const claims = Array.isArray(frontmatter.claims) ? frontmatter.claims : [];
+  let count = 0;
+  for (let index = 0; index < claims.length; index += 1) {
+    const claim = claims[index];
+    if (!claim || typeof claim !== 'object' || typeof claim.text !== 'string' || !claim.text.trim()) continue;
+    if (claimId(typeof claim.id === 'string' ? claim.id : undefined, index) === targetClaimId.toLocaleLowerCase()) count += 1;
+  }
+  return count;
 }
 
 function blockAnchorLines(content: string, blockId: string): number[] {
@@ -787,7 +830,9 @@ automatically.
 For a MOC that represents a curriculum, onboarding route, or procedure, call
 \`get_wiki_learning_path\`. It preserves authored Obsidian link order, expands
 nested MOCs only to a bounded requested depth, and compares the sequence with
-existing \`depends_on\` Properties. The separate recommended order and
+existing note-level \`depends_on\` Properties and valid cross-note
+\`depends_on_claims\` prerequisites. Local claim dependencies remain inside
+their note and never become false self-prerequisites. The separate recommended order and
 unresolved, ambiguous, external, late, or cyclic prerequisite findings are
 advisory; inspect current revisions and deliberately edit Markdown rather than
 automatically reordering it.
@@ -5754,6 +5799,8 @@ export class LlmWikiService {
       interpretationStatus?: string;
       epistemicStatus?: string;
       relations: Record<string, string[]>;
+      claimDependencies: ReturnType<typeof claimDependencyReferences>;
+      claimIds: string[];
       hasEvidence: boolean;
       links: string[];
     }> = [];
@@ -5789,6 +5836,8 @@ export class LlmWikiService {
         relations: Object.fromEntries(RELATION_FIELDS
           .filter(field => Array.isArray(note.frontmatter[field]))
           .map(field => [field, note.frontmatter[field].filter((item: unknown): item is string => typeof item === 'string').slice(0, 30)])),
+        claimDependencies: claimDependencyReferences(note.frontmatter, 120),
+        claimIds: (Array.isArray(note.frontmatter.claims) ? note.frontmatter.claims : []).flatMap((claim: any, index: number) => claim && typeof claim === 'object' && typeof claim.text === 'string' && claim.text.trim() ? [claimId(typeof claim.id === 'string' ? claim.id : undefined, index)] : []),
         hasEvidence: (Array.isArray(note.frontmatter.evidence_paths) && note.frontmatter.evidence_paths.length > 0)
           || (Array.isArray(note.frontmatter.claims) && note.frontmatter.claims.some((claim: any) => Array.isArray(claim?.evidence_paths) && claim.evidence_paths.length > 0)),
         links,
@@ -5818,6 +5867,18 @@ export class LlmWikiService {
         if (direct) return [direct.path];
       }
       return resolveWikiLinkTargets(occurrence.target, visibleNotePaths);
+    };
+    const resolveGraphClaimDependency = (sourcePath: string, reference: ClaimDependencyReference): string[] => {
+      if (reference.error || reference.document === undefined) return [];
+      if (!reference.document) return [sourcePath];
+      let matches: string[] = [];
+      if (reference.document.startsWith('../') || reference.document.startsWith('./')) {
+        const relative = posix.normalize(posix.join(posix.dirname(normalizePath(sourcePath)), reference.document));
+        const direct = graphByPath.get(relative.toLowerCase()) || graphByPath.get(`${relative}.md`.toLowerCase());
+        if (direct) matches = [direct.path];
+      }
+      if (!matches.length) matches = resolveWikiLinkTargets(reference.document, visibleNotePaths);
+      return matches.filter(target => this.access.canReferenceFrom(sourcePath, target));
     };
     const incoming = new Map<string, number>();
     const resolvedOutgoing = new Map<string, Set<string>>();
@@ -6252,6 +6313,7 @@ export class LlmWikiService {
     let mocSequenceUnresolvedTotal = 0;
     let mocSequenceAmbiguousTotal = 0;
     let mocSequenceCycleBlockedTotal = 0;
+    let mocSequenceClaimEdgesTotal = 0;
     for (const moc of mocDrafts) {
       const orderedKeys: string[] = [];
       const unresolvedEntries: Array<Record<string, unknown>> = [];
@@ -6270,7 +6332,7 @@ export class LlmWikiService {
         if (key !== normalizePath(moc.path).toLowerCase() && !orderedKeys.includes(key)) orderedKeys.push(key);
       }
       const orderIndex = new Map(orderedKeys.map((key, index) => [key, index]));
-      const edges: Array<{ prerequisite: string; dependent: string }> = [];
+      const edges: Array<{ prerequisite: string; dependent: string; dependencyType: 'note' | 'claim' }> = [];
       const latePrerequisites: Array<Record<string, unknown>> = [];
       const externalPrerequisites: Array<Record<string, unknown>> = [];
       const unresolvedPrerequisites: Array<Record<string, unknown>> = [];
@@ -6278,34 +6340,60 @@ export class LlmWikiService {
       const externalSeen = new Set<string>();
       for (const dependentKey of orderedKeys) {
         const dependent = graphByPath.get(dependentKey);
-        for (const raw of dependent?.relations.depends_on || []) {
-          const matches = resolveWikiLinkTargets(relationDocument(raw), visibleNotePaths);
+        const prerequisites = [
+          ...(dependent?.relations.depends_on || []).map(raw => ({ dependencyType: 'note' as const, raw, document: relationDocument(raw) })),
+          ...(dependent?.claimDependencies.items || []).map(reference => ({ dependencyType: 'claim' as const, raw: reference.raw, document: reference.document || '', reference })),
+        ];
+        if (dependent?.claimDependencies.truncated) unresolvedPrerequisites.push({ path: this.access.toPublicPath(dependent.path), dependencyType: 'claim', reason: 'claim_prerequisites_truncated', limit: 120 });
+        for (const prerequisite of prerequisites) {
+          const raw = prerequisite.raw;
+          if (prerequisite.dependencyType === 'claim' && prerequisite.reference.error) {
+            unresolvedPrerequisites.push({ path: this.access.toPublicPath(dependent!.path), prerequisite: boundedText(raw, 200), dependencyType: 'claim', sourceClaimId: prerequisite.reference.sourceClaimId, reason: 'invalid_claim_prerequisite' });
+            continue;
+          }
+          const matches = prerequisite.dependencyType === 'claim'
+            ? resolveGraphClaimDependency(dependent!.path, prerequisite.reference)
+            : resolveWikiLinkTargets(prerequisite.document, visibleNotePaths).filter(target => this.access.canReferenceFrom(dependent!.path, target));
           if (matches.length === 0) {
-            unresolvedPrerequisites.push({ path: this.access.toPublicPath(dependent!.path), prerequisite: boundedText(raw, 200) });
+            unresolvedPrerequisites.push({ path: this.access.toPublicPath(dependent!.path), prerequisite: boundedText(raw, 200), dependencyType: prerequisite.dependencyType, ...(prerequisite.dependencyType === 'claim' && { sourceClaimId: prerequisite.reference.sourceClaimId, targetClaimId: prerequisite.reference.targetClaimId }) });
             continue;
           }
           if (matches.length > 1) {
-            ambiguousPrerequisites.push({ path: this.access.toPublicPath(dependent!.path), prerequisite: boundedText(raw, 200), matches: matches.slice(0, 4).map(match => this.access.toPublicPath(match)) });
+            ambiguousPrerequisites.push({ path: this.access.toPublicPath(dependent!.path), prerequisite: boundedText(raw, 200), dependencyType: prerequisite.dependencyType, matches: matches.slice(0, 4).map(match => this.access.toPublicPath(match)), ...(prerequisite.dependencyType === 'claim' && { sourceClaimId: prerequisite.reference.sourceClaimId, targetClaimId: prerequisite.reference.targetClaimId }) });
             continue;
           }
           const prerequisitePath = matches[0]!;
           const prerequisiteKey = normalizePath(prerequisitePath).toLowerCase();
+          if (prerequisite.dependencyType === 'claim') {
+            const targetClaimCount = (graphByPath.get(prerequisiteKey)?.claimIds || []).filter(id => id === prerequisite.reference.targetClaimId).length;
+            if (targetClaimCount === 0) {
+              unresolvedPrerequisites.push({ path: this.access.toPublicPath(dependent!.path), prerequisite: this.access.toPublicPath(prerequisitePath), dependencyType: 'claim', sourceClaimId: prerequisite.reference.sourceClaimId, targetClaimId: prerequisite.reference.targetClaimId, reason: 'missing_claim_prerequisite_target' });
+              continue;
+            }
+            if (targetClaimCount > 1) {
+              ambiguousPrerequisites.push({ path: this.access.toPublicPath(dependent!.path), prerequisite: this.access.toPublicPath(prerequisitePath), dependencyType: 'claim', sourceClaimId: prerequisite.reference.sourceClaimId, targetClaimId: prerequisite.reference.targetClaimId, reason: 'ambiguous_claim_prerequisite_target' });
+              continue;
+            }
+            if (prerequisiteKey === dependentKey) continue;
+          }
           const prerequisiteIndex = orderIndex.get(prerequisiteKey);
           if (prerequisiteIndex === undefined) {
             const externalKey = `${prerequisiteKey}|${dependentKey}`;
             if (!externalSeen.has(externalKey)) {
               externalSeen.add(externalKey);
-              const prerequisite = graphByPath.get(prerequisiteKey);
-              externalPrerequisites.push({ path: this.access.toPublicPath(prerequisitePath), ...(prerequisite?.revision && { revision: prerequisite.revision }), requiredBy: this.access.toPublicPath(dependent!.path) });
+              const prerequisiteNote = graphByPath.get(prerequisiteKey);
+              externalPrerequisites.push({ path: this.access.toPublicPath(prerequisitePath), ...(prerequisiteNote?.revision && { revision: prerequisiteNote.revision }), requiredBy: this.access.toPublicPath(dependent!.path), dependencyType: prerequisite.dependencyType, ...(prerequisite.dependencyType === 'claim' && { sourceClaimId: prerequisite.reference.sourceClaimId, targetClaimId: prerequisite.reference.targetClaimId }) });
             }
             continue;
           }
-          edges.push({ prerequisite: prerequisiteKey, dependent: dependentKey });
+          edges.push({ prerequisite: prerequisiteKey, dependent: dependentKey, dependencyType: prerequisite.dependencyType });
           const dependentIndex = orderIndex.get(dependentKey)!;
           if (prerequisiteIndex > dependentIndex) {
             latePrerequisites.push({
               path: this.access.toPublicPath(dependent!.path),
               prerequisite: this.access.toPublicPath(prerequisitePath),
+              dependencyType: prerequisite.dependencyType,
+              ...(prerequisite.dependencyType === 'claim' && { sourceClaimId: prerequisite.reference.sourceClaimId, targetClaimId: prerequisite.reference.targetClaimId }),
               dependentPosition: dependentIndex + 1,
               prerequisitePosition: prerequisiteIndex + 1,
             });
@@ -6339,6 +6427,7 @@ export class LlmWikiService {
       mocSequenceUnresolvedTotal += unresolvedEntries.length + unresolvedPrerequisites.length;
       mocSequenceAmbiguousTotal += ambiguousEntries.length + ambiguousPrerequisites.length;
       mocSequenceCycleBlockedTotal += cycleOrBlocked.length;
+      mocSequenceClaimEdgesTotal += edges.filter(edge => edge.dependencyType === 'claim').length;
       // A thematic MOC may legitimately rely on a prerequisite outside its
       // direct shelf. Keep that count visible, but do not turn an external-only
       // dependency into maintenance debt. Late, unresolved, ambiguous, and
@@ -6353,6 +6442,7 @@ export class LlmWikiService {
         ...(moc.revision && { revision: moc.revision }),
         state: cycleOrBlocked.length > 0 ? 'cyclic_or_cycle_blocked' : latePrerequisites.length > 0 ? 'order_conflict' : 'incomplete_prerequisite_path',
         authoredEntries: orderedKeys.length,
+        dependencyEdges: { total: edges.length, claim: edges.filter(edge => edge.dependencyType === 'claim').length, note: edges.filter(edge => edge.dependencyType === 'note').length },
         latePrerequisites: { total: latePrerequisites.length, items: latePrerequisites.slice(0, 4), truncated: latePrerequisites.length > 4 },
         externalPrerequisites: { total: externalPrerequisites.length, items: externalPrerequisites.slice(0, 4), truncated: externalPrerequisites.length > 4 },
         unresolved: { total: unresolvedEntries.length + unresolvedPrerequisites.length, entries: unresolvedEntries.slice(0, 2), prerequisites: unresolvedPrerequisites.slice(0, 2), truncated: unresolvedEntries.length > 2 || unresolvedPrerequisites.length > 2 },
@@ -6371,9 +6461,10 @@ export class LlmWikiService {
       unresolved: mocSequenceUnresolvedTotal,
       ambiguous: mocSequenceAmbiguousTotal,
       cycleOrBlockedEntries: mocSequenceCycleBlockedTotal,
+      claimDependencyEdges: mocSequenceClaimEdgesTotal,
       items: mocSequenceItems.slice(0, boundedLimit).map(({ severityScore: _severityScore, ...item }) => item),
       truncated: mocSequenceItems.length > boundedLimit,
-      note: 'This fast health pass checks each MOC direct body order. External-only prerequisites are informational, not maintenance debt. Call wiki.learning_path for bounded nested expansion and a stable recommended order; neither view rewrites Markdown.',
+      note: 'This fast health pass checks each MOC direct body order using both note-level depends_on and valid cross-note dependsOnClaims edges. External-only prerequisites are informational, not maintenance debt. Call wiki.learning_path for bounded nested expansion and a stable recommended order; neither view rewrites Markdown.',
     };
     const includeMocSequenceHealth = mocSequenceHealth.needsAttention > 0
       || mocSequenceHealth.externalPrerequisites > 0
@@ -6836,6 +6927,7 @@ export class LlmWikiService {
           unresolved: Number(mocSequenceHealth.unresolved || 0),
           ambiguous: Number(mocSequenceHealth.ambiguous || 0),
           cycleOrBlockedEntries: Number(mocSequenceHealth.cycleOrBlockedEntries || 0),
+          claimDependencyEdges: Number(mocSequenceHealth.claimDependencyEdges || 0),
           items: Array.isArray(mocSequenceHealth.items) ? mocSequenceHealth.items.slice(0, 2) : [],
           truncated: true,
         },
@@ -7790,6 +7882,18 @@ export class LlmWikiService {
       }
       return resolveWikiLinkTargets(link.target, visiblePaths);
     };
+    const resolveClaimDependency = (sourcePath: string, reference: ClaimDependencyReference): string[] => {
+      if (reference.error || reference.document === undefined) return [];
+      if (!reference.document) return [sourcePath];
+      let matches: string[] = [];
+      if (reference.document.startsWith('../') || reference.document.startsWith('./')) {
+        const relative = posix.normalize(posix.join(posix.dirname(normalizePath(sourcePath)), reference.document));
+        const direct = visibleByPath.get(relative.toLowerCase()) || visibleByPath.get(`${relative}.md`.toLowerCase());
+        if (direct) matches = [direct.path];
+      }
+      if (!matches.length) matches = resolveWikiLinkTargets(reference.document, visiblePaths);
+      return matches.filter(target => this.access.canReferenceFrom(sourcePath, target));
+    };
     const entries: Array<PathEntry & { internalPath: string }> = [];
     const entryByKey = new Map<string, PathEntry & { internalPath: string }>();
     const navigationIssues: Array<Record<string, unknown>> = [];
@@ -7875,7 +7979,7 @@ export class LlmWikiService {
     await visitMoc(path, rootNote, 0, [rootKey]);
 
     const authoredIndex = new Map(entries.map((entry, index) => [normalizePath(entry.internalPath).toLowerCase(), index]));
-    const edges: Array<{ prerequisite: string; dependent: string }> = [];
+    const edges: Array<{ prerequisite: string; dependent: string; dependencyType: 'note' | 'claim'; sourceClaimId?: string; targetClaimId?: string }> = [];
     const orderIssues: Array<Record<string, unknown>> = [];
     const externalPrerequisites: Array<Record<string, unknown>> = [];
     const externalSeen = new Set<string>();
@@ -7885,21 +7989,51 @@ export class LlmWikiService {
       const dependencies = Array.isArray(metadata?.frontmatter.depends_on)
         ? metadata!.frontmatter.depends_on.filter((item: unknown): item is string => typeof item === 'string' && Boolean(item.trim())).slice(0, 30)
         : [];
-      for (const rawDependency of dependencies) {
-        const matches = resolveWikiLinkTargets(relationDocument(rawDependency), visiblePaths);
+      const claimDependencies = claimDependencyReferences(metadata?.frontmatter || {}, 120);
+      if (claimDependencies.truncated) {
+        orderIssues.push({ type: 'claim_prerequisites_truncated', path: entry.path, limit: 120 });
+        truncated = true;
+      }
+      const prerequisites = [
+        ...dependencies.map(raw => ({ dependencyType: 'note' as const, raw, document: relationDocument(raw) })),
+        ...claimDependencies.items.map(reference => ({ dependencyType: 'claim' as const, raw: reference.raw, document: reference.document || '', reference })),
+      ];
+      for (const prerequisite of prerequisites) {
+        const rawDependency = prerequisite.raw;
+        if (prerequisite.dependencyType === 'claim' && prerequisite.reference.error) {
+          orderIssues.push({ type: 'invalid_claim_prerequisite', path: entry.path, prerequisite: boundedText(rawDependency, 200), sourceClaimId: prerequisite.reference.sourceClaimId });
+          continue;
+        }
+        const matches = prerequisite.dependencyType === 'claim'
+          ? resolveClaimDependency(entry.internalPath, prerequisite.reference)
+          : resolveWikiLinkTargets(prerequisite.document, visiblePaths).filter(target => this.access.canReferenceFrom(entry.internalPath, target));
         if (matches.length === 0) {
-          orderIssues.push({ type: 'unresolved_or_inaccessible_prerequisite', path: entry.path, prerequisite: boundedText(rawDependency, 200) });
+          orderIssues.push({ type: 'unresolved_or_inaccessible_prerequisite', path: entry.path, prerequisite: boundedText(rawDependency, 200), dependencyType: prerequisite.dependencyType, ...(prerequisite.dependencyType === 'claim' && { sourceClaimId: prerequisite.reference.sourceClaimId, targetClaimId: prerequisite.reference.targetClaimId }) });
           continue;
         }
         if (matches.length > 1) {
-          orderIssues.push({ type: 'ambiguous_prerequisite', path: entry.path, prerequisite: boundedText(rawDependency, 200), matches: matches.slice(0, 5).map(match => this.access.toPublicPath(match)) });
+          orderIssues.push({ type: 'ambiguous_prerequisite', path: entry.path, prerequisite: boundedText(rawDependency, 200), dependencyType: prerequisite.dependencyType, matches: matches.slice(0, 5).map(match => this.access.toPublicPath(match)), ...(prerequisite.dependencyType === 'claim' && { sourceClaimId: prerequisite.reference.sourceClaimId, targetClaimId: prerequisite.reference.targetClaimId }) });
           continue;
         }
         const prerequisitePath = matches[0]!;
         const prerequisiteKey = normalizePath(prerequisitePath).toLowerCase();
+        if (prerequisite.dependencyType === 'claim') {
+          const targetClaimCount = structuredClaimIdCount(visibleByPath.get(prerequisiteKey)?.frontmatter || {}, prerequisite.reference.targetClaimId!);
+          if (targetClaimCount === 0) {
+            orderIssues.push({ type: 'missing_claim_prerequisite_target', path: entry.path, prerequisite: this.access.toPublicPath(prerequisitePath), sourceClaimId: prerequisite.reference.sourceClaimId, targetClaimId: prerequisite.reference.targetClaimId });
+            continue;
+          }
+          if (targetClaimCount > 1) {
+            orderIssues.push({ type: 'ambiguous_claim_prerequisite_target', path: entry.path, prerequisite: this.access.toPublicPath(prerequisitePath), sourceClaimId: prerequisite.reference.sourceClaimId, targetClaimId: prerequisite.reference.targetClaimId });
+            continue;
+          }
+          // A claim may depend on another claim in the same note. That is a
+          // real argument edge, but it cannot impose an inter-note read order.
+          if (prerequisiteKey === dependentKey) continue;
+        }
         if (prerequisiteKey === dependentKey) {
-          orderIssues.push({ type: 'self_prerequisite', path: entry.path, prerequisite: this.access.toPublicPath(prerequisitePath) });
-          edges.push({ prerequisite: prerequisiteKey, dependent: dependentKey });
+          orderIssues.push({ type: 'self_prerequisite', path: entry.path, prerequisite: this.access.toPublicPath(prerequisitePath), dependencyType: prerequisite.dependencyType });
+          edges.push({ prerequisite: prerequisiteKey, dependent: dependentKey, dependencyType: prerequisite.dependencyType });
           continue;
         }
         const prerequisiteIndex = authoredIndex.get(prerequisiteKey);
@@ -7907,25 +8041,29 @@ export class LlmWikiService {
           const externalKey = `${prerequisiteKey}|${dependentKey}`;
           if (!externalSeen.has(externalKey)) {
             externalSeen.add(externalKey);
-            const prerequisite = visibleByPath.get(prerequisiteKey);
-            let prerequisiteRevision = prerequisite?.revision;
+            const prerequisiteNote = visibleByPath.get(prerequisiteKey);
+            let prerequisiteRevision = prerequisiteNote?.revision;
             if (!prerequisiteRevision) prerequisiteRevision = (await this.fileSystem.readNote(prerequisitePath)).revision;
             externalPrerequisites.push({
               path: this.access.toPublicPath(prerequisitePath),
               revision: prerequisiteRevision,
               requiredBy: entry.path,
-              reason: 'depends_on_target_outside_authored_moc_path',
+              reason: prerequisite.dependencyType === 'claim' ? 'claim_depends_on_target_outside_authored_moc_path' : 'depends_on_target_outside_authored_moc_path',
+              dependencyType: prerequisite.dependencyType,
+              ...(prerequisite.dependencyType === 'claim' && { sourceClaimId: prerequisite.reference.sourceClaimId, targetClaimId: prerequisite.reference.targetClaimId }),
             });
           }
           continue;
         }
-        edges.push({ prerequisite: prerequisiteKey, dependent: dependentKey });
+        edges.push({ prerequisite: prerequisiteKey, dependent: dependentKey, dependencyType: prerequisite.dependencyType, ...(prerequisite.dependencyType === 'claim' && { sourceClaimId: prerequisite.reference.sourceClaimId, targetClaimId: prerequisite.reference.targetClaimId }) });
         const dependentIndex = authoredIndex.get(dependentKey)!;
         if (prerequisiteIndex > dependentIndex) {
           orderIssues.push({
             type: 'prerequisite_after_dependent',
             path: entry.path,
             prerequisite: entries[prerequisiteIndex]!.path,
+            dependencyType: prerequisite.dependencyType,
+            ...(prerequisite.dependencyType === 'claim' && { sourceClaimId: prerequisite.reference.sourceClaimId, targetClaimId: prerequisite.reference.targetClaimId }),
             dependentPosition: dependentIndex + 1,
             prerequisitePosition: prerequisiteIndex + 1,
           });
@@ -7966,7 +8104,10 @@ export class LlmWikiService {
     const recommendedOrder = recommendedKeys.map(key => entryByKey.get(key)!.path);
     const authoredOrder = entries.map(({ internalPath: _internalPath, ...entry }) => entry);
     const latePrerequisites = orderIssues.filter(issue => issue.type === 'prerequisite_after_dependent').length;
-    const incompletePrerequisites = orderIssues.filter(issue => ['unresolved_or_inaccessible_prerequisite', 'ambiguous_prerequisite'].includes(String(issue.type))).length + externalPrerequisites.length;
+    const incompletePrerequisites = orderIssues.filter(issue => [
+      'unresolved_or_inaccessible_prerequisite', 'ambiguous_prerequisite', 'invalid_claim_prerequisite',
+      'missing_claim_prerequisite_target', 'ambiguous_claim_prerequisite_target', 'claim_prerequisites_truncated',
+    ].includes(String(issue.type))).length + externalPrerequisites.length;
     const latestRoot = await this.fileSystem.readNote(path);
     if (latestRoot.revision !== rootNote.revision) throw new Error('The root MOC changed while building its learning path; re-read it and retry.');
     const result = {
@@ -7986,13 +8127,15 @@ export class LlmWikiService {
         mocsVisited: visitedMocs.size,
         authoredLinksScanned,
         dependencyEdges: edges.length,
+        noteDependencyEdges: edges.filter(edge => edge.dependencyType === 'note').length,
+        claimDependencyEdges: edges.filter(edge => edge.dependencyType === 'claim').length,
         latePrerequisites,
         externalPrerequisites: externalPrerequisites.length,
         orderIssues: orderIssues.length,
         navigationIssues: navigationIssues.length,
         omittedEntries,
       },
-      guidance: 'Keep the MOC body order when it expresses pedagogy or narrative. If the recommended order differs, inspect the cited depends_on Properties and current revisions, then edit the Markdown deliberately; never auto-reorder from this projection.',
+      guidance: 'Keep the MOC body order when it expresses pedagogy or narrative. If the recommended order differs, inspect the cited note-level depends_on or claim-level dependsOnClaims relation and both current revisions, then edit the Markdown deliberately; never auto-reorder from this projection.',
       truncated: truncated || externalPrerequisites.length > boundedLimit || orderIssues.length > boundedLimit || navigationIssues.length > boundedLimit,
     };
     if (JSON.stringify(result).length <= boundedChars) return result;
@@ -8162,7 +8305,7 @@ export class LlmWikiService {
       return {
         path: item.path,
         code,
-        detail: `MOC sequence needs review: ${Number(item.latePrerequisites?.total || 0)} late, ${Number(item.externalPrerequisites?.total || 0)} external, ${Number(item.unresolved?.total || 0)} unresolved, ${Number(item.ambiguous?.total || 0)} ambiguous, ${Number(item.cycleOrBlocked?.total || 0)} cyclic-or-blocked entries.`,
+        detail: `MOC sequence needs review: ${Number(item.latePrerequisites?.total || 0)} late, ${Number(item.externalPrerequisites?.total || 0)} external, ${Number(item.unresolved?.total || 0)} unresolved, ${Number(item.ambiguous?.total || 0)} ambiguous, ${Number(item.cycleOrBlocked?.total || 0)} cyclic-or-blocked entries, ${Number(item.dependencyEdges?.claim || 0)} claim-level prerequisite edges.`,
         category: 'navigation',
         severity: 'warning',
         state: 'open',

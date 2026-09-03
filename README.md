@@ -181,7 +181,9 @@ Catalog `orderBy=hierarchy` is a metadata grouping by preferred MOC/project,
 not the tree traversal. Code-fenced examples never become reading-order links.
 For a MOC that is also a curriculum, onboarding route, or procedure,
 `wiki.learning_path` preserves that authored outline while checking existing
-`depends_on` Properties. It can expand nested MOCs to a bounded depth and
+note-level `depends_on` Properties and valid cross-note `dependsOnClaims`
+relations. An intra-note claim dependency remains argument structure and does
+not become a false self-prerequisite. It can expand nested MOCs to a bounded depth and
 returns a separate stable `recommendedOrder`, external prerequisites, late
 prerequisites, ambiguous/unresolved targets, and dependency-cycle findings.
 Every readable entry includes its current revision. The projection never
@@ -500,14 +502,17 @@ uniquely resolved, accessible, non-hidden targets enter the reading order.
 The bounded result always pairs returned read paths with their revisions;
 use a larger budget or read the root when `truncated` is true.
 `get_wiki_learning_path` is the stricter sequence view for a MOC. It preserves
-authored order and reports where a visible `depends_on` prerequisite occurs
+authored order and reports where a visible note-level `depends_on` or
+claim-level `dependsOnClaims` prerequisite occurs
 later, outside the path, cannot be resolved uniquely, or participates in a
 cycle. Its stable topological recommendation keeps authored order among
 otherwise independent notes. It is bounded, scope-filtered, non-mutating, and
 does not create a parallel graph or a new client-side requirement.
 The same direct-order check is reused during graph health rather than scanning
 the Vault again. It also resolves relative Markdown links from the containing
-MOC, keeping coverage, sequence health, and the detailed learning path aligned.
+MOC, validates the referenced claim ID, and labels each ordering reason as a
+note or claim dependency, keeping coverage, sequence health, and the detailed
+learning path aligned.
 `get_wiki_exception_board` combines organization, graph,
 quarantine, freshness, vocabulary, and execution findings into one 5S-style
 repair board. `get_wiki_quality_check` applies a small role-specific checklist

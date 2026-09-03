@@ -808,6 +808,7 @@ export declare class LlmWikiService {
                     unresolved: number;
                     ambiguous: number;
                     cycleOrBlockedEntries: number;
+                    claimDependencyEdges: number;
                     items: {
                         [x: string]: unknown;
                     }[];
@@ -1132,6 +1133,7 @@ export declare class LlmWikiService {
                     unresolved: number;
                     ambiguous: number;
                     cycleOrBlockedEntries: number;
+                    claimDependencyEdges: number;
                     items: {
                         [x: string]: unknown;
                     }[];
@@ -2658,6 +2660,7 @@ export declare class LlmWikiService {
             unresolved: number;
             ambiguous: number;
             cycleOrBlockedEntries: number;
+            claimDependencyEdges: number;
             items: {
                 [x: string]: unknown;
             }[];
@@ -3132,6 +3135,8 @@ export declare class LlmWikiService {
             mocsVisited: number;
             authoredLinksScanned: number;
             dependencyEdges: number;
+            noteDependencyEdges: number;
+            claimDependencyEdges: number;
             latePrerequisites: number;
             externalPrerequisites: number;
             orderIssues: number;

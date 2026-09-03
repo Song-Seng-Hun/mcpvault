@@ -239,9 +239,12 @@ links or confuse catalog metadata grouping with a tree traversal.
 When a MOC is intended as a curriculum or procedural sequence, use
 `get_wiki_learning_path`. It preserves the authored outline, expands nested
 MOCs only to the requested bounded depth, and compares visible entries with
-their existing `depends_on` relations. Follow `recommendedOrder` only as an
+their existing note-level `depends_on` and valid cross-note `dependsOnClaims`
+relations. A local `[[#^claim-id]]` dependency is argument structure inside one
+note and never creates a false note self-dependency. Follow `recommendedOrder` only as an
 advisory reading suggestion: unresolved, ambiguous, external, late, or cyclic
-prerequisites require inspection of the returned current revisions. Never
+prerequisites require inspection of the returned current revisions and the
+reported `dependencyType`, source claim, and target claim. Never
 automatically rewrite the MOC body or invent a second prerequisite property.
 Graph and organization health expose actionable late, unresolved, ambiguous,
 and cyclic MOC sequence defects; the exception board routes them back to
