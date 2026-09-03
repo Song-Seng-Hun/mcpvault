@@ -572,6 +572,12 @@ remain authoritative.
 spelling/case variants, subject terms without a local authority note, and terms
 used by multiple notes. It suggests review only; it never renames or retags
 notes, because local distinctions may be intentional.
+It also counts tags alongside domain, subject, method, and audience facets. On
+a sufficiently large visible sample it reports facets dominated by one-off
+values and values attached to most notes, helping distinguish false precision
+from metadata that no longer narrows retrieval. These are conservative review
+signals; hidden/quarantined notes are excluded, and rare or broad values are
+never changed automatically.
 Use `get_wiki_note_template` for an optional small scaffold when starting an
 atomic, literature, question, hypothesis, experiment, assumption, decision,
 project, MOC, or negative-knowledge note. It also provides role-specific

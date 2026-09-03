@@ -360,9 +360,12 @@ knowledge may still be worth preserving, and similar terms can represent
 distinct perspectives.
 `get_wiki_vocabulary_health` provides a bounded library-style vocabulary and
 tag hygiene projection: spelling/case variants, subject terms without a local
-authority note, term collisions, and facet counts. These are advisory signals;
-tags and facets remain optional access points and are never renamed or retagged
-automatically.
+authority note, term collisions, and facet counts including tags. With at least
+a conservative visible-note sample it also reports facets dominated by one-off
+values and values attached to most notes. Hidden/quarantined notes never
+contribute. These are advisory signals: preserve legitimate local distinctions
+and real collection boundaries; tags and facets remain optional access points
+and are never renamed, retagged, or consolidated automatically.
 Its `typedRelations` projection additionally reports unresolved, ambiguous,
 self-referential, and `answers_questions` targets that are not question notes.
 Repair them with ordinary revision-checked edits; graph health never rewrites

@@ -283,7 +283,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_vocabulary_health',
-            description: 'Return a bounded library-style vocabulary and Obsidian tag health report. It finds tag spelling/case variants, subject terms without a local authority note, and terms used by multiple notes. Findings are advisory; it never renames, retags, merges, or redirects notes.',
+            description: 'Return a bounded library-style vocabulary, Obsidian tag, and facet health report. It finds tag spelling/case variants, subject terms without a local authority note, terms used by multiple notes, sufficiently sampled facets dominated by one-off values, and values attached to most visible notes. Hidden or quarantined notes do not contribute. Findings are advisory; it never renames, retags, merges, or redirects notes.',
             inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 60, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
         },
         {

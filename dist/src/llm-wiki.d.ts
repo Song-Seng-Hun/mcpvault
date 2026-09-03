@@ -1673,6 +1673,32 @@ export declare class LlmWikiService {
                     paths: string[];
                     reason: string;
                 }[];
+                facetHealth: {
+                    thresholds: {
+                        minimumVisibleNotes: number;
+                        fragmentationMinimumValues: number;
+                        fragmentationSingletonRatio: number;
+                        lowSelectivityCoverageRatio: number;
+                    };
+                    fragmentedFacets: {
+                        facet: string;
+                        distinctValues: number;
+                        singletonValues: number;
+                        singletonRatio: number;
+                        examples: string[];
+                        reason: string;
+                        guidance: string;
+                    }[];
+                    lowSelectivityValues: {
+                        facet: string;
+                        value: string;
+                        noteCount: number;
+                        coverageRatio: number;
+                        reason: string;
+                        guidance: string;
+                    }[];
+                    advisory: boolean;
+                };
                 facets: {
                     [k: string]: {
                         [k: string]: number;
@@ -3320,6 +3346,32 @@ export declare class LlmWikiService {
             paths: string[];
             reason: string;
         }[];
+        facetHealth: {
+            thresholds: {
+                minimumVisibleNotes: number;
+                fragmentationMinimumValues: number;
+                fragmentationSingletonRatio: number;
+                lowSelectivityCoverageRatio: number;
+            };
+            fragmentedFacets: {
+                facet: string;
+                distinctValues: number;
+                singletonValues: number;
+                singletonRatio: number;
+                examples: string[];
+                reason: string;
+                guidance: string;
+            }[];
+            lowSelectivityValues: {
+                facet: string;
+                value: string;
+                noteCount: number;
+                coverageRatio: number;
+                reason: string;
+                guidance: string;
+            }[];
+            advisory: boolean;
+        };
         facets: {
             [k: string]: {
                 [k: string]: number;

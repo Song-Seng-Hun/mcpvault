@@ -2158,6 +2158,43 @@ test('agent active recall state is isolated from the shared knowledge note', asy
   }
 });
 
+test('vocabulary health detects bounded facet fragmentation and low-selectivity values without leaking hidden notes', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'facet-health-owner', modelId: 'codex', password: 'facet-health-password' });
+    const accessToken = registration.value.accessToken;
+    for (let index = 0; index < 20; index += 1) {
+      const write = await client.callTool({ name: 'write_note', arguments: {
+        path: `Knowledge/Facet ${index}.md`, content: `# Facet ${index}\n`,
+        frontmatter: { note_kind: 'atomic', lifecycle: 'evergreen', tags: ['common', `niche-${index}`], domain: 'shared-domain' },
+        expectedRevision: 'missing', accessToken,
+      } });
+      expect(write.isError).toBeFalsy();
+    }
+    const hidden = await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/Hidden facet.md', content: '# Hidden facet\n',
+      frontmatter: { note_kind: 'atomic', lifecycle: 'evergreen', tags: ['secret-taxonomy'], moderation_status: 'hidden' },
+      expectedRevision: 'missing', accessToken,
+    } });
+    expect(hidden.isError).toBeFalsy();
+
+    const vocabulary = await callJson(client, 'call_endpoint', { endpointId: 'wiki.vocabulary_health', arguments: { limit: 20, maxChars: 10000, accessToken } });
+    expect(vocabulary.value.facets.tag.common).toBe(20);
+    expect(vocabulary.value.facets.tag).not.toHaveProperty('secret-taxonomy');
+    expect(vocabulary.value.facetHealth.fragmentedFacets).toEqual(expect.arrayContaining([
+      expect.objectContaining({ facet: 'tag', distinctValues: 21, singletonValues: 20, reason: 'facet_may_be_overfragmented' }),
+    ]));
+    expect(vocabulary.value.facetHealth.lowSelectivityValues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ facet: 'tag', value: 'common', noteCount: 20, reason: 'facet_value_has_low_selectivity' }),
+      expect.objectContaining({ facet: 'domain', value: 'shared-domain', noteCount: 20, reason: 'facet_value_has_low_selectivity' }),
+    ]));
+    expect(vocabulary.value.facetHealth.advisory).toBe(true);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('recall queue, near-duplicate review, and typed relation health stay bounded', async () => {
   const { server, client } = await setup();
   try {

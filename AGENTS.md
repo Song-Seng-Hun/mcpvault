@@ -198,10 +198,12 @@ redirecting existing links. Use `get_wiki_trail` when a question needs a
 bounded multi-hop chain between two notes; links are a navigation path, not
 proof by themselves.
 Use `get_wiki_vocabulary_health` for tag spelling/case variants, subject terms
-without a local authority note, and terms used by multiple notes. These are
-advisory library-style hygiene signals: preserve intentional local distinctions
-and repair with scope notes, aliases, or `canonical_path`; never rename or
-retag automatically.
+without a local authority note, terms used by multiple notes, and conservatively
+sampled facet fragmentation/low-selectivity signals. Tags participate in the
+same bounded facet view as domain, subject, method, and audience; hidden content
+is excluded. Preserve intentional local distinctions and real collection
+boundaries, and repair with scope notes, aliases, or `canonical_path`; never
+rename, retag, or consolidate automatically.
 Use `get_wiki_note_template` when a new note role needs a low-friction
 scaffold. Templates are optional starting points, not publication gates; keep
 the body in ordinary Markdown and put only small typed values in Properties.

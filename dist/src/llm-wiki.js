@@ -8987,23 +8987,27 @@ export class LlmWikiService {
         };
         let noteCount = 0;
         for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+            if (isModerationHidden(note.frontmatter))
+                continue;
             noteCount += 1;
             const path = note.path;
-            for (const value of list(note.frontmatter.tags))
-                add(tags, value.replace(/^#+/, ''), path, item => normalizedAuthorityTerm(item.replace(/^#+/, '')));
+            for (const value of [...new Set(list(note.frontmatter.tags).map(item => item.replace(/^#+/, '')))]) {
+                add(tags, value, path, item => normalizedAuthorityTerm(item.replace(/^#+/, '')));
+                incrementFacet('tag', value);
+            }
             const title = String(note.frontmatter.title || path.split('/').at(-1) || '').replace(/\.(?:md|markdown|txt)$/i, '').trim();
             if (title)
                 add(authorities, title, path, normalizedAuthorityTerm);
             for (const value of list(note.frontmatter.aliases))
                 add(authorities, value, path, normalizedAuthorityTerm);
-            for (const value of list(note.frontmatter.subject_terms)) {
+            for (const value of [...new Set(list(note.frontmatter.subject_terms))]) {
                 add(subjects, value, path, normalizedAuthorityTerm);
                 incrementFacet('subjectTerm', value);
             }
             incrementFacet('domain', note.frontmatter.domain);
-            for (const value of list(note.frontmatter.methods))
+            for (const value of [...new Set(list(note.frontmatter.methods))])
                 incrementFacet('method', value);
-            for (const value of list(note.frontmatter.audience))
+            for (const value of [...new Set(list(note.frontmatter.audience))])
                 incrementFacet('audience', value);
         }
         const authorityKeys = new Set(authorities.keys());
@@ -9022,11 +9026,51 @@ export class LlmWikiService {
             .sort((left, right) => right.paths.size - left.paths.size || left.key.localeCompare(right.key))
             .slice(0, boundedLimit)
             .map(item => ({ term: item.display, noteCount: item.paths.size, paths: [...item.paths].slice(0, 6), reason: 'authority_term_used_by_multiple_notes' }));
+        const minimumHealthSample = 12;
+        const fragmentationMinimumValues = 8;
+        const facetRecords = [...facets.entries()].map(([facet, values]) => {
+            const ordered = [...values.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
+            const singletonValues = ordered.filter(([, count]) => count === 1);
+            return {
+                facet,
+                values: ordered,
+                distinctValues: ordered.length,
+                singletonValues,
+                singletonRatio: ordered.length > 0 ? Number((singletonValues.length / ordered.length).toFixed(3)) : 0,
+            };
+        });
+        const fragmentedFacetsAll = noteCount < minimumHealthSample ? [] : facetRecords
+            .filter(item => item.distinctValues >= fragmentationMinimumValues && item.singletonValues.length >= 6 && item.singletonRatio >= 0.6)
+            .sort((left, right) => right.singletonRatio - left.singletonRatio || right.distinctValues - left.distinctValues || left.facet.localeCompare(right.facet))
+            .map(item => ({
+            facet: item.facet,
+            distinctValues: item.distinctValues,
+            singletonValues: item.singletonValues.length,
+            singletonRatio: item.singletonRatio,
+            examples: item.singletonValues.slice(0, 8).map(([value]) => value),
+            reason: 'facet_may_be_overfragmented',
+            guidance: 'Review one-off values for aliases, spelling drift, or false precision. Preserve legitimate distinctions and never consolidate automatically.',
+        }));
+        const lowSelectivityValuesAll = noteCount < minimumHealthSample ? [] : facetRecords.flatMap(item => {
+            const threshold = Math.max(6, Math.ceil(noteCount * 0.6));
+            return item.values.filter(([, count]) => count >= threshold).map(([value, count]) => ({
+                facet: item.facet,
+                value,
+                noteCount: count,
+                coverageRatio: Number((count / Math.max(1, noteCount)).toFixed(3)),
+                reason: 'facet_value_has_low_selectivity',
+                guidance: 'Keep the value when it expresses a real collection boundary; otherwise prefer a more discriminating facet or omit redundant metadata.',
+            }));
+        }).sort((left, right) => right.coverageRatio - left.coverageRatio || left.facet.localeCompare(right.facet) || left.value.localeCompare(right.value));
+        const fragmentedFacets = fragmentedFacetsAll.slice(0, boundedLimit);
+        const lowSelectivityValues = lowSelectivityValuesAll.slice(0, boundedLimit);
         const facetCounts = Object.fromEntries([...facets.entries()].map(([facet, values]) => [facet, Object.fromEntries([...values.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])).slice(0, 20))]));
         const recommendations = [
             ...(tagVariants.length > 0 ? ['Choose one canonical spelling for each tag and keep variants only when they carry a deliberate distinction.'] : []),
             ...(unresolvedSubjectTerms.length > 0 ? ['Review subject terms without an authority note; either create a scoped term note or mark the term as intentionally local.'] : []),
             ...(termCollisions.length > 0 ? ['Resolve authority-term collisions with aliases, scope notes, or canonical_path before treating a term as a unique destination.'] : []),
+            ...(fragmentedFacets.length > 0 ? ['Review one fragmented facet at a time for aliases, spelling drift, or false precision; preserve intentional one-off distinctions.'] : []),
+            ...(lowSelectivityValues.length > 0 ? ['Review facet values attached to most visible notes; keep true collection boundaries but remove redundant metadata that no longer narrows retrieval.'] : []),
             'Use facets as additional access points, not as a rigid replacement for Obsidian links and MOCs.',
         ];
         const result = {
@@ -9038,14 +9082,20 @@ export class LlmWikiService {
             tagVariants,
             unresolvedSubjectTerms,
             termCollisions,
+            facetHealth: {
+                thresholds: { minimumVisibleNotes: minimumHealthSample, fragmentationMinimumValues, fragmentationSingletonRatio: 0.6, lowSelectivityCoverageRatio: 0.6 },
+                fragmentedFacets,
+                lowSelectivityValues,
+                advisory: true,
+            },
             facets: facetCounts,
             recommendations,
-            truncated: tagVariants.length >= boundedLimit || unresolvedSubjectTerms.length >= boundedLimit || termCollisions.length >= boundedLimit,
+            truncated: tagVariants.length >= boundedLimit || unresolvedSubjectTerms.length >= boundedLimit || termCollisions.length >= boundedLimit || fragmentedFacetsAll.length > fragmentedFacets.length || lowSelectivityValuesAll.length > lowSelectivityValues.length,
             generatedAt: now(),
         };
         if (JSON.stringify(result).length <= boundedChars)
             return result;
-        return { ...result, tagVariants: tagVariants.slice(0, 3), unresolvedSubjectTerms: unresolvedSubjectTerms.slice(0, 3), termCollisions: termCollisions.slice(0, 3), recommendations: recommendations.slice(0, 3), facets: Object.fromEntries(Object.entries(facetCounts).map(([key, value]) => [key, Object.fromEntries(Object.entries(value).slice(0, 8))])), truncated: true };
+        return { ...result, tagVariants: tagVariants.slice(0, 3), unresolvedSubjectTerms: unresolvedSubjectTerms.slice(0, 3), termCollisions: termCollisions.slice(0, 3), facetHealth: { ...result.facetHealth, fragmentedFacets: fragmentedFacets.slice(0, 3), lowSelectivityValues: lowSelectivityValues.slice(0, 3) }, recommendations: recommendations.slice(0, 3), facets: Object.fromEntries(Object.entries(facetCounts).map(([key, value]) => [key, Object.fromEntries(Object.entries(value).slice(0, 8))])), truncated: true };
     }
     /**
      * Resolve one human/agent-facing term without changing the vault.  This is
