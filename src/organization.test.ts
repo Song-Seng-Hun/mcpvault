@@ -226,7 +226,7 @@ describe('knowledge organization focus and summary metadata', () => {
 
   test('provides optional role templates without making them publication gates', () => {
     expect(NOTE_TEMPLATE_IDS).toEqual(expect.arrayContaining(['concept', 'argument', 'model', 'observation', 'counterargument']));
-    expect(BASES_VIEW_IDS).toEqual(expect.arrayContaining(['concepts', 'arguments', 'models', 'observations', 'counterarguments', 'authority', 'review_checklist', 'collections']));
+    expect(BASES_VIEW_IDS).toEqual(expect.arrayContaining(['decisions', 'concepts', 'arguments', 'models', 'observations', 'counterarguments', 'authority', 'review_checklist', 'collections']));
     expect(organizationNoteTemplate('question')).toMatchObject({
       templateId: 'question', noteKind: 'question',
       properties: { epistemic_status: 'open' },
@@ -257,6 +257,28 @@ describe('knowledge organization focus and summary metadata', () => {
     });
     expect(organizationNoteTemplate('journal')).toMatchObject({ templateId: 'atomic', noteKind: 'atomic' });
     expect(organizationNoteTemplate('unknown')).toMatchObject({ templateId: 'atomic', noteKind: 'atomic' });
+  });
+
+  test('keeps Decision Record state distinct from lifecycle and knowledge status', () => {
+    expect(knowledgeOrganization({ status: 'verified', noteKind: 'decision', lifecycle: 'evergreen', decisionStatus: 'accepted' })).toMatchObject({
+      note_kind: 'decision', lifecycle: 'evergreen', decision_status: 'accepted',
+    });
+    expect(() => knowledgeOrganization({ status: 'draft', noteKind: 'atomic', decisionStatus: 'proposed' })).toThrow(/only valid for noteKind decision/);
+    expect(organizationLintIssues('Knowledge/Decision.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'decision', lifecycle: 'evergreen', knowledge_status: 'verified',
+    }, '# Decision\n').map(issue => issue.code)).toContain('decision_status_missing');
+    expect(organizationLintIssues('Knowledge/Bad decision.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'decision', lifecycle: 'review', knowledge_status: 'draft', decision_status: 'accepted',
+    }, '# Decision\n').map(issue => issue.code)).toContain('decision_status_inconsistent');
+    expect(organizationLintIssues('Knowledge/Mismatched decision.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'decision', lifecycle: 'evergreen', knowledge_status: 'verified', decision_status: 'accepted',
+    }, '# Decision\n\nDecision status: **proposed**\n').map(issue => issue.code)).toContain('decision_status_body_mismatch');
+    expect(organizationLintIssues('Knowledge/Rejected decision.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'decision', lifecycle: 'superseded', knowledge_status: 'superseded', decision_status: 'rejected',
+    }, '# Decision\n\nDecision status: **rejected**\n').map(issue => issue.code)).not.toContain('superseded_without_replacement');
+    expect(organizationLintIssues('Knowledge/Not a decision.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', decision_status: 'accepted',
+    }, '# Note\n').map(issue => issue.code)).toContain('decision_status_wrong_kind');
   });
 
   test('models reproducible experiments between hypotheses and durable conclusions', () => {

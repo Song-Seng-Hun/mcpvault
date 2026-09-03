@@ -21,6 +21,9 @@ export const HYPOTHESIS_STATUSES = ['proposed', 'supported', 'refuted', 'inconcl
 /** State of a reproducible experiment record; separate from task workflow. */
 export const EXPERIMENT_STATUSES = ['planned', 'running', 'completed', 'failed', 'inconclusive', 'reproduced'];
 export const ASSUMPTION_STATUSES = ['active', 'verified', 'invalidated', 'replaced'];
+/** Decision Record state is intentionally separate from the coarser knowledge
+ * status so rejected alternatives are not confused with superseded choices. */
+export const DECISION_STATUSES = ['proposed', 'accepted', 'rejected', 'superseded'];
 /** Optional controlled-vocabulary state for a note title/alias. */
 export const TERM_STATUSES = ['preferred', 'deprecated', 'redirect'];
 /** A small Zettelkasten-style role vocabulary for durable knowledge notes. */
@@ -30,7 +33,7 @@ export const KNOWLEDGE_ROLES = ['concept', 'argument', 'model', 'observation', '
 export const NOTE_TEMPLATE_IDS = ['atomic', 'literature', 'question', 'hypothesis', 'experiment', 'assumption', 'decision', 'project', 'moc', 'negative', ...KNOWLEDGE_ROLES];
 /** Standard Obsidian Bases projections. Keep the runtime and tool schema on
  * one shared list so a documented view cannot become unreachable. */
-export const BASES_VIEW_IDS = ['all', 'inbox', 'inbox_oldest', 'projects', 'project_next_actions', 'review', 'epistemic', 'experiments', 'open_questions', 'knowledge', 'concepts', 'arguments', 'models', 'observations', 'counterarguments', 'unreviewed_evidence', 'negative_knowledge', 'deprecated_terms', 'maintenance', 'authority', 'review_checklist', 'collections'];
+export const BASES_VIEW_IDS = ['all', 'inbox', 'inbox_oldest', 'projects', 'project_next_actions', 'review', 'epistemic', 'experiments', 'open_questions', 'decisions', 'knowledge', 'concepts', 'arguments', 'models', 'observations', 'counterarguments', 'unreviewed_evidence', 'negative_knowledge', 'deprecated_terms', 'maintenance', 'authority', 'review_checklist', 'collections'];
 /** Optional recall result for high-value knowledge; separate from evidence review. */
 export const RECALL_QUALITIES = ['unseen', 'failed', 'partial', 'good'];
 /** Error Book state is split into resolution and learning so a closed issue
@@ -76,6 +79,7 @@ export const ORGANIZATION_LIST_FIELDS = ['aliases', 'tags', 'mocs', 'key_points'
 export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'note_kind', type: 'text', description: 'What the note is for', allowed: NOTE_KINDS },
     { name: 'lifecycle', type: 'text', description: 'What should happen to the knowledge next', allowed: LIFECYCLES },
+    { name: 'decision_status', type: 'text', description: 'Structured Decision Record state, distinct from knowledge_status', allowed: DECISION_STATUSES, appliesTo: ['decision'] },
     { name: 'captured_from', type: 'text', description: 'Bounded origin label for a fleeting Inbox capture', allowed: ['manual', 'chat', 'community', 'issue', 'experiment', 'external_source', 'other'], appliesTo: ['fleeting'] },
     { name: 'capture_reason', type: 'text', description: 'Why a fleeting observation was preserved; never a secret or raw prompt', appliesTo: ['fleeting'] },
     { name: 'capture_context', type: 'text', description: 'Short interpretation context for a fleeting observation', appliesTo: ['fleeting'] },
@@ -292,6 +296,7 @@ const questionStatusSet = new Set(QUESTION_STATUSES);
 const hypothesisStatusSet = new Set(HYPOTHESIS_STATUSES);
 const experimentStatusSet = new Set(EXPERIMENT_STATUSES);
 const assumptionStatusSet = new Set(ASSUMPTION_STATUSES);
+const decisionStatusSet = new Set(DECISION_STATUSES);
 const termStatusSet = new Set(TERM_STATUSES);
 const knowledgeRoleSet = new Set(KNOWLEDGE_ROLES);
 const recallQualitySet = new Set(RECALL_QUALITIES);
@@ -423,6 +428,14 @@ export function normalizeEpistemicStatus(value, noteKind, fallback) {
         throw new Error(`epistemicStatus for ${noteKind} must be one of: ${choices.join(', ')}`);
     }
     return supplied;
+}
+export function normalizeDecisionStatus(value, fallback) {
+    if (value === undefined || value === null || String(value).trim() === '')
+        return fallback;
+    const normalized = String(value).trim().toLowerCase();
+    if (!decisionStatusSet.has(normalized))
+        throw new Error(`decisionStatus must be one of: ${DECISION_STATUSES.join(', ')}`);
+    return normalized;
 }
 export function normalizeKnowledgePolarity(value, fallback) {
     if (value === undefined || value === null || String(value).trim() === '')
@@ -655,6 +668,11 @@ export function knowledgeOrganization(input) {
     const existingLifecycle = normalizeLifecycle(existing.lifecycle);
     const kind = normalizeNoteKind(input.noteKind, existingKind || 'knowledge') || 'knowledge';
     const lifecycle = normalizeLifecycle(input.lifecycle, existingLifecycle || lifecycleForKnowledgeStatus(input.status)) || lifecycleForKnowledgeStatus(input.status);
+    if (input.decisionStatus !== undefined && kind !== 'decision')
+        throw new Error('decisionStatus is only valid for noteKind decision');
+    const decisionStatus = kind === 'decision'
+        ? normalizeDecisionStatus(input.decisionStatus, normalizeDecisionStatus(existing.decision_status))
+        : undefined;
     const primaryMoc = input.primaryMoc === undefined ? optionalText(existing.primary_moc, 'primaryMoc', 500) : optionalText(input.primaryMoc, 'primaryMoc', 500);
     const mocs = input.mocs === undefined ? normalizedList(existing.mocs, 'mocs', 12, 500) : normalizedList(input.mocs, 'mocs', 12, 500);
     const moc = input.moc === undefined ? optionalText(existing.moc, 'moc', 500) : optionalText(input.moc, 'moc', 500);
@@ -798,6 +816,7 @@ export function knowledgeOrganization(input) {
     return {
         note_kind: kind,
         lifecycle,
+        ...(decisionStatus && { decision_status: decisionStatus }),
         ...executionHints,
         ...(primaryMoc && { primary_moc: primaryMoc }),
         ...(mocs && { mocs }),
@@ -980,6 +999,33 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
     }
     if (lifecycleValue !== undefined && !lifecycleSet.has(lifecycle || '')) {
         issues.push({ code: 'invalid_lifecycle', detail: `lifecycle must be one of: ${LIFECYCLES.join(', ')}` });
+    }
+    const rawDecisionStatus = frontmatter.decision_status;
+    const decisionStatus = rawDecisionStatus === undefined ? undefined : String(rawDecisionStatus).trim().toLowerCase();
+    const bodyDecisionStatus = /Decision status\s*:\s*(?:\*\*)?(proposed|accepted|rejected|superseded)(?:\*\*)?/i.exec(String(content || ''))?.[1]?.toLowerCase();
+    if (kind === 'decision') {
+        if (!decisionStatus) {
+            issues.push({ code: 'decision_status_missing', detail: 'A Decision Record must preserve proposed, accepted, rejected, or superseded as the structured decision_status Property.' });
+        }
+        else if (!decisionStatusSet.has(decisionStatus)) {
+            issues.push({ code: 'invalid_decision_status', detail: `decision_status must be one of: ${DECISION_STATUSES.join(', ')}` });
+        }
+        else {
+            const expected = decisionStatus === 'accepted'
+                ? { lifecycle: 'evergreen', knowledgeStatus: 'verified' }
+                : decisionStatus === 'proposed'
+                    ? { lifecycle: 'review', knowledgeStatus: 'draft' }
+                    : { lifecycle: 'superseded', knowledgeStatus: 'superseded' };
+            if (lifecycle !== expected.lifecycle || String(frontmatter.knowledge_status || '').trim().toLowerCase() !== expected.knowledgeStatus) {
+                issues.push({ code: 'decision_status_inconsistent', detail: `${decisionStatus} decisions should use lifecycle=${expected.lifecycle} and knowledge_status=${expected.knowledgeStatus}.` });
+            }
+            if (bodyDecisionStatus && bodyDecisionStatus !== decisionStatus) {
+                issues.push({ code: 'decision_status_body_mismatch', detail: `The Markdown body says ${bodyDecisionStatus}, while decision_status says ${decisionStatus}; use the Decision Record endpoint for state transitions.` });
+            }
+        }
+    }
+    else if (rawDecisionStatus !== undefined) {
+        issues.push({ code: 'decision_status_wrong_kind', detail: 'decision_status is only valid when note_kind is decision.' });
     }
     if (frontmatter.triage_disposition !== undefined && !clarifyDispositionSet.has(String(frontmatter.triage_disposition).trim().toLowerCase())) {
         issues.push({ code: 'invalid_triage_disposition', detail: `triage_disposition must be one of: ${CLARIFY_DISPOSITIONS.join(', ')}` });
@@ -1407,7 +1453,7 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
         if (!Array.isArray(frontmatter.moc_questions) || frontmatter.moc_questions.length === 0)
             issues.push({ code: 'moc_questions_missing', detail: 'A MOC should list representative questions so its coverage stays intentional.' });
     }
-    if (lifecycle === 'superseded' && !frontmatter.replacement_path && !frontmatter.replaced_by && !frontmatter.superseded_by) {
+    if (lifecycle === 'superseded' && !(kind === 'decision' && decisionStatus === 'rejected') && !frontmatter.replacement_path && !frontmatter.replaced_by && !frontmatter.superseded_by) {
         issues.push({ code: 'superseded_without_replacement', detail: 'A superseded knowledge note should point to the replacement note with replacement_path, replaced_by, or superseded_by.' });
     }
     if (lifecycle === 'archived' && !frontmatter.archive_reason) {

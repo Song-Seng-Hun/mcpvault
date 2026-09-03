@@ -531,6 +531,18 @@ typed relations remain directional. Retention metadata
 (`retention_policy`, `retention_at`, `retention_reason`, `replaced_by`) makes
 archive and replacement decisions explainable without enabling automatic
 deletion.
+
+Decision Records keep their own `decision_status` (`proposed`, `accepted`,
+`rejected`, or `superseded`) instead of losing the distinction inside the
+coarser `knowledge_status`. Use `wiki.decision_register` for a bounded live
+view of revisions, predecessors, successors, legacy migration needs,
+conflicting accepted replacements, ambiguous links, and supersession cycles.
+The `supersedes` relation always points from the newer decision to the older
+one. Accepting a successor does not silently rewrite the old note: reread both
+revisions, then explicitly retire the old record with `wiki.decision_record`
+and `replacedBy`. The optional `decisions` Bases view provides the same
+Properties in Obsidian without becoming another source of truth.
+
 Use `primary_moc` as the preferred Obsidian launch point for a note. When a
 note legitimately belongs to more than one context, use the bounded `mocs`
 list for additional MOC links while keeping one canonical note; this avoids

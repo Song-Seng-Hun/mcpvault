@@ -770,6 +770,7 @@ When modifying file operations:
 
 ## Remaining organization workflows
 
+- Decision Records use `decision_status` as their structured state; do not infer rejected versus superseded from `knowledge_status`. Before introducing or replacing a durable choice, call `wiki.decision_register`, inspect the returned revisions and lineage, and use `wiki.decision_record`. `supersedes` points from the new record to the old one. Retire the old record explicitly with `replacedBy`; the register reports legacy states, active-target conflicts, ambiguous links, and cycles but never rewrites notes automatically.
 - Error Book entries have independent `issue_resolution_status` and `issue_retrospective_status`. Resolve the exception with `resolve_wiki_issue`, then record a bounded reusable lesson and `issue_follow_up_paths`; a resolved issue without a retrospective is still incomplete learning.
 - Active recall is reader-specific. For `failed` or `partial`, record `confusion`, optionally `repairPath`, and leave `repairStatus=needed` or `in_progress`. The queue prioritizes these repairs; only mark them `resolved` after rereading and verifying the repair.
 - Search improvement telemetry is per-account, process-local, bounded, and never persisted. Call `record_search_feedback` after a useful, failed, or ambiguous search, then inspect `get_search_improvement_candidates` before adding aliases, retrieval cues, MOCs, disambiguation, or new notes.

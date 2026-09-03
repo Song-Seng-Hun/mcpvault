@@ -154,6 +154,69 @@ test('MOC navigation preserves explicit sibling order, body link order, and mult
   }
 });
 
+test('Decision Records preserve structured state and expose a bounded conflict-aware register', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'decision-register-owner', modelId: 'codex', password: 'decision-register-password' });
+    const accessToken = registration.value.accessToken;
+    const source = await callJson(client, 'ingest_source', {
+      sourceId: 'decision-register-source', title: 'Decision register evidence', content: 'A successor must retain an auditable link to the decision it replaces.', capturedBy: 'codex', accessToken,
+    });
+    const original = await callJson(client, 'publish_decision_record', {
+      path: 'Knowledge/Decisions/Original.md', title: 'Original policy', context: 'The first policy is in force.', decision: 'Use the original policy.', status: 'accepted',
+      evidencePaths: [source.value.path], expectedRevision: 'missing', accessToken,
+    });
+    expect(original.value).toMatchObject({ decisionStatus: 'accepted' });
+    const originalRead = await callJson(client, 'read_note', { path: original.value.path, accessToken });
+    expect(originalRead.value.fm).toMatchObject({ note_kind: 'decision', decision_status: 'accepted', lifecycle: 'evergreen', knowledge_status: 'verified' });
+
+    await callJson(client, 'publish_decision_record', {
+      path: 'Knowledge/Decisions/Successor.md', title: 'Successor policy', context: 'New evidence changes the preferred policy.', decision: 'Use the successor policy.', status: 'accepted',
+      supersedes: ['[[Knowledge/Decisions/Original]]'], evidencePaths: [source.value.path], expectedRevision: 'missing', accessToken,
+    });
+    const conflicted = await callJson(client, 'get_wiki_decision_register', { limit: 20, maxChars: 12000, accessToken });
+    expect(conflicted.value.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/Decisions/Successor.md', issues: expect.arrayContaining([expect.objectContaining({ code: 'superseded_target_still_active', target: 'Knowledge/Decisions/Original.md' })]) }),
+    ]));
+
+    await callJson(client, 'publish_decision_record', {
+      path: 'Knowledge/Decisions/Original.md', title: 'Original policy', context: 'The first policy was in force.', decision: 'Use the original policy.', status: 'superseded', replacedBy: '[[Knowledge/Decisions/Successor]]',
+      evidencePaths: [source.value.path], expectedRevision: originalRead.value.revision, accessToken,
+    });
+    const repaired = await callJson(client, 'get_wiki_decision_register', { limit: 20, maxChars: 12000, accessToken });
+    expect(repaired.value.counts.statuses).toMatchObject({ accepted: 1, superseded: 1 });
+    expect(repaired.value.counts.issueCodes.superseded_target_still_active || 0).toBe(0);
+    expect(repaired.value.items.find((item: any) => item.path === 'Knowledge/Decisions/Original.md')).toMatchObject({ decisionStatus: 'superseded', statusSource: 'property', successors: ['Knowledge/Decisions/Successor.md'] });
+
+    const legacyWrite = await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/Decisions/Legacy.md', content: '# Legacy decision\n\nDecision status: **proposed**\n', expectedRevision: 'missing', accessToken,
+      frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'decision', lifecycle: 'review', knowledge_status: 'draft', evidence_paths: [source.value.path] },
+    } });
+    expect(legacyWrite.isError).toBeFalsy();
+    const legacy = await callJson(client, 'read_note', { path: 'Knowledge/Decisions/Legacy.md', accessToken });
+    const migration = await callJson(client, 'get_wiki_decision_register', { limit: 20, maxChars: 12000, accessToken });
+    expect(migration.value.items.find((item: any) => item.path === 'Knowledge/Decisions/Legacy.md')).toMatchObject({ decisionStatus: 'proposed', statusSource: 'body_legacy', issues: expect.arrayContaining([expect.objectContaining({ code: 'decision_status_migration_required' })]) });
+    await callJson(client, 'triage_wiki_note', { path: 'Knowledge/Decisions/Legacy.md', decisionStatus: 'proposed', expectedRevision: legacy.value.revision, accessToken });
+    const migrated = await callJson(client, 'get_wiki_decision_register', { limit: 20, maxChars: 12000, accessToken });
+    expect(migrated.value.items.find((item: any) => item.path === 'Knowledge/Decisions/Legacy.md')).toMatchObject({ decisionStatus: 'proposed', statusSource: 'property' });
+
+    const bases = await callJson(client, 'get_wiki_bases_view', { view: 'decisions', maxChars: 12000, accessToken });
+    expect(bases.value).toMatchObject({ view: 'decisions', matchingNotes: 3, matchingNotesExact: true });
+    expect(bases.value.content).toContain('note.decision_status');
+    const capabilities = await callJson(client, 'search_capabilities', { query: 'decision register', limit: 3, maxChars: 5000, accessToken });
+    expect(capabilities.value.endpoints).toEqual(expect.arrayContaining([expect.objectContaining({ endpointId: 'wiki.decision_register' })]));
+    const bounded = await callJson(client, 'get_wiki_decision_register', { limit: 2, maxChars: 1200, accessToken });
+    expect(JSON.stringify(bounded.value).length).toBeLessThanOrEqual(1200);
+    expect(bounded.value.truncated).toBe(true);
+    const tiny = await callJson(client, 'get_wiki_decision_register', { limit: 2, maxChars: 512, accessToken });
+    expect(JSON.stringify(tiny.value).length).toBeLessThanOrEqual(512);
+    expect(tiny.value.truncated).toBe(true);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('drillable facets and synthesis candidates close the authored Distill to Express loop', async () => {
   const { server, client } = await setup();
   try {

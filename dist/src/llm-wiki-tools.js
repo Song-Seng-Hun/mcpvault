@@ -1,4 +1,4 @@
-import { BASES_VIEW_IDS, KNOWLEDGE_ROLES, NOTE_TEMPLATE_IDS } from './organization.js';
+import { BASES_VIEW_IDS, DECISION_STATUSES, KNOWLEDGE_ROLES, NOTE_TEMPLATE_IDS } from './organization.js';
 const prettyPrint = { type: 'boolean', description: 'Format JSON response with indentation', default: false };
 const accessToken = { type: 'string', description: 'Token from login_scope. Omit for public global scope only.' };
 const scopeUri = { type: 'string', description: 'Target scope root; defaults to scope://global/. Private scopes require an authorized accessToken.', default: 'scope://global/' };
@@ -65,9 +65,16 @@ export function getLlmWikiTools() {
             inputSchema: { type: 'object', properties: {
                     path: { type: 'string' }, title: { type: 'string' }, context: { type: 'string', maxLength: 4000 }, decision: { type: 'string', maxLength: 4000 },
                     alternatives: { type: 'array', items: { type: 'string', maxLength: 1000 }, maxItems: 12 }, consequences: { type: 'array', items: { type: 'string', maxLength: 1000 }, maxItems: 12 },
-                    status: { type: 'string', enum: ['proposed', 'accepted', 'rejected', 'superseded'], default: 'proposed' }, evidencePaths: { type: 'array', items: { type: 'string' }, maxItems: 20 }, references: { type: 'array', items: { type: 'string' } },
+                    status: { type: 'string', enum: [...DECISION_STATUSES], default: 'proposed' }, supersedes: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 30, description: 'Older Decision Records replaced by this one; direction is new -> old.' }, replacedBy: { type: 'string', maxLength: 500, description: 'Successor path when explicitly retiring this record.' }, evidencePaths: { type: 'array', items: { type: 'string' }, maxItems: 20 }, references: { type: 'array', items: { type: 'string' } },
                     author: { type: 'string' }, reviewAt: { type: 'string' }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
                 }, required: ['path', 'title', 'context', 'decision', 'evidencePaths', 'expectedRevision'] },
+        },
+        {
+            name: 'get_wiki_decision_register',
+            description: 'Return a bounded live register of visible Decision Records with structured state, revisions, predecessor/successor lineage, legacy migration warnings, active-target conflicts, ambiguous links, and supersession cycles. It derives from Markdown, never auto-rewrites records, and treats decision_status as authoritative.',
+            inputSchema: { type: 'object', properties: {
+                    limit: { type: 'integer', minimum: 1, maximum: 100, default: 30 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 8000 }, accessToken, prettyPrint,
+                } },
         },
         {
             name: 'publish_knowledge',
@@ -80,6 +87,7 @@ export function getLlmWikiTools() {
                     status: { type: 'string', enum: ['draft', 'verified', 'disputed', 'superseded'], default: 'draft' },
                     noteKind: { type: 'string', enum: ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'experiment', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'], default: 'knowledge' },
                     lifecycle: { type: 'string', enum: ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'] },
+                    decisionStatus: { type: 'string', enum: [...DECISION_STATUSES], description: 'Structured state for noteKind=decision. Prefer wiki.decision_record for creation and state transitions.' },
                     moc: { type: 'string', description: 'Optional legacy single Obsidian [[MOC]] link or path' }, mocs: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'Additional Obsidian [[MOC]] links for multi-context discovery; navigation only' }, primaryMoc: { type: 'string', maxLength: 500, description: 'Preferred Obsidian MOC entry point for this note; navigation only' }, navOrder: { type: 'integer', minimum: 0, maximum: 1000000, description: 'Optional order among sibling MOCs; lower numbers appear first' }, project: { type: 'string', description: 'Optional Obsidian [[Project]] link or path' },
                     reviewAt: { type: 'string', description: 'Optional ISO date/time for evidence review' }, reviewIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: 'Optional cadence in days; review_wiki_note schedules the next review after completion' }, reviewSnoozedUntil: { type: 'string', description: 'Temporarily omit this note from review queues until an ISO date/time' }, reviewSnoozeReason: { type: 'string', maxLength: 500 },
                     aliases: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 30, description: 'Optional Obsidian aliases for stable navigation' }, knowledgeRole: { type: 'string', enum: ['concept', 'argument', 'model', 'observation', 'counterargument'], description: 'Atomic-note role; use counterargument for an explicit rebuttal or limitation' }, seeAlso: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20, description: 'Adjacent Obsidian links, not evidence' },
@@ -415,6 +423,7 @@ export function getLlmWikiTools() {
                     ...temporalProperties,
                     path: { type: 'string' }, noteKind: { type: 'string', enum: ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'experiment', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'] },
                     lifecycle: { type: 'string', enum: ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'] },
+                    decisionStatus: { type: 'string', enum: [...DECISION_STATUSES], description: 'Metadata-only migration/repair for an existing Decision Record; use wiki.decision_record for an actual state transition.' },
                     moc: { type: 'string' }, mocs: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'Additional Obsidian [[MOC]] links for multi-context discovery; navigation only' }, primaryMoc: { type: 'string', maxLength: 500, description: 'Preferred Obsidian MOC entry point for this note; navigation only' }, navOrder: { type: 'integer', minimum: 0, maximum: 1000000, description: 'Optional order among sibling MOCs; lower numbers appear first' }, project: { type: 'string' }, reviewAt: { type: 'string' },
                     aliases: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 30 }, reviewIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: 'Optional review cadence in days; review_wiki_note advances review_at after a completed review' },
                     summary: { type: 'string', maxLength: 2000 },
@@ -497,7 +506,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_bases_view',
-            description: 'Return a bounded, optional Obsidian Bases YAML view for visible Wiki notes, including focused concept, argument, model, observation, and counterargument shelves. This exports a local view definition only; it is not an MCP permission boundary and does not write a file.',
+            description: 'Return a bounded, optional Obsidian Bases YAML view for visible Wiki notes, including decisions and focused concept, argument, model, observation, and counterargument shelves. This exports a local view definition only; it is not an MCP permission boundary and does not write a file.',
             inputSchema: { type: 'object', properties: {
                     view: { type: 'string', enum: [...BASES_VIEW_IDS], default: 'all', description: 'Optional standard Obsidian Bases projection' },
                     noteKind: { type: 'string', description: 'Optional exact note_kind filter' },

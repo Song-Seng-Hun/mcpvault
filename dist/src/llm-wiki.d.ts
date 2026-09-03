@@ -200,6 +200,7 @@ export declare class LlmWikiService {
         status?: string;
         noteKind?: string;
         lifecycle?: string;
+        decisionStatus?: unknown;
         primaryMoc?: string;
         moc?: string;
         mocs?: unknown;
@@ -1982,6 +1983,7 @@ export declare class LlmWikiService {
         path: string;
         noteKind?: string;
         lifecycle?: string;
+        decisionStatus?: unknown;
         primaryMoc?: string;
         moc?: string;
         mocs?: unknown;
@@ -2339,6 +2341,7 @@ export declare class LlmWikiService {
             projects: number;
             inbox: number;
             review: number;
+            decisions: number;
             stableIds: number;
         };
         nextAction: {
@@ -2532,6 +2535,7 @@ export declare class LlmWikiService {
             projects: number;
             inbox: number;
             review: number;
+            decisions: number;
             stableIds: number;
         };
         nextAction: {
@@ -3255,6 +3259,8 @@ export declare class LlmWikiService {
         alternatives?: unknown;
         consequences?: unknown;
         status?: string;
+        supersedes?: unknown;
+        replacedBy?: string;
         evidencePaths: string[];
         references?: unknown;
         author: string;
@@ -3276,6 +3282,29 @@ export declare class LlmWikiService {
         }[];
         claims?: Record<string, unknown>[];
         revision: string;
+        decisionStatus: "accepted" | "proposed" | "rejected" | "superseded";
+    }>;
+    /**
+     * Return a bounded, live Decision Record register derived from Markdown.
+     * decision_status is authoritative for new records. Older records are only
+     * inferred for display and are never silently rewritten.
+     */
+    decisionRegister(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        counts: {
+            total: number;
+            issues: number;
+        };
+        nextAction: {
+            endpointId: string;
+        };
+        automaticChanges: boolean;
+        truncated: boolean;
+    } | {
+        counts: {
+            total: number;
+            issues: number;
+        };
+        truncated: boolean;
     }>;
     sourceTrust(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
         items: Record<string, unknown>[];

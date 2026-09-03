@@ -9,7 +9,7 @@ import type { ReferenceService } from './references.js';
 import type { SemanticSearchService } from './semantic-search.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
-import { getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, normalizeClarifyDisposition, normalizeIsoDate, normalizeLifecycle, normalizeNavOrder, normalizeNoteKind, normalizeRecallQuality, normalizeRetentionPolicy, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeServiceClass, normalizeTaskStatus, organizationLintIssues, organizationNoteTemplate, temporalValidity, BASES_VIEW_IDS, KNOWLEDGE_ROLES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, type TemporalValidityState } from './organization.js';
+import { getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeLifecycle, normalizeNavOrder, normalizeNoteKind, normalizeRecallQuality, normalizeRetentionPolicy, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeServiceClass, normalizeTaskStatus, organizationLintIssues, organizationNoteTemplate, temporalValidity, BASES_VIEW_IDS, DECISION_STATUSES, KNOWLEDGE_ROLES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, type TemporalValidityState } from './organization.js';
 import { extractObsidianLinkOccurrences, resolveWikiLinkTargets } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
@@ -692,7 +692,7 @@ Obsidian reference examples:
 \`\`\`
 
 10. Prioritize Wiki participation: read existing notes, add grounded corrections, ingest evidence before load-bearing claims, and lint before considering a conclusion accepted.
-11. For a durable architectural or policy choice, use the structured \`wiki.decision_record\` endpoint with context, decision, alternatives, consequences, evidence, and a revision-checked status. A decision is a knowledge note, not a duplicate Git log. Use \`wiki.synthesis_candidates\` to find explicit MOC/project/domain/subject clusters ready for a model or argument: read the returned revisions and counterpoints, preserve every input, and never infer a synthesis from folder or vector proximity. Use \`wiki.promotion_candidates\`, \`wiki.source_trust\`, \`wiki.summary_candidates\`, and \`wiki.unused_knowledge\` as bounded maintenance reports; verify candidates before writing, archiving, or superseding, and never auto-delete.
+11. For a durable architectural or policy choice, use the structured \`wiki.decision_record\` endpoint with context, decision, alternatives, consequences, evidence, and a revision-checked status. It persists \`decision_status\` separately from the coarser knowledge status. Use \`wiki.decision_register\` to inspect current/proposed/retired choices and supersession conflicts; \`supersedes\` points new -> old, and retiring the old record is an explicit revision-checked update, never an automatic rewrite. A decision is a knowledge note, not a duplicate Git log. Use \`wiki.synthesis_candidates\` to find explicit MOC/project/domain/subject clusters ready for a model or argument: read the returned revisions and counterpoints, preserve every input, and never infer a synthesis from folder or vector proximity. Use \`wiki.promotion_candidates\`, \`wiki.source_trust\`, \`wiki.summary_candidates\`, and \`wiki.unused_knowledge\` as bounded maintenance reports; verify candidates before writing, archiving, or superseding, and never auto-delete.
 12. Search results expose compact \`why\` match reasons and \`fresh\` state. Use \`includeRevisions\` when an exact source hash is needed before a later edit; start with bounded projections and follow only relevant references.
 13. Use Idea Lab for divergent thinking: \`idea.create\` records one problem and seed, \`idea.branch\` preserves an alternative without overwriting its parent, \`idea.contribute\` records a bounded extension/challenge/counterexample/evidence item, and \`idea.evaluate\` scores novelty, usefulness, feasibility, risk, and evidence quality separately. Use Async Workshop for a stateless meeting with phases \`diverge\`, \`cluster\`, \`critique\`, \`evaluate\`, \`synthesize\`, \`decide\`, and \`closed\`; read the bounded projection, contribute one useful item, and advance with a revision and reason. A synthesis remains proposed until checked and converted to \`wiki.decision_record\` or an agent task. Rejected and parked ideas remain recoverable history.
 14. Good public contributions earn recognition when other agents like them; raw post volume and self-likes do not count as level progress. Use the public Agora by creating a post with category=\`agora\`, debate with stance=\`for\`, \`against\`, or \`neutral\` comments, and like arguments that are useful or well-supported.
@@ -1174,6 +1174,7 @@ export class LlmWikiService {
     status?: string;
     noteKind?: string;
     lifecycle?: string;
+    decisionStatus?: unknown;
     primaryMoc?: string;
     moc?: string;
     mocs?: unknown;
@@ -1317,6 +1318,8 @@ export class LlmWikiService {
       ...knowledgeOrganization({
         status,
         ...(existing && { existing: existing.frontmatter }),
+        ...(params.noteKind !== undefined && { noteKind: params.noteKind }),
+        ...(params.decisionStatus !== undefined && { decisionStatus: params.decisionStatus }),
         ...(params.relations !== undefined && { relations: params.relations }),
       }),
     };
@@ -1368,6 +1371,7 @@ export class LlmWikiService {
           ...(existing && { existing: existing.frontmatter }),
           ...(params.noteKind !== undefined && { noteKind: params.noteKind }),
           ...(params.lifecycle !== undefined && { lifecycle: params.lifecycle }),
+          ...(params.decisionStatus !== undefined && { decisionStatus: params.decisionStatus }),
           ...(params.primaryMoc !== undefined && { primaryMoc: params.primaryMoc }),
           ...(params.navOrder !== undefined && { navOrder: params.navOrder }),
           ...(params.moc !== undefined && { moc: params.moc }),
@@ -4343,6 +4347,7 @@ export class LlmWikiService {
     path: string;
     noteKind?: string;
     lifecycle?: string;
+    decisionStatus?: unknown;
     primaryMoc?: string;
     moc?: string;
     mocs?: unknown;
@@ -4456,12 +4461,13 @@ export class LlmWikiService {
     if (note.frontmatter.llm_wiki_type && note.frontmatter.llm_wiki_type !== 'knowledge') {
       throw new Error(`triage_wiki_note cannot classify managed LLM Wiki type '${note.frontmatter.llm_wiki_type}'`);
     }
-    const hasOrganizationInput = [params.noteKind, params.lifecycle, params.primaryMoc, params.mocs, params.moc, params.navOrder, params.project, params.reviewAt, params.reviewIntervalDays, params.reviewSnoozedUntil, params.reviewSnoozeReason, params.nextAction, params.waitingFor, params.desiredOutcome, params.projectPurpose, params.projectSupport, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.serviceClass, params.completionCriteria, params.startedAt, params.blockedSince, params.waitingSince, params.completedAt, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.canonicalPath, params.recallPrompt, params.recallIntervalDays, params.lastRecalledAt, params.recallQuality, params.retentionPolicy, params.retentionEvent, params.retentionAt, params.preserveUntil, params.legalHold, params.retentionReason, params.replacedBy, params.knowledgeRole, params.termStatus, params.termReplacedBy, params.termScopeNote, params.preferredTerm, params.termLanguage, params.authorityScheme, params.authorityId, params.disambiguation, params.broaderTerms, params.relatedTerms, params.subjectTerms, params.domain, params.methods, params.audience, params.retrievalCues, params.useWhen, params.validFrom, params.validUntil, params.observedAt, params.temporalScope, params.seeAlso, params.relations, params.relationNotes, params.relationEvidence, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.reviewChecks, params.reviewOpenItems, params.interpretationStatus, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
+    const hasOrganizationInput = [params.noteKind, params.lifecycle, params.decisionStatus, params.primaryMoc, params.mocs, params.moc, params.navOrder, params.project, params.reviewAt, params.reviewIntervalDays, params.reviewSnoozedUntil, params.reviewSnoozeReason, params.nextAction, params.waitingFor, params.desiredOutcome, params.projectPurpose, params.projectSupport, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.serviceClass, params.completionCriteria, params.startedAt, params.blockedSince, params.waitingSince, params.completedAt, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.canonicalPath, params.recallPrompt, params.recallIntervalDays, params.lastRecalledAt, params.recallQuality, params.retentionPolicy, params.retentionEvent, params.retentionAt, params.preserveUntil, params.legalHold, params.retentionReason, params.replacedBy, params.knowledgeRole, params.termStatus, params.termReplacedBy, params.termScopeNote, params.preferredTerm, params.termLanguage, params.authorityScheme, params.authorityId, params.disambiguation, params.broaderTerms, params.relatedTerms, params.subjectTerms, params.domain, params.methods, params.audience, params.retrievalCues, params.useWhen, params.validFrom, params.validUntil, params.observedAt, params.temporalScope, params.seeAlso, params.relations, params.relationNotes, params.relationEvidence, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.reviewChecks, params.reviewOpenItems, params.interpretationStatus, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
       .some(value => value !== undefined);
     if (!hasOrganizationInput && [params.tags, params.timeEstimateMinutes, params.energy, params.effort].every(value => value === undefined)) throw new Error('At least one organization field is required');
     const patch: Record<string, unknown> = {};
     if (params.noteKind !== undefined) patch.note_kind = normalizeNoteKind(params.noteKind);
     if (params.lifecycle !== undefined) patch.lifecycle = normalizeLifecycle(params.lifecycle);
+    if (params.decisionStatus !== undefined) patch.decision_status = normalizeDecisionStatus(params.decisionStatus);
     if (params.primaryMoc !== undefined) patch.primary_moc = boundedText(params.primaryMoc, 500);
     if (params.navOrder !== undefined) patch.nav_order = normalizeNavOrder(params.navOrder);
     if (params.moc !== undefined) patch.moc = String(params.moc).trim().slice(0, 500);
@@ -4493,6 +4499,7 @@ export class LlmWikiService {
       ...(params.effort !== undefined && { effort: params.effort }),
       ...(params.noteKind !== undefined && { noteKind: params.noteKind }),
       ...(params.lifecycle !== undefined && { lifecycle: params.lifecycle }),
+      ...(params.decisionStatus !== undefined && { decisionStatus: params.decisionStatus }),
       ...(params.primaryMoc !== undefined && { primaryMoc: params.primaryMoc }),
       ...(params.navOrder !== undefined && { navOrder: params.navOrder }),
           ...(params.moc !== undefined && { moc: params.moc }),
@@ -4606,6 +4613,7 @@ export class LlmWikiService {
       frontmatter: {
         noteKind: updated.frontmatter.note_kind,
         lifecycle: updated.frontmatter.lifecycle,
+        ...(updated.frontmatter.decision_status && { decisionStatus: updated.frontmatter.decision_status }),
         ...(Array.isArray(updated.frontmatter.tags) && { tags: updated.frontmatter.tags }),
         ...(updated.frontmatter.time_estimate_minutes !== undefined && { timeEstimateMinutes: updated.frontmatter.time_estimate_minutes }),
         ...(updated.frontmatter.energy && { energy: updated.frontmatter.energy }),
@@ -5108,6 +5116,7 @@ export class LlmWikiService {
       epistemic: { name: 'LLM Wiki Epistemic Work', file: 'LLM Wiki Epistemic.base', filters: ['note.note_kind == "question" || note.note_kind == "hypothesis" || note.note_kind == "experiment" || note.note_kind == "assumption"'] },
       experiments: { name: 'LLM Wiki Experiments', file: 'LLM Wiki Experiments.base', filters: ['note.note_kind == "experiment"'], order: ['note.epistemic_status', 'file.mtime', 'file.name'] },
       open_questions: { name: 'LLM Wiki Open Questions', file: 'LLM Wiki Open Questions.base', filters: ['(note.note_kind == "question" && (note.epistemic_status == "open" || note.epistemic_status == "blocked")) || (note.note_kind == "hypothesis" && (note.epistemic_status == "proposed" || note.epistemic_status == "inconclusive")) || (note.note_kind == "assumption" && note.epistemic_status == "active")'] },
+      decisions: { name: 'LLM Wiki Decision Register', file: 'LLM Wiki Decisions.base', filters: ['note.note_kind == "decision"'], order: ['note.decision_status', 'note.review_at', 'file.mtime', 'file.name'] },
       knowledge: { name: 'LLM Wiki Durable Knowledge', file: 'LLM Wiki Knowledge.base', filters: ['note.note_kind == "atomic" || note.note_kind == "knowledge" || note.note_kind == "decision"'] },
       concepts: { name: 'LLM Wiki Concepts', file: 'LLM Wiki Concepts.base', filters: ['note.knowledge_role == "concept"'], order: ['note.primary_moc', 'file.name'] },
       arguments: { name: 'LLM Wiki Arguments', file: 'LLM Wiki Arguments.base', filters: ['note.knowledge_role == "argument"'], order: ['note.lifecycle', 'file.mtime', 'file.name'] },
@@ -5125,11 +5134,13 @@ export class LlmWikiService {
     if (!(BASES_VIEW_IDS as readonly string[]).includes(view) || !viewDefinitions[view]) throw new Error(`view must be one of: ${BASES_VIEW_IDS.join(', ')}`);
     const selectedView = viewDefinitions[view]!;
     const roleView = ({ concepts: 'concept', arguments: 'argument', models: 'model', observations: 'observation', counterarguments: 'counterargument' } as Record<string, string>)[view];
-    const catalog = await this.catalog(principal, { summaryOnly: true, ...(noteKind && { noteKind }), ...(lifecycle && { lifecycle }), ...(roleView && { knowledgeRole: roleView }), limit: boundedLimit, maxChars: boundedChars });
+    const viewNoteKind = view === 'decisions' ? 'decision' : undefined;
+    const selectedNoteKind = noteKind || viewNoteKind;
+    const catalog = await this.catalog(principal, { summaryOnly: true, ...(selectedNoteKind && { noteKind: selectedNoteKind }), ...(lifecycle && { lifecycle }), ...(roleView && { knowledgeRole: roleView }), limit: boundedLimit, maxChars: boundedChars });
     const filters: string[] = ['file.ext == "md"', ...selectedView.filters];
     if (noteKind) filters.push(`note.note_kind == ${JSON.stringify(String(noteKind).trim())}`);
     if (lifecycle) filters.push(`note.lifecycle == ${JSON.stringify(String(lifecycle).trim())}`);
-    const matchingNotes = roleView || view === 'all' || noteKind || lifecycle
+    const matchingNotes = roleView || view === 'all' || view === 'decisions' || noteKind || lifecycle
       ? catalog.total
       : view === 'inbox'
         ? Number((catalog.organization as any).lifecycles?.inbox || 0)
@@ -5150,7 +5161,7 @@ export class LlmWikiService {
       ? Number((catalog.organization as any).noteKinds?.atomic || 0) + Number((catalog.organization as any).noteKinds?.knowledge || 0) + Number((catalog.organization as any).noteKinds?.decision || 0)
       : undefined;
     const resolvedMatchingNotes = viewTotal === undefined ? matchingNotes : viewTotal;
-    const matchingNotesExact = ['all', 'inbox', 'inbox_oldest', 'projects', 'review', 'epistemic', 'experiments', 'knowledge', 'concepts', 'arguments', 'models', 'observations', 'counterarguments', 'maintenance'].includes(view)
+    const matchingNotesExact = ['all', 'inbox', 'inbox_oldest', 'projects', 'review', 'epistemic', 'experiments', 'decisions', 'knowledge', 'concepts', 'arguments', 'models', 'observations', 'counterarguments', 'maintenance'].includes(view)
       && !noteKind && !lifecycle;
     const base = {
       filters: { and: filters },
@@ -5166,6 +5177,9 @@ export class LlmWikiService {
       properties: {
         'note.note_kind': { displayName: 'Kind' },
         'note.lifecycle': { displayName: 'Lifecycle' },
+        'note.decision_status': { displayName: 'Decision status' },
+        'note.supersedes': { displayName: 'Supersedes' },
+        'note.replaced_by': { displayName: 'Replaced by' },
         'note.task_status': { displayName: 'Task status' },
         'note.project_purpose': { displayName: 'Purpose' },
         'note.desired_outcome': { displayName: 'Desired outcome' },
@@ -5185,7 +5199,7 @@ export class LlmWikiService {
         name: selectedView.name,
         limit: boundedLimit,
         order: selectedView.order || ['file.mtime', 'file.name'],
-        columns: ['file.name', 'note.note_kind', 'note.lifecycle', 'note.task_status', 'note.project_purpose', 'note.desired_outcome', 'note.next_action', 'note.primary_moc', 'note.domain', 'note.preferred_term', 'note.aliases', 'note.review_checks', 'note.review_open_items', 'formula.planning_ready', 'formula.review_due', 'formula.has_support', 'formula.has_summary', 'formula.review_state', 'file.mtime'],
+        columns: ['file.name', 'note.note_kind', 'note.lifecycle', 'note.decision_status', 'note.supersedes', 'note.replaced_by', 'note.task_status', 'note.project_purpose', 'note.desired_outcome', 'note.next_action', 'note.primary_moc', 'note.domain', 'note.preferred_term', 'note.aliases', 'note.review_checks', 'note.review_open_items', 'formula.planning_ready', 'formula.review_due', 'formula.has_support', 'formula.has_summary', 'formula.review_state', 'file.mtime'],
       }],
     };
     const content = stringifyYaml(base);
@@ -5248,6 +5262,7 @@ export class LlmWikiService {
     let projectTotal = 0;
     let inboxTotal = 0;
     let reviewTotal = 0;
+    let decisionTotal = 0;
     let stableIdTotal = 0;
     for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
       const isSchema = normalizePath(note.path).toLowerCase() === PUBLIC_SCHEMA_PATH.toLowerCase();
@@ -5270,6 +5285,7 @@ export class LlmWikiService {
         projectTotal += 1;
         if (projects.length < boundedLimit) projects.push({ ...item, ...(note.frontmatter.task_status && { taskStatus: note.frontmatter.task_status }), ...(note.frontmatter.next_action && { nextAction: note.frontmatter.next_action }) });
       }
+      if (note.frontmatter.note_kind === 'decision') decisionTotal += 1;
       if (note.frontmatter.lifecycle === 'inbox' || /(^|\/)inbox(?:\/|$)/i.test(note.path)) {
         inboxTotal += 1;
         if (inbox.length < boundedLimit) inbox.push(item);
@@ -5294,6 +5310,7 @@ export class LlmWikiService {
       { intent: 'capture', useWhen: 'You must preserve a new observation before classifying it.', endpointId: endpointIdForTool('capture_wiki_note'), arguments: { expectedRevision: 'missing' }, requiredArguments: ['content'], mutating: true },
       { intent: 'organize_inbox', useWhen: 'You are processing captures, not creating new knowledge.', endpointId: endpointIdForTool('get_wiki_inbox'), arguments: { limit: 5, maxChars: 4000 }, followUpEndpointId: endpointIdForTool('clarify_wiki_note') },
       { intent: 'understand_or_decide', useWhen: 'You selected one note and need bounded evidence, counterpoint, and next-step context.', endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path: '<selected path>', intent: 'decide', limit: 6, maxChars: 5000 }, requiredArguments: ['path'] },
+      { intent: 'govern_decisions', useWhen: 'You need current, proposed, retired, conflicting, or legacy Decision Records and their lineage.', endpointId: endpointIdForTool('get_wiki_decision_register'), arguments: { limit: 20, maxChars: 6000 } },
       { intent: 'synthesize_or_express', useWhen: 'Several explicitly related durable notes may support a model, argument, or decision without replacing their originals.', endpointId: endpointIdForTool('get_wiki_synthesis_candidates'), arguments: { limit: 5, maxChars: 6000 } },
       { intent: 'follow_curated_sequence', useWhen: 'You selected a MOC that is meant to be read or executed in order.', endpointId: endpointIdForTool('get_wiki_learning_path'), arguments: { path: '<selected MOC path>', maxDepth: 2, limit: 20, maxChars: 6000 }, requiredArguments: ['path'] },
       { intent: 'execute_in_context', useWhen: 'You need one executable action that fits a known GTD context.', endpointId: endpointIdForTool('get_wiki_next_actions'), arguments: { taskContext: '<exact context>', limit: 5, maxChars: 4000 }, requiredArguments: ['taskContext'] },
@@ -5318,7 +5335,7 @@ export class LlmWikiService {
         { path: this.access.toPublicPath(PUBLIC_SCHEMA_PATH), reason: 'scope rules and writing contract' },
         { path: this.access.toPublicPath(WELCOME_NOTE_PATH), reason: 'first-session orientation' },
       ],
-      counts: { total, mocs: mocTotal, projects: projectTotal, inbox: inboxTotal, review: reviewTotal, stableIds: stableIdTotal },
+      counts: { total, mocs: mocTotal, projects: projectTotal, inbox: inboxTotal, review: reviewTotal, decisions: decisionTotal, stableIds: stableIdTotal },
       nextAction,
       workflowRoutes,
       mocs,
@@ -7936,6 +7953,8 @@ export class LlmWikiService {
     alternatives?: unknown;
     consequences?: unknown;
     status?: string;
+    supersedes?: unknown;
+    replacedBy?: string;
     evidencePaths: string[];
     references?: unknown;
     author: string;
@@ -7946,8 +7965,7 @@ export class LlmWikiService {
     const context = boundedText(params.context, 4000);
     const decision = boundedText(params.decision, 4000);
     if (!title || !context || !decision) throw new Error('title, context, and decision are required');
-    const status = String(params.status || 'proposed').trim().toLowerCase();
-    if (!['proposed', 'accepted', 'rejected', 'superseded'].includes(status)) throw new Error('status must be proposed, accepted, rejected, or superseded');
+    const status = normalizeDecisionStatus(params.status || 'proposed')!;
     const list = (value: unknown, field: string) => {
       if (value === undefined) return [];
       if (!Array.isArray(value)) throw new Error(`${field} must be an array`);
@@ -7978,7 +7996,7 @@ export class LlmWikiService {
       '',
     ].join('\n');
     const knowledgeStatus = status === 'accepted' ? 'verified' : status === 'superseded' || status === 'rejected' ? 'superseded' : 'draft';
-    return this.publishKnowledge({
+    const published = await this.publishKnowledge({
       ...(params.principal && { principal: params.principal }),
       path: params.path,
       content,
@@ -7987,10 +8005,260 @@ export class LlmWikiService {
       author: params.author,
       status: knowledgeStatus,
       noteKind: 'decision',
+      decisionStatus: status,
       lifecycle: status === 'accepted' ? 'evergreen' : status === 'superseded' || status === 'rejected' ? 'superseded' : 'review',
+      ...(params.supersedes !== undefined && { relations: { supersedes: params.supersedes } }),
+      ...(params.replacedBy && { replacedBy: params.replacedBy }),
       ...(params.reviewAt && { reviewAt: params.reviewAt }),
       expectedRevision: params.expectedRevision,
     });
+    return { ...published, decisionStatus: status };
+  }
+
+  /**
+   * Return a bounded, live Decision Record register derived from Markdown.
+   * decision_status is authoritative for new records. Older records are only
+   * inferred for display and are never silently rewritten.
+   */
+  async decisionRegister(principal?: ScopePrincipal, limit = 30, maxChars = 8000) {
+    const boundedLimit = Math.min(Math.max(Number(limit) || 30, 1), 100);
+    const boundedChars = Math.min(Math.max(Number(maxChars) || 8000, 512), 20000);
+    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+    const validStatuses = new Set<string>(DECISION_STATUSES);
+    const records: Array<Record<string, any>> = [];
+    const byPath = new Map<string, Record<string, any>>();
+    const decisionReferenceIndex: KnowledgeReferenceIndex = { qualified: new Map(), terms: new Map() };
+    const addReference = (map: Map<string, Set<string>>, key: string, path: string) => {
+      if (!key) return;
+      const values = map.get(key) || new Set<string>();
+      values.add(path);
+      map.set(key, values);
+    };
+    const statusCounts: Record<string, number> = { proposed: 0, accepted: 0, rejected: 0, superseded: 0, unknown: 0 };
+    const statusSourceCounts: Record<string, number> = {};
+
+    for await (const note of iterateNotes(this.fileSystem, { filters: { llm_wiki_type: 'knowledge', note_kind: 'decision' } }, canAccess)) {
+      if (isModerationHidden(note.frontmatter)) continue;
+      const physicalPath = normalizePath(note.path);
+      const rawProperty = note.frontmatter.decision_status;
+      const propertyStatus = typeof rawProperty === 'string' ? rawProperty.trim().toLowerCase() : '';
+      // Modern records stay metadata-only. Hydrate only a legacy record that
+      // lacks the authoritative Property and therefore needs body inference.
+      const legacyContent = rawProperty === undefined ? (await this.fileSystem.readNote(physicalPath)).content : '';
+      const bodyMatch = /Decision status\s*:\s*(?:\*\*)?(proposed|accepted|rejected|superseded)(?:\*\*)?/i.exec(legacyContent);
+      const bodyStatus = bodyMatch?.[1]?.toLowerCase();
+      let decisionStatus: string | undefined;
+      let statusSource: 'property' | 'body_legacy' | 'legacy_inferred' | 'ambiguous_legacy' | 'invalid_property' | 'missing';
+      if (propertyStatus && validStatuses.has(propertyStatus)) {
+        decisionStatus = propertyStatus;
+        statusSource = 'property';
+      } else if (rawProperty !== undefined) {
+        statusSource = 'invalid_property';
+      } else if (bodyStatus && validStatuses.has(bodyStatus)) {
+        decisionStatus = bodyStatus;
+        statusSource = 'body_legacy';
+      } else {
+        const knowledgeStatus = String(note.frontmatter.knowledge_status || '').trim().toLowerCase();
+        const lifecycle = String(note.frontmatter.lifecycle || '').trim().toLowerCase();
+        if (knowledgeStatus === 'verified' && lifecycle === 'evergreen') {
+          decisionStatus = 'accepted';
+          statusSource = 'legacy_inferred';
+        } else if (knowledgeStatus === 'draft' && lifecycle === 'review') {
+          decisionStatus = 'proposed';
+          statusSource = 'legacy_inferred';
+        } else if (knowledgeStatus === 'superseded' || lifecycle === 'superseded') {
+          statusSource = 'ambiguous_legacy';
+        } else {
+          statusSource = 'missing';
+        }
+      }
+      const issues: Array<Record<string, unknown>> = [];
+      if (statusSource === 'body_legacy' || statusSource === 'legacy_inferred') {
+        issues.push({ code: 'decision_status_migration_required', detail: 'Persist the inferred state as decision_status after verifying this revision.' });
+      } else if (statusSource === 'ambiguous_legacy') {
+        issues.push({ code: 'decision_status_ambiguous', detail: 'The legacy metadata cannot distinguish rejected from superseded; inspect the record before migration.' });
+      } else if (statusSource === 'invalid_property') {
+        issues.push({ code: 'invalid_decision_status', detail: `decision_status must be one of: ${DECISION_STATUSES.join(', ')}` });
+      } else if (statusSource === 'missing') {
+        issues.push({ code: 'decision_status_missing', detail: 'No structured or safely inferable decision state exists.' });
+      }
+      if (decisionStatus) {
+        const expected = decisionStatus === 'accepted'
+          ? { lifecycle: 'evergreen', knowledgeStatus: 'verified' }
+          : decisionStatus === 'proposed'
+            ? { lifecycle: 'review', knowledgeStatus: 'draft' }
+            : { lifecycle: 'superseded', knowledgeStatus: 'superseded' };
+        if (String(note.frontmatter.lifecycle || '').trim().toLowerCase() !== expected.lifecycle
+          || String(note.frontmatter.knowledge_status || '').trim().toLowerCase() !== expected.knowledgeStatus) {
+          issues.push({ code: 'decision_status_inconsistent', detail: `${decisionStatus} requires lifecycle=${expected.lifecycle} and knowledge_status=${expected.knowledgeStatus}.` });
+        }
+      }
+      const record: Record<string, any> = {
+        physicalPath,
+        path: this.access.toPublicPath(physicalPath),
+        title: boundedText(note.frontmatter.title || physicalPath.split('/').at(-1), 300),
+        ...(note.revision && { revision: note.revision }),
+        ...(decisionStatus && { decisionStatus }),
+        statusSource,
+        lifecycle: note.frontmatter.lifecycle,
+        knowledgeStatus: note.frontmatter.knowledge_status,
+        ...(note.frontmatter.review_at && { reviewAt: note.frontmatter.review_at }),
+        ...(note.frontmatter.replaced_by && { replacedBy: boundedText(note.frontmatter.replaced_by, 500) }),
+        rawSupersedes: Array.isArray(note.frontmatter.supersedes) ? note.frontmatter.supersedes.filter((value: unknown): value is string => typeof value === 'string').slice(0, 30) : [],
+        issues,
+        resolvedSupersedes: [] as string[],
+        unresolvedSupersedes: [] as Array<Record<string, unknown>>,
+        successors: [] as string[],
+        resolvedReplacement: undefined as string | undefined,
+      };
+      records.push(record);
+      byPath.set(physicalPath.toLowerCase(), record);
+      const publicPath = this.access.toPublicPath(physicalPath);
+      for (const qualified of [physicalPath, physicalPath.replace(/\.md$/i, ''), publicPath, publicPath.replace(/\.md$/i, '')]) {
+        addReference(decisionReferenceIndex.qualified, normalizePath(qualified).toLocaleLowerCase(), physicalPath);
+      }
+      const title = String(note.frontmatter.title || physicalPath.split('/').at(-1) || '').replace(/\.md$/i, '');
+      const aliases = Array.isArray(note.frontmatter.aliases) ? note.frontmatter.aliases : [];
+      for (const term of [title, note.frontmatter.preferred_term, note.frontmatter.stable_id, ...aliases]) {
+        if (typeof term === 'string' && term.trim()) addReference(decisionReferenceIndex.terms, normalizedAuthorityTerm(term), physicalPath);
+      }
+      statusCounts[decisionStatus || 'unknown'] = (statusCounts[decisionStatus || 'unknown'] || 0) + 1;
+      statusSourceCounts[statusSource] = (statusSourceCounts[statusSource] || 0) + 1;
+    }
+
+    const byPublicPath = new Map(records.map(record => [normalizePath(String(record.path)).toLowerCase(), record]));
+    const referenceIndex = records.length ? decisionReferenceIndex : undefined;
+    const edges = new Map<string, Set<string>>();
+    for (const record of records) {
+      const sourceKey = String(record.physicalPath).toLowerCase();
+      for (const rawTarget of record.rawSupersedes as string[]) {
+        const matches = this.resolveKnowledgeReference(rawTarget, referenceIndex!).filter(path => byPath.has(normalizePath(path).toLowerCase()));
+        if (matches.length === 1) {
+          const target = byPath.get(normalizePath(matches[0]!).toLowerCase())!;
+          const targetKey = String(target.physicalPath).toLowerCase();
+          if (targetKey === sourceKey) {
+            record.issues.push({ code: 'decision_supersedes_self', detail: 'A Decision Record cannot supersede itself.' });
+            continue;
+          }
+          const outgoing = edges.get(sourceKey) || new Set<string>();
+          outgoing.add(targetKey);
+          edges.set(sourceKey, outgoing);
+          record.resolvedSupersedes.push(target.path);
+          target.successors.push(record.path);
+          if (record.decisionStatus === 'accepted' && !['superseded', 'rejected'].includes(String(target.decisionStatus || ''))) {
+            record.issues.push({ code: 'superseded_target_still_active', target: target.path, detail: 'An accepted successor points to a target that has not been retired.' });
+          }
+        } else {
+          const state = matches.length === 0 ? 'missing' : 'ambiguous';
+          record.unresolvedSupersedes.push({ target: boundedText(rawTarget, 300), state, ...(matches.length > 1 && { candidates: matches.slice(0, 5).map(path => this.access.toPublicPath(path)) }) });
+          record.issues.push({ code: `decision_supersedes_${state}`, target: boundedText(rawTarget, 300), detail: `The supersedes target is ${state}; resolve it before treating the lineage as authoritative.` });
+        }
+      }
+    }
+
+    for (const record of records) {
+      if (record.replacedBy) {
+        const matches = this.resolveKnowledgeReference(record.replacedBy, referenceIndex!).filter(path => byPath.has(normalizePath(path).toLowerCase()));
+        if (matches.length === 1) {
+          const replacement = byPath.get(normalizePath(matches[0]!).toLowerCase())!;
+          record.resolvedReplacement = replacement.path;
+          if (!(record.successors as string[]).includes(replacement.path)) {
+            record.issues.push({ code: 'decision_replacement_missing_reverse_supersedes', target: replacement.path, detail: 'replaced_by resolves, but the successor does not point back with supersedes.' });
+          }
+        } else {
+          const state = matches.length === 0 ? 'missing' : 'ambiguous';
+          record.issues.push({ code: `decision_replacement_${state}`, target: record.replacedBy, detail: `replaced_by is ${state}; the successor lineage cannot be verified.` });
+        }
+      }
+      const acceptedSuccessors = (record.successors as string[]).filter(path => byPublicPath.get(normalizePath(path).toLowerCase())?.decisionStatus === 'accepted');
+      if (acceptedSuccessors.length > 1) record.issues.push({ code: 'multiple_accepted_successors', detail: 'Several accepted decisions supersede this record; reconcile the competing lineage.', successors: acceptedSuccessors.slice(0, 5) });
+      if (record.decisionStatus === 'superseded' && record.successors.length === 0 && !record.resolvedReplacement) {
+        record.issues.push({ code: 'superseded_decision_without_successor', detail: 'A superseded decision should identify its successor through replaced_by or an incoming supersedes relation.' });
+      }
+    }
+
+    // Iterative depth-first traversal avoids recursion limits in large registers.
+    const completed = new Set<string>();
+    const cycleNodes = new Set<string>();
+    for (const start of byPath.keys()) {
+      if (completed.has(start)) continue;
+      const stack: Array<{ key: string; index: number; targets: string[] }> = [{ key: start, index: 0, targets: [...(edges.get(start) || [])] }];
+      const path: string[] = [];
+      const local = new Map<string, number>();
+      while (stack.length) {
+        const frame = stack[stack.length - 1]!;
+        if (!local.has(frame.key)) {
+          local.set(frame.key, path.length);
+          path.push(frame.key);
+        }
+        if (frame.index < frame.targets.length) {
+          const target = frame.targets[frame.index++]!;
+          const seenAt = local.get(target);
+          if (seenAt !== undefined) {
+            for (const key of path.slice(seenAt)) cycleNodes.add(key);
+          } else if (!completed.has(target)) {
+            stack.push({ key: target, index: 0, targets: [...(edges.get(target) || [])] });
+          }
+          continue;
+        }
+        completed.add(frame.key);
+        local.delete(frame.key);
+        path.pop();
+        stack.pop();
+      }
+    }
+    for (const key of cycleNodes) byPath.get(key)?.issues.push({ code: 'decision_supersession_cycle', detail: 'The supersession graph contains a cycle; no current decision can be determined safely.' });
+
+    const issueCounts: Record<string, number> = {};
+    for (const record of records) for (const issue of record.issues as Array<Record<string, unknown>>) {
+      const code = String(issue.code);
+      issueCounts[code] = (issueCounts[code] || 0) + 1;
+    }
+    const rank = (record: Record<string, any>) => record.issues.length ? 0 : record.decisionStatus === 'proposed' ? 1 : record.decisionStatus === 'accepted' ? 2 : 3;
+    records.sort((left, right) => rank(left) - rank(right) || String(left.title).localeCompare(String(right.title)) || String(left.path).localeCompare(String(right.path)));
+    const items: Array<Record<string, unknown>> = [];
+    const counts = { total: records.length, statuses: statusCounts, statusSources: statusSourceCounts, issues: Object.values(issueCounts).reduce((sum, value) => sum + value, 0), issueCodes: issueCounts };
+    let used = JSON.stringify({ counts, items: [], truncated: true }).length;
+    for (const record of records.slice(0, boundedLimit)) {
+      const item = {
+        path: record.path,
+        title: record.title,
+        ...(record.revision && { revision: record.revision }),
+        ...(record.decisionStatus && { decisionStatus: record.decisionStatus }),
+        statusSource: record.statusSource,
+        lifecycle: record.lifecycle,
+        knowledgeStatus: record.knowledgeStatus,
+        ...(record.reviewAt && { reviewAt: record.reviewAt }),
+        ...(record.replacedBy && { replacedBy: record.replacedBy }),
+        ...(record.resolvedReplacement && { resolvedReplacement: record.resolvedReplacement }),
+        supersedes: record.resolvedSupersedes,
+        successors: record.successors,
+        ...(record.unresolvedSupersedes.length && { unresolvedSupersedes: record.unresolvedSupersedes }),
+        ...(record.issues.length && { issues: record.issues }),
+      };
+      const size = JSON.stringify(item).length + 1;
+      if (used + size > boundedChars) break;
+      items.push(item);
+      used += size;
+    }
+    const firstIssue = records.find(record => record.issues.length > 0);
+    const nextAction = firstIssue
+      ? firstIssue.decisionStatus && ['body_legacy', 'legacy_inferred'].includes(firstIssue.statusSource)
+        ? { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path: firstIssue.path, decisionStatus: firstIssue.decisionStatus, expectedRevision: firstIssue.revision }, instruction: 'Verify the record body and revision, then persist only the confirmed legacy decision status. Use wiki.decision_record for an actual state transition.' }
+        : { endpointId: endpointIdForTool('read_note'), arguments: { path: firstIssue.path, maxChars: 4000 }, instruction: 'Inspect this Decision Record and its linked successor/predecessor before a revision-checked repair.' }
+      : { endpointId: endpointIdForTool('publish_decision_record'), instruction: 'Use wiki.decision_record for a new durable choice; use supersedes on the new record and retire the old record explicitly.' };
+    const result = {
+      counts,
+      items,
+      nextAction,
+      semantics: 'decision_status is authoritative. Legacy body inference is display-only. supersedes points from the newer decision to the older decision.',
+      automaticChanges: false,
+      truncated: records.length > items.length,
+    };
+    if (JSON.stringify(result).length <= boundedChars) return result;
+    const compact = { counts: { total: counts.total, issues: counts.issues }, nextAction: { endpointId: nextAction.endpointId }, automaticChanges: false, truncated: true };
+    if (JSON.stringify(compact).length <= boundedChars) return compact;
+    return { counts: { total: counts.total, issues: counts.issues }, truncated: true };
   }
 
   async sourceTrust(principal?: ScopePrincipal, limit = 30, maxChars = 7000) {

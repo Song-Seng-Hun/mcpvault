@@ -20,6 +20,9 @@ export declare const HYPOTHESIS_STATUSES: readonly ['proposed', 'supported', 're
 /** State of a reproducible experiment record; separate from task workflow. */
 export declare const EXPERIMENT_STATUSES: readonly ['planned', 'running', 'completed', 'failed', 'inconclusive', 'reproduced'];
 export declare const ASSUMPTION_STATUSES: readonly ['active', 'verified', 'invalidated', 'replaced'];
+/** Decision Record state is intentionally separate from the coarser knowledge
+ * status so rejected alternatives are not confused with superseded choices. */
+export declare const DECISION_STATUSES: readonly ['proposed', 'accepted', 'rejected', 'superseded'];
 /** Optional controlled-vocabulary state for a note title/alias. */
 export declare const TERM_STATUSES: readonly ['preferred', 'deprecated', 'redirect'];
 /** A small Zettelkasten-style role vocabulary for durable knowledge notes. */
@@ -29,7 +32,7 @@ export declare const KNOWLEDGE_ROLES: readonly ['concept', 'argument', 'model', 
 export declare const NOTE_TEMPLATE_IDS: readonly ["atomic", "literature", "question", "hypothesis", "experiment", "assumption", "decision", "project", "moc", "negative", "concept", "argument", "model", "observation", "counterargument"];
 /** Standard Obsidian Bases projections. Keep the runtime and tool schema on
  * one shared list so a documented view cannot become unreachable. */
-export declare const BASES_VIEW_IDS: readonly ['all', 'inbox', 'inbox_oldest', 'projects', 'project_next_actions', 'review', 'epistemic', 'experiments', 'open_questions', 'knowledge', 'concepts', 'arguments', 'models', 'observations', 'counterarguments', 'unreviewed_evidence', 'negative_knowledge', 'deprecated_terms', 'maintenance', 'authority', 'review_checklist', 'collections'];
+export declare const BASES_VIEW_IDS: readonly ['all', 'inbox', 'inbox_oldest', 'projects', 'project_next_actions', 'review', 'epistemic', 'experiments', 'open_questions', 'decisions', 'knowledge', 'concepts', 'arguments', 'models', 'observations', 'counterarguments', 'unreviewed_evidence', 'negative_knowledge', 'deprecated_terms', 'maintenance', 'authority', 'review_checklist', 'collections'];
 /** Optional recall result for high-value knowledge; separate from evidence review. */
 export declare const RECALL_QUALITIES: readonly ['unseen', 'failed', 'partial', 'good'];
 /** Error Book state is split into resolution and learning so a closed issue
@@ -220,6 +223,7 @@ export declare function normalizeReviewPolicy(value: unknown, fallback?: typeof 
 export declare function normalizeReviewOutcome(value: unknown, fallback?: typeof REVIEW_OUTCOMES[number]): typeof REVIEW_OUTCOMES[number] | undefined;
 export declare function normalizeInterpretationStatus(value: unknown, fallback?: typeof INTERPRETATION_STATUSES[number]): typeof INTERPRETATION_STATUSES[number] | undefined;
 export declare function normalizeEpistemicStatus(value: unknown, noteKind: NoteKind, fallback?: string): string | undefined;
+export declare function normalizeDecisionStatus(value: unknown, fallback?: typeof DECISION_STATUSES[number]): typeof DECISION_STATUSES[number] | undefined;
 export declare function normalizeKnowledgePolarity(value: unknown, fallback?: typeof KNOWLEDGE_POLARITIES[number]): typeof KNOWLEDGE_POLARITIES[number] | undefined;
 export declare function normalizeNegativeKind(value: unknown, fallback?: typeof NEGATIVE_KINDS[number]): typeof NEGATIVE_KINDS[number] | undefined;
 export declare function normalizeClarifyDisposition(value: unknown, fallback?: typeof CLARIFY_DISPOSITIONS[number]): typeof CLARIFY_DISPOSITIONS[number] | undefined;
@@ -260,6 +264,7 @@ export interface KnowledgeOrganizationInput {
     effort?: unknown;
     noteKind?: unknown;
     lifecycle?: unknown;
+    decisionStatus?: unknown;
     primaryMoc?: unknown;
     mocs?: unknown;
     moc?: unknown;
