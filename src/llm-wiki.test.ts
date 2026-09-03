@@ -511,7 +511,13 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
       'Knowledge/Nested Topic.md',
     ]);
     expect(path.value).toMatchObject({ orderChanged: true, authoredOrderConsistent: false, prerequisiteCoverageComplete: false });
-    expect(path.value.summary).toMatchObject({ claimDependencyEdges: 1, noteDependencyEdges: expect.any(Number) });
+    expect(path.value.summary).toMatchObject({ claimDependencyEdges: 1, noteDependencyEdges: expect.any(Number), recommendedStages: 2, parallelStages: 2, stagedEntries: 8 });
+    expect(path.value.recommendedStages.map((stage: any) => ({ stage: stage.stage, paths: stage.entries.map((item: any) => item.path) }))).toEqual([
+      { stage: 1, paths: ['Knowledge/Basics.md', 'Knowledge/MOCs/Nested.md', 'Knowledge/Independent.md', 'Knowledge/Relative.md', 'Knowledge/Claim Prerequisite.md'] },
+      { stage: 2, paths: ['Knowledge/Advanced.md', 'Knowledge/Nested Topic.md', 'Knowledge/Claim Dependent.md'] },
+    ]);
+    expect(path.value.recommendedStages.flatMap((stage: any) => stage.entries).every((item: any) => /^[a-f0-9]{64}$/.test(item.revision))).toBe(true);
+    expect(path.value.recommendedStages[0].entries.find((item: any) => item.path === 'Knowledge/Basics.md')).toMatchObject({ internalPrerequisiteCount: 0, externalPrerequisiteCount: 1 });
     expect(path.value.prerequisiteEdges).toEqual(expect.arrayContaining([
       expect.objectContaining({ prerequisite: 'Knowledge/Basics.md', dependent: 'Knowledge/Advanced.md', dependencyType: 'note', authoredOrderState: 'late', prerequisitePosition: 2, dependentPosition: 1 }),
       expect.objectContaining({ prerequisite: 'Knowledge/Independent.md', dependent: 'Knowledge/Nested Topic.md', dependencyType: 'note', authoredOrderState: 'late' }),

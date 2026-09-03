@@ -785,6 +785,9 @@ automatically reordering it.
 \`dependencyCycles\` identifies the actual strongly connected repair targets,
 while \`cycleBlockedDependents\` lists downstream notes that may be valid. Repair
 one cycle edge first and recompute rather than editing every blocked note.
+Use \`recommendedStages\` to group internally acyclic notes at the same
+prerequisite depth for parallel reading. External or unresolved prerequisites
+remain caveats; a stage is navigation, not assignment or evidence.
 Graph and organization health expose actionable late, unresolved, ambiguous,
 and cyclic sequence defects, while the exception board routes an affected MOC
 back to the detailed learning path. An external-only prerequisite remains an
@@ -8147,6 +8150,7 @@ export class LlmWikiService {
             }
         }
         const adjacency = new Map();
+        const incoming = new Map();
         const indegree = new Map(entries.map(entry => [normalizePath(entry.internalPath).toLowerCase(), 0]));
         for (const edge of edges) {
             if (!indegree.has(edge.prerequisite) || !indegree.has(edge.dependent))
@@ -8156,6 +8160,9 @@ export class LlmWikiService {
                 continue;
             dependents.add(edge.dependent);
             adjacency.set(edge.prerequisite, dependents);
+            const prerequisites = incoming.get(edge.dependent) || new Set();
+            prerequisites.add(edge.prerequisite);
+            incoming.set(edge.dependent, prerequisites);
             indegree.set(edge.dependent, (indegree.get(edge.dependent) || 0) + 1);
         }
         const authoredRank = (key) => authoredIndex.get(key) ?? Number.MAX_SAFE_INTEGER;
@@ -8173,6 +8180,31 @@ export class LlmWikiService {
                 }
             }
         }
+        const acyclicRecommendedKeys = [...recommendedKeys];
+        const stageByKey = new Map();
+        for (const key of acyclicRecommendedKeys) {
+            const prerequisiteStages = [...(incoming.get(key) || [])].flatMap(prerequisite => stageByKey.has(prerequisite) ? [stageByKey.get(prerequisite)] : []);
+            stageByKey.set(key, prerequisiteStages.length > 0 ? Math.max(...prerequisiteStages) + 1 : 1);
+        }
+        const stageBuckets = new Map();
+        for (const [key, stage] of stageByKey) {
+            const bucket = stageBuckets.get(stage) || [];
+            bucket.push(key);
+            stageBuckets.set(stage, bucket);
+        }
+        const recommendedStages = [...stageBuckets.entries()].sort(([left], [right]) => left - right).map(([stage, keys]) => ({
+            stage,
+            entries: keys.sort((left, right) => authoredRank(left) - authoredRank(right)).map(key => {
+                const entry = entryByKey.get(key);
+                return {
+                    path: entry.path,
+                    revision: entry.revision,
+                    authoredPosition: (authoredIndex.get(key) ?? -1) + 1,
+                    internalPrerequisiteCount: incoming.get(key)?.size || 0,
+                    externalPrerequisiteCount: externalPrerequisites.filter(item => item.requiredBy === entry.path).length,
+                };
+            }),
+        }));
         const cycleBlockedKeys = entries.map(entry => normalizePath(entry.internalPath).toLowerCase()).filter(key => !recommendedKeys.includes(key));
         const dependencyResidual = classifyDependencyResidual(cycleBlockedKeys, adjacency);
         if (cycleBlockedKeys.length) {
@@ -8267,6 +8299,7 @@ export class LlmWikiService {
             root: { path: this.access.toPublicPath(path), title: boundedText(rootNote.frontmatter.title || path.split('/').at(-1), 160), revision: rootNote.revision },
             authoredOrder,
             recommendedOrder,
+            recommendedStages: recommendedStages.slice(0, Math.min(12, boundedLimit)),
             orderChanged: recommendedOrder.some((item, index) => item !== authoredOrder[index]?.path),
             authoredOrderConsistent: latePrerequisites === 0 && cycleBlockedKeys.length === 0,
             prerequisiteCoverageComplete: incompletePrerequisites === 0,
@@ -8286,14 +8319,17 @@ export class LlmWikiService {
                 dependencyCycles: dependencyCycles.length,
                 cyclicEntries: dependencyResidual.cycleNodes.size,
                 cycleBlockedDependents: dependencyResidual.blocked.length,
+                recommendedStages: recommendedStages.length,
+                parallelStages: recommendedStages.filter(stage => stage.entries.length > 1).length,
+                stagedEntries: acyclicRecommendedKeys.length,
                 latePrerequisites,
                 externalPrerequisites: externalPrerequisites.length,
                 orderIssues: orderIssues.length,
                 navigationIssues: navigationIssues.length,
                 omittedEntries,
             },
-            guidance: 'Keep the MOC body order when it expresses pedagogy or narrative. If the recommended order differs, inspect the cited note-level depends_on or claim-level dependsOnClaims relation and both current revisions, then edit the Markdown deliberately; never auto-reorder from this projection. Repair an edge inside dependencyCycles before touching cycleBlockedDependents, which may be valid downstream notes.',
-            truncated: truncated || prerequisiteEdges.length > boundedLimit || dependencyCycles.length > Math.min(8, boundedLimit) || cycleBlockedDependents.length > boundedLimit || externalPrerequisites.length > boundedLimit || orderIssues.length > boundedLimit || navigationIssues.length > boundedLimit,
+            guidance: 'Keep the MOC body order when it expresses pedagogy or narrative. recommendedStages groups only the internally acyclic entries whose prerequisites can be satisfied together; entries in one stage may be read in parallel, but external or incomplete prerequisites still require inspection. If the recommended order differs, inspect the cited relation and both current revisions, then edit Markdown deliberately. Repair an edge inside dependencyCycles before touching cycleBlockedDependents.',
+            truncated: truncated || recommendedStages.length > Math.min(12, boundedLimit) || prerequisiteEdges.length > boundedLimit || dependencyCycles.length > Math.min(8, boundedLimit) || cycleBlockedDependents.length > boundedLimit || externalPrerequisites.length > boundedLimit || orderIssues.length > boundedLimit || navigationIssues.length > boundedLimit,
         };
         if (JSON.stringify(result).length <= boundedChars)
             return result;
@@ -8301,6 +8337,7 @@ export class LlmWikiService {
             ...result,
             authoredOrder: authoredOrder.slice(0, Math.min(10, authoredOrder.length)),
             recommendedOrder: recommendedOrder.slice(0, 10),
+            recommendedStages: result.recommendedStages.slice(0, 6).map(stage => ({ ...stage, entries: stage.entries.slice(0, 6) })),
             prerequisiteEdges: result.prerequisiteEdges.slice(0, 6),
             dependencyCycles: result.dependencyCycles.slice(0, 2).map(cycle => ({ ...cycle, notes: cycle.notes.slice(0, 6), edges: cycle.edges.slice(0, 6), truncated: cycle.truncated || cycle.notes.length > 6 || cycle.edges.length > 6 })),
             cycleBlockedDependents: result.cycleBlockedDependents.slice(0, 4),
@@ -8313,6 +8350,10 @@ export class LlmWikiService {
             compact.authoredOrder.pop();
             compact.recommendedOrder.pop();
         }
+        while (JSON.stringify(compact).length > boundedChars && compact.recommendedStages.length > 1)
+            compact.recommendedStages.pop();
+        while (JSON.stringify(compact).length > boundedChars && compact.recommendedStages.length > 0 && compact.recommendedStages[0].entries.length > 1)
+            compact.recommendedStages[0].entries.pop();
         while (JSON.stringify(compact).length > boundedChars && compact.cycleBlockedDependents.length)
             compact.cycleBlockedDependents.pop();
         while (JSON.stringify(compact).length > boundedChars && compact.dependencyCycles.length > 1)

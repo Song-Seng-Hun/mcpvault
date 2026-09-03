@@ -3149,6 +3149,9 @@ export declare class LlmWikiService {
             dependencyCycles: number;
             cyclicEntries: number;
             cycleBlockedDependents: number;
+            recommendedStages: number;
+            parallelStages: number;
+            stagedEntries: number;
             latePrerequisites: number;
             externalPrerequisites: number;
             orderIssues: number;

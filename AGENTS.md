@@ -253,6 +253,10 @@ do not reconstruct the whole dependency graph from note bodies.
 `cycleBlockedDependents` contains otherwise valid downstream notes. Break or
 correct one cycle edge first and recompute the path instead of editing every
 blocked note.
+Use `recommendedStages` when several agents can read independently: every item
+in one stage has the same satisfied internal prerequisite depth. Check each
+entry's external prerequisite count and the global coverage flag before calling
+the stage ready; the stage is navigation, not assignment or evidence.
 Graph and organization health expose actionable late, unresolved, ambiguous,
 and cyclic MOC sequence defects; the exception board routes them back to
 `get_wiki_learning_path`. An external-only prerequisite is informational, not

@@ -190,6 +190,11 @@ prerequisites, ambiguous/unresolved targets, exact dependency cycles, and
 downstream notes that are merely blocked by those cycles. Repair an edge inside
 `dependencyCycles` first; do not rewrite a `cycleBlockedDependents` note merely
 because topological reading cannot yet reach it.
+`recommendedStages` groups acyclic entries by prerequisite depth, so independent
+notes in one stage can be read or investigated in parallel without pretending
+that the stable linear tie-break order is pedagogically mandatory. External or
+unresolved prerequisites remain explicit caveats rather than silently making a
+stage "ready".
 Every readable entry includes its current revision. The projection never
 rewrites the MOC, and a recommendation is navigation—not proof or permission
 to discard a deliberate narrative order.
@@ -521,6 +526,9 @@ does not create a parallel graph or a new client-side requirement.
 Each returned `prerequisiteEdges` item explains the prerequisite/dependent
 pair, relation level, authored positions, and both current revisions; agents
 can inspect the exact relation without reconstructing it from the whole MOC.
+`recommendedStages` is the bounded parallel-reading projection of the same
+graph. It excludes actual cycle members and their blocked dependents until the
+cycle is repaired, and never assigns work or mutates Markdown.
 The same direct-order check is reused during graph health rather than scanning
 the Vault again. It also resolves relative Markdown links from the containing
 MOC, validates the referenced claim ID, and labels each ordering reason as a
