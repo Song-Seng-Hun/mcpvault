@@ -184,7 +184,8 @@ For a MOC that is also a curriculum, onboarding route, or procedure,
 note-level `depends_on` Properties and valid cross-note `dependsOnClaims`
 relations. An intra-note claim dependency remains argument structure and does
 not become a false self-prerequisite. It can expand nested MOCs to a bounded depth and
-returns a separate stable `recommendedOrder`, external prerequisites, late
+returns a separate stable `recommendedOrder`, bounded `prerequisiteEdges` with
+both current revisions and authored-order state, external prerequisites, late
 prerequisites, ambiguous/unresolved targets, and dependency-cycle findings.
 Every readable entry includes its current revision. The projection never
 rewrites the MOC, and a recommendation is navigation—not proof or permission
@@ -512,6 +513,9 @@ later, outside the path, cannot be resolved uniquely, or participates in a
 cycle. Its stable topological recommendation keeps authored order among
 otherwise independent notes. It is bounded, scope-filtered, non-mutating, and
 does not create a parallel graph or a new client-side requirement.
+Each returned `prerequisiteEdges` item explains the prerequisite/dependent
+pair, relation level, authored positions, and both current revisions; agents
+can inspect the exact relation without reconstructing it from the whole MOC.
 The same direct-order check is reused during graph health rather than scanning
 the Vault again. It also resolves relative Markdown links from the containing
 MOC, validates the referenced claim ID, and labels each ordering reason as a

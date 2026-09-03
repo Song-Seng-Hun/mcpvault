@@ -509,6 +509,12 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
     ]);
     expect(path.value).toMatchObject({ orderChanged: true, authoredOrderConsistent: false, prerequisiteCoverageComplete: false });
     expect(path.value.summary).toMatchObject({ claimDependencyEdges: 1, noteDependencyEdges: expect.any(Number) });
+    expect(path.value.prerequisiteEdges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ prerequisite: 'Knowledge/Basics.md', dependent: 'Knowledge/Advanced.md', dependencyType: 'note', authoredOrderState: 'late', prerequisitePosition: 2, dependentPosition: 1 }),
+      expect.objectContaining({ prerequisite: 'Knowledge/Independent.md', dependent: 'Knowledge/Nested Topic.md', dependencyType: 'note', authoredOrderState: 'late' }),
+      expect.objectContaining({ prerequisite: 'Knowledge/Claim Prerequisite.md', dependent: 'Knowledge/Claim Dependent.md', dependencyType: 'claim', sourceClaimId: 'claim-dependent', targetClaimId: 'claim-base', authoredOrderState: 'late' }),
+    ]));
+    expect(path.value.prerequisiteEdges.every((item: any) => /^[a-f0-9]{64}$/.test(item.prerequisiteRevision) && /^[a-f0-9]{64}$/.test(item.dependentRevision))).toBe(true);
     expect(path.value.recommendedOrder.indexOf('Knowledge/Claim Prerequisite.md')).toBeLessThan(path.value.recommendedOrder.indexOf('Knowledge/Claim Dependent.md'));
     expect(path.value.orderIssues).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: 'prerequisite_after_dependent', path: 'Knowledge/Advanced.md', prerequisite: 'Knowledge/Basics.md' }),

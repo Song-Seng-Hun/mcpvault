@@ -8124,6 +8124,30 @@ export class LlmWikiService {
     }
     const recommendedOrder = recommendedKeys.map(key => entryByKey.get(key)!.path);
     const authoredOrder = entries.map(({ internalPath: _internalPath, ...entry }) => entry);
+    const prerequisiteEdges: Array<Record<string, unknown>> = [];
+    const prerequisiteEdgeSeen = new Set<string>();
+    for (const edge of edges) {
+      const prerequisite = entryByKey.get(edge.prerequisite);
+      const dependent = entryByKey.get(edge.dependent);
+      if (!prerequisite || !dependent) continue;
+      const identity = [edge.prerequisite, edge.dependent, edge.dependencyType, edge.sourceClaimId || '', edge.targetClaimId || ''].join('|');
+      if (prerequisiteEdgeSeen.has(identity)) continue;
+      prerequisiteEdgeSeen.add(identity);
+      const prerequisitePosition = (authoredIndex.get(edge.prerequisite) ?? -1) + 1;
+      const dependentPosition = (authoredIndex.get(edge.dependent) ?? -1) + 1;
+      prerequisiteEdges.push({
+        prerequisite: prerequisite.path,
+        prerequisiteRevision: prerequisite.revision,
+        dependent: dependent.path,
+        dependentRevision: dependent.revision,
+        dependencyType: edge.dependencyType,
+        ...(edge.sourceClaimId && { sourceClaimId: edge.sourceClaimId }),
+        ...(edge.targetClaimId && { targetClaimId: edge.targetClaimId }),
+        prerequisitePosition,
+        dependentPosition,
+        authoredOrderState: prerequisitePosition === dependentPosition ? 'self' : prerequisitePosition < dependentPosition ? 'satisfied' : 'late',
+      });
+    }
     const latePrerequisites = orderIssues.filter(issue => issue.type === 'prerequisite_after_dependent').length;
     const incompletePrerequisites = orderIssues.filter(issue => [
       'unresolved_or_inaccessible_prerequisite', 'ambiguous_prerequisite', 'invalid_claim_prerequisite',
@@ -8140,6 +8164,7 @@ export class LlmWikiService {
       orderChanged: recommendedOrder.some((item, index) => item !== authoredOrder[index]?.path),
       authoredOrderConsistent: latePrerequisites === 0 && cycleBlockedKeys.length === 0,
       prerequisiteCoverageComplete: incompletePrerequisites === 0,
+      prerequisiteEdges: prerequisiteEdges.slice(0, boundedLimit),
       externalPrerequisites: externalPrerequisites.slice(0, boundedLimit),
       orderIssues: orderIssues.slice(0, boundedLimit),
       navigationIssues: navigationIssues.slice(0, boundedLimit),
@@ -8157,13 +8182,14 @@ export class LlmWikiService {
         omittedEntries,
       },
       guidance: 'Keep the MOC body order when it expresses pedagogy or narrative. If the recommended order differs, inspect the cited note-level depends_on or claim-level dependsOnClaims relation and both current revisions, then edit the Markdown deliberately; never auto-reorder from this projection.',
-      truncated: truncated || externalPrerequisites.length > boundedLimit || orderIssues.length > boundedLimit || navigationIssues.length > boundedLimit,
+      truncated: truncated || prerequisiteEdges.length > boundedLimit || externalPrerequisites.length > boundedLimit || orderIssues.length > boundedLimit || navigationIssues.length > boundedLimit,
     };
     if (JSON.stringify(result).length <= boundedChars) return result;
     const compact = {
       ...result,
       authoredOrder: authoredOrder.slice(0, Math.min(10, authoredOrder.length)),
       recommendedOrder: recommendedOrder.slice(0, 10),
+      prerequisiteEdges: result.prerequisiteEdges.slice(0, 6),
       externalPrerequisites: result.externalPrerequisites.slice(0, 5),
       orderIssues: result.orderIssues.slice(0, 6),
       navigationIssues: result.navigationIssues.slice(0, 4),
@@ -8173,6 +8199,7 @@ export class LlmWikiService {
       compact.authoredOrder.pop();
       compact.recommendedOrder.pop();
     }
+    while (JSON.stringify(compact).length > boundedChars && compact.prerequisiteEdges.length) compact.prerequisiteEdges.pop();
     while (JSON.stringify(compact).length > boundedChars && compact.orderIssues.length) compact.orderIssues.pop();
     while (JSON.stringify(compact).length > boundedChars && compact.externalPrerequisites.length) compact.externalPrerequisites.pop();
     while (JSON.stringify(compact).length > boundedChars && compact.navigationIssues.length) compact.navigationIssues.pop();
