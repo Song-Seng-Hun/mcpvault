@@ -2956,7 +2956,10 @@ export class LlmWikiService {
         const [inbox, knowledgeReview, graph] = await Promise.all([
             this.inbox(principal, boundedLimit, Math.floor(boundedChars / 4)),
             this.reviewQueue(principal, boundedLimit, Math.floor(boundedChars / 3)),
-            this.graphHealth(principal, boundedLimit, Math.floor(boundedChars / 3)),
+            // Health computation already scans the graph once. Keep a sufficiently
+            // rich internal projection so the outer dashboard can choose and trim
+            // actionable categories instead of losing them before prioritization.
+            this.graphHealth(principal, boundedLimit, Math.min(12000, Math.max(8000, Math.floor(boundedChars / 3)))),
         ]);
         const graphView = 'mocCoverage' in graph
             ? {
@@ -2969,6 +2972,9 @@ export class LlmWikiService {
                 orphanNotes: graph.orphanNotes,
                 ...(graph.focusHealth && { focusHealth: graph.focusHealth }),
                 ...(graph.knowledgeConnectivity && { knowledgeConnectivity: graph.knowledgeConnectivity }),
+                ...(graph.epistemicConsistency && { epistemicConsistency: graph.epistemicConsistency }),
+                ...(graph.knowledgeFlow && { knowledgeFlow: graph.knowledgeFlow }),
+                ...(graph.typedRelations && { typedRelations: graph.typedRelations }),
             }
             : { truncated: true, note: graph.note };
         const graphSignals = graphView;
@@ -3512,7 +3518,24 @@ export class LlmWikiService {
             graph.mocQuestionCoverage?.unlinked,
             graph.mocSequenceHealth,
             graph.mocHierarchy?.missingParents,
+            graph.mocHierarchy?.ambiguousParents,
             graph.mocHierarchy?.cycles,
+            graph.focusHealth?.unresolved,
+            graph.focusHealth?.ambiguous,
+            graph.focusHealth?.unparented,
+            graph.focusHealth?.cycles,
+            graph.knowledgeConnectivity?.isolated,
+            graph.knowledgeConnectivity?.atomicWithoutProjection,
+            graph.knowledgeConnectivity?.literatureWithoutPermanent,
+            graph.knowledgeConnectivity?.literatureWithoutInterpretation,
+            graph.epistemicConsistency,
+            graph.knowledgeFlow?.literatureWithoutSource,
+            graph.knowledgeFlow?.synthesisWithoutInputs,
+            graph.typedRelations?.unresolved,
+            graph.typedRelations?.ambiguous,
+            graph.typedRelations?.self,
+            graph.typedRelations?.kindMismatches,
+            graph.typedRelations?.reciprocityMissing,
             graph.evergreenQuality,
             graph.unresolvedLinks,
             graph.orphanNotes,
@@ -3584,8 +3607,32 @@ export class LlmWikiService {
         add(sections.projectsAndTasks?.items, 'project_needs_next_action', 'wiki.triage', 3);
         add(executionFlow.lanes?.blocked, 'blocked_work_needs_unblocking', 'wiki.flow_health', 1);
         add(executionFlow.lanes?.waiting, 'waiting_work_needs_follow_up', 'wiki.flow_health', 2);
+        const cycleRepresentatives = (items) => Array.isArray(items)
+            ? items.map(item => item && typeof item === 'object' && Array.isArray(item.nodes) && typeof item.nodes[0] === 'string'
+                ? { ...item, path: item.nodes[0] }
+                : item)
+            : [];
+        add(graph.epistemicConsistency?.items, 'epistemic_state_needs_evidence', 'wiki.answer_packet', 1);
+        add(graph.knowledgeFlow?.literatureWithoutSource?.items, 'literature_source_missing', 'wiki.answer_packet', 1);
+        add(graph.knowledgeFlow?.synthesisWithoutInputs?.items, 'synthesis_inputs_missing', 'wiki.answer_packet', 1);
+        add(cycleRepresentatives(graph.mocHierarchy?.cycles?.items), 'moc_hierarchy_cycle', 'wiki.graph_health', 2);
+        add(cycleRepresentatives(graph.focusHealth?.cycles?.items), 'focus_hierarchy_cycle', 'wiki.graph_health', 2);
+        add(graph.typedRelations?.self?.items, 'typed_relation_self_link', 'wiki.neighborhood', 2);
+        add(graph.typedRelations?.kindMismatches?.items, 'typed_relation_kind_mismatch', 'wiki.neighborhood', 2);
         add(graph.mocSequenceHealth?.items, 'moc_sequence_needs_repair', 'wiki.learning_path', 3);
+        add(graph.mocHierarchy?.missingParents?.items, 'moc_parent_unresolved', 'wiki.graph_health', 3);
+        add(graph.mocHierarchy?.ambiguousParents?.items, 'moc_parent_ambiguous', 'wiki.graph_health', 3);
+        add(graph.focusHealth?.unresolved?.items, 'focus_relation_unresolved', 'wiki.graph_health', 3);
+        add(graph.focusHealth?.ambiguous?.items, 'focus_relation_ambiguous', 'wiki.graph_health', 3);
+        add(graph.typedRelations?.unresolved?.items, 'typed_relation_unresolved', 'wiki.neighborhood', 3);
+        add(graph.typedRelations?.ambiguous?.items, 'typed_relation_ambiguous', 'wiki.neighborhood', 3);
         add(graph.mocQuestionCoverage?.unlinked?.items, 'moc_question_has_no_linked_answer', 'wiki.graph_health', 4);
+        add(graph.knowledgeConnectivity?.atomicWithoutProjection?.items, 'atomic_projection_missing', 'wiki.read_projection', 4);
+        add(graph.knowledgeConnectivity?.literatureWithoutPermanent?.items, 'literature_permanent_note_missing', 'wiki.answer_packet', 4);
+        add(graph.knowledgeConnectivity?.literatureWithoutInterpretation?.items, 'literature_interpretation_missing', 'wiki.answer_packet', 4);
+        add(graph.focusHealth?.unparented?.items, 'focus_parent_missing', 'wiki.graph_health', 5);
+        add(graph.knowledgeConnectivity?.isolated?.items, 'isolated_knowledge', 'wiki.neighborhood', 5);
+        add(graph.typedRelations?.reciprocityMissing?.items, 'typed_relation_reciprocity_missing', 'wiki.neighborhood', 6);
         add(graph.evergreenQuality?.items?.filter((item) => item?.state === 'needs_attention'), 'evergreen_quality_hint', 'wiki.graph_health', 5);
         add(graph.unresolvedLinks?.items, 'broken_link', 'wiki.graph_health', 6);
         add(graph.orphanNotes?.items, 'orphan_note', 'wiki.graph_health', 7);
@@ -3646,6 +3693,34 @@ export class LlmWikiService {
                             instruction: 'Dry-run a nearby answer [[wikilink]] only after verifying the answer note; a link improves discovery but does not prove the answer.',
                         };
                     }
+                    else if (reason === 'atomic_projection_missing') {
+                        inspect = { endpointId: endpointIdForTool('read_wiki_projection'), arguments: { path: selectedPriority.path, view: 'progressive', maxChars: 5000 } };
+                        mutation = { endpointId: endpointIdForTool('update_wiki_projection'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['summary or keyPoints or openQuestions or summaryHighlights'], instruction: 'Refresh only the compact projection after checking the authoritative Markdown body.' };
+                    }
+                    else if (reason.startsWith('typed_relation_')) {
+                        inspect = { endpointId: endpointIdForTool('get_wiki_neighborhood'), arguments: { path: selectedPriority.path, includeSemantic: false, limit: Math.min(12, boundedLimit), maxChars: 5000 } };
+                        mutation = { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['the exact typed relation repair'], instruction: 'Preserve directional meaning and verify both visible endpoints; never infer a relation from similarity alone.' };
+                    }
+                    else if (reason.startsWith('moc_parent_') || reason === 'moc_hierarchy_cycle') {
+                        inspect = { endpointId: endpointIdForTool('read_wiki_projection'), arguments: { path: selectedPriority.path, view: 'metadata', maxChars: 4000 } };
+                        mutation = { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['mocParent'], instruction: 'Repair one explicit parent edge; ordinary body links may still cross MOC branches.' };
+                    }
+                    else if (reason.startsWith('focus_')) {
+                        inspect = { endpointId: endpointIdForTool('read_wiki_projection'), arguments: { path: selectedPriority.path, view: 'metadata', maxChars: 4000 } };
+                        mutation = { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['focusParent or focusSupports'], instruction: 'Repair the smallest focus edge without inventing hierarchy from folder placement.' };
+                    }
+                    else if (reason === 'isolated_knowledge') {
+                        inspect = { endpointId: endpointIdForTool('get_wiki_neighborhood'), arguments: { path: selectedPriority.path, includeSemantic: true, limit: Math.min(12, boundedLimit), maxChars: 5000 } };
+                        mutation = { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['primaryMoc, mocs, seeAlso, or another verified link'], instruction: 'Use semantic candidates only for discovery; add a link only after reading the target.' };
+                    }
+                    else if (reason.startsWith('literature_')) {
+                        inspect = { endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path: selectedPriority.path, intent: 'review', maxChars: 5000 } };
+                        mutation = { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['verified evidence, interpretationStatus, or a derived-note link'], instruction: 'Keep the literature note and immutable source intact; do not mark it interpreted merely to clear the queue.' };
+                    }
+                    else if (reason === 'epistemic_state_needs_evidence' || reason === 'synthesis_inputs_missing') {
+                        inspect = { endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path: selectedPriority.path, intent: 'review', maxChars: 5000 } };
+                        mutation = { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['evidencePaths, epistemicStatus, answersQuestions, or derivedFrom as justified'], instruction: 'Align state with inspected evidence; never make a resolved state true merely by changing metadata.' };
+                    }
                     else if (reason.includes('project') || reason.includes('blocked') || reason.includes('waiting')) {
                         inspect = { endpointId: endpointIdForTool('get_wiki_project_packet'), arguments: { path: selectedPriority.path, maxChars: 5000 } };
                         mutation = { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['the smallest justified execution-state or next-action repair'] };
@@ -3687,6 +3762,12 @@ export class LlmWikiService {
                 waiting: Number(executionFlow.flow?.waiting || 0),
                 unlinkedMocQuestions: Number(graph.mocQuestionCoverage?.unlinked?.total || 0),
                 mocSequenceNeedsAttention: Number(graph.mocSequenceHealth?.needsAttention || 0),
+                mocHierarchyIssues: Number(graph.mocHierarchy?.missingParents?.total || 0) + Number(graph.mocHierarchy?.ambiguousParents?.total || 0) + Number(graph.mocHierarchy?.cycles?.total || 0),
+                focusHierarchyIssues: Number(graph.focusHealth?.unresolved?.total || 0) + Number(graph.focusHealth?.ambiguous?.total || 0) + Number(graph.focusHealth?.unparented?.total || 0) + Number(graph.focusHealth?.cycles?.total || 0),
+                connectivityIssues: Number(graph.knowledgeConnectivity?.isolated?.total || 0) + Number(graph.knowledgeConnectivity?.atomicWithoutProjection?.total || 0) + Number(graph.knowledgeConnectivity?.literatureWithoutPermanent?.total || 0) + Number(graph.knowledgeConnectivity?.literatureWithoutInterpretation?.total || 0),
+                epistemicIssues: Number(graph.epistemicConsistency?.needsAttention || 0),
+                knowledgeFlowIssues: Number(graph.knowledgeFlow?.literatureWithoutSource?.total || 0) + Number(graph.knowledgeFlow?.synthesisWithoutInputs?.total || 0),
+                typedRelationIssues: Number(graph.typedRelations?.unresolved?.total || 0) + Number(graph.typedRelations?.ambiguous?.total || 0) + Number(graph.typedRelations?.self?.total || 0) + Number(graph.typedRelations?.kindMismatches?.total || 0) + Number(graph.typedRelations?.reciprocityMissing?.total || 0),
                 evergreenNeedsAttention: Number(graph.evergreenQuality?.needsAttention || 0),
                 recallDue: Number(recall.total || 0),
                 tagVariantIssues: vocabulary.tagVariants.length,
@@ -5803,6 +5884,10 @@ export class LlmWikiService {
             .slice(0, boundedLimit)
             .map(path => ({ path: this.access.toPublicPath(path) }));
         const includeExtendedGraph = boundedChars >= 8000;
+        const includeMocHierarchy = includeExtendedGraph
+            || mocHierarchy.missingParents.total > 0
+            || mocHierarchy.ambiguousParents.total > 0
+            || mocHierarchy.cycles.total > 0;
         const report = {
             unresolvedLinks: { total: unresolved.total, items: unresolved.unresolved.slice(0, boundedLimit).map(item => ({ ...item, path: this.access.toPublicPath(item.path) })), truncated: unresolved.truncated },
             orphanNotes: { total: orphans.total, items: orphans.orphans.slice(0, boundedLimit).map(item => ({ ...item, path: this.access.toPublicPath(item.path) })), truncated: orphans.truncated },
@@ -5825,7 +5910,7 @@ export class LlmWikiService {
                 truncated: mocQuestionMocItems.length > boundedLimit,
             },
             ...(includeMocSequenceHealth && { mocSequenceHealth }),
-            ...(includeExtendedGraph && { mocHierarchy }),
+            ...(includeMocHierarchy && { mocHierarchy }),
             evergreenQuality: {
                 total: evergreenTotal,
                 needsAttention: evergreenNeedsAttention,
@@ -5877,7 +5962,7 @@ export class LlmWikiService {
                 report.mocQuestionCoverage.unlinked.items,
                 report.mocQuestionCoverage.mocs,
                 ...(includeMocSequenceHealth ? [report.mocSequenceHealth.items] : []),
-                ...(includeExtendedGraph ? [
+                ...(includeMocHierarchy ? [
                     report.mocHierarchy.missingParents.items,
                     report.mocHierarchy.ambiguousParents.items,
                     report.mocHierarchy.cycles.items,

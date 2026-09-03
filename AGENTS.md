@@ -360,7 +360,10 @@ issue-specific `curationPlan`: recall must use the recall route rather than an
 evidence review, blocked work uses the project packet, and a MOC sequence
 defect uses `get_wiki_learning_path` followed only by a deliberate dry-run
 patch at the returned revision. `autoFix=false` means no plan may silently
-rewrite or reorder Markdown. MOC questions are
+rewrite or reorder Markdown. The same packet promotes actionable MOC-parent,
+focus-hierarchy, epistemic, source-flow, connectivity, compact-projection, and
+typed-relation findings from graph health; do not leave them stranded in a
+dashboard. MOC questions are
 covered only when the question list item has an answer `[[wikilink]]` on the
 same line or within the next three lines; this is a discoverability signal, not
 proof that the answer is correct. Evergreen quality hints are advisory: prefer

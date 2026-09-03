@@ -931,6 +931,58 @@ export declare class LlmWikiService {
                         truncated: boolean;
                     };
                 };
+                epistemicConsistency: {
+                    total: number;
+                    needsAttention: number;
+                    consistent: number;
+                    items: Record<string, unknown>[];
+                    truncated: boolean;
+                };
+                knowledgeFlow: {
+                    stages: {
+                        unprocessed: number;
+                        interpreted: number;
+                        synthesized: number;
+                        unspecified: number;
+                    };
+                    literatureWithoutSource: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    synthesisWithoutInputs: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                };
+                typedRelations: {
+                    unresolved: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    ambiguous: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    self: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    kindMismatches: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    reciprocityMissing: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                };
                 truncated?: never;
                 note?: never;
             } | {
@@ -1202,6 +1254,58 @@ export declare class LlmWikiService {
                         truncated: boolean;
                     };
                 };
+                epistemicConsistency: {
+                    total: number;
+                    needsAttention: number;
+                    consistent: number;
+                    items: Record<string, unknown>[];
+                    truncated: boolean;
+                };
+                knowledgeFlow: {
+                    stages: {
+                        unprocessed: number;
+                        interpreted: number;
+                        synthesized: number;
+                        unspecified: number;
+                    };
+                    literatureWithoutSource: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    synthesisWithoutInputs: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                };
+                typedRelations: {
+                    unresolved: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    ambiguous: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    self: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    kindMismatches: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    reciprocityMissing: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                };
                 truncated?: never;
                 note?: never;
             } | {
@@ -1397,6 +1501,12 @@ export declare class LlmWikiService {
             waiting: number;
             unlinkedMocQuestions: number;
             mocSequenceNeedsAttention: number;
+            mocHierarchyIssues: number;
+            focusHierarchyIssues: number;
+            connectivityIssues: number;
+            epistemicIssues: number;
+            knowledgeFlowIssues: number;
+            typedRelationIssues: number;
             evergreenNeedsAttention: number;
             recallDue: number;
             tagVariantIssues: number;

@@ -2488,6 +2488,9 @@ adds bounded navigation signals instead of a second database.
   from evidence review, blocked work opens the project packet, MOC sequence
   defects open `wiki.learning_path`, and body repairs begin with a dry-run
   `notes.patch`. Every plan carries the current revision and `autoFix=false`.
+  MOC parent/focus hierarchy, epistemic consistency, source-to-knowledge flow,
+  isolated knowledge, missing compact projections, and typed-relation findings
+  are also promoted from graph health into this same deduplicated repair cart.
   These projections reuse existing endpoints instead of creating a second
   curator task system.
 - `get_wiki_organization_health` includes bounded collection health grouped by

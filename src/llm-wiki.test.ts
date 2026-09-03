@@ -256,6 +256,47 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
   }
 });
 
+test('review packet promotes every actionable graph repair class without duplicate path slots', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'repair-coverage-owner', modelId: 'codex', password: 'repair-coverage-password' });
+    const accessToken = registration.value.accessToken;
+    const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
+      const result = await client.callTool({ name: 'write_note', arguments: { path, content, frontmatter, expectedRevision: 'missing', accessToken } });
+      expect(result.isError).toBeFalsy();
+    };
+    await write('Knowledge/MOCs/Broken child.md', '# Broken child\n\n[[Knowledge/Typed broken]]\n', { note_kind: 'moc', lifecycle: 'evergreen', moc_parent: '[[Knowledge/MOCs/Missing parent]]' });
+    await write('Areas/Focus broken.md', '# Focus broken\n', { note_kind: 'area', lifecycle: 'active', focus_horizon: 'area', focus_parent: '[[Goals/Missing goal]]' });
+    await write('Knowledge/Typed broken.md', '# Typed broken\n', { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', summary: 'A deliberately malformed relation fixture.', related: ['[[Knowledge/Typed broken]]'] });
+    await write('Knowledge/Settled question.md', '# Settled question\n', { llm_wiki_type: 'knowledge', note_kind: 'question', lifecycle: 'active', epistemic_status: 'answered' });
+    await write('Knowledge/Unprocessed literature.md', '# Unprocessed literature\n', { llm_wiki_type: 'knowledge', note_kind: 'literature', lifecycle: 'active', interpretation_status: 'unprocessed' });
+
+    const packet = await callJson(client, 'get_wiki_review_packet', { limit: 30, maxChars: 16000, accessToken });
+    for (const key of ['mocHierarchyIssues', 'focusHierarchyIssues', 'connectivityIssues', 'epistemicIssues', 'knowledgeFlowIssues', 'typedRelationIssues']) {
+      expect(packet.value.counts[key]).toBeGreaterThan(0);
+    }
+    const priorityPaths = packet.value.priorities.map((item: any) => item.path);
+    expect(new Set(priorityPaths).size).toBe(priorityPaths.length);
+    expect(packet.value.priorities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/MOCs/Broken child.md', reasons: expect.arrayContaining(['moc_parent_unresolved']) }),
+      expect.objectContaining({ path: 'Areas/Focus broken.md', reasons: expect.arrayContaining(['focus_relation_unresolved']) }),
+      expect.objectContaining({ path: 'Knowledge/Typed broken.md', reasons: expect.arrayContaining(['typed_relation_self_link']), suggestedTools: expect.arrayContaining(['wiki.neighborhood']) }),
+      expect.objectContaining({ path: 'Knowledge/Settled question.md', reasons: expect.arrayContaining(['epistemic_state_needs_evidence']) }),
+      expect.objectContaining({ path: 'Knowledge/Unprocessed literature.md', reasons: expect.arrayContaining(['literature_source_missing']) }),
+    ]));
+    expect(packet.value.curationPlan).toMatchObject({
+      selected: { path: 'Knowledge/Typed broken.md', reason: 'knowledge_needs_review', reasons: expect.arrayContaining(['knowledge_needs_review', 'typed_relation_self_link']), revision: expect.any(String) },
+      inspect: { endpointId: 'wiki.answer_packet' },
+      then: { endpointId: 'wiki.review', arguments: { path: 'Knowledge/Typed broken.md', expectedRevision: expect.any(String) } },
+      guard: { autoFix: false },
+    });
+    expect(JSON.stringify(packet.value).length).toBeLessThanOrEqual(16000);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('weekly review separates schedule from deadline and exposes reverse focus context', async () => {
   const { server, client } = await setup();
   try {
