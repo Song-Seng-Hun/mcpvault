@@ -344,7 +344,7 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'review_wiki_claim',
-      description: 'Review one persisted claim inside a knowledge note without rewriting the Markdown body. Updates only that claim status/confidence and records a bounded reviewer note with the expected revision; evidence remains unchanged and must still be verified separately.',
+      description: 'Review one persisted claim inside a knowledge note without rewriting the Markdown body. Updates only that claim status/confidence and records a bounded reviewer note with the expected revision; evidence remains unchanged and must still be verified separately. Disputed or superseded claims return bounded downstream notes found through claim dependencies/support/contradiction so their conclusions can be re-read rather than silently changed.',
       inputSchema: { type: 'object', properties: {
         path: { type: 'string' }, claimId: { type: 'string', maxLength: 80 }, status: { type: 'string', enum: ['supported', 'disputed', 'unverified', 'superseded'] }, confidence: { type: 'string', enum: ['low', 'medium', 'high'] }, reviewedBy: { type: 'string', maxLength: 200 }, reviewNote: { type: 'string', maxLength: 1000 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
       }, required: ['path', 'claimId', 'status', 'reviewedBy', 'expectedRevision'] },

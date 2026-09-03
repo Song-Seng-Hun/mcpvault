@@ -168,7 +168,7 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'retention_reason', type: 'text', description: 'Why the note should be preserved, reviewed, archived, or tombstoned' },
     { name: 'replaced_by', type: 'text', description: 'Visible replacement note for a superseded or tombstoned note' },
     { name: 'review_policy', type: 'text', description: 'Event that re-enters review', allowed: REVIEW_POLICIES },
-    { name: 'review_basis_upstream', type: 'object', description: 'Bounded typed-upstream revision/state baseline captured by publish or review' },
+    { name: 'review_basis_upstream', type: 'object', description: 'Bounded typed note/claim upstream state baseline captured by publish or review' },
     { name: 'review_note', type: 'text', description: 'Short record of the latest review' },
     { name: 'review_checks', type: 'list', description: 'Quality dimensions checked during the latest evidence review', allowed: REVIEW_CHECKS },
     { name: 'review_open_items', type: 'list', description: 'Bounded follow-up items left by the latest review' },

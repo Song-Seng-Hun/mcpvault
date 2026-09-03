@@ -207,6 +207,7 @@ export class VaultGraphIndex {
                     ...(link.targetHeading && { targetHeading: link.targetHeading }),
                     ...(link.targetBlockId && { targetBlockId: link.targetBlockId }),
                     ...(link.relation && { relation: link.relation }),
+                    ...(link.sourceClaimId && { sourceClaimId: link.sourceClaimId }),
                 };
                 addTopMatch(backlinks, backlink, limit, compare);
             }
@@ -447,6 +448,48 @@ export class VaultGraphIndex {
                             link: /^!?\[\[.+\]\]$/.test(target) ? target : `[[${target}]]`,
                             context: `${relation}: ${target}`,
                             relation,
+                        });
+                    }
+                }
+            }
+            const claims = Array.isArray(parsed.frontmatter.claims) ? parsed.frontmatter.claims : [];
+            const claimRelations = [
+                { field: 'supports_claims', relation: 'claim_supports' },
+                { field: 'contradicts_claims', relation: 'claim_contradicts' },
+                { field: 'depends_on_claims', relation: 'claim_depends_on' },
+            ];
+            for (let claimIndex = 0; claimIndex < claims.length; claimIndex += 1) {
+                const claim = claims[claimIndex];
+                if (!claim || typeof claim !== 'object')
+                    continue;
+                const sourceClaimId = String(claim.id || `claim-${claimIndex + 1}`).trim().toLowerCase();
+                if (!sourceClaimId)
+                    continue;
+                for (const definition of claimRelations) {
+                    const values = Array.isArray(claim[definition.field]) ? claim[definition.field] : [];
+                    for (const value of values.slice(0, 20)) {
+                        if (typeof value !== 'string' || !value.trim())
+                            continue;
+                        const authoredLink = value.trim();
+                        const matching = links.find(link => link.link === authoredLink && !link.relation);
+                        if (matching) {
+                            matching.relation = definition.relation;
+                            matching.sourceClaimId = sourceClaimId;
+                            matching.context = `claims.${sourceClaimId}.${definition.field}: ${authoredLink}`;
+                            continue;
+                        }
+                        const inner = authoredLink.replace(/^!?\[\[/, '').replace(/\]\]$/, '').split('|', 1)[0].trim();
+                        const marker = inner.lastIndexOf('#^');
+                        if (marker < 0)
+                            continue;
+                        links.push({
+                            target: inner.slice(0, marker).trim().replace(/\\/g, '/').toLowerCase(),
+                            targetBlockId: inner.slice(marker + 2).trim().toLowerCase(),
+                            line: 1,
+                            link: authoredLink,
+                            context: `claims.${sourceClaimId}.${definition.field}: ${authoredLink}`,
+                            relation: definition.relation,
+                            sourceClaimId,
                         });
                     }
                 }

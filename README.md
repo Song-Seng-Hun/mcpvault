@@ -473,7 +473,12 @@ incoming and outgoing links under hard depth/node/character bounds and reports
 missing or ambiguous targets, absent/duplicate block anchors, role mismatches,
 self-links, and support/dependency cycles. It never rewrites a note or decides
 whether an argument is true; use the claim matrix and current source revisions
-for evidence review.
+for evidence review. `on_upstream_change` snapshots the exact linked claim
+status, confidence, anchor block, and digest, so changing an unrelated claim in
+the same note does not reopen review while changing the linked claim does.
+Reviewing a claim as disputed or superseded also returns a bounded list of
+downstream notes reached through claim dependencies, support, or contradiction;
+agents must re-read those revisions rather than accepting an automatic cascade.
 `get_wiki_link_context_health` reports terse durable-note links with their
 line, heading, relation, and nearby context so agents can add a useful reason
 without forcing prose beside every valid link. `get_wiki_graph_health` also counts typed incoming and outgoing relations and

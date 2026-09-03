@@ -165,15 +165,20 @@ test('claim argument maps preserve Obsidian block links, revisions, scope, and b
     const conclusion = await callJson(client, 'publish_knowledge', {
       path: 'Knowledge/Conclusion.md', content: '# Conclusion\n\nThe proposed policy should be adopted. ^c1\n', evidencePaths: [source.value.path],
       claims: [{ id: 'c1', text: 'The proposed policy should be adopted.', evidencePaths: [source.value.path], claimRole: 'conclusion', dependsOnClaims: ['[[Knowledge/Premises#^p1]]'] }],
-      author: 'codex', expectedRevision: 'missing', accessToken,
+      reviewPolicy: 'on_upstream_change', author: 'codex', expectedRevision: 'missing', accessToken,
     });
-    await callJson(client, 'publish_knowledge', {
+    const premises = await callJson(client, 'publish_knowledge', {
       path: 'Knowledge/Premises.md', content: '# Premises\n\nThe policy reduces duplicated work. ^p1\n\nThe measured workflow explains that reduction. ^w1\n\nThe policy may hide minority concerns.\n', evidencePaths: [source.value.path],
       claims: [
         { id: 'p1', text: 'The policy reduces duplicated work.', evidencePaths: [source.value.path], claimRole: 'premise', supportsClaims: ['[[Knowledge/Conclusion#^c1]]'], dependsOnClaims: ['[[Knowledge/Conclusion#^c1]]'] },
         { id: 'w1', text: 'The measured workflow explains that reduction.', evidencePaths: [source.value.path], claimRole: 'warrant', supportsClaims: ['[[#^p1]]'] },
         { id: 'o1', text: 'The policy may hide minority concerns.', evidencePaths: [source.value.path], claimRole: 'objection', contradictsClaims: ['[[Knowledge/Conclusion#^c1]]'] },
       ],
+      author: 'codex', expectedRevision: 'missing', accessToken,
+    });
+    await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Dependent.md', content: '# Dependent\n\nA separate conclusion depends on the premise. ^d1\n', evidencePaths: [source.value.path],
+      claims: [{ id: 'd1', text: 'A separate conclusion depends on the premise.', evidencePaths: [source.value.path], claimRole: 'conclusion', dependsOnClaims: ['[[Knowledge/Premises#^p1]]'] }],
       author: 'codex', expectedRevision: 'missing', accessToken,
     });
 
@@ -206,6 +211,24 @@ test('claim argument maps preserve Obsidian block links, revisions, scope, and b
     const projection = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Conclusion.md', view: 'summary', accessToken });
     expect(projection.value.claims).toEqual([expect.objectContaining({ id: 'c1', role: 'conclusion', dependsOnClaims: ['[[Knowledge/Premises#^p1]]'], status: 'supported' })]);
     expect(reviewed.value.success).toBe(true);
+
+    const baseline = await callJson(client, 'review_wiki_note', {
+      path: 'Knowledge/Conclusion.md', reviewOutcome: 'confirmed', reviewedBy: 'codex', nextLifecycle: 'evergreen', expectedRevision: reviewed.value.revision, accessToken,
+    });
+    expect(baseline.value.success).toBe(true);
+    const unrelatedClaimReview = await callJson(client, 'review_wiki_claim', {
+      path: 'Knowledge/Premises.md', claimId: 'o1', status: 'disputed', reviewedBy: 'codex', expectedRevision: premises.value.revision, accessToken,
+    });
+    const unchangedQueue = await callJson(client, 'get_wiki_review_queue', { limit: 30, maxChars: 12000, accessToken });
+    expect(unchangedQueue.value.items.find((item: any) => item.path === 'Knowledge/Conclusion.md')).toBeUndefined();
+    const disputedPremise = await callJson(client, 'review_wiki_claim', {
+      path: 'Knowledge/Premises.md', claimId: 'p1', status: 'disputed', reviewedBy: 'codex', expectedRevision: unrelatedClaimReview.value.revision, accessToken,
+    });
+    expect(disputedPremise.value).toMatchObject({ impactedDownstreamCount: 2, impactedDownstreamPaths: ['Knowledge/Conclusion.md', 'Knowledge/Dependent.md'] });
+    const changedQueue = await callJson(client, 'get_wiki_review_queue', { limit: 30, maxChars: 12000, accessToken });
+    expect(changedQueue.value.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/Conclusion.md', reviewTriggers: expect.arrayContaining(['upstream_changed']), upstreamChanges: expect.arrayContaining([expect.stringContaining('#^p1')]) }),
+    ]));
 
     const compact = await callJson(client, 'get_wiki_argument_map', { path: 'Knowledge/Conclusion.md', maxDepth: 2, limit: 20, maxChars: 1024, accessToken });
     expect(compact.result.isError).toBeFalsy();

@@ -448,6 +448,12 @@ Call dynamic endpoint `wiki.argument_map` to inspect bounded incoming/outgoing
 relations, target ambiguity, missing anchors, role mismatches, and cycles.
 Graph shape is not evidence or truth; re-read the returned note revisions and
 their immutable sources before accepting, disputing, or rewriting a claim.
+For `review_policy: on_upstream_change`, claim dependencies and incoming claim
+support are snapshotted by exact claim digest and Markdown block anchor, so an
+unrelated edit in the same note does not reopen review. When
+`review_wiki_claim` returns impacted downstream paths after a disputed or
+superseded outcome, re-read those paths and their argument maps; never cascade
+an automatic status change.
 When preserving a failed path, record what was attempted/observed, the failure
 condition and reproduction, why it was rejected, and the reusable lesson.
 When a review is genuinely completed, record its outcome and reviewer rather

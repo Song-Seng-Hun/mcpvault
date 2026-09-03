@@ -113,6 +113,10 @@ export declare class LlmWikiService {
     private collectReviewBasisUpstream;
     /** Return notes whose conclusions can be affected when this note changes. */
     private collectDownstreamKnowledgePaths;
+    /** Return notes whose argument may change when one structured claim is
+     * disputed or retired. Incoming claim dependencies and the claim's outgoing
+     * support/contradiction links are navigation signals, not automatic edits. */
+    private collectClaimDownstreamKnowledgePaths;
     private reviewChangeSignals;
     initialize(scopeRoot: string, actor: string): Promise<{
         success: boolean;
@@ -690,6 +694,10 @@ export declare class LlmWikiService {
         reviewedAt: string;
         reviewNote?: string;
         revision: string;
+        impactedDownstreamCount?: number;
+        impactedDownstreamPaths?: string[];
+        impactTruncated?: boolean;
+        downstreamWarning?: string;
     }>;
     reviewDashboard(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
         purpose: string;
@@ -878,6 +886,7 @@ export declare class LlmWikiService {
                         targetHeading?: string;
                         targetBlockId?: string;
                         relation?: string;
+                        sourceClaimId?: string;
                         path: string;
                     }[];
                     truncated: boolean;
@@ -1201,6 +1210,7 @@ export declare class LlmWikiService {
                         targetHeading?: string;
                         targetBlockId?: string;
                         relation?: string;
+                        sourceClaimId?: string;
                         path: string;
                     }[];
                     truncated: boolean;
@@ -2593,6 +2603,7 @@ export declare class LlmWikiService {
                 targetHeading?: string;
                 targetBlockId?: string;
                 relation?: string;
+                sourceClaimId?: string;
                 path: string;
             }[];
             truncated: boolean;

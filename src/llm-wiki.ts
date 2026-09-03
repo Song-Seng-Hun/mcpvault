@@ -368,12 +368,18 @@ type ReviewBasisUpstreamEntry = {
   relation: string;
   direction: 'dependency' | 'support';
   target: string;
-  state: 'current' | 'missing' | 'ambiguous' | 'retired' | 'disputed' | 'unavailable';
+  state: 'current' | 'missing' | 'ambiguous' | 'retired' | 'disputed' | 'unverified' | 'unavailable';
   path?: string;
   revision?: string;
   lifecycle?: string;
   knowledgeStatus?: string;
   reviewOutcome?: string;
+  claimId?: string;
+  localClaimId?: string;
+  claimStatus?: string;
+  claimConfidence?: string;
+  claimDigest?: string;
+  claimAnchorState?: 'current' | 'missing' | 'ambiguous';
 };
 
 type ReviewBasisUpstreamSnapshot = {
@@ -416,7 +422,7 @@ function normalizeReviewBasisUpstream(value: unknown): ReviewBasisUpstreamSnapsh
     const relation = typeof raw.relation === 'string' ? raw.relation.trim().toLowerCase() : '';
     const direction = raw.direction === 'dependency' || raw.direction === 'support' ? raw.direction : undefined;
     const target = typeof raw.target === 'string' ? raw.target.trim() : '';
-    const state = ['current', 'missing', 'ambiguous', 'retired', 'disputed', 'unavailable'].includes(String(raw.state))
+    const state = ['current', 'missing', 'ambiguous', 'retired', 'disputed', 'unverified', 'unavailable'].includes(String(raw.state))
       ? raw.state as ReviewBasisUpstreamEntry['state']
       : undefined;
     if (!relation || !direction || !target || !state) continue;
@@ -425,12 +431,18 @@ function normalizeReviewBasisUpstream(value: unknown): ReviewBasisUpstreamSnapsh
     const lifecycle = typeof raw.lifecycle === 'string' && raw.lifecycle.trim() ? raw.lifecycle.trim().toLowerCase() : undefined;
     const knowledgeStatus = typeof raw.knowledgeStatus === 'string' && raw.knowledgeStatus.trim() ? raw.knowledgeStatus.trim().toLowerCase() : undefined;
     const reviewOutcome = typeof raw.reviewOutcome === 'string' && raw.reviewOutcome.trim() ? raw.reviewOutcome.trim().toLowerCase() : undefined;
-    const key = `${direction}|${relation}|${(path || target).toLowerCase()}`;
+    const claimId = typeof raw.claimId === 'string' && raw.claimId.trim() ? raw.claimId.trim().toLowerCase() : undefined;
+    const localClaimId = typeof raw.localClaimId === 'string' && raw.localClaimId.trim() ? raw.localClaimId.trim().toLowerCase() : undefined;
+    const claimStatus = typeof raw.claimStatus === 'string' && raw.claimStatus.trim() ? raw.claimStatus.trim().toLowerCase() : undefined;
+    const claimConfidence = typeof raw.claimConfidence === 'string' && raw.claimConfidence.trim() ? raw.claimConfidence.trim().toLowerCase() : undefined;
+    const claimDigest = typeof raw.claimDigest === 'string' && /^[a-f0-9]{64}$/i.test(raw.claimDigest.trim()) ? raw.claimDigest.trim().toLowerCase() : undefined;
+    const claimAnchorState = ['current', 'missing', 'ambiguous'].includes(String(raw.claimAnchorState)) ? raw.claimAnchorState as ReviewBasisUpstreamEntry['claimAnchorState'] : undefined;
+    const key = `${direction}|${relation}|${(path || target).toLowerCase()}|${claimId || ''}|${localClaimId || ''}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    entries.push({ relation, direction, target, state, ...(path && { path }), ...(revision && { revision }), ...(lifecycle && { lifecycle }), ...(knowledgeStatus && { knowledgeStatus }), ...(reviewOutcome && { reviewOutcome }) });
+    entries.push({ relation, direction, target, state, ...(path && { path }), ...(revision && { revision }), ...(lifecycle && { lifecycle }), ...(knowledgeStatus && { knowledgeStatus }), ...(reviewOutcome && { reviewOutcome }), ...(claimId && { claimId }), ...(localClaimId && { localClaimId }), ...(claimStatus && { claimStatus }), ...(claimConfidence && { claimConfidence }), ...(claimDigest && { claimDigest }), ...(claimAnchorState && { claimAnchorState }) });
   }
-  entries.sort((left, right) => `${left.direction}|${left.relation}|${left.path || left.target}`.localeCompare(`${right.direction}|${right.relation}|${right.path || right.target}`));
+  entries.sort((left, right) => `${left.direction}|${left.relation}|${left.path || left.target}|${left.claimId || ''}|${left.localClaimId || ''}`.localeCompare(`${right.direction}|${right.relation}|${right.path || right.target}|${right.claimId || ''}|${right.localClaimId || ''}`));
   const total = Number.isInteger(Number((value as any).total)) && Number((value as any).total) >= entries.length
     ? Number((value as any).total)
     : entries.length;
@@ -686,7 +698,7 @@ Use YAML properties and Obsidian links together:
 - \`lifecycle\`: inbox, active, review, evergreen, superseded, or archived.
 - \`project\`, \`moc\`, and \`review_at\`: optional navigation and review hints.
 - A knowledge note remains grounded by \`evidence_paths\`; links are not evidence by themselves. In answer packets, source-work diversity groups snapshots by \`source_work_id\`, \`source_family\`, or \`source_id\`; multiple snapshots of one work are not independent corroboration, and multiple works still do not establish truth.
-- For structured \`claims\`, use the bounded claim matrix to preserve authored order while separately prioritizing missing, unavailable, altered, stale-locator, or single-source-work evidence. Optional \`claim_role\` values are premise, warrant, conclusion, objection, rebuttal, and observation. Put \`^claim-id\` on the corresponding Markdown block and use \`supports_claims\`, \`contradicts_claims\`, or \`depends_on_claims\` with Obsidian block links such as \`[[Knowledge/Note#^claim-id]]\` or local \`[[#^claim-id]]\`. Use \`wiki.argument_map\` to verify targets, anchors, roles, and cycles; the map is navigation, not proof. Inspect current sources before recording a claim review.
+- For structured \`claims\`, use the bounded claim matrix to preserve authored order while separately prioritizing missing, unavailable, altered, stale-locator, or single-source-work evidence. Optional \`claim_role\` values are premise, warrant, conclusion, objection, rebuttal, and observation. Put \`^claim-id\` on the corresponding Markdown block and use \`supports_claims\`, \`contradicts_claims\`, or \`depends_on_claims\` with Obsidian block links such as \`[[Knowledge/Note#^claim-id]]\` or local \`[[#^claim-id]]\`. Use \`wiki.argument_map\` to verify targets, anchors, roles, and cycles; the map is navigation, not proof. With \`review_policy: on_upstream_change\`, external claim dependencies and incoming support are tracked by claim digest and anchor so unrelated edits in the same note do not reopen review. A disputed or superseded claim returns bounded downstream notes for explicit re-review and never changes them automatically. Inspect current sources before recording a claim review.
 - When immutable sources arrive as a provenance-bearing archival set, keep optional \`archive_collection_id\`, broad-to-narrow \`archive_series\`, \`archive_sequence\`, \`accession_id\`, \`custodial_history\`, and \`original_order_note\` at ingestion. Use \`wiki.archive_finding_aid\` to browse the collection without loading bodies. This preserves creator context and original order; it does not replace MOCs, folders, source hashes, or Git.
 - Optional \`valid_from\` (inclusive), \`valid_until\` (exclusive), \`observed_at\`, and \`temporal_scope\` describe when the represented claim or condition applies. They are separate from file modification, source publication/retrieval, task, and review dates. Expired validity is a review signal, never automatic deletion.
 
@@ -985,9 +997,10 @@ export class LlmWikiService {
   private async collectReviewBasisUpstream(path: string, frontmatter: Record<string, any>, principal?: ScopePrincipal, providedIndex?: KnowledgeReferenceIndex): Promise<ReviewBasisUpstreamSnapshot> {
     const canAccess = (candidate: string) => this.access.canAccessPhysicalPath(candidate, principal);
     let referenceIndex = providedIndex;
-    const candidates = new Map<string, { relation: string; direction: 'dependency' | 'support'; target: string; path?: string; state?: 'missing' | 'ambiguous' }>();
-    const add = (entry: { relation: string; direction: 'dependency' | 'support'; target: string; path?: string; state?: 'missing' | 'ambiguous' }) => {
-      const key = `${entry.direction}|${entry.relation}|${normalizePath(entry.path || entry.target).toLowerCase()}`;
+    type UpstreamCandidate = { relation: string; direction: 'dependency' | 'support'; target: string; path?: string; state?: 'missing' | 'ambiguous'; claimId?: string; localClaimId?: string };
+    const candidates = new Map<string, UpstreamCandidate>();
+    const add = (entry: UpstreamCandidate) => {
+      const key = `${entry.direction}|${entry.relation}|${normalizePath(entry.path || entry.target).toLowerCase()}|${entry.claimId || ''}|${entry.localClaimId || ''}`;
       if (!candidates.has(key)) candidates.set(key, entry);
     };
 
@@ -1004,10 +1017,41 @@ export class LlmWikiService {
       }
     }
 
+    const localClaims = Array.isArray(frontmatter.claims) ? frontmatter.claims : [];
+    for (let claimIndex = 0; claimIndex < localClaims.length; claimIndex += 1) {
+      const claim = localClaims[claimIndex];
+      if (!claim || typeof claim !== 'object') continue;
+      const localClaimId = claimId(typeof claim.id === 'string' ? claim.id : undefined, claimIndex);
+      for (const definition of CLAIM_RELATION_FIELDS.filter(item => item.property === 'depends_on_claims' || item.property === 'contradicts_claims')) {
+        for (const raw of claimRelationValues(claim, definition.property)) {
+          let parsed: ParsedClaimReference;
+          try { parsed = parseClaimReference(raw); } catch {
+            add({ relation: `claim_${definition.relation}`, direction: 'dependency', target: raw, state: 'missing', localClaimId });
+            continue;
+          }
+          // Same-note claim structure changes together with this note and is
+          // inspected by the argument map. Upstream review baselines only
+          // track external claims so a newly published local graph does not
+          // immediately invalidate itself.
+          if (!parsed.document) continue;
+          if (!referenceIndex) referenceIndex = await this.buildKnowledgeReferenceIndex(principal);
+          const matches = this.resolveKnowledgeReference(parsed.document, referenceIndex)
+            .filter(candidate => this.access.canReferenceFrom(path, candidate));
+          if (matches.length === 1) add({ relation: `claim_${definition.relation}`, direction: 'dependency', target: raw, path: matches[0]!, claimId: parsed.blockId, localClaimId });
+          else add({ relation: `claim_${definition.relation}`, direction: 'dependency', target: raw, state: matches.length === 0 ? 'missing' : 'ambiguous', claimId: parsed.blockId, localClaimId });
+        }
+      }
+    }
+
     if (await this.fileSystem.noteExists(path)) {
       try {
         const backlinks = await this.fileSystem.getBacklinks(path, 400, canAccess);
         for (const backlink of backlinks.backlinks) {
+          if (backlink.relation === 'claim_supports') {
+            if (!this.access.canReferenceFrom(path, backlink.path)) continue;
+            add({ relation: 'claim_supports', direction: 'support', target: backlink.link, path: backlink.path, ...(backlink.sourceClaimId && { claimId: backlink.sourceClaimId }), ...(backlink.targetBlockId && { localClaimId: backlink.targetBlockId }) });
+            continue;
+          }
           if (backlink.relation !== 'supports') continue;
           if (!this.access.canReferenceFrom(path, backlink.path)) continue;
           add({ relation: 'supports', direction: 'support', target: backlink.path, path: backlink.path });
@@ -1021,7 +1065,7 @@ export class LlmWikiService {
     const entries: ReviewBasisUpstreamEntry[] = [];
     for (const candidate of candidates.values()) {
       if (candidate.state) {
-        entries.push({ relation: candidate.relation, direction: candidate.direction, target: candidate.target, state: candidate.state });
+        entries.push({ relation: candidate.relation, direction: candidate.direction, target: candidate.target, state: candidate.state, ...(candidate.claimId && { claimId: candidate.claimId }), ...(candidate.localClaimId && { localClaimId: candidate.localClaimId }) });
         continue;
       }
       const candidatePath = candidate.path!;
@@ -1038,11 +1082,48 @@ export class LlmWikiService {
         const lifecycle = String(note.frontmatter.lifecycle || '').trim().toLowerCase();
         const knowledgeStatus = String(note.frontmatter.knowledge_status || '').trim().toLowerCase();
         const reviewOutcome = String(note.frontmatter.last_review_outcome || '').trim().toLowerCase();
-        const state: ReviewBasisUpstreamEntry['state'] = ['superseded', 'archived'].includes(lifecycle) || knowledgeStatus === 'superseded' || reviewOutcome === 'superseded'
+        let state: ReviewBasisUpstreamEntry['state'] = ['superseded', 'archived'].includes(lifecycle) || knowledgeStatus === 'superseded' || reviewOutcome === 'superseded'
           ? 'retired'
           : knowledgeStatus === 'disputed' || reviewOutcome === 'disputed'
             ? 'disputed'
             : 'current';
+        let claimStatus: string | undefined;
+        let claimConfidence: string | undefined;
+        let claimDigest: string | undefined;
+        let claimAnchorState: ReviewBasisUpstreamEntry['claimAnchorState'];
+        if (candidate.claimId) {
+          const targetClaims = Array.isArray(note.frontmatter.claims)
+            ? note.frontmatter.claims.filter((claim: unknown) => claim && typeof claim === 'object' && String((claim as any).id || '').trim().toLowerCase() === candidate.claimId!.toLowerCase())
+            : [];
+          if (targetClaims.length === 0) {
+            state = 'missing';
+          } else if (targetClaims.length > 1) {
+            state = 'ambiguous';
+          } else {
+            const targetClaim = targetClaims[0] as Record<string, any>;
+            claimStatus = String(targetClaim.status || 'unverified').trim().toLowerCase();
+            claimConfidence = String(targetClaim.confidence || 'medium').trim().toLowerCase();
+            if (claimStatus === 'superseded') state = 'retired';
+            else if (claimStatus === 'disputed') state = 'disputed';
+            else if (claimStatus === 'unverified') state = 'unverified';
+            const anchorLines = blockAnchorLines(note.content, candidate.claimId);
+            claimAnchorState = anchorLines.length === 1 ? 'current' : anchorLines.length === 0 ? 'missing' : 'ambiguous';
+            const bodyLines = note.content.replace(/\r\n?/g, '\n').split('\n');
+            const anchorBlocks = anchorLines.map(line => bodyLines[line - 1] || '');
+            claimDigest = hash(JSON.stringify({
+              id: candidate.claimId,
+              text: boundedText(targetClaim.text, 1000),
+              status: claimStatus,
+              confidence: claimConfidence,
+              role: typeof targetClaim.claim_role === 'string' ? targetClaim.claim_role.trim().toLowerCase() : '',
+              evidencePaths: Array.isArray(targetClaim.evidence_paths) ? targetClaim.evidence_paths.slice(0, 20) : [],
+              supports: claimRelationValues(targetClaim, 'supports_claims'),
+              contradicts: claimRelationValues(targetClaim, 'contradicts_claims'),
+              dependsOn: claimRelationValues(targetClaim, 'depends_on_claims'),
+              anchorBlocks,
+            }));
+          }
+        }
         entries.push({
           relation: candidate.relation,
           direction: candidate.direction,
@@ -1053,12 +1134,18 @@ export class LlmWikiService {
           ...(lifecycle && { lifecycle }),
           ...(knowledgeStatus && { knowledgeStatus }),
           ...(reviewOutcome && { reviewOutcome }),
+          ...(candidate.claimId && { claimId: candidate.claimId }),
+          ...(candidate.localClaimId && { localClaimId: candidate.localClaimId }),
+          ...(claimStatus && { claimStatus }),
+          ...(claimConfidence && { claimConfidence }),
+          ...(claimDigest && { claimDigest }),
+          ...(claimAnchorState && { claimAnchorState }),
         });
       } catch {
         entries.push({ relation: candidate.relation, direction: candidate.direction, target: candidate.target, state: 'unavailable' });
       }
     }
-    entries.sort((left, right) => `${left.direction}|${left.relation}|${left.path || left.target}`.localeCompare(`${right.direction}|${right.relation}|${right.path || right.target}`));
+    entries.sort((left, right) => `${left.direction}|${left.relation}|${left.path || left.target}|${left.claimId || ''}|${left.localClaimId || ''}`.localeCompare(`${right.direction}|${right.relation}|${right.path || right.target}|${right.claimId || ''}|${right.localClaimId || ''}`));
     return { entries: entries.slice(0, 80), total: entries.length, truncated: entries.length > 80 };
   }
 
@@ -1093,6 +1180,50 @@ export class LlmWikiService {
     return { total: visible.length, paths: visible.slice(0, Math.max(1, limit)), truncated: visible.length > limit };
   }
 
+  /** Return notes whose argument may change when one structured claim is
+   * disputed or retired. Incoming claim dependencies and the claim's outgoing
+   * support/contradiction links are navigation signals, not automatic edits. */
+  private async collectClaimDownstreamKnowledgePaths(path: string, selectedClaimId: string, claim: Record<string, any>, principal?: ScopePrincipal, limit = 20) {
+    const canAccess = (candidate: string) => this.access.canAccessPhysicalPath(candidate, principal);
+    const paths = new Set<string>();
+    if (await this.fileSystem.noteExists(path)) {
+      try {
+        const backlinks = await this.fileSystem.getBacklinks(path, 400, canAccess);
+        for (const backlink of backlinks.backlinks) {
+          if (!['claim_depends_on', 'claim_contradicts'].includes(String(backlink.relation || ''))) continue;
+          if (String(backlink.targetBlockId || '').trim().toLowerCase() !== selectedClaimId.toLowerCase()) continue;
+          if (!this.access.canReferenceFrom(backlink.path, path)) continue;
+          paths.add(normalizePath(backlink.path));
+        }
+      } catch { /* impact guidance must not make a completed claim review fail */ }
+    }
+    const outgoing = [
+      ...claimRelationValues(claim, 'supports_claims'),
+      ...claimRelationValues(claim, 'contradicts_claims'),
+    ];
+    const referenceIndex = outgoing.length > 0 ? await this.buildKnowledgeReferenceIndex(principal) : undefined;
+    for (const raw of outgoing) {
+      let parsed: ParsedClaimReference;
+      try { parsed = parseClaimReference(raw); } catch { continue; }
+      const matches = !parsed.document
+        ? [normalizePath(path)]
+        : this.resolveKnowledgeReference(parsed.document, referenceIndex!);
+      if (matches.length !== 1 || !this.access.canReferenceFrom(path, matches[0]!)) continue;
+      paths.add(normalizePath(matches[0]!));
+    }
+    paths.delete(normalizePath(path));
+    const visible: string[] = [];
+    for (const candidate of paths) {
+      try {
+        if (!canAccess(candidate)) continue;
+        const note = await this.fileSystem.readNote(candidate);
+        if (note.frontmatter.llm_wiki_type === 'knowledge' && !isModerationHidden(note.frontmatter)) visible.push(this.access.toPublicPath(candidate));
+      } catch { /* ignore a concurrently moved or unavailable target */ }
+    }
+    visible.sort((left, right) => left.localeCompare(right));
+    return { total: visible.length, paths: visible.slice(0, Math.max(1, limit)), truncated: visible.length > limit };
+  }
+
   private async reviewChangeSignals(note: { path?: string; content?: string; frontmatter: Record<string, any> }, principal?: ScopePrincipal, referenceIndex?: KnowledgeReferenceIndex) {
     const policy = typeof note.frontmatter.review_policy === 'string' ? note.frontmatter.review_policy.toLowerCase() : 'manual';
     const bodyDigest = hash(note.content || '');
@@ -1111,13 +1242,19 @@ export class LlmWikiService {
     if (policy === 'on_upstream_change' && typeof note.path === 'string') {
       const baseline = normalizeReviewBasisUpstream(note.frontmatter.review_basis_upstream);
       const current = await this.collectReviewBasisUpstream(note.path, note.frontmatter, principal, referenceIndex);
-      const previousByKey = new Map((baseline?.entries || []).map(entry => [`${entry.direction}|${entry.relation}|${(entry.path || entry.target).toLowerCase()}`, entry]));
-      const currentByKey = new Map(current.entries.map(entry => [`${entry.direction}|${entry.relation}|${(entry.path || entry.target).toLowerCase()}`, entry]));
+      const entryKey = (entry: ReviewBasisUpstreamEntry) => `${entry.direction}|${entry.relation}|${(entry.path || entry.target).toLowerCase()}|${entry.claimId || ''}|${entry.localClaimId || ''}`;
+      const comparableEntry = (entry: ReviewBasisUpstreamEntry) => {
+        if (!entry.claimDigest) return entry;
+        const { revision: _revision, ...claimStable } = entry;
+        return claimStable;
+      };
+      const previousByKey = new Map((baseline?.entries || []).map(entry => [entryKey(entry), entry]));
+      const currentByKey = new Map(current.entries.map(entry => [entryKey(entry), entry]));
       const changes: string[] = [];
       for (const [key, entry] of currentByKey) {
         const prior = previousByKey.get(key);
         if (!prior) changes.push(`added:${entry.relation}:${entry.path || entry.target}`);
-        else if (JSON.stringify(prior) !== JSON.stringify(entry)) changes.push(`changed:${entry.relation}:${entry.path || entry.target}:${prior.state}->${entry.state}`);
+        else if (JSON.stringify(comparableEntry(prior)) !== JSON.stringify(comparableEntry(entry))) changes.push(`changed:${entry.relation}:${entry.path || entry.target}${entry.claimId ? `#^${entry.claimId}` : ''}:${prior.state}->${entry.state}`);
       }
       for (const [key, entry] of previousByKey) if (!currentByKey.has(key)) changes.push(`removed:${entry.relation}:${entry.path || entry.target}`);
       if (baseline && (baseline.total !== current.total || baseline.truncated !== current.truncated)) changes.push(`set:${baseline.total}->${current.total}`);
@@ -1485,7 +1622,6 @@ export class LlmWikiService {
         ...(params.relations !== undefined && { relations: params.relations }),
       }),
     };
-    const reviewBasisUpstream = await this.collectReviewBasisUpstream(params.path, relationFrontmatter, params.principal);
     const claims = normalizeClaims(params.claims, existing?.frontmatter.claims);
     if (claims) {
       for (const claim of claims) {
@@ -1510,6 +1646,7 @@ export class LlmWikiService {
         }
       }
     }
+    const reviewBasisUpstream = await this.collectReviewBasisUpstream(params.path, { ...relationFrontmatter, ...(claims && { claims }) }, params.principal);
     await this.fileSystem.writeNote({
       path: params.path,
       content,
@@ -3178,7 +3315,26 @@ export class LlmWikiService {
       expectedRevision: params.expectedRevision,
     });
     const updated = await this.fileSystem.readNote(params.path);
-    return { success: true, path: this.access.toPublicPath(params.path), claimId: String(claim.id), status: claim.status, confidence: claim.confidence, reviewedBy: params.reviewedBy, reviewedAt, ...(params.reviewNote?.trim() && { reviewNote: boundedText(params.reviewNote, 1000) }), revision: updated.revision };
+    const downstream = ['disputed', 'superseded'].includes(params.status)
+      ? await this.collectClaimDownstreamKnowledgePaths(params.path, String(claim.id), claim, params.principal, 8)
+      : { total: 0, paths: [] as string[], truncated: false };
+    return {
+      success: true,
+      path: this.access.toPublicPath(params.path),
+      claimId: String(claim.id),
+      status: claim.status,
+      confidence: claim.confidence,
+      reviewedBy: params.reviewedBy,
+      reviewedAt,
+      ...(params.reviewNote?.trim() && { reviewNote: boundedText(params.reviewNote, 1000) }),
+      revision: updated.revision,
+      ...(downstream.total > 0 && {
+        impactedDownstreamCount: downstream.total,
+        impactedDownstreamPaths: downstream.paths,
+        impactTruncated: downstream.truncated,
+        downstreamWarning: `This claim is linked into ${downstream.total} visible downstream note(s). Re-read their current revisions and use wiki.argument_map or wiki.review_queue before changing conclusions.`,
+      }),
+    };
   }
 
   async reviewDashboard(principal?: ScopePrincipal, limit = 10, maxChars = 9000) {

@@ -64,4 +64,32 @@ describe('VaultGraphIndex', () => {
     });
     await expect(graph.getBacklinks('Wiki/Target.md', 10, () => false)).rejects.toThrow(/Access denied/);
   });
+
+  test('keeps claim-level Obsidian links in backlinks with their argument meaning', async () => {
+    vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-claim-graph-'));
+    await writeNote('Wiki/Target.md', '# Target\n\nConclusion. ^conclusion\n');
+    await writeNote('Wiki/Source.md', [
+      '---',
+      'claims:',
+      '  - id: premise',
+      '    supports_claims:',
+      '      - "[[Wiki/Target#^conclusion]]"',
+      '---',
+      '# Source',
+      '',
+      'Premise. ^premise',
+      '',
+    ].join('\n'));
+    graph = new VaultGraphIndex(vaultPath, new PathFilter(), new FrontmatterHandler());
+
+    const backlinks = await graph.getBacklinks('Wiki/Target.md', 10, () => true);
+    expect(backlinks).toMatchObject({ total: 1, truncated: false });
+    expect(backlinks.backlinks).toEqual([
+      expect.objectContaining({ path: 'Wiki/Source.md', relation: 'claim_supports', sourceClaimId: 'premise', targetBlockId: 'conclusion', context: 'claims.premise.supports_claims: [[Wiki/Target#^conclusion]]' }),
+    ]);
+    const outlinks = await graph.getOutlinks('Wiki/Source.md', 10, () => true);
+    expect(outlinks.outlinks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ relation: 'claim_supports', sourceClaimId: 'premise', targetBlockId: 'conclusion' }),
+    ]));
+  });
 });

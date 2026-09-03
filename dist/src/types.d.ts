@@ -261,6 +261,8 @@ export interface BacklinkMatch {
     targetBlockId?: string;
     /** Typed frontmatter relation such as supports or contradicts. */
     relation?: string;
+    /** Structured claim id that authored a claim-level relation. */
+    sourceClaimId?: string;
 }
 export interface BacklinksResult {
     target: string;
@@ -281,6 +283,8 @@ export interface OutlinkMatch {
     targetBlockId?: string;
     /** Typed frontmatter relation such as supports or contradicts. */
     relation?: string;
+    /** Structured claim id that authored a claim-level relation. */
+    sourceClaimId?: string;
 }
 export interface OutlinksResult {
     source: string;
