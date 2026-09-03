@@ -44,10 +44,15 @@ test('Global Hub keeps proposals separate, rejects unsafe paths, and restores to
 
 test('Global Sync carries signed Wiki provenance through proposals, manifests, and revisions', async () => {
   const hub = new GlobalSyncHub(hubRoot, { hubId: 'provenance-hub' });
+  const sourceProposal = await hub.submitProposal({ documentId: '_sources/design.md', content: '# Immutable design source\n', author: 'server-a', reason: 'Capture source before dependent knowledge', origin: 'server-a' });
+  await hub.approveProposal(sourceProposal.proposalId, 'reviewer-a', 'Source integrity checked');
+  const sourceRevision = (await hub.approveProposal(sourceProposal.proposalId, 'reviewer-b', 'Source integrity checked')).revision!;
   const provenance = {
     evidencePaths: ['_sources/design.md'],
+    evidenceRevisions: { '_sources/design.md': sourceRevision.revisionId },
     sourceIds: ['design-source-v1'],
     references: ['Knowledge/Read-policy.md'],
+    organizationFingerprint: 'a'.repeat(64),
   };
   const proposal = await hub.submitProposal({
     documentId: 'Knowledge/Provenance.md',
@@ -57,11 +62,59 @@ test('Global Sync carries signed Wiki provenance through proposals, manifests, a
   expect(proposal.provenance).toEqual(provenance);
   await hub.approveProposal(proposal.proposalId, 'reviewer-a', 'Evidence checked');
   const accepted = await hub.approveProposal(proposal.proposalId, 'reviewer-b', 'Evidence checked');
-  expect((await hub.getManifest()).entries[0]?.provenance).toEqual(provenance);
+  expect((await hub.getManifest()).entries.find(entry => entry.documentId === 'Knowledge/Provenance.md')?.provenance).toEqual(provenance);
   expect(accepted.revision?.provenance).toEqual(provenance);
   const revision = await hub.getRevision(accepted.revision!.revisionId);
   expect(revision.provenance).toEqual(provenance);
   expect(revision.content).toContain('evidence_paths');
+  expect((await hub.audit()).ok).toBe(true);
+});
+
+test('cross-Vault migration enforces source-first provenance, contract fingerprints, and dirty-work rollback', async () => {
+  const hub = new GlobalSyncHub(hubRoot, { hubId: 'migration-hub' });
+  const fingerprint = 'b'.repeat(64);
+  const sourceInput = { documentId: '_sources/paper-v1.md', content: '# Paper snapshot\nStable evidence.\n', author: 'server-a', reason: 'Publish immutable evidence first', origin: 'server-a', provenance: { organizationFingerprint: fingerprint } };
+  const sourceProposal = await hub.submitProposal(sourceInput);
+  await expect(hub.submitProposal({
+    documentId: 'Knowledge/Grounded.md', content: '# Grounded\nA claim.\n', author: 'server-a', reason: 'Premature knowledge', origin: 'server-a',
+    provenance: { evidencePaths: ['_sources/paper-v1.md'], evidenceRevisions: { '_sources/paper-v1.md': 'rev_12345678' }, organizationFingerprint: fingerprint },
+  })).rejects.toThrow('approved before dependent knowledge');
+
+  await hub.approveProposal(sourceProposal.proposalId, 'reviewer-a', 'Source checked');
+  const sourceRevision = (await hub.approveProposal(sourceProposal.proposalId, 'reviewer-b', 'Source checked')).revision!;
+  await expect(hub.submitProposal({ ...sourceInput, content: '# Rewritten source\n' })).rejects.toThrow('immutable');
+
+  const provenance = { evidencePaths: ['_sources/paper-v1.md'], evidenceRevisions: { '_sources/paper-v1.md': sourceRevision.revisionId }, sourceIds: ['paper-v1'], organizationFingerprint: fingerprint };
+  const knowledgeProposal = await hub.submitProposal({ documentId: 'Knowledge/Grounded.md', content: '# Grounded\nA claim.\n', author: 'server-a', reason: 'Publish grounded knowledge', origin: 'server-a', provenance });
+  await hub.approveProposal(knowledgeProposal.proposalId, 'reviewer-a', 'Evidence checked');
+  const knowledgeRevision = (await hub.approveProposal(knowledgeProposal.proposalId, 'reviewer-b', 'Evidence checked')).revision!;
+
+  const client = {
+    getManifest: (after?: number, limit?: number) => hub.getManifest(after, limit),
+    getRevision: (revisionId: string) => hub.getRevision(revisionId),
+    submitProposal: (input: Parameters<typeof hub.submitProposal>[0]) => hub.submitProposal(input),
+  };
+  const replica = new GlobalSyncReplica({ vaultPath: root, client, trustedPublicKey: hub.getPublicKey(), organizationFingerprint: fingerprint });
+  expect((await replica.pull(1)).applied).toEqual(['_sources/paper-v1.md']);
+  expect((await replica.pull(1)).applied).toEqual(['Knowledge/Grounded.md']);
+  expect(await readFile(join(root, '_sources', 'paper-v1.md'), 'utf8')).toContain('Stable evidence');
+  expect(await readFile(join(root, 'Knowledge', 'Grounded.md'), 'utf8')).toContain('A claim');
+  expect((await hub.getRevision(knowledgeRevision.revisionId)).provenance).toEqual(provenance);
+
+  const incompatibleRoot = join(root, 'incompatible-vault');
+  const incompatible = new GlobalSyncReplica({ vaultPath: incompatibleRoot, client, trustedPublicKey: hub.getPublicKey(), organizationFingerprint: 'c'.repeat(64) });
+  const incompatiblePull = await incompatible.pull(10);
+  expect(incompatiblePull.applied).toEqual([]);
+  expect(incompatiblePull.conflicts[0]?.reason).toContain('fingerprint');
+
+  const updateProposal = await hub.submitProposal({ documentId: 'Knowledge/Grounded.md', parentRevision: knowledgeRevision.revisionId, content: '# Grounded\nA revised claim.\n', author: 'server-b', reason: 'Refine claim', origin: 'server-b', provenance });
+  await hub.approveProposal(updateProposal.proposalId, 'reviewer-a', 'Evidence checked again');
+  await hub.approveProposal(updateProposal.proposalId, 'reviewer-b', 'Evidence checked again');
+  await writeFile(join(root, 'Knowledge', 'Grounded.md'), '# Grounded\nLocal unsubmitted interpretation.\n');
+  const dirtyPull = await replica.pull(10);
+  expect(dirtyPull.applied).toEqual([]);
+  expect(dirtyPull.conflicts[0]?.reason).toContain('unsubmitted changes');
+  expect(await readFile(join(root, 'Knowledge', 'Grounded.md'), 'utf8')).toContain('Local unsubmitted interpretation');
   expect((await hub.audit()).ok).toBe(true);
 });
 
@@ -264,6 +317,9 @@ test('Global Sync rejects control characters in signed identity metadata', async
   const hub = new GlobalSyncHub(hubRoot);
   await expect(hub.submitProposal({ documentId: 'Knowledge/Safe.md', content: 'safe\n', author: 'agent\nforged', reason: 'test', origin: 'server-a' })).rejects.toThrow('control characters');
   await expect(hub.submitProposal({ documentId: 'Knowledge/Safe.md', content: 'safe\n', author: 'agent', reason: 'test\u0000', origin: 'server-a' })).rejects.toThrow('control characters');
+  await expect(hub.submitProposal({ documentId: 'Knowledge/Leak.md', content: 'no\n', author: 'agent', reason: 'test', origin: 'server-a', provenance: { evidencePaths: ['_scopes/users/alice/private.md'] } })).rejects.toThrow('private or service state');
+  await expect(hub.submitProposal({ documentId: 'Knowledge/Leak.md', content: 'no\n', author: 'agent', reason: 'test', origin: 'server-a', provenance: { references: ['Community/Posts/private.md'] } })).rejects.toThrow('private or service state');
+  await expect(hub.submitProposal({ documentId: 'Knowledge/Bad-contract.md', content: 'no\n', author: 'agent', reason: 'test', origin: 'server-a', provenance: { organizationFingerprint: 'not-a-fingerprint' } })).rejects.toThrow('SHA-256');
 });
 
 test('Global Hub enforces a cumulative content quota before storing new objects', async () => {

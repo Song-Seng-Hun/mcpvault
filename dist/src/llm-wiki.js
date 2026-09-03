@@ -295,6 +295,70 @@ function genericEvergreenTitle(title) {
         || /^\d{4}[-_.]\d{1,2}(?:[-_.]\d{1,2})?$/.test(normalized);
 }
 const hash = (value) => createHash('sha256').update(value).digest('hex');
+function nativePropertyType(value) {
+    if (value === null)
+        return 'null';
+    if (Array.isArray(value))
+        return 'list';
+    if (typeof value === 'object')
+        return 'object';
+    if (typeof value === 'number')
+        return 'number';
+    if (typeof value === 'boolean')
+        return 'boolean';
+    return 'text';
+}
+function manifestStringList(value, maximum = 500) {
+    if (!Array.isArray(value))
+        return [];
+    return [...new Set(value.filter((item) => typeof item === 'string').map(item => item.trim()).filter(Boolean))]
+        .slice(0, maximum)
+        .sort((left, right) => left.localeCompare(right));
+}
+/** Keep the portability fingerprint independent from prose, timestamps, and
+ * object insertion order. This is a contract revision guard, not a content or
+ * security hash. */
+function comparableOrganizationManifest(value) {
+    const contracts = value.contracts && typeof value.contracts === 'object' && !Array.isArray(value.contracts)
+        ? value.contracts
+        : {};
+    const properties = Array.isArray(contracts.properties)
+        ? contracts.properties
+            .filter((item) => Boolean(item) && typeof item === 'object' && !Array.isArray(item) && typeof item.name === 'string')
+            .slice(0, 500)
+            .map(item => ({
+            name: String(item.name).trim(),
+            type: String(item.type || '').trim(),
+            allowed: manifestStringList(item.allowed, 200),
+            appliesTo: manifestStringList(item.appliesTo, 100),
+        }))
+            .sort((left, right) => left.name.localeCompare(right.name))
+        : [];
+    const relations = Array.isArray(contracts.relations)
+        ? contracts.relations
+            .map(item => typeof item === 'string'
+            ? { field: item.trim(), direction: '', reciprocal: false }
+            : item && typeof item === 'object' && !Array.isArray(item)
+                ? { field: String(item.field || '').trim(), direction: String(item.direction || '').trim(), reciprocal: Boolean(item.reciprocal) }
+                : undefined)
+            .filter((item) => Boolean(item?.field))
+            .slice(0, 100)
+            .sort((left, right) => left.field.localeCompare(right.field))
+        : [];
+    return {
+        format: String(value.format || ''),
+        manifestVersion: Number(value.manifestVersion || 0),
+        reservedPaths: manifestStringList(value.reservedPaths, 100),
+        contracts: {
+            noteKinds: manifestStringList(contracts.noteKinds),
+            lifecycles: manifestStringList(contracts.lifecycles),
+            taskStatuses: manifestStringList(contracts.taskStatuses),
+            serviceClasses: manifestStringList(contracts.serviceClasses),
+            properties,
+            relations,
+        },
+    };
+}
 const hasProgressiveProjection = (frontmatter) => Boolean(frontmatter.summary || frontmatter.key_points || frontmatter.open_questions
     || frontmatter.summary_layer !== undefined || frontmatter.summary_highlights);
 const now = () => new Date().toISOString();
@@ -2973,41 +3037,338 @@ export class LlmWikiService {
             return result;
         return { purpose: result.purpose, sourceOfTruth: result.sourceOfTruth, filing: result.filing, work: result.work, review: result.review, truncated: true };
     }
-    /** Return a portable, content-free organization contract for another Vault. */
-    organizationManifest(maxChars = 12000) {
-        const boundedChars = Math.min(Math.max(Number(maxChars) || 12000, 2048), 24000);
-        const result = {
-            manifestVersion: 1,
+    /**
+     * Return a portable organization contract and, when explicitly requested,
+     * a metadata-only migration preflight. The preflight deliberately scans
+     * only global material: command-center Community, model/agent/user scopes,
+     * whispers, and disposable caches never enter an export inventory.
+     */
+    async organizationManifest(principal, options = {}) {
+        // Authentication must not widen a portable export. The readiness scan
+        // below deliberately uses anonymous/global access rules.
+        void principal;
+        const boundedChars = Math.min(Math.max(Number(options.maxChars) || 12000, 2048), 24000);
+        const boundedLimit = Math.min(Math.max(Number(options.limit) || 30, 1), 100);
+        const contracts = {
+            noteKinds: ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'],
+            lifecycles: [...LIFECYCLES],
+            taskStatuses: [...TASK_STATUSES],
+            serviceClasses: [...SERVICE_CLASSES],
+            properties: getOrganizationPropertyContract(),
+            relations: getOrganizationRelationContract(),
+        };
+        const base = {
+            manifestVersion: 2,
             format: 'mcpvault-organization-manifest',
             portable: true,
+            contentFreeByDefault: true,
             sourceOfTruth: ['ordinary Markdown', 'YAML Properties', 'Git history and revisions'],
             filing: { Inbox: 'unclear or newly captured material', Projects: 'outcome-oriented work', Areas: 'ongoing responsibilities', Resources: 'reusable references', Archives: 'inactive material' },
-            reservedPaths: ['_sources/', '_wiki/', 'Community/', '_scopes/', '.mcpvault/'],
+            reservedPaths: ['_sources/', '_wiki/', 'Community/', '_scopes/', '_whispers/', '.mcpvault/'],
             syntax: { links: ['[[Note]]', '[[folder/Note#Heading]]', '[[Note|display text]]', '[Guide](Resources/Guide.md#section)'], tags: '#tag', sourceIntegrity: 'immutable source snapshot + content_sha256 + revision' },
             pipeline: ['capture', 'organize', 'distill', 'express', 'review'],
-            contracts: {
-                noteKinds: ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'],
-                lifecycles: [...LIFECYCLES],
-                taskStatuses: [...TASK_STATUSES],
-                serviceClasses: [...SERVICE_CLASSES],
-                properties: getOrganizationPropertyContract(),
-                relations: getOrganizationRelationContract(),
-            },
+            contracts,
             templates: ['atomic', 'literature', 'question', 'hypothesis', 'assumption', 'decision', 'project', 'moc', 'negative'],
-            importRules: ['Do not copy private user scope, agent continuity, sessions, or .mcpvault caches.', 'Treat this manifest as organization guidance, not an access grant.', 'Preserve source IDs, content hashes, evidence paths, and revisions when migrating knowledge.', 'Review aliases, stable IDs, citation keys, and typed links for collisions in the destination Vault.'],
+            importRules: [
+                'Do not copy Community, private user/model/agent scopes, whispers, sessions, or .mcpvault caches.',
+                'Treat this manifest as organization guidance, not an access grant.',
+                'Preserve source IDs, content hashes, evidence paths, and revisions when migrating global knowledge.',
+                'Run readiness and counterpart comparison before copying notes; a preview never mutates either Vault.',
+                'Review aliases, stable IDs, citation keys, Properties, and typed links for collisions in the destination Vault.',
+            ],
         };
+        const contractFingerprint = hash(JSON.stringify(comparableOrganizationManifest(base)));
+        const result = { ...base, contractFingerprint };
+        let readiness;
+        const counterpartInventory = options.compareManifest && typeof options.compareManifest === 'object' && !Array.isArray(options.compareManifest)
+            ? options.compareManifest.readiness?.inventory?.items
+            : undefined;
+        if (options.includeReadiness || Array.isArray(counterpartInventory)) {
+            const issues = [];
+            const issueCounts = {};
+            let blocking = 0;
+            let warnings = 0;
+            const addIssue = (issue) => {
+                issueCounts[issue.code] = (issueCounts[issue.code] || 0) + 1;
+                if (issue.severity === 'blocking')
+                    blocking += 1;
+                else
+                    warnings += 1;
+                issues.push(issue);
+                issues.sort((left, right) => String(left.path || '').localeCompare(String(right.path || '')) || left.code.localeCompare(right.code));
+                if (issues.length > boundedLimit)
+                    issues.pop();
+            };
+            const isPortableGlobalPath = (rawPath) => {
+                const path = normalizePath(rawPath).toLowerCase();
+                return Boolean(path)
+                    && this.access.canAccessPhysicalPath(rawPath, undefined)
+                    && path !== 'community' && !path.startsWith('community/')
+                    && path !== '_scopes' && !path.startsWith('_scopes/')
+                    && path !== '_whispers' && !path.startsWith('_whispers/')
+                    && path !== '.mcpvault' && !path.startsWith('.mcpvault/');
+            };
+            const propertyContract = new Map(contracts.properties.map(entry => [entry.name, entry]));
+            const propertyTypes = new Map();
+            const vocabularyOwners = new Map();
+            const stableIdOwners = new Map();
+            const inventory = [];
+            let inventoryTotal = 0;
+            let scanned = 0;
+            let excludedModerated = 0;
+            for await (const note of iterateNotes(this.fileSystem, {}, isPortableGlobalPath)) {
+                scanned += 1;
+                const current = await this.fileSystem.readNote(note.path);
+                const frontmatter = current.frontmatter;
+                const revision = current.revision;
+                if (isModerationHidden(frontmatter)) {
+                    excludedModerated += 1;
+                    continue;
+                }
+                const publicPath = this.access.toPublicPath(note.path);
+                const title = typeof frontmatter.title === 'string' && frontmatter.title.trim()
+                    ? frontmatter.title.trim()
+                    : note.path.split('/').at(-1)?.replace(/\.md$/i, '') || note.path;
+                const aliases = manifestStringList(frontmatter.aliases, 30);
+                const stableId = typeof frontmatter.stable_id === 'string' ? frontmatter.stable_id.trim() : '';
+                const managedShape = {};
+                for (const [property, value] of Object.entries(frontmatter)) {
+                    const valueType = nativePropertyType(value);
+                    const byType = propertyTypes.get(property) || new Map();
+                    if (!byType.has(valueType))
+                        byType.set(valueType, { path: publicPath, revision });
+                    propertyTypes.set(property, byType);
+                    if (propertyContract.has(property))
+                        managedShape[property] = valueType;
+                }
+                const relationProjection = {};
+                for (const relationField of RELATION_FIELDS) {
+                    const values = manifestStringList(frontmatter[relationField], 30);
+                    if (!values.length)
+                        continue;
+                    relationProjection[relationField] = values;
+                    for (const rawRelation of values) {
+                        let matches = [];
+                        try {
+                            if (/^!?\[\[.+\]\]$/.test(rawRelation)) {
+                                const parsed = parseWikiLink(rawRelation.replace(/^!/, ''));
+                                matches = await this.fileSystem.findPathForWikiLink(parsed.document, isPortableGlobalPath);
+                            }
+                            else {
+                                const target = this.access.resolveExternalPath(rawRelation, undefined);
+                                if (isPortableGlobalPath(target) && await this.fileSystem.noteExists(target))
+                                    matches = [target];
+                                else if (this.access.canAccessPhysicalPath(target, undefined) && await this.fileSystem.noteExists(target)) {
+                                    addIssue({ severity: 'blocking', code: 'nonportable_relation_target', path: publicPath, revision, detail: `${relationField} points outside portable global content: ${rawRelation}` });
+                                    continue;
+                                }
+                            }
+                        }
+                        catch {
+                            matches = [];
+                        }
+                        if (matches.length !== 1) {
+                            addIssue({ severity: 'blocking', code: matches.length > 1 ? 'ambiguous_relation_target' : 'missing_relation_target', path: publicPath, revision, detail: `${relationField} target is ${matches.length > 1 ? 'ambiguous' : 'missing'} in the portable global set: ${rawRelation}` });
+                        }
+                    }
+                }
+                const vocabulary = [title, frontmatter.preferred_term, ...aliases]
+                    .filter((item) => typeof item === 'string' && Boolean(item.trim()));
+                for (const label of vocabulary) {
+                    const key = normalizedAuthorityTerm(label);
+                    if (!key)
+                        continue;
+                    const owner = vocabularyOwners.get(key);
+                    if (owner && owner.path !== publicPath) {
+                        addIssue({ severity: 'warning', code: 'vocabulary_collision', path: publicPath, revision, detail: `Term '${label}' collides with '${owner.label}' at ${owner.path}; disambiguate before migration.` });
+                    }
+                    else if (!owner)
+                        vocabularyOwners.set(key, { path: publicPath, label });
+                }
+                if (stableId) {
+                    const key = stableId.toLocaleLowerCase();
+                    const owner = stableIdOwners.get(key);
+                    if (owner && owner.path !== publicPath) {
+                        addIssue({ severity: 'blocking', code: 'duplicate_stable_id', path: publicPath, revision, detail: `stable_id '${stableId}' is also used by ${owner.path}.` });
+                    }
+                    else if (!owner)
+                        stableIdOwners.set(key, { path: publicPath, revision });
+                }
+                inventoryTotal += 1;
+                const inventoryItem = {
+                    path: publicPath,
+                    revision,
+                    title: boundedText(title, 240),
+                    ...(stableId && { stableId }),
+                    ...(aliases.length && { aliases }),
+                    ...(Object.keys(managedShape).length && { properties: managedShape }),
+                    ...(Object.keys(relationProjection).length && { relations: relationProjection }),
+                };
+                inventory.push(inventoryItem);
+                inventory.sort((left, right) => left.path.localeCompare(right.path));
+                if (inventory.length > boundedLimit)
+                    inventory.pop();
+            }
+            for (const [property, byType] of propertyTypes) {
+                if (byType.size > 1) {
+                    const samples = [...byType.entries()].map(([type, sample]) => `${type} at ${sample.path}`).join(', ');
+                    const sample = [...byType.values()][0];
+                    addIssue({ severity: 'blocking', code: 'property_type_drift', ...(sample?.path && { path: sample.path }), ...(sample?.revision && { revision: sample.revision }), detail: `Property '${property}' uses multiple native shapes: ${samples}.` });
+                }
+                const expected = propertyContract.get(property)?.type;
+                const incompatible = expected && [...byType.keys()].filter(type => type !== expected);
+                if (expected && incompatible?.length) {
+                    const sample = byType.get(incompatible[0]);
+                    addIssue({ severity: 'blocking', code: 'managed_property_type_mismatch', ...(sample?.path && { path: sample.path }), ...(sample?.revision && { revision: sample.revision }), detail: `Managed Property '${property}' expects ${expected}, found ${incompatible.join(', ')}.` });
+                }
+            }
+            readiness = {
+                scanned,
+                excludedModerated,
+                issues,
+                issueCounts,
+                blocking,
+                warnings,
+                inventory: { items: inventory, total: inventoryTotal, truncated: inventoryTotal > inventory.length },
+            };
+            result.readiness = {
+                scope: 'global_only',
+                bodyContentIncluded: false,
+                privateOrCommunityContentIncluded: false,
+                safeToMigrate: blocking === 0,
+                ...readiness,
+                note: 'Paths, revisions, identity terms, Property shapes, and typed-link metadata are included only when readiness is requested. Re-read every selected note before copying it.',
+            };
+        }
+        if (options.compareManifest !== undefined) {
+            if (!options.compareManifest || typeof options.compareManifest !== 'object' || Array.isArray(options.compareManifest))
+                throw new Error('compareManifest must be an organization manifest object');
+            let serialized = '';
+            try {
+                serialized = JSON.stringify(options.compareManifest);
+            }
+            catch {
+                throw new Error('compareManifest must be JSON serializable');
+            }
+            if (serialized.length > 128_000)
+                throw new Error('compareManifest must be 128000 characters or fewer; compare bounded inventory pages separately');
+            const counterpart = options.compareManifest;
+            const comparableCurrent = comparableOrganizationManifest(base);
+            const comparableCounterpart = comparableOrganizationManifest(counterpart);
+            const counterpartFingerprint = hash(JSON.stringify(comparableCounterpart));
+            const compatibilityIssues = [];
+            const addCompatibility = (severity, code, detail) => compatibilityIssues.push({ severity, code, detail });
+            if (String(counterpart.format || '') !== base.format)
+                addCompatibility('blocking', 'unsupported_format', `Expected ${base.format}; counterpart reports ${String(counterpart.format || 'missing')}.`);
+            const counterpartVersion = Number(counterpart.manifestVersion || 0);
+            if (!Number.isInteger(counterpartVersion) || counterpartVersion < 1)
+                addCompatibility('blocking', 'invalid_manifest_version', 'Counterpart manifestVersion is missing or invalid.');
+            else if (counterpartVersion > base.manifestVersion)
+                addCompatibility('blocking', 'newer_manifest_version', `Counterpart version ${counterpartVersion} is newer than supported version ${base.manifestVersion}.`);
+            else if (counterpartVersion < base.manifestVersion)
+                addCompatibility('warning', 'older_manifest_version', `Counterpart version ${counterpartVersion} needs a reviewed migration to version ${base.manifestVersion}.`);
+            const currentContracts = (comparableCurrent.contracts || {});
+            const otherContracts = (comparableCounterpart.contracts || {});
+            for (const key of ['noteKinds', 'lifecycles', 'taskStatuses', 'serviceClasses']) {
+                const other = new Set(Array.isArray(otherContracts[key]) ? otherContracts[key] : []);
+                const missing = (Array.isArray(currentContracts[key]) ? currentContracts[key] : []).filter((value) => !other.has(value));
+                if (missing.length)
+                    addCompatibility('warning', `missing_${key}`, `Counterpart does not declare: ${missing.slice(0, 30).join(', ')}.`);
+            }
+            const otherProperties = new Map((Array.isArray(otherContracts.properties) ? otherContracts.properties : []).map((entry) => [entry.name, entry]));
+            for (const property of Array.isArray(currentContracts.properties) ? currentContracts.properties : []) {
+                const other = otherProperties.get(property.name);
+                if (!other)
+                    addCompatibility('warning', 'missing_property_contract', `Counterpart does not declare Property '${property.name}'.`);
+                else if (other.type !== property.type)
+                    addCompatibility('blocking', 'property_contract_type_conflict', `Property '${property.name}' is ${property.type} here and ${other.type || 'unspecified'} in the counterpart.`);
+            }
+            const otherRelations = new Map((Array.isArray(otherContracts.relations) ? otherContracts.relations : []).map((entry) => [entry.field, entry]));
+            for (const relation of Array.isArray(currentContracts.relations) ? currentContracts.relations : []) {
+                const other = otherRelations.get(relation.field);
+                if (!other)
+                    addCompatibility('warning', 'missing_relation_contract', `Counterpart does not declare typed relation '${relation.field}'.`);
+                else if (other.direction && relation.direction && other.direction !== relation.direction)
+                    addCompatibility('blocking', 'relation_direction_conflict', `Relation '${relation.field}' has conflicting direction semantics.`);
+            }
+            if (typeof counterpart.contractFingerprint === 'string' && counterpart.contractFingerprint !== counterpartFingerprint) {
+                addCompatibility('warning', 'declared_fingerprint_mismatch', 'Counterpart contractFingerprint does not match its normalized contract payload.');
+            }
+            if (options.expectedCounterpartFingerprint && options.expectedCounterpartFingerprint !== counterpartFingerprint) {
+                addCompatibility('blocking', 'counterpart_changed', 'The counterpart contract changed since it was selected; fetch it again before planning migration.');
+            }
+            if (readiness && Array.isArray(counterpartInventory)) {
+                const localStable = new Map();
+                const localTerms = new Map();
+                for (const item of readiness.inventory.items) {
+                    if (item.stableId)
+                        localStable.set(item.stableId.toLocaleLowerCase(), item);
+                    for (const term of [item.title, ...(item.aliases || [])]) {
+                        const key = normalizedAuthorityTerm(term);
+                        if (key && !localTerms.has(key))
+                            localTerms.set(key, item);
+                    }
+                }
+                for (const raw of counterpartInventory.slice(0, 100)) {
+                    if (!raw || typeof raw !== 'object')
+                        continue;
+                    const item = raw;
+                    const otherPath = boundedText(item.path, 500);
+                    const otherStable = typeof item.stableId === 'string' ? item.stableId.trim().toLocaleLowerCase() : '';
+                    const stableOwner = otherStable ? localStable.get(otherStable) : undefined;
+                    if (stableOwner && stableOwner.path !== otherPath)
+                        addCompatibility('blocking', 'cross_vault_stable_id_collision', `stable_id '${item.stableId}' maps to ${stableOwner.path} here and ${otherPath || 'another note'} in the counterpart.`);
+                    for (const term of [item.title, ...manifestStringList(item.aliases, 30)].filter((value) => typeof value === 'string')) {
+                        const owner = localTerms.get(normalizedAuthorityTerm(term));
+                        if (owner && owner.path !== otherPath)
+                            addCompatibility('warning', 'cross_vault_vocabulary_collision', `Term '${term}' maps to ${owner.path} here and ${otherPath || 'another note'} in the counterpart.`);
+                    }
+                }
+            }
+            compatibilityIssues.sort((left, right) => Number(left.severity === 'warning') - Number(right.severity === 'warning') || left.code.localeCompare(right.code) || left.detail.localeCompare(right.detail));
+            const blockingIssues = compatibilityIssues.filter(issue => issue.severity === 'blocking').length;
+            const compatibilityIssueCounts = compatibilityIssues.reduce((counts, issue) => {
+                counts[issue.code] = (counts[issue.code] || 0) + 1;
+                return counts;
+            }, {});
+            result.migrationPreview = {
+                mutatesVault: false,
+                currentFingerprint: contractFingerprint,
+                counterpartFingerprint,
+                ...(options.expectedCounterpartFingerprint && { expectedCounterpartFingerprint: options.expectedCounterpartFingerprint }),
+                counterpartChanged: Boolean(options.expectedCounterpartFingerprint && options.expectedCounterpartFingerprint !== counterpartFingerprint),
+                compatible: blockingIssues === 0,
+                blockingIssues,
+                warnings: compatibilityIssues.length - blockingIssues,
+                issueCounts: compatibilityIssueCounts,
+                issues: compatibilityIssues.slice(0, boundedLimit),
+                inventoryComparisonComplete: Boolean(readiness && !readiness.inventory.truncated && !options.compareManifest.readiness?.inventory?.truncated),
+                nextActions: blockingIssues > 0
+                    ? ['Resolve blocking contract/identity conflicts, fetch fresh fingerprints, and rerun this preview.']
+                    : ['Re-read selected global notes at their returned revisions, copy immutable sources before dependent knowledge, then validate links and Properties in the destination.'],
+            };
+        }
         if (JSON.stringify(result).length <= boundedChars)
             return result;
-        return {
-            manifestVersion: result.manifestVersion,
-            format: result.format,
+        const compact = {
+            manifestVersion: base.manifestVersion,
+            format: base.format,
             portable: true,
-            sourceOfTruth: result.sourceOfTruth,
-            filing: result.filing,
-            reservedPaths: result.reservedPaths,
-            contracts: { noteKinds: result.contracts.noteKinds, lifecycles: result.contracts.lifecycles, taskStatuses: result.contracts.taskStatuses, serviceClasses: result.contracts.serviceClasses, relations: getOrganizationRelationContract().map(entry => entry.field) },
+            contentFreeByDefault: true,
+            contractFingerprint,
+            sourceOfTruth: base.sourceOfTruth,
+            filing: base.filing,
+            reservedPaths: base.reservedPaths,
+            contracts: { noteKinds: contracts.noteKinds, lifecycles: contracts.lifecycles, taskStatuses: contracts.taskStatuses, serviceClasses: contracts.serviceClasses, properties: contracts.properties.map(entry => ({ name: entry.name, type: entry.type })), relations: contracts.relations.map(entry => entry.field) },
+            ...(result.readiness && { readiness: { ...result.readiness, issues: result.readiness.issues.slice(0, 3), inventory: { ...result.readiness.inventory, items: result.readiness.inventory.items.slice(0, 2) } } }),
+            ...(result.migrationPreview && { migrationPreview: { ...result.migrationPreview, issues: result.migrationPreview.issues.slice(0, 5) } }),
             truncated: true,
         };
+        while (JSON.stringify(compact).length > boundedChars && compact.contracts.properties.length > 0)
+            compact.contracts.properties.pop();
+        if (JSON.stringify(compact).length <= boundedChars)
+            return compact;
+        return { manifestVersion: base.manifestVersion, format: base.format, portable: true, contractFingerprint, reservedPaths: base.reservedPaths, ...(result.migrationPreview && { migrationPreview: { compatible: result.migrationPreview.compatible, blockingIssues: result.migrationPreview.blockingIssues, counterpartFingerprint: result.migrationPreview.counterpartFingerprint } }), truncated: true };
     }
     /**
      * A small action-oriented packet for agents that need to decide what to do
@@ -3084,6 +3445,34 @@ export class LlmWikiService {
         add(vocabulary.unresolvedSubjectTerms.map((item) => ({ path: item.paths?.[0], title: item.term })), 'subject_term_needs_authority', 'wiki.vocabulary_health', 8);
         add([...lintByPath.entries()].map(([path, codes]) => ({ path, title: path.split('/').at(-1), issueCodes: codes })), 'lint_quality_issue', 'wiki.organization_health', 8);
         priorities.sort((left, right) => Number(left.priority) - Number(right.priority) || String(left.path).localeCompare(String(right.path)));
+        let curationPlan;
+        const selectedPriority = priorities[0];
+        if (selectedPriority && typeof selectedPriority.path === 'string') {
+            try {
+                const physicalPath = this.access.resolveExternalPath(selectedPriority.path, principal);
+                if (this.access.canAccessPhysicalPath(physicalPath, principal) && await this.fileSystem.noteExists(physicalPath)) {
+                    const selectedNote = await this.fileSystem.readNote(physicalPath);
+                    selectedPriority.revision = selectedNote.revision;
+                    const reason = String(selectedPriority.reason || 'review');
+                    const inspectIntent = reason.includes('inbox') ? 'capture' : reason.includes('project') || reason.includes('blocked') || reason.includes('waiting') ? 'execute' : 'review';
+                    const mutation = reason === 'oldest_inbox_capture'
+                        ? { endpointId: endpointIdForTool('clarify_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['disposition'] }
+                        : reason === 'knowledge_needs_review' || reason === 'active_recall_due'
+                            ? { endpointId: endpointIdForTool('review_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['reviewOutcome'] }
+                            : { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['the smallest justified metadata repair'] };
+                    curationPlan = {
+                        selected: { path: selectedPriority.path, title: selectedPriority.title, revision: selectedNote.revision, reason },
+                        inspect: { endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path: selectedPriority.path, intent: inspectIntent, maxChars: 5000 } },
+                        then: mutation,
+                        instruction: 'Finish one bounded repair before pulling another. Re-read at the returned revision; the plan never edits, archives, merges, or supersedes automatically.',
+                    };
+                }
+            }
+            catch {
+                // The source reports may contain a target that changed between scans.
+                // Keep the priority visible, but never invent a revision-safe action.
+            }
+        }
         const result = {
             purpose: 'One bounded action packet for the next knowledge-organization step. It is advisory; inspect the selected note and use expectedRevision before changing it.',
             priorities,
@@ -3115,13 +3504,14 @@ export class LlmWikiService {
                 vocabulary,
                 graph: { unresolvedLinks: graph.unresolvedLinks, orphanNotes: graph.orphanNotes },
             },
+            ...(curationPlan && { curationPlan }),
             nextActions: dashboard.nextActions,
             sourceTruncated: Boolean(dashboard.truncated || graph.truncated),
             generatedAt: now(),
         };
         if (JSON.stringify(result).length <= boundedChars)
             return result;
-        return {
+        const compactResult = {
             ...result,
             priorities: priorities.slice(0, Math.min(5, boundedLimit)),
             supportingViews: {
@@ -3134,8 +3524,34 @@ export class LlmWikiService {
                 vocabulary: { tagVariants: vocabulary.tagVariants.slice(0, 2), unresolvedSubjectTerms: vocabulary.unresolvedSubjectTerms.slice(0, 2), termCollisions: vocabulary.termCollisions.slice(0, 2), truncated: true },
                 graph: { unresolvedLinks: graph.unresolvedLinks ? { total: graph.unresolvedLinks.total, items: graph.unresolvedLinks.items?.slice(0, 2) || [], truncated: true } : undefined, orphanNotes: graph.orphanNotes ? { total: graph.orphanNotes.total, items: graph.orphanNotes.items?.slice(0, 2) || [], truncated: true } : undefined },
             },
+            ...(curationPlan && { curationPlan }),
             truncated: true,
         };
+        if (JSON.stringify(compactResult).length <= boundedChars)
+            return compactResult;
+        const minimal = {
+            purpose: result.purpose,
+            counts: result.counts,
+            ...(curationPlan && { curationPlan }),
+            sourceTruncated: true,
+            truncated: true,
+        };
+        if (JSON.stringify(minimal).length <= boundedChars)
+            return minimal;
+        if (curationPlan) {
+            const selected = curationPlan.selected;
+            const inspect = curationPlan.inspect;
+            const then = curationPlan.then;
+            const tiny = {
+                selected: selected ? { path: selected.path, revision: selected.revision, reason: selected.reason } : undefined,
+                nextAction: inspect ? { endpointId: inspect.endpointId, arguments: inspect.arguments } : undefined,
+                then: then ? { endpointId: then.endpointId } : undefined,
+                truncated: true,
+            };
+            if (JSON.stringify(tiny).length <= boundedChars)
+                return tiny;
+        }
+        return { truncated: true, nextAction: { endpointId: endpointIdForTool('get_wiki_review_packet'), arguments: { limit: 1, maxChars: Math.min(16000, Math.max(1600, boundedChars * 2)) } } };
     }
     /**
      * Return the shared frontmatter contract without scanning note bodies. This
@@ -4366,6 +4782,10 @@ export class LlmWikiService {
         const stableIds = [];
         let total = 0;
         let mocTotal = 0;
+        let projectTotal = 0;
+        let inboxTotal = 0;
+        let reviewTotal = 0;
+        let stableIdTotal = 0;
         for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
             const isSchema = normalizePath(note.path).toLowerCase() === PUBLIC_SCHEMA_PATH.toLowerCase();
             if (isModerationHidden(note.frontmatter))
@@ -4376,6 +4796,7 @@ export class LlmWikiService {
             const item = {
                 path: this.access.toPublicPath(note.path),
                 title: note.frontmatter.title || note.path.split('/').at(-1),
+                ...(note.revision && { revision: note.revision }),
                 ...(note.frontmatter.stable_id && { stableId: note.frontmatter.stable_id }),
                 ...(note.frontmatter.lifecycle && { lifecycle: note.frontmatter.lifecycle }),
             };
@@ -4384,18 +4805,26 @@ export class LlmWikiService {
                 const navOrder = navigationOrder(note.frontmatter.nav_order);
                 mocNodes.push({ ...item, path: note.path, title: String(item.title), ...(typeof note.frontmatter.moc_parent === 'string' && { parent: note.frontmatter.moc_parent }), ...(navOrder !== Number.MAX_SAFE_INTEGER && { navOrder }) });
             }
-            if ((note.frontmatter.note_kind === 'project' || note.frontmatter.note_kind === 'task') && projects.length < boundedLimit)
-                projects.push({ ...item, ...(note.frontmatter.task_status && { taskStatus: note.frontmatter.task_status }), ...(note.frontmatter.next_action && { nextAction: note.frontmatter.next_action }) });
+            if (note.frontmatter.note_kind === 'project' || note.frontmatter.note_kind === 'task') {
+                projectTotal += 1;
+                if (projects.length < boundedLimit)
+                    projects.push({ ...item, ...(note.frontmatter.task_status && { taskStatus: note.frontmatter.task_status }), ...(note.frontmatter.next_action && { nextAction: note.frontmatter.next_action }) });
+            }
             if (note.frontmatter.lifecycle === 'inbox' || /(^|\/)inbox(?:\/|$)/i.test(note.path)) {
+                inboxTotal += 1;
                 if (inbox.length < boundedLimit)
                     inbox.push(item);
             }
             if (note.frontmatter.lifecycle === 'review' || note.frontmatter.knowledge_status === 'disputed') {
+                reviewTotal += 1;
                 if (review.length < boundedLimit)
                     review.push({ ...item, ...(note.frontmatter.review_at && { reviewAt: note.frontmatter.review_at }) });
             }
-            if (typeof note.frontmatter.stable_id === 'string' && stableIds.length < boundedLimit)
-                stableIds.push({ stableId: note.frontmatter.stable_id, path: this.access.toPublicPath(note.path), title: item.title });
+            if (typeof note.frontmatter.stable_id === 'string') {
+                stableIdTotal += 1;
+                if (stableIds.length < boundedLimit)
+                    stableIds.push({ stableId: note.frontmatter.stable_id, path: this.access.toPublicPath(note.path), title: item.title, ...(note.revision && { revision: note.revision }) });
+            }
         }
         const mocs = buildMocNavigation(mocNodes).items.slice(0, boundedLimit).map(({ children, ...item }) => ({
             ...item, path: this.access.toPublicPath(item.path),
@@ -4403,27 +4832,50 @@ export class LlmWikiService {
             children: children.slice(0, boundedLimit).map(path => this.access.toPublicPath(path)),
             childrenTruncated: children.length > boundedLimit,
         }));
+        const workflowRoutes = [
+            { intent: 'find', useWhen: 'You need an existing note or fact.', endpointId: endpointIdForTool('search_notes'), arguments: { query: '<terms>', limit: 5, maxChars: 4000 }, requiredArguments: ['query'] },
+            { intent: 'capture', useWhen: 'You must preserve a new observation before classifying it.', endpointId: endpointIdForTool('capture_wiki_note'), arguments: { expectedRevision: 'missing' }, requiredArguments: ['content'], mutating: true },
+            { intent: 'organize_inbox', useWhen: 'You are processing captures, not creating new knowledge.', endpointId: endpointIdForTool('get_wiki_inbox'), arguments: { limit: 5, maxChars: 4000 }, followUpEndpointId: endpointIdForTool('clarify_wiki_note') },
+            { intent: 'understand_or_decide', useWhen: 'You selected one note and need bounded evidence, counterpoint, and next-step context.', endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path: '<selected path>', intent: 'decide', limit: 6, maxChars: 5000 }, requiredArguments: ['path'] },
+            { intent: 'execute_in_context', useWhen: 'You need one executable action that fits a known GTD context.', endpointId: endpointIdForTool('get_wiki_next_actions'), arguments: { taskContext: '<exact context>', limit: 5, maxChars: 4000 }, requiredArguments: ['taskContext'] },
+            { intent: 'review_one', useWhen: 'You want one prioritized evidence, flow, or maintenance item.', endpointId: endpointIdForTool('get_wiki_review_packet'), arguments: { limit: 1, maxChars: 4000 } },
+            { intent: 'repair_structure', useWhen: 'You are fixing derived organization debt rather than reading broadly.', endpointId: endpointIdForTool('get_wiki_exception_board'), arguments: { limit: 5, maxChars: 4000 } },
+            { intent: 'migrate_contract', useWhen: 'You are preflighting organization compatibility with another Vault.', endpointId: endpointIdForTool('get_wiki_organization_manifest'), arguments: { includeReadiness: true, limit: 20, maxChars: 8000 } },
+        ];
+        const nextAction = reviewTotal > 0
+            ? { endpointId: endpointIdForTool('get_wiki_review_packet'), arguments: { limit: 1, maxChars: 4000 }, reason: `${reviewTotal} review item(s) are visible; inspect one before broad maintenance.` }
+            : inboxTotal > 0
+                ? { endpointId: endpointIdForTool('get_wiki_inbox'), arguments: { limit: 5, maxChars: 4000 }, reason: `${inboxTotal} capture(s) await clarification.` }
+                : projectTotal > 0
+                    ? { endpointId: endpointIdForTool('get_wiki_review_dashboard'), arguments: { limit: 5, maxChars: 4000 }, reason: `${projectTotal} project/task note(s) are visible; inspect readiness before pulling more work.` }
+                    : { endpointId: endpointIdForTool('search_notes'), arguments: { query: '<terms>', limit: 5, maxChars: 4000 }, requiredArguments: ['query'], reason: 'Search existing knowledge before creating a note.' };
         const result = {
             scope: principal ? (principal.commandCenterId ? `command-center:${principal.commandCenterId}` : 'authorized-scope') : 'global',
             purpose: 'A live, bounded launchpad for this scope. It is derived from Markdown and is not a security boundary or a second database.',
+            routingRule: 'Choose exactly one workflow route for the current intent. Do not call every dashboard. Search first unless the live nextAction is already your task.',
             suggestedHomePath: 'Home.md',
             suggestedIndexPath: 'JDex.md',
             entrypoints: [
                 { path: this.access.toPublicPath(PUBLIC_SCHEMA_PATH), reason: 'scope rules and writing contract' },
                 { path: this.access.toPublicPath(WELCOME_NOTE_PATH), reason: 'first-session orientation' },
             ],
-            counts: { total, mocs: mocTotal, projects: projects.length, inbox: inbox.length, review: review.length, stableIds: stableIds.length },
+            counts: { total, mocs: mocTotal, projects: projectTotal, inbox: inboxTotal, review: reviewTotal, stableIds: stableIdTotal },
+            nextAction,
+            workflowRoutes,
             mocs,
             mocOrdering: 'preorder: parent, then its branch; siblings by nav_order then title/path',
             projects,
             inbox,
             review,
             stableIds,
-            truncated: total > boundedLimit,
+            truncated: mocTotal > mocs.length || projectTotal > projects.length || inboxTotal > inbox.length || reviewTotal > review.length || stableIdTotal > stableIds.length,
         };
         if (JSON.stringify(result).length <= boundedChars)
             return result;
-        return { ...result, mocs: mocs.slice(0, 5), projects: projects.slice(0, 5), inbox: inbox.slice(0, 5), review: review.slice(0, 5), stableIds: stableIds.slice(0, 5), truncated: true };
+        const compact = { ...result, workflowRoutes: workflowRoutes.slice(0, 4), mocs: mocs.slice(0, 2), projects: projects.slice(0, 2), inbox: inbox.slice(0, 2), review: review.slice(0, 2), stableIds: stableIds.slice(0, 2), truncated: true };
+        if (JSON.stringify(compact).length <= boundedChars)
+            return compact;
+        return { scope: result.scope, counts: result.counts, nextAction, routingRule: result.routingRule, truncated: true };
     }
     async graphHealth(principal, limit = 20, maxChars = 6000) {
         const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
@@ -5424,6 +5876,37 @@ export class LlmWikiService {
         const counts = {};
         const candidates = [];
         const nowMs = Date.now();
+        const curationRoute = (path, revision, reasons) => {
+            const inspect = reasons.includes('project_without_next_action')
+                ? { endpointId: endpointIdForTool('get_wiki_project_packet'), arguments: { path, maxChars: 5000 } }
+                : reasons.includes('empty_moc') || reasons.includes('no_primary_moc')
+                    ? { endpointId: endpointIdForTool('get_wiki_moc_candidates'), arguments: { maxChars: 5000, limit: 8 } }
+                    : { endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path, intent: reasons.includes('inbox_capture') ? 'capture' : 'review', maxChars: 5000 } };
+            if (reasons.includes('inbox_capture'))
+                return {
+                    inspect,
+                    then: { endpointId: endpointIdForTool('clarify_wiki_note'), arguments: { path, expectedRevision: revision }, requiredArguments: ['disposition'] },
+                };
+            if (reasons.includes('stale_summary'))
+                return {
+                    inspect,
+                    then: { endpointId: endpointIdForTool('update_wiki_projection'), arguments: { path, expectedRevision: revision }, requiredArguments: ['summary or keyPoints or openQuestions or summaryHighlights'] },
+                };
+            if (reasons.some(reason => ['review_due', 'never_reviewed', 'disputed_knowledge'].includes(reason)))
+                return {
+                    inspect,
+                    then: { endpointId: endpointIdForTool('review_wiki_note'), arguments: { path, expectedRevision: revision }, requiredArguments: ['reviewOutcome'] },
+                };
+            if (reasons.includes('unprocessed_literature'))
+                return {
+                    inspect,
+                    then: { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path, expectedRevision: revision, interpretationStatus: 'interpreted' }, requiredBeforeCall: ['Write a checked interpretation and link any derived atomic note; do not change status merely to clear the queue.'] },
+                };
+            return {
+                inspect,
+                then: { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path, expectedRevision: revision }, requiredArguments: reasons.includes('project_without_next_action') ? ['nextAction'] : ['primaryMoc or mocs or another justified repair'] },
+            };
+        };
         const addDebt = (note, reasons, score, updatedAt) => {
             if (reasons.length === 0)
                 return;
@@ -5506,13 +5989,29 @@ export class LlmWikiService {
             addDebt(note, reasons, score, updatedAt);
         }
         const selected = [];
+        let firstEnriched;
         for (const item of candidates.slice(0, boundedLimit)) {
             const { score: _score, ...withoutScore } = item;
-            if (JSON.stringify([...selected, withoutScore]).length + 2 > boundedChars)
+            let revision;
+            try {
+                const physicalPath = this.access.resolveExternalPath(String(item.path), principal);
+                revision = (await this.fileSystem.readNote(physicalPath)).revision;
+            }
+            catch {
+                // Keep a concurrently removed candidate visible without fabricating a
+                // revision-safe mutation plan.
+            }
+            const enriched = {
+                ...withoutScore,
+                ...(revision && { revision, curationPlan: curationRoute(String(item.path), revision, item.reasons) }),
+                priority: item.score >= 12 ? 'high' : item.score >= 6 ? 'medium' : 'low',
+            };
+            firstEnriched ||= enriched;
+            if (JSON.stringify([...selected, enriched]).length + 2 > boundedChars)
                 break;
-            selected.push({ ...withoutScore, priority: item.score >= 12 ? 'high' : item.score >= 6 ? 'medium' : 'low' });
+            selected.push(enriched);
         }
-        return {
+        const result = {
             purpose: 'A derived 5S maintenance ledger: sort intake, restore canonical placement, repair stale projections, and sustain review cadence. It never moves, archives, deletes, or rewrites notes.',
             olderThanDays: ageDays,
             scanned,
@@ -5522,6 +6021,23 @@ export class LlmWikiService {
             truncated: candidates.length > selected.length,
             generatedAt: now(),
         };
+        if (JSON.stringify(result).length <= boundedChars && (selected.length > 0 || !firstEnriched))
+            return result;
+        const first = (selected[0] || firstEnriched);
+        const compact = {
+            olderThanDays: ageDays,
+            debtTotal: result.debtTotal,
+            counts,
+            ...(first && {
+                item: { path: first.path, revision: first.revision, reasons: first.reasons?.slice(0, 4), priority: first.priority },
+                nextAction: first.curationPlan?.inspect,
+                then: first.curationPlan?.then ? { endpointId: first.curationPlan.then.endpointId } : undefined,
+            }),
+            truncated: true,
+        };
+        if (JSON.stringify(compact).length <= boundedChars)
+            return compact;
+        return { debtTotal: result.debtTotal, ...(first && { path: first.path, revision: first.revision, nextEndpoint: first.curationPlan?.inspect?.endpointId }), truncated: true };
     }
     /**
      * Build one small answer-oriented context packet.  It keeps the source
@@ -5614,6 +6130,45 @@ export class LlmWikiService {
             ],
             note: 'This is a navigation and reasoning aid. It does not establish truth; inspect the cited Markdown at the returned revision before acting.',
         };
+        const synthesisInputs = [sourcePacket, ...context]
+            .map(item => ({ path: item.path, revision: item.revision, role: item === sourcePacket ? 'source' : item.relationToSource }))
+            .filter((item, index, all) => all.findIndex(candidate => candidate.path === item.path) === index)
+            .slice(0, 8);
+        const sourceEvidencePaths = [...new Set(evidence.map((item) => typeof item?.path === 'string' ? item.path : '').filter(Boolean))].slice(0, 20);
+        const synthesisPlan = ['decide', 'review'].includes(selectedIntent) ? {
+            status: evidence.length === 0 ? 'needs_immutable_evidence'
+                : counterpoints.length === 0 ? 'needs_counterpoint_review'
+                    : selectedIntent === 'review' ? 'ready_for_review_record' : 'ready_for_decision_draft',
+            inputs: synthesisInputs,
+            missingStages: reasoningTrail.gaps,
+            nextAction: evidence.length === 0
+                ? {
+                    endpointId: endpointIdForTool('ingest_source'),
+                    arguments: {},
+                    requiredArguments: ['title', 'content'],
+                    instruction: 'Capture inspectable immutable evidence first. The selected note and nearby community or knowledge text are leads, not source evidence by themselves.',
+                }
+                : counterpoints.length === 0
+                    ? {
+                        endpointId: endpointIdForTool('get_wiki_neighborhood'),
+                        arguments: { path: source.path, includeSemantic: false, limit: 12, maxChars: 5000 },
+                        instruction: 'Look for one explicit contradiction, limitation, failed path, or negative result before consolidating the conclusion.',
+                    }
+                    : selectedIntent === 'review'
+                        ? {
+                            endpointId: endpointIdForTool('review_wiki_note'),
+                            arguments: { path: source.path, expectedRevision: source.revision, reviewReason: 'manual_review' },
+                            requiredArguments: ['reviewOutcome'],
+                            instruction: 'Record only the checks actually completed and leave unresolved items explicit.',
+                        }
+                        : {
+                            endpointId: endpointIdForTool('publish_decision_record'),
+                            arguments: { evidencePaths: sourceEvidencePaths, references: synthesisInputs.map(item => item.path), expectedRevision: 'missing' },
+                            requiredArguments: ['path', 'title', 'context', 'decision'],
+                            instruction: 'Create a proposed Decision Record after writing the conclusion in your own words; do not silently supersede or rewrite any input note.',
+                        },
+            preservation: 'This plan is non-mutating. Input notes, objections, and failed paths remain independent Markdown/Git history unless a later revision-checked decision explicitly relates or supersedes them.',
+        } : undefined;
         const result = {
             mode: 'bounded_answer_packet',
             intent: selectedIntent,
@@ -5623,6 +6178,7 @@ export class LlmWikiService {
             supporting: context.filter(item => item.relationToSource === 'supporting_context'),
             counterpoints: context.filter(item => item.relationToSource === 'counterpoint_or_review'),
             reasoningTrail,
+            ...(synthesisPlan && { synthesisPlan }),
             neighborhood: {
                 totalCandidates: neighborhood.totalCandidates,
                 truncated: neighborhood.truncated,
@@ -5652,11 +6208,19 @@ export class LlmWikiService {
             intent: selectedIntent,
             source: { path: result.source.path, title: result.source.title, revision: result.source.revision },
             reasoningTrail: { gaps: result.reasoningTrail.gaps, note: result.reasoningTrail.note },
+            ...(synthesisPlan && { synthesisPlan: { status: synthesisPlan.status, nextAction: synthesisPlan.nextAction, preservation: synthesisPlan.preservation } }),
             truncated: true,
         };
         if (JSON.stringify(compact).length <= boundedChars)
             return compact;
-        return { mode: 'bounded_answer_packet', intent: selectedIntent, source: { path: String(result.source.path).slice(0, 160), revision: String(result.source.revision).slice(0, 160) }, truncated: true };
+        const tinyAction = synthesisPlan?.nextAction;
+        return {
+            mode: 'bounded_answer_packet',
+            intent: selectedIntent,
+            source: { path: String(result.source.path).slice(0, 160), revision: String(result.source.revision).slice(0, 160) },
+            ...(tinyAction && { synthesisPlan: { status: synthesisPlan?.status, nextAction: { endpointId: tinyAction.endpointId, ...(tinyAction.arguments?.path && { arguments: { path: tinyAction.arguments.path } }) } } }),
+            truncated: true,
+        };
     }
     /**
      * Build a reusable shelf-like context projection without persisting a
@@ -6579,6 +7143,12 @@ export class LlmWikiService {
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
         const candidates = [];
         let total = 0;
+        const addCandidate = (candidate) => {
+            candidates.push(candidate);
+            candidates.sort((left, right) => right.score - left.score || String(left.path).localeCompare(String(right.path)));
+            if (candidates.length > boundedLimit)
+                candidates.pop();
+        };
         for await (const note of iterateNotes(this.fileSystem, { pathPrefix: 'Community/Posts' }, canAccess)) {
             if (note.frontmatter.mcpvault_type !== 'blog_post' || String(note.frontmatter.status || '').toLowerCase() !== 'published' || isModerationHidden(note.frontmatter))
                 continue;
@@ -6592,6 +7162,7 @@ export class LlmWikiService {
             const score = categoryScore + Math.min(references.length, 3) + (note.frontmatter.accepted_comment_id ? 4 : 0) + (workflow === 'resolved' || workflow === 'closed' ? 2 : 0);
             const item = {
                 path: this.access.toPublicPath(note.path),
+                sourceType: 'community_discussion',
                 suggestedPath: `Knowledge/Community/${String(note.frontmatter.post_id || note.path.split('/').at(-1) || 'post')}.md`,
                 slug: note.frontmatter.post_id,
                 title: note.frontmatter.title || note.path.split('/').at(-1),
@@ -6606,22 +7177,89 @@ export class LlmWikiService {
                     ...(workflow === 'resolved' || workflow === 'closed' ? ['discussion_closed'] : []),
                 ],
                 references: references.slice(0, 10).map((path) => this.access.toPublicPath(String(path))),
+                promotionPlan: {
+                    inspect: { endpointId: endpointIdForTool('read_blog_post'), arguments: { slug: note.frontmatter.post_id, includeComments: true, commentLimit: 20, maxChars: 7000 } },
+                    evidenceRule: 'Community text, votes, accepted answers, and reputation are leads and provenance context, not immutable factual evidence.',
+                    then: [
+                        { endpointId: endpointIdForTool('ingest_source'), requiredWhen: 'A factual claim lacks an existing immutable source snapshot.' },
+                        { endpointId: endpointIdForTool('preflight_wiki_publish'), arguments: { path: `Knowledge/Community/${String(note.frontmatter.post_id || 'post')}.md`, title: note.frontmatter.title } },
+                        { endpointId: endpointIdForTool('publish_knowledge'), arguments: { path: `Knowledge/Community/${String(note.frontmatter.post_id || 'post')}.md`, references: [this.access.toPublicPath(note.path)], expectedRevision: 'missing' }, requiredArguments: ['content', 'evidencePaths'] },
+                    ],
+                    verification: 'Re-read the discussion at this revision, preserve disagreement and attribution, and verify every promoted claim against immutable evidence.',
+                },
             };
-            candidates.push({ ...item, score });
-            candidates.sort((left, right) => right.score - left.score || String(left.path).localeCompare(String(right.path)));
-            if (candidates.length > boundedLimit)
-                candidates.pop();
+            // Keep the ranking pass metadata-only; hydrate bodies only for the
+            // bounded winning page below.
+            addCandidate({ ...item, score, excerpt: '' });
+        }
+        for await (const note of iterateNotes(this.fileSystem, { pathPrefix: 'Community/Tasks' }, canAccess)) {
+            if (note.frontmatter.mcpvault_type !== 'agent_task' || String(note.frontmatter.status || '').toLowerCase() !== 'completed' || isModerationHidden(note.frontmatter))
+                continue;
+            const retrospective = typeof note.frontmatter.retrospective === 'string' ? note.frontmatter.retrospective.trim() : '';
+            if (!retrospective)
+                continue;
+            total += 1;
+            const taskId = String(note.frontmatter.task_id || note.path.split('/').at(-1)?.replace(/\.md$/i, '') || 'task');
+            const knowledgeNotes = manifestStringList(note.frontmatter.knowledge_notes, 20).map(path => this.access.toPublicPath(path));
+            const references = manifestStringList(note.frontmatter.references, 20).map(path => this.access.toPublicPath(path));
+            const score = 7 + (knowledgeNotes.length ? 1 : 3) + Math.min(references.length, 3);
+            addCandidate({
+                path: this.access.toPublicPath(note.path),
+                sourceType: 'completed_task',
+                taskId,
+                title: note.frontmatter.title || taskId,
+                suggestedPath: `Knowledge/Task Lessons/${taskId}.md`,
+                author: note.frontmatter.assignee || note.frontmatter.requester,
+                score,
+                reasons: ['completed_task_retrospective', ...(knowledgeNotes.length ? ['has_linked_knowledge'] : ['lesson_not_yet_linked_to_knowledge']), ...(references.length ? ['has_references'] : [])],
+                references: [...new Set([...references, ...knowledgeNotes])].slice(0, 20),
+                excerpt: boundedText(retrospective, 360),
+                promotionPlan: {
+                    inspect: { endpointId: endpointIdForTool('read_agent_task'), arguments: { taskId, includeContent: true, referenceLimit: 12, referenceMaxChars: 5000 } },
+                    evidenceRule: 'A retrospective records experience and navigation context; factual reusable claims still require immutable source evidence.',
+                    then: knowledgeNotes.length
+                        ? [{ endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path: knowledgeNotes[0], intent: 'review', maxChars: 5000 } }]
+                        : [
+                            { endpointId: endpointIdForTool('ingest_source'), requiredWhen: 'The reusable lesson depends on external facts or experiment output not yet captured.' },
+                            { endpointId: endpointIdForTool('publish_knowledge'), arguments: { path: `Knowledge/Task Lessons/${taskId}.md`, references: [this.access.toPublicPath(note.path), ...references], expectedRevision: 'missing' }, requiredArguments: ['content', 'evidencePaths'] },
+                        ],
+                    verification: 'Preserve the completed task as history, write only the reusable lesson in the durable note, and link the result back through task knowledgeNotes.',
+                },
+            });
         }
         const items = [];
+        let firstCompact;
         for (const candidate of candidates) {
-            const { score: _score, ...item } = candidate;
             const source = await this.fileSystem.readNote(String(candidate.path));
-            const bounded = { ...item, excerpt: boundedText(source.content, 360) };
+            let excerpt = candidate.excerpt;
+            if (!excerpt && candidate.sourceType === 'community_discussion') {
+                excerpt = boundedText(source.content, 360);
+            }
+            const { score: _score, excerpt: _excerpt, ...item } = candidate;
+            const bounded = { ...item, revision: source.revision, excerpt };
+            firstCompact ||= {
+                path: item.path,
+                revision: source.revision,
+                sourceType: item.sourceType,
+                ...(item.slug && { slug: item.slug }),
+                ...(item.taskId && { taskId: item.taskId }),
+                title: item.title,
+                reasons: Array.isArray(item.reasons) ? item.reasons.slice(0, 4) : [],
+                nextAction: item.promotionPlan?.inspect,
+                then: Array.isArray(item.promotionPlan?.then) ? item.promotionPlan.then.slice(0, 3).map((action) => ({ endpointId: action.endpointId })) : [],
+                candidateTruncated: true,
+            };
             if (JSON.stringify([...items, bounded]).length + 2 > boundedChars)
                 break;
             items.push(bounded);
         }
-        return { items, total, truncated: total > items.length };
+        const result = { items, total, truncated: total > items.length };
+        if (JSON.stringify(result).length <= boundedChars && (items.length > 0 || !firstCompact))
+            return result;
+        const compact = { items: firstCompact ? [firstCompact] : [], total, truncated: true };
+        if (JSON.stringify(compact).length <= boundedChars)
+            return compact;
+        return { total, ...(firstCompact && { path: firstCompact.path, revision: firstCompact.revision, nextAction: firstCompact.nextAction }), truncated: true };
     }
     async summaryCandidates(principal, limit = 10, maxChars = 6000) {
         const boundedLimit = Math.min(Math.max(Number(limit) || 10, 1), 30);

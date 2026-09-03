@@ -717,7 +717,7 @@ describe("structured frontmatter queries", () => {
     });
 
     await expect(fileSystem.queryNotes({ filters: { "meta.owner": "bob" } })).resolves.toMatchObject({
-      notes: [{ path: "Projects/Beta.md" }],
+      notes: [{ path: "Projects/Beta.md", revision: expect.stringMatching(/^[a-f0-9]{64}$/) }],
       total: 1,
     });
   });
@@ -753,6 +753,7 @@ describe("structured frontmatter queries", () => {
     try {
       const fastFirst = await indexedFileSystem.queryNotes({ sortBy: "priority", limit: 1, includeTotal: false });
       expect(fastFirst.notes.map(note => note.path)).toEqual(["One.md"]);
+      expect(fastFirst.notes[0]?.revision).toMatch(/^[a-f0-9]{64}$/);
       expect(fastFirst.total).toBe(-1);
       expect(fastFirst.totalKnown).toBe(false);
       const fastSecond = await indexedFileSystem.queryNotes({ sortBy: "priority", limit: 1, includeTotal: false, after: fastFirst.nextCursor });

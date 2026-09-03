@@ -273,7 +273,10 @@ Zettelkasten-style atomic notes/MOCs suit durable knowledge, while GTD-style
 next actions suit Projects and structured tasks; do not force either format
 onto comments, chat, or journals.
 
-Use `get_wiki_home` as the bounded scope launchpad before broad browsing. For
+Use `get_wiki_home` as the bounded scope launchpad before broad browsing. Its
+`workflowRoutes` map common intent to one existing endpoint; choose exactly one
+route and do not call every dashboard. Its listed notes carry current revisions
+for a revision-safe follow-up. For
 `question`, `hypothesis`, and `assumption` notes, set the matching
 `epistemicStatus` and update it when evidence changes. For project/task work,
 prefer `desiredOutcome`, one concrete `nextAction`, `taskContext`, `dueAt`,
@@ -313,6 +316,12 @@ an ordering explanation. Active projects should declare bounded
 `started_at`, `blocked_since`, `waiting_since`, and `completed_at` when known.
 These are flow signals, not access rules, truth scores, or automatic
 assignments.
+For cross-command-center migration, compare `wiki.organization_manifest`
+fingerprints first, then approve immutable `_sources/` snapshots before
+submitting dependent knowledge. Bind each Global evidence path to its exact Hub
+revision in signed `evidenceRevisions`, and pass the local organization
+fingerprint to the replica. A contract mismatch, stale source revision, or
+dirty target note must stop the pull; never bypass it by copying files directly.
 `get_wiki_review_packet` includes the same execution-flow projection and
 prioritizes blocked/waiting work before suggesting more work. Treat missing
 `started_at`, `blocked_since`, `waiting_since`, or `completed_at` as a repair
@@ -357,6 +366,11 @@ as the review budget for one turn. A legitimate deferral may set
 it does not delete evidence or make a note trusted. Save `focusQuestions`,
 `focusProjects`, and `focusNotes` in the private `save_work_state` checkpoint
 when a session has a small set of items that must remain top-of-mind.
+Before an interrupted multi-note edit or handoff, also save bounded
+`pendingEdits` entries with only `endpointId`, `path`, `expectedRevision`, and a
+short purpose. On resume, re-read every path and discard any stale plan; the
+checkpoint is neither a lock nor permission to overwrite. Never store note
+bodies, access tokens, passwords, or prompt text in `pendingEdits`.
 When preserving a failed path, record what was attempted/observed, the failure
 condition and reproduction, why it was rejected, and the reusable lesson.
 When a review is genuinely completed, record its outcome and reviewer rather
@@ -699,4 +713,5 @@ When modifying file operations:
 - Active recall is reader-specific. For `failed` or `partial`, record `confusion`, optionally `repairPath`, and leave `repairStatus=needed` or `in_progress`. The queue prioritizes these repairs; only mark them `resolved` after rereading and verifying the repair.
 - Search improvement telemetry is per-account, process-local, bounded, and never persisted. Call `record_search_feedback` after a useful, failed, or ambiguous search, then inspect `get_search_improvement_candidates` before adding aliases, retrieval cues, MOCs, disambiguation, or new notes.
 - Source snapshots are immutable editions. Use `sourceWorkId`/`sourceEditionId` for explicit lineage; `sourceFamily`/`sourceVersion` remain compatible aliases. Use `get_wiki_source_lineage` to compare editions, but retain source ID, hash, evidence path, and revision as the authority.
-- `get_wiki_organization_manifest` returns a content-free portable contract for PARA, Obsidian links/Properties, relations, lifecycles, templates, and migration rules. Never migrate private scopes, sessions, or `.mcpvault` derived caches.
+- `get_wiki_organization_manifest` returns a fingerprinted portable contract for PARA, Obsidian links/Properties, relations, lifecycles, templates, and migration rules. The default is content-free. Request `includeReadiness` only when preparing a migration: it returns bounded global path/revision/identity/Property-shape metadata and reports drift, collisions, and missing relation targets while excluding Community, all private scopes, whispers, bodies, sessions, and `.mcpvault` caches. Compare a destination manifest with `compareManifest` and an `expectedCounterpartFingerprint`; rerun when the fingerprint changes and never copy before resolving blocking findings.
+- For one maintenance turn, follow the revision-stamped `curationPlan` returned by `get_wiki_maintenance_debt` or the single selected plan in `get_wiki_review_packet`. For `decide`/`review`, follow the answer packet's `synthesisPlan`: fill missing immutable evidence and counterpoints first, then use the named Decision Record or review endpoint. A plan is advisory and never supersedes inputs. `get_wiki_promotion_candidates` also surfaces completed task retrospectives; inspect the task/discussion at its revision, keep it as history, and treat it as context rather than immutable factual evidence.

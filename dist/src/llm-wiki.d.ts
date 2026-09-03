@@ -1304,124 +1304,25 @@ export declare class LlmWikiService {
         };
         truncated: boolean;
     };
-    /** Return a portable, content-free organization contract for another Vault. */
-    organizationManifest(maxChars?: number): {
-        manifestVersion: number;
-        format: string;
-        portable: boolean;
-        sourceOfTruth: string[];
-        filing: {
-            Inbox: string;
-            Projects: string;
-            Areas: string;
-            Resources: string;
-            Archives: string;
-        };
-        reservedPaths: string[];
-        syntax: {
-            links: string[];
-            tags: string;
-            sourceIntegrity: string;
-        };
-        pipeline: string[];
-        contracts: {
-            noteKinds: string[];
-            lifecycles: ("active" | "archived" | "evergreen" | "inbox" | "review" | "superseded")[];
-            taskStatuses: ("blocked" | "cancelled" | "completed" | "next_action" | "open" | "someday" | "waiting")[];
-            serviceClasses: ("expedite" | "fixed_date" | "research" | "standard")[];
-            properties: import("./organization.js").OrganizationPropertyContractEntry[];
-            relations: ({
-                field: 'supports';
-                direction: 'directional';
-                target: 'A claim, decision, or note supported by this note.';
-                reciprocal: false;
-            } | {
-                field: 'contradicts';
-                direction: 'directional';
-                target: 'A claim or conclusion challenged by this note.';
-                reciprocal: false;
-            } | {
-                field: 'supersedes';
-                direction: 'directional';
-                target: 'An older or replaced note.';
-                reciprocal: false;
-            } | {
-                field: 'derived_from';
-                direction: 'directional';
-                target: 'The source or note from which this note was derived.';
-                reciprocal: false;
-            } | {
-                field: 'depends_on';
-                direction: 'directional';
-                target: 'A prerequisite note, decision, or project.';
-                reciprocal: false;
-            } | {
-                field: 'implements';
-                direction: 'directional';
-                target: 'The design, decision, or requirement implemented here.';
-                reciprocal: false;
-            } | {
-                field: 'blocked_by';
-                direction: 'directional';
-                target: 'The note or dependency currently blocking this note.';
-                reciprocal: false;
-            } | {
-                field: 'answers_questions';
-                direction: 'directional';
-                target: 'A question note answered by this note.';
-                reciprocal: false;
-            } | {
-                field: 'related';
-                direction: 'mutual';
-                target: 'A materially related note without a stronger claim.';
-                reciprocal: true;
-            } | {
-                field: 'same_as';
-                direction: 'mutual';
-                target: 'The same concept represented by another note or alias.';
-                reciprocal: true;
-            } | {
-                field: 'version_of';
-                direction: 'directional';
-                target: 'The conceptual note this version belongs to.';
-                reciprocal: false;
-            } | {
-                field: 'refines';
-                direction: 'directional';
-                target: 'A note made more precise or useful by this note.';
-                reciprocal: false;
-            })[];
-        };
-        templates: string[];
-        importRules: string[];
-    } | {
-        manifestVersion: number;
-        format: string;
-        portable: boolean;
-        sourceOfTruth: string[];
-        filing: {
-            Inbox: string;
-            Projects: string;
-            Areas: string;
-            Resources: string;
-            Archives: string;
-        };
-        reservedPaths: string[];
-        contracts: {
-            noteKinds: string[];
-            lifecycles: ("active" | "archived" | "evergreen" | "inbox" | "review" | "superseded")[];
-            taskStatuses: ("blocked" | "cancelled" | "completed" | "next_action" | "open" | "someday" | "waiting")[];
-            serviceClasses: ("expedite" | "fixed_date" | "research" | "standard")[];
-            relations: ("answers_questions" | "blocked_by" | "contradicts" | "depends_on" | "derived_from" | "implements" | "refines" | "related" | "same_as" | "supersedes" | "supports" | "version_of")[];
-        };
-        truncated: boolean;
-    };
+    /**
+     * Return a portable organization contract and, when explicitly requested,
+     * a metadata-only migration preflight. The preflight deliberately scans
+     * only global material: command-center Community, model/agent/user scopes,
+     * whispers, and disposable caches never enter an export inventory.
+     */
+    organizationManifest(principal: ScopePrincipal | undefined, options?: {
+        maxChars?: number;
+        includeReadiness?: boolean;
+        compareManifest?: unknown;
+        expectedCounterpartFingerprint?: string;
+        limit?: number;
+    }): Promise<any>;
     /**
      * A small action-oriented packet for agents that need to decide what to do
      * next. It is a projection over the existing Reflect/graph reports, not a
      * new task or history store.
      */
-    reviewPacket(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+    reviewPacket(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<Record<string, any> | {
         purpose: string;
         priorities: Record<string, unknown>[];
         counts: {
@@ -1568,118 +1469,23 @@ export declare class LlmWikiService {
                 orphanNotes: any;
             };
         };
+        curationPlan?: Record<string, unknown>;
         nextActions: string[];
         sourceTruncated: boolean;
         generatedAt: string;
     } | {
-        purpose: string;
-        counts: {
-            inbox: number;
-            knowledgeReview: number;
-            due: number;
-            projectNeedsAction: number;
-            activeWip: number;
-            wipOverflow: number;
-            readyToPull: number;
-            blocked: number;
-            waiting: number;
-            unlinkedMocQuestions: number;
-            evergreenNeedsAttention: number;
-            recallDue: number;
-            tagVariantIssues: number;
-            unresolvedSubjectTerms: number;
-            lintIssues: number;
-        };
-        nextActions: string[];
-        sourceTruncated: boolean;
-        generatedAt: string;
-        priorities: Record<string, unknown>[];
-        supportingViews: {
-            inbox: {
-                total: any;
-                items: any;
-                truncated: boolean;
-            } | undefined;
-            knowledge: {
-                total: any;
-                items: any;
-                truncated: boolean;
-            } | undefined;
-            executionFlow: {
-                flow: {
-                    totalWork: number;
-                    activeWip: number;
-                    wipOverflow: number;
-                    pullAllowed: boolean;
-                    readyToPull: number;
-                    blocked: number;
-                    waiting: number;
-                    overdue: number;
-                };
-                lanes: {
-                    active: Record<string, unknown>[];
-                    ready: Record<string, unknown>[];
-                    blocked: Record<string, unknown>[];
-                    waiting: Record<string, unknown>[];
-                };
-                truncated: boolean;
-            };
-            mocQuestions: {
-                total: any;
-                linked: any;
-                ratio: any;
-                unlinked: any;
-            } | undefined;
-            evergreenQuality: {
-                total: any;
-                needsAttention: any;
-                ready: any;
-                items: any;
-                truncated: boolean;
-            } | undefined;
-            recall: {
-                total: number;
-                items: Record<string, unknown>[];
-                truncated: boolean;
-            };
-            vocabulary: {
-                tagVariants: {
-                    key: string;
-                    variants: string[];
-                    count: number;
-                    noteCount: number;
-                    paths: string[];
-                    reason: string;
-                }[];
-                unresolvedSubjectTerms: {
-                    term: string;
-                    count: number;
-                    noteCount: number;
-                    paths: string[];
-                    reason: string;
-                    advisory: boolean;
-                }[];
-                termCollisions: {
-                    term: string;
-                    noteCount: number;
-                    paths: string[];
-                    reason: string;
-                }[];
-                truncated: boolean;
-            };
-            graph: {
-                unresolvedLinks: {
-                    total: any;
-                    items: any;
-                    truncated: boolean;
-                } | undefined;
-                orphanNotes: {
-                    total: any;
-                    items: any;
-                    truncated: boolean;
-                } | undefined;
-            };
-        };
+        selected: {
+            path: unknown;
+            revision: unknown;
+            reason: unknown;
+        } | undefined;
+        nextAction: {
+            endpointId: unknown;
+            arguments: unknown;
+        } | undefined;
+        then: {
+            endpointId: unknown;
+        } | undefined;
         truncated: boolean;
     }>;
     /**
@@ -2320,6 +2126,7 @@ export declare class LlmWikiService {
     home(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
         scope: string;
         purpose: string;
+        routingRule: string;
         suggestedHomePath: string;
         suggestedIndexPath: string;
         entrypoints: {
@@ -2334,12 +2141,152 @@ export declare class LlmWikiService {
             review: number;
             stableIds: number;
         };
+        nextAction: {
+            requiredArguments?: never;
+            endpointId: string;
+            arguments: {
+                query?: never;
+                limit: number;
+                maxChars: number;
+            };
+            reason: string;
+        } | {
+            endpointId: string;
+            arguments: {
+                query: string;
+                limit: number;
+                maxChars: number;
+            };
+            requiredArguments: string[];
+            reason: string;
+        };
+        workflowRoutes: ({
+            intent: string;
+            useWhen: string;
+            endpointId: string;
+            arguments: {
+                expectedRevision?: never;
+                query: string;
+                limit: number;
+                maxChars: number;
+                path?: never;
+                intent?: never;
+                taskContext?: never;
+                includeReadiness?: never;
+            };
+            requiredArguments: string[];
+            mutating?: never;
+            followUpEndpointId?: never;
+        } | {
+            intent: string;
+            useWhen: string;
+            endpointId: string;
+            arguments: {
+                query?: never;
+                expectedRevision: string;
+                path?: never;
+                intent?: never;
+                taskContext?: never;
+                includeReadiness?: never;
+                limit?: never;
+                maxChars?: never;
+            };
+            requiredArguments: string[];
+            mutating: boolean;
+            followUpEndpointId?: never;
+        } | {
+            mutating?: never;
+            intent: string;
+            useWhen: string;
+            endpointId: string;
+            arguments: {
+                expectedRevision?: never;
+                query?: never;
+                limit: number;
+                maxChars: number;
+                path?: never;
+                intent?: never;
+                taskContext?: never;
+                includeReadiness?: never;
+            };
+            followUpEndpointId: string;
+            requiredArguments?: never;
+        } | {
+            mutating?: never;
+            followUpEndpointId?: never;
+            intent: string;
+            useWhen: string;
+            endpointId: string;
+            arguments: {
+                expectedRevision?: never;
+                query?: never;
+                path: string;
+                intent: string;
+                limit: number;
+                maxChars: number;
+                taskContext?: never;
+                includeReadiness?: never;
+            };
+            requiredArguments: string[];
+        } | {
+            mutating?: never;
+            followUpEndpointId?: never;
+            intent: string;
+            useWhen: string;
+            endpointId: string;
+            arguments: {
+                expectedRevision?: never;
+                query?: never;
+                path?: never;
+                intent?: never;
+                taskContext: string;
+                limit: number;
+                maxChars: number;
+                includeReadiness?: never;
+            };
+            requiredArguments: string[];
+        } | {
+            mutating?: never;
+            followUpEndpointId?: never;
+            requiredArguments?: never;
+            intent: string;
+            useWhen: string;
+            endpointId: string;
+            arguments: {
+                expectedRevision?: never;
+                query?: never;
+                path?: never;
+                intent?: never;
+                taskContext?: never;
+                limit: number;
+                maxChars: number;
+                includeReadiness?: never;
+            };
+        } | {
+            mutating?: never;
+            followUpEndpointId?: never;
+            requiredArguments?: never;
+            intent: string;
+            useWhen: string;
+            endpointId: string;
+            arguments: {
+                expectedRevision?: never;
+                query?: never;
+                path?: never;
+                intent?: never;
+                taskContext?: never;
+                includeReadiness: boolean;
+                limit: number;
+                maxChars: number;
+            };
+        })[];
         mocs: {
             resolvedParent?: string;
             childTotal: number;
             depth: number;
             state: string;
             title: string;
+            revision?: string;
             parent?: string;
             navOrder?: number;
             path: string;
@@ -2351,6 +2298,37 @@ export declare class LlmWikiService {
         inbox: Record<string, unknown>[];
         review: Record<string, unknown>[];
         stableIds: Record<string, unknown>[];
+        truncated: boolean;
+    } | {
+        scope: string;
+        counts: {
+            total: number;
+            mocs: number;
+            projects: number;
+            inbox: number;
+            review: number;
+            stableIds: number;
+        };
+        nextAction: {
+            requiredArguments?: never;
+            endpointId: string;
+            arguments: {
+                query?: never;
+                limit: number;
+                maxChars: number;
+            };
+            reason: string;
+        } | {
+            endpointId: string;
+            arguments: {
+                query: string;
+                limit: number;
+                maxChars: number;
+            };
+            requiredArguments: string[];
+            reason: string;
+        };
+        routingRule: string;
         truncated: boolean;
     }>;
     graphHealth(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
@@ -2696,6 +2674,27 @@ export declare class LlmWikiService {
         items: Record<string, unknown>[];
         truncated: boolean;
         generatedAt: string;
+    } | {
+        olderThanDays: number;
+        debtTotal: number;
+        counts: Record<string, number>;
+        item?: {
+            path: any;
+            revision: any;
+            reasons: any;
+            priority: any;
+        };
+        nextAction?: any;
+        then?: {
+            endpointId: any;
+        } | undefined;
+        truncated: boolean;
+    } | {
+        debtTotal: number;
+        path?: any;
+        revision?: any;
+        nextEndpoint?: any;
+        truncated: boolean;
     }>;
     /**
      * Build one small answer-oriented context packet.  It keeps the source
@@ -2995,6 +2994,12 @@ export declare class LlmWikiService {
     promotionCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
         items: Record<string, unknown>[];
         total: number;
+        truncated: boolean;
+    } | {
+        total: number;
+        path?: unknown;
+        revision?: unknown;
+        nextAction?: unknown;
         truncated: boolean;
     }>;
     summaryCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{

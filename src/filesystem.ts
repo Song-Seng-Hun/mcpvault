@@ -2313,7 +2313,7 @@ export class FileSystemService {
         ...(params.after && { after: params.after }),
         canAccessPath,
       });
-      const selected = page.entries.map(entry => ({ path: entry.path, frontmatter: entry.frontmatter }));
+      const selected = page.entries.map(entry => ({ path: entry.path, frontmatter: entry.frontmatter, revision: entry.revision }));
       const nextCursor = page.truncated ? cursorForQueryNote(selected[selected.length - 1]!, sortBy) : undefined;
       if (params.includeContent) {
         const withContent = await Promise.all(selected.map(async note => {
@@ -2325,7 +2325,7 @@ export class FileSystemService {
           }
         }));
         return {
-          notes: withContent.filter((note): note is QueryNote & { content: string } => note !== undefined),
+          notes: withContent.filter((note): note is NonNullable<typeof note> => note !== undefined),
           total: -1,
           totalKnown: false,
           truncated: page.truncated,
@@ -2358,7 +2358,7 @@ export class FileSystemService {
           skipped -= 1;
           continue;
         }
-        pageCandidates.push({ path: entry.path, frontmatter: entry.frontmatter });
+        pageCandidates.push({ path: entry.path, frontmatter: entry.frontmatter, revision: entry.revision });
         if (pageCandidates.length > limit) break;
       }
       const truncated = pageCandidates.length > limit;
@@ -2374,7 +2374,7 @@ export class FileSystemService {
           }
         }));
         return {
-          notes: withContent.filter((note): note is QueryNote & { content: string } => note !== undefined),
+          notes: withContent.filter((note): note is NonNullable<typeof note> => note !== undefined),
           total: -1,
           totalKnown: false,
           truncated,
@@ -2397,7 +2397,7 @@ export class FileSystemService {
           const actual = getFrontmatterValue(entry.frontmatter, key);
           return actual.found && frontmatterValuesEqual(actual.value, expected);
         });
-        if (matches) notes.push({ path: entry.path, frontmatter: entry.frontmatter });
+        if (matches) notes.push({ path: entry.path, frontmatter: entry.frontmatter, revision: entry.revision });
       }
     } else {
       const notePaths = (await this.collectVaultFiles())
@@ -2420,7 +2420,7 @@ export class FileSystemService {
           const actual = getFrontmatterValue(parsed.frontmatter, key);
           return actual.found && frontmatterValuesEqual(actual.value, expected);
         });
-        if (matches) notes.push({ path, frontmatter: parsed.frontmatter, ...(params.includeContent && { content: parsed.content }) });
+        if (matches) notes.push({ path, frontmatter: parsed.frontmatter, revision: this.revision(raw), ...(params.includeContent && { content: parsed.content }) });
       }
     }
 
@@ -2442,7 +2442,7 @@ export class FileSystemService {
         }
       }));
       return {
-        notes: withContent.filter((note): note is QueryNote & { content: string } => note !== undefined),
+        notes: withContent.filter((note): note is NonNullable<typeof note> => note !== undefined),
         total: notes.length,
         truncated,
         ...(nextCursor ? { nextCursor } : {}),
@@ -2464,7 +2464,7 @@ export class FileSystemService {
   ): Promise<number> {
     const pathPrefix = this.resolvePathPrefix(params.pathPrefix);
     if (this.metadataIndex) {
-      return this.metadataIndex.count(params.filters || {}, pathPrefix, canAccessPath, entry => predicate({ path: entry.path, frontmatter: entry.frontmatter }));
+      return this.metadataIndex.count(params.filters || {}, pathPrefix, canAccessPath, entry => predicate({ path: entry.path, frontmatter: entry.frontmatter, revision: entry.revision }));
     }
     const result = await this.queryNotes({ ...params, limit: 1, includeContent: false, includeTotal: true }, canAccessPath);
     return result.total;

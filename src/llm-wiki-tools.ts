@@ -486,7 +486,7 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_home',
-      description: 'Return a bounded live launchpad for the current scope: public schema/welcome entrypoints, MOCs, active Projects/Tasks, Inbox, due review items, and stable IDs. This is a derived Home/JDex-style view, never a second index or an access boundary.',
+      description: 'Return a bounded live launchpad and intent router for the current scope: one recommended next action, exact existing endpoint routes for find/capture/organize/decide/execute/review/repair/migrate, and revision-stamped MOCs, Projects/Tasks, Inbox, review items, and stable IDs. Choose one route; do not call every dashboard. This is a derived Home/JDex-style view, never a second index or an access boundary.',
       inputSchema: { type: 'object', properties: {
         limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint,
       } },
@@ -519,8 +519,14 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_organization_manifest',
-      description: 'Return a bounded portable, content-free organization manifest containing PARA filing, Obsidian syntax, properties, relations, lifecycle, and migration rules. It is guidance only and exposes no private content or caches.',
-      inputSchema: { type: 'object', properties: { maxChars: { type: 'integer', minimum: 2048, maximum: 24000, default: 12000 }, accessToken, prettyPrint } },
+      description: 'Return a bounded portable organization contract for PARA, Obsidian syntax, Properties, relations, lifecycle, and migration. Set includeReadiness to add only global path/revision/identity/shape metadata and detect local drift, collisions, and missing relation targets; Community, private scopes, bodies, sessions, and caches are excluded. Pass another bounded manifest as compareManifest plus its expected fingerprint for a non-mutating destination compatibility preview.',
+      inputSchema: { type: 'object', properties: {
+        includeReadiness: { type: 'boolean', default: false, description: 'Scan only portable global metadata; never includes note bodies, Community, private scopes, sessions, whispers, or caches' },
+        compareManifest: { type: 'object', description: 'Optional counterpart organization manifest returned by this endpoint; limited to 128000 serialized characters' },
+        expectedCounterpartFingerprint: { type: 'string', pattern: '^[a-fA-F0-9]{64}$', description: 'Optional revision guard for the compared contract' },
+        limit: { type: 'integer', minimum: 1, maximum: 100, default: 30, description: 'Maximum readiness issues and metadata inventory rows' },
+        maxChars: { type: 'integer', minimum: 2048, maximum: 24000, default: 12000 }, accessToken, prettyPrint,
+      } },
     },
     {
       name: 'get_wiki_promotion_candidates',

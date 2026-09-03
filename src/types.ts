@@ -408,6 +408,8 @@ export interface QueryNotesCursor {
 export interface QueryNote {
   path: string;
   frontmatter: Record<string, any>;
+  /** Current content revision when the metadata source can provide it. */
+  revision?: string;
   content?: string;
 }
 

@@ -99,6 +99,18 @@ test('MOC navigation preserves explicit sibling order, body link order, and mult
     const home = await callJson(client, 'get_wiki_home', { accessToken, limit: 10 });
     expect(home.value.mocs.map((item: any) => item.path)).toEqual(['Knowledge/MOCs/Root.md', 'Knowledge/MOCs/A.md', 'Knowledge/MOCs/Z.md']);
     expect(home.value.mocs.map((item: any) => item.navOrder)).toEqual([0, 10, 20]);
+    expect(home.value.mocs.every((item: any) => typeof item.revision === 'string' && item.revision.length === 64)).toBe(true);
+    expect(home.value.routingRule).toContain('exactly one');
+    expect(home.value.workflowRoutes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ intent: 'find', endpointId: 'wiki.search', requiredArguments: ['query'] }),
+      expect.objectContaining({ intent: 'understand_or_decide', endpointId: 'wiki.answer_packet', requiredArguments: ['path'] }),
+      expect.objectContaining({ intent: 'review_one', endpointId: 'wiki.review_packet' }),
+      expect.objectContaining({ intent: 'migrate_contract', endpointId: 'wiki.organization_manifest' }),
+    ]));
+    expect(home.value.nextAction.endpointId).toBe('wiki.search');
+    const tinyHome = await callJson(client, 'get_wiki_home', { accessToken, limit: 10, maxChars: 512, prettyPrint: true });
+    expect(String((tinyHome.result.content as any)[0].text).length).toBeLessThanOrEqual(512);
+    expect(tinyHome.value.nextAction).toMatchObject({ endpointId: 'wiki.search', requiredArguments: ['query'] });
 
     const graph = await callJson(client, 'get_wiki_graph_health', { accessToken, limit: 20, maxChars: 12000 });
     expect(graph.value.mocHierarchy.items.map((item: any) => item.path)).toEqual(['Knowledge/MOCs/Root.md', 'Knowledge/MOCs/A.md', 'Knowledge/MOCs/Z.md']);
@@ -110,8 +122,26 @@ test('MOC navigation preserves explicit sibling order, body link order, and mult
 
     await write('Knowledge/MOCs/A child.md', '# Child\n', { note_kind: 'moc', lifecycle: 'evergreen', moc_parent: '[[Knowledge/MOCs/A]]', nav_order: 900 });
     await write('Knowledge/MOCs/Other root.md', '# Other\n', { note_kind: 'moc', lifecycle: 'evergreen', nav_order: 1 });
+    await write('Knowledge/MOCs/Hidden root.md', '# Hidden\n', { note_kind: 'moc', lifecycle: 'evergreen', moderation_status: 'quarantined' });
+    await write('Knowledge/Huge property.md', '# Compact body\n', { note_kind: 'atomic', lifecycle: 'evergreen', stable_id: 'huge-property', retrieval_cues: ['x'.repeat(20_000)] });
+    const privateMoc = await client.callTool({ name: 'write_note', arguments: { path: 'scope://model/codex/Private MOC.md', content: '# Private MOC\n', frontmatter: { note_kind: 'moc', lifecycle: 'evergreen' }, expectedRevision: 'missing', accessToken } });
+    expect(privateMoc.isError).toBeFalsy();
     const treeHome = await callJson(client, 'get_wiki_home', { accessToken, limit: 10 });
-    expect(treeHome.value.mocs.map((item: any) => item.path)).toEqual(['Knowledge/MOCs/Root.md', 'Knowledge/MOCs/A.md', 'Knowledge/MOCs/A child.md', 'Knowledge/MOCs/Z.md', 'Knowledge/MOCs/Other root.md']);
+    expect(treeHome.value.mocs.map((item: any) => item.path)).toEqual(['Knowledge/MOCs/Root.md', 'Knowledge/MOCs/A.md', 'Knowledge/MOCs/A child.md', 'Knowledge/MOCs/Z.md', 'Knowledge/MOCs/Other root.md', 'scope://model/codex/Private MOC.md']);
+    expect(JSON.stringify(treeHome.value)).not.toContain('Hidden root');
+    expect(JSON.stringify(treeHome.value)).not.toContain('x'.repeat(100));
+    const publicHome = await callJson(client, 'get_wiki_home', { limit: 10, maxChars: 16000 });
+    expect(JSON.stringify(publicHome.value)).not.toContain('Private MOC');
+
+    const rootBefore = treeHome.value.mocs.find((item: any) => item.path === 'Knowledge/MOCs/Root.md').revision;
+    const rootPath = join(vault, 'Knowledge', 'MOCs', 'Root.md');
+    const externallyEdited = (await readFile(rootPath, 'utf8')).replace('# Root', '# Root externally edited');
+    await writeFile(rootPath, externallyEdited);
+    await new Promise(resolve => setTimeout(resolve, 150));
+    const refreshedHome = await callJson(client, 'get_wiki_home', { accessToken, limit: 10, maxChars: 16000 });
+    const rootAfter = refreshedHome.value.mocs.find((item: any) => item.path === 'Knowledge/MOCs/Root.md').revision;
+    expect(rootAfter).toMatch(/^[a-f0-9]{64}$/);
+    expect(rootAfter).not.toBe(rootBefore);
 
     const neighborhood = await callJson(client, 'get_wiki_neighborhood', { path: 'Knowledge/Source.md', accessToken, limit: 10, maxChars: 5000 });
     expect(neighborhood.value.neighbors).toEqual(expect.arrayContaining([
@@ -1625,6 +1655,163 @@ test('remaining organization loops connect issue retrospectives, recall repair, 
 
     const manifest = await callJson(client, 'get_wiki_organization_manifest', { accessToken, maxChars: 12000 });
     expect(manifest.value).toMatchObject({ format: 'mcpvault-organization-manifest', portable: true, contracts: expect.objectContaining({ relations: expect.any(Array) }), reservedPaths: expect.arrayContaining(['.mcpvault/']) });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('portable migration preflight excludes non-global content and reports revision-safe compatibility hazards', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'portable-owner', userId: 'portable-family', modelId: 'codex', agentId: 'portable-worker', password: 'portable-owner-password' });
+    const accessToken = registration.value.accessToken;
+    for (const [path, frontmatter] of [
+      ['Knowledge/Portable One.md', { title: 'Portable One', note_kind: 'atomic', lifecycle: 'evergreen', stable_id: 'portable-shared', aliases: ['공통 용어'], tags: ['portable'], supports: ['[[Missing Portable Target]]'] }],
+      ['Knowledge/Portable Two.md', { title: 'Portable Two', note_kind: 'atomic', lifecycle: 'evergreen', stable_id: 'portable-shared', aliases: ['공통 용어'], tags: 'portable' }],
+    ] as const) {
+      const written = await client.callTool({ name: 'write_note', arguments: { path, content: `# ${frontmatter.title}\n`, frontmatter, expectedRevision: 'missing', accessToken } });
+      expect(written.isError).toBeFalsy();
+    }
+    await client.callTool({ name: 'write_note', arguments: { path: 'scope://agent/portable-worker/Private.md', content: '# Private\nNever export.', frontmatter: { stable_id: 'private-id' }, expectedRevision: 'missing', accessToken } });
+    await client.callTool({ name: 'write_note', arguments: { path: 'Knowledge/Quarantined Portable.md', content: '# Quarantined\nNever export.', frontmatter: { note_kind: 'atomic', moderation_status: 'quarantined', stable_id: 'quarantined-id' }, expectedRevision: 'missing', accessToken } });
+    await callJson(client, 'publish_blog_post', { slug: 'portable-community-only', title: 'Community only', content: 'Never enter a global migration inventory.', expectedRevision: 'missing', accessToken });
+
+    const defaultManifest = await callJson(client, 'get_wiki_organization_manifest', { maxChars: 24000, accessToken });
+    expect(defaultManifest.value).toMatchObject({ manifestVersion: 2, portable: true, contentFreeByDefault: true, contractFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    expect(defaultManifest.value.readiness).toBeUndefined();
+    expect(JSON.stringify(defaultManifest.value)).not.toContain('Portable One');
+
+    const readiness = await callJson(client, 'get_wiki_organization_manifest', { includeReadiness: true, limit: 50, maxChars: 24000, accessToken });
+    expect(readiness.value.readiness).toMatchObject({ scope: 'global_only', bodyContentIncluded: false, privateOrCommunityContentIncluded: false, safeToMigrate: false, excludedModerated: 1 });
+    expect(readiness.value.readiness.issueCounts).toMatchObject({ duplicate_stable_id: 1, vocabulary_collision: 1, property_type_drift: 1, missing_relation_target: 1 });
+    expect(readiness.value.readiness.inventory.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Portable One.md', revision: expect.stringMatching(/^[a-f0-9]{64}$/) })]));
+    expect(JSON.stringify(readiness.value.readiness)).not.toContain('portable-community-only');
+    expect(JSON.stringify(readiness.value.readiness)).not.toContain('Private.md');
+    expect(JSON.stringify(readiness.value.readiness)).not.toContain('Quarantined Portable');
+
+    const counterpart = {
+      manifestVersion: 1,
+      format: 'mcpvault-organization-manifest',
+      reservedPaths: ['Community/'],
+      contracts: { noteKinds: ['atomic'], lifecycles: ['evergreen'], taskStatuses: [], serviceClasses: [], properties: [{ name: 'aliases', type: 'text' }], relations: [] },
+    };
+    const compared = await callJson(client, 'get_wiki_organization_manifest', { compareManifest: counterpart, expectedCounterpartFingerprint: 'a'.repeat(64), limit: 50, maxChars: 24000, accessToken });
+    expect(compared.value.migrationPreview).toMatchObject({ mutatesVault: false, compatible: false, counterpartChanged: true });
+    expect(compared.value.migrationPreview.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'counterpart_changed', severity: 'blocking' }),
+      expect.objectContaining({ code: 'property_contract_type_conflict', severity: 'blocking' }),
+    ]));
+    expect(compared.value.migrationPreview.issueCounts.missing_relation_contract).toBeGreaterThan(0);
+    const tinyCompared = await callJson(client, 'get_wiki_organization_manifest', { compareManifest: counterpart, expectedCounterpartFingerprint: 'a'.repeat(64), limit: 50, maxChars: 512, prettyPrint: true, accessToken });
+    expect(String((tinyCompared.result.content as any)[0].text).length).toBeLessThanOrEqual(512);
+    expect(tinyCompared.value.contractFingerprint).toMatch(/^[a-f0-9]{64}$/);
+    expect(tinyCompared.value.migrationPreview).toMatchObject({ compatible: false, blockingIssues: expect.any(Number) });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('curation, synthesis, discussion, task lessons, and interrupted edits expose exact revision-safe next actions', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'workflow-owner', userId: 'workflow-family', modelId: 'codex', agentId: 'workflow-worker', password: 'workflow-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const source = await callJson(client, 'ingest_source', { sourceId: 'workflow-source', title: 'Workflow source', content: '# Evidence\n\nA checked fact.\n', capturedBy: 'codex', accessToken });
+    const published = await callJson(client, 'publish_knowledge', { path: 'Knowledge/Workflow synthesis.md', content: '# Workflow synthesis\n\nA checked claim.\n', evidencePaths: [source.value.path], keyPoints: ['A checked claim'], status: 'draft', expectedRevision: 'missing', accessToken });
+    const packet = await callJson(client, 'get_wiki_answer_packet', { path: 'Knowledge/Workflow synthesis.md', intent: 'decide', maxChars: 12000, accessToken });
+    expect(packet.value.synthesisPlan).toMatchObject({ status: 'needs_counterpoint_review', inputs: expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Workflow synthesis.md', revision: published.value.revision })]), nextAction: { endpointId: 'wiki.neighborhood', arguments: { path: 'Knowledge/Workflow synthesis.md', includeSemantic: false } } });
+    const smallPacket = await callJson(client, 'get_wiki_answer_packet', { path: 'Knowledge/Workflow synthesis.md', intent: 'decide', maxChars: 1024, accessToken });
+    expect((smallPacket.result.content as any)[0].text.length).toBeLessThanOrEqual(1024);
+    expect(smallPacket.value.synthesisPlan.nextAction.endpointId).toBe('wiki.neighborhood');
+
+    const capture = await callJson(client, 'capture_wiki_note', { title: 'Interrupted curation', content: 'Clarify this capture later.', expectedRevision: 'missing', accessToken });
+    const maintenance = await callJson(client, 'get_wiki_maintenance_debt', { limit: 20, maxChars: 12000, accessToken });
+    expect(maintenance.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: capture.value.path, revision: capture.value.revision, curationPlan: expect.objectContaining({ then: expect.objectContaining({ endpointId: 'wiki.clarify', arguments: { path: capture.value.path, expectedRevision: capture.value.revision } }) }) })]));
+    const smallMaintenance = await callJson(client, 'get_wiki_maintenance_debt', { limit: 20, maxChars: 700, accessToken });
+    expect((smallMaintenance.result.content as any)[0].text.length).toBeLessThanOrEqual(700);
+    expect(smallMaintenance.value.nextAction.endpointId).toBe('wiki.answer_packet');
+    const reviewPacket = await callJson(client, 'get_wiki_review_packet', { limit: 20, maxChars: 12000, accessToken });
+    expect(reviewPacket.value.curationPlan.selected.revision).toMatch(/^[a-f0-9]{64}$/);
+    expect(reviewPacket.value.curationPlan.inspect.endpointId).toBe('wiki.answer_packet');
+    const smallReviewPacket = await callJson(client, 'get_wiki_review_packet', { limit: 20, maxChars: 700, accessToken });
+    expect((smallReviewPacket.result.content as any)[0].text.length).toBeLessThanOrEqual(700);
+    expect(smallReviewPacket.value.selected.revision).toMatch(/^[a-f0-9]{64}$/);
+    expect(smallReviewPacket.value.nextAction.endpointId).toBe('wiki.answer_packet');
+
+    const task = await callJson(client, 'create_agent_task', { taskId: 'workflow-lesson', title: 'Learn from indexing', description: 'Check the index repair flow.', expectedRevision: 'missing', accessToken });
+    await callJson(client, 'update_agent_task', { taskId: 'workflow-lesson', status: 'completed', reason: 'The repair path was verified.', retrospective: 'Index repairs need a revision guard and a post-write read.', expectedRevision: task.value.revision, accessToken });
+    const promotion = await callJson(client, 'get_wiki_promotion_candidates', { limit: 20, maxChars: 16000, accessToken });
+    expect(promotion.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ sourceType: 'completed_task', taskId: 'workflow-lesson', revision: expect.stringMatching(/^[a-f0-9]{64}$/), promotionPlan: expect.objectContaining({ inspect: expect.objectContaining({ endpointId: 'mcp.read_agent_task' }) }) })]));
+    const smallPromotion = await callJson(client, 'get_wiki_promotion_candidates', { limit: 20, maxChars: 700, accessToken });
+    expect((smallPromotion.result.content as any)[0].text.length).toBeLessThanOrEqual(700);
+    expect(smallPromotion.value.items?.[0]?.nextAction?.endpointId || smallPromotion.value.nextAction?.endpointId).toBe('mcp.read_agent_task');
+
+    const checkpoint = await callJson(client, 'save_work_state', {
+      topic: 'Interrupted organization edits', summary: 'Two changes were planned but not applied.', nextAction: 'Re-read both notes and resume only if revisions still match.',
+      pendingEdits: [
+        { path: 'Knowledge/Workflow synthesis.md', expectedRevision: published.value.revision, endpointId: 'wiki.review', purpose: 'Complete evidence review.' },
+        { path: capture.value.path, expectedRevision: capture.value.revision, endpointId: 'wiki.clarify', purpose: 'Choose a final disposition.' },
+      ],
+      accessToken,
+    });
+    const resumed = await callJson(client, 'resume_work_state', { accessToken });
+    expect(checkpoint.value.revision).toMatch(/^[a-f0-9]{64}$/);
+    expect(resumed.value.fm.pending_edits).toHaveLength(2);
+    expect(resumed.value.fm.pending_edits[0]).toMatchObject({ expectedRevision: published.value.revision, endpointId: 'wiki.review' });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('mixed Korean and English retrieval keeps durable Wiki context ahead of noisy community matches', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'retrieval-owner', userId: 'retrieval-family', modelId: 'codex', agentId: 'retrieval-worker', password: 'retrieval-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const source = await callJson(client, 'ingest_source', { sourceId: 'retrieval-source', title: 'Retrieval source', content: '# Retrieval source\n\nRAG combines retrieval with generation. 검색 증강 생성은 검색 결과를 생성 과정에 연결한다.\n', capturedBy: 'codex', accessToken });
+    for (const [path, title] of [['Maps/검색 MOC.md', '검색 MOC'], ['Maps/AI MOC.md', 'AI MOC']] as const) {
+      await client.callTool({ name: 'write_note', arguments: { path, content: `# ${title}\n\n- [[Knowledge/RAG Guide]]\n`, frontmatter: { note_kind: 'moc', lifecycle: 'active', moc_purpose: `${title} navigation`, moc_questions: ['RAG는 언제 유용한가?'] }, expectedRevision: 'missing', accessToken } });
+    }
+    const main = await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/RAG Guide.md', content: '# 검색 증강 생성\n\n검색과 생성을 결합해 근거를 찾은 뒤 답을 구성한다.\n', evidencePaths: [source.value.path],
+      aliases: ['RAG', 'retrieval augmented generation', '회수 증강 생성'], primaryMoc: '[[Maps/검색 MOC]]', mocs: ['[[Maps/AI MOC]]'],
+      summary: 'RAG는 검색 결과를 생성에 연결한다.', keyPoints: ['검색과 생성을 분리해 검증한다.'], openQuestions: ['검색 실패를 어떻게 드러낼까?'], status: 'draft', expectedRevision: 'missing', accessToken,
+    });
+    const patched = await callJson(client, 'patch_note', { path: 'Knowledge/RAG Guide.md', oldString: '답을 구성한다.', newString: '검증 가능한 답을 구성한다.', expectedRevision: main.value.revision, accessToken });
+    expect(patched.value.success).toBe(true);
+    await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/RAG Alternate.md', content: '# RAG alternate meaning\n\nRAG can also be an ambiguous local abbreviation.\n', evidencePaths: [source.value.path], aliases: ['RAG'], status: 'draft', expectedRevision: 'missing', accessToken,
+    });
+    await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/RAG Failure.md', content: '# RAG failure\n\n검색 결과가 부정확하면 생성도 근거 없이 강화될 수 있다.\n', evidencePaths: [source.value.path],
+      relations: { contradicts: ['[[Knowledge/RAG Guide]]'] }, polarity: 'negative', negativeType: 'counterexample',
+      attempted: 'Use retrieved passages without checking relevance.', observed: 'The answer amplified an irrelevant passage.', failureCondition: 'Low-relevance retrieval.', reproduction: 'Query an ambiguous acronym.', whyRejected: 'Similarity alone is not evidence.', reusableLesson: 'Inspect relevance and preserve a counterpoint.', status: 'disputed', expectedRevision: 'missing', accessToken,
+    });
+    for (let index = 0; index < 8; index += 1) {
+      await callJson(client, 'publish_blog_post', { slug: `rag-noise-${index}`, title: `회수 증강 생성 community thread ${index}`, content: `회수 증강 생성 discussion ${index}. ${'long community context '.repeat(120)}`, category: 'discussion', expectedRevision: 'missing', accessToken });
+    }
+
+    const search = await callJson(client, 'search_notes', { query: '회수 증강 생성', limit: 6, maxChars: 2200, includeRevisions: true, accessToken });
+    expect((search.result.content as any)[0].text.length).toBeLessThanOrEqual(2200);
+    expect(search.value[0]).toMatchObject({ wk: true, why: expect.arrayContaining(['wiki_priority']), rv: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    const mainHit = search.value.find((item: any) => item.p === 'Knowledge/RAG Guide.md');
+    expect(mainHit).toMatchObject({ why: expect.arrayContaining(['alias_match']), next: 'read_projection' });
+    const firstCommunity = search.value.findIndex((item: any) => String(item.p).startsWith('Community/'));
+    const lastWiki = search.value.reduce((last: number, item: any, index: number) => item.wk ? index : last, -1);
+    expect(firstCommunity === -1 || lastWiki < firstCommunity).toBe(true);
+    expect(search.value.every((item: any) => String(item.ex || '').length <= 60)).toBe(true);
+    const ambiguous = await callJson(client, 'search_notes', { query: 'RAG', limit: 6, maxChars: 2200, accessToken });
+    expect(ambiguous.value.filter((item: any) => item.wk).map((item: any) => item.p)).toEqual(expect.arrayContaining(['Knowledge/RAG Guide.md', 'Knowledge/RAG Alternate.md']));
+
+    const packet = await callJson(client, 'get_wiki_answer_packet', { path: 'Knowledge/RAG Guide.md', intent: 'decide', includeSemantic: false, maxChars: 5000, accessToken });
+    expect(packet.value.source).toMatchObject({ path: 'Knowledge/RAG Guide.md', revision: patched.value.revision, summaryStale: true, navigation: expect.objectContaining({ primaryMoc: expect.anything() }) });
+    expect(packet.value.counterpoints).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/RAG Failure.md', relationToSource: 'counterpoint_or_review' })]));
+    expect(packet.value.reasoningTrail.counterexamples).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/RAG Failure.md', revision: expect.stringMatching(/^[a-f0-9]{64}$/) })]));
+    expect(packet.value.synthesisPlan.status).toBe('ready_for_decision_draft');
+    expect(JSON.stringify(packet.value)).not.toContain('long community context long community context long community context');
   } finally {
     await client.close();
     await server.close();

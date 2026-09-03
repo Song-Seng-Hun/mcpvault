@@ -5,7 +5,7 @@ export function getContinuityTools() {
     return [
         {
             name: 'save_work_state',
-            description: 'Save a compact private resume checkpoint in this authenticated model or agent scope. Use before a context limit, handoff, or session end. Store only summary, next action, bounded top-of-mind questions/projects/notes, cursors, and references; never store passwords, access tokens, or sensitive prompt text.',
+            description: 'Save a compact private resume checkpoint in this authenticated model or agent scope. Use before a context limit, handoff, session end, or interrupted multi-note edit. pendingEdits preserves only endpoint/path/expectedRevision/purpose guards; re-read every path before resuming. Never store passwords, access tokens, note bodies, or sensitive prompt text.',
             inputSchema: { type: 'object', properties: {
                     topic: { type: 'string', description: 'Short name of the work in progress' },
                     summary: { type: 'string', description: 'What has been established so far' },
@@ -14,6 +14,7 @@ export function getContinuityTools() {
                     focusQuestions: { type: 'array', items: { type: 'string' }, maxItems: 20, description: 'Private top-of-mind questions for the next session' },
                     focusProjects: { type: 'array', items: { type: 'string' }, maxItems: 20, description: 'Private top-of-mind projects or outcomes' },
                     focusNotes: { type: 'array', items: { type: 'string' }, maxItems: 20, description: 'Private notes/links to inspect first' },
+                    pendingEdits: { type: 'array', maxItems: 20, description: 'Revision guards for interrupted edits; this never reserves or locks a note', items: { type: 'object', properties: { path: { type: 'string', maxLength: 500 }, expectedRevision: { type: 'string', maxLength: 200 }, endpointId: { type: 'string', maxLength: 120 }, purpose: { type: 'string', maxLength: 500 } }, required: ['path', 'expectedRevision', 'endpointId'] } },
                     references: { type: 'array', items: { type: 'string' }, description: 'Note paths or scope URIs to revisit' },
                     cursors: { type: 'object', description: 'Small notification/comment/message cursors for incremental resumption' },
                     expectedRevision: { type: 'string', description: 'Revision returned by the prior checkpoint read; prevents stale overwrites' },

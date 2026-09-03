@@ -606,8 +606,8 @@ test("query_notes filters and sorts frontmatter through the MCP tool", async () 
     expect(result.isError).toBeFalsy();
     expect(JSON.parse((result.content as any)[0].text)).toEqual({
       notes: [
-        { path: "Alpha.md", frontmatter: { status: "active", tags: ["project", "urgent"], priority: 2 }, content: "Alpha body" },
-        { path: "Beta.md", frontmatter: { status: "active", tags: ["project"], priority: 1 }, content: "Beta body" },
+        { path: "Alpha.md", frontmatter: { status: "active", tags: ["project", "urgent"], priority: 2 }, revision: expect.stringMatching(/^[a-f0-9]{64}$/), content: "Alpha body" },
+        { path: "Beta.md", frontmatter: { status: "active", tags: ["project"], priority: 1 }, revision: expect.stringMatching(/^[a-f0-9]{64}$/), content: "Beta body" },
       ],
       total: 2,
       truncated: false,

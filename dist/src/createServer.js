@@ -73,6 +73,7 @@ const SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_4 = 'Use wiki.vocabulary_health t
 const SERVER_INSTRUCTIONS_ORGANIZATION_PROJECTIONS = 'Use wiki.context_pack after selecting a project, MOC, question, or decision when one reusable bounded shelf should combine the root, ordered entrypoints, supporting context, counterpoints, gaps, and revisions; it is derived navigation, not a truth score. Use wiki.exception_board for one 5S-style repair board instead of separately browsing every health report. Use wiki.quality_check for one note-kind-specific advisory checklist; it never blocks publication. Use wiki.resurface_archives to rediscover archived or superseded notes only when current visible notes still link to them; never restore, move, or delete automatically.';
 const SERVER_INSTRUCTIONS_FLOW = 'Use wiki.policy to read the machine-readable organization constitution for the visible scope. Before starting more work, use wiki.flow_health: task_status=next_action is executable WIP, task_status=open with a concrete next_action is pull-ready, and waiting/blocked items should age visibly rather than being silently ignored. The compact wiki.review_packet includes the same flow signals and prioritizes blocked/waiting follow-up. Use service_class=expedite|fixed_date|standard|research only to explain ordering, never to bypass evidence, scope, or moderation. For active projects, add bounded completion_criteria or a visible completion-criteria heading; set startedAt/blockedSince/waitingSince/completedAt when known. The flow report is advisory and does not assign work.';
 const SERVER_INSTRUCTIONS_REMAINING = 'Use the Error Book as a two-stage learning loop: resolve_wiki_issue records resolutionStatus (resolved, wont_fix, duplicate, or still in progress), then add retrospectiveStatus and a bounded retrospective lesson when the cause and prevention are understood; attach followUpPaths instead of hiding recurrence work. A failed or partial wiki.record_recall should include confusion and link a repairPath when one exists; the recall queue surfaces repair-needed items before ordinary due items, and only mark repairStatus=resolved after verifying the repair. Search automatically records only per-account, process-local counts; call record_search_feedback with useful, failed, or ambiguous after meaningful searches, then use get_search_improvement_candidates to improve aliases, retrieval_cues, MOCs, disambiguation, or missing notes. Never put search queries in Markdown or Git. Use wiki.source_lineage to inspect work/edition groupings; sourceWorkId/sourceEditionId are optional explicit identifiers and sourceFamily/sourceVersion remain compatible aliases, while source_id, immutable content hash, evidence path, and revision remain authoritative. Use wiki.organization_manifest when moving organization practices to another Vault: it is content-free and portable, but never copy private scopes, sessions, or .mcpvault caches.';
+const SERVER_INSTRUCTIONS_PORTABLE_WORKFLOWS = 'Organization plans reuse existing endpoints. wiki.home is the first bounded intent router: choose exactly one workflowRoute for find, capture, organize, decide, execute, review, repair, or migration instead of opening every dashboard; listed notes carry current revisions. wiki.maintenance_debt and wiki.review_packet return revision-stamped curation plans; inspect first and finish one repair before pulling another. For decide/review reads, wiki.answer_packet returns a synthesisPlan whose missing evidence/counterpoint stages must be completed before a proposed Decision Record or review; it never supersedes inputs. wiki.promotion_candidates covers discussions and completed-task retrospectives, but both are context rather than immutable factual evidence. Before an interrupted multi-note edit, continuity.save may store only bounded endpointId/path/expectedRevision/purpose pendingEdits; re-read them on resume because a checkpoint is not a lock. wiki.organization_manifest is content-free by default; includeReadiness emits only bounded global path/revision/identity/Property/relation metadata, excluding Community, private scopes, whispers, bodies, sessions, and caches. compareManifest plus expectedCounterpartFingerprint is a non-mutating compatibility guard.';
 const SEMANTIC_QUERY_TIMEOUT_MS = 2_000;
 const REQUEST_QUEUE_WAIT_MS = 10_000;
 class RequestConcurrencyGate {
@@ -425,7 +426,7 @@ export function createServer(vaultPath, options = {}) {
     const requestGate = new RequestConcurrencyGate();
     const server = new Server({ name, version }, {
         capabilities: { tools: {} },
-        instructions: `${SERVER_INSTRUCTIONS} ${SERVER_INSTRUCTIONS_ORGANIZATION} ${SERVER_INSTRUCTIONS_FIRST_ENTRY} ${SERVER_INSTRUCTIONS_COMMUNITY} ${SERVER_INSTRUCTIONS_FEEDBACK_FORUM} ${SERVER_INSTRUCTIONS_WIKI_QUALITY} ${SERVER_INSTRUCTIONS_KNOWLEDGE_ORGANIZATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_NAVIGATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_QUALITY_2} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_3} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_4} ${SERVER_INSTRUCTIONS_ORGANIZATION_PROJECTIONS} ${SERVER_INSTRUCTIONS_FLOW} ${SERVER_INSTRUCTIONS_REMAINING} ${SERVER_INSTRUCTIONS_IDEATION} ${SERVER_INSTRUCTIONS_MAINTENANCE} ${SERVER_INSTRUCTIONS_MOTIVATION}`,
+        instructions: `${SERVER_INSTRUCTIONS} ${SERVER_INSTRUCTIONS_ORGANIZATION} ${SERVER_INSTRUCTIONS_FIRST_ENTRY} ${SERVER_INSTRUCTIONS_COMMUNITY} ${SERVER_INSTRUCTIONS_FEEDBACK_FORUM} ${SERVER_INSTRUCTIONS_WIKI_QUALITY} ${SERVER_INSTRUCTIONS_KNOWLEDGE_ORGANIZATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_NAVIGATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_QUALITY_2} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_3} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_4} ${SERVER_INSTRUCTIONS_ORGANIZATION_PROJECTIONS} ${SERVER_INSTRUCTIONS_FLOW} ${SERVER_INSTRUCTIONS_REMAINING} ${SERVER_INSTRUCTIONS_PORTABLE_WORKFLOWS} ${SERVER_INSTRUCTIONS_IDEATION} ${SERVER_INSTRUCTIONS_MAINTENANCE} ${SERVER_INSTRUCTIONS_MOTIVATION}`,
     });
     const buildInternalTools = () => [
         {
@@ -756,7 +757,7 @@ export function createServer(vaultPath, options = {}) {
         },
         {
             name: "query_notes",
-            description: "Filter notes by structured YAML frontmatter and optionally sort by a frontmatter property. Filters use exact values; array fields match when they contain the requested value(s).",
+            description: "Filter notes by structured YAML frontmatter and optionally sort by a frontmatter property. Filters use exact values; array fields match when they contain the requested value(s). Every metadata row includes its current revision so a selected follow-up can use optimistic concurrency without rereading every body.",
             inputSchema: {
                 type: "object",
                 properties: {
@@ -1116,6 +1117,7 @@ export function createServer(vaultPath, options = {}) {
                             ...(trimmedArgs.focusQuestions !== undefined && { focusQuestions: trimmedArgs.focusQuestions }),
                             ...(trimmedArgs.focusProjects !== undefined && { focusProjects: trimmedArgs.focusProjects }),
                             ...(trimmedArgs.focusNotes !== undefined && { focusNotes: trimmedArgs.focusNotes }),
+                            ...(trimmedArgs.pendingEdits !== undefined && { pendingEdits: trimmedArgs.pendingEdits }),
                             ...(trimmedArgs.summaryLayer !== undefined && { summaryLayer: trimmedArgs.summaryLayer }),
                             ...(trimmedArgs.summaryHighlights !== undefined && { summaryHighlights: trimmedArgs.summaryHighlights }),
                             ...(trimmedArgs.references !== undefined && { references: trimmedArgs.references }),
@@ -1528,7 +1530,13 @@ export function createServer(vaultPath, options = {}) {
                         return jsonResult(await llmWiki.sourceLineage(principal, trimmedArgs.sourceFamily, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_organization_manifest": {
-                        return jsonResult(llmWiki.organizationManifest(trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+                        return jsonResult(await llmWiki.organizationManifest(principal, {
+                            ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
+                            ...(trimmedArgs.limit !== undefined && { limit: trimmedArgs.limit }),
+                            ...(trimmedArgs.includeReadiness !== undefined && { includeReadiness: trimmedArgs.includeReadiness }),
+                            ...(trimmedArgs.compareManifest !== undefined && { compareManifest: trimmedArgs.compareManifest }),
+                            ...(typeof trimmedArgs.expectedCounterpartFingerprint === 'string' && { expectedCounterpartFingerprint: trimmedArgs.expectedCounterpartFingerprint }),
+                        }), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_promotion_candidates": {
                         return jsonResult(await llmWiki.promotionCandidates(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
@@ -2509,7 +2517,7 @@ export function createServer(vaultPath, options = {}) {
         createRequestServer: () => {
             const requestServer = new Server({ name, version }, {
                 capabilities: { tools: {} },
-                instructions: `${SERVER_INSTRUCTIONS} ${SERVER_INSTRUCTIONS_ORGANIZATION} ${SERVER_INSTRUCTIONS_FIRST_ENTRY} ${SERVER_INSTRUCTIONS_COMMUNITY} ${SERVER_INSTRUCTIONS_FEEDBACK_FORUM} ${SERVER_INSTRUCTIONS_WIKI_QUALITY} ${SERVER_INSTRUCTIONS_KNOWLEDGE_ORGANIZATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_NAVIGATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_QUALITY_2} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_3} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_4} ${SERVER_INSTRUCTIONS_ORGANIZATION_PROJECTIONS} ${SERVER_INSTRUCTIONS_FLOW} ${SERVER_INSTRUCTIONS_REMAINING} ${SERVER_INSTRUCTIONS_IDEATION} ${SERVER_INSTRUCTIONS_MAINTENANCE} ${SERVER_INSTRUCTIONS_MOTIVATION}`,
+                instructions: `${SERVER_INSTRUCTIONS} ${SERVER_INSTRUCTIONS_ORGANIZATION} ${SERVER_INSTRUCTIONS_FIRST_ENTRY} ${SERVER_INSTRUCTIONS_COMMUNITY} ${SERVER_INSTRUCTIONS_FEEDBACK_FORUM} ${SERVER_INSTRUCTIONS_WIKI_QUALITY} ${SERVER_INSTRUCTIONS_KNOWLEDGE_ORGANIZATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_NAVIGATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_QUALITY_2} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_3} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_4} ${SERVER_INSTRUCTIONS_ORGANIZATION_PROJECTIONS} ${SERVER_INSTRUCTIONS_FLOW} ${SERVER_INSTRUCTIONS_REMAINING} ${SERVER_INSTRUCTIONS_PORTABLE_WORKFLOWS} ${SERVER_INSTRUCTIONS_IDEATION} ${SERVER_INSTRUCTIONS_MAINTENANCE} ${SERVER_INSTRUCTIONS_MOTIVATION}`,
             });
             installMcpHandlers(requestServer);
             return requestServer;
@@ -2693,7 +2701,33 @@ function compactOverflowValue(value, maxChars) {
     }
     const source = value;
     const compact = { truncated: true, maxChars };
-    for (const key of ['protocol', 'state', 'path', 'revision', 'roomId', 'messageId', 'commentId', 'slug', 'total', 'totalMessages', 'nextCursor', 'contextBefore']) {
+    const compactArguments = (input) => {
+        if (!input || typeof input !== 'object' || Array.isArray(input))
+            return undefined;
+        return Object.fromEntries(Object.entries(input)
+            .filter(([key, item]) => !/(?:token|password|secret|credential)/i.test(key) && (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean'))
+            .slice(0, 8)
+            .map(([key, item]) => [key, typeof item === 'string' ? item.slice(0, 160) : item]));
+    };
+    const compactAction = (input) => {
+        if (!input || typeof input !== 'object' || Array.isArray(input))
+            return undefined;
+        const action = input;
+        const result = Object.fromEntries(['endpointId', 'tool', 'target', 'followUpTool', 'followUpEndpointId', 'reason'].filter(key => action[key] !== undefined).map(key => [key, typeof action[key] === 'string' ? String(action[key]).slice(0, 160) : action[key]]));
+        const args = compactArguments(action.arguments);
+        if (args && Object.keys(args).length)
+            result.arguments = args;
+        if (Array.isArray(action.requiredArguments))
+            result.requiredArguments = action.requiredArguments.slice(0, 8).map(item => String(item).slice(0, 80));
+        return result;
+    };
+    const compactLocator = (input) => {
+        if (!input || typeof input !== 'object' || Array.isArray(input))
+            return undefined;
+        const item = input;
+        return Object.fromEntries(['path', 'revision', 'stableId', 'title', 'sourceType'].filter(key => item[key] !== undefined).map(key => [key, typeof item[key] === 'string' ? String(item[key]).slice(0, 200) : item[key]]));
+    };
+    for (const key of ['protocol', 'state', 'scope', 'path', 'revision', 'roomId', 'messageId', 'commentId', 'slug', 'total', 'totalMessages', 'nextCursor', 'contextBefore', 'contractFingerprint', 'counterpartFingerprint', 'compatible', 'complete']) {
         const candidate = source[key];
         if (typeof candidate === 'string' || typeof candidate === 'number' || typeof candidate === 'boolean')
             compact[key] = candidate;
@@ -2705,8 +2739,35 @@ function compactOverflowValue(value, maxChars) {
     if (source.signals && typeof source.signals === 'object' && !Array.isArray(source.signals))
         compact.signals = source.signals;
     if (source.nextAction && typeof source.nextAction === 'object' && !Array.isArray(source.nextAction)) {
-        const action = source.nextAction;
-        compact.nextAction = Object.fromEntries(['tool', 'target', 'followUpTool', 'reason'].filter(key => action[key] !== undefined).map(key => [key, typeof action[key] === 'string' ? String(action[key]).slice(0, 160) : action[key]]));
+        compact.nextAction = compactAction(source.nextAction);
+    }
+    if (source.source && typeof source.source === 'object' && !Array.isArray(source.source))
+        compact.source = compactLocator(source.source);
+    if (source.selected && typeof source.selected === 'object' && !Array.isArray(source.selected))
+        compact.selected = compactLocator(source.selected);
+    if (Array.isArray(source.workflowRoutes))
+        compact.workflowRoutes = source.workflowRoutes.slice(0, 2).map(route => {
+            if (!route || typeof route !== 'object')
+                return route;
+            const item = route;
+            return { intent: item.intent, ...compactAction(item) };
+        });
+    if (source.synthesisPlan && typeof source.synthesisPlan === 'object' && !Array.isArray(source.synthesisPlan)) {
+        const plan = source.synthesisPlan;
+        compact.synthesisPlan = {
+            status: plan.status,
+            inputs: Array.isArray(plan.inputs) ? plan.inputs.slice(0, 2).map(compactLocator) : [],
+            missingStages: Array.isArray(plan.missingStages) ? plan.missingStages.slice(0, 4) : [],
+            nextAction: compactAction(plan.nextAction),
+        };
+    }
+    if (source.curationPlan && typeof source.curationPlan === 'object' && !Array.isArray(source.curationPlan)) {
+        const plan = source.curationPlan;
+        compact.curationPlan = { selected: compactLocator(plan.selected), inspect: compactAction(plan.inspect), then: compactAction(plan.then) };
+    }
+    if (source.migrationPreview && typeof source.migrationPreview === 'object' && !Array.isArray(source.migrationPreview)) {
+        const preview = source.migrationPreview;
+        compact.migrationPreview = Object.fromEntries(['compatible', 'complete', 'counterpartFingerprint', 'blockingIssues', 'warnings', 'nextAction'].filter(key => preview[key] !== undefined).map(key => [key, key === 'nextAction' ? compactAction(preview[key]) : Array.isArray(preview[key]) ? preview[key].slice(0, 3) : preview[key]]));
     }
     if (Array.isArray(source.endpoints)) {
         compact.endpoints = source.endpoints.slice(0, 3).map(endpoint => {
@@ -2762,5 +2823,23 @@ function compactOverflowValue(value, maxChars) {
         const quarantine = source.quarantine;
         compact.quarantine = { total: quarantine.total, truncated: quarantine.truncated, items: Array.isArray(quarantine.items) ? quarantine.items.slice(0, 8) : [] };
     }
-    return compact;
+    if (JSON.stringify(compact).length <= maxChars)
+        return compact;
+    const tiny = { truncated: true, maxChars };
+    for (const key of ['scope', 'path', 'revision', 'contractFingerprint', 'counterpartFingerprint', 'compatible'])
+        if (compact[key] !== undefined)
+            tiny[key] = compact[key];
+    if (compact.nextAction)
+        tiny.nextAction = compact.nextAction;
+    else if (compact.curationPlan && typeof compact.curationPlan === 'object') {
+        const plan = compact.curationPlan;
+        tiny.selected = plan.selected;
+        tiny.nextAction = plan.inspect;
+    }
+    else if (compact.synthesisPlan && typeof compact.synthesisPlan === 'object') {
+        const plan = compact.synthesisPlan;
+        tiny.status = plan.status;
+        tiny.nextAction = plan.nextAction;
+    }
+    return JSON.stringify(tiny).length <= maxChars ? tiny : { truncated: true, maxChars };
 }

@@ -32,48 +32,58 @@ tools; new behaviors belong in the endpoint catalog.
 - MOC candidates now include current revisions, deterministic authored order,
   a bounded Obsidian Markdown draft, and collision-aware `notes.write` guidance.
   The suggestion remains non-mutating.
+- Maintenance debt and the compact review packet now route one selected item
+  through existing inspect/mutate endpoints with its current revision. Answer
+  packets for decide/review expose a bounded synthesis plan that preserves
+  inputs, names missing evidence/counterpoint stages, and routes to an existing
+  review or proposed Decision Record rather than inventing a curator API.
+- Community discussions and completed-task retrospectives share one promotion
+  queue with revision-safe inspection and publication guidance. Social/task
+  records remain provenance context, never immutable factual evidence.
+- Private continuity checkpoints can preserve bounded pending edit guards
+  (`endpointId`, path, expected revision, purpose) across interruption without
+  locking notes or duplicating their bodies.
+- Organization manifest v2 has a normalized contract fingerprint, optional
+  global-only metadata readiness scan, contract/identity comparison, stale
+  counterpart detection, and honest inventory truncation. Community, private
+  scopes, whispers, bodies, sessions, and caches never enter that inventory.
+- A representative Korean/English corpus test covers ambiguous aliases,
+  multiple MOCs, negative knowledge, stale summaries, and long community
+  noise. Bounded search keeps Wiki knowledge first and the selected answer
+  packet retains a revision, counterpoint, stale-summary signal, and synthesis
+  route.
+- Home is now the single intent router rather than another dashboard. It maps
+  find/capture/organize/decide/execute/review/repair/migrate to one existing
+  endpoint, returns a live recommended action, and carries metadata-index
+  revisions without reopening every note body. A 512-character response still
+  preserves an executable endpoint and its required argument names.
+- The Global Hub/Replica path now proves source-before-knowledge migration
+  between two Vault roots. Immutable `_sources/` snapshots are approved first;
+  dependent knowledge binds exact Hub evidence revisions and a signed portable
+  organization fingerprint. Incompatible contracts and dirty target notes stop
+  before overwrite, while private/Community paths are rejected even inside
+  provenance.
+- Organization projections now share a last-resort response compactor that
+  retains revision locators, exact endpoint actions, curation/synthesis plans,
+  and migration fingerprints without serializing credentials. Direct Home,
+  answer, review, maintenance, promotion, and manifest tests cover minimum
+  budgets. Public Home also excludes private/quarantined MOCs, ignores a huge
+  irrelevant Property, and refreshes its revision after an external Markdown
+  edit without a server restart.
 
 Evidence: `moc-navigation.test.ts`, `backlinks.test.ts`, `organization.test.ts`,
-and the onboarding/context-pack/capacity integration cases in `llm-wiki.test.ts`.
+`filesystem.test.ts`, `continuity.test.ts`, `global-sync.test.ts`, and the
+onboarding/context-pack/capacity/retrieval/migration integration cases in
+`llm-wiki.test.ts`.
 These prove the named behaviors, not completion of the whole goal.
 
 ## Open work with concrete completion evidence
 
-1. **Finish curator/synthesis consolidation.** The MOC scaffold need now lives
-   in the existing candidate endpoint instead of a hidden API. Curator and
-   synthesis intent still need to be traced through maintenance, answer-packet,
-   decision, and publication workflows before adding any operation. Prove a
-   new agent can discover and use the resulting path; preserve prerequisites,
-   explicit cycles, Unicode titles, scope, evidence, and revisions. Never
-   automatically declare source notes superseded because a synthesis candidate
-   exists.
-2. **Unify bounds and access across organization projections.** Audit direct
-   service results as well as the generic MCP response limiter. At minimum and
-   normal budgets retain a next step, exact identifiers/revisions, and honest
-   truncation. Test hidden content, private paths, huge Properties, several
-   MOC roots, concurrent changes, and external Markdown edits.
-3. **Complete capture-to-permanent-knowledge continuity.** Fleeting capture,
-   clarification lifecycle, destination collision, immutable-source distillation,
-   and MOC draft placement are now connected by revision-bound next actions.
-   Discussion promotion, completed-task lessons, and interrupted multi-note
-   edits still need one end-to-end proof. Preserve the immutable work/edition
-   source and distinguish evidence from navigational references.
-4. **Make portable organization practical.** The content-free manifest is
-   exported, but destination compatibility, property type drift, vocabulary
-   collisions, stable IDs, missing relation targets, and a revision-aware
-   migration preview still need an end-to-end workflow. Never copy private
-   scopes, sessions, or derived caches.
-5. **Validate retrieval utility with a representative corpus.** Combine Korean
-   and English notes, ambiguous aliases, multiple classifications/MOCs,
-   negative results, stale summaries, and long discussions. Check that a small
-   packet includes enough reason/context to select a source, and that wiki
-   knowledge remains discoverable as community volume grows.
-6. **Reduce organizational burden.** Trace the same user intent through home,
-   catalog, graph, packets, review, and repair endpoints. Remove duplicate
-   rituals and contradictory advice; retain optional templates and a short
-   first-entry path. Verify externally installed clients need only the
-   endpoint/plugin/skill workflow the user requested.
-
+1. **Prove the low-friction route in an external client.** Home now removes the
+   overlapping-dashboard decision from the protocol and the plugin/skill path
+   needs no helper daemon, but exercise one newly installed external client
+   from orientation through one selected workflow route before calling the
+   usability goal complete.
 ## Completion gate
 
 For each open workflow, inspect its actual registered schema, dispatcher,

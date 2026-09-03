@@ -25,6 +25,7 @@ const MAX_RATE_BUCKETS = 4_096;
 const DEFAULT_BATCH_LIMIT = 100;
 const MAX_BATCH_LIMIT = 200;
 const RESERVED_ROOTS = new Set(['.git', '.obsidian', '.mcpvault', '_scopes', '_whispers', 'community', 'node_modules']);
+const GLOBAL_SPECIAL_ROOTS = new Set(['_sources']);
 
 function isLoopbackHost(host: string): boolean {
   const normalized = host.trim().toLowerCase().replace(/^\[|\]$/g, '');
@@ -63,8 +64,12 @@ export interface GlobalManifestEntry {
 
 export interface GlobalProvenance {
   evidencePaths?: string[];
+  /** Hub revision IDs binding evidence paths to the exact approved snapshots. */
+  evidenceRevisions?: Record<string, string>;
   sourceIds?: string[];
   references?: string[];
+  /** Portable organization-manifest contract fingerprint used by the origin. */
+  organizationFingerprint?: string;
 }
 
 export interface GlobalManifest {
@@ -200,7 +205,7 @@ function normalizeId(value: string, field: string): string {
     throw new Error(`${field} must be a safe relative path`);
   }
   const first = normalized.split('/')[0]!.toLowerCase();
-  if (RESERVED_ROOTS.has(first) || normalized.startsWith('_')) throw new Error(`${field} must identify a Global document, not private or service state`);
+  if (RESERVED_ROOTS.has(first) || (normalized.startsWith('_') && !GLOBAL_SPECIAL_ROOTS.has(first))) throw new Error(`${field} must identify a Global document or immutable _sources snapshot, not private or service state`);
   if (!/\.(?:md|markdown|txt)$/i.test(normalized)) throw new Error(`${field} must be a Markdown or text document`);
   return normalized;
 }
@@ -228,14 +233,34 @@ function normalizeProvenance(value: unknown): GlobalProvenance | undefined {
     if (!Array.isArray(raw)) throw new Error(`provenance.${field} must be an array`);
     return Array.from(new Set(raw.map(item => boundedText(String(item), `provenance.${field}`, MAX_PROVENANCE_VALUE_LENGTH)))).slice(0, MAX_PROVENANCE_ITEMS);
   };
-  const evidencePaths = list('evidencePaths');
+  const evidencePaths = list('evidencePaths')?.map((path, index) => normalizeId(path, `provenance.evidencePaths[${index}]`));
   const sourceIds = list('sourceIds');
-  const references = list('references');
-  if (!evidencePaths?.length && !sourceIds?.length && !references?.length) return undefined;
+  const references = list('references')?.map((path, index) => normalizeId(path, `provenance.references[${index}]`));
+  let evidenceRevisions: Record<string, string> | undefined;
+  if (value.evidenceRevisions !== undefined) {
+    if (!isRecord(value.evidenceRevisions)) throw new Error('provenance.evidenceRevisions must be an object');
+    const entries = Object.entries(value.evidenceRevisions);
+    if (entries.length > MAX_PROVENANCE_ITEMS) throw new Error(`provenance.evidenceRevisions must contain at most ${MAX_PROVENANCE_ITEMS} entries`);
+    evidenceRevisions = {};
+    for (const [rawPath, rawRevision] of entries) {
+      const path = normalizeId(rawPath, 'provenance.evidenceRevisions path');
+      const revision = boundedText(String(rawRevision), `provenance.evidenceRevisions.${path}`, MAX_PROVENANCE_VALUE_LENGTH);
+      if (!/^rev_[a-zA-Z0-9-]{8,}$/.test(revision)) throw new Error(`provenance.evidenceRevisions.${path} must be a Hub revision ID`);
+      evidenceRevisions[path] = revision;
+    }
+  }
+  let organizationFingerprint: string | undefined;
+  if (value.organizationFingerprint !== undefined) {
+    organizationFingerprint = String(value.organizationFingerprint).trim().toLowerCase();
+    if (!/^[a-f0-9]{64}$/.test(organizationFingerprint)) throw new Error('provenance.organizationFingerprint must be a 64-character SHA-256 hex fingerprint');
+  }
+  if (!evidencePaths?.length && !sourceIds?.length && !references?.length && !Object.keys(evidenceRevisions || {}).length && !organizationFingerprint) return undefined;
   return {
     ...(evidencePaths?.length ? { evidencePaths } : {}),
+    ...(evidenceRevisions && Object.keys(evidenceRevisions).length ? { evidenceRevisions } : {}),
     ...(sourceIds?.length ? { sourceIds } : {}),
     ...(references?.length ? { references } : {}),
+    ...(organizationFingerprint ? { organizationFingerprint } : {}),
   };
 }
 
@@ -663,6 +688,17 @@ export class GlobalSyncHub {
         && candidate.operation === operation
         && candidate.contentHash === contentHash);
       if (duplicate) return duplicate;
+      const isSourceSnapshot = documentId.toLowerCase().startsWith('_sources/');
+      if (isSourceSnapshot && current) throw new Error('Global _sources snapshots are immutable; ingest a new source path instead of updating or tombstoning an approved snapshot');
+      if (isSourceSnapshot && operation !== 'upsert') throw new Error('Global _sources snapshots cannot be tombstoned');
+      for (const evidencePath of provenance?.evidencePaths || []) {
+        if (!evidencePath.toLowerCase().startsWith('_sources/')) continue;
+        const evidenceHead = this.currentRevision(evidencePath);
+        if (!evidenceHead || evidenceHead.operation !== 'upsert') throw new Error(`Global evidence must be approved before dependent knowledge: ${evidencePath}`);
+        const boundRevision = provenance?.evidenceRevisions?.[evidencePath];
+        if (!boundRevision) throw new Error(`provenance.evidenceRevisions must bind approved Global evidence: ${evidencePath}`);
+        if (boundRevision !== evidenceHead.revisionId) throw new Error(`Global evidence revision changed before proposal submission: ${evidencePath}`);
+      }
       this.enforceProposalQuota(origin, byteLength);
       if (operation === 'upsert' && typeof input.content === 'string') await this.storeContent(input.content);
       const proposal: GlobalProposal = {
@@ -922,6 +958,8 @@ export interface GlobalSyncReplicaOptions {
   vaultPath: string;
   client: Pick<GlobalSyncClient, 'getManifest' | 'getRevision' | 'submitProposal'>;
   trustedPublicKey: string;
+  /** Reject every remote revision whose signed organization contract differs. */
+  organizationFingerprint?: string;
 }
 
 interface ReplicaDocumentState {
@@ -951,6 +989,7 @@ export class GlobalSyncReplica {
   private readonly quarantineRoot: string;
   private readonly client: GlobalSyncReplicaOptions['client'];
   private readonly trustedPublicKey: KeyObject;
+  private readonly organizationFingerprint: string | undefined;
   private state: ReplicaState = { version: 1, cursor: 0, documents: {} };
   private loaded = false;
 
@@ -961,6 +1000,8 @@ export class GlobalSyncReplica {
     this.quarantineRoot = join(this.vaultPath, '.mcpvault', 'global-sync-quarantine');
     this.client = options.client;
     this.trustedPublicKey = createPublicKey(options.trustedPublicKey);
+    if (options.organizationFingerprint !== undefined && !/^[a-f0-9]{64}$/i.test(options.organizationFingerprint)) throw new Error('organizationFingerprint must be a 64-character SHA-256 hex fingerprint');
+    this.organizationFingerprint = options.organizationFingerprint?.toLowerCase();
   }
 
   private async load(): Promise<void> {
@@ -1019,6 +1060,10 @@ export class GlobalSyncReplica {
         conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: 'Remote manifest sequence is not strictly increasing.' });
         break;
       }
+      if (this.organizationFingerprint && entry.provenance?.organizationFingerprint !== this.organizationFingerprint) {
+        conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: 'Remote revision organization fingerprint is missing or incompatible.' });
+        break;
+      }
       const path = this.localPath(entry.documentId);
       const previous = this.state.documents[entry.documentId];
       const current = await this.currentContent(path);
@@ -1072,12 +1117,12 @@ export class GlobalSyncReplica {
     return { applied, conflicts, cursor: this.state.cursor, hasMore: manifest.hasMore || conflicts.length > 0 };
   }
 
-  async proposeLocal(documentId: string, author: string, reason: string, origin: string): Promise<GlobalProposal> {
+  async proposeLocal(documentId: string, author: string, reason: string, origin: string, provenance?: GlobalProvenance, idempotencyKey?: string): Promise<GlobalProposal> {
     await this.load();
     const normalized = normalizeId(documentId, 'documentId');
     const current = await this.currentContent(this.localPath(normalized));
     if (!current.exists || current.content === undefined) throw new Error('local Global document does not exist');
-    return this.client.submitProposal({ documentId: normalized, ...(this.state.documents[normalized]?.revisionId && { parentRevision: this.state.documents[normalized]!.revisionId }), operation: 'upsert', content: current.content, author, reason, origin });
+    return this.client.submitProposal({ documentId: normalized, ...(this.state.documents[normalized]?.revisionId && { parentRevision: this.state.documents[normalized]!.revisionId }), operation: 'upsert', content: current.content, author, reason, origin, ...(provenance && { provenance }), ...(idempotencyKey && { idempotencyKey }) });
   }
 
   async proposeTombstone(documentId: string, author: string, reason: string, origin: string): Promise<GlobalProposal> {

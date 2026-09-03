@@ -2226,7 +2226,7 @@ export class FileSystemService {
                 ...(params.after && { after: params.after }),
                 canAccessPath,
             });
-            const selected = page.entries.map(entry => ({ path: entry.path, frontmatter: entry.frontmatter }));
+            const selected = page.entries.map(entry => ({ path: entry.path, frontmatter: entry.frontmatter, revision: entry.revision }));
             const nextCursor = page.truncated ? cursorForQueryNote(selected[selected.length - 1], sortBy) : undefined;
             if (params.includeContent) {
                 const withContent = await Promise.all(selected.map(async (note) => {
@@ -2275,7 +2275,7 @@ export class FileSystemService {
                     skipped -= 1;
                     continue;
                 }
-                pageCandidates.push({ path: entry.path, frontmatter: entry.frontmatter });
+                pageCandidates.push({ path: entry.path, frontmatter: entry.frontmatter, revision: entry.revision });
                 if (pageCandidates.length > limit)
                     break;
             }
@@ -2319,7 +2319,7 @@ export class FileSystemService {
                     return actual.found && frontmatterValuesEqual(actual.value, expected);
                 });
                 if (matches)
-                    notes.push({ path: entry.path, frontmatter: entry.frontmatter });
+                    notes.push({ path: entry.path, frontmatter: entry.frontmatter, revision: entry.revision });
             }
         }
         else {
@@ -2343,7 +2343,7 @@ export class FileSystemService {
                     return actual.found && frontmatterValuesEqual(actual.value, expected);
                 });
                 if (matches)
-                    notes.push({ path, frontmatter: parsed.frontmatter, ...(params.includeContent && { content: parsed.content }) });
+                    notes.push({ path, frontmatter: parsed.frontmatter, revision: this.revision(raw), ...(params.includeContent && { content: parsed.content }) });
             }
         }
         const afterNotes = params.after
@@ -2382,7 +2382,7 @@ export class FileSystemService {
     async countNotes(params = {}, canAccessPath = () => true, predicate = () => true) {
         const pathPrefix = this.resolvePathPrefix(params.pathPrefix);
         if (this.metadataIndex) {
-            return this.metadataIndex.count(params.filters || {}, pathPrefix, canAccessPath, entry => predicate({ path: entry.path, frontmatter: entry.frontmatter }));
+            return this.metadataIndex.count(params.filters || {}, pathPrefix, canAccessPath, entry => predicate({ path: entry.path, frontmatter: entry.frontmatter, revision: entry.revision }));
         }
         const result = await this.queryNotes({ ...params, limit: 1, includeContent: false, includeTotal: true }, canAccessPath);
         return result.total;

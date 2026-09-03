@@ -29,8 +29,12 @@ export interface GlobalManifestEntry {
 }
 export interface GlobalProvenance {
     evidencePaths?: string[];
+    /** Hub revision IDs binding evidence paths to the exact approved snapshots. */
+    evidenceRevisions?: Record<string, string>;
     sourceIds?: string[];
     references?: string[];
+    /** Portable organization-manifest contract fingerprint used by the origin. */
+    organizationFingerprint?: string;
 }
 export interface GlobalManifest {
     protocol: typeof PROTOCOL;
@@ -190,6 +194,8 @@ export interface GlobalSyncReplicaOptions {
     vaultPath: string;
     client: Pick<GlobalSyncClient, 'getManifest' | 'getRevision' | 'submitProposal'>;
     trustedPublicKey: string;
+    /** Reject every remote revision whose signed organization contract differs. */
+    organizationFingerprint?: string;
 }
 export interface GlobalPullResult {
     applied: string[];
@@ -209,6 +215,7 @@ export declare class GlobalSyncReplica {
     private readonly quarantineRoot;
     private readonly client;
     private readonly trustedPublicKey;
+    private readonly organizationFingerprint;
     private state;
     private loaded;
     constructor(options: GlobalSyncReplicaOptions);
@@ -218,7 +225,7 @@ export declare class GlobalSyncReplica {
     private currentContent;
     private backup;
     pull(limit?: number): Promise<GlobalPullResult>;
-    proposeLocal(documentId: string, author: string, reason: string, origin: string): Promise<GlobalProposal>;
+    proposeLocal(documentId: string, author: string, reason: string, origin: string, provenance?: GlobalProvenance, idempotencyKey?: string): Promise<GlobalProposal>;
     proposeTombstone(documentId: string, author: string, reason: string, origin: string): Promise<GlobalProposal>;
 }
 export interface GlobalSyncHubHttpOptions {
