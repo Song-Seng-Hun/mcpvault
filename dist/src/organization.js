@@ -63,7 +63,7 @@ export const RELATION_SEMANTICS = [
 export function getOrganizationRelationContract() {
     return RELATION_SEMANTICS.map(entry => ({ ...entry }));
 }
-export const ORGANIZATION_LIST_FIELDS = ['aliases', 'mocs', 'key_points', 'open_questions', 'next_actions', 'project_support', 'subject_terms', 'methods', 'audience', 'see_also', ...RELATION_FIELDS];
+export const ORGANIZATION_LIST_FIELDS = ['aliases', 'tags', 'mocs', 'key_points', 'open_questions', 'next_actions', 'project_support', 'subject_terms', 'methods', 'audience', 'see_also', ...RELATION_FIELDS];
 export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'note_kind', type: 'text', description: 'What the note is for', allowed: NOTE_KINDS },
     { name: 'lifecycle', type: 'text', description: 'What should happen to the knowledge next', allowed: LIFECYCLES },
@@ -74,6 +74,8 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'primary_moc', type: 'text', description: 'Preferred Obsidian MOC entry point for this note; navigation metadata only' },
     { name: 'mocs', type: 'list', description: 'Additional Obsidian MOC entry points for multi-context discovery; navigation metadata only' },
     { name: 'aliases', type: 'list', description: 'Alternate Obsidian names' },
+    { name: 'tags', type: 'list', description: 'Native Obsidian tags used for lightweight faceted discovery' },
+    { name: 'nav_order', type: 'number', description: 'Optional sibling order inside an MOC tree; lower numbers appear first, unnumbered items follow', appliesTo: ['moc'] },
     { name: 'stable_id', type: 'text', description: 'Durable identity for a note; not an access boundary' },
     { name: 'term_status', type: 'text', description: 'Optional authority-vocabulary state for this note title', allowed: TERM_STATUSES },
     { name: 'term_replaced_by', type: 'text', description: 'Preferred term or Obsidian link that replaces a deprecated term' },
@@ -102,6 +104,9 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'summary_of_content_sha256', type: 'text', description: 'Body digest for projection freshness' },
     { name: 'next_action', type: 'text', description: 'One concrete GTD action', appliesTo: ['project', 'task'] },
     { name: 'next_actions', type: 'list', description: 'Bounded GTD action list', appliesTo: ['project', 'task'] },
+    { name: 'time_estimate_minutes', type: 'number', description: 'Optional rough effort estimate for one execution step', appliesTo: ['project', 'task'] },
+    { name: 'energy', type: 'text', description: 'Optional energy needed for execution: low, medium, or high', allowed: ['low', 'medium', 'high'], appliesTo: ['project', 'task'] },
+    { name: 'effort', type: 'text', description: 'Optional coarse effort class: low, medium, or high', allowed: ['low', 'medium', 'high'], appliesTo: ['project', 'task'] },
     { name: 'waiting_for', type: 'text', description: 'External dependency or owner', appliesTo: ['project', 'task'] },
     { name: 'desired_outcome', type: 'text', description: 'Observable project outcome', appliesTo: ['project'] },
     { name: 'project_purpose', type: 'text', description: 'Why the project exists', appliesTo: ['project'] },
@@ -525,6 +530,14 @@ export function normalizeReviewIntervalDays(value, fallback) {
         throw new Error('reviewIntervalDays must be an integer from 1 to 3650');
     return days;
 }
+export function normalizeNavOrder(value, fallback) {
+    if (value === undefined || value === null || String(value).trim() === '')
+        return fallback;
+    const order = Number(value);
+    if (!Number.isInteger(order) || order < 0 || order > 1_000_000)
+        throw new Error('navOrder must be an integer from 0 to 1000000');
+    return order;
+}
 export function normalizeIsoDate(value, field) {
     const date = optionalText(value, field, 40);
     if (!date)
@@ -542,6 +555,7 @@ export function knowledgeOrganization(input) {
     const primaryMoc = input.primaryMoc === undefined ? optionalText(existing.primary_moc, 'primaryMoc', 500) : optionalText(input.primaryMoc, 'primaryMoc', 500);
     const mocs = input.mocs === undefined ? normalizedList(existing.mocs, 'mocs', 12, 500) : normalizedList(input.mocs, 'mocs', 12, 500);
     const moc = input.moc === undefined ? optionalText(existing.moc, 'moc', 500) : optionalText(input.moc, 'moc', 500);
+    const navOrder = input.navOrder === undefined ? normalizeNavOrder(existing.nav_order) : normalizeNavOrder(input.navOrder);
     const project = input.project === undefined ? optionalText(existing.project, 'project', 500) : optionalText(input.project, 'project', 500);
     const reviewAt = input.reviewAt === undefined ? normalizeReviewAt(existing.review_at) : normalizeReviewAt(input.reviewAt);
     const reviewIntervalDays = input.reviewIntervalDays === undefined ? normalizeReviewIntervalDays(existing.review_interval_days) : normalizeReviewIntervalDays(input.reviewIntervalDays);
@@ -670,6 +684,7 @@ export function knowledgeOrganization(input) {
         ...(primaryMoc && { primary_moc: primaryMoc }),
         ...(mocs && { mocs }),
         ...(moc && { moc }),
+        ...(navOrder !== undefined && { nav_order: navOrder }),
         ...(project && { project }),
         ...(reviewAt && { review_at: reviewAt }),
         ...(reviewIntervalDays !== undefined && { review_interval_days: reviewIntervalDays }),
@@ -881,6 +896,14 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
     }
     if (frontmatter.stable_id !== undefined && (typeof frontmatter.stable_id !== 'string' || !/^[a-z0-9][a-z0-9._-]*$/i.test(frontmatter.stable_id))) {
         issues.push({ code: 'invalid_stable_id', detail: 'stable_id must contain only letters, numbers, dots, underscores, and hyphens.' });
+    }
+    if (frontmatter.nav_order !== undefined) {
+        try {
+            normalizeNavOrder(frontmatter.nav_order);
+        }
+        catch (error) {
+            issues.push({ code: 'invalid_nav_order', detail: error instanceof Error ? error.message : 'nav_order must be an integer from 0 to 1000000.' });
+        }
     }
     if (frontmatter.canonical_path !== undefined) {
         const canonicalPath = String(frontmatter.canonical_path).trim();

@@ -165,7 +165,7 @@ export declare function getOrganizationRelationContract(): ({
     target: 'A note made more precise or useful by this note.';
     reciprocal: false;
 })[];
-export declare const ORGANIZATION_LIST_FIELDS: readonly ["aliases", "mocs", "key_points", "open_questions", "next_actions", "project_support", "subject_terms", "methods", "audience", "see_also", "supports", "contradicts", "supersedes", "derived_from", "depends_on", "implements", "blocked_by", "answers_questions", "related", "same_as", "version_of", "refines"];
+export declare const ORGANIZATION_LIST_FIELDS: readonly ["aliases", "tags", "mocs", "key_points", "open_questions", "next_actions", "project_support", "subject_terms", "methods", "audience", "see_also", "supports", "contradicts", "supersedes", "derived_from", "depends_on", "implements", "blocked_by", "answers_questions", "related", "same_as", "version_of", "refines"];
 /**
  * The small, stable subset of frontmatter that MCPVault owns.  Custom
  * Properties remain allowed; this contract only gives agents and lint a common
@@ -217,6 +217,7 @@ export declare function normalizeBoolean(value: unknown, field: string, fallback
 export declare function lifecycleForKnowledgeStatus(status: string): Lifecycle;
 export declare function normalizeReviewAt(value: unknown): string | undefined;
 export declare function normalizeReviewIntervalDays(value: unknown, fallback?: number): number | undefined;
+export declare function normalizeNavOrder(value: unknown, fallback?: number): number | undefined;
 export declare function normalizeIsoDate(value: unknown, field: string): string | undefined;
 export interface KnowledgeOrganizationInput {
     existing?: Record<string, any>;
@@ -225,6 +226,7 @@ export interface KnowledgeOrganizationInput {
     primaryMoc?: unknown;
     mocs?: unknown;
     moc?: unknown;
+    navOrder?: unknown;
     project?: unknown;
     reviewAt?: unknown;
     reviewIntervalDays?: unknown;

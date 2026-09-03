@@ -165,6 +165,15 @@ source provenance; Git records authorship, reasons, diffs, and rollback. Do
 not create a parallel edit log, treat links as evidence without checking
 them, or move Community-managed posts into PARA folders.
 
+Obsidian's native `tags` property is a bounded discovery facet; keep it a
+list of short tag values and use `subject_terms` for controlled vocabulary.
+MOCs may declare numeric `nav_order`: lower values appear first among
+siblings, followed by unnumbered MOCs in title/path order. Their Markdown
+body is an ordered outline; graph coverage exposes `orderedEntries` with the
+link's line and heading context. `moc_parent` defines the tree edge, while
+ordinary body links may cross branches. Home, hierarchy, catalog
+`orderBy=hierarchy`, and graph coverage follow these rules consistently.
+
 Use `question` for an unresolved question, `hypothesis` for a testable
 proposition, and `assumption` for a working premise. Keep these visibly
 different from verified knowledge until evidence supports them.
@@ -306,7 +315,10 @@ are proposed/supported/refuted/inconclusive, and assumptions are
 active/verified/invalidated/replaced. Project/task notes may add GTD-style
 `desired_outcome`, `next_action`, `task_context`, `due_at`, `scheduled_at`, and
 `defer_until`. `due_at` means a deadline; `scheduled_at` means when the work is
-intended to happen.
+intended to happen. Optional `time_estimate_minutes`, `energy` (`low`,
+`medium`, `high`), and `effort` (`low`, `medium`, `high`) help select a
+feasible next action without replacing `next_action` or changing evidence
+requirements.
 Project notes may additionally use `project_purpose` for the reason/why and
 `project_support` for bounded Obsidian links or paths to planning material.
 Keep support material separate from the executable `next_action` list; use

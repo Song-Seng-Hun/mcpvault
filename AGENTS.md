@@ -208,8 +208,11 @@ and needing to know which visible notes support, answer, derive from, or
 supersede it. This is bounded derived navigation, not a permission grant.
 MOC hierarchy is explicit only when a child declares one resolvable
 `moc_parent`; ordinary body links may cross branches without becoming parent
-edges. Repair missing, ambiguous, or cyclic parent signals before treating a
-MOC tree as an authoritative navigation order.
+edges. Optional numeric `nav_order` controls sibling order (lower first,
+then unnumbered title/path order). The MOC body remains an ordered Markdown
+outline; graph coverage exposes `orderedEntries` with line and heading context.
+Repair missing, ambiguous, or cyclic parent signals before treating a MOC tree
+as a reliable navigation order.
 Use `primary_moc` as the single preferred launch point for a durable note;
 use the bounded `mocs` list for intentional membership in several maps, while
 keeping one canonical note instead of copying it. This is navigation metadata,

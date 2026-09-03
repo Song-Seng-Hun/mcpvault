@@ -3,7 +3,7 @@ import { stringify as stringifyYaml } from 'yaml';
 import { normalizeScopeId } from './scopes.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
-import { getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, normalizeClarifyDisposition, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeRetentionPolicy, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeServiceClass, normalizeTaskStatus, organizationLintIssues, organizationNoteTemplate, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES } from './organization.js';
+import { getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, normalizeClarifyDisposition, normalizeIsoDate, normalizeLifecycle, normalizeNavOrder, normalizeNoteKind, normalizeRecallQuality, normalizeRetentionPolicy, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeServiceClass, normalizeTaskStatus, organizationLintIssues, organizationNoteTemplate, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES } from './organization.js';
 import { extractObsidianLinkOccurrences, resolveWikiLinkTargets } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
@@ -191,6 +191,31 @@ function relationDocument(value) {
         return value.trim();
     }
 }
+function navigationOrder(value) {
+    return Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 1_000_000 ? Number(value) : Number.MAX_SAFE_INTEGER;
+}
+function compareMocNavigation(left, right) {
+    return navigationOrder(left.navOrder ?? left.nav_order) - navigationOrder(right.navOrder ?? right.nav_order)
+        || String(left.title || left.path).localeCompare(String(right.title || right.path))
+        || String(left.path).localeCompare(String(right.path));
+}
+function mocBodyOutline(content, limit = 24) {
+    const outline = [];
+    let section = '';
+    const lines = String(content || '').split(/\r?\n/);
+    for (let index = 0; index < lines.length && outline.length < limit; index += 1) {
+        const line = lines[index] || '';
+        const heading = line.match(/^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$/);
+        if (heading)
+            section = heading[1].trim();
+        for (const link of extractObsidianLinkOccurrences(line)) {
+            outline.push({ target: link.target, line: index + 1, ...(section && { section }) });
+            if (outline.length >= limit)
+                break;
+        }
+    }
+    return outline;
+}
 function catalogEntryCompare(left, right, orderBy = 'location') {
     if (orderBy === 'time') {
         const rightTime = Date.parse(String(right.updatedAt || '')) || 0;
@@ -202,7 +227,8 @@ function catalogEntryCompare(left, right, orderBy = 'location') {
     if (orderBy === 'category')
         return `${left.noteKind || ''}|${left.lifecycle || ''}|${left.title || left.path}`.localeCompare(`${right.noteKind || ''}|${right.lifecycle || ''}|${right.title || right.path}`) || String(left.path).localeCompare(String(right.path));
     if (orderBy === 'hierarchy')
-        return `${left.moc || ''}|${left.project || ''}|${left.noteKind || ''}|${left.title || left.path}`.localeCompare(`${right.moc || ''}|${right.project || ''}|${right.noteKind || ''}|${right.title || right.path}`) || String(left.path).localeCompare(String(right.path));
+        return `${left.primaryMoc || left.moc || ''}|${left.project || ''}|${left.noteKind || ''}`.localeCompare(`${right.primaryMoc || right.moc || ''}|${right.project || ''}|${right.noteKind || ''}`)
+            || compareMocNavigation(left, right);
     return String(left.path).localeCompare(String(right.path));
 }
 function normalizeCatalogOrder(value) {
@@ -743,6 +769,7 @@ export class LlmWikiService {
                     ...(params.noteKind !== undefined && { noteKind: params.noteKind }),
                     ...(params.lifecycle !== undefined && { lifecycle: params.lifecycle }),
                     ...(params.primaryMoc !== undefined && { primaryMoc: params.primaryMoc }),
+                    ...(params.navOrder !== undefined && { navOrder: params.navOrder }),
                     ...(params.moc !== undefined && { moc: params.moc }),
                     ...(params.mocs !== undefined && { mocs: params.mocs }),
                     ...(params.project !== undefined && { project: params.project }),
@@ -997,8 +1024,10 @@ export class LlmWikiService {
                 ...(note.frontmatter.knowledge_role && { knowledgeRole: note.frontmatter.knowledge_role }),
                 ...(Array.isArray(note.frontmatter.see_also) && { seeAlso: note.frontmatter.see_also.slice(0, 12) }),
                 ...(note.frontmatter.project && { project: note.frontmatter.project }),
+                ...(note.frontmatter.primary_moc && { primaryMoc: note.frontmatter.primary_moc }),
                 ...(note.frontmatter.moc && { moc: note.frontmatter.moc }),
                 ...(Array.isArray(note.frontmatter.mocs) && { mocs: note.frontmatter.mocs.slice(0, 12) }),
+                ...(note.frontmatter.nav_order !== undefined && { navOrder: note.frontmatter.nav_order }),
                 ...(Array.isArray(note.frontmatter.subject_terms) && { subjectTerms: note.frontmatter.subject_terms.slice(0, 12) }),
                 ...(note.frontmatter.domain && { domain: note.frontmatter.domain }),
                 ...(Array.isArray(note.frontmatter.methods) && { methods: note.frontmatter.methods.slice(0, 12) }),
@@ -1299,7 +1328,15 @@ export class LlmWikiService {
         for (const link of backlinks.backlinks) {
             add(link.path, 95, 'backlink', { line: link.line, context: boundedText(link.context, 240), relations: [link.relation || 'backlinks_to'] });
         }
-        const sourceMoc = typeof source.frontmatter.moc === 'string' ? source.frontmatter.moc.trim() : '';
+        const mocRefs = (frontmatter) => {
+            const values = [
+                ...(typeof frontmatter.primary_moc === 'string' ? [frontmatter.primary_moc] : []),
+                ...(Array.isArray(frontmatter.mocs) ? frontmatter.mocs : []),
+                ...(typeof frontmatter.moc === 'string' ? [frontmatter.moc] : []),
+            ];
+            return [...new Set(values.filter((value) => typeof value === 'string' && Boolean(value.trim())).map(value => value.trim()))].slice(0, 12);
+        };
+        const sourceMocs = mocRefs(source.frontmatter);
         const sourceProject = typeof source.frontmatter.project === 'string' ? source.frontmatter.project.trim() : '';
         const sourceTaskContext = typeof source.frontmatter.task_context === 'string' ? source.frontmatter.task_context.trim() : '';
         const sourceUpdatedAt = Date.parse(String(source.frontmatter.updated_at || source.frontmatter.created_at || ''));
@@ -1315,13 +1352,13 @@ export class LlmWikiService {
                 return normalizePath(value).replace(/\.md$/i, '').toLowerCase();
             }
         };
-        const mocKey = sourceMoc ? referenceKey(sourceMoc) : '';
+        const mocKeys = new Set(sourceMocs.map(referenceKey));
         const projectKey = sourceProject ? referenceKey(sourceProject) : '';
-        if (mocKey || projectKey || sourceTaskContext || sourceTags.size > 0 || sourceEvidence.size > 0 || Number.isFinite(sourceUpdatedAt)) {
+        if (mocKeys.size > 0 || projectKey || sourceTaskContext || sourceTags.size > 0 || sourceEvidence.size > 0 || Number.isFinite(sourceUpdatedAt)) {
             for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
-                const noteMoc = typeof note.frontmatter.moc === 'string' ? note.frontmatter.moc.trim() : '';
+                const noteMocs = mocRefs(note.frontmatter);
                 const noteProject = typeof note.frontmatter.project === 'string' ? note.frontmatter.project.trim() : '';
-                const sameMoc = Boolean(mocKey && noteMoc && referenceKey(noteMoc) === mocKey);
+                const sameMoc = noteMocs.some(value => mocKeys.has(referenceKey(value)));
                 const sameProject = Boolean(projectKey && noteProject && referenceKey(noteProject) === projectKey);
                 const noteTaskContext = typeof note.frontmatter.task_context === 'string' ? note.frontmatter.task_context.trim() : '';
                 const noteTags = new Set((Array.isArray(note.frontmatter.tags) ? note.frontmatter.tags : typeof note.frontmatter.tags === 'string' ? [note.frontmatter.tags] : [])
@@ -1342,7 +1379,7 @@ export class LlmWikiService {
                     title: typeof note.frontmatter.title === 'string' ? note.frontmatter.title : (note.path.split('/').at(-1) || note.path),
                     ...(typeof note.frontmatter.note_kind === 'string' && { noteKind: note.frontmatter.note_kind }),
                     ...(typeof note.frontmatter.lifecycle === 'string' && { lifecycle: note.frontmatter.lifecycle }),
-                    ...(noteMoc && { moc: noteMoc }),
+                    ...(noteMocs.length > 0 && { moc: noteMocs[0], mocs: noteMocs }),
                     ...(noteProject && { project: noteProject }),
                 });
             }
@@ -1386,8 +1423,12 @@ export class LlmWikiService {
                     if (typeof note.frontmatter.lifecycle === 'string' && note.frontmatter.lifecycle)
                         candidate.lifecycle = note.frontmatter.lifecycle;
                     candidate.revision = note.revision;
-                    if (typeof note.frontmatter.moc === 'string' && note.frontmatter.moc)
-                        candidate.moc = note.frontmatter.moc;
+                    const noteMocs = mocRefs(note.frontmatter);
+                    const firstMoc = noteMocs[0];
+                    if (firstMoc) {
+                        candidate.moc = firstMoc;
+                        candidate.mocs = noteMocs;
+                    }
                     if (typeof note.frontmatter.project === 'string' && note.frontmatter.project)
                         candidate.project = note.frontmatter.project;
                     if (typeof note.frontmatter.knowledge_polarity === 'string' && note.frontmatter.knowledge_polarity)
@@ -1411,6 +1452,7 @@ export class LlmWikiService {
                 ...(candidate.line !== undefined && { line: candidate.line }),
                 ...(candidate.context && { context: candidate.context }),
                 ...(candidate.moc && { moc: candidate.moc }),
+                ...(candidate.mocs && { mocs: candidate.mocs }),
                 ...(candidate.project && { project: candidate.project }),
                 ...(candidate.polarity && { polarity: candidate.polarity }),
                 ...(candidate.status && { status: candidate.status }),
@@ -1424,7 +1466,7 @@ export class LlmWikiService {
                 path: this.access.toPublicPath(sourcePath),
                 title: typeof source.frontmatter.title === 'string' ? source.frontmatter.title : sourcePath.split('/').at(-1),
                 revision: source.revision,
-                ...(sourceMoc && { moc: sourceMoc }),
+                ...(sourceMocs.length > 0 && { moc: sourceMocs[0], mocs: sourceMocs }),
                 ...(sourceProject && { project: sourceProject }),
             },
             neighbors,
@@ -3212,7 +3254,7 @@ export class LlmWikiService {
         if (note.frontmatter.llm_wiki_type && note.frontmatter.llm_wiki_type !== 'knowledge') {
             throw new Error(`triage_wiki_note cannot classify managed LLM Wiki type '${note.frontmatter.llm_wiki_type}'`);
         }
-        const hasOrganizationInput = [params.noteKind, params.lifecycle, params.primaryMoc, params.moc, params.project, params.reviewAt, params.reviewIntervalDays, params.reviewSnoozedUntil, params.reviewSnoozeReason, params.nextAction, params.waitingFor, params.desiredOutcome, params.projectPurpose, params.projectSupport, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.serviceClass, params.completionCriteria, params.startedAt, params.blockedSince, params.waitingSince, params.completedAt, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.canonicalPath, params.recallPrompt, params.recallIntervalDays, params.lastRecalledAt, params.recallQuality, params.retentionPolicy, params.retentionEvent, params.retentionAt, params.preserveUntil, params.legalHold, params.retentionReason, params.replacedBy, params.knowledgeRole, params.termStatus, params.termReplacedBy, params.termScopeNote, params.preferredTerm, params.termLanguage, params.authorityScheme, params.authorityId, params.disambiguation, params.broaderTerms, params.relatedTerms, params.subjectTerms, params.domain, params.methods, params.audience, params.retrievalCues, params.useWhen, params.seeAlso, params.relations, params.relationNotes, params.relationEvidence, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.reviewChecks, params.reviewOpenItems, params.interpretationStatus, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
+        const hasOrganizationInput = [params.noteKind, params.lifecycle, params.primaryMoc, params.mocs, params.moc, params.navOrder, params.project, params.reviewAt, params.reviewIntervalDays, params.reviewSnoozedUntil, params.reviewSnoozeReason, params.nextAction, params.waitingFor, params.desiredOutcome, params.projectPurpose, params.projectSupport, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.serviceClass, params.completionCriteria, params.startedAt, params.blockedSince, params.waitingSince, params.completedAt, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.canonicalPath, params.recallPrompt, params.recallIntervalDays, params.lastRecalledAt, params.recallQuality, params.retentionPolicy, params.retentionEvent, params.retentionAt, params.preserveUntil, params.legalHold, params.retentionReason, params.replacedBy, params.knowledgeRole, params.termStatus, params.termReplacedBy, params.termScopeNote, params.preferredTerm, params.termLanguage, params.authorityScheme, params.authorityId, params.disambiguation, params.broaderTerms, params.relatedTerms, params.subjectTerms, params.domain, params.methods, params.audience, params.retrievalCues, params.useWhen, params.seeAlso, params.relations, params.relationNotes, params.relationEvidence, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.reviewChecks, params.reviewOpenItems, params.interpretationStatus, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
             .some(value => value !== undefined);
         if (!hasOrganizationInput)
             throw new Error('At least one organization field is required');
@@ -3223,6 +3265,8 @@ export class LlmWikiService {
             patch.lifecycle = normalizeLifecycle(params.lifecycle);
         if (params.primaryMoc !== undefined)
             patch.primary_moc = boundedText(params.primaryMoc, 500);
+        if (params.navOrder !== undefined)
+            patch.nav_order = normalizeNavOrder(params.navOrder);
         if (params.moc !== undefined)
             patch.moc = String(params.moc).trim().slice(0, 500);
         if (params.project !== undefined)
@@ -3270,6 +3314,7 @@ export class LlmWikiService {
             ...(params.noteKind !== undefined && { noteKind: params.noteKind }),
             ...(params.lifecycle !== undefined && { lifecycle: params.lifecycle }),
             ...(params.primaryMoc !== undefined && { primaryMoc: params.primaryMoc }),
+            ...(params.navOrder !== undefined && { navOrder: params.navOrder }),
             ...(params.moc !== undefined && { moc: params.moc }),
             ...(params.mocs !== undefined && { mocs: params.mocs }),
             ...(params.project !== undefined && { project: params.project }),
@@ -3378,6 +3423,7 @@ export class LlmWikiService {
                 noteKind: updated.frontmatter.note_kind,
                 lifecycle: updated.frontmatter.lifecycle,
                 ...(updated.frontmatter.primary_moc && { primaryMoc: updated.frontmatter.primary_moc }),
+                ...(updated.frontmatter.nav_order !== undefined && { navOrder: updated.frontmatter.nav_order }),
                 ...(updated.frontmatter.moc && { moc: updated.frontmatter.moc }),
                 ...(Array.isArray(updated.frontmatter.mocs) && { mocs: updated.frontmatter.mocs }),
                 ...(updated.frontmatter.moc_purpose && { mocPurpose: updated.frontmatter.moc_purpose }),
@@ -3995,6 +4041,7 @@ export class LlmWikiService {
         const review = [];
         const stableIds = [];
         let total = 0;
+        let mocTotal = 0;
         for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
             const isSchema = normalizePath(note.path).toLowerCase() === PUBLIC_SCHEMA_PATH.toLowerCase();
             if (!isSchema && typeof note.frontmatter.llm_wiki_type !== 'string' && typeof note.frontmatter.note_kind !== 'string' && note.frontmatter.lifecycle !== 'inbox')
@@ -4006,8 +4053,15 @@ export class LlmWikiService {
                 ...(note.frontmatter.stable_id && { stableId: note.frontmatter.stable_id }),
                 ...(note.frontmatter.lifecycle && { lifecycle: note.frontmatter.lifecycle }),
             };
-            if (note.frontmatter.note_kind === 'moc' && mocs.length < boundedLimit)
-                mocs.push(item);
+            if (note.frontmatter.note_kind === 'moc') {
+                mocTotal += 1;
+                const navOrder = Number.isInteger(Number(note.frontmatter.nav_order)) && Number(note.frontmatter.nav_order) >= 0 && Number(note.frontmatter.nav_order) <= 1_000_000
+                    ? Number(note.frontmatter.nav_order) : undefined;
+                mocs.push({ ...item, ...(navOrder !== undefined && { navOrder }) });
+                mocs.sort(compareMocNavigation);
+                if (mocs.length > boundedLimit)
+                    mocs.pop();
+            }
             if ((note.frontmatter.note_kind === 'project' || note.frontmatter.note_kind === 'task') && projects.length < boundedLimit)
                 projects.push({ ...item, ...(note.frontmatter.task_status && { taskStatus: note.frontmatter.task_status }), ...(note.frontmatter.next_action && { nextAction: note.frontmatter.next_action }) });
             if (note.frontmatter.lifecycle === 'inbox' || /(^|\/)inbox(?:\/|$)/i.test(note.path)) {
@@ -4030,7 +4084,7 @@ export class LlmWikiService {
                 { path: this.access.toPublicPath(PUBLIC_SCHEMA_PATH), reason: 'scope rules and writing contract' },
                 { path: this.access.toPublicPath(WELCOME_NOTE_PATH), reason: 'first-session orientation' },
             ],
-            counts: { total, mocs: mocs.length, projects: projects.length, inbox: inbox.length, review: review.length, stableIds: stableIds.length },
+            counts: { total, mocs: mocTotal, projects: projects.length, inbox: inbox.length, review: review.length, stableIds: stableIds.length },
             mocs,
             projects,
             inbox,
@@ -4096,7 +4150,9 @@ export class LlmWikiService {
             const questions = Array.isArray(note.frontmatter.moc_questions)
                 ? note.frontmatter.moc_questions.filter((item) => typeof item === 'string' && Boolean(item.trim())).slice(0, 12)
                 : [];
-            mocDrafts.push({ path: note.path, title: note.frontmatter.title || note.path.split('/').at(-1) || note.path, links, questions, content: note.content || '', ...(typeof note.frontmatter.moc_parent === 'string' && { parent: note.frontmatter.moc_parent }) });
+            const navOrder = Number.isInteger(Number(note.frontmatter.nav_order)) && Number(note.frontmatter.nav_order) >= 0 && Number(note.frontmatter.nav_order) <= 1_000_000
+                ? Number(note.frontmatter.nav_order) : undefined;
+            mocDrafts.push({ path: note.path, title: note.frontmatter.title || note.path.split('/').at(-1) || note.path, links, questions, content: note.content || '', outline: mocBodyOutline(note.content || '', Math.min(24, boundedLimit * 2)), ...(navOrder !== undefined && { navOrder }), ...(typeof note.frontmatter.moc_parent === 'string' && { parent: note.frontmatter.moc_parent }) });
             if (links.length === 0) {
                 emptyMocTotal += 1;
                 if (emptyMocs.length < boundedLimit) {
@@ -4558,7 +4614,7 @@ export class LlmWikiService {
                 questionLinked: linkedQuestions,
                 questionCoverage: questionCoverage.length ? Number((linkedQuestions / questionCoverage.length).toFixed(3)) : 1,
             });
-            mocCoverageItems.push({ path: this.access.toPublicPath(moc.path), title: moc.title, linkedNotes: linked.size, linkedKnowledge: linkedKnowledge.length, directKnowledge: directKnowledge.length, indirectKnowledge: indirectKnowledge.length, nestedMocs: nestedMocs.size, unresolvedTargets, linkDensity: moc.links.length ? Number((linked.size / moc.links.length).toFixed(3)) : 0, knowledgeCoverage: knowledgePaths.size ? Number((linkedKnowledge.length / knowledgePaths.size).toFixed(3)) : 1, questionTotal: questionCoverage.length, questionLinked: linkedQuestions, questionCoverage: questionCoverage.length ? Number((linkedQuestions / questionCoverage.length).toFixed(3)) : 1 });
+            mocCoverageItems.push({ path: this.access.toPublicPath(moc.path), title: moc.title, ...(moc.navOrder !== undefined && { navOrder: moc.navOrder }), orderedEntries: moc.outline.map(entry => ({ ...entry, target: boundedText(entry.target, 300) })), linkedNotes: linked.size, linkedKnowledge: linkedKnowledge.length, directKnowledge: directKnowledge.length, indirectKnowledge: indirectKnowledge.length, nestedMocs: nestedMocs.size, unresolvedTargets, linkDensity: moc.links.length ? Number((linked.size / moc.links.length).toFixed(3)) : 0, knowledgeCoverage: knowledgePaths.size ? Number((linkedKnowledge.length / knowledgePaths.size).toFixed(3)) : 1, questionTotal: questionCoverage.length, questionLinked: linkedQuestions, questionCoverage: questionCoverage.length ? Number((linkedQuestions / questionCoverage.length).toFixed(3)) : 1 });
         }
         // An explicit moc_parent is a hierarchy edge, distinct from ordinary
         // cross-links in an MOC body. This keeps navigation predictable while
@@ -4618,19 +4674,23 @@ export class LlmWikiService {
         const mocHierarchyItems = mocDrafts
             .map(moc => {
             const path = normalizePath(moc.path).toLowerCase();
-            const children = [...(mocChildren.get(path) || new Set())];
+            const children = [...(mocChildren.get(path) || new Set())]
+                .map(child => mocByPath.get(child))
+                .filter((child) => Boolean(child))
+                .sort((left, right) => compareMocNavigation(left, right));
             return {
                 path: this.access.toPublicPath(moc.path),
                 title: moc.title,
+                ...(moc.navOrder !== undefined && { navOrder: moc.navOrder }),
                 ...(moc.parent && { parent: boundedText(moc.parent, 300) }),
                 ...(mocParentByPath.has(path) && { resolvedParent: this.access.toPublicPath(graphByPath.get(mocParentByPath.get(path))?.path || mocParentByPath.get(path)) }),
                 childTotal: children.length,
-                children: children.slice(0, boundedLimit).map(child => this.access.toPublicPath(graphByPath.get(child)?.path || child)),
+                children: children.slice(0, boundedLimit).map(child => this.access.toPublicPath(child.path)),
                 depth: mocDepth.get(path) || 0,
                 state: mocHierarchyCycles.some(item => item.nodes.includes(this.access.toPublicPath(moc.path))) ? 'cycle' : mocMissingParents.some(item => item.path === this.access.toPublicPath(moc.path)) ? 'unresolved_parent' : mocParentByPath.has(path) ? 'nested' : 'root',
             };
         })
-            .sort((left, right) => Number(left.depth) - Number(right.depth) || String(left.path).localeCompare(String(right.path)));
+            .sort((left, right) => Number(left.depth) - Number(right.depth) || compareMocNavigation(left, right));
         const mocRoots = mocHierarchyItems.filter(item => item.state === 'root').map(item => item.path);
         const mocHierarchy = {
             total: mocTotal,
@@ -4642,6 +4702,7 @@ export class LlmWikiService {
             maxDepth: Math.max(0, ...mocHierarchyItems.map(item => Number(item.depth))),
             items: mocHierarchyItems.slice(0, boundedLimit),
             truncated: mocHierarchyItems.length > boundedLimit,
+            ordering: 'depth asc, nav_order asc, then title/path; body orderedEntries preserve Markdown link order',
         };
         const uncoveredKnowledge = visibleNotePaths
             .filter(path => knowledgePaths.has(normalizePath(path).toLowerCase()) && !mocCoveredKnowledge.has(normalizePath(path).toLowerCase()))

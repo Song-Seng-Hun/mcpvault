@@ -172,6 +172,7 @@ export declare class LlmWikiService {
         primaryMoc?: string;
         moc?: string;
         mocs?: unknown;
+        navOrder?: unknown;
         project?: string;
         reviewAt?: string;
         reviewIntervalDays?: unknown;
@@ -318,6 +319,7 @@ export declare class LlmWikiService {
             title: string | undefined;
             revision: string;
             moc?: string;
+            mocs?: string[];
             project?: string;
         };
         neighbors: {
@@ -330,6 +332,7 @@ export declare class LlmWikiService {
             line?: number;
             context?: string;
             moc?: string;
+            mocs?: string[];
             project?: string;
             polarity?: string;
             status?: string;
@@ -713,6 +716,7 @@ export declare class LlmWikiService {
                     items: {
                         path: string;
                         title: string;
+                        navOrder?: number;
                         parent?: string;
                         resolvedParent?: string;
                         childTotal: number;
@@ -721,6 +725,7 @@ export declare class LlmWikiService {
                         state: string;
                     }[];
                     truncated: boolean;
+                    ordering: string;
                 };
                 evergreenQuality: {
                     total: number;
@@ -946,6 +951,7 @@ export declare class LlmWikiService {
                     items: {
                         path: string;
                         title: string;
+                        navOrder?: number;
                         parent?: string;
                         resolvedParent?: string;
                         childTotal: number;
@@ -954,6 +960,7 @@ export declare class LlmWikiService {
                         state: string;
                     }[];
                     truncated: boolean;
+                    ordering: string;
                 };
                 evergreenQuality: {
                     total: number;
@@ -1881,6 +1888,7 @@ export declare class LlmWikiService {
         primaryMoc?: string;
         moc?: string;
         mocs?: unknown;
+        navOrder?: unknown;
         project?: string;
         reviewAt?: string;
         reviewIntervalDays?: unknown;
@@ -2312,6 +2320,7 @@ export declare class LlmWikiService {
             items: {
                 path: string;
                 title: string;
+                navOrder?: number;
                 parent?: string;
                 resolvedParent?: string;
                 childTotal: number;
@@ -2320,6 +2329,7 @@ export declare class LlmWikiService {
                 state: string;
             }[];
             truncated: boolean;
+            ordering: string;
         };
         evergreenQuality: {
             total: number;

@@ -12,6 +12,45 @@ beforeEach(async () => {
   vault = await mkdtemp(join(tmpdir(), 'mcpvault-llm-wiki-'));
 });
 
+test('MOC navigation preserves explicit sibling order, body link order, and multi-MOC neighborhoods', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'moc-navigation-owner', modelId: 'codex', password: 'moc-navigation-password' });
+    const accessToken = registration.value.accessToken;
+    const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
+      const result = await client.callTool({ name: 'write_note', arguments: { path, content, frontmatter, expectedRevision: 'missing', accessToken } });
+      expect(result.isError).toBeFalsy();
+    };
+    await write('Knowledge/MOCs/Root.md', '# Root\n\n## Reading order\n[[Knowledge/Z note]]\n[[Knowledge/A note]]\n', { note_kind: 'moc', lifecycle: 'evergreen', nav_order: 0 });
+    await write('Knowledge/MOCs/Z.md', '# Z\n', { note_kind: 'moc', lifecycle: 'evergreen', moc_parent: '[[Knowledge/MOCs/Root]]', nav_order: 20 });
+    await write('Knowledge/MOCs/A.md', '# A\n', { note_kind: 'moc', lifecycle: 'evergreen', moc_parent: '[[Knowledge/MOCs/Root]]', nav_order: 10 });
+    await write('Knowledge/Z note.md', '# Z note\n', { note_kind: 'atomic', lifecycle: 'evergreen' });
+    await write('Knowledge/A note.md', '# A note\n', { note_kind: 'atomic', lifecycle: 'evergreen' });
+    await write('Knowledge/Multi.md', '# Multi\n', { note_kind: 'atomic', lifecycle: 'evergreen', mocs: ['[[Knowledge/MOCs/A]]'] });
+    await write('Knowledge/Source.md', '# Source\n', { note_kind: 'atomic', lifecycle: 'evergreen', mocs: ['[[Knowledge/MOCs/A]]'] });
+
+    const home = await callJson(client, 'get_wiki_home', { accessToken, limit: 10 });
+    expect(home.value.mocs.map((item: any) => item.path)).toEqual(['Knowledge/MOCs/Root.md', 'Knowledge/MOCs/A.md', 'Knowledge/MOCs/Z.md']);
+    expect(home.value.mocs.map((item: any) => item.navOrder)).toEqual([0, 10, 20]);
+
+    const graph = await callJson(client, 'get_wiki_graph_health', { accessToken, limit: 20, maxChars: 12000 });
+    expect(graph.value.mocHierarchy.items.map((item: any) => item.path)).toEqual(['Knowledge/MOCs/Root.md', 'Knowledge/MOCs/A.md', 'Knowledge/MOCs/Z.md']);
+    const rootCoverage = graph.value.mocCoverage.mocs.find((item: any) => item.path === 'Knowledge/MOCs/Root.md');
+    expect(rootCoverage.orderedEntries).toEqual([
+      expect.objectContaining({ target: 'Knowledge/Z note', line: 4, section: 'Reading order' }),
+      expect.objectContaining({ target: 'Knowledge/A note', line: 5, section: 'Reading order' }),
+    ]);
+
+    const neighborhood = await callJson(client, 'get_wiki_neighborhood', { path: 'Knowledge/Source.md', accessToken, limit: 10, maxChars: 5000 });
+    expect(neighborhood.value.neighbors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/Multi.md', reasons: expect.arrayContaining(['shared_moc']), mocs: ['[[Knowledge/MOCs/A]]'] }),
+    ]));
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('weekly review separates schedule from deadline and exposes reverse focus context', async () => {
   const { server, client } = await setup();
   try {
