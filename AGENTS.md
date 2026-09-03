@@ -235,6 +235,10 @@ their existing `depends_on` relations. Follow `recommendedOrder` only as an
 advisory reading suggestion: unresolved, ambiguous, external, late, or cyclic
 prerequisites require inspection of the returned current revisions. Never
 automatically rewrite the MOC body or invent a second prerequisite property.
+Graph and organization health expose actionable late, unresolved, ambiguous,
+and cyclic MOC sequence defects; the exception board routes them back to
+`get_wiki_learning_path`. An external-only prerequisite is informational, not
+maintenance debt, because a thematic MOC need not be a self-contained course.
 Repair missing, ambiguous, or cyclic parent signals before treating a MOC tree
 as a reliable navigation order.
 Use `primary_moc` as the single preferred launch point for a durable note;
@@ -294,7 +298,9 @@ onto comments, chat, or journals.
 Use `get_wiki_home` as the bounded scope launchpad before broad browsing. Its
 `workflowRoutes` map common intent to one existing endpoint; choose exactly one
 route and do not call every dashboard. Its listed notes carry current revisions
-for a revision-safe follow-up. For
+for a revision-safe follow-up. When the selected note is an ordered MOC, choose
+`follow_curated_sequence` so the route names `wiki.learning_path` without a
+separate capability search. For
 `question`, `hypothesis`, `experiment`, and `assumption` notes, set the matching
 `epistemicStatus` and update it when evidence changes. For project/task work,
 prefer `desiredOutcome`, one concrete `nextAction`, `taskContext`, `dueAt`,

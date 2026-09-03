@@ -255,13 +255,16 @@ function compareMocNavigation(left, right) {
         || String(left.title || left.path).localeCompare(String(right.title || right.path))
         || String(left.path).localeCompare(String(right.path));
 }
-function mocBodyOutline(content, limit = 24) {
-    return extractObsidianLinkOccurrences(content, limit).map(link => ({
+function mocOutlineFromOccurrences(occurrences, limit = 24) {
+    return occurrences.slice(0, limit).map(link => ({
         target: link.target, line: link.line,
         ...(link.heading && { section: boundedText(link.heading, 200) }),
         ...(link.targetHeading && { targetHeading: boundedText(link.targetHeading, 200) }),
         ...(link.targetBlockId && { targetBlockId: boundedText(link.targetBlockId, 200) }),
     }));
+}
+function mocBodyOutline(content, limit = 24) {
+    return mocOutlineFromOccurrences(extractObsidianLinkOccurrences(content, limit), limit);
 }
 function catalogEntryCompare(left, right, orderBy = 'location') {
     if (orderBy === 'time') {
@@ -507,6 +510,10 @@ existing \`depends_on\` Properties. The separate recommended order and
 unresolved, ambiguous, external, late, or cyclic prerequisite findings are
 advisory; inspect current revisions and deliberately edit Markdown rather than
 automatically reordering it.
+Graph and organization health expose actionable late, unresolved, ambiguous,
+and cyclic sequence defects, while the exception board routes an affected MOC
+back to the detailed learning path. An external-only prerequisite remains an
+informational signal so thematic MOCs are not treated as broken curricula.
 
 Use \`get_wiki_composition_candidates\` for long or heavily sectioned notes.
 Atomicity is a desired outcome, not a publication gate; inspect one heading
@@ -4961,6 +4968,7 @@ export class LlmWikiService {
             { intent: 'capture', useWhen: 'You must preserve a new observation before classifying it.', endpointId: endpointIdForTool('capture_wiki_note'), arguments: { expectedRevision: 'missing' }, requiredArguments: ['content'], mutating: true },
             { intent: 'organize_inbox', useWhen: 'You are processing captures, not creating new knowledge.', endpointId: endpointIdForTool('get_wiki_inbox'), arguments: { limit: 5, maxChars: 4000 }, followUpEndpointId: endpointIdForTool('clarify_wiki_note') },
             { intent: 'understand_or_decide', useWhen: 'You selected one note and need bounded evidence, counterpoint, and next-step context.', endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path: '<selected path>', intent: 'decide', limit: 6, maxChars: 5000 }, requiredArguments: ['path'] },
+            { intent: 'follow_curated_sequence', useWhen: 'You selected a MOC that is meant to be read or executed in order.', endpointId: endpointIdForTool('get_wiki_learning_path'), arguments: { path: '<selected MOC path>', maxDepth: 2, limit: 20, maxChars: 6000 }, requiredArguments: ['path'] },
             { intent: 'execute_in_context', useWhen: 'You need one executable action that fits a known GTD context.', endpointId: endpointIdForTool('get_wiki_next_actions'), arguments: { taskContext: '<exact context>', limit: 5, maxChars: 4000 }, requiredArguments: ['taskContext'] },
             { intent: 'review_one', useWhen: 'You want one prioritized evidence, flow, or maintenance item.', endpointId: endpointIdForTool('get_wiki_review_packet'), arguments: { limit: 1, maxChars: 4000 } },
             { intent: 'repair_structure', useWhen: 'You are fixing derived organization debt rather than reading broadly.', endpointId: endpointIdForTool('get_wiki_exception_board'), arguments: { limit: 5, maxChars: 4000 } },
@@ -5022,10 +5030,12 @@ export class LlmWikiService {
             visibleNotePaths.push(note.path);
             const kind = String(note.frontmatter.note_kind || '').toLowerCase();
             const managedType = String(note.frontmatter.llm_wiki_type || '').toLowerCase();
-            const links = extractObsidianLinkOccurrences(note.content || '').map(link => link.target);
+            const occurrences = extractObsidianLinkOccurrences(note.content || '');
+            const links = occurrences.map(link => link.target);
             graphNotes.push({
                 path: note.path,
                 title: String(note.frontmatter.title || note.path.split('/').at(-1) || note.path),
+                ...(note.revision && { revision: note.revision }),
                 aliases: Array.isArray(note.frontmatter.aliases) ? note.frontmatter.aliases.filter((item) => typeof item === 'string' && Boolean(item.trim())).slice(0, 20) : [],
                 ...(typeof note.frontmatter.stable_id === 'string' && { stableId: note.frontmatter.stable_id }),
                 kind,
@@ -5059,7 +5069,7 @@ export class LlmWikiService {
                 : [];
             const order = navigationOrder(note.frontmatter.nav_order);
             const navOrder = order === Number.MAX_SAFE_INTEGER ? undefined : order;
-            mocDrafts.push({ path: note.path, title: note.frontmatter.title || note.path.split('/').at(-1) || note.path, links, questions, content: note.content || '', outline: mocBodyOutline(note.content || '', Math.min(24, boundedLimit * 2)), ...(navOrder !== undefined && { navOrder }), ...(typeof note.frontmatter.moc_parent === 'string' && { parent: note.frontmatter.moc_parent }) });
+            mocDrafts.push({ path: note.path, title: note.frontmatter.title || note.path.split('/').at(-1) || note.path, ...(note.revision && { revision: note.revision }), occurrences, questions, content: note.content || '', outline: mocOutlineFromOccurrences(occurrences, Math.min(24, boundedLimit * 2)), ...(navOrder !== undefined && { navOrder }), ...(typeof note.frontmatter.moc_parent === 'string' && { parent: note.frontmatter.moc_parent }) });
             if (links.length === 0) {
                 emptyMocTotal += 1;
                 if (emptyMocs.length < boundedLimit) {
@@ -5068,6 +5078,15 @@ export class LlmWikiService {
             }
         }
         const graphByPath = new Map(graphNotes.map(note => [normalizePath(note.path).toLowerCase(), note]));
+        const resolveMocOccurrence = (sourcePath, occurrence) => {
+            if (!occurrence.link.startsWith('[[') && !occurrence.link.startsWith('![[')) {
+                const relative = posix.normalize(posix.join(posix.dirname(normalizePath(sourcePath)), occurrence.target));
+                const direct = graphByPath.get(relative.toLowerCase()) || graphByPath.get(`${relative}.md`.toLowerCase());
+                if (direct)
+                    return [direct.path];
+            }
+            return resolveWikiLinkTargets(occurrence.target, visibleNotePaths);
+        };
         const incoming = new Map();
         const resolvedOutgoing = new Map();
         for (const note of graphNotes) {
@@ -5457,11 +5476,11 @@ export class LlmWikiService {
             const indirect = new Set();
             const nestedMocs = new Set();
             let unresolvedTargets = 0;
-            const queue = moc.links.map(target => ({ target, depth: 0, direct: true }));
+            const queue = moc.occurrences.map(occurrence => ({ sourcePath: moc.path, occurrence, depth: 0, direct: true }));
             const visitedMocs = new Set([normalizePath(moc.path).toLowerCase()]);
             for (let queueIndex = 0; queueIndex < queue.length; queueIndex += 1) {
                 const current = queue[queueIndex];
-                const resolvedTargets = resolveWikiLinkTargets(current.target, visibleNotePaths);
+                const resolvedTargets = resolveMocOccurrence(current.sourcePath, current.occurrence);
                 if (resolvedTargets.length === 0) {
                     if (current.direct)
                         unresolvedTargets += 1;
@@ -5479,8 +5498,8 @@ export class LlmWikiService {
                     visitedMocs.add(normalized);
                     nestedMocs.add(normalized);
                     const child = mocByPath.get(normalized);
-                    for (const target of child?.links || [])
-                        queue.push({ target, depth: current.depth + 1, direct: false });
+                    for (const occurrence of child?.occurrences || [])
+                        queue.push({ sourcePath: child.path, occurrence, depth: current.depth + 1, direct: false });
                 }
             }
             const linkedKnowledge = [...linked].filter(path => knowledgePaths.has(path));
@@ -5528,8 +5547,145 @@ export class LlmWikiService {
                 questionLinked: linkedQuestions,
                 questionCoverage: questionCoverage.length ? Number((linkedQuestions / questionCoverage.length).toFixed(3)) : 1,
             });
-            mocCoverageItems.push({ path: this.access.toPublicPath(moc.path), title: moc.title, ...(moc.navOrder !== undefined && { navOrder: moc.navOrder }), orderedEntries: moc.outline.map(entry => ({ ...entry, target: boundedText(entry.target, 300) })), linkedNotes: linked.size, linkedKnowledge: linkedKnowledge.length, directKnowledge: directKnowledge.length, indirectKnowledge: indirectKnowledge.length, nestedMocs: nestedMocs.size, unresolvedTargets, linkDensity: moc.links.length ? Number((linked.size / moc.links.length).toFixed(3)) : 0, knowledgeCoverage: knowledgePaths.size ? Number((linkedKnowledge.length / knowledgePaths.size).toFixed(3)) : 1, questionTotal: questionCoverage.length, questionLinked: linkedQuestions, questionCoverage: questionCoverage.length ? Number((linkedQuestions / questionCoverage.length).toFixed(3)) : 1 });
+            mocCoverageItems.push({ path: this.access.toPublicPath(moc.path), title: moc.title, ...(moc.revision && { revision: moc.revision }), ...(moc.navOrder !== undefined && { navOrder: moc.navOrder }), orderedEntries: moc.outline.map(entry => ({ ...entry, target: boundedText(entry.target, 300) })), linkedNotes: linked.size, linkedKnowledge: linkedKnowledge.length, directKnowledge: directKnowledge.length, indirectKnowledge: indirectKnowledge.length, nestedMocs: nestedMocs.size, unresolvedTargets, linkDensity: moc.occurrences.length ? Number((linked.size / moc.occurrences.length).toFixed(3)) : 0, knowledgeCoverage: knowledgePaths.size ? Number((linkedKnowledge.length / knowledgePaths.size).toFixed(3)) : 1, questionTotal: questionCoverage.length, questionLinked: linkedQuestions, questionCoverage: questionCoverage.length ? Number((linkedQuestions / questionCoverage.length).toFixed(3)) : 1 });
         }
+        const mocSequenceItems = [];
+        let mocSequenceLateTotal = 0;
+        let mocSequenceExternalTotal = 0;
+        let mocSequenceUnresolvedTotal = 0;
+        let mocSequenceAmbiguousTotal = 0;
+        let mocSequenceCycleBlockedTotal = 0;
+        for (const moc of mocDrafts) {
+            const orderedKeys = [];
+            const unresolvedEntries = [];
+            const ambiguousEntries = [];
+            for (const occurrence of moc.occurrences) {
+                const matches = resolveMocOccurrence(moc.path, occurrence);
+                if (matches.length === 0) {
+                    unresolvedEntries.push({ target: boundedText(occurrence.target, 200), line: occurrence.line });
+                    continue;
+                }
+                if (matches.length > 1) {
+                    ambiguousEntries.push({ target: boundedText(occurrence.target, 200), line: occurrence.line, matches: matches.slice(0, 4).map(match => this.access.toPublicPath(match)) });
+                    continue;
+                }
+                const key = normalizePath(matches[0]).toLowerCase();
+                if (key !== normalizePath(moc.path).toLowerCase() && !orderedKeys.includes(key))
+                    orderedKeys.push(key);
+            }
+            const orderIndex = new Map(orderedKeys.map((key, index) => [key, index]));
+            const edges = [];
+            const latePrerequisites = [];
+            const externalPrerequisites = [];
+            const unresolvedPrerequisites = [];
+            const ambiguousPrerequisites = [];
+            const externalSeen = new Set();
+            for (const dependentKey of orderedKeys) {
+                const dependent = graphByPath.get(dependentKey);
+                for (const raw of dependent?.relations.depends_on || []) {
+                    const matches = resolveWikiLinkTargets(relationDocument(raw), visibleNotePaths);
+                    if (matches.length === 0) {
+                        unresolvedPrerequisites.push({ path: this.access.toPublicPath(dependent.path), prerequisite: boundedText(raw, 200) });
+                        continue;
+                    }
+                    if (matches.length > 1) {
+                        ambiguousPrerequisites.push({ path: this.access.toPublicPath(dependent.path), prerequisite: boundedText(raw, 200), matches: matches.slice(0, 4).map(match => this.access.toPublicPath(match)) });
+                        continue;
+                    }
+                    const prerequisitePath = matches[0];
+                    const prerequisiteKey = normalizePath(prerequisitePath).toLowerCase();
+                    const prerequisiteIndex = orderIndex.get(prerequisiteKey);
+                    if (prerequisiteIndex === undefined) {
+                        const externalKey = `${prerequisiteKey}|${dependentKey}`;
+                        if (!externalSeen.has(externalKey)) {
+                            externalSeen.add(externalKey);
+                            const prerequisite = graphByPath.get(prerequisiteKey);
+                            externalPrerequisites.push({ path: this.access.toPublicPath(prerequisitePath), ...(prerequisite?.revision && { revision: prerequisite.revision }), requiredBy: this.access.toPublicPath(dependent.path) });
+                        }
+                        continue;
+                    }
+                    edges.push({ prerequisite: prerequisiteKey, dependent: dependentKey });
+                    const dependentIndex = orderIndex.get(dependentKey);
+                    if (prerequisiteIndex > dependentIndex) {
+                        latePrerequisites.push({
+                            path: this.access.toPublicPath(dependent.path),
+                            prerequisite: this.access.toPublicPath(prerequisitePath),
+                            dependentPosition: dependentIndex + 1,
+                            prerequisitePosition: prerequisiteIndex + 1,
+                        });
+                    }
+                }
+            }
+            const indegree = new Map(orderedKeys.map(key => [key, 0]));
+            const adjacency = new Map();
+            for (const edge of edges) {
+                const dependents = adjacency.get(edge.prerequisite) || new Set();
+                if (dependents.has(edge.dependent))
+                    continue;
+                dependents.add(edge.dependent);
+                adjacency.set(edge.prerequisite, dependents);
+                indegree.set(edge.dependent, (indegree.get(edge.dependent) || 0) + 1);
+            }
+            const ready = [...indegree.entries()].filter(([, count]) => count === 0).map(([key]) => key);
+            let processed = 0;
+            for (let offset = 0; offset < ready.length; offset += 1) {
+                const current = ready[offset];
+                processed += 1;
+                for (const dependent of adjacency.get(current) || []) {
+                    const remaining = (indegree.get(dependent) || 0) - 1;
+                    indegree.set(dependent, remaining);
+                    if (remaining === 0)
+                        ready.push(dependent);
+                }
+            }
+            const cycleOrBlocked = processed === orderedKeys.length ? [] : orderedKeys.filter(key => (indegree.get(key) || 0) > 0).map(key => this.access.toPublicPath(graphByPath.get(key)?.path || key));
+            const incompleteCount = unresolvedEntries.length + ambiguousEntries.length + unresolvedPrerequisites.length + ambiguousPrerequisites.length;
+            mocSequenceLateTotal += latePrerequisites.length;
+            mocSequenceExternalTotal += externalPrerequisites.length;
+            mocSequenceUnresolvedTotal += unresolvedEntries.length + unresolvedPrerequisites.length;
+            mocSequenceAmbiguousTotal += ambiguousEntries.length + ambiguousPrerequisites.length;
+            mocSequenceCycleBlockedTotal += cycleOrBlocked.length;
+            // A thematic MOC may legitimately rely on a prerequisite outside its
+            // direct shelf. Keep that count visible, but do not turn an external-only
+            // dependency into maintenance debt. Late, unresolved, ambiguous, and
+            // cyclic signals are the actionable sequence defects.
+            if (latePrerequisites.length === 0 && incompleteCount === 0 && cycleOrBlocked.length === 0)
+                continue;
+            const publicMocPath = this.access.toPublicPath(moc.path);
+            const severityScore = cycleOrBlocked.length * 100 + latePrerequisites.length * 20 + incompleteCount * 10 + externalPrerequisites.length;
+            mocSequenceItems.push({
+                severityScore,
+                path: publicMocPath,
+                title: moc.title,
+                ...(moc.revision && { revision: moc.revision }),
+                state: cycleOrBlocked.length > 0 ? 'cyclic_or_cycle_blocked' : latePrerequisites.length > 0 ? 'order_conflict' : 'incomplete_prerequisite_path',
+                authoredEntries: orderedKeys.length,
+                latePrerequisites: { total: latePrerequisites.length, items: latePrerequisites.slice(0, 4), truncated: latePrerequisites.length > 4 },
+                externalPrerequisites: { total: externalPrerequisites.length, items: externalPrerequisites.slice(0, 4), truncated: externalPrerequisites.length > 4 },
+                unresolved: { total: unresolvedEntries.length + unresolvedPrerequisites.length, entries: unresolvedEntries.slice(0, 2), prerequisites: unresolvedPrerequisites.slice(0, 2), truncated: unresolvedEntries.length > 2 || unresolvedPrerequisites.length > 2 },
+                ambiguous: { total: ambiguousEntries.length + ambiguousPrerequisites.length, entries: ambiguousEntries.slice(0, 2), prerequisites: ambiguousPrerequisites.slice(0, 2), truncated: ambiguousEntries.length > 2 || ambiguousPrerequisites.length > 2 },
+                cycleOrBlocked: { total: cycleOrBlocked.length, paths: cycleOrBlocked.slice(0, 6), truncated: cycleOrBlocked.length > 6 },
+                nextAction: { endpointId: endpointIdForTool('get_wiki_learning_path'), arguments: { path: publicMocPath, maxDepth: 2, limit: Math.min(30, boundedLimit), maxChars: 7000 } },
+            });
+        }
+        mocSequenceItems.sort((left, right) => right.severityScore - left.severityScore || String(left.path).localeCompare(String(right.path)));
+        const mocSequenceHealth = {
+            mocsAnalyzed: mocDrafts.length,
+            needsAttention: mocSequenceItems.length,
+            ready: Math.max(0, mocDrafts.length - mocSequenceItems.length),
+            latePrerequisites: mocSequenceLateTotal,
+            externalPrerequisites: mocSequenceExternalTotal,
+            unresolved: mocSequenceUnresolvedTotal,
+            ambiguous: mocSequenceAmbiguousTotal,
+            cycleOrBlockedEntries: mocSequenceCycleBlockedTotal,
+            items: mocSequenceItems.slice(0, boundedLimit).map(({ severityScore: _severityScore, ...item }) => item),
+            truncated: mocSequenceItems.length > boundedLimit,
+            note: 'This fast health pass checks each MOC direct body order. External-only prerequisites are informational, not maintenance debt. Call wiki.learning_path for bounded nested expansion and a stable recommended order; neither view rewrites Markdown.',
+        };
+        const includeMocSequenceHealth = mocSequenceHealth.needsAttention > 0
+            || mocSequenceHealth.externalPrerequisites > 0
+            || mocSequenceHealth.unresolved > 0
+            || mocSequenceHealth.ambiguous > 0;
         const navigation = buildMocNavigation(mocDrafts.map(({ path, title, navOrder, parent }) => ({ path, title, navOrder, parent })));
         const mocHierarchyItems = navigation.items.map(item => ({
             ...item,
@@ -5578,6 +5734,7 @@ export class LlmWikiService {
                 mocs: mocQuestionMocItems.slice(0, boundedLimit),
                 truncated: mocQuestionMocItems.length > boundedLimit,
             },
+            ...(includeMocSequenceHealth && { mocSequenceHealth }),
             ...(includeExtendedGraph && { mocHierarchy }),
             evergreenQuality: {
                 total: evergreenTotal,
@@ -5629,6 +5786,7 @@ export class LlmWikiService {
                 report.mocCoverage.mocs,
                 report.mocQuestionCoverage.unlinked.items,
                 report.mocQuestionCoverage.mocs,
+                ...(includeMocSequenceHealth ? [report.mocSequenceHealth.items] : []),
                 ...(includeExtendedGraph ? [
                     report.mocHierarchy.missingParents.items,
                     report.mocHierarchy.ambiguousParents.items,
@@ -5892,11 +6050,15 @@ export class LlmWikiService {
         const knowledgeConnectivity = 'knowledgeConnectivity' in graph ? graph.knowledgeConnectivity : undefined;
         const knowledgeUsage = 'knowledgeUsage' in graph ? graph.knowledgeUsage : undefined;
         const typedRelations = 'typedRelations' in graph ? graph.typedRelations : undefined;
+        const mocSequenceHealth = 'mocSequenceHealth' in graph ? graph.mocSequenceHealth : undefined;
         if (typedRelations && Number(typedRelations.reciprocityMissing?.total || 0) > 0) {
             recommendations.push('Repair one-sided related/same_as links or document why the edge is intentionally one-sided; directional relations such as supports and supersedes do not require a reverse field.');
         }
         if (mocCoverage && Number(mocCoverage.knowledgeTotal) > 0 && Number(mocCoverage.ratio) < 1) {
             recommendations.push('Add uncovered knowledge notes to an appropriate MOC or explain why they intentionally remain uncurated.');
+        }
+        if (mocSequenceHealth && Number(mocSequenceHealth.needsAttention || 0) > 0) {
+            recommendations.push('Inspect one MOC sequence with wiki.learning_path: resolve missing or ambiguous prerequisites, break dependency cycles, and deliberately reconcile authored order with depends_on without automatic rewriting.');
         }
         if (focusHealth && (Number(focusHealth.unresolved?.total) > 0 || Number(focusHealth.ambiguous?.total) > 0 || Number(focusHealth.cycles?.total) > 0)) {
             recommendations.push('Repair unresolved, ambiguous, or cyclic focus_parent/focus_supports links before using the GTD horizon map for prioritization.');
@@ -5942,6 +6104,7 @@ export class LlmWikiService {
             recommendations,
             ...(mocCoverage && { mocCoverage }),
             ...(mocQuestionCoverage && { mocQuestionCoverage }),
+            ...(mocSequenceHealth && { mocSequenceHealth }),
             ...(mocHierarchy && { mocHierarchy }),
             ...(evergreenQuality && { evergreenQuality }),
             ...(focusHealth && { focusHealth }),
@@ -5955,6 +6118,7 @@ export class LlmWikiService {
                 + (knowledgeUsage ? Number(knowledgeUsage.hubs?.total || 0) : 0)
                 + (typedRelations ? Number(typedRelations.unresolved?.total || 0) + Number(typedRelations.ambiguous?.total || 0) + Number(typedRelations.self?.total || 0) + Number(typedRelations.kindMismatches?.total || 0) + Number(typedRelations.reciprocityMissing?.total || 0) : 0)
                 + Number(mocQuestionCoverage?.unlinked?.total || 0)
+                + Number(mocSequenceHealth?.needsAttention || 0)
                 + (mocHierarchy ? Number(mocHierarchy.missingParents?.total || 0) + Number(mocHierarchy.ambiguousParents?.total || 0) + Number(mocHierarchy.cycles?.total || 0) : 0)
                 + Number(evergreenQuality?.needsAttention || 0),
             truncated: lint.truncated || Object.values(byCode).reduce((sum, count) => sum + count, 0) > issues.length,
@@ -5980,6 +6144,19 @@ export class LlmWikiService {
                     return [[key, { total: Number(item.total || 0), items: Array.isArray(item.items) ? item.items.slice(0, 2) : [], truncated: Boolean(item.truncated) || (Array.isArray(item.items) && item.items.length > 2) }]];
                 })),
             }),
+            ...(mocSequenceHealth && {
+                mocSequenceHealth: {
+                    mocsAnalyzed: Number(mocSequenceHealth.mocsAnalyzed || 0),
+                    needsAttention: Number(mocSequenceHealth.needsAttention || 0),
+                    latePrerequisites: Number(mocSequenceHealth.latePrerequisites || 0),
+                    externalPrerequisites: Number(mocSequenceHealth.externalPrerequisites || 0),
+                    unresolved: Number(mocSequenceHealth.unresolved || 0),
+                    ambiguous: Number(mocSequenceHealth.ambiguous || 0),
+                    cycleOrBlockedEntries: Number(mocSequenceHealth.cycleOrBlockedEntries || 0),
+                    items: Array.isArray(mocSequenceHealth.items) ? mocSequenceHealth.items.slice(0, 2) : [],
+                    truncated: true,
+                },
+            }),
             collectionHealth: { totalNotes: collectionHealth.totalNotes, collectionTotal: collectionHealth.collectionTotal, items: collectionHealth.items.slice(0, 3), truncated: true },
             truncated: true,
             generatedAt: result.generatedAt,
@@ -5988,6 +6165,8 @@ export class LlmWikiService {
             compact.issues.pop();
         while (JSON.stringify(compact).length > boundedChars && compact.quarantine.items.length > 0)
             compact.quarantine.items.pop();
+        while (JSON.stringify(compact).length > boundedChars && compact.mocSequenceHealth?.items?.length > 0)
+            compact.mocSequenceHealth.items.pop();
         while (JSON.stringify(compact).length > boundedChars && compact.recommendations.length > 1)
             compact.recommendations.pop();
         while (JSON.stringify(compact).length > boundedChars && Object.keys(compact.byCode).length > 0)
@@ -7010,8 +7189,25 @@ export class LlmWikiService {
         const categoryFor = (code) => code.startsWith('invalid_') || code.startsWith('unsafe_') ? 'validation' : code.includes('stale') || code.includes('review') || code.includes('fresh') ? 'freshness' : code.includes('moc') || code.includes('relation') || code.includes('link') || code.includes('orphan') ? 'navigation' : code.includes('project') || code.includes('task') || code.includes('waiting') ? 'execution' : code.includes('term') || code.includes('alias') || code.includes('vocabulary') ? 'vocabulary' : code.includes('retention') || code.includes('archive') ? 'preservation' : 'knowledge_quality';
         const rawIssues = Array.isArray(health.issues) ? health.issues : [];
         const rawQuarantine = health.quarantine && Array.isArray(health.quarantine.items) ? health.quarantine.items : [];
+        const rawMocSequences = health.mocSequenceHealth && Array.isArray(health.mocSequenceHealth.items) ? health.mocSequenceHealth.items : [];
+        const mocSequenceIssues = rawMocSequences.map(item => {
+            const state = String(item.state || 'incomplete_prerequisite_path');
+            const code = state === 'cyclic_or_cycle_blocked' ? 'moc_dependency_cycle' : state === 'order_conflict' ? 'moc_prerequisite_order_conflict' : 'moc_prerequisite_path_incomplete';
+            return {
+                path: item.path,
+                code,
+                detail: `MOC sequence needs review: ${Number(item.latePrerequisites?.total || 0)} late, ${Number(item.externalPrerequisites?.total || 0)} external, ${Number(item.unresolved?.total || 0)} unresolved, ${Number(item.ambiguous?.total || 0)} ambiguous, ${Number(item.cycleOrBlocked?.total || 0)} cyclic-or-blocked entries.`,
+                category: 'navigation',
+                severity: 'warning',
+                state: 'open',
+                suggestedAction: 'call_wiki_learning_path_then_edit_with_current_revision',
+                ...(item.revision && { revision: item.revision }),
+                ...(item.nextAction && { nextAction: item.nextAction }),
+            };
+        });
         const items = [
             ...rawQuarantine.map(item => ({ ...item, category: 'validation', severity: 'error', state: 'quarantined', suggestedAction: 'inspect_and_repair_with_revision' })),
+            ...mocSequenceIssues,
             ...rawIssues.filter(issue => !rawQuarantine.some(item => item.path === issue.path && item.code === issue.code)).map(issue => ({
                 path: issue.path,
                 code: issue.code,
@@ -7023,7 +7219,7 @@ export class LlmWikiService {
             })),
         ].slice(0, boundedLimit);
         const counts = {};
-        for (const item of [...rawQuarantine, ...rawIssues]) {
+        for (const item of [...rawQuarantine, ...mocSequenceIssues, ...rawIssues]) {
             const category = item.state === 'quarantined' ? 'validation' : categoryFor(String(item.code || ''));
             counts[category] = (counts[category] || 0) + 1;
         }
@@ -7035,7 +7231,7 @@ export class LlmWikiService {
             recommendations: Array.isArray(health.recommendations) ? health.recommendations.slice(0, boundedLimit) : [],
             sourceViews: ['wiki.organization_health', 'wiki.graph_health', 'wiki.review_packet'],
             advisory: true,
-            truncated: rawIssues.length + rawQuarantine.length > items.length || Boolean(health.truncated),
+            truncated: rawIssues.length + rawQuarantine.length + mocSequenceIssues.length > items.length || Boolean(health.truncated),
             generatedAt: now(),
         };
         if (JSON.stringify(result).length <= boundedChars)

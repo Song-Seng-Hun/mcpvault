@@ -104,6 +104,7 @@ test('MOC navigation preserves explicit sibling order, body link order, and mult
     expect(home.value.workflowRoutes).toEqual(expect.arrayContaining([
       expect.objectContaining({ intent: 'find', endpointId: 'wiki.search', requiredArguments: ['query'] }),
       expect.objectContaining({ intent: 'understand_or_decide', endpointId: 'wiki.answer_packet', requiredArguments: ['path'] }),
+      expect.objectContaining({ intent: 'follow_curated_sequence', endpointId: 'wiki.learning_path', requiredArguments: ['path'] }),
       expect.objectContaining({ intent: 'review_one', endpointId: 'wiki.review_packet' }),
       expect.objectContaining({ intent: 'migrate_contract', endpointId: 'wiki.organization_manifest' }),
     ]));
@@ -168,6 +169,7 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
       '[[Knowledge/Basics]]',
       '[[Knowledge/MOCs/Nested]]',
       '[[Knowledge/Independent]]',
+      '[Relative note](../Relative.md)',
       '[[Knowledge/Cycle A]]',
       '[[Knowledge/Cycle B]]',
     ].join('\n'), { note_kind: 'moc', lifecycle: 'evergreen', moc_purpose: 'Teach a bounded topic.' });
@@ -176,6 +178,7 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
     await write('Knowledge/Basics.md', '# Basics\n', { note_kind: 'atomic', lifecycle: 'evergreen', depends_on: ['[[Knowledge/External Primer]]'] });
     await write('Knowledge/Nested Topic.md', '# Nested Topic\n', { note_kind: 'atomic', lifecycle: 'evergreen', depends_on: ['[[Knowledge/Independent]]'] });
     await write('Knowledge/Independent.md', '# Independent\n', { note_kind: 'atomic', lifecycle: 'evergreen' });
+    await write('Knowledge/Relative.md', '# Relative\n', { note_kind: 'atomic', lifecycle: 'evergreen' });
     await write('Knowledge/External Primer.md', '# External Primer\n', { note_kind: 'atomic', lifecycle: 'evergreen' });
     await write('Knowledge/Cycle A.md', '# Cycle A\n', { note_kind: 'atomic', lifecycle: 'evergreen', depends_on: ['[[Knowledge/Cycle B]]'] });
     await write('Knowledge/Cycle B.md', '# Cycle B\n', { note_kind: 'atomic', lifecycle: 'evergreen', depends_on: ['[[Knowledge/Cycle A]]'] });
@@ -190,6 +193,7 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
       'Knowledge/MOCs/Nested.md',
       'Knowledge/Nested Topic.md',
       'Knowledge/Independent.md',
+      'Knowledge/Relative.md',
       'Knowledge/Cycle A.md',
       'Knowledge/Cycle B.md',
     ]);
@@ -209,6 +213,23 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
     ]));
     expect(path.value.externalPrerequisites).toEqual(expect.arrayContaining([
       expect.objectContaining({ path: 'Knowledge/External Primer.md', requiredBy: 'Knowledge/Basics.md', revision: expect.any(String) }),
+    ]));
+    const graph = await callJson(client, 'get_wiki_graph_health', { limit: 20, maxChars: 12000, accessToken });
+    expect(graph.value.mocSequenceHealth).toMatchObject({ needsAttention: 1, latePrerequisites: 2, externalPrerequisites: 2, unresolved: 1, cycleOrBlockedEntries: 2 });
+    expect(graph.value.mocSequenceHealth.items[0]).toMatchObject({
+      path: 'Knowledge/MOCs/Curriculum.md',
+      revision: expect.any(String),
+      state: 'cyclic_or_cycle_blocked',
+      nextAction: { endpointId: 'wiki.learning_path' },
+    });
+    const coverage = graph.value.mocCoverage.mocs.find((item: any) => item.path === 'Knowledge/MOCs/Curriculum.md');
+    expect(coverage).toMatchObject({ directKnowledge: 6, indirectKnowledge: 1, linkedKnowledge: 7, revision: expect.any(String) });
+    const organization = await callJson(client, 'get_wiki_organization_health', { limit: 20, maxChars: 12000, accessToken });
+    expect(organization.value.mocSequenceHealth.needsAttention).toBe(1);
+    expect(organization.value.recommendations).toEqual(expect.arrayContaining([expect.stringContaining('wiki.learning_path')]));
+    const exceptionBoard = await callJson(client, 'get_wiki_exception_board', { limit: 30, maxChars: 12000, accessToken });
+    expect(exceptionBoard.value.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/MOCs/Curriculum.md', code: 'moc_dependency_cycle', suggestedAction: 'call_wiki_learning_path_then_edit_with_current_revision' }),
     ]));
     const tiny = await callJson(client, 'get_wiki_learning_path', { path: 'Knowledge/MOCs/Curriculum.md', maxDepth: 2, limit: 20, maxChars: 1024, accessToken, prettyPrint: true });
     expect(String((tiny.result.content as any)[0].text).length).toBeLessThanOrEqual(1024);

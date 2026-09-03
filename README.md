@@ -187,6 +187,10 @@ prerequisites, ambiguous/unresolved targets, and dependency-cycle findings.
 Every readable entry includes its current revision. The projection never
 rewrites the MOC, and a recommendation is navigation—not proof or permission
 to discard a deliberate narrative order.
+Graph/organization health also expose actionable MOC sequence defects, and the
+exception board gives each affected map a `wiki.learning_path` repair route.
+External-only prerequisites remain informational so thematic maps are not
+misclassified as broken curricula.
 
 Use `question` for an unresolved question, `hypothesis` for a testable
 proposition, and `assumption` for a working premise. Keep these visibly
@@ -394,10 +398,13 @@ completion visible without duplicating Git history. Precise evidence may add
 selected source lines. `get_wiki_home` returns a bounded live Home/JDex-style
 launchpad for MOCs, active work, Inbox, review items, and stable IDs. It is also
 the low-friction intent router: choose exactly one returned route for find,
-capture, organize, decide, execute, review, repair, or migration instead of
+capture, organize, decide, follow a curated sequence, execute, review, repair,
+or migration instead of
 opening every overlapping dashboard. Returned note entries carry their current
 revision when the metadata index is available, so the next read/edit can keep
 the same optimistic-concurrency guard without reopening every body.
+The `follow_curated_sequence` route sends a selected MOC directly to
+`wiki.learning_path`; agents do not need to know that endpoint name in advance.
 
 The intended loop is **Capture -> Organize -> Distill -> Express**: ingest an
 immutable source or capture a rough note, classify and link it, publish a
@@ -470,6 +477,9 @@ later, outside the path, cannot be resolved uniquely, or participates in a
 cycle. Its stable topological recommendation keeps authored order among
 otherwise independent notes. It is bounded, scope-filtered, non-mutating, and
 does not create a parallel graph or a new client-side requirement.
+The same direct-order check is reused during graph health rather than scanning
+the Vault again. It also resolves relative Markdown links from the containing
+MOC, keeping coverage, sequence health, and the detailed learning path aligned.
 `get_wiki_exception_board` combines organization, graph,
 quarantine, freshness, vocabulary, and execution findings into one 5S-style
 repair board. `get_wiki_quality_check` applies a small role-specific checklist

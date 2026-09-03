@@ -2214,8 +2214,9 @@ export declare class LlmWikiService {
                 query: string;
                 limit: number;
                 maxChars: number;
-                path?: never;
                 intent?: never;
+                path?: never;
+                maxDepth?: never;
                 taskContext?: never;
                 includeReadiness?: never;
             };
@@ -2229,8 +2230,9 @@ export declare class LlmWikiService {
             arguments: {
                 query?: never;
                 expectedRevision: string;
-                path?: never;
                 intent?: never;
+                path?: never;
+                maxDepth?: never;
                 taskContext?: never;
                 includeReadiness?: never;
                 limit?: never;
@@ -2249,8 +2251,9 @@ export declare class LlmWikiService {
                 query?: never;
                 limit: number;
                 maxChars: number;
-                path?: never;
                 intent?: never;
+                path?: never;
+                maxDepth?: never;
                 taskContext?: never;
                 includeReadiness?: never;
             };
@@ -2269,6 +2272,7 @@ export declare class LlmWikiService {
                 intent: string;
                 limit: number;
                 maxChars: number;
+                maxDepth?: never;
                 taskContext?: never;
                 includeReadiness?: never;
             };
@@ -2282,8 +2286,27 @@ export declare class LlmWikiService {
             arguments: {
                 expectedRevision?: never;
                 query?: never;
-                path?: never;
                 intent?: never;
+                path: string;
+                maxDepth: number;
+                limit: number;
+                maxChars: number;
+                taskContext?: never;
+                includeReadiness?: never;
+            };
+            requiredArguments: string[];
+        } | {
+            mutating?: never;
+            followUpEndpointId?: never;
+            intent: string;
+            useWhen: string;
+            endpointId: string;
+            arguments: {
+                expectedRevision?: never;
+                query?: never;
+                intent?: never;
+                path?: never;
+                maxDepth?: never;
                 taskContext: string;
                 limit: number;
                 maxChars: number;
@@ -2300,8 +2323,9 @@ export declare class LlmWikiService {
             arguments: {
                 expectedRevision?: never;
                 query?: never;
-                path?: never;
                 intent?: never;
+                path?: never;
+                maxDepth?: never;
                 taskContext?: never;
                 limit: number;
                 maxChars: number;
@@ -2317,8 +2341,9 @@ export declare class LlmWikiService {
             arguments: {
                 expectedRevision?: never;
                 query?: never;
-                path?: never;
                 intent?: never;
+                path?: never;
+                maxDepth?: never;
                 taskContext?: never;
                 includeReadiness: boolean;
                 limit: number;
@@ -2431,6 +2456,21 @@ export declare class LlmWikiService {
             };
             mocs: Record<string, unknown>[];
             truncated: boolean;
+        };
+        mocSequenceHealth?: {
+            mocsAnalyzed: number;
+            needsAttention: number;
+            ready: number;
+            latePrerequisites: number;
+            externalPrerequisites: number;
+            unresolved: number;
+            ambiguous: number;
+            cycleOrBlockedEntries: number;
+            items: {
+                [x: string]: unknown;
+            }[];
+            truncated: boolean;
+            note: string;
         };
         mocHierarchy?: {
             total: number;
@@ -2864,20 +2904,7 @@ export declare class LlmWikiService {
         purpose: string;
         counts: Record<string, number>;
         total: number;
-        items: ({
-            category: string;
-            severity: string;
-            state: string;
-            suggestedAction: string;
-        } | {
-            path: any;
-            code: any;
-            detail: any;
-            category: string;
-            severity: any;
-            state: string;
-            suggestedAction: string;
-        })[];
+        items: any[];
         recommendations: any;
         sourceViews: string[];
         advisory: boolean;
