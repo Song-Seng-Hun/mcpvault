@@ -2284,6 +2284,28 @@ Only grant write access to clients and conversations you trust. Use `--read-only
 - `src/uri.ts` - Obsidian URI generation for deep links
 - `src/types.ts` - TypeScript type definitions
 
+## Knowledge organization extensions
+
+MCPVault keeps the vault itself authoritative: ordinary Obsidian Markdown, YAML
+Properties, wikilinks, and Git history remain the source of truth. The Wiki
+adds bounded navigation signals instead of a second database.
+
+- Typed links can carry optional `relation_notes` and `relation_evidence`, so
+  an agent can see why `supports`, `contradicts`, or `derived_from` was used.
+- Authority-style notes may declare `preferred_term`, `disambiguation`,
+  `aliases`, `term_status`, and `term_replaced_by`. Projection reads expose
+  this as a compact `authority` card.
+- `review_wiki_note` can record `reviewChecks` (`evidence`, `links`, `summary`,
+  `moc`, `counterexamples`, `scope`, `freshness`) and bounded
+  `reviewOpenItems`; this preserves an auditable hand-off without duplicating
+  Git history.
+- `get_wiki_organization_health` includes bounded collection health grouped by
+  primary MOC, MOC, domain, or top-level filing area. `get_wiki_bases_view`
+  offers optional `authority`, `review_checklist`, and `collections` views.
+
+These are advisory organization aids. They never grant access, replace
+revision checks, auto-move notes, or turn a generated summary into truth.
+
 ## Contributing
 
 1. Fork the repository

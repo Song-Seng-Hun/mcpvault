@@ -12,6 +12,8 @@ export const LIFECYCLES = ['inbox', 'active', 'review', 'evergreen', 'superseded
 export const TASK_STATUSES = ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'] as const;
 export const REVIEW_POLICIES = ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit'] as const;
 export const REVIEW_OUTCOMES = ['confirmed', 'revised', 'disputed', 'superseded', 'rescheduled'] as const;
+/** Small, repeatable quality checklist for an evidence review. */
+export const REVIEW_CHECKS = ['evidence', 'links', 'summary', 'moc', 'counterexamples', 'scope', 'freshness'] as const;
 export const INTERPRETATION_STATUSES = ['unprocessed', 'interpreted', 'synthesized'] as const;
 export const QUESTION_STATUSES = ['open', 'answered', 'blocked', 'abandoned'] as const;
 export const HYPOTHESIS_STATUSES = ['proposed', 'supported', 'refuted', 'inconclusive'] as const;
@@ -79,6 +81,8 @@ export const ORGANIZATION_PROPERTY_CONTRACT: readonly OrganizationPropertyContra
   { name: 'term_status', type: 'text', description: 'Optional authority-vocabulary state for this note title', allowed: TERM_STATUSES },
   { name: 'term_replaced_by', type: 'text', description: 'Preferred term or Obsidian link that replaces a deprecated term' },
   { name: 'term_scope_note', type: 'text', description: 'Short definition or scope note for this term' },
+  { name: 'preferred_term', type: 'text', description: 'Preferred display term for an authority record; defaults to the note title' },
+  { name: 'disambiguation', type: 'text', description: 'Short qualifier distinguishing this term from homonyms' },
   { name: 'canonical_path', type: 'text', description: 'Visible canonical note path when this note is a redirect or duplicate' },
   { name: 'broader_terms', type: 'list', description: 'Optional broader concepts for library-style hierarchy' },
   { name: 'related_terms', type: 'list', description: 'Optional related concepts for authority discovery' },
@@ -124,6 +128,8 @@ export const ORGANIZATION_PROPERTY_CONTRACT: readonly OrganizationPropertyContra
   { name: 'replaced_by', type: 'text', description: 'Visible replacement note for a superseded or tombstoned note' },
   { name: 'review_policy', type: 'text', description: 'Event that re-enters review', allowed: REVIEW_POLICIES },
   { name: 'review_note', type: 'text', description: 'Short record of the latest review' },
+  { name: 'review_checks', type: 'list', description: 'Quality dimensions checked during the latest evidence review', allowed: REVIEW_CHECKS },
+  { name: 'review_open_items', type: 'list', description: 'Bounded follow-up items left by the latest review' },
   { name: 'last_review_outcome', type: 'text', description: 'Outcome of the latest evidence review', allowed: REVIEW_OUTCOMES },
   { name: 'last_reviewed_by', type: 'text', description: 'Reviewer identity' },
   { name: 'last_reviewed_at', type: 'text', description: 'Review completion time' },
@@ -140,6 +146,8 @@ export const ORGANIZATION_PROPERTY_CONTRACT: readonly OrganizationPropertyContra
   { name: 'claims', type: 'list', description: 'Claim-level provenance objects' },
   { name: 'evidence', type: 'list', description: 'Evidence locator objects' },
   ...RELATION_FIELDS.map(name => ({ name, type: 'list' as const, description: `Typed Obsidian links: ${name}` })),
+  { name: 'relation_notes', type: 'object', description: 'Short rationale for typed relation fields; navigation metadata only' },
+  { name: 'relation_evidence', type: 'object', description: 'Scope-safe evidence paths keyed by typed relation field' },
 ] as const;
 
 export function getOrganizationPropertyContract(): OrganizationPropertyContractEntry[] {
@@ -224,6 +232,7 @@ const lifecycleSet = new Set<string>(LIFECYCLES);
 const taskStatusSet = new Set<string>(TASK_STATUSES);
 const reviewPolicySet = new Set<string>(REVIEW_POLICIES);
 const reviewOutcomeSet = new Set<string>(REVIEW_OUTCOMES);
+const reviewCheckSet = new Set<string>(REVIEW_CHECKS);
 const interpretationStatusSet = new Set<string>(INTERPRETATION_STATUSES);
 const questionStatusSet = new Set<string>(QUESTION_STATUSES);
 const hypothesisStatusSet = new Set<string>(HYPOTHESIS_STATUSES);
@@ -261,6 +270,37 @@ function normalizedRelationMap(value: unknown): Record<string, string[]> | undef
     if (normalized?.length) result[field] = normalized;
   }
   return result;
+}
+
+function normalizedRelationNotes(value: unknown): Record<string, string> | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'object' || Array.isArray(value)) throw new Error('relationNotes must be an object keyed by relation field');
+  const result: Record<string, string> = {};
+  for (const [field, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (!relationFieldSet.has(field)) throw new Error(`Unsupported relation note field: ${field}`);
+    const text = optionalText(raw, `relationNotes.${field}`, 500);
+    if (text) result[field] = text;
+  }
+  return Object.keys(result).length ? result : undefined;
+}
+
+function normalizedRelationEvidence(value: unknown): Record<string, string[]> | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'object' || Array.isArray(value)) throw new Error('relationEvidence must be an object keyed by relation field');
+  const result: Record<string, string[]> = {};
+  for (const [field, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (!relationFieldSet.has(field)) throw new Error(`Unsupported relation evidence field: ${field}`);
+    const paths = normalizedList(raw, `relationEvidence.${field}`, 8, 500);
+    if (paths?.length) result[field] = paths;
+  }
+  return Object.keys(result).length ? result : undefined;
+}
+
+export function normalizeReviewChecks(value: unknown): string[] | undefined {
+  const checks = normalizedList(value, 'reviewChecks', REVIEW_CHECKS.length, 40);
+  if (!checks) return undefined;
+  for (const check of checks) if (!reviewCheckSet.has(check)) throw new Error(`reviewChecks must contain only: ${REVIEW_CHECKS.join(', ')}`);
+  return checks;
 }
 
 export function normalizeTaskStatus(value: unknown, fallback?: typeof TASK_STATUSES[number]): typeof TASK_STATUSES[number] | undefined {
@@ -497,6 +537,8 @@ export interface KnowledgeOrganizationInput {
   termStatus?: unknown;
   termReplacedBy?: unknown;
   termScopeNote?: unknown;
+  preferredTerm?: unknown;
+  disambiguation?: unknown;
   broaderTerms?: unknown;
   relatedTerms?: unknown;
   subjectTerms?: unknown;
@@ -508,12 +550,16 @@ export interface KnowledgeOrganizationInput {
   knowledgeRole?: unknown;
   seeAlso?: unknown;
   relations?: unknown;
+  relationNotes?: unknown;
+  relationEvidence?: unknown;
   taskStatus?: unknown;
   reviewPolicy?: unknown;
   reviewOutcome?: unknown;
   reviewedBy?: unknown;
   reviewedAt?: unknown;
   reviewNote?: unknown;
+  reviewChecks?: unknown;
+  reviewOpenItems?: unknown;
   interpretationStatus?: unknown;
   epistemicStatus?: unknown;
   polarity?: unknown;
@@ -591,6 +637,8 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
   const termStatus = input.termStatus === undefined ? normalizeTermStatus(existing.term_status) : normalizeTermStatus(input.termStatus);
   const termReplacedBy = input.termReplacedBy === undefined ? optionalText(existing.term_replaced_by, 'termReplacedBy', 500) : optionalText(input.termReplacedBy, 'termReplacedBy', 500);
   const termScopeNote = input.termScopeNote === undefined ? optionalText(existing.term_scope_note, 'termScopeNote', 1000) : optionalText(input.termScopeNote, 'termScopeNote', 1000);
+  const preferredTerm = input.preferredTerm === undefined ? optionalText(existing.preferred_term, 'preferredTerm', 300) : optionalText(input.preferredTerm, 'preferredTerm', 300);
+  const disambiguation = input.disambiguation === undefined ? optionalText(existing.disambiguation, 'disambiguation', 300) : optionalText(input.disambiguation, 'disambiguation', 300);
   const broaderTerms = input.broaderTerms === undefined ? normalizedList(existing.broader_terms, 'broaderTerms', 20, 500) : normalizedList(input.broaderTerms, 'broaderTerms', 20, 500);
   const relatedTerms = input.relatedTerms === undefined ? normalizedList(existing.related_terms, 'relatedTerms', 20, 500) : normalizedList(input.relatedTerms, 'relatedTerms', 20, 500);
   const subjectTerms = input.subjectTerms === undefined ? normalizedList(existing.subject_terms, 'subjectTerms', 20, 200) : normalizedList(input.subjectTerms, 'subjectTerms', 20, 200);
@@ -605,6 +653,8 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
     ? Object.fromEntries(RELATION_FIELDS.map(field => [field, existing[field]]).filter(([, value]) => value !== undefined))
     : input.relations;
   const relations = normalizedRelationMap(relationsInput);
+  const relationNotes = input.relationNotes === undefined ? normalizedRelationNotes(existing.relation_notes) : normalizedRelationNotes(input.relationNotes);
+  const relationEvidence = input.relationEvidence === undefined ? normalizedRelationEvidence(existing.relation_evidence) : normalizedRelationEvidence(input.relationEvidence);
   const taskStatus = input.taskStatus === undefined
     ? normalizeTaskStatus(existing.task_status)
     : normalizeTaskStatus(input.taskStatus);
@@ -615,6 +665,8 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
   const reviewedBy = input.reviewedBy === undefined ? optionalText(existing.last_reviewed_by, 'reviewedBy', 200) : optionalText(input.reviewedBy, 'reviewedBy', 200);
   const reviewedAt = input.reviewedAt === undefined ? normalizeIsoDate(existing.last_reviewed_at, 'reviewedAt') : normalizeIsoDate(input.reviewedAt, 'reviewedAt');
   const reviewNote = input.reviewNote === undefined ? optionalText(existing.review_note, 'reviewNote', 1000) : optionalText(input.reviewNote, 'reviewNote', 1000);
+  const reviewChecks = input.reviewChecks === undefined ? normalizeReviewChecks(existing.review_checks) : normalizeReviewChecks(input.reviewChecks);
+  const reviewOpenItems = input.reviewOpenItems === undefined ? normalizedList(existing.review_open_items, 'reviewOpenItems', 8, 500) : normalizedList(input.reviewOpenItems, 'reviewOpenItems', 8, 500);
   const interpretationStatus = input.interpretationStatus === undefined
     ? normalizeInterpretationStatus(existing.interpretation_status)
     : normalizeInterpretationStatus(input.interpretationStatus);
@@ -693,6 +745,8 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
     ...(termStatus !== 'preferred' && { term_status: termStatus }),
     ...(termReplacedBy && { term_replaced_by: termReplacedBy }),
     ...(termScopeNote && { term_scope_note: termScopeNote }),
+    ...(preferredTerm && { preferred_term: preferredTerm }),
+    ...(disambiguation && { disambiguation }),
     ...(broaderTerms && { broader_terms: broaderTerms }),
     ...(relatedTerms && { related_terms: relatedTerms }),
     ...(subjectTerms && { subject_terms: subjectTerms }),
@@ -709,6 +763,8 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
     ...(reviewedBy && { last_reviewed_by: reviewedBy }),
     ...(reviewedAt && { last_reviewed_at: reviewedAt }),
     ...(reviewNote && { review_note: reviewNote }),
+    ...(reviewChecks && { review_checks: reviewChecks }),
+    ...(reviewOpenItems && { review_open_items: reviewOpenItems }),
     ...(interpretationStatus && { interpretation_status: interpretationStatus }),
     ...(epistemicStatus && { epistemic_status: epistemicStatus }),
     ...(polarity && { knowledge_polarity: polarity }),
@@ -735,6 +791,8 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
     ...(focusSupports && { focus_supports: focusSupports }),
     ...(summaryDigest && { summary_of_content_sha256: summaryDigest }),
     ...(relations || {}),
+    ...(relationNotes && { relation_notes: relationNotes }),
+    ...(relationEvidence && { relation_evidence: relationEvidence }),
   };
 }
 
@@ -845,6 +903,21 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
   }
   if (frontmatter.term_scope_note !== undefined && (typeof frontmatter.term_scope_note !== 'string' || !String(frontmatter.term_scope_note).trim() || Array.from(String(frontmatter.term_scope_note)).length > 1000)) {
     issues.push({ code: 'invalid_term_scope_note', detail: 'term_scope_note must be non-empty text of 1000 Unicode characters or fewer.' });
+  }
+  for (const [field, maximum] of [['preferred_term', 300], ['disambiguation', 300]] as const) {
+    if (frontmatter[field] !== undefined && (typeof frontmatter[field] !== 'string' || !String(frontmatter[field]).trim() || Array.from(String(frontmatter[field])).length > maximum)) {
+      issues.push({ code: `invalid_${field}`, detail: `${field} must be non-empty text of ${maximum} Unicode characters or fewer.` });
+    }
+  }
+  if (frontmatter.review_checks !== undefined) {
+    try { normalizeReviewChecks(frontmatter.review_checks); } catch (error) { issues.push({ code: 'invalid_review_checks', detail: error instanceof Error ? error.message : 'review_checks must contain known bounded checklist values.' }); }
+  }
+  if (frontmatter.review_open_items !== undefined) {
+    try { normalizedList(frontmatter.review_open_items, 'reviewOpenItems', 8, 500); } catch (error) { issues.push({ code: 'invalid_review_open_items', detail: error instanceof Error ? error.message : 'review_open_items must be a bounded string array.' }); }
+  }
+  for (const [field, normalizer] of [['relation_notes', normalizedRelationNotes], ['relation_evidence', normalizedRelationEvidence] ] as const) {
+    if (frontmatter[field] === undefined) continue;
+    try { normalizer(frontmatter[field]); } catch (error) { issues.push({ code: `invalid_${field}`, detail: error instanceof Error ? error.message : `${field} must be keyed by typed relation field.` }); }
   }
   if (['deprecated', 'redirect'].includes(String(frontmatter.term_status || '').trim().toLowerCase()) && !String(frontmatter.term_replaced_by || '').trim()) {
     issues.push({ code: 'term_replacement_missing', detail: 'Deprecated or redirect terms should point to their preferred replacement with term_replaced_by.' });

@@ -200,6 +200,8 @@ export declare class LlmWikiService {
         termStatus?: string;
         termReplacedBy?: string;
         termScopeNote?: string;
+        preferredTerm?: string;
+        disambiguation?: string;
         broaderTerms?: unknown;
         relatedTerms?: unknown;
         subjectTerms?: unknown;
@@ -210,12 +212,16 @@ export declare class LlmWikiService {
         useWhen?: string;
         seeAlso?: unknown;
         relations?: unknown;
+        relationNotes?: unknown;
+        relationEvidence?: unknown;
         taskStatus?: unknown;
         reviewPolicy?: unknown;
         reviewOutcome?: unknown;
         reviewedBy?: string;
         reviewedAt?: string;
         reviewNote?: string;
+        reviewChecks?: unknown;
+        reviewOpenItems?: unknown;
         interpretationStatus?: unknown;
         epistemicStatus?: unknown;
         polarity?: unknown;
@@ -483,6 +489,8 @@ export declare class LlmWikiService {
         reviewNote?: string;
         reviewReason?: string;
         nextLifecycle?: string;
+        reviewChecks?: unknown;
+        reviewOpenItems?: unknown;
         expectedRevision: string;
     }): Promise<{
         success: boolean;
@@ -494,6 +502,8 @@ export declare class LlmWikiService {
         reviewTrigger: string;
         reviewCount: number;
         reviewReopenCount: number;
+        reviewChecks?: string[];
+        reviewOpenItems?: string[];
         reviewAt?: string;
         reviewIntervalDays?: number;
         adaptiveReviewInterval?: boolean;
@@ -1472,6 +1482,8 @@ export declare class LlmWikiService {
         termStatus?: string;
         termReplacedBy?: string;
         termScopeNote?: string;
+        preferredTerm?: string;
+        disambiguation?: string;
         broaderTerms?: unknown;
         relatedTerms?: unknown;
         subjectTerms?: unknown;
@@ -1482,12 +1494,16 @@ export declare class LlmWikiService {
         useWhen?: string;
         seeAlso?: unknown;
         relations?: unknown;
+        relationNotes?: unknown;
+        relationEvidence?: unknown;
         taskStatus?: unknown;
         reviewPolicy?: unknown;
         reviewOutcome?: unknown;
         reviewedBy?: string;
         reviewedAt?: string;
         reviewNote?: string;
+        reviewChecks?: unknown;
+        reviewOpenItems?: unknown;
         interpretationStatus?: unknown;
         epistemicStatus?: unknown;
         polarity?: unknown;
@@ -1548,10 +1564,27 @@ export declare class LlmWikiService {
             project?: string;
             termStatus?: string;
             termScopeNote?: string;
+            authority?: {
+                preferredTerm: string;
+                variantTerms?: any[];
+                status?: string;
+                disambiguation?: string;
+                scopeNote?: string;
+                useInstead?: string;
+            };
             domain?: string;
             broaderTerms?: any[];
             relatedTerms?: any[];
             subjectTerms?: any[];
+            relations?: {
+                [k: string]: unknown[];
+            };
+            relationNotes?: {
+                [k: string]: string;
+            };
+            relationEvidence?: {
+                [k: string]: string[];
+            };
         };
         status: any;
         confidence: any;
@@ -1590,6 +1623,8 @@ export declare class LlmWikiService {
         reviewedBy?: string;
         reviewedAt?: string;
         reviewNote?: string;
+        reviewChecks?: any[];
+        reviewOpenItems?: any[];
         reviewedRevision?: string;
         reviewTrigger?: string;
         reviewCount?: any;
@@ -1997,6 +2032,23 @@ export declare class LlmWikiService {
      * scan instead of running separate folder/property scans, and never mutates
      * notes or treats organization hints as security boundaries.
      */
+    collectionHealth(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        purpose: string;
+        totalNotes: number;
+        collectionTotal: number;
+        items: {
+            key: string;
+            entryPoint: string;
+            total: number;
+            knowledge: number;
+            inbox: number;
+            reviewDue: number;
+            withoutSummary: number;
+            withOpenQuestions: number;
+        }[];
+        truncated: boolean;
+        generatedAt: string;
+    }>;
     organizationHealth(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<any>;
     /**
      * Return a derived maintenance ledger.  It deliberately reports debt rather

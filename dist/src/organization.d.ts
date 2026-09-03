@@ -10,6 +10,8 @@ export declare const LIFECYCLES: readonly ['inbox', 'active', 'review', 'evergre
 export declare const TASK_STATUSES: readonly ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'];
 export declare const REVIEW_POLICIES: readonly ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit'];
 export declare const REVIEW_OUTCOMES: readonly ['confirmed', 'revised', 'disputed', 'superseded', 'rescheduled'];
+/** Small, repeatable quality checklist for an evidence review. */
+export declare const REVIEW_CHECKS: readonly ['evidence', 'links', 'summary', 'moc', 'counterexamples', 'scope', 'freshness'];
 export declare const INTERPRETATION_STATUSES: readonly ['unprocessed', 'interpreted', 'synthesized'];
 export declare const QUESTION_STATUSES: readonly ['open', 'answered', 'blocked', 'abandoned'];
 export declare const HYPOTHESIS_STATUSES: readonly ['proposed', 'supported', 'refuted', 'inconclusive'];
@@ -187,6 +189,7 @@ export interface OrganizationNoteTemplate {
 export declare function organizationNoteTemplate(value?: unknown): OrganizationNoteTemplate;
 export type NoteKind = typeof NOTE_KINDS[number];
 export type Lifecycle = typeof LIFECYCLES[number];
+export declare function normalizeReviewChecks(value: unknown): string[] | undefined;
 export declare function normalizeTaskStatus(value: unknown, fallback?: typeof TASK_STATUSES[number]): typeof TASK_STATUSES[number] | undefined;
 export declare function normalizeReviewPolicy(value: unknown, fallback?: typeof REVIEW_POLICIES[number]): typeof REVIEW_POLICIES[number] | undefined;
 export declare function normalizeReviewOutcome(value: unknown, fallback?: typeof REVIEW_OUTCOMES[number]): typeof REVIEW_OUTCOMES[number] | undefined;
@@ -252,6 +255,8 @@ export interface KnowledgeOrganizationInput {
     termStatus?: unknown;
     termReplacedBy?: unknown;
     termScopeNote?: unknown;
+    preferredTerm?: unknown;
+    disambiguation?: unknown;
     broaderTerms?: unknown;
     relatedTerms?: unknown;
     subjectTerms?: unknown;
@@ -263,12 +268,16 @@ export interface KnowledgeOrganizationInput {
     knowledgeRole?: unknown;
     seeAlso?: unknown;
     relations?: unknown;
+    relationNotes?: unknown;
+    relationEvidence?: unknown;
     taskStatus?: unknown;
     reviewPolicy?: unknown;
     reviewOutcome?: unknown;
     reviewedBy?: unknown;
     reviewedAt?: unknown;
     reviewNote?: unknown;
+    reviewChecks?: unknown;
+    reviewOpenItems?: unknown;
     interpretationStatus?: unknown;
     epistemicStatus?: unknown;
     polarity?: unknown;

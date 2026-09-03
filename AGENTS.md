@@ -358,6 +358,17 @@ leave the note composed. Use `update_wiki_projection` to refresh only
 summary/key_points/highlights with `expectedRevision`; it never rewrites the
 Markdown body or unrelated Properties.
 
+For richer hand-offs, attach `relationNotes` and `relationEvidence` to typed
+links when the reason or supporting path matters. Authority-style knowledge
+may use `preferredTerm`, `disambiguation`, `aliases`, `termStatus`, and
+`termReplacedBy`; projection reads expose a bounded `authority` card. After a
+real evidence review, pass `reviewChecks` and `reviewOpenItems` to
+`review_wiki_note` so later agents can see what was checked and what remains.
+Use the `authority`, `review_checklist`, and `collections` Bases views, and the
+collection section of `get_wiki_organization_health`, as advisory maintenance
+launchpads. None of these metadata fields replaces Markdown, Obsidian links,
+revision checks, or Git history.
+
 ## Project Overview
 
 MCPVault is a Model Context Protocol (MCP) server that provides a universal AI bridge for Obsidian vaults. It enables any MCP-compatible AI assistant (Claude, ChatGPT, Gemini, etc.) to safely read and write notes in Obsidian vaults while preserving YAML frontmatter and enforcing security boundaries.

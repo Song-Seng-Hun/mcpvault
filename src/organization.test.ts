@@ -159,4 +159,24 @@ describe('knowledge organization focus and summary metadata', () => {
       'retention_reason_missing', 'tombstone_lifecycle_mismatch',
     ]));
   });
+
+  test('preserves authority, relation rationale, and review checklist metadata', () => {
+    expect(knowledgeOrganization({
+      status: 'verified', noteKind: 'atomic', preferredTerm: 'MCPVault', disambiguation: 'Obsidian bridge',
+      relations: { supports: ['[[Knowledge/Search]]'] },
+      relationNotes: { supports: 'The search design uses this note as its cache invariant.' },
+      relationEvidence: { supports: ['_sources/design.md'] },
+      reviewChecks: ['evidence', 'links', 'freshness'], reviewOpenItems: ['Check the remote benchmark.'],
+    })).toMatchObject({
+      preferred_term: 'MCPVault', disambiguation: 'Obsidian bridge',
+      supports: ['[[Knowledge/Search]]'],
+      relation_notes: { supports: 'The search design uses this note as its cache invariant.' },
+      relation_evidence: { supports: ['_sources/design.md'] },
+      review_checks: ['evidence', 'links', 'freshness'], review_open_items: ['Check the remote benchmark.'],
+    });
+    expect(organizationLintIssues('Knowledge/BadReview.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'review',
+      review_checks: ['not-a-check'], relation_notes: { unknown: 'bad' },
+    }, '# Bad review\n').map(issue => issue.code)).toEqual(expect.arrayContaining(['invalid_review_checks', 'invalid_relation_notes']));
+  });
 });

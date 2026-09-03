@@ -8,7 +8,7 @@ import type { ReferenceService } from './references.js';
 import type { SemanticSearchService } from './semantic-search.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
-import { getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, normalizeClarifyDisposition, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeRetentionPolicy, normalizeReviewAt, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeTaskStatus, organizationLintIssues, organizationNoteTemplate, RELATION_FIELDS, RECIPROCAL_RELATIONS } from './organization.js';
+import { getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, normalizeClarifyDisposition, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeRetentionPolicy, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeTaskStatus, organizationLintIssues, organizationNoteTemplate, RELATION_FIELDS, RECIPROCAL_RELATIONS } from './organization.js';
 import { extractObsidianLinkOccurrences, resolveWikiLinkTargets } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
@@ -769,6 +769,8 @@ export class LlmWikiService {
     termStatus?: string;
     termReplacedBy?: string;
     termScopeNote?: string;
+    preferredTerm?: string;
+    disambiguation?: string;
     broaderTerms?: unknown;
     relatedTerms?: unknown;
     subjectTerms?: unknown;
@@ -779,12 +781,16 @@ export class LlmWikiService {
     useWhen?: string;
     seeAlso?: unknown;
     relations?: unknown;
+    relationNotes?: unknown;
+    relationEvidence?: unknown;
     taskStatus?: unknown;
     reviewPolicy?: unknown;
     reviewOutcome?: unknown;
     reviewedBy?: string;
     reviewedAt?: string;
     reviewNote?: string;
+    reviewChecks?: unknown;
+    reviewOpenItems?: unknown;
     interpretationStatus?: unknown;
     epistemicStatus?: unknown;
     polarity?: unknown;
@@ -927,6 +933,8 @@ export class LlmWikiService {
           ...(params.termStatus !== undefined && { termStatus: params.termStatus }),
           ...(params.termReplacedBy !== undefined && { termReplacedBy: params.termReplacedBy }),
           ...(params.termScopeNote !== undefined && { termScopeNote: params.termScopeNote }),
+          ...(params.preferredTerm !== undefined && { preferredTerm: params.preferredTerm }),
+          ...(params.disambiguation !== undefined && { disambiguation: params.disambiguation }),
           ...(params.broaderTerms !== undefined && { broaderTerms: params.broaderTerms }),
           ...(params.relatedTerms !== undefined && { relatedTerms: params.relatedTerms }),
           ...(params.subjectTerms !== undefined && { subjectTerms: params.subjectTerms }),
@@ -938,12 +946,16 @@ export class LlmWikiService {
           ...(params.knowledgeRole !== undefined && { knowledgeRole: params.knowledgeRole }),
           ...(params.seeAlso !== undefined && { seeAlso: params.seeAlso }),
           ...(params.relations !== undefined && { relations: params.relations }),
+          ...(params.relationNotes !== undefined && { relationNotes: params.relationNotes }),
+          ...(params.relationEvidence !== undefined && { relationEvidence: params.relationEvidence }),
           ...(params.taskStatus !== undefined && { taskStatus: params.taskStatus }),
           ...(params.reviewPolicy !== undefined && { reviewPolicy: params.reviewPolicy }),
           ...(params.reviewOutcome !== undefined && { reviewOutcome: params.reviewOutcome }),
           ...(params.reviewedBy !== undefined && { reviewedBy: params.reviewedBy }),
           ...(params.reviewedAt !== undefined && { reviewedAt: params.reviewedAt }),
           ...(params.reviewNote !== undefined && { reviewNote: params.reviewNote }),
+          ...(params.reviewChecks !== undefined && { reviewChecks: params.reviewChecks }),
+          ...(params.reviewOpenItems !== undefined && { reviewOpenItems: params.reviewOpenItems }),
           ...(params.interpretationStatus !== undefined && { interpretationStatus: params.interpretationStatus }),
           ...(params.epistemicStatus !== undefined && { epistemicStatus: params.epistemicStatus }),
           ...(params.polarity !== undefined && { polarity: params.polarity }),
@@ -2099,6 +2111,8 @@ export class LlmWikiService {
     reviewNote?: string;
     reviewReason?: string;
     nextLifecycle?: string;
+    reviewChecks?: unknown;
+    reviewOpenItems?: unknown;
     expectedRevision: string;
   }) {
     if (!params.expectedRevision) throw new Error('expectedRevision is required; use the current note revision');
@@ -2115,6 +2129,8 @@ export class LlmWikiService {
     const reviewNote = params.reviewNote === undefined ? undefined : boundedText(params.reviewNote, 1000);
     const reviewReason = params.reviewReason === undefined ? undefined : boundedText(params.reviewReason, 120);
     const nextLifecycle = params.nextLifecycle === undefined ? undefined : normalizeLifecycle(params.nextLifecycle);
+    const reviewChecks = params.reviewChecks === undefined ? undefined : normalizeReviewChecks(params.reviewChecks);
+    const reviewOpenItems = params.reviewOpenItems === undefined ? undefined : (Array.isArray(params.reviewOpenItems) ? params.reviewOpenItems.slice(0, 8).map(item => boundedText(String(item), 500)) : (() => { throw new Error('reviewOpenItems must be an array'); })());
     const reviewBasisLinks = await this.collectReviewBasisLinks(note.content, Array.isArray(note.frontmatter.references) ? note.frontmatter.references : [], params.principal);
     const timestamp = now();
     const currentLifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
@@ -2146,6 +2162,8 @@ export class LlmWikiService {
         ...(effectiveReviewIntervalDays !== undefined && { review_interval_days: effectiveReviewIntervalDays }),
         ...(nextLifecycle && { lifecycle: nextLifecycle }),
         ...(reviewNote && { review_note: reviewNote }),
+        ...(reviewChecks && { review_checks: reviewChecks }),
+        ...(reviewOpenItems && { review_open_items: reviewOpenItems }),
         updated_by: params.reviewedBy,
         updated_at: timestamp,
       },
@@ -2154,7 +2172,7 @@ export class LlmWikiService {
     });
     const updated = await this.fileSystem.readNote(params.path);
     const followUpRequired = String(updated.frontmatter.lifecycle || '').toLowerCase() === 'review' && !nextLifecycle;
-    return { success: true, path: this.access.toPublicPath(params.path), revision: updated.revision, reviewOutcome: outcome, reviewedBy: updated.frontmatter.last_reviewed_by, reviewedAt: updated.frontmatter.last_reviewed_at, reviewTrigger, reviewCount, reviewReopenCount, ...(reviewAt && { reviewAt }), ...(effectiveReviewIntervalDays !== undefined && { reviewIntervalDays: effectiveReviewIntervalDays }), ...(adaptiveInterval !== undefined && { adaptiveReviewInterval: true }), ...(nextLifecycle && { nextLifecycle }), ...(followUpRequired && { followUpRequired, followUp: 'Choose nextLifecycle or revise the note; a confirmed review does not silently remove the note from the review queue.' }) };
+    return { success: true, path: this.access.toPublicPath(params.path), revision: updated.revision, reviewOutcome: outcome, reviewedBy: updated.frontmatter.last_reviewed_by, reviewedAt: updated.frontmatter.last_reviewed_at, reviewTrigger, reviewCount, reviewReopenCount, ...(reviewChecks && { reviewChecks }), ...(reviewOpenItems && { reviewOpenItems }), ...(reviewAt && { reviewAt }), ...(effectiveReviewIntervalDays !== undefined && { reviewIntervalDays: effectiveReviewIntervalDays }), ...(adaptiveInterval !== undefined && { adaptiveReviewInterval: true }), ...(nextLifecycle && { nextLifecycle }), ...(followUpRequired && { followUpRequired, followUp: 'Choose nextLifecycle or revise the note; a confirmed review does not silently remove the note from the review queue.' }) };
   }
 
   async reviewDashboard(principal?: ScopePrincipal, limit = 10, maxChars = 9000) {
@@ -2851,6 +2869,8 @@ export class LlmWikiService {
     termStatus?: string;
     termReplacedBy?: string;
     termScopeNote?: string;
+    preferredTerm?: string;
+    disambiguation?: string;
     broaderTerms?: unknown;
     relatedTerms?: unknown;
     subjectTerms?: unknown;
@@ -2861,12 +2881,16 @@ export class LlmWikiService {
     useWhen?: string;
     seeAlso?: unknown;
     relations?: unknown;
+    relationNotes?: unknown;
+    relationEvidence?: unknown;
     taskStatus?: unknown;
     reviewPolicy?: unknown;
     reviewOutcome?: unknown;
     reviewedBy?: string;
     reviewedAt?: string;
     reviewNote?: string;
+    reviewChecks?: unknown;
+    reviewOpenItems?: unknown;
     interpretationStatus?: unknown;
     epistemicStatus?: unknown;
     polarity?: unknown;
@@ -2903,7 +2927,7 @@ export class LlmWikiService {
     if (note.frontmatter.llm_wiki_type && note.frontmatter.llm_wiki_type !== 'knowledge') {
       throw new Error(`triage_wiki_note cannot classify managed LLM Wiki type '${note.frontmatter.llm_wiki_type}'`);
     }
-    const hasOrganizationInput = [params.noteKind, params.lifecycle, params.primaryMoc, params.moc, params.project, params.reviewAt, params.reviewIntervalDays, params.reviewSnoozedUntil, params.reviewSnoozeReason, params.nextAction, params.waitingFor, params.desiredOutcome, params.projectPurpose, params.projectSupport, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.canonicalPath, params.recallPrompt, params.recallIntervalDays, params.lastRecalledAt, params.recallQuality, params.retentionPolicy, params.retentionEvent, params.retentionAt, params.preserveUntil, params.legalHold, params.retentionReason, params.replacedBy, params.knowledgeRole, params.termStatus, params.termReplacedBy, params.termScopeNote, params.broaderTerms, params.relatedTerms, params.subjectTerms, params.domain, params.methods, params.audience, params.retrievalCues, params.useWhen, params.seeAlso, params.relations, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.interpretationStatus, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
+    const hasOrganizationInput = [params.noteKind, params.lifecycle, params.primaryMoc, params.moc, params.project, params.reviewAt, params.reviewIntervalDays, params.reviewSnoozedUntil, params.reviewSnoozeReason, params.nextAction, params.waitingFor, params.desiredOutcome, params.projectPurpose, params.projectSupport, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.canonicalPath, params.recallPrompt, params.recallIntervalDays, params.lastRecalledAt, params.recallQuality, params.retentionPolicy, params.retentionEvent, params.retentionAt, params.preserveUntil, params.legalHold, params.retentionReason, params.replacedBy, params.knowledgeRole, params.termStatus, params.termReplacedBy, params.termScopeNote, params.preferredTerm, params.disambiguation, params.broaderTerms, params.relatedTerms, params.subjectTerms, params.domain, params.methods, params.audience, params.retrievalCues, params.useWhen, params.seeAlso, params.relations, params.relationNotes, params.relationEvidence, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.reviewChecks, params.reviewOpenItems, params.interpretationStatus, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
       .some(value => value !== undefined);
     if (!hasOrganizationInput) throw new Error('At least one organization field is required');
     const patch: Record<string, unknown> = {};
@@ -2973,6 +2997,8 @@ export class LlmWikiService {
       ...(params.termStatus !== undefined && { termStatus: params.termStatus }),
       ...(params.termReplacedBy !== undefined && { termReplacedBy: params.termReplacedBy }),
       ...(params.termScopeNote !== undefined && { termScopeNote: params.termScopeNote }),
+      ...(params.preferredTerm !== undefined && { preferredTerm: params.preferredTerm }),
+      ...(params.disambiguation !== undefined && { disambiguation: params.disambiguation }),
       ...(params.broaderTerms !== undefined && { broaderTerms: params.broaderTerms }),
       ...(params.relatedTerms !== undefined && { relatedTerms: params.relatedTerms }),
       ...(params.subjectTerms !== undefined && { subjectTerms: params.subjectTerms }),
@@ -2983,12 +3009,16 @@ export class LlmWikiService {
       ...(params.useWhen !== undefined && { useWhen: params.useWhen }),
       ...(params.seeAlso !== undefined && { seeAlso: params.seeAlso }),
       ...(params.relations !== undefined && { relations: params.relations }),
+      ...(params.relationNotes !== undefined && { relationNotes: params.relationNotes }),
+      ...(params.relationEvidence !== undefined && { relationEvidence: params.relationEvidence }),
       ...(params.taskStatus !== undefined && { taskStatus: params.taskStatus }),
       ...(params.reviewPolicy !== undefined && { reviewPolicy: params.reviewPolicy }),
       ...(params.reviewOutcome !== undefined && { reviewOutcome: params.reviewOutcome }),
       ...(params.reviewedBy !== undefined && { reviewedBy: params.reviewedBy }),
       ...(params.reviewedAt !== undefined && { reviewedAt: params.reviewedAt }),
       ...(params.reviewNote !== undefined && { reviewNote: params.reviewNote }),
+      ...(params.reviewChecks !== undefined && { reviewChecks: params.reviewChecks }),
+      ...(params.reviewOpenItems !== undefined && { reviewOpenItems: params.reviewOpenItems }),
       ...(params.interpretationStatus !== undefined && { interpretationStatus: params.interpretationStatus }),
       ...(params.epistemicStatus !== undefined && { epistemicStatus: params.epistemicStatus }),
       ...(params.polarity !== undefined && { polarity: params.polarity }),
@@ -3221,6 +3251,29 @@ export class LlmWikiService {
         note: 'This is navigation metadata only; the original Markdown and Git history remain authoritative.',
       }
       : undefined;
+    const projectedRelations = Object.fromEntries(RELATION_FIELDS
+      .filter(field => Array.isArray(note.frontmatter[field]) && note.frontmatter[field].length > 0)
+      .map(field => [field, (note.frontmatter[field] as unknown[]).slice(0, 12)]));
+    const projectedRelationNotes = note.frontmatter.relation_notes && typeof note.frontmatter.relation_notes === 'object' && !Array.isArray(note.frontmatter.relation_notes)
+      ? Object.fromEntries(Object.entries(note.frontmatter.relation_notes as Record<string, unknown>)
+        .filter(([field, value]) => Object.prototype.hasOwnProperty.call(projectedRelations, field) && typeof value === 'string')
+        .slice(0, 12).map(([field, value]) => [field, boundedText(value, 500)]))
+      : undefined;
+    const projectedRelationEvidence = note.frontmatter.relation_evidence && typeof note.frontmatter.relation_evidence === 'object' && !Array.isArray(note.frontmatter.relation_evidence)
+      ? Object.fromEntries(Object.entries(note.frontmatter.relation_evidence as Record<string, unknown>)
+        .filter(([field, value]) => Object.prototype.hasOwnProperty.call(projectedRelations, field) && Array.isArray(value))
+        .slice(0, 12).map(([field, value]) => [field, (value as unknown[]).filter((item): item is string => typeof item === 'string' && this.access.canReferenceFrom(params.path, item)).slice(0, 4).map(item => this.access.toPublicPath(item))]))
+      : undefined;
+    const authority = (typeof note.frontmatter.term_status === 'string' || typeof note.frontmatter.term_scope_note === 'string' || typeof note.frontmatter.preferred_term === 'string' || typeof note.frontmatter.disambiguation === 'string' || Array.isArray(note.frontmatter.aliases))
+      ? {
+        preferredTerm: typeof note.frontmatter.preferred_term === 'string' ? boundedText(note.frontmatter.preferred_term, 300) : title,
+        ...(Array.isArray(note.frontmatter.aliases) && { variantTerms: note.frontmatter.aliases.slice(0, 12) }),
+        ...(typeof note.frontmatter.term_status === 'string' && { status: note.frontmatter.term_status }),
+        ...(typeof note.frontmatter.disambiguation === 'string' && { disambiguation: boundedText(note.frontmatter.disambiguation, 300) }),
+        ...(typeof note.frontmatter.term_scope_note === 'string' && { scopeNote: boundedText(note.frontmatter.term_scope_note, 500) }),
+        ...(typeof note.frontmatter.term_replaced_by === 'string' && { useInstead: note.frontmatter.term_replaced_by }),
+      }
+      : undefined;
     return {
       path: this.access.toPublicPath(params.path),
       title,
@@ -3229,17 +3282,21 @@ export class LlmWikiService {
       noteKind: note.frontmatter.note_kind,
       lifecycle: note.frontmatter.lifecycle,
       ...(redirect && { redirect }),
-      ...(typeof note.frontmatter.primary_moc === 'string' || typeof note.frontmatter.moc === 'string' || typeof note.frontmatter.project === 'string' || typeof note.frontmatter.term_status === 'string' || typeof note.frontmatter.term_scope_note === 'string' || typeof note.frontmatter.domain === 'string' || Array.isArray(note.frontmatter.broader_terms) || Array.isArray(note.frontmatter.related_terms) || Array.isArray(note.frontmatter.subject_terms) ? {
+      ...(typeof note.frontmatter.primary_moc === 'string' || typeof note.frontmatter.moc === 'string' || typeof note.frontmatter.project === 'string' || typeof note.frontmatter.term_status === 'string' || typeof note.frontmatter.term_scope_note === 'string' || typeof note.frontmatter.preferred_term === 'string' || typeof note.frontmatter.disambiguation === 'string' || Array.isArray(note.frontmatter.aliases) || typeof note.frontmatter.domain === 'string' || Array.isArray(note.frontmatter.broader_terms) || Array.isArray(note.frontmatter.related_terms) || Array.isArray(note.frontmatter.subject_terms) || Object.keys(projectedRelations).length > 0 ? {
         navigation: {
           ...(typeof note.frontmatter.primary_moc === 'string' && { primaryMoc: note.frontmatter.primary_moc }),
           ...(typeof note.frontmatter.moc === 'string' && { moc: note.frontmatter.moc }),
           ...(typeof note.frontmatter.project === 'string' && { project: note.frontmatter.project }),
           ...(typeof note.frontmatter.term_status === 'string' && { termStatus: note.frontmatter.term_status }),
           ...(typeof note.frontmatter.term_scope_note === 'string' && { termScopeNote: boundedText(note.frontmatter.term_scope_note, 500) }),
+          ...(authority && { authority }),
           ...(typeof note.frontmatter.domain === 'string' && { domain: note.frontmatter.domain }),
           ...(Array.isArray(note.frontmatter.broader_terms) && { broaderTerms: note.frontmatter.broader_terms.slice(0, 12) }),
           ...(Array.isArray(note.frontmatter.related_terms) && { relatedTerms: note.frontmatter.related_terms.slice(0, 12) }),
           ...(Array.isArray(note.frontmatter.subject_terms) && { subjectTerms: note.frontmatter.subject_terms.slice(0, 12) }),
+          ...(Object.keys(projectedRelations).length > 0 && { relations: projectedRelations }),
+          ...(projectedRelationNotes && Object.keys(projectedRelationNotes).length > 0 && { relationNotes: projectedRelationNotes }),
+          ...(projectedRelationEvidence && Object.keys(projectedRelationEvidence).length > 0 && { relationEvidence: projectedRelationEvidence }),
         },
       } : {}),
       status: note.frontmatter.knowledge_status || note.frontmatter.status,
@@ -3279,6 +3336,8 @@ export class LlmWikiService {
       ...(typeof note.frontmatter.last_reviewed_by === 'string' && { reviewedBy: note.frontmatter.last_reviewed_by }),
       ...(typeof note.frontmatter.last_reviewed_at === 'string' && { reviewedAt: note.frontmatter.last_reviewed_at }),
       ...(typeof note.frontmatter.review_note === 'string' && { reviewNote: note.frontmatter.review_note }),
+      ...(Array.isArray(note.frontmatter.review_checks) && { reviewChecks: note.frontmatter.review_checks.slice(0, 7) }),
+      ...(Array.isArray(note.frontmatter.review_open_items) && { reviewOpenItems: note.frontmatter.review_open_items.slice(0, 8) }),
       ...(typeof note.frontmatter.last_reviewed_revision === 'string' && { reviewedRevision: note.frontmatter.last_reviewed_revision }),
       ...(typeof note.frontmatter.last_review_trigger === 'string' && { reviewTrigger: note.frontmatter.last_review_trigger }),
       ...(Number.isInteger(note.frontmatter.review_count) && { reviewCount: note.frontmatter.review_count }),
@@ -3428,6 +3487,9 @@ export class LlmWikiService {
       negative_knowledge: { name: 'LLM Wiki Negative Knowledge', file: 'LLM Wiki Negative Knowledge.base', filters: ['note.knowledge_polarity == "negative"'], order: ['file.mtime', 'file.name'] },
       deprecated_terms: { name: 'LLM Wiki Deprecated Terms', file: 'LLM Wiki Deprecated Terms.base', filters: ['note.term_status == "deprecated" || note.term_status == "redirect"'], order: ['file.name'] },
       maintenance: { name: 'LLM Wiki Maintenance', file: 'LLM Wiki Maintenance.base', filters: ['note.lifecycle == "review"'] },
+      authority: { name: 'LLM Wiki Authority Terms', file: 'LLM Wiki Authority.base', filters: ['note.term_status || note.preferred_term || note.aliases'], order: ['note.term_status', 'file.name'] },
+      review_checklist: { name: 'LLM Wiki Review Checklist', file: 'LLM Wiki Review Checklist.base', filters: ['note.lifecycle == "review" || note.review_at'], order: ['note.review_at', 'file.name'] },
+      collections: { name: 'LLM Wiki Collections', file: 'LLM Wiki Collections.base', filters: ['note.primary_moc || note.moc || note.domain'], order: ['note.primary_moc', 'note.domain', 'file.name'] },
     };
     if (!viewDefinitions[view]) throw new Error(`view must be one of: ${Object.keys(viewDefinitions).join(', ')}`);
     const selectedView = viewDefinitions[view]!;
@@ -3447,7 +3509,7 @@ export class LlmWikiService {
             ? Number((catalog.organization as any).noteKinds?.project || 0) + Number((catalog.organization as any).noteKinds?.task || 0)
         : view === 'project_next_actions'
               ? Number((catalog.organization as any).noteKinds?.project || 0) + Number((catalog.organization as any).noteKinds?.task || 0)
-              : ['unreviewed_evidence', 'open_questions', 'negative_knowledge', 'deprecated_terms'].includes(view)
+              : ['unreviewed_evidence', 'open_questions', 'negative_knowledge', 'deprecated_terms', 'authority', 'review_checklist', 'collections'].includes(view)
                 ? catalog.total
               : Number((catalog.organization as any).noteKinds?.question || 0) + Number((catalog.organization as any).noteKinds?.hypothesis || 0) + Number((catalog.organization as any).noteKinds?.assumption || 0);
     const viewTotal = view === 'knowledge'
@@ -3464,6 +3526,8 @@ export class LlmWikiService {
         has_support: 'note.project_support && note.project_support.length > 0',
         has_summary: 'note.summary || note.key_points',
         review_state: 'note.last_review_outcome || "never_reviewed"',
+        review_checks: 'note.review_checks || []',
+        review_open_items: 'note.review_open_items || []',
       },
       properties: {
         'note.note_kind': { displayName: 'Kind' },
@@ -3478,6 +3542,8 @@ export class LlmWikiService {
         'formula.has_support': { displayName: 'Has support' },
         'formula.has_summary': { displayName: 'Has summary' },
         'formula.review_state': { displayName: 'Review state' },
+        'note.review_checks': { displayName: 'Checks completed' },
+        'note.review_open_items': { displayName: 'Open review items' },
         'file.mtime': { displayName: 'Modified' },
       },
       views: [{
@@ -3485,7 +3551,7 @@ export class LlmWikiService {
         name: selectedView.name,
         limit: boundedLimit,
         order: selectedView.order || ['file.mtime', 'file.name'],
-        columns: ['file.name', 'note.note_kind', 'note.lifecycle', 'note.task_status', 'note.project_purpose', 'note.desired_outcome', 'note.next_action', 'formula.planning_ready', 'formula.review_due', 'formula.has_support', 'formula.has_summary', 'formula.review_state', 'file.mtime'],
+        columns: ['file.name', 'note.note_kind', 'note.lifecycle', 'note.task_status', 'note.project_purpose', 'note.desired_outcome', 'note.next_action', 'note.primary_moc', 'note.domain', 'note.preferred_term', 'note.aliases', 'note.review_checks', 'note.review_open_items', 'formula.planning_ready', 'formula.review_due', 'formula.has_support', 'formula.has_summary', 'formula.review_state', 'file.mtime'],
       }],
     };
     const content = stringifyYaml(base);
@@ -4301,6 +4367,45 @@ export class LlmWikiService {
    * scan instead of running separate folder/property scans, and never mutates
    * notes or treats organization hints as security boundaries.
    */
+  async collectionHealth(principal?: ScopePrincipal, limit = 20, maxChars = 6000) {
+    const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
+    const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 12000);
+    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+    type Collection = { key: string; entryPoint: string; total: number; knowledge: number; inbox: number; reviewDue: number; withoutSummary: number; withOpenQuestions: number };
+    const groups = new Map<string, Collection>();
+    let noteTotal = 0;
+    let overflow = 0;
+    for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+      noteTotal += 1;
+      const frontmatter = note.frontmatter || {};
+      const rawKey = typeof frontmatter.primary_moc === 'string' && frontmatter.primary_moc.trim()
+        ? frontmatter.primary_moc.trim()
+        : typeof frontmatter.moc === 'string' && frontmatter.moc.trim()
+          ? frontmatter.moc.trim()
+          : typeof frontmatter.domain === 'string' && frontmatter.domain.trim()
+            ? `domain:${frontmatter.domain.trim()}`
+            : `folder:${normalizePath(note.path).split('/')[0] || 'root'}`;
+      const key = rawKey.slice(0, 500);
+      let group = groups.get(key);
+      if (!group) {
+        if (groups.size >= 120) { overflow += 1; continue; }
+        group = { key, entryPoint: typeof frontmatter.primary_moc === 'string' && frontmatter.primary_moc.trim() ? frontmatter.primary_moc.trim() : this.access.toPublicPath(note.path), total: 0, knowledge: 0, inbox: 0, reviewDue: 0, withoutSummary: 0, withOpenQuestions: 0 };
+        groups.set(key, group);
+      }
+      group.total += 1;
+      const kind = String(frontmatter.note_kind || '').toLowerCase();
+      if (['atomic', 'knowledge', 'decision', 'literature'].includes(kind)) group.knowledge += 1;
+      if (String(frontmatter.lifecycle || '').toLowerCase() === 'inbox') group.inbox += 1;
+      const reviewAt = Date.parse(String(frontmatter.review_at || ''));
+      if (Number.isFinite(reviewAt) && reviewAt <= Date.now() && !['archived', 'superseded'].includes(String(frontmatter.lifecycle || '').toLowerCase())) group.reviewDue += 1;
+      if (['atomic', 'knowledge', 'decision'].includes(kind) && !frontmatter.summary && !Array.isArray(frontmatter.key_points)) group.withoutSummary += 1;
+      if (Array.isArray(frontmatter.open_questions) && frontmatter.open_questions.length > 0) group.withOpenQuestions += 1;
+    }
+    const items = Array.from(groups.values()).sort((a, b) => (b.reviewDue + b.withoutSummary + b.inbox) - (a.reviewDue + a.withoutSummary + a.inbox) || a.key.localeCompare(b.key)).slice(0, boundedLimit);
+    const result = { purpose: 'Bounded collection-level health for MOCs, domains, or top-level filing areas. It is an advisory view; it never moves or rewrites notes.', totalNotes: noteTotal, collectionTotal: groups.size + overflow, items, truncated: groups.size > items.length || overflow > 0, generatedAt: now() };
+    return JSON.stringify(result).length <= boundedChars ? result : { ...result, items: items.slice(0, Math.max(1, Math.floor(items.length / 2))), truncated: true };
+  }
+
   async organizationHealth(principal?: ScopePrincipal, limit = 30, maxChars = 7000) {
     const boundedLimit = Math.min(Math.max(Number(limit) || 30, 1), 100);
     const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
@@ -4317,7 +4422,7 @@ export class LlmWikiService {
       'negative_type_without_negative_polarity', 'negative_polarity_without_type', 'atomic_note_may_be_too_broad',
       'invalid_retention_policy', 'invalid_retention_event', 'invalid_retention_at', 'invalid_preserve_until', 'invalid_legal_hold', 'legal_hold_blocks_disposition', 'invalid_retention_reason', 'invalid_replaced_by', 'retention_reason_missing', 'tombstone_lifecycle_mismatch',
       'invalid_evidence_locator', 'evidence_path_mismatch', 'stale_evidence_revision', 'invalid_claim_evidence_locator', 'stale_claim_evidence_revision', 'epistemic_status_missing',
-      'invalid_relation', 'relation_self_reference',
+      'invalid_relation', 'relation_self_reference', 'invalid_relation_notes', 'invalid_relation_evidence', 'invalid_review_checks', 'invalid_review_open_items', 'invalid_preferred_term', 'invalid_disambiguation',
       'property_type_drift',
       'duplicate_citation_key',
       'invalid_retrieval_cues', 'invalid_use_when', 'unresolved_broader_terms', 'ambiguous_broader_terms', 'self_broader_terms',
@@ -4355,9 +4460,11 @@ export class LlmWikiService {
       ...(byCode.deprecated_term_used ? ['Replace deprecated classification facets with their preferred term while retaining the deprecated note as a redirect.'] : []),
       ...(byCode.relation_reciprocity_missing ? ['Repair one-sided related/same_as links or document why the edge is intentionally one-sided; directional relations such as supports and supersedes do not require a reverse field.'] : []),
       ...(byCode.retention_reason_missing || byCode.tombstone_lifecycle_mismatch ? ['Give archive/tombstone decisions a reason and visible replacement, and keep retention metadata separate from automatic deletion.'] : []),
+      ...(byCode.invalid_review_checks || byCode.invalid_review_open_items ? ['Repair the bounded review checklist metadata before relying on the review projection.'] : []),
       ...(quarantine.total > 0 ? ['Repair quarantined validation errors before treating the affected notes as dependable knowledge; the quarantine is a derived view and does not move or delete them.'] : []),
     ];
     const graph = await this.graphHealth(principal, Math.min(boundedLimit, 20), Math.min(boundedChars, 12000));
+    const collectionHealth = await this.collectionHealth(principal, Math.min(boundedLimit, 20), Math.min(boundedChars, 9000));
     const mocCoverage = 'mocCoverage' in graph ? graph.mocCoverage as Record<string, unknown> : undefined;
     const focusHealth = 'focusHealth' in graph ? graph.focusHealth as Record<string, any> : undefined;
     const knowledgeConnectivity = 'knowledgeConnectivity' in graph ? graph.knowledgeConnectivity as Record<string, any> : undefined;
@@ -4419,6 +4526,7 @@ export class LlmWikiService {
       ...(knowledgeConnectivity && { knowledgeConnectivity }),
       ...(knowledgeUsage && { knowledgeUsage }),
       ...(typedRelations && { typedRelations }),
+      collectionHealth,
       quarantine,
       advisoryIssueTotal: (focusHealth ? Number(focusHealth.unresolved?.total || 0) + Number(focusHealth.ambiguous?.total || 0) + Number(focusHealth.unparented?.total || 0) + Number(focusHealth.cycles?.total || 0) : 0)
          + (knowledgeConnectivity ? Number(knowledgeConnectivity.isolated?.total || 0) + Number(knowledgeConnectivity.atomicWithoutProjection?.total || 0) + Number(knowledgeConnectivity.literatureWithoutPermanent?.total || 0) + Number(knowledgeConnectivity.literatureWithoutInterpretation?.total || 0) : 0)
@@ -4449,6 +4557,7 @@ export class LlmWikiService {
           return [[key, { total: Number(item.total || 0), items: Array.isArray(item.items) ? item.items.slice(0, 2) : [], truncated: Boolean(item.truncated) || (Array.isArray(item.items) && item.items.length > 2) }]];
         })),
       }),
+      collectionHealth: { totalNotes: collectionHealth.totalNotes, collectionTotal: collectionHealth.collectionTotal, items: collectionHealth.items.slice(0, 3), truncated: true },
       truncated: true,
       generatedAt: result.generatedAt,
     };
