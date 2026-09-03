@@ -61,6 +61,10 @@ export const ORGANIZATION_LIST_FIELDS = ['aliases', 'mocs', 'key_points', 'open_
 export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'note_kind', type: 'text', description: 'What the note is for', allowed: NOTE_KINDS },
     { name: 'lifecycle', type: 'text', description: 'What should happen to the knowledge next', allowed: LIFECYCLES },
+    { name: 'captured_from', type: 'text', description: 'Bounded origin label for a fleeting Inbox capture', allowed: ['manual', 'chat', 'community', 'issue', 'experiment', 'external_source', 'other'], appliesTo: ['fleeting'] },
+    { name: 'capture_reason', type: 'text', description: 'Why a fleeting observation was preserved; never a secret or raw prompt', appliesTo: ['fleeting'] },
+    { name: 'capture_context', type: 'text', description: 'Short interpretation context for a fleeting observation', appliesTo: ['fleeting'] },
+    { name: 'related_task', type: 'text', description: 'Scope-safe task or project reference associated with a fleeting capture', appliesTo: ['fleeting'] },
     { name: 'primary_moc', type: 'text', description: 'Preferred Obsidian MOC entry point for this note; navigation metadata only' },
     { name: 'mocs', type: 'list', description: 'Additional Obsidian MOC entry points for multi-context discovery; navigation metadata only' },
     { name: 'aliases', type: 'list', description: 'Alternate Obsidian names' },

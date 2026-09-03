@@ -270,6 +270,12 @@ not automatic publication or truth judgments.
 
 For low-friction capture, `capture_wiki_note` creates an ordinary Markdown
 note in `Inbox/` with `note_kind: fleeting` and `lifecycle: inbox`. Complete
+When known, pass the bounded `capturedFrom`, `captureReason`, and
+`captureContext` fields, plus one existing `relatedTask` path or Obsidian
+wikilink. These preserve why an observation exists for the next agent without
+copying raw prompts, credentials, or secrets into the note. The related task
+is validated for existence and scope access and is also recorded in
+`references`; all of this remains ordinary YAML frontmatter.
 the GTD Clarify step with `clarify_wiki_note` and choose exactly one durable
 disposition: `knowledge`, `reference`, `project`, `someday`, `discard`, or
 `delegate`. Clarification records the decision and a suggested PARA destination
@@ -337,10 +343,13 @@ unchanged and a later atomic note may link to the literature note with
 unprocessed captures, including capture age bands and a suggested next action;
 age is advisory and does not move or delete a note.
 `triage_wiki_note` classifies one note with its revision without moving or
-rewriting the body. `get_wiki_catalog` can filter by note kind/lifecycle and
-bound returned entries with `limit`/`maxChars`. Set `includeFacets: true` to
-receive bounded metadata-only counts for note kind, lifecycle, MOC, project,
-and tags without loading note bodies. `get_wiki_neighborhood` provides a
+rewriting the body. `get_wiki_catalog` can filter by note kind/lifecycle,
+epistemic state, task state, review policy, source type, polarity, domain, or
+subject term and bound returned entries with `limit`/`maxChars`. Set
+`includeFacets: true` to receive bounded metadata-only counts for those fields,
+MOC, project, and tags without loading note bodies. These filters and facets
+are computed from the same live frontmatter pass, so they do not introduce a
+second index that can drift from Markdown. `get_wiki_neighborhood` provides a
 bounded knowledge-space view around one note: explicit Obsidian links and
 typed backlinks are ranked before shared MOC/project context, with optional
 semantic candidates. Each neighbor includes its reason and current revision;

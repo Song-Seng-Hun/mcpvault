@@ -26,6 +26,13 @@ export interface WikiCatalogOptions {
   summaryOnly?: boolean;
   noteKind?: string;
   lifecycle?: string;
+  epistemicStatus?: string;
+  taskStatus?: string;
+  reviewPolicy?: string;
+  sourceType?: string;
+  polarity?: string;
+  domain?: string;
+  subjectTerm?: string;
   limit?: number;
   maxChars?: number;
   /** Include bounded metadata-only facet counts for exploratory browsing. */
@@ -355,7 +362,10 @@ the existing evidence and integrity invariants.
 Use \`aliases\` for stable Obsidian navigation, optional \`stable_id\` for a durable note identity, and compact \`summary\`, \`key_points\`, and \`open_questions\` properties for progressive reads; never replace the full Markdown body with a summary. When any progressive field is present, store \`summary_of_content_sha256\` for the exact Markdown body; a body edit makes the projection stale until it is regenerated. Use \`task_status\` for the operational state of project/task notes (\`open\`, \`next_action\`, \`waiting\`, \`blocked\`, \`someday\`, \`completed\`, or \`cancelled\`); keep it separate from the knowledge \`lifecycle\`. Use \`desired_outcome\`, \`next_action\`, \`task_context\`, \`due_at\`, and \`defer_until\` for GTD-style execution details. Questions, hypotheses, and assumptions should carry \`epistemic_status\` for their kind-specific state. Use \`knowledge_polarity: negative\` with \`negative_type\` plus attempted/observed/failure condition/reproduction/reusable lesson metadata to preserve failed paths instead of deleting them. Typed link arrays such as \`supports\`, \`contradicts\`, \`supersedes\`, \`derived_from\`, \`depends_on\`, \`implements\`, \`blocked_by\`, and \`related\` explain the relationship while ordinary \`[[wikilinks]]\` remain the navigational source. Optional faceted access points use bounded \`subject_terms\`, \`domain\`, \`methods\`, and \`audience\`; keep them consistent but do not treat them as a rigid taxonomy. Use \`next_actions\` and \`waiting_for\` on project/task notes only. Evidence can include \`heading\`, \`blockId\`, source \`revision\`, 1-based line ranges, and a \`quoteHash\`; stale locators are reported by lint. Use \`review_policy\` (\`manual\`, \`periodic\`, \`on_source_change\`, \`on_link_change\`, or \`on_any_edit\`) to declare when a note should re-enter review, and record the review outcome after checking evidence; this is a derived policy, not a hidden scheduler. Call \`wiki.home\` for a bounded Home/JDex launchpad, \`wiki.review_packet\` for a compact prioritized next-action packet, \`wiki.knowledge_gaps\` for active-recall questions and disputes, and \`wiki.organization_health\` to review property, MOC coverage, atomicity, Evergreen discoverability, summary freshness, typed evidence, and link problems.
 Use \`wiki.note_template\` for an optional small scaffold for common note roles; it never creates a file or makes fields mandatory. Prefer reciprocal \`related\`/\`same_as\` edges when the relationship is mutual; graph health reports missing reciprocity but does not rewrite it. Use \`primary_moc\` as the preferred launch point and \`read_wiki_projection\` with \`view=section\` plus a heading or \`blockId\` when bounded nearby context is enough. Use \`retention_policy\` (\`preserve\`, \`review\`, \`archive\`, or \`tombstone\`) with \`retention_reason\`, \`retention_at\`, and \`replaced_by\`; \`retention_event\`, \`preserve_until\`, and \`legal_hold\` add auditable preservation constraints, but never authorize automatic deletion.
 
-Use \`capture_wiki_note\` to create a fleeting Inbox note first. Complete the
+Use \`capture_wiki_note\` to create a fleeting Inbox note first. When known,
+include a bounded \`capturedFrom\`, \`captureReason\`, \`captureContext\`, and
+scope-safe \`relatedTask\`; preserve why the observation exists without copying
+raw prompts, credentials, or secrets. Complete the
 GTD Clarify step with \`clarify_wiki_note\`, choosing one disposition:
 knowledge, reference, project, someday, discard, or delegate. It records the
 decision and suggested destination without silently moving or deleting the
@@ -389,7 +399,9 @@ with an expected revision; it preserves the full Markdown body and unrelated
 Properties.
 
 Use \`get_wiki_catalog\` with \`includeFacets: true\` for bounded metadata-only
-counts by note kind, lifecycle, MOC, project, and tag. Use
+counts by note kind, lifecycle, epistemic/task state, review policy, source type,
+polarity, MOC, project, domain, subject term, and tag. Use its optional facet
+filters to narrow the same metadata pass without loading note bodies. Use
 \`get_wiki_neighborhood\` after selecting a note when nearby context is useful:
 direct links and typed relations come first, followed by shared MOC/project
 context and optional semantic candidates. Neighbors are metadata-only and
@@ -1000,7 +1012,7 @@ export class LlmWikiService {
 
   async catalog(principal?: ScopePrincipal, options: WikiCatalogOptions = {}) {
     if (!options.summaryOnly) return this.computeCatalog(principal, options);
-    const key = `${this.principalKey(principal)}|${options.noteKind || ''}|${options.lifecycle || ''}|${options.limit || ''}|${options.maxChars || ''}|${options.includeFacets ? 'facets' : ''}|${options.facetLimit || ''}|${normalizeCatalogOrder(options.orderBy)}`;
+    const key = `${this.principalKey(principal)}|${options.noteKind || ''}|${options.lifecycle || ''}|${options.epistemicStatus || ''}|${options.taskStatus || ''}|${options.reviewPolicy || ''}|${options.sourceType || ''}|${options.polarity || ''}|${options.domain || ''}|${options.subjectTerm || ''}|${options.limit || ''}|${options.maxChars || ''}|${options.includeFacets ? 'facets' : ''}|${options.facetLimit || ''}|${normalizeCatalogOrder(options.orderBy)}`;
     const cached = this.catalogSummaryCache.get(key);
     if (cached?.generation === this.generation) return cached.value;
     const running = this.catalogSummaryInFlight.get(key);
@@ -1028,6 +1040,11 @@ export class LlmWikiService {
     const facetValues = options.includeFacets ? {
       noteKind: new Map<string, number>(),
       lifecycle: new Map<string, number>(),
+      epistemicStatus: new Map<string, number>(),
+      taskStatus: new Map<string, number>(),
+      reviewPolicy: new Map<string, number>(),
+      sourceType: new Map<string, number>(),
+      polarity: new Map<string, number>(),
       moc: new Map<string, number>(),
       project: new Map<string, number>(),
       subjectTerm: new Map<string, number>(),
@@ -1051,6 +1068,22 @@ export class LlmWikiService {
       const lifecycle = typeof note.frontmatter.lifecycle === 'string' ? note.frontmatter.lifecycle : undefined;
       if (options.noteKind && noteKind !== options.noteKind) continue;
       if (options.lifecycle && lifecycle !== options.lifecycle) continue;
+      const epistemicStatus = typeof note.frontmatter.epistemic_status === 'string' ? note.frontmatter.epistemic_status.trim().toLowerCase() : undefined;
+      const taskStatus = typeof note.frontmatter.task_status === 'string' ? note.frontmatter.task_status.trim().toLowerCase() : undefined;
+      const reviewPolicy = typeof note.frontmatter.review_policy === 'string' ? note.frontmatter.review_policy.trim().toLowerCase() : undefined;
+      const sourceType = typeof note.frontmatter.source_type === 'string' ? note.frontmatter.source_type.trim().toLowerCase() : undefined;
+      const polarity = typeof note.frontmatter.knowledge_polarity === 'string' ? note.frontmatter.knowledge_polarity.trim().toLowerCase() : undefined;
+      const domain = typeof note.frontmatter.domain === 'string' ? note.frontmatter.domain.trim() : undefined;
+      const subjectTerms = Array.isArray(note.frontmatter.subject_terms)
+        ? note.frontmatter.subject_terms.filter((item: unknown): item is string => typeof item === 'string').map(item => item.trim()).filter(Boolean)
+        : typeof note.frontmatter.subject_terms === 'string' ? [note.frontmatter.subject_terms.trim()] : [];
+      if (options.epistemicStatus && epistemicStatus !== options.epistemicStatus.trim().toLowerCase()) continue;
+      if (options.taskStatus && taskStatus !== options.taskStatus.trim().toLowerCase()) continue;
+      if (options.reviewPolicy && reviewPolicy !== options.reviewPolicy.trim().toLowerCase()) continue;
+      if (options.sourceType && sourceType !== options.sourceType.trim().toLowerCase()) continue;
+      if (options.polarity && polarity !== options.polarity.trim().toLowerCase()) continue;
+      if (options.domain && domain !== options.domain.trim()) continue;
+      if (options.subjectTerm && !subjectTerms.some(term => term.toLowerCase() === options.subjectTerm!.trim().toLowerCase())) continue;
       total += 1;
       counts[catalogType] = (counts[catalogType] || 0) + 1;
       if (isPublicSchema) schemaPresent = true;
@@ -1063,6 +1096,11 @@ export class LlmWikiService {
         };
         increment(facetValues.noteKind, noteKind);
         increment(facetValues.lifecycle, lifecycle);
+        increment(facetValues.epistemicStatus, epistemicStatus);
+        increment(facetValues.taskStatus, taskStatus);
+        increment(facetValues.reviewPolicy, reviewPolicy);
+        increment(facetValues.sourceType, sourceType);
+        increment(facetValues.polarity, polarity);
         increment(facetValues.moc, note.frontmatter.moc);
         increment(facetValues.project, note.frontmatter.project);
         const incrementList = (facet: Map<string, number>, value: unknown) => {
@@ -1070,7 +1108,7 @@ export class LlmWikiService {
           for (const item of values) increment(facet, item);
         };
         incrementList(facetValues.moc, note.frontmatter.mocs);
-        incrementList(facetValues.subjectTerm, note.frontmatter.subject_terms);
+        incrementList(facetValues.subjectTerm, subjectTerms);
         increment(facetValues.domain, note.frontmatter.domain);
         incrementList(facetValues.method, note.frontmatter.methods);
         incrementList(facetValues.audience, note.frontmatter.audience);
@@ -1086,6 +1124,11 @@ export class LlmWikiService {
         confidence: note.frontmatter.confidence,
         noteKind,
         lifecycle,
+        ...(epistemicStatus && { epistemicStatus }),
+        ...(taskStatus && { taskStatus }),
+        ...(reviewPolicy && { reviewPolicy }),
+        ...(sourceType && { sourceType }),
+        ...(polarity && { polarity }),
         ...(note.frontmatter.knowledge_role && { knowledgeRole: note.frontmatter.knowledge_role }),
         ...(Array.isArray(note.frontmatter.see_also) && { seeAlso: note.frontmatter.see_also.slice(0, 12) }),
         ...(note.frontmatter.project && { project: note.frontmatter.project }),
@@ -1745,6 +1788,10 @@ export class LlmWikiService {
     content: string;
     capturedBy: string;
     references?: unknown;
+    capturedFrom?: unknown;
+    captureReason?: unknown;
+    captureContext?: unknown;
+    relatedTask?: unknown;
     expectedRevision?: string;
   }) {
     const content = String(params.content ?? '').replace(/\r\n/g, '\n');
@@ -1757,6 +1804,16 @@ export class LlmWikiService {
     this.access.assertMutationAllowed(path, 'capture_wiki_note');
     if (await this.fileSystem.noteExists(path)) throw new Error(`Capture path already exists: ${this.access.toPublicPath(path)}; choose a new path or read its revision first.`);
     const references = await this.references.validateAndNormalize(params.references, path, params.principal, content);
+    const relatedTaskReferences = params.relatedTask === undefined
+      ? []
+      : await this.references.validateAndNormalize([params.relatedTask], path, params.principal, content);
+    const mergedReferences = [...new Set([...references, ...relatedTaskReferences])].slice(0, 50);
+    const capturedFrom = params.capturedFrom === undefined ? undefined : boundedText(params.capturedFrom, 80).toLowerCase();
+    if (capturedFrom && !['manual', 'chat', 'community', 'issue', 'experiment', 'external_source', 'other'].includes(capturedFrom)) {
+      throw new Error('capturedFrom must be one of: manual, chat, community, issue, experiment, external_source, other');
+    }
+    const captureReason = params.captureReason === undefined ? undefined : boundedText(params.captureReason, 500);
+    const captureContext = params.captureContext === undefined ? undefined : boundedText(params.captureContext, 1000);
     const timestamp = now();
     await this.fileSystem.writeNote({
       path,
@@ -1765,7 +1822,11 @@ export class LlmWikiService {
         title,
         note_kind: 'fleeting',
         lifecycle: 'inbox',
-        ...(references.length > 0 && { references }),
+        ...(mergedReferences.length > 0 && { references: mergedReferences }),
+        ...(capturedFrom && { captured_from: capturedFrom }),
+        ...(captureReason && { capture_reason: captureReason }),
+        ...(captureContext && { capture_context: captureContext }),
+        ...(relatedTaskReferences[0] && { related_task: relatedTaskReferences[0] }),
         captured_by: params.capturedBy,
         captured_at: timestamp,
         updated_by: params.capturedBy,
@@ -1774,7 +1835,19 @@ export class LlmWikiService {
       expectedRevision: params.expectedRevision || 'missing',
     });
     const created = await this.fileSystem.readNote(path);
-    return { success: true, path: this.access.toPublicPath(path), title, noteKind: 'fleeting', lifecycle: 'inbox', revision: created.revision, nextAction: 'Read the capture and classify it with triage_wiki_note.' };
+    return {
+      success: true,
+      path: this.access.toPublicPath(path),
+      title,
+      noteKind: 'fleeting',
+      lifecycle: 'inbox',
+      revision: created.revision,
+      ...(capturedFrom && { capturedFrom }),
+      ...(captureReason && { captureReason }),
+      ...(captureContext && { captureContext }),
+      ...(relatedTaskReferences[0] && { relatedTask: this.access.toPublicPath(relatedTaskReferences[0]) }),
+      nextAction: 'Read the capture and classify it with triage_wiki_note.',
+    };
   }
 
   /** Apply the GTD clarification decision to an Inbox capture without

@@ -198,13 +198,16 @@ test('catalog facets and explainable knowledge neighborhoods stay bounded', asyn
       const result = await client.callTool({ name: 'write_note', arguments: { path, content, frontmatter, expectedRevision: 'missing', accessToken } });
       expect(result.isError).toBeFalsy();
     };
-    await write('Knowledge/Anchor.md', '# Anchor\n\nA durable anchor. [[Knowledge/Linked]]\n', { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', moc: '[[MOCs/Research]]', tags: ['research', 'anchor'] });
-    await write('Knowledge/Linked.md', '# Linked\n\n[[Knowledge/Anchor]]\n', { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'review', moc: '[[MOCs/Research]]', tags: ['research'] });
-    await write('Knowledge/Project.md', '# Project\n', { llm_wiki_type: 'knowledge', note_kind: 'project', lifecycle: 'active', project: '[[Projects/Build]]', tags: ['build'] });
+    await write('Knowledge/Anchor.md', '# Anchor\n\nA durable anchor. [[Knowledge/Linked]]\n', { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', epistemic_status: 'verified', review_policy: 'on_source_change', domain: 'retrieval', moc: '[[MOCs/Research]]', tags: ['research', 'anchor'] });
+    await write('Knowledge/Linked.md', '# Linked\n\n[[Knowledge/Anchor]]\n', { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'review', knowledge_polarity: 'negative', source_type: 'paper', subject_terms: ['retrieval'], moc: '[[MOCs/Research]]', tags: ['research'] });
+    await write('Knowledge/Project.md', '# Project\n', { llm_wiki_type: 'knowledge', note_kind: 'project', lifecycle: 'active', task_status: 'next_action', project: '[[Projects/Build]]', tags: ['build'] });
 
     const catalog = await callJson(client, 'get_wiki_catalog', { includeFacets: true, facetLimit: 10, limit: 2, maxChars: 5000, accessToken });
-    expect(catalog.value.facets).toMatchObject({ noteKind: { knowledge: 1, atomic: 1, project: 1 }, lifecycle: { evergreen: 1, review: 1, active: 1 }, tag: { research: 2 } });
+    expect(catalog.value.facets).toMatchObject({ noteKind: { knowledge: 1, atomic: 1, project: 1 }, lifecycle: { evergreen: 1, review: 1, active: 1 }, epistemicStatus: { verified: 1 }, taskStatus: { next_action: 1 }, reviewPolicy: { on_source_change: 1 }, sourceType: { paper: 1 }, polarity: { negative: 1 }, domain: { retrieval: 1 }, subjectTerm: { retrieval: 1 }, tag: { research: 2 } });
     expect(catalog.value.entries).toHaveLength(2);
+
+    const filtered = await callJson(client, 'get_wiki_catalog', { epistemicStatus: 'verified', includeFacets: true, accessToken });
+    expect(filtered.value).toMatchObject({ total: 1, entries: [expect.objectContaining({ path: 'Knowledge/Anchor.md', epistemicStatus: 'verified' })], facets: { epistemicStatus: { verified: 1 } } });
 
     const neighborhood = await callJson(client, 'get_wiki_neighborhood', { path: 'Knowledge/Anchor.md', limit: 5, maxChars: 3000, accessToken });
     expect(neighborhood.value.source.path).toBe('Knowledge/Anchor.md');
@@ -353,9 +356,13 @@ test('capture, review completion, and bounded Reflect dashboard close the organi
   try {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'reflect-owner', modelId: 'codex', password: 'reflect-owner-password' });
     const accessToken = registration.value.accessToken;
-    const captured = await callJson(client, 'capture_wiki_note', { title: 'Unprocessed observation', content: 'A rough observation to classify later.', capturedBy: 'codex', accessToken });
+    await client.callTool({ name: 'write_note', arguments: { path: 'Projects/Capture task.md', content: '# Capture task\n', expectedRevision: 'missing', accessToken } });
+    const captured = await callJson(client, 'capture_wiki_note', { title: 'Unprocessed observation', content: 'A rough observation to classify later.', capturedBy: 'codex', capturedFrom: 'experiment', captureReason: 'Preserve the observation before deciding its final home.', captureContext: 'Observed while checking the bounded organization workflow.', relatedTask: '[[Projects/Capture task]]', accessToken });
     expect(captured.value).toMatchObject({ noteKind: 'fleeting', lifecycle: 'inbox', nextAction: 'Read the capture and classify it with triage_wiki_note.' });
     expect(captured.value.path).toMatch(/^Inbox\/capture-/);
+    expect(captured.value).toMatchObject({ capturedFrom: 'experiment', relatedTask: 'Projects/Capture task.md' });
+    const capturedNote = await callJson(client, 'read_note', { path: captured.value.path, accessToken });
+    expect(capturedNote.value.fm).toMatchObject({ captured_from: 'experiment', capture_reason: 'Preserve the observation before deciding its final home.', capture_context: 'Observed while checking the bounded organization workflow.', related_task: 'Projects/Capture task.md', references: ['Projects/Capture task.md'] });
     const inbox = await callJson(client, 'get_wiki_inbox', { accessToken });
     expect(inbox.value).toMatchObject({ total: 1, items: [expect.objectContaining({ path: captured.value.path, lifecycle: 'inbox' })] });
 

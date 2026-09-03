@@ -8,6 +8,13 @@ export interface WikiCatalogOptions {
     summaryOnly?: boolean;
     noteKind?: string;
     lifecycle?: string;
+    epistemicStatus?: string;
+    taskStatus?: string;
+    reviewPolicy?: string;
+    sourceType?: string;
+    polarity?: string;
+    domain?: string;
+    subjectTerm?: string;
     limit?: number;
     maxChars?: number;
     /** Include bounded metadata-only facet counts for exploratory browsing. */
@@ -384,6 +391,10 @@ export declare class LlmWikiService {
         content: string;
         capturedBy: string;
         references?: unknown;
+        capturedFrom?: unknown;
+        captureReason?: unknown;
+        captureContext?: unknown;
+        relatedTask?: unknown;
         expectedRevision?: string;
     }): Promise<{
         success: boolean;
@@ -392,6 +403,10 @@ export declare class LlmWikiService {
         noteKind: string;
         lifecycle: string;
         revision: string;
+        capturedFrom?: string;
+        captureReason?: string;
+        captureContext?: string;
+        relatedTask?: string;
         nextAction: string;
     }>;
     /** Apply the GTD clarification decision to an Inbox capture without

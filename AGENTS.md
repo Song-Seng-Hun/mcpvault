@@ -106,7 +106,9 @@ Use `distill_wiki_source` when turning an immutable source into a literature or
 atomic note so source path and revision remain provenance. Use
 `get_wiki_catalog` to filter organization metadata; add
 `includeFacets: true` when you need bounded counts by note kind, lifecycle,
-MOC, project, or tag without loading note bodies. Use
+epistemic/task state, review policy, source type, polarity, MOC, project,
+domain, subject term, or tag without loading note bodies. Use the corresponding
+facet filters when you need one narrow metadata-only view. Use
 `orderBy: location|alphabet|time|category|hierarchy` for LATCH-style browsing;
 this changes only projection order and never moves a note. Use
 `get_wiki_neighborhood` after selecting a note to inspect a bounded,
@@ -345,7 +347,10 @@ relations automatically.
 
 When the only goal is to preserve an observation, use `capture_wiki_note` and
 let it create an Inbox fleeting note; do not spend the capture turn deciding
-its final folder. Use `get_wiki_review_dashboard` for one bounded Reflect pass across Inbox,
+its final folder. When known, preserve a bounded `capturedFrom`,
+`captureReason`, `captureContext`, and one scope-safe `relatedTask`; never copy
+raw prompts, credentials, or secrets into capture metadata. Use
+`get_wiki_review_dashboard` for one bounded Reflect pass across Inbox,
 next actions, due work, waiting/someday items, open questions or hypotheses,
 due knowledge, and graph/focus/connectivity health. Use
 `read_wiki_projection` with `view: progressive` when one bounded context packet

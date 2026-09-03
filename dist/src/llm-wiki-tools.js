@@ -26,9 +26,9 @@ export function getLlmWikiTools() {
         },
         {
             name: 'capture_wiki_note',
-            description: 'Capture a rough observation in Inbox with one call. It defaults to note_kind=fleeting and lifecycle=inbox; classify it later with triage_wiki_note. This reduces capture friction without moving or replacing ordinary Markdown.',
+            description: 'Capture a rough observation in Inbox with one call. It defaults to note_kind=fleeting and lifecycle=inbox; classify it later with triage_wiki_note. Optionally preserve bounded origin, reason, context, and one related task so a later agent can understand why the capture exists; never put raw prompts, credentials, or secrets in these fields.',
             inputSchema: { type: 'object', properties: {
-                    path: { type: 'string', description: 'Optional path inside Inbox/. Omit to generate a unique Inbox path.' }, title: { type: 'string', maxLength: 300 }, content: { type: 'string' }, references: { type: 'array', items: { type: 'string' }, maxItems: 20 }, capturedBy: { type: 'string' }, expectedRevision: { type: 'string', description: "Optional; use 'missing' for a new capture" }, accessToken, prettyPrint,
+                    path: { type: 'string', description: 'Optional path inside Inbox/. Omit to generate a unique Inbox path.' }, title: { type: 'string', maxLength: 300 }, content: { type: 'string' }, references: { type: 'array', items: { type: 'string' }, maxItems: 20 }, capturedBy: { type: 'string' }, capturedFrom: { type: 'string', enum: ['manual', 'chat', 'community', 'issue', 'experiment', 'external_source', 'other'], description: 'Bounded origin label for the observation' }, captureReason: { type: 'string', maxLength: 500, description: 'Why this observation was captured; do not include secrets or raw prompt text' }, captureContext: { type: 'string', maxLength: 1000, description: 'Short surrounding context another agent needs to interpret the capture' }, relatedTask: { type: 'string', maxLength: 500, description: 'One existing task/project path or Obsidian wikilink related to this capture' }, expectedRevision: { type: 'string', description: "Optional; use 'missing' for a new capture" }, accessToken, prettyPrint,
                 }, required: ['content'] },
         },
         {
@@ -112,10 +112,17 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_catalog',
-            description: 'Build a live scope-aware catalog from frontmatter instead of maintaining a stale hand-written index. Set includeFacets=true for bounded metadata-only counts across note kind, lifecycle, MOC, project, and tags. Use orderBy for LATCH-style location, alphabet, time, category, or hierarchy browsing without duplicating notes.',
+            description: 'Build a live scope-aware catalog from frontmatter instead of maintaining a stale hand-written index. Set includeFacets=true for bounded metadata-only counts across note kind, lifecycle, epistemic/task state, review policy, source type, polarity, MOC, project, domain, subject terms, and tags. Optional facet filters narrow the same metadata pass without loading note bodies. Use orderBy for LATCH-style location, alphabet, time, category, or hierarchy browsing without duplicating notes.',
             inputSchema: { type: 'object', properties: {
                     noteKind: { type: 'string', enum: ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'] },
                     lifecycle: { type: 'string', enum: ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'] },
+                    epistemicStatus: { type: 'string', maxLength: 80, description: 'Optional exact epistemic state filter for question/hypothesis/assumption notes' },
+                    taskStatus: { type: 'string', enum: ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'] },
+                    reviewPolicy: { type: 'string', enum: ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit'] },
+                    sourceType: { type: 'string', maxLength: 80, description: 'Optional source kind filter such as paper, web, book, dataset, or code' },
+                    polarity: { type: 'string', enum: ['positive', 'negative'], description: 'Filter preserved knowledge by positive or negative/failed-path polarity' },
+                    domain: { type: 'string', maxLength: 200 },
+                    subjectTerm: { type: 'string', maxLength: 200, description: 'Case-insensitive exact match against one subject_terms value' },
                     includeFacets: { type: 'boolean', description: 'Include bounded metadata-only facet counts for exploratory browsing (default: false)' },
                     facetLimit: { type: 'integer', minimum: 1, maximum: 50, default: 20, description: 'Maximum values returned per facet' },
                     orderBy: { type: 'string', enum: ['location', 'alphabet', 'time', 'category', 'hierarchy'], default: 'location', description: 'LATCH-style browse order: path, title/alias, recent time, category, or MOC/project hierarchy' },
