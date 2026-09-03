@@ -183,6 +183,13 @@ export function getLlmWikiTools() {
                 } },
         },
         {
+            name: 'get_wiki_term_change_preview',
+            description: 'Preview the bounded impact of changing a preferred term. It finds visible title, alias, property, body, and wikilink uses plus proposed-term collisions and revisions; it never renames notes or rewrites links.',
+            inputSchema: { type: 'object', properties: {
+                    currentTerm: { type: 'string', maxLength: 300 }, proposedTerm: { type: 'string', maxLength: 300 }, limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 1024, maximum: 16000, default: 7000 }, scopeUri, accessToken, prettyPrint,
+                }, required: ['currentTerm', 'proposedTerm'] },
+        },
+        {
             name: 'get_wiki_vocabulary_health',
             description: 'Return a bounded library-style vocabulary and Obsidian tag health report. It finds tag spelling/case variants, subject terms without a local authority note, and terms used by multiple notes. Findings are advisory; it never renames, retags, merges, or redirects notes.',
             inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 60, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
@@ -250,7 +257,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_recall_queue',
-            description: 'Return a bounded reader-specific queue of due active-recall prompts. Attempt each prompt before opening the body; agent sessions use private continuity state, and this queue never changes evidence truth or shared knowledge.',
+            description: 'Return a bounded reader-specific queue of due active-recall prompts. Attempt each prompt before opening the body; agent sessions use private continuity state, and this queue never changes evidence truth or shared knowledge. When contrastWith is present, compare those explicitly related notes before accepting the recalled statement.',
             inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 30, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 6000 }, accessToken, prettyPrint } },
         },
         {

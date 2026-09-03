@@ -2048,6 +2048,27 @@ export class LlmWikiService {
       total += 1;
       const ageDays = Number.isFinite(lastMs) ? Math.max(0, Math.floor((current - lastMs) / (24 * 60 * 60 * 1000))) : 9999;
       const priority = (quality === 'failed' ? 400 : quality === 'partial' ? 300 : quality === 'unseen' ? 200 : 100) + Math.min(ageDays, 365);
+      const contrastWith: Array<{ relation: string; target: string }> = [];
+      for (const relation of ['contradicts', 'same_as', 'version_of', 'refines'] as const) {
+        const values = Array.isArray(note.frontmatter[relation]) ? note.frontmatter[relation] : [];
+        for (const raw of values.slice(0, 4)) {
+          if (typeof raw !== 'string' || !raw.trim()) continue;
+          let target = relationDocument(raw);
+          try {
+            if (/^!?\[\[.+\]\]$/.test(raw)) {
+              const matches = await this.fileSystem.findPathForWikiLink(target, canAccess);
+              if (matches.length !== 1) continue;
+              target = matches[0]!;
+            }
+          } catch {
+            continue;
+          }
+          if (!canAccess(target) || !await this.fileSystem.noteExists(target)) continue;
+          contrastWith.push({ relation, target: this.access.toPublicPath(target) });
+          if (contrastWith.length >= 4) break;
+        }
+        if (contrastWith.length >= 4) break;
+      }
       candidates.push({
         path: this.access.toPublicPath(note.path),
         title: note.frontmatter.title || note.path.split('/').at(-1),
@@ -2062,6 +2083,7 @@ export class LlmWikiService {
         ageDays,
         reason: quality === 'failed' ? 'previous_recall_failed' : quality === 'partial' ? 'previous_recall_partial' : !lastRecalledAt ? 'never_recalled' : 'recall_due',
         recallPrompt: boundedText(note.frontmatter.recall_prompt, 500),
+        ...(contrastWith.length > 0 && { contrastWith }),
         priority,
       });
     }
@@ -4535,6 +4557,7 @@ export class LlmWikiService {
       'duplicate_citation_key',
       'invalid_retrieval_cues', 'invalid_use_when', 'unresolved_broader_terms', 'ambiguous_broader_terms', 'self_broader_terms',
       'unresolved_related_terms', 'ambiguous_related_terms', 'self_related_terms', 'broader_term_cycle', 'deprecated_term_used',
+      'relation_target_kind_mismatch',
       ...RELATION_FIELDS.flatMap(field => [`invalid_${field}`, `duplicate_${field}`, `unsafe_${field}`]),
     ]);
     const issues = lint.issues.filter(issue => organizationCodes.has(issue.code)).slice(0, boundedLimit);
@@ -4567,6 +4590,7 @@ export class LlmWikiService {
       ...(byCode.broader_term_cycle ? ['Break broader_terms cycles; use one-way broader-to-narrower navigation so authority browsing terminates predictably.'] : []),
       ...(byCode.unresolved_broader_terms || byCode.ambiguous_broader_terms || byCode.unresolved_related_terms || byCode.ambiguous_related_terms ? ['Repair unresolved or ambiguous library terms, preferably with an exact Obsidian wikilink or an existing preferred title.'] : []),
       ...(byCode.deprecated_term_used ? ['Replace deprecated classification facets with their preferred term while retaining the deprecated note as a redirect.'] : []),
+      ...(byCode.relation_target_kind_mismatch ? ['Repair typed relation targets so the relation meaning and note_kind agree; use ordinary related links when the relationship is intentionally broader.'] : []),
       ...(byCode.relation_reciprocity_missing ? ['Repair one-sided related/same_as links or document why the edge is intentionally one-sided; directional relations such as supports and supersedes do not require a reverse field.'] : []),
       ...(byCode.retention_reason_missing || byCode.tombstone_lifecycle_mismatch ? ['Give archive/tombstone decisions a reason and visible replacement, and keep retention metadata separate from automatic deletion.'] : []),
       ...(byCode.invalid_review_checks || byCode.invalid_review_open_items ? ['Repair the bounded review checklist metadata before relying on the review projection.'] : []),
@@ -6081,6 +6105,33 @@ export class LlmWikiService {
       }
     }
 
+    // A small set of high-confidence relation contracts catches semantic
+    // mistakes early without pretending that every note belongs to one rigid
+    // ontology. Unknown note kinds are left alone so custom notes remain
+    // usable; graphHealth provides the same advisory signal for navigation.
+    const relationTargetKinds: Record<string, Set<string>> = {
+      answers_questions: new Set(['question']),
+      implements: new Set(['decision', 'project', 'task', 'requirement', 'knowledge', 'atomic']),
+      blocked_by: new Set(['task', 'project', 'decision', 'knowledge', 'atomic', 'question', 'hypothesis']),
+      version_of: new Set(['literature', 'atomic', 'knowledge', 'decision']),
+      refines: new Set(['question', 'hypothesis', 'assumption', 'atomic', 'knowledge', 'decision']),
+    };
+    const classificationByPath = new Map(classificationNotes.map(item => [relationKey(item.path), item.frontmatter]));
+    for (const edge of resolvedRelationEdges) {
+      const allowed = relationTargetKinds[edge.relation];
+      if (!allowed) continue;
+      const targetFrontmatter = classificationByPath.get(relationKey(edge.target));
+      const targetKind = typeof targetFrontmatter?.note_kind === 'string' ? targetFrontmatter.note_kind.trim().toLowerCase() : '';
+      if (targetKind && !allowed.has(targetKind)) {
+        addIssue({
+          severity: 'warning',
+          code: 'relation_target_kind_mismatch',
+          path: this.access.toPublicPath(edge.source),
+          detail: `${edge.relation} points to ${this.access.toPublicPath(edge.target)} (${targetKind}); expected one of ${[...allowed].join(', ')}.`,
+        });
+      }
+    }
+
     // Library-style broader/related terms are deliberately advisory, but
     // their targets must still be discoverable. Resolve them once across the
     // visible note set so a typo or a hierarchy cycle is caught by lint
@@ -6206,6 +6257,123 @@ export class LlmWikiService {
       reportedBy: params.reportedBy,
       extraFrontmatter: { proposal_status: 'proposed', current_term: currentTerm, proposed_term: proposedTerm, rationale },
     });
+  }
+
+  /**
+   * Show the bounded, visible impact of an authority-term change before an
+   * agent proposes or applies it.  This is deliberately preview-only: the
+   * Markdown files, wikilinks, aliases, and Git history are not changed.
+   */
+  async termChangePreview(params: {
+    principal?: ScopePrincipal;
+    currentTerm: string;
+    proposedTerm: string;
+    limit?: number;
+    maxChars?: number;
+  }) {
+    const currentTerm = boundedText(params.currentTerm, 300);
+    const proposedTerm = boundedText(params.proposedTerm, 300);
+    if (!currentTerm || !proposedTerm) throw new Error('currentTerm and proposedTerm are required');
+    const currentKey = normalizedAuthorityTerm(currentTerm);
+    const proposedKey = normalizedAuthorityTerm(proposedTerm);
+    if (!currentKey || !proposedKey) throw new Error('currentTerm and proposedTerm are required');
+    if (currentKey === proposedKey) throw new Error('proposedTerm must differ from currentTerm');
+    const boundedLimit = Math.min(Math.max(Number(params.limit) || 20, 1), 50);
+    const boundedChars = Math.min(Math.max(Number(params.maxChars) || 7000, 1024), 16000);
+    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, params.principal);
+    const matches: Array<Record<string, unknown> & { rank: number }> = [];
+    let scannedNotes = 0;
+    let currentUseCount = 0;
+    let proposedCollisionCount = 0;
+
+    const listValues = (value: unknown): string[] => Array.isArray(value)
+      ? value.filter((item: unknown): item is string => typeof item === 'string' && Boolean(item.trim()))
+      : typeof value === 'string' && value.trim() ? [value] : [];
+    const titleFor = (note: { path: string; frontmatter: Record<string, any> }) =>
+      typeof note.frontmatter.title === 'string' && note.frontmatter.title.trim()
+        ? note.frontmatter.title.trim()
+        : note.path.split('/').at(-1)?.replace(/\.md$/i, '') || note.path;
+
+    for await (const note of iterateNotes(this.fileSystem, { includeContent: true }, canAccess)) {
+      scannedNotes += 1;
+      const title = titleFor(note);
+      const fieldValues: Array<[string, string[]]> = [
+        ['title', [title]],
+        ['preferred_term', listValues(note.frontmatter.preferred_term)],
+        ['aliases', listValues(note.frontmatter.aliases)],
+        ['stable_id', listValues(note.frontmatter.stable_id)],
+        ['subject_terms', listValues(note.frontmatter.subject_terms)],
+        ['broader_terms', listValues(note.frontmatter.broader_terms)],
+        ['related_terms', listValues(note.frontmatter.related_terms)],
+        ['tags', listValues(note.frontmatter.tags).map(value => value.replace(/^#+/, ''))],
+      ];
+      const reasons = new Set<string>();
+      const lines = new Set<number>();
+      let proposedCollision = false;
+      for (const [field, values] of fieldValues) {
+        for (const value of values) {
+          const key = normalizedAuthorityTerm(value);
+          if (key === currentKey || key.includes(currentKey)) {
+            reasons.add(`${field}_match`);
+            currentUseCount += 1;
+          }
+          if (key === proposedKey || key.includes(proposedKey)) proposedCollision = true;
+        }
+      }
+      const contentLines = (note.content || '').split(/\r?\n/);
+      for (let index = 0; index < contentLines.length; index += 1) {
+        const line = contentLines[index] || '';
+        const lineKey = normalizedAuthorityTerm(line);
+        if (!lineKey.includes(currentKey)) continue;
+        reasons.add(line.includes('[[') ? 'wikilink_match' : 'body_match');
+        if (lines.size < 8) lines.add(index + 1);
+      }
+      if (proposedCollision && !reasons.size) {
+        reasons.add('proposed_term_collision');
+        proposedCollisionCount += 1;
+      } else if (proposedCollision && reasons.size) {
+        proposedCollisionCount += 1;
+        reasons.add('proposed_term_collision');
+      }
+      if (!reasons.size) continue;
+      const rank = reasons.has('proposed_term_collision') ? 5
+        : reasons.has('title_match') || reasons.has('preferred_term_match') ? 4
+          : reasons.has('wikilink_match') ? 3 : reasons.has('body_match') ? 2 : 1;
+      const currentNote = await this.fileSystem.readNote(note.path);
+      matches.push({
+        path: this.access.toPublicPath(note.path),
+        title: boundedText(title, 240),
+        revision: currentNote.revision,
+        reasons: [...reasons].slice(0, 8),
+        ...(lines.size > 0 && { lines: [...lines] }),
+        rank,
+      });
+    }
+
+    matches.sort((left, right) => right.rank - left.rank || String(left.path).localeCompare(String(right.path)));
+    const visibleMatches = matches.slice(0, boundedLimit).map(({ rank: _rank, ...match }) => match);
+    const result: Record<string, unknown> = {
+      purpose: 'Preview authority-term change impact before creating a proposal. It is advisory and never renames notes or rewrites links.',
+      currentTerm,
+      proposedTerm,
+      canRename: false,
+      scannedNotes,
+      totalMatches: matches.length,
+      currentUseCount,
+      proposedCollisionCount,
+      matches: visibleMatches,
+      nextActions: [
+        'Review title, preferred_term, alias, and wikilink matches before changing the authority term.',
+        ...(proposedCollisionCount > 0 ? ['Resolve proposed-term collisions with an alias, disambiguation note, or narrower term.'] : []),
+        'Create wiki.term_proposal only after the impact is understood; apply any rename as a separate revision-checked change.',
+      ],
+      truncated: matches.length > visibleMatches.length,
+    };
+    while (JSON.stringify(result).length > boundedChars && Array.isArray(result.matches) && result.matches.length > 1) {
+      result.matches = result.matches.slice(0, Math.max(1, Math.floor(result.matches.length * 0.7)));
+      result.truncated = true;
+    }
+    return result;
   }
 
   async reportIssue(params: {

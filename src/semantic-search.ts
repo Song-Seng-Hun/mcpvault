@@ -270,6 +270,7 @@ async function resultFromRow(row: IndexRow, vaultPath: string, includeRevision: 
       vs: true,
       why: ['semantic_match'],
       fresh: 'verified' as const,
+      next: row.wiki ? 'read_projection' as const : 'read_section' as const,
       ...(includeRevision && { rv: row.hash }),
     };
   } catch {

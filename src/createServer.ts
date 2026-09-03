@@ -543,7 +543,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "search_notes",
-          description: "Search visible notes and return one compact excerpt per matching document. Matching LLM Wiki notes are prioritized. Obsidian aliases and bounded retrieval cues can surface a canonical note, with alias_match or retrieval_cue_match explaining why. Set expandAuthority=true to include bounded broader/related classification terms; those matches are labeled separately and never treated as exact evidence. Supports bounded Obsidian-style path:, tag:, property:, [property:value], section:(...), block:(...), task:, task-todo:, task-done:, quoted phrases, OR, and -excluded terms. Set semantic=true to add bounded Korean-capable vector matches; filtered/scoped searches remain lexical for correctness.",
+          description: "Search visible notes and return one compact excerpt per matching document. Matching LLM Wiki notes are prioritized. Obsidian aliases and bounded retrieval cues can surface a canonical note, with alias_match or retrieval_cue_match explaining why. Each result includes fresh and a bounded next hint: read_projection for Wiki context, read_section for a direct hit, or verify_evidence when only the note identity matched. Set expandAuthority=true to include bounded broader/related classification terms; those matches are labeled separately and never treated as exact evidence. Supports bounded Obsidian-style path:, tag:, property:, [property:value], section:(...), block:(...), task:, task-todo:, task-done:, quoted phrases, OR, and -excluded terms. Set semantic=true to add bounded Korean-capable vector matches; filtered/scoped searches remain lexical for correctness.",
           inputSchema: {
             type: "object",
             properties: {
@@ -1319,6 +1319,16 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
         case "get_wiki_authority_map": {
           return jsonResult(await llmWiki.authorityMap(principal, trimmedArgs.query, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+        }
+
+        case "get_wiki_term_change_preview": {
+          return jsonResult(await llmWiki.termChangePreview({
+            ...(principal && { principal }),
+            currentTerm: trimmedArgs.currentTerm,
+            proposedTerm: trimmedArgs.proposedTerm,
+            ...(trimmedArgs.limit !== undefined && { limit: trimmedArgs.limit }),
+            ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
+          }), trimmedArgs.prettyPrint);
         }
 
         case "resolve_wiki_term": {

@@ -151,6 +151,10 @@ Use `get_wiki_recall_queue` for a reader-specific due queue; attempt each
 The queue interleaves different domains, MOCs, and projects when metadata is
 available so one crowded topic does not consume the whole read window. A
 successful recall is not evidence validation.
+When a recall item includes `contrastWith`, inspect the cited visible
+`contradicts`, `same_as`, `version_of`, or `refines` neighbor before treating
+the recalled statement as settled; this is a bounded comparison cue, not a
+truth score.
 `get_wiki_graph_health` also exposes bounded knowledge usage, lifecycle, and
 same-title/alias duplicate candidates, including high-degree hub notes that may
 need a smaller MOC or a deliberate split. Treat zero usage as a review signal,

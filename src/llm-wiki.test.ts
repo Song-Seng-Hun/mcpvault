@@ -80,12 +80,15 @@ test('lint reports library vocabulary orphans, cycles, and deprecated facet use'
     await write('Knowledge/Other Term.md', '# Other Term\n', { note_kind: 'knowledge', lifecycle: 'evergreen', broader_terms: ['[[Knowledge/Preferred Term]]'] });
     await write('Knowledge/Facet User.md', '# Facet User\n', { note_kind: 'knowledge', lifecycle: 'evergreen', subject_terms: ['Old Term'] });
     await write('Knowledge/Missing Parent.md', '# Missing Parent\n', { note_kind: 'knowledge', lifecycle: 'evergreen', broader_terms: ['[[Knowledge/Does Not Exist]]'] });
+    await write('Knowledge/Question.md', '# Question\n', { note_kind: 'question', lifecycle: 'active' });
+    await write('Knowledge/Mislinked Answer.md', '# Mislinked Answer\n', { note_kind: 'knowledge', lifecycle: 'evergreen', answers_questions: ['[[Knowledge/Preferred Term]]'] });
 
     const lint = await callJson(client, 'lint_wiki', { limit: 50, accessToken });
     expect(lint.value.issues).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'broader_term_cycle' }),
       expect.objectContaining({ code: 'unresolved_broader_terms', path: 'Knowledge/Missing Parent.md' }),
       expect.objectContaining({ code: 'deprecated_term_used', path: 'Knowledge/Facet User.md' }),
+      expect.objectContaining({ code: 'relation_target_kind_mismatch', path: 'Knowledge/Mislinked Answer.md' }),
     ]));
     const health = await callJson(client, 'get_wiki_organization_health', { limit: 50, accessToken });
     expect(health.value.byCode.broader_term_cycle).toBeGreaterThan(0);
@@ -125,6 +128,13 @@ test('term resolution, merge preview, and citation graph stay bounded and non-mu
     const resolved = await callJson(client, 'call_endpoint', { endpointId: 'wiki.resolve_term', arguments: { query: 'agentic model', accessToken, maxChars: 3000 } });
     expect(resolved.value.resolved).toMatchObject({ canonicalTerm: 'AI Agent', path: 'Knowledge/AI Agent.md' });
     expect(resolved.value.matches[0]).toMatchObject({ matchKind: 'alias', matchedTerm: 'agentic model' });
+    const termPreview = await callJson(client, 'get_wiki_term_change_preview', {
+      currentTerm: 'agentic model', proposedTerm: 'reasoning agent', limit: 10, maxChars: 3000, accessToken,
+    });
+    expect(termPreview.value).toMatchObject({ canRename: false, currentTerm: 'agentic model', proposedTerm: 'reasoning agent' });
+    expect(termPreview.value.matches).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/AI Agent.md', reasons: expect.arrayContaining(['aliases_match']) }),
+    ]));
 
     const source = await write('Knowledge/Source Copy.md', '# Source Copy\n\n[[Knowledge/AI Agent]]\n\nA source-backed claim.\n', { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'review', stable_id: 'source-copy', evidence_paths: ['_sources/paper.md'] });
     const target = await write('Knowledge/Canonical Copy.md', '# Canonical Copy\n\n[[Knowledge/AI Agent]]\n\nA consolidated claim.\n', { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', stable_id: 'canonical-copy', evidence_paths: ['_sources/paper.md'] });

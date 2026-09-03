@@ -1581,6 +1581,11 @@ export class SearchService {
       excerpt = searchableText.slice(0, 50).trim();
       if (searchableText.length > 50) excerpt = `${excerpt}...`;
     }
+    const next = document.isWiki
+      ? (candidate.authorityMatch || candidate.broaderTermMatch || candidate.relatedTermMatch || candidate.retrievalCueMatch
+        ? 'read_projection' as const
+        : candidate.firstIndex !== -1 ? 'read_section' as const : 'verify_evidence' as const)
+      : 'read_section' as const;
     return {
       p: document.relativePath,
       t: candidate.title,
@@ -1601,6 +1606,7 @@ export class SearchService {
         ...(candidate.firstIndex !== -1 && (!searchFrontmatter || candidate.firstIndex >= (document.frontmatterText || '').length) ? ['content_match'] : []),
       ],
       fresh: 'current' as const,
+      next,
       ...(candidate.retrievalCueMatch && document.retrievalCues.length > 0 && { rc: document.retrievalCues.slice(0, 4) }),
       ...(candidate.retrievalCueMatch && document.useWhen && { uw: document.useWhen.slice(0, 280) }),
       ...(includeRevision && { rv: document.revision }),

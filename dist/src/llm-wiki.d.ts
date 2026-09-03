@@ -2386,6 +2386,18 @@ export declare class LlmWikiService {
         path: string;
         revision: string;
     }>;
+    /**
+     * Show the bounded, visible impact of an authority-term change before an
+     * agent proposes or applies it.  This is deliberately preview-only: the
+     * Markdown files, wikilinks, aliases, and Git history are not changed.
+     */
+    termChangePreview(params: {
+        principal?: ScopePrincipal;
+        currentTerm: string;
+        proposedTerm: string;
+        limit?: number;
+        maxChars?: number;
+    }): Promise<Record<string, unknown>>;
     reportIssue(params: {
         scopeRoot: string;
         issueId?: string;

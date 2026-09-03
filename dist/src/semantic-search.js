@@ -177,6 +177,7 @@ async function resultFromRow(row, vaultPath, includeRevision, vaultIo) {
             vs: true,
             why: ['semantic_match'],
             fresh: 'verified',
+            next: row.wiki ? 'read_projection' : 'read_section',
             ...(includeRevision && { rv: row.hash }),
         };
     }

@@ -330,6 +330,7 @@ describe("SearchService", () => {
 
     expect(results[0]!.why).toContain("content_match");
     expect(results[0]!.fresh).toBe("current");
+    expect(results[0]!.next).toBe("read_section");
   });
 
   test("excerpt contains context around match", async () => {

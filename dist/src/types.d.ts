@@ -128,6 +128,8 @@ export interface SearchResult {
     uw?: string;
     /** Freshness of the derived result relative to the Markdown source. */
     fresh?: 'current' | 'verified';
+    /** Bounded, agent-facing next step for opening or validating the result. */
+    next?: 'read_projection' | 'read_section' | 'verify_evidence' | 'inspect_neighbors';
     /** SHA-256 of the source note, included only when requested by the client. */
     rv?: string;
 }
