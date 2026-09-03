@@ -227,6 +227,17 @@ export function getLlmWikiTools(): Tool[] {
       }, required: ['path'] },
     },
     {
+      name: 'get_wiki_learning_path',
+      description: 'Analyze one visible MOC as a bounded dependency-aware reading path. It preserves authored Obsidian link order, expands nested MOCs to a limited depth, checks depends_on prerequisites, and returns a separate stable recommended order plus unresolved, ambiguous, external, late-prerequisite, and cycle findings. It never rewrites or reorders Markdown; every readable item carries its current revision.',
+      inputSchema: { type: 'object', properties: {
+        path: { type: 'string', description: 'Existing visible MOC Markdown note path' },
+        maxDepth: { type: 'integer', minimum: 0, maximum: 6, default: 2, description: 'Maximum nested-MOC expansion depth; 0 reads only the root MOC body' },
+        limit: { type: 'integer', minimum: 1, maximum: 50, default: 30, description: 'Maximum unique authored entries returned' },
+        maxChars: { type: 'integer', minimum: 1024, maximum: 16000, default: 7000 },
+        accessToken, prettyPrint,
+      }, required: ['path'] },
+    },
+    {
       name: 'get_wiki_authority_map',
       description: 'Return a bounded library-style authority view derived from note titles, Obsidian aliases, and stable IDs. It helps normalize terminology and exposes title/alias collisions without renaming notes or creating a parallel taxonomy.',
       inputSchema: { type: 'object', properties: {

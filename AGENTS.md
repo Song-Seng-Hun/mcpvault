@@ -228,6 +228,13 @@ ignores fenced examples, and includes target heading/block locators when the
 budget permits. Every returned read path has a revision. Use `truncated` to
 decide whether to read the root or request more context; never guess omitted
 links or confuse catalog metadata grouping with a tree traversal.
+When a MOC is intended as a curriculum or procedural sequence, use
+`get_wiki_learning_path`. It preserves the authored outline, expands nested
+MOCs only to the requested bounded depth, and compares visible entries with
+their existing `depends_on` relations. Follow `recommendedOrder` only as an
+advisory reading suggestion: unresolved, ambiguous, external, late, or cyclic
+prerequisites require inspection of the returned current revisions. Never
+automatically rewrite the MOC body or invent a second prerequisite property.
 Repair missing, ambiguous, or cyclic parent signals before treating a MOC tree
 as a reliable navigation order.
 Use `primary_moc` as the single preferred launch point for a durable note;

@@ -179,6 +179,14 @@ read a parent, then its whole branch, before visiting the next sibling.
 Unresolved, ambiguous, and cyclic branches are marked; they are not valid roots.
 Catalog `orderBy=hierarchy` is a metadata grouping by preferred MOC/project,
 not the tree traversal. Code-fenced examples never become reading-order links.
+For a MOC that is also a curriculum, onboarding route, or procedure,
+`wiki.learning_path` preserves that authored outline while checking existing
+`depends_on` Properties. It can expand nested MOCs to a bounded depth and
+returns a separate stable `recommendedOrder`, external prerequisites, late
+prerequisites, ambiguous/unresolved targets, and dependency-cycle findings.
+Every readable entry includes its current revision. The projection never
+rewrites the MOC, and a recommendation is navigation—not proof or permission
+to discard a deliberate narrative order.
 
 Use `question` for an unresolved question, `hypothesis` for a testable
 proposition, and `assumption` for a working premise. Keep these visibly
@@ -456,6 +464,12 @@ mixed wikilinks/relative Markdown links and heading/block locators. Only
 uniquely resolved, accessible, non-hidden targets enter the reading order.
 The bounded result always pairs returned read paths with their revisions;
 use a larger budget or read the root when `truncated` is true.
+`get_wiki_learning_path` is the stricter sequence view for a MOC. It preserves
+authored order and reports where a visible `depends_on` prerequisite occurs
+later, outside the path, cannot be resolved uniquely, or participates in a
+cycle. Its stable topological recommendation keeps authored order among
+otherwise independent notes. It is bounded, scope-filtered, non-mutating, and
+does not create a parallel graph or a new client-side requirement.
 `get_wiki_exception_board` combines organization, graph,
 quarantine, freshness, vocabulary, and execution findings into one 5S-style
 repair board. `get_wiki_quality_check` applies a small role-specific checklist

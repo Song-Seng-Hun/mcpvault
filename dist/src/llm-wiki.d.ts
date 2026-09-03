@@ -2812,6 +2812,35 @@ export declare class LlmWikiService {
     }>;
     answerPacket(principal: ScopePrincipal | undefined, path: string, maxChars?: number, includeSemantic?: boolean, intent?: 'capture' | 'explore' | 'decide' | 'execute' | 'review'): Promise<Record<string, unknown>>;
     /**
+     * Turn an authored MOC outline into a bounded, dependency-aware reading
+     * path. The Markdown order remains authoritative; the topological order is
+     * returned separately as an advisory projection and never mutates notes.
+     */
+    learningPath(principal: ScopePrincipal | undefined, path: string, maxDepth?: number, limit?: number, maxChars?: number): Promise<{
+        mode: string;
+        root: {
+            path: string;
+            revision: string;
+        };
+        authoredOrder: {
+            path: string;
+            revision: string;
+        }[];
+        recommendedOrder: string[];
+        summary: {
+            entries: number;
+            mocsVisited: number;
+            authoredLinksScanned: number;
+            dependencyEdges: number;
+            latePrerequisites: number;
+            externalPrerequisites: number;
+            orderIssues: number;
+            navigationIssues: number;
+            omittedEntries: number;
+        };
+        truncated: boolean;
+    }>;
+    /**
      * Build a reusable shelf-like context projection without persisting a
      * second index.  The selected note remains the entry point; the existing
      * answer packet supplies the bounded supporting and counterpoint context.

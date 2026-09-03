@@ -582,6 +582,13 @@ server reports linked versus unlinked questions without claiming that a link
 proves the answer. Call
 \`get_wiki_moc_candidates\` for bounded suggestions; it never creates a map
 automatically.
+For a MOC that represents a curriculum, onboarding route, or procedure, call
+\`get_wiki_learning_path\`. It preserves authored Obsidian link order, expands
+nested MOCs only to a bounded requested depth, and compares the sequence with
+existing \`depends_on\` Properties. The separate recommended order and
+unresolved, ambiguous, external, late, or cyclic prerequisite findings are
+advisory; inspect current revisions and deliberately edit Markdown rather than
+automatically reordering it.
 
 Use \`get_wiki_composition_candidates\` for long or heavily sectioned notes.
 Atomicity is a desired outcome, not a publication gate; inspect one heading
@@ -6608,6 +6615,297 @@ export class LlmWikiService {
       ...(tinyAction && { synthesisPlan: { status: synthesisPlan?.status, nextAction: { endpointId: tinyAction.endpointId, ...(tinyAction.arguments?.path && { arguments: { path: tinyAction.arguments.path } }) } } }),
       truncated: true,
     };
+  }
+
+  /**
+   * Turn an authored MOC outline into a bounded, dependency-aware reading
+   * path. The Markdown order remains authoritative; the topological order is
+   * returned separately as an advisory projection and never mutates notes.
+   */
+  async learningPath(principal: ScopePrincipal | undefined, path: string, maxDepth = 2, limit = 30, maxChars = 7000) {
+    const boundedDepth = Math.min(Math.max(Number(maxDepth) || 0, 0), 6);
+    const boundedLimit = Math.min(Math.max(Number(limit) || 30, 1), 50);
+    const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 1024), 16000);
+    if (!this.access.canAccessPhysicalPath(path, principal)) throw new Error('Access denied');
+    const rootNote = await this.fileSystem.readNote(path);
+    if (isModerationHidden(rootNote.frontmatter)) throw new Error('The source note is unavailable');
+    if (String(rootNote.frontmatter.note_kind || '').toLowerCase() !== 'moc') throw new Error('path must point to a visible MOC note');
+
+    type VisibleNote = { path: string; frontmatter: Record<string, any>; revision?: string };
+    type PathEntry = {
+      path: string;
+      revision: string;
+      title: string;
+      noteKind: string;
+      lifecycle?: string;
+      knowledgeRole?: string;
+      authoredPosition: number;
+      depth: number;
+      parentMoc: string;
+      line: number;
+      section?: string;
+      targetHeading?: string;
+      targetBlockId?: string;
+    };
+    const canAccess = (candidate: string) => this.access.canAccessPhysicalPath(candidate, principal);
+    const visibleByPath = new Map<string, VisibleNote>();
+    const visiblePaths: string[] = [];
+    for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+      if (isModerationHidden(note.frontmatter)) continue;
+      const normalized = normalizePath(note.path).toLowerCase();
+      visiblePaths.push(note.path);
+      visibleByPath.set(normalized, { path: note.path, frontmatter: note.frontmatter, ...(note.revision && { revision: note.revision }) });
+    }
+    const rootKey = normalizePath(path).toLowerCase();
+    visibleByPath.set(rootKey, { path, frontmatter: rootNote.frontmatter, revision: rootNote.revision });
+    if (!visiblePaths.some(candidate => normalizePath(candidate).toLowerCase() === rootKey)) visiblePaths.push(path);
+
+    const resolveBodyLink = (sourcePath: string, link: ReturnType<typeof extractObsidianLinkOccurrences>[number]): string[] => {
+      if (!link.link.startsWith('[[') && !link.link.startsWith('![[')) {
+        const relative = posix.normalize(posix.join(posix.dirname(normalizePath(sourcePath)), link.target));
+        const direct = visibleByPath.get(relative.toLowerCase())
+          || visibleByPath.get(`${relative}.md`.toLowerCase());
+        if (direct) return [direct.path];
+      }
+      return resolveWikiLinkTargets(link.target, visiblePaths);
+    };
+    const entries: Array<PathEntry & { internalPath: string }> = [];
+    const entryByKey = new Map<string, PathEntry & { internalPath: string }>();
+    const navigationIssues: Array<Record<string, unknown>> = [];
+    const visitedMocs = new Set<string>();
+    let authoredLinksScanned = 0;
+    let omittedEntries = 0;
+    let truncated = false;
+
+    const visitMoc = async (mocPath: string, mocNote: ReadNoteResult, depth: number, ancestry: string[]): Promise<void> => {
+      const mocKey = normalizePath(mocPath).toLowerCase();
+      if (visitedMocs.has(mocKey)) return;
+      visitedMocs.add(mocKey);
+      const linkWindow = Math.min(200, Math.max(24, boundedLimit * 4));
+      const links = extractObsidianLinkOccurrences(mocNote.content || '', linkWindow + 1);
+      if (links.length > linkWindow) truncated = true;
+      for (const link of links.slice(0, linkWindow)) {
+        authoredLinksScanned += 1;
+        const matches = resolveBodyLink(mocPath, link);
+        if (matches.length === 0) {
+          navigationIssues.push({ type: 'unresolved_or_inaccessible_body_link', moc: this.access.toPublicPath(mocPath), target: boundedText(link.target, 200), line: link.line });
+          continue;
+        }
+        if (matches.length > 1) {
+          navigationIssues.push({ type: 'ambiguous_body_link', moc: this.access.toPublicPath(mocPath), target: boundedText(link.target, 200), line: link.line, matches: matches.slice(0, 5).map(match => this.access.toPublicPath(match)) });
+          continue;
+        }
+        const targetPath = matches[0]!;
+        const targetKey = normalizePath(targetPath).toLowerCase();
+        if (targetKey === rootKey) {
+          navigationIssues.push({ type: 'moc_navigation_cycle', moc: this.access.toPublicPath(mocPath), target: this.access.toPublicPath(targetPath), line: link.line });
+          continue;
+        }
+        const metadata = visibleByPath.get(targetKey);
+        if (!metadata) continue;
+        const targetKind = String(metadata.frontmatter.note_kind || 'note').toLowerCase();
+        const cycleAt = ancestry.indexOf(targetKey);
+        if (targetKind === 'moc' && cycleAt !== -1) {
+          navigationIssues.push({
+            type: 'moc_navigation_cycle',
+            moc: this.access.toPublicPath(mocPath),
+            target: this.access.toPublicPath(targetPath),
+            line: link.line,
+            cycle: [...ancestry.slice(cycleAt), targetKey].map(item => this.access.toPublicPath(visibleByPath.get(item)?.path || item)),
+          });
+        }
+        let entry = entryByKey.get(targetKey);
+        if (!entry) {
+          if (entries.length >= boundedLimit) {
+            omittedEntries += 1;
+            truncated = true;
+            continue;
+          }
+          let revision = metadata.revision;
+          if (!revision) revision = (await this.fileSystem.readNote(targetPath)).revision;
+          const createdEntry: PathEntry & { internalPath: string } = {
+            internalPath: targetPath,
+            path: this.access.toPublicPath(targetPath),
+            revision,
+            title: boundedText(metadata.frontmatter.title || targetPath.split('/').at(-1), 160),
+            noteKind: targetKind,
+            ...(metadata.frontmatter.lifecycle && { lifecycle: boundedText(metadata.frontmatter.lifecycle, 80) }),
+            ...(metadata.frontmatter.knowledge_role && { knowledgeRole: boundedText(metadata.frontmatter.knowledge_role, 80) }),
+            authoredPosition: entries.length + 1,
+            depth,
+            parentMoc: this.access.toPublicPath(mocPath),
+            line: link.line,
+            ...(link.heading && { section: boundedText(link.heading, 160) }),
+            ...(link.targetHeading && { targetHeading: boundedText(link.targetHeading, 160) }),
+            ...(link.targetBlockId && { targetBlockId: boundedText(link.targetBlockId, 160) }),
+          };
+          entries.push(createdEntry);
+          entryByKey.set(targetKey, createdEntry);
+          entry = createdEntry;
+        }
+        if (targetKind === 'moc' && depth < boundedDepth && cycleAt === -1) {
+          const nested = await this.fileSystem.readNote(targetPath);
+          const resolvedEntry = entryByKey.get(targetKey)!;
+          if (nested.revision !== resolvedEntry.revision) resolvedEntry.revision = nested.revision;
+          await visitMoc(targetPath, nested, depth + 1, [...ancestry, targetKey]);
+        }
+      }
+    };
+    await visitMoc(path, rootNote, 0, [rootKey]);
+
+    const authoredIndex = new Map(entries.map((entry, index) => [normalizePath(entry.internalPath).toLowerCase(), index]));
+    const edges: Array<{ prerequisite: string; dependent: string }> = [];
+    const orderIssues: Array<Record<string, unknown>> = [];
+    const externalPrerequisites: Array<Record<string, unknown>> = [];
+    const externalSeen = new Set<string>();
+    for (const entry of entries) {
+      const dependentKey = normalizePath(entry.internalPath).toLowerCase();
+      const metadata = visibleByPath.get(dependentKey);
+      const dependencies = Array.isArray(metadata?.frontmatter.depends_on)
+        ? metadata!.frontmatter.depends_on.filter((item: unknown): item is string => typeof item === 'string' && Boolean(item.trim())).slice(0, 30)
+        : [];
+      for (const rawDependency of dependencies) {
+        const matches = resolveWikiLinkTargets(relationDocument(rawDependency), visiblePaths);
+        if (matches.length === 0) {
+          orderIssues.push({ type: 'unresolved_or_inaccessible_prerequisite', path: entry.path, prerequisite: boundedText(rawDependency, 200) });
+          continue;
+        }
+        if (matches.length > 1) {
+          orderIssues.push({ type: 'ambiguous_prerequisite', path: entry.path, prerequisite: boundedText(rawDependency, 200), matches: matches.slice(0, 5).map(match => this.access.toPublicPath(match)) });
+          continue;
+        }
+        const prerequisitePath = matches[0]!;
+        const prerequisiteKey = normalizePath(prerequisitePath).toLowerCase();
+        if (prerequisiteKey === dependentKey) {
+          orderIssues.push({ type: 'self_prerequisite', path: entry.path, prerequisite: this.access.toPublicPath(prerequisitePath) });
+          edges.push({ prerequisite: prerequisiteKey, dependent: dependentKey });
+          continue;
+        }
+        const prerequisiteIndex = authoredIndex.get(prerequisiteKey);
+        if (prerequisiteIndex === undefined) {
+          const externalKey = `${prerequisiteKey}|${dependentKey}`;
+          if (!externalSeen.has(externalKey)) {
+            externalSeen.add(externalKey);
+            const prerequisite = visibleByPath.get(prerequisiteKey);
+            let prerequisiteRevision = prerequisite?.revision;
+            if (!prerequisiteRevision) prerequisiteRevision = (await this.fileSystem.readNote(prerequisitePath)).revision;
+            externalPrerequisites.push({
+              path: this.access.toPublicPath(prerequisitePath),
+              revision: prerequisiteRevision,
+              requiredBy: entry.path,
+              reason: 'depends_on_target_outside_authored_moc_path',
+            });
+          }
+          continue;
+        }
+        edges.push({ prerequisite: prerequisiteKey, dependent: dependentKey });
+        const dependentIndex = authoredIndex.get(dependentKey)!;
+        if (prerequisiteIndex > dependentIndex) {
+          orderIssues.push({
+            type: 'prerequisite_after_dependent',
+            path: entry.path,
+            prerequisite: entries[prerequisiteIndex]!.path,
+            dependentPosition: dependentIndex + 1,
+            prerequisitePosition: prerequisiteIndex + 1,
+          });
+        }
+      }
+    }
+
+    const adjacency = new Map<string, Set<string>>();
+    const indegree = new Map(entries.map(entry => [normalizePath(entry.internalPath).toLowerCase(), 0]));
+    for (const edge of edges) {
+      if (!indegree.has(edge.prerequisite) || !indegree.has(edge.dependent)) continue;
+      const dependents = adjacency.get(edge.prerequisite) || new Set<string>();
+      if (dependents.has(edge.dependent)) continue;
+      dependents.add(edge.dependent);
+      adjacency.set(edge.prerequisite, dependents);
+      indegree.set(edge.dependent, (indegree.get(edge.dependent) || 0) + 1);
+    }
+    const authoredRank = (key: string) => authoredIndex.get(key) ?? Number.MAX_SAFE_INTEGER;
+    const queue = [...indegree.entries()].filter(([, count]) => count === 0).map(([key]) => key).sort((left, right) => authoredRank(left) - authoredRank(right));
+    const recommendedKeys: string[] = [];
+    while (queue.length) {
+      const current = queue.shift()!;
+      recommendedKeys.push(current);
+      for (const dependent of adjacency.get(current) || []) {
+        const remaining = (indegree.get(dependent) || 0) - 1;
+        indegree.set(dependent, remaining);
+        if (remaining === 0) {
+          queue.push(dependent);
+          queue.sort((left, right) => authoredRank(left) - authoredRank(right));
+        }
+      }
+    }
+    const cycleBlockedKeys = entries.map(entry => normalizePath(entry.internalPath).toLowerCase()).filter(key => !recommendedKeys.includes(key));
+    if (cycleBlockedKeys.length) {
+      orderIssues.push({ type: 'dependency_cycle_or_cycle_blocked_path', paths: cycleBlockedKeys.slice(0, 12).map(key => entryByKey.get(key)!.path) });
+      recommendedKeys.push(...cycleBlockedKeys.sort((left, right) => authoredRank(left) - authoredRank(right)));
+    }
+    const recommendedOrder = recommendedKeys.map(key => entryByKey.get(key)!.path);
+    const authoredOrder = entries.map(({ internalPath: _internalPath, ...entry }) => entry);
+    const latePrerequisites = orderIssues.filter(issue => issue.type === 'prerequisite_after_dependent').length;
+    const incompletePrerequisites = orderIssues.filter(issue => ['unresolved_or_inaccessible_prerequisite', 'ambiguous_prerequisite'].includes(String(issue.type))).length + externalPrerequisites.length;
+    const latestRoot = await this.fileSystem.readNote(path);
+    if (latestRoot.revision !== rootNote.revision) throw new Error('The root MOC changed while building its learning path; re-read it and retry.');
+    const result = {
+      mode: 'dependency_aware_moc_learning_path',
+      purpose: 'Preserve the authored Obsidian outline while exposing a separate prerequisite-safe reading suggestion. This is bounded navigation, not a truth score or an automatic rewrite.',
+      root: { path: this.access.toPublicPath(path), title: boundedText(rootNote.frontmatter.title || path.split('/').at(-1), 160), revision: rootNote.revision },
+      authoredOrder,
+      recommendedOrder,
+      orderChanged: recommendedOrder.some((item, index) => item !== authoredOrder[index]?.path),
+      authoredOrderConsistent: latePrerequisites === 0 && cycleBlockedKeys.length === 0,
+      prerequisiteCoverageComplete: incompletePrerequisites === 0,
+      externalPrerequisites: externalPrerequisites.slice(0, boundedLimit),
+      orderIssues: orderIssues.slice(0, boundedLimit),
+      navigationIssues: navigationIssues.slice(0, boundedLimit),
+      summary: {
+        entries: authoredOrder.length,
+        mocsVisited: visitedMocs.size,
+        authoredLinksScanned,
+        dependencyEdges: edges.length,
+        latePrerequisites,
+        externalPrerequisites: externalPrerequisites.length,
+        orderIssues: orderIssues.length,
+        navigationIssues: navigationIssues.length,
+        omittedEntries,
+      },
+      guidance: 'Keep the MOC body order when it expresses pedagogy or narrative. If the recommended order differs, inspect the cited depends_on Properties and current revisions, then edit the Markdown deliberately; never auto-reorder from this projection.',
+      truncated: truncated || externalPrerequisites.length > boundedLimit || orderIssues.length > boundedLimit || navigationIssues.length > boundedLimit,
+    };
+    if (JSON.stringify(result).length <= boundedChars) return result;
+    const compact = {
+      ...result,
+      authoredOrder: authoredOrder.slice(0, Math.min(10, authoredOrder.length)),
+      recommendedOrder: recommendedOrder.slice(0, 10),
+      externalPrerequisites: result.externalPrerequisites.slice(0, 5),
+      orderIssues: result.orderIssues.slice(0, 6),
+      navigationIssues: result.navigationIssues.slice(0, 4),
+      truncated: true,
+    };
+    while (JSON.stringify(compact).length > boundedChars && compact.authoredOrder.length > 1) {
+      compact.authoredOrder.pop();
+      compact.recommendedOrder.pop();
+    }
+    while (JSON.stringify(compact).length > boundedChars && compact.orderIssues.length) compact.orderIssues.pop();
+    while (JSON.stringify(compact).length > boundedChars && compact.externalPrerequisites.length) compact.externalPrerequisites.pop();
+    while (JSON.stringify(compact).length > boundedChars && compact.navigationIssues.length) compact.navigationIssues.pop();
+    if (JSON.stringify(compact).length <= boundedChars) return compact;
+    const minimal = {
+      mode: result.mode,
+      root: { path: result.root.path, revision: result.root.revision },
+      authoredOrder: authoredOrder.slice(0, 3).map(entry => ({ path: entry.path, revision: entry.revision })),
+      recommendedOrder: recommendedOrder.slice(0, 3),
+      summary: result.summary,
+      truncated: true,
+    };
+    while (JSON.stringify(minimal).length > boundedChars && minimal.authoredOrder.length > 0) {
+      minimal.authoredOrder.pop();
+      minimal.recommendedOrder.pop();
+    }
+    if (JSON.stringify(minimal).length > boundedChars) throw new Error('maxChars is too small to preserve this MOC path and revision; increase the read budget.');
+    return minimal;
   }
 
   /**

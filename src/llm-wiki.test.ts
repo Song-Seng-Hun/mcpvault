@@ -153,6 +153,75 @@ test('MOC navigation preserves explicit sibling order, body link order, and mult
   }
 });
 
+test('dependency-aware MOC learning paths preserve authorship and diagnose prerequisite order safely', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'learning-path-owner', modelId: 'codex', password: 'learning-path-password' });
+    const accessToken = registration.value.accessToken;
+    const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
+      const result = await client.callTool({ name: 'write_note', arguments: { path, content, frontmatter, expectedRevision: 'missing', accessToken } });
+      expect(result.isError).toBeFalsy();
+    };
+    await write('Knowledge/MOCs/Curriculum.md', [
+      '# Curriculum', '', '## Authored route',
+      '[[Knowledge/Advanced]]',
+      '[[Knowledge/Basics]]',
+      '[[Knowledge/MOCs/Nested]]',
+      '[[Knowledge/Independent]]',
+      '[[Knowledge/Cycle A]]',
+      '[[Knowledge/Cycle B]]',
+    ].join('\n'), { note_kind: 'moc', lifecycle: 'evergreen', moc_purpose: 'Teach a bounded topic.' });
+    await write('Knowledge/MOCs/Nested.md', '# Nested\n\n[[Knowledge/Nested Topic]]\n', { note_kind: 'moc', lifecycle: 'evergreen' });
+    await write('Knowledge/Advanced.md', '# Advanced\n', { note_kind: 'atomic', lifecycle: 'evergreen', depends_on: ['[[Knowledge/Basics]]', '[[Knowledge/Unavailable prerequisite]]'] });
+    await write('Knowledge/Basics.md', '# Basics\n', { note_kind: 'atomic', lifecycle: 'evergreen', depends_on: ['[[Knowledge/External Primer]]'] });
+    await write('Knowledge/Nested Topic.md', '# Nested Topic\n', { note_kind: 'atomic', lifecycle: 'evergreen', depends_on: ['[[Knowledge/Independent]]'] });
+    await write('Knowledge/Independent.md', '# Independent\n', { note_kind: 'atomic', lifecycle: 'evergreen' });
+    await write('Knowledge/External Primer.md', '# External Primer\n', { note_kind: 'atomic', lifecycle: 'evergreen' });
+    await write('Knowledge/Cycle A.md', '# Cycle A\n', { note_kind: 'atomic', lifecycle: 'evergreen', depends_on: ['[[Knowledge/Cycle B]]'] });
+    await write('Knowledge/Cycle B.md', '# Cycle B\n', { note_kind: 'atomic', lifecycle: 'evergreen', depends_on: ['[[Knowledge/Cycle A]]'] });
+
+    const discovery = await callJson(client, 'search_capabilities', { query: 'MOC prerequisite learning path', limit: 3 });
+    expect(discovery.value.endpoints).toEqual(expect.arrayContaining([expect.objectContaining({ endpointId: 'wiki.learning_path' })]));
+    const path = await callJson(client, 'get_wiki_learning_path', { path: 'Knowledge/MOCs/Curriculum.md', maxDepth: 2, limit: 20, maxChars: 12000, accessToken });
+    expect(path.value.mode).toBe('dependency_aware_moc_learning_path');
+    expect(path.value.authoredOrder.map((item: any) => item.path)).toEqual([
+      'Knowledge/Advanced.md',
+      'Knowledge/Basics.md',
+      'Knowledge/MOCs/Nested.md',
+      'Knowledge/Nested Topic.md',
+      'Knowledge/Independent.md',
+      'Knowledge/Cycle A.md',
+      'Knowledge/Cycle B.md',
+    ]);
+    expect(path.value.authoredOrder.every((item: any) => /^[a-f0-9]{64}$/.test(item.revision))).toBe(true);
+    expect(path.value.recommendedOrder.slice(0, 5)).toEqual([
+      'Knowledge/Basics.md',
+      'Knowledge/Advanced.md',
+      'Knowledge/MOCs/Nested.md',
+      'Knowledge/Independent.md',
+      'Knowledge/Nested Topic.md',
+    ]);
+    expect(path.value).toMatchObject({ orderChanged: true, authoredOrderConsistent: false, prerequisiteCoverageComplete: false });
+    expect(path.value.orderIssues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'prerequisite_after_dependent', path: 'Knowledge/Advanced.md', prerequisite: 'Knowledge/Basics.md' }),
+      expect.objectContaining({ type: 'unresolved_or_inaccessible_prerequisite', path: 'Knowledge/Advanced.md' }),
+      expect.objectContaining({ type: 'dependency_cycle_or_cycle_blocked_path' }),
+    ]));
+    expect(path.value.externalPrerequisites).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/External Primer.md', requiredBy: 'Knowledge/Basics.md', revision: expect.any(String) }),
+    ]));
+    const tiny = await callJson(client, 'get_wiki_learning_path', { path: 'Knowledge/MOCs/Curriculum.md', maxDepth: 2, limit: 20, maxChars: 1024, accessToken, prettyPrint: true });
+    expect(String((tiny.result.content as any)[0].text).length).toBeLessThanOrEqual(1024);
+    expect(tiny.value.root).toMatchObject({ path: 'Knowledge/MOCs/Curriculum.md', revision: expect.any(String) });
+
+    const notMoc = await client.callTool({ name: 'get_wiki_learning_path', arguments: { path: 'Knowledge/Basics.md', accessToken } });
+    expect(notMoc.isError).toBe(true);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('weekly review separates schedule from deadline and exposes reverse focus context', async () => {
   const { server, client } = await setup();
   try {
