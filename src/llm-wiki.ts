@@ -97,7 +97,8 @@ const CLAIM_ARGUMENT_LINT_CODES = new Set([
   'invalid_claim_role', 'invalid_claim_relation', 'missing_claim_block_anchor', 'duplicate_claim_block_anchor',
   'duplicate_claim_id', 'claim_graph_scan_truncated', 'unresolved_claim_note', 'ambiguous_claim_note',
   'claim_scope_violation', 'missing_claim_target', 'ambiguous_claim_target', 'self_claim_relation',
-  'claim_relation_cycle', 'claim_role_relation_mismatch',
+  'claim_relation_cycle', 'claim_role_relation_mismatch', 'claim_dependency_status_risk',
+  'claim_support_status_risk', 'supported_claim_contradiction',
 ]);
 
 type ClaimRelationProperty = typeof CLAIM_RELATION_FIELDS[number]['property'];
@@ -7376,8 +7377,8 @@ export class LlmWikiService {
           order: index + 1,
           claimId: id,
           text: boundedText(claim.text, 500),
-          status: typeof claim.status === 'string' ? claim.status : 'unverified',
-          confidence: typeof claim.confidence === 'string' ? claim.confidence : 'medium',
+          status: typeof claim.status === 'string' ? claim.status.trim().toLocaleLowerCase() : 'unverified',
+          confidence: typeof claim.confidence === 'string' ? claim.confidence.trim().toLocaleLowerCase() : 'medium',
           ...(typeof claim.claim_role === 'string' && CLAIM_ROLES.has(claim.claim_role.toLowerCase()) && { role: claim.claim_role.toLowerCase() }),
           relations: {
             supports_claims: claimRelationValues(claim, 'supports_claims'),
@@ -7545,6 +7546,26 @@ export class LlmWikiService {
       }
       if (node.role === 'rebuttal' && !out.some(edge => edge.relation === 'contradicts' || edge.relation === 'supports')) {
         addIssue(node.key, { code: 'claim_role_relation_mismatch', detail: 'rebuttal has neither contradicts_claims nor supports_claims.' });
+      }
+    }
+    const statusIssueKeys = new Set<string>();
+    for (const edge of selectedEdges) {
+      const source = byKey.get(edge.source)?.[0];
+      const target = byKey.get(edge.target)?.[0];
+      if (!source || !target) continue;
+      const statusIssue = (key: string, code: string, detail: string) => {
+        if (statusIssueKeys.has(key)) return;
+        statusIssueKeys.add(key);
+        addIssue(source.key, { code, detail, target: target.publicPath });
+      };
+      if (edge.relation === 'depends_on' && source.status === 'supported' && target.status !== 'supported') {
+        statusIssue(`dependency|${edge.source}|${edge.target}`, 'claim_dependency_status_risk', `Supported claim depends on a ${target.status} claim; re-check both evidence sets without cascading status.`);
+      }
+      if (edge.relation === 'supports' && target.status === 'supported' && ['disputed', 'superseded'].includes(source.status)) {
+        statusIssue(`support|${edge.source}|${edge.target}`, 'claim_support_status_risk', `${source.status} claim still supports a supported claim; re-check both evidence sets.`);
+      }
+      if (edge.relation === 'contradicts' && source.status === 'supported' && target.status === 'supported') {
+        statusIssue(`contradiction|${[edge.source, edge.target].sort().join('|')}`, 'supported_claim_contradiction', 'Both sides of this contradiction are supported; preserve the disagreement and review evidence explicitly.');
       }
     }
 
@@ -10286,6 +10307,7 @@ export class LlmWikiService {
       path: string;
       publicPath: string;
       claimId: string;
+      status: string;
       role?: string;
       hasArgumentMetadata: boolean;
       anchorLines: number[];
@@ -10428,6 +10450,7 @@ export class LlmWikiService {
                   path: normalizePath(note.path),
                   publicPath,
                   claimId: structuredClaimId,
+                  status: String(claim.status || 'unverified').trim().toLocaleLowerCase(),
                   ...(claimRole && CLAIM_ROLES.has(claimRole) && { role: claimRole }),
                   hasArgumentMetadata,
                   anchorLines: structuredClaimAnchors,
@@ -10669,6 +10692,27 @@ export class LlmWikiService {
       else if (claim.role === 'objection' && !outgoing.some(edge => edge.relation === 'contradicts')) detail = 'objection has no resolved contradicts_claims edge.';
       else if (claim.role === 'rebuttal' && !outgoing.some(edge => edge.relation === 'contradicts' || edge.relation === 'supports')) detail = 'rebuttal has neither a resolved contradicts_claims nor supports_claims edge.';
       if (detail) addIssue({ severity: 'warning', code: 'claim_role_relation_mismatch', path: claim.publicPath, detail: `Claim ${claim.claimId}: ${detail}` });
+    }
+
+    const claimStatusIssueKeys = new Set<string>();
+    const addClaimStatusIssue = (key: string, claim: ClaimLintRecord, code: string, detail: string) => {
+      if (claimStatusIssueKeys.has(key)) return;
+      claimStatusIssueKeys.add(key);
+      addIssue({ severity: 'warning', code, path: claim.publicPath, detail });
+    };
+    for (const edge of claimEdges) {
+      const source = claimsByKey.get(edge.source)?.[0];
+      const target = claimsByKey.get(edge.target)?.[0];
+      if (!source || !target) continue;
+      if (edge.relation === 'depends_on' && source.status === 'supported' && target.status !== 'supported') {
+        addClaimStatusIssue(`dependency|${edge.source}|${edge.target}`, source, 'claim_dependency_status_risk', `Supported claim ${source.claimId} depends on ${target.publicPath}#^${target.claimId}, whose status is ${target.status}. Re-check the dependency; do not propagate status automatically.`);
+      }
+      if (edge.relation === 'supports' && target.status === 'supported' && ['disputed', 'superseded'].includes(source.status)) {
+        addClaimStatusIssue(`support|${edge.source}|${edge.target}`, source, 'claim_support_status_risk', `${source.status} claim ${source.claimId} still supports the supported claim ${target.publicPath}#^${target.claimId}. Re-check both evidence sets before changing either status.`);
+      }
+      if (edge.relation === 'contradicts' && source.status === 'supported' && target.status === 'supported') {
+        addClaimStatusIssue(`contradiction|${[edge.source, edge.target].sort().join('|')}`, source, 'supported_claim_contradiction', `Supported claim ${source.claimId} contradicts another supported claim at ${target.publicPath}#^${target.claimId}. Preserve both and resolve the disagreement through evidence review.`);
+      }
     }
 
     const reportClaimCycles = (relation: 'supports' | 'depends_on') => {

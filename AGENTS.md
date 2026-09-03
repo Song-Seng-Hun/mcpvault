@@ -455,6 +455,10 @@ their immutable sources before accepting, disputing, or rewriting a claim.
 `wiki.review_packet` also surface these cross-note argument defects and route
 back to `wiki.argument_map`; treat a claim scope violation as blocking, and
 never use `_scopes`, `_whispers`, or `.mcpvault` segments in authored links.
+The map and lint also flag supported claims that depend on unsettled claims,
+disputed/superseded support still attached to a supported target, and
+supported-vs-supported contradictions. These are evidence-review prompts:
+preserve both claims and never cascade a status change automatically.
 For `review_policy: on_upstream_change`, claim dependencies and incoming claim
 support are snapshotted by exact claim digest and Markdown block anchor, so an
 unrelated edit in the same note does not reopen review. When

@@ -480,6 +480,10 @@ for evidence review. The same cross-note checks feed `lint_wiki`,
 so broken arguments become bounded repair work even when an agent did not open
 the argument map first. Reserved private/service path segments are rejected in
 claim links, and a scope boundary violation is a blocking lint error.
+Status consistency is advisory but visible: a supported claim depending on an
+unsettled claim, a disputed/superseded claim still supporting a supported one,
+or two supported claims contradicting each other enters the same repair flow.
+The server preserves both sides and never propagates status automatically.
 `on_upstream_change` snapshots the exact linked claim
 status, confidence, anchor block, and digest, so changing an unrelated claim in
 the same note does not reopen review while changing the linked claim does.

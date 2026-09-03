@@ -229,6 +229,16 @@ test('claim argument maps preserve Obsidian block links, revisions, scope, and b
     expect(changedQueue.value.items).toEqual(expect.arrayContaining([
       expect.objectContaining({ path: 'Knowledge/Conclusion.md', reviewTriggers: expect.arrayContaining(['upstream_changed']), upstreamChanges: expect.arrayContaining([expect.stringContaining('#^p1')]) }),
     ]));
+    const supportedObjection = await callJson(client, 'review_wiki_claim', {
+      path: 'Knowledge/Premises.md', claimId: 'o1', status: 'supported', reviewedBy: 'codex', expectedRevision: disputedPremise.value.revision, accessToken,
+    });
+    expect(supportedObjection.value.success).toBe(true);
+    const statusMap = await callJson(client, 'get_wiki_argument_map', { path: 'Knowledge/Conclusion.md', claimId: 'c1', maxDepth: 2, limit: 20, maxChars: 12000, accessToken });
+    expect(statusMap.value.issues.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'claim_dependency_status_risk' }),
+      expect.objectContaining({ code: 'claim_support_status_risk' }),
+      expect.objectContaining({ code: 'supported_claim_contradiction' }),
+    ]));
 
     const compact = await callJson(client, 'get_wiki_argument_map', { path: 'Knowledge/Conclusion.md', maxDepth: 2, limit: 20, maxChars: 1024, accessToken });
     expect(compact.result.isError).toBeFalsy();
@@ -284,6 +294,9 @@ test('claim argument maps preserve Obsidian block links, revisions, scope, and b
       expect.objectContaining({ code: 'missing_claim_block_anchor', path: 'Knowledge/Premises.md' }),
       expect.objectContaining({ code: 'missing_claim_target', path: 'Knowledge/Missing target.md' }),
       expect.objectContaining({ code: 'claim_scope_violation', path: 'Knowledge/Scope leak.md', severity: 'error' }),
+      expect.objectContaining({ code: 'claim_dependency_status_risk', path: 'Knowledge/Conclusion.md' }),
+      expect.objectContaining({ code: 'claim_support_status_risk', path: 'Knowledge/Premises.md' }),
+      expect.objectContaining({ code: 'supported_claim_contradiction', path: 'Knowledge/Premises.md' }),
     ]));
     const organization = await callJson(client, 'get_wiki_organization_health', { limit: 100, maxChars: 16000, accessToken });
     expect(organization.value.byCode).toMatchObject({ claim_relation_cycle: expect.any(Number), missing_claim_target: 1, claim_scope_violation: 1 });
