@@ -92,7 +92,7 @@ export declare class LlmWikiService {
     private resolveKnowledgeReference;
     /**
      * Snapshot the typed notes whose state can invalidate this note. Outgoing
-     * derived_from/depends_on/version_of/refines edges are prerequisites;
+     * derived_from/depends_on/version_of/refines/tests edges are prerequisites;
      * incoming supports edges are evidence supplied by another knowledge note.
      * The snapshot is bounded frontmatter, not a second graph database.
      */
@@ -154,7 +154,7 @@ export declare class LlmWikiService {
         summaryHighlights?: unknown;
         expectedRevision: string;
     }): Promise<{
-        noteKind: "area" | "assumption" | "atomic" | "decision" | "fleeting" | "hypothesis" | "journal" | "knowledge" | "literature" | "moc" | "project" | "question" | "resource" | "task";
+        noteKind: "area" | "assumption" | "atomic" | "decision" | "experiment" | "fleeting" | "hypothesis" | "journal" | "knowledge" | "literature" | "moc" | "project" | "question" | "resource" | "task";
         distilledFrom: {
             path: string;
             revision: string;
@@ -498,6 +498,7 @@ export declare class LlmWikiService {
         targetPath?: string;
         noteKind?: string;
         lifecycle?: string;
+        epistemicStatus?: unknown;
         taskStatus?: unknown;
         project?: string;
         nextAction?: string;
@@ -722,6 +723,11 @@ export declare class LlmWikiService {
                     truncated: boolean;
                 };
                 hypotheses: {
+                    items: Record<string, unknown>[];
+                    total: number;
+                    truncated: boolean;
+                };
+                experiments: {
                     items: Record<string, unknown>[];
                     total: number;
                     truncated: boolean;
@@ -973,6 +979,11 @@ export declare class LlmWikiService {
                     items: Record<string, unknown>[];
                 };
                 hypotheses: {
+                    total: number;
+                    truncated: boolean;
+                    items: Record<string, unknown>[];
+                };
+                experiments: {
                     total: number;
                     truncated: boolean;
                     items: Record<string, unknown>[];
@@ -1284,7 +1295,7 @@ export declare class LlmWikiService {
         agentLoop: string[];
         availableContracts: {
             properties: string[];
-            relations: ("answers_questions" | "blocked_by" | "contradicts" | "depends_on" | "derived_from" | "implements" | "refines" | "related" | "same_as" | "supersedes" | "supports" | "version_of")[];
+            relations: ("answers_questions" | "blocked_by" | "contradicts" | "depends_on" | "derived_from" | "implements" | "refines" | "related" | "same_as" | "supersedes" | "supports" | "tests" | "version_of")[];
         };
     } | {
         purpose: string;
@@ -1545,6 +1556,11 @@ export declare class LlmWikiService {
             target: 'A question note answered by this note.';
             reciprocal: false;
         } | {
+            field: 'tests';
+            direction: 'directional';
+            target: 'A question, hypothesis, or assumption tested by this experiment.';
+            reciprocal: false;
+        } | {
             field: 'related';
             direction: 'mutual';
             target: 'A materially related note without a stronger claim.';
@@ -1619,6 +1635,11 @@ export declare class LlmWikiService {
             field: 'answers_questions';
             direction: 'directional';
             target: 'A question note answered by this note.';
+            reciprocal: false;
+        } | {
+            field: 'tests';
+            direction: 'directional';
+            target: 'A question, hypothesis, or assumption tested by this experiment.';
             reciprocal: false;
         } | {
             field: 'related';

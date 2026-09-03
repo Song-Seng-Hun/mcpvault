@@ -145,7 +145,7 @@ publication gate. Use `resurface_wiki_archives` to find archived or
 superseded notes that current visible notes still reference; do not restore,
 move, or delete them automatically.
 `get_wiki_knowledge_gaps` for a bounded active-recall queue of unresolved
-questions, hypotheses, assumptions, disputes, and negative knowledge; read the
+questions, hypotheses, experiments, assumptions, disputes, and negative knowledge; read the
 selected note and evidence before changing its epistemic state.
 Notes may additionally declare `recall_prompt` and
 `recall_interval_days` when a durable fact benefits from active recall. Attempt
@@ -197,14 +197,21 @@ retag automatically.
 Use `get_wiki_note_template` when a new note role needs a low-friction
 scaffold. Templates are optional starting points, not publication gates; keep
 the body in ordinary Markdown and put only small typed values in Properties.
-Supported roles include atomic, literature, question, hypothesis, decision,
+Supported roles include atomic, literature, question, hypothesis, experiment, assumption, decision,
 project, moc, and negative knowledge.
+For one reproducible run, use `note_kind: experiment` with `epistemic_status`
+set to `planned`, `running`, `completed`, `failed`, `inconclusive`, or
+`reproduced`. Link the exact question, hypothesis, or assumption with `tests`,
+and keep Protocol, Environment, Observations, Result, and Reproduction in the
+Markdown body. A reproduced run should link its predecessor through
+`version_of` or `derived_from`. Preserve failed runs; distill a separate
+negative-knowledge note only when the reusable lesson is broader than one run.
 For `related` and `same_as`, prefer a reverse edge on the target note when the
 relationship is genuinely mutual. Graph health reports missing reciprocity as
 an advisory signal; directional relations such as `supports`, `contradicts`,
 `depends_on`, and `supersedes` do not require a reverse field.
 Use graph health's `relationNavigation` reverse map when starting from a note
-and needing to know which visible notes support, answer, derive from, or
+and needing to know which visible notes support, answer, test, derive from, or
 supersede it. This is bounded derived navigation, not a permission grant.
 MOC hierarchy is explicit only when a child declares one resolvable
 `moc_parent`; ordinary body links may cross branches without becoming parent
@@ -277,7 +284,7 @@ Use `get_wiki_home` as the bounded scope launchpad before broad browsing. Its
 `workflowRoutes` map common intent to one existing endpoint; choose exactly one
 route and do not call every dashboard. Its listed notes carry current revisions
 for a revision-safe follow-up. For
-`question`, `hypothesis`, and `assumption` notes, set the matching
+`question`, `hypothesis`, `experiment`, and `assumption` notes, set the matching
 `epistemicStatus` and update it when evidence changes. For project/task work,
 prefer `desiredOutcome`, one concrete `nextAction`, `taskContext`, `dueAt`,
 `scheduledAt`, and `deferUntil`; keep execution state separate from knowledge
@@ -289,7 +296,7 @@ key points, or an outgoing `[[wikilink]]` to derived atomic/knowledge notes;
 this remains a quality hint, not a publication gate. Use
 `get_wiki_property_contract` before repairing managed Properties, and use
 `get_wiki_bases_view` with `view` set to `all`, `inbox`, `inbox_oldest`,
-`projects`, `project_next_actions`, `review`, `epistemic`, `open_questions`,
+`projects`, `project_next_actions`, `review`, `epistemic`, `experiments`, `open_questions`,
 `knowledge`, `unreviewed_evidence`, `negative_knowledge`, `deprecated_terms`,
 or `maintenance` when a local Obsidian view is useful. Specialized views may
 report `matchingNotesExact: false` because Bases evaluates their final

@@ -155,7 +155,7 @@ reserved Wiki, Community, scope, or `.mcpvault` folders:
 
 Classify notes with YAML properties such as `note_kind` (`fleeting`,
 `literature`, `atomic`, `moc`, `knowledge`, `question`, `hypothesis`,
-`assumption`, `decision`, `project`, `area`, `resource`, `journal`, or `task`) and `lifecycle` (`inbox`, `active`,
+`experiment`, `assumption`, `decision`, `project`, `area`, `resource`, `journal`, or `task`) and `lifecycle` (`inbox`, `active`,
 `review`, `evergreen`, `superseded`, or `archived`). Optional `moc`,
 `project`, and `review_at` properties make related notes and review work
 discoverable. `[[wikilinks]]` and relative Markdown links such as
@@ -183,6 +183,13 @@ not the tree traversal. Code-fenced examples never become reading-order links.
 Use `question` for an unresolved question, `hypothesis` for a testable
 proposition, and `assumption` for a working premise. Keep these visibly
 different from verified knowledge until evidence supports them.
+Use `experiment` for one reproducible run rather than the proposition itself.
+Set `epistemic_status` to `planned`, `running`, `completed`, `failed`,
+`inconclusive`, or `reproduced`; link the question, hypothesis, or assumption
+through `tests`. Keep Protocol, Environment, Observations, Result, and
+Reproduction in ordinary Markdown. A reproduced run should link its predecessor
+through `version_of` or `derived_from`; preserve failed runs and distill a
+separate negative-knowledge note only when the lesson generalizes.
 
 For durable notes, `aliases` provide alternate Obsidian names and optional
 `stable_id` provides an identity that can survive a title change. Keep the
@@ -199,8 +206,8 @@ only key points cannot certify an inherited old summary. For failed paths, use `
 `negative_type` such as `failure`, `rejected`, `counterexample`, or
 `non_reproducible`; preserve the note so later agents do not repeat it. Typed relationship
 properties (`supports`, `contradicts`, `supersedes`, `derived_from`,
-`depends_on`, `implements`, `blocked_by`, `related`, `same_as`, `version_of`,
-and `refines`) explain the meaning
+`depends_on`, `implements`, `blocked_by`, `answers_questions`, `tests`,
+`related`, `same_as`, `version_of`, and `refines`) explain the meaning
 of a `[[wikilink]]`; they do not grant access and their targets are checked by
 Wiki lint. Use `next_actions` and `waiting_for` for project/task notes, and
 `task_status` (`open`, `next_action`, `waiting`, `blocked`, `someday`,
@@ -327,9 +334,10 @@ should include the summary, selected passages, claims, and open questions;
 its `summaryFresh`/`summaryStale` fields make stale compression visible
 before it is used.
 
-Questions, hypotheses, and assumptions can carry `epistemic_status` so their
+Questions, hypotheses, experiments, and assumptions carry `epistemic_status` so their
 state is explicit: questions are open/answered/blocked/abandoned, hypotheses
-are proposed/supported/refuted/inconclusive, and assumptions are
+are proposed/supported/refuted/inconclusive, experiments are
+planned/running/completed/failed/inconclusive/reproduced, and assumptions are
 active/verified/invalidated/replaced. Project/task notes may add GTD-style
 `desired_outcome`, `next_action`, `task_context`, `due_at`, `scheduled_at`, and
 `defer_until`. `due_at` means a deadline; `scheduled_at` means when the work is
@@ -475,7 +483,7 @@ spelling/case variants, subject terms without a local authority note, and terms
 used by multiple notes. It suggests review only; it never renames or retags
 notes, because local distinctions may be intentional.
 Use `get_wiki_note_template` for an optional small scaffold when starting an
-atomic, literature, question, hypothesis, decision, project, MOC, or negative
+atomic, literature, question, hypothesis, experiment, assumption, decision, project, MOC, or negative
 knowledge note. It returns Markdown and suggested Properties without creating
 files or imposing a schema gate. For `related` and `same_as`, graph health
 also reports missing reverse edges as advisory `reciprocityMissing`; other
@@ -511,7 +519,7 @@ without creating a second provenance database.
 Optional faceted access points are available through `subject_terms`,
 `domain`, `methods`, and `audience`; they supplement, rather than replace,
 wikilinks, MOCs, and authority terms. `get_wiki_knowledge_gaps` provides a
-bounded active-recall queue for unresolved questions, hypotheses, assumptions,
+bounded active-recall queue for unresolved questions, hypotheses, experiments, assumptions,
 disputed claims, and negative knowledge. It is a prioritization view, not an
 automated truth engine.
 Durable notes may also declare `retrieval_cues` and `use_when` so an agent can
@@ -537,7 +545,7 @@ not an automatic MOC or a reason to overwrite an existing map.
 
 `get_wiki_bases_view` can generate standard local Obsidian Bases projections:
 `all`, `inbox`, `inbox_oldest`, `projects`, `project_next_actions`, `review`,
-`epistemic`, `open_questions`, `knowledge`, `unreviewed_evidence`,
+`epistemic`, `experiments`, `open_questions`, `knowledge`, `unreviewed_evidence`,
 `negative_knowledge`, `deprecated_terms`, and `maintenance`. `export_wiki_base`
 can persist one derived view under `Views/*.base` with an explicit file
 revision; it is limited to that presentation file and does not change note

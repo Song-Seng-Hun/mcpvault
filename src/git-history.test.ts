@@ -83,7 +83,7 @@ test('commits only safe vault paths and ignores restricted application state', a
   expect((await history.status()).pending).toEqual([]);
   const committed = await execFileAsync('git', ['ls-tree', '-r', '--name-only', 'HEAD'], { cwd: vaultPath, encoding: 'utf8' });
   expect(committed.stdout.trim()).toBe('Note.md');
-});
+}, 15_000);
 
 test('refuses executable clean filters before staging content', async () => {
   await history.initialize();

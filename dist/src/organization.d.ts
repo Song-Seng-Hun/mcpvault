@@ -5,7 +5,7 @@
  * These fields describe how an agent should work with a note inside an
  * already-authorized scope; they never grant access or replace Git history.
  */
-export declare const NOTE_KINDS: readonly ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'];
+export declare const NOTE_KINDS: readonly ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'experiment', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'];
 export declare const LIFECYCLES: readonly ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'];
 export declare const TASK_STATUSES: readonly ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'];
 /** Optional Kanban-style class of service for executable work. */
@@ -17,6 +17,8 @@ export declare const REVIEW_CHECKS: readonly ['evidence', 'links', 'summary', 'm
 export declare const INTERPRETATION_STATUSES: readonly ['unprocessed', 'interpreted', 'synthesized'];
 export declare const QUESTION_STATUSES: readonly ['open', 'answered', 'blocked', 'abandoned'];
 export declare const HYPOTHESIS_STATUSES: readonly ['proposed', 'supported', 'refuted', 'inconclusive'];
+/** State of a reproducible experiment record; separate from task workflow. */
+export declare const EXPERIMENT_STATUSES: readonly ['planned', 'running', 'completed', 'failed', 'inconclusive', 'reproduced'];
 export declare const ASSUMPTION_STATUSES: readonly ['active', 'verified', 'invalidated', 'replaced'];
 /** Optional controlled-vocabulary state for a note title/alias. */
 export declare const TERM_STATUSES: readonly ['preferred', 'deprecated', 'redirect'];
@@ -39,7 +41,7 @@ export declare const FOCUS_HORIZONS: readonly ['ground', 'project', 'area', 'goa
 /** GTD clarification outcomes. These are workflow metadata, not deletion commands. */
 export declare const CLARIFY_DISPOSITIONS: readonly ['knowledge', 'reference', 'project', 'someday', 'discard', 'delegate'];
 /** Typed relationships are navigation metadata, never an access grant. */
-export declare const RELATION_FIELDS: readonly ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'answers_questions', 'related', 'same_as', 'version_of', 'refines'];
+export declare const RELATION_FIELDS: readonly ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'answers_questions', 'tests', 'related', 'same_as', 'version_of', 'refines'];
 /** These relations have a meaning that is incomplete when the reverse edge is absent. */
 export declare const RECIPROCAL_RELATIONS: readonly ['related', 'same_as'];
 /** A compact ontology so agents can choose a relation by meaning, not by name. */
@@ -82,6 +84,11 @@ export declare const RELATION_SEMANTICS: readonly [{
     readonly field: 'answers_questions';
     readonly direction: 'directional';
     readonly target: 'A question note answered by this note.';
+    readonly reciprocal: false;
+}, {
+    readonly field: 'tests';
+    readonly direction: 'directional';
+    readonly target: 'A question, hypothesis, or assumption tested by this experiment.';
     readonly reciprocal: false;
 }, {
     readonly field: 'related';
@@ -145,6 +152,11 @@ export declare function getOrganizationRelationContract(): ({
     target: 'A question note answered by this note.';
     reciprocal: false;
 } | {
+    field: 'tests';
+    direction: 'directional';
+    target: 'A question, hypothesis, or assumption tested by this experiment.';
+    reciprocal: false;
+} | {
     field: 'related';
     direction: 'mutual';
     target: 'A materially related note without a stronger claim.';
@@ -165,7 +177,7 @@ export declare function getOrganizationRelationContract(): ({
     target: 'A note made more precise or useful by this note.';
     reciprocal: false;
 })[];
-export declare const ORGANIZATION_LIST_FIELDS: readonly ["aliases", "tags", "mocs", "key_points", "open_questions", "next_actions", "project_support", "subject_terms", "methods", "audience", "see_also", "supports", "contradicts", "supersedes", "derived_from", "depends_on", "implements", "blocked_by", "answers_questions", "related", "same_as", "version_of", "refines"];
+export declare const ORGANIZATION_LIST_FIELDS: readonly ["aliases", "tags", "mocs", "key_points", "open_questions", "next_actions", "project_support", "subject_terms", "methods", "audience", "see_also", "supports", "contradicts", "supersedes", "derived_from", "depends_on", "implements", "blocked_by", "answers_questions", "tests", "related", "same_as", "version_of", "refines"];
 /**
  * The small, stable subset of frontmatter that MCPVault owns.  Custom
  * Properties remain allowed; this contract only gives agents and lint a common

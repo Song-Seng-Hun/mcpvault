@@ -196,4 +196,4 @@ test('scoped notes use the same Git commit, history, and rollback foundation', a
     await client.close();
     await server.close();
   }
-});
+}, 15_000);

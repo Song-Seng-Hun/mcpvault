@@ -193,6 +193,7 @@ describe('knowledge organization focus and summary metadata', () => {
   test('publishes relation meaning without inventing inverse Properties', () => {
     expect(getOrganizationRelationContract()).toEqual(expect.arrayContaining([
       expect.objectContaining({ field: 'supports', direction: 'directional', reciprocal: false }),
+      expect.objectContaining({ field: 'tests', direction: 'directional', reciprocal: false }),
       expect.objectContaining({ field: 'related', direction: 'mutual', reciprocal: true }),
       expect.objectContaining({ field: 'same_as', direction: 'mutual', reciprocal: true }),
     ]));
@@ -232,7 +233,62 @@ describe('knowledge organization focus and summary metadata', () => {
       templateId: 'negative', noteKind: 'knowledge',
       properties: { knowledge_polarity: 'negative', negative_type: 'failure' },
     });
+    expect(organizationNoteTemplate('assumption')).toMatchObject({
+      templateId: 'assumption', noteKind: 'assumption',
+      properties: { epistemic_status: 'active' },
+    });
     expect(organizationNoteTemplate('unknown')).toMatchObject({ templateId: 'atomic', noteKind: 'atomic' });
+  });
+
+  test('models reproducible experiments between hypotheses and durable conclusions', () => {
+    expect(organizationNoteTemplate('experiment')).toMatchObject({
+      templateId: 'experiment',
+      noteKind: 'experiment',
+      properties: { epistemic_status: 'planned', tests: [], methods: [] },
+    });
+    expect(knowledgeOrganization({
+      status: 'draft',
+      noteKind: 'experiment',
+      epistemicStatus: 'reproduced',
+      relations: {
+        tests: ['[[Knowledge/Latency hypothesis]]'],
+        version_of: ['[[Experiments/Latency run 1]]'],
+      },
+    })).toMatchObject({
+      note_kind: 'experiment',
+      epistemic_status: 'reproduced',
+      tests: ['[[Knowledge/Latency hypothesis]]'],
+      version_of: ['[[Experiments/Latency run 1]]'],
+    });
+    const complete = organizationLintIssues('Experiments/Latency run 2.md', {
+      llm_wiki_type: 'knowledge',
+      note_kind: 'experiment',
+      lifecycle: 'review',
+      epistemic_status: 'reproduced',
+      tests: ['[[Knowledge/Latency hypothesis]]'],
+      version_of: ['[[Experiments/Latency run 1]]'],
+    }, '# Latency run 2\n\n## Protocol\nRepeat the same 100-request benchmark.\n\n## Environment\nNode 24 on Windows.\n\n## Observations\nMedian latency fell by 8 ms.\n\n## Result\nThe result reproduced.\n\n## Reproduction\nRun npm test with the benchmark fixture.\n');
+    expect(complete.map(issue => issue.code)).not.toEqual(expect.arrayContaining([
+      'epistemic_status_missing',
+      'experiment_target_missing',
+      'experiment_protocol_missing',
+      'experiment_result_missing',
+      'experiment_reproduction_missing',
+      'experiment_reproduction_lineage_missing',
+    ]));
+    const incomplete = organizationLintIssues('Experiments/Incomplete.md', {
+      llm_wiki_type: 'knowledge',
+      note_kind: 'experiment',
+      lifecycle: 'review',
+      epistemic_status: 'failed',
+    }, '# Incomplete\n\n## Protocol\n\n## Result\n');
+    expect(incomplete.map(issue => issue.code)).toEqual(expect.arrayContaining([
+      'experiment_target_missing',
+      'experiment_protocol_missing',
+      'experiment_result_missing',
+      'experiment_reproduction_missing',
+    ]));
+    expect(() => knowledgeOrganization({ status: 'draft', noteKind: 'experiment', epistemicStatus: 'supported' })).toThrow(/epistemicStatus for experiment/);
   });
 
   test('adds explainable retention metadata and warns about unsafe combinations', () => {

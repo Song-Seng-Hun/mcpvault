@@ -186,6 +186,82 @@ test('weekly review separates schedule from deadline and exposes reverse focus c
   }
 });
 
+test('experiment notes connect epistemic work, reproducible Markdown, graph navigation, and bounded review views', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'experiment-owner', modelId: 'codex', password: 'experiment-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
+      const result = await client.callTool({
+        name: 'call_endpoint',
+        arguments: {
+          endpointId: 'notes.write',
+          arguments: { path, content, frontmatter, expectedRevision: 'missing', accessToken },
+        },
+      });
+      expect(result.isError).toBeFalsy();
+    };
+
+    const capability = await callJson(client, 'search_capabilities', { query: 'reproducible experiment template', limit: 3 });
+    expect(capability.value.endpoints).toEqual(expect.arrayContaining([expect.objectContaining({ endpointId: 'wiki.note_template' })]));
+    const template = await callJson(client, 'call_endpoint', { endpointId: 'wiki.note_template', arguments: { noteKind: 'experiment', accessToken } });
+    expect(template.value).toMatchObject({
+      templateId: 'experiment',
+      noteKind: 'experiment',
+      properties: { epistemic_status: 'planned', tests: [] },
+    });
+    expect(template.value.markdown).toContain('## Protocol');
+    expect(template.value.markdown).toContain('## Reproduction');
+
+    await write('Knowledge/Latency hypothesis.md', '# Latency hypothesis\n\nBatching lowers median latency.\n', {
+      llm_wiki_type: 'knowledge', note_kind: 'hypothesis', lifecycle: 'review', epistemic_status: 'proposed',
+    });
+    await write('Knowledge/Unrelated concept.md', '# Unrelated concept\n', {
+      llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen',
+    });
+    await write('Experiments/Latency run 1.md', '# Latency run 1\n\n## Tested proposition\n[[Knowledge/Latency hypothesis]]\n\n## Protocol\nSend 100 requests with and without batching.\n\n## Environment\nNode 24 on Windows.\n\n## Observations\nPending.\n\n## Result\nPending.\n\n## Reproduction\nRun the benchmark fixture.\n', {
+      llm_wiki_type: 'knowledge', note_kind: 'experiment', lifecycle: 'review', epistemic_status: 'planned',
+      tests: ['[[Knowledge/Latency hypothesis]]'], methods: ['benchmark'],
+    });
+    await write('Experiments/Wrong target.md', '# Wrong target\n\n## Protocol\nRun once.\n\n## Observations\nThe run completed.\n\n## Result\nNo difference.\n', {
+      llm_wiki_type: 'knowledge', note_kind: 'experiment', lifecycle: 'review', epistemic_status: 'completed',
+      tests: ['[[Knowledge/Unrelated concept]]'],
+    });
+
+    const gaps = await callJson(client, 'call_endpoint', { endpointId: 'wiki.knowledge_gaps', arguments: { limit: 10, maxChars: 6000, accessToken } });
+    expect(gaps.value.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Experiments/Latency run 1.md', noteKind: 'experiment', epistemicStatus: 'planned', reasons: ['experiment_planned'] }),
+    ]));
+    const dashboard = await callJson(client, 'call_endpoint', { endpointId: 'wiki.review_dashboard', arguments: { limit: 10, maxChars: 16000, accessToken } });
+    expect(dashboard.value.sections.epistemic.experiments).toMatchObject({
+      total: 1,
+      items: [expect.objectContaining({ path: 'Experiments/Latency run 1.md', epistemicStatus: 'planned' })],
+    });
+    const bases = await callJson(client, 'call_endpoint', { endpointId: 'wiki.bases_view', arguments: { view: 'experiments', limit: 20, accessToken } });
+    expect(bases.value).toMatchObject({ view: 'experiments', suggestedPath: 'Views/LLM Wiki Experiments.base', matchingNotes: 2, matchingNotesExact: true });
+    expect(bases.value.content).toContain('note.note_kind == "experiment"');
+
+    const graph = await callJson(client, 'call_endpoint', { endpointId: 'wiki.graph_health', arguments: { limit: 20, maxChars: 12000, accessToken } });
+    expect(graph.value.typedRelations.kindMismatches.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Experiments/Wrong target.md', relation: 'tests', targetKind: 'knowledge' }),
+    ]));
+    expect(graph.value.relationNavigation.targets).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path: 'Knowledge/Latency hypothesis.md',
+        incoming: expect.arrayContaining([expect.objectContaining({ relation: 'tests', paths: ['Experiments/Latency run 1.md'] })]),
+      }),
+    ]));
+    const quality = await callJson(client, 'call_endpoint', { endpointId: 'wiki.quality_check', arguments: { path: 'Experiments/Latency run 1.md', maxChars: 8000, accessToken } });
+    expect(quality.value.checks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'tested_proposition', passed: true }),
+      expect.objectContaining({ id: 'reproducible_protocol', passed: true }),
+    ]));
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('knowledge organization helpers stay bounded and revision-safe', async () => {
   const { server, client } = await setup();
   try {

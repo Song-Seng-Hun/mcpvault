@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
  * These fields describe how an agent should work with a note inside an
  * already-authorized scope; they never grant access or replace Git history.
  */
-export const NOTE_KINDS = ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'];
+export const NOTE_KINDS = ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'experiment', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'];
 export const LIFECYCLES = ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'];
 export const TASK_STATUSES = ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'];
 /** Optional Kanban-style class of service for executable work. */
@@ -18,6 +18,8 @@ export const REVIEW_CHECKS = ['evidence', 'links', 'summary', 'moc', 'counterexa
 export const INTERPRETATION_STATUSES = ['unprocessed', 'interpreted', 'synthesized'];
 export const QUESTION_STATUSES = ['open', 'answered', 'blocked', 'abandoned'];
 export const HYPOTHESIS_STATUSES = ['proposed', 'supported', 'refuted', 'inconclusive'];
+/** State of a reproducible experiment record; separate from task workflow. */
+export const EXPERIMENT_STATUSES = ['planned', 'running', 'completed', 'failed', 'inconclusive', 'reproduced'];
 export const ASSUMPTION_STATUSES = ['active', 'verified', 'invalidated', 'replaced'];
 /** Optional controlled-vocabulary state for a note title/alias. */
 export const TERM_STATUSES = ['preferred', 'deprecated', 'redirect'];
@@ -42,7 +44,7 @@ export const CLARIFY_DISPOSITIONS = ['knowledge', 'reference', 'project', 'somed
 /** Titles are an agent-facing API: generic names are hard to rediscover. */
 const GENERIC_NOTE_TITLE = /^(?:untitled|new note|new document|note|knowledge|draft|todo|copy)(?:\s*[-_ ]?\d+)?$/i;
 /** Typed relationships are navigation metadata, never an access grant. */
-export const RELATION_FIELDS = ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'answers_questions', 'related', 'same_as', 'version_of', 'refines'];
+export const RELATION_FIELDS = ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'answers_questions', 'tests', 'related', 'same_as', 'version_of', 'refines'];
 /** These relations have a meaning that is incomplete when the reverse edge is absent. */
 export const RECIPROCAL_RELATIONS = ['related', 'same_as'];
 /** A compact ontology so agents can choose a relation by meaning, not by name. */
@@ -55,6 +57,7 @@ export const RELATION_SEMANTICS = [
     { field: 'implements', direction: 'directional', target: 'The design, decision, or requirement implemented here.', reciprocal: false },
     { field: 'blocked_by', direction: 'directional', target: 'The note or dependency currently blocking this note.', reciprocal: false },
     { field: 'answers_questions', direction: 'directional', target: 'A question note answered by this note.', reciprocal: false },
+    { field: 'tests', direction: 'directional', target: 'A question, hypothesis, or assumption tested by this experiment.', reciprocal: false },
     { field: 'related', direction: 'mutual', target: 'A materially related note without a stronger claim.', reciprocal: true },
     { field: 'same_as', direction: 'mutual', target: 'The same concept represented by another note or alias.', reciprocal: true },
     { field: 'version_of', direction: 'directional', target: 'The conceptual note this version belongs to.', reciprocal: false },
@@ -160,7 +163,7 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'review_count', type: 'number', description: 'Number of completed reviews' },
     { name: 'review_reopen_count', type: 'number', description: 'Number of reviews reopened' },
     { name: 'interpretation_status', type: 'text', description: 'Source-to-knowledge processing stage', allowed: INTERPRETATION_STATUSES },
-    { name: 'epistemic_status', type: 'text', description: 'Question, hypothesis, or assumption state' },
+    { name: 'epistemic_status', type: 'text', description: 'Question, hypothesis, experiment, or assumption state' },
     { name: 'moc_questions', type: 'list', description: 'Questions a MOC should help answer', appliesTo: ['moc'] },
     { name: 'moc_parent', type: 'text', description: 'Parent MOC link', appliesTo: ['moc'] },
     { name: 'focus_horizon', type: 'text', description: 'GTD horizon from ground to purpose', allowed: FOCUS_HORIZONS },
@@ -197,13 +200,23 @@ export function organizationNoteTemplate(value = 'atomic') {
         },
         question: {
             purpose: 'An explicit unresolved question that can later receive a grounded answer.',
-            properties: { note_kind: 'question', lifecycle: 'review', epistemic_status: 'open', answers_questions: [] },
+            properties: { note_kind: 'question', lifecycle: 'review', epistemic_status: 'open' },
             markdown: '# {{title}}\n\n## Question\n\n## Why it is open\n\n## Evidence to seek\n',
         },
         hypothesis: {
             purpose: 'A testable proposition kept separate from established knowledge.',
             properties: { note_kind: 'hypothesis', lifecycle: 'review', epistemic_status: 'proposed', supports: [], contradicts: [] },
             markdown: '# {{title}}\n\n## Hypothesis\n\n## Prediction\n\n## Test\n\n## Result\n',
+        },
+        experiment: {
+            purpose: 'A reproducible run that tests an explicit question, hypothesis, or assumption and preserves its observations.',
+            properties: { note_kind: 'experiment', lifecycle: 'review', epistemic_status: 'planned', tests: [], methods: [] },
+            markdown: '# {{title}}\n\n## Tested proposition\n- [[ ]]\n\n## Protocol\n\n## Environment\n\n## Observations\n\n## Result\n\n## Reproduction\n',
+        },
+        assumption: {
+            purpose: 'A working premise kept visible until it is verified, invalidated, or replaced.',
+            properties: { note_kind: 'assumption', lifecycle: 'review', epistemic_status: 'active', related: [] },
+            markdown: '# {{title}}\n\n## Assumption\n\n## Why it is needed\n\n## How to verify\n\n## Risk if false\n',
         },
         decision: {
             purpose: 'A durable decision with alternatives, consequences, and evidence.',
@@ -246,6 +259,7 @@ const reviewCheckSet = new Set(REVIEW_CHECKS);
 const interpretationStatusSet = new Set(INTERPRETATION_STATUSES);
 const questionStatusSet = new Set(QUESTION_STATUSES);
 const hypothesisStatusSet = new Set(HYPOTHESIS_STATUSES);
+const experimentStatusSet = new Set(EXPERIMENT_STATUSES);
 const assumptionStatusSet = new Set(ASSUMPTION_STATUSES);
 const termStatusSet = new Set(TERM_STATUSES);
 const knowledgeRoleSet = new Set(KNOWLEDGE_ROLES);
@@ -370,11 +384,11 @@ export function normalizeEpistemicStatus(value, noteKind, fallback) {
     const supplied = value === undefined || value === null || String(value).trim() === '' ? fallback : String(value).trim().toLowerCase();
     if (!supplied)
         return undefined;
-    const allowed = noteKind === 'question' ? questionStatusSet : noteKind === 'hypothesis' ? hypothesisStatusSet : noteKind === 'assumption' ? assumptionStatusSet : undefined;
+    const allowed = noteKind === 'question' ? questionStatusSet : noteKind === 'hypothesis' ? hypothesisStatusSet : noteKind === 'experiment' ? experimentStatusSet : noteKind === 'assumption' ? assumptionStatusSet : undefined;
     if (!allowed)
-        throw new Error('epistemicStatus is only valid for noteKind question, hypothesis, or assumption');
+        throw new Error('epistemicStatus is only valid for noteKind question, hypothesis, experiment, or assumption');
     if (!allowed.has(supplied)) {
-        const choices = noteKind === 'question' ? QUESTION_STATUSES : noteKind === 'hypothesis' ? HYPOTHESIS_STATUSES : ASSUMPTION_STATUSES;
+        const choices = noteKind === 'question' ? QUESTION_STATUSES : noteKind === 'hypothesis' ? HYPOTHESIS_STATUSES : noteKind === 'experiment' ? EXPERIMENT_STATUSES : ASSUMPTION_STATUSES;
         throw new Error(`epistemicStatus for ${noteKind} must be one of: ${choices.join(', ')}`);
     }
     return supplied;
@@ -858,6 +872,28 @@ export function knowledgeOrganization(input) {
         ...(relationEvidence && { relation_evidence: relationEvidence }),
     };
 }
+function markdownSectionHasContent(content, names) {
+    const wanted = new Set(names.map(name => name.trim().toLowerCase()));
+    const lines = String(content || '').replace(/\r\n?/g, '\n').split('\n');
+    let selectedDepth = 0;
+    for (const line of lines) {
+        const heading = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line.trim());
+        if (heading) {
+            const depth = heading[1].length;
+            const name = heading[2].trim().toLowerCase();
+            if (wanted.has(name)) {
+                selectedDepth = depth;
+                continue;
+            }
+            if (selectedDepth && depth <= selectedDepth)
+                selectedDepth = 0;
+            continue;
+        }
+        if (selectedDepth && line.trim() && !/^<!--.*-->$/.test(line.trim()) && !/^-\s*\[\[\s*\]\]\s*$/.test(line.trim()))
+            return true;
+    }
+    return false;
+}
 export function organizationLintIssues(path, frontmatter, content, nowMs = Date.now()) {
     const issues = [];
     const type = String(frontmatter.llm_wiki_type || '').trim().toLowerCase();
@@ -1217,18 +1253,38 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
     if (polarity === 'negative' && !negativeType)
         issues.push({ code: 'negative_polarity_without_type', detail: 'Negative knowledge should state whether it is a failure, rejection, counterexample, or non-reproducible result.' });
     const epistemicStatus = frontmatter.epistemic_status === undefined ? undefined : String(frontmatter.epistemic_status).trim().toLowerCase();
-    if (kind === 'question' || kind === 'hypothesis' || kind === 'assumption') {
+    if (kind === 'question' || kind === 'hypothesis' || kind === 'experiment' || kind === 'assumption') {
         if (epistemicStatus === undefined)
             issues.push({ code: 'epistemic_status_missing', detail: `${kind} notes should declare epistemic_status so their uncertainty state is visible.` });
         try {
-            normalizeEpistemicStatus(epistemicStatus, kind, kind === 'question' ? 'open' : kind === 'hypothesis' ? 'proposed' : 'active');
+            normalizeEpistemicStatus(epistemicStatus, kind, kind === 'question' ? 'open' : kind === 'hypothesis' ? 'proposed' : kind === 'experiment' ? 'planned' : 'active');
         }
         catch (error) {
             issues.push({ code: 'invalid_epistemic_status', detail: error instanceof Error ? error.message : 'Invalid epistemic status.' });
         }
     }
     else if (epistemicStatus !== undefined) {
-        issues.push({ code: 'epistemic_status_wrong_kind', detail: 'epistemic_status is only valid for question, hypothesis, or assumption notes.' });
+        issues.push({ code: 'epistemic_status_wrong_kind', detail: 'epistemic_status is only valid for question, hypothesis, experiment, or assumption notes.' });
+    }
+    if (kind === 'experiment') {
+        const tested = Array.isArray(frontmatter.tests) ? frontmatter.tests.filter((value) => typeof value === 'string' && value.trim()) : [];
+        if (tested.length === 0)
+            issues.push({ code: 'experiment_target_missing', detail: 'An experiment should use tests with an Obsidian link to the question, hypothesis, or assumption it evaluates.' });
+        if (!markdownSectionHasContent(content, ['protocol', 'method', 'procedure', '프로토콜', '방법', '절차'])) {
+            issues.push({ code: 'experiment_protocol_missing', detail: 'An experiment should record a reproducible protocol or method in the Markdown body.' });
+        }
+        if (['completed', 'failed', 'inconclusive', 'reproduced'].includes(epistemicStatus || '') && !markdownSectionHasContent(content, ['observations', 'observation', 'result', 'results', '관찰', '결과'])) {
+            issues.push({ code: 'experiment_result_missing', detail: 'A completed, failed, inconclusive, or reproduced experiment should preserve observations or results.' });
+        }
+        if (['failed', 'reproduced'].includes(epistemicStatus || '') && !markdownSectionHasContent(content, ['reproduction', 'reproduce', '재현', '재현 방법'])) {
+            issues.push({ code: 'experiment_reproduction_missing', detail: 'A failed or reproduced experiment should record how another agent can reproduce the run.' });
+        }
+        if (epistemicStatus === 'reproduced') {
+            const lineage = [...(Array.isArray(frontmatter.version_of) ? frontmatter.version_of : []), ...(Array.isArray(frontmatter.derived_from) ? frontmatter.derived_from : [])]
+                .filter((value) => typeof value === 'string' && value.trim());
+            if (lineage.length === 0)
+                issues.push({ code: 'experiment_reproduction_lineage_missing', detail: 'A reproduced experiment should link the prior run through version_of or derived_from.' });
+        }
     }
     if (polarity === 'negative') {
         if (!frontmatter.negative_reusable_lesson)
