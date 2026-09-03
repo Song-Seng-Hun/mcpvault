@@ -462,6 +462,9 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
       '[Relative note](../Relative.md)',
       '[[Knowledge/Claim Dependent]]',
       '[[Knowledge/Claim Prerequisite]]',
+      '[[Knowledge/Redundant Base]]',
+      '[[Knowledge/Redundant Middle]]',
+      '[[Knowledge/Redundant Top]]',
       '[[Knowledge/Cycle A]]',
       '[[Knowledge/Cycle B]]',
       '[[Knowledge/Cycle Follower]]',
@@ -480,6 +483,9 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
       note_kind: 'atomic', lifecycle: 'evergreen',
       claims: [{ id: 'claim-base', text: 'The foundational claim comes first.' }],
     });
+    await write('Knowledge/Redundant Base.md', '# Redundant Base\n', { note_kind: 'atomic', lifecycle: 'evergreen' });
+    await write('Knowledge/Redundant Middle.md', '# Redundant Middle\n', { note_kind: 'atomic', lifecycle: 'evergreen', depends_on: ['[[Knowledge/Redundant Base]]'] });
+    await write('Knowledge/Redundant Top.md', '# Redundant Top\n', { note_kind: 'atomic', lifecycle: 'evergreen', depends_on: ['[[Knowledge/Redundant Base]]', '[[Knowledge/Redundant Middle]]'] });
     await write('Knowledge/External Primer.md', '# External Primer\n', { note_kind: 'atomic', lifecycle: 'evergreen' });
     await write('Knowledge/Cycle A.md', '# Cycle A\n', { note_kind: 'atomic', lifecycle: 'evergreen', depends_on: ['[[Knowledge/Cycle B]]'] });
     await write('Knowledge/Cycle B.md', '# Cycle B\n', { note_kind: 'atomic', lifecycle: 'evergreen', depends_on: ['[[Knowledge/Cycle A]]'] });
@@ -487,7 +493,7 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
 
     const discovery = await callJson(client, 'search_capabilities', { query: 'MOC prerequisite learning path', limit: 3 });
     expect(discovery.value.endpoints).toEqual(expect.arrayContaining([expect.objectContaining({ endpointId: 'wiki.learning_path' })]));
-    const path = await callJson(client, 'get_wiki_learning_path', { path: 'Knowledge/MOCs/Curriculum.md', maxDepth: 2, limit: 20, maxChars: 12000, accessToken });
+    const path = await callJson(client, 'get_wiki_learning_path', { path: 'Knowledge/MOCs/Curriculum.md', maxDepth: 2, limit: 20, maxChars: 16000, accessToken });
     expect(path.value.mode).toBe('dependency_aware_moc_learning_path');
     expect(path.value.authoredOrder.map((item: any) => item.path)).toEqual([
       'Knowledge/Advanced.md',
@@ -498,6 +504,9 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
       'Knowledge/Relative.md',
       'Knowledge/Claim Dependent.md',
       'Knowledge/Claim Prerequisite.md',
+      'Knowledge/Redundant Base.md',
+      'Knowledge/Redundant Middle.md',
+      'Knowledge/Redundant Top.md',
       'Knowledge/Cycle A.md',
       'Knowledge/Cycle B.md',
       'Knowledge/Cycle Follower.md',
@@ -511,10 +520,11 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
       'Knowledge/Nested Topic.md',
     ]);
     expect(path.value).toMatchObject({ orderChanged: true, authoredOrderConsistent: false, prerequisiteCoverageComplete: false });
-    expect(path.value.summary).toMatchObject({ claimDependencyEdges: 1, noteDependencyEdges: expect.any(Number), recommendedStages: 2, parallelStages: 2, stagedEntries: 8 });
+    expect(path.value.summary).toMatchObject({ claimDependencyEdges: 1, noteDependencyEdges: expect.any(Number), recommendedStages: 3, parallelStages: 2, stagedEntries: 11, redundantPrerequisiteEdges: 1, unlockPoints: expect.any(Number) });
     expect(path.value.recommendedStages.map((stage: any) => ({ stage: stage.stage, paths: stage.entries.map((item: any) => item.path) }))).toEqual([
-      { stage: 1, paths: ['Knowledge/Basics.md', 'Knowledge/MOCs/Nested.md', 'Knowledge/Independent.md', 'Knowledge/Relative.md', 'Knowledge/Claim Prerequisite.md'] },
-      { stage: 2, paths: ['Knowledge/Advanced.md', 'Knowledge/Nested Topic.md', 'Knowledge/Claim Dependent.md'] },
+      { stage: 1, paths: ['Knowledge/Basics.md', 'Knowledge/MOCs/Nested.md', 'Knowledge/Independent.md', 'Knowledge/Relative.md', 'Knowledge/Claim Prerequisite.md', 'Knowledge/Redundant Base.md'] },
+      { stage: 2, paths: ['Knowledge/Advanced.md', 'Knowledge/Nested Topic.md', 'Knowledge/Claim Dependent.md', 'Knowledge/Redundant Middle.md'] },
+      { stage: 3, paths: ['Knowledge/Redundant Top.md'] },
     ]);
     expect(path.value.recommendedStages.flatMap((stage: any) => stage.entries).every((item: any) => /^[a-f0-9]{64}$/.test(item.revision))).toBe(true);
     expect(path.value.recommendedStages[0].entries.find((item: any) => item.path === 'Knowledge/Basics.md')).toMatchObject({ internalPrerequisiteCount: 0, externalPrerequisiteCount: 1 });
@@ -524,6 +534,19 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
       expect.objectContaining({ prerequisite: 'Knowledge/Claim Prerequisite.md', dependent: 'Knowledge/Claim Dependent.md', dependencyType: 'claim', sourceClaimId: 'claim-dependent', targetClaimId: 'claim-base', authoredOrderState: 'late' }),
     ]));
     expect(path.value.prerequisiteEdges.every((item: any) => /^[a-f0-9]{64}$/.test(item.prerequisiteRevision) && /^[a-f0-9]{64}$/.test(item.dependentRevision))).toBe(true);
+    expect(path.value.redundantPrerequisiteEdges).toEqual([
+      expect.objectContaining({
+        prerequisite: 'Knowledge/Redundant Base.md',
+        dependent: 'Knowledge/Redundant Top.md',
+        directDependencyTypes: ['note'],
+        alternatePath: [
+          expect.objectContaining({ path: 'Knowledge/Redundant Base.md', revision: expect.any(String) }),
+          expect.objectContaining({ path: 'Knowledge/Redundant Middle.md', revision: expect.any(String) }),
+          expect.objectContaining({ path: 'Knowledge/Redundant Top.md', revision: expect.any(String) }),
+        ],
+      }),
+    ]);
+    expect(path.value.unlockPoints[0]).toMatchObject({ path: 'Knowledge/Redundant Base.md', stage: 1, directDependents: 2, downstreamDependents: 2, revision: expect.any(String) });
     expect(path.value.recommendedOrder.indexOf('Knowledge/Claim Prerequisite.md')).toBeLessThan(path.value.recommendedOrder.indexOf('Knowledge/Claim Dependent.md'));
     expect(path.value.orderIssues).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: 'prerequisite_after_dependent', path: 'Knowledge/Advanced.md', prerequisite: 'Knowledge/Basics.md' }),
@@ -553,17 +576,18 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
       expect.objectContaining({ path: 'Knowledge/External Primer.md', requiredBy: 'Knowledge/Basics.md', revision: expect.any(String) }),
     ]));
     const graph = await callJson(client, 'get_wiki_graph_health', { limit: 20, maxChars: 12000, accessToken });
-    expect(graph.value.mocSequenceHealth).toMatchObject({ needsAttention: 1, latePrerequisites: 3, externalPrerequisites: 2, unresolved: 2, cycleOrBlockedEntries: 3, dependencyCycles: 1, cyclicEntries: 2, blockedByCycleEntries: 1, claimDependencyEdges: 1 });
+    expect(graph.value.mocSequenceHealth).toMatchObject({ needsAttention: 1, latePrerequisites: 3, externalPrerequisites: 2, unresolved: 2, cycleOrBlockedEntries: 3, dependencyCycles: 1, cyclicEntries: 2, blockedByCycleEntries: 1, redundantPrerequisiteEdges: 1, claimDependencyEdges: 1 });
     expect(graph.value.mocSequenceHealth.items[0]).toMatchObject({
       path: 'Knowledge/MOCs/Curriculum.md',
       revision: expect.any(String),
       state: 'cyclic_or_cycle_blocked',
       dependencyCycles: expect.objectContaining({ total: 1, entries: 2 }),
       blockedByCycles: expect.objectContaining({ total: 1, paths: ['Knowledge/Cycle Follower.md'] }),
+      redundantPrerequisites: expect.objectContaining({ total: 1, items: [expect.objectContaining({ prerequisite: 'Knowledge/Redundant Base.md', dependent: 'Knowledge/Redundant Top.md', alternatePath: ['Knowledge/Redundant Base.md', 'Knowledge/Redundant Middle.md', 'Knowledge/Redundant Top.md'] })] }),
       nextAction: { endpointId: 'wiki.learning_path' },
     });
     const coverage = graph.value.mocCoverage.mocs.find((item: any) => item.path === 'Knowledge/MOCs/Curriculum.md');
-    expect(coverage).toMatchObject({ directKnowledge: 9, indirectKnowledge: 1, linkedKnowledge: 10, revision: expect.any(String) });
+    expect(coverage).toMatchObject({ directKnowledge: 12, indirectKnowledge: 1, linkedKnowledge: 13, revision: expect.any(String) });
     const organization = await callJson(client, 'get_wiki_organization_health', { limit: 20, maxChars: 12000, accessToken });
     expect(organization.value.mocSequenceHealth.needsAttention).toBe(1);
     expect(organization.value.recommendations).toEqual(expect.arrayContaining([expect.stringContaining('wiki.learning_path')]));
@@ -584,6 +608,10 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
       then: { endpointId: 'notes.patch', arguments: { path: 'Knowledge/MOCs/Curriculum.md', dryRun: true, expectedRevision: expect.any(String) } },
       guard: { oneNotePerPlan: true, expectedRevisionRequired: true, autoFix: false },
     });
+    const medium = await callJson(client, 'get_wiki_learning_path', { path: 'Knowledge/MOCs/Curriculum.md', maxDepth: 2, limit: 20, maxChars: 12000, accessToken, prettyPrint: true });
+    expect(String((medium.result.content as any)[0].text).length).toBeLessThanOrEqual(12000);
+    expect(medium.value.authoredOrder.map((item: any) => item.path)).toEqual(path.value.authoredOrder.map((item: any) => item.path));
+    expect(medium.value.authoredOrder.every((item: any) => /^[a-f0-9]{64}$/.test(item.revision))).toBe(true);
     const tiny = await callJson(client, 'get_wiki_learning_path', { path: 'Knowledge/MOCs/Curriculum.md', maxDepth: 2, limit: 20, maxChars: 1024, accessToken, prettyPrint: true });
     expect(String((tiny.result.content as any)[0].text).length).toBeLessThanOrEqual(1024);
     expect(tiny.value.root).toMatchObject({ path: 'Knowledge/MOCs/Curriculum.md', revision: expect.any(String) });

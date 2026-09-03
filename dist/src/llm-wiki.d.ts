@@ -811,6 +811,7 @@ export declare class LlmWikiService {
                     dependencyCycles: number;
                     cyclicEntries: number;
                     blockedByCycleEntries: number;
+                    redundantPrerequisiteEdges: number;
                     claimDependencyEdges: number;
                     items: {
                         [x: string]: unknown;
@@ -1139,6 +1140,7 @@ export declare class LlmWikiService {
                     dependencyCycles: number;
                     cyclicEntries: number;
                     blockedByCycleEntries: number;
+                    redundantPrerequisiteEdges: number;
                     claimDependencyEdges: number;
                     items: {
                         [x: string]: unknown;
@@ -2669,6 +2671,7 @@ export declare class LlmWikiService {
             dependencyCycles: number;
             cyclicEntries: number;
             blockedByCycleEntries: number;
+            redundantPrerequisiteEdges: number;
             claimDependencyEdges: number;
             items: {
                 [x: string]: unknown;
@@ -3152,6 +3155,8 @@ export declare class LlmWikiService {
             recommendedStages: number;
             parallelStages: number;
             stagedEntries: number;
+            redundantPrerequisiteEdges: number;
+            unlockPoints: number;
             latePrerequisites: number;
             externalPrerequisites: number;
             orderIssues: number;

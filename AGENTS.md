@@ -257,6 +257,10 @@ Use `recommendedStages` when several agents can read independently: every item
 in one stage has the same satisfied internal prerequisite depth. Check each
 entry's external prerequisite count and the global coverage flag before calling
 the stage ready; the stage is navigation, not assignment or evidence.
+Use `unlockPoints` only to choose a high-leverage reading start. Review
+`redundantPrerequisiteEdges` when a direct prerequisite also has a distinct
+multi-hop path; keep it when it carries deliberate pedagogy or semantics, and
+never remove it automatically.
 Graph and organization health expose actionable late, unresolved, ambiguous,
 and cyclic MOC sequence defects; the exception board routes them back to
 `get_wiki_learning_path`. An external-only prerequisite is informational, not

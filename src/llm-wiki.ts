@@ -346,6 +346,45 @@ function classifyDependencyResidual(nodes: string[], adjacency: Map<string, Set<
   return { cycles, cycleNodes, blocked: nodes.filter(node => !cycleNodes.has(node)) };
 }
 
+/** Find direct prerequisite pairs for which a distinct path of two or more
+ * edges already connects the same notes. This is only a graph-hygiene signal:
+ * a direct edge may still carry deliberate pedagogical emphasis. */
+function findRedundantDependencyPairs(nodes: string[], adjacency: Map<string, Set<string>>, excluded = new Set<string>()): Array<{ prerequisite: string; dependent: string; alternatePath: string[] }> {
+  const allowed = new Set(nodes.filter(node => !excluded.has(node)));
+  const results: Array<{ prerequisite: string; dependent: string; alternatePath: string[] }> = [];
+  for (const prerequisite of nodes) {
+    if (!allowed.has(prerequisite)) continue;
+    for (const dependent of adjacency.get(prerequisite) || []) {
+      if (!allowed.has(dependent) || prerequisite === dependent) continue;
+      const queue: string[] = [];
+      const parent = new Map<string, string>();
+      for (const next of adjacency.get(prerequisite) || []) {
+        if (next === dependent || !allowed.has(next) || parent.has(next)) continue;
+        parent.set(next, prerequisite);
+        queue.push(next);
+      }
+      for (let index = 0; index < queue.length && !parent.has(dependent); index += 1) {
+        const current = queue[index]!;
+        for (const next of adjacency.get(current) || []) {
+          if (!allowed.has(next) || next === prerequisite || parent.has(next)) continue;
+          parent.set(next, current);
+          queue.push(next);
+          if (next === dependent) break;
+        }
+      }
+      if (!parent.has(dependent)) continue;
+      const alternatePath = [dependent];
+      let cursor = dependent;
+      while (cursor !== prerequisite) {
+        cursor = parent.get(cursor)!;
+        alternatePath.unshift(cursor);
+      }
+      if (alternatePath.length >= 3) results.push({ prerequisite, dependent, alternatePath });
+    }
+  }
+  return results;
+}
+
 function blockAnchorLines(content: string, blockId: string): number[] {
   return blockAnchorLineIndex(content).get(blockId.toLocaleLowerCase()) || [];
 }
@@ -893,6 +932,10 @@ one cycle edge first and recompute rather than editing every blocked note.
 Use \`recommendedStages\` to group internally acyclic notes at the same
 prerequisite depth for parallel reading. External or unresolved prerequisites
 remain caveats; a stage is navigation, not assignment or evidence.
+\`unlockPoints\` is only a high-leverage reading hint. A
+\`redundantPrerequisiteEdges\` item means a distinct multi-hop route also exists;
+keep the direct edge when it carries deliberate pedagogy or semantics, and
+never remove it automatically.
 Graph and organization health expose actionable late, unresolved, ambiguous,
 and cyclic sequence defects, while the exception board routes an affected MOC
 back to the detailed learning path. An external-only prerequisite remains an
@@ -6373,6 +6416,7 @@ export class LlmWikiService {
     let mocSequenceCycleEntriesTotal = 0;
     let mocSequenceCycleComponentsTotal = 0;
     let mocSequenceBlockedByCycleTotal = 0;
+    let mocSequenceRedundantTotal = 0;
     let mocSequenceClaimEdgesTotal = 0;
     for (const moc of mocDrafts) {
       const orderedKeys: string[] = [];
@@ -6485,6 +6529,7 @@ export class LlmWikiService {
       const cyclePaths = [...dependencyResidual.cycleNodes].map(key => this.access.toPublicPath(graphByPath.get(key)?.path || key));
       const blockedByCyclePaths = dependencyResidual.blocked.map(key => this.access.toPublicPath(graphByPath.get(key)?.path || key));
       const cycleOrBlocked = [...cyclePaths, ...blockedByCyclePaths];
+      const redundantPrerequisites = findRedundantDependencyPairs(orderedKeys, adjacency, new Set(residualKeys));
       const incompleteCount = unresolvedEntries.length + ambiguousEntries.length + unresolvedPrerequisites.length + ambiguousPrerequisites.length;
       mocSequenceLateTotal += latePrerequisites.length;
       mocSequenceExternalTotal += externalPrerequisites.length;
@@ -6494,20 +6539,21 @@ export class LlmWikiService {
       mocSequenceCycleEntriesTotal += dependencyResidual.cycleNodes.size;
       mocSequenceCycleComponentsTotal += dependencyResidual.cycles.length;
       mocSequenceBlockedByCycleTotal += dependencyResidual.blocked.length;
+      mocSequenceRedundantTotal += redundantPrerequisites.length;
       mocSequenceClaimEdgesTotal += edges.filter(edge => edge.dependencyType === 'claim').length;
       // A thematic MOC may legitimately rely on a prerequisite outside its
       // direct shelf. Keep that count visible, but do not turn an external-only
       // dependency into maintenance debt. Late, unresolved, ambiguous, and
       // cyclic signals are the actionable sequence defects.
-      if (latePrerequisites.length === 0 && incompleteCount === 0 && cycleOrBlocked.length === 0) continue;
+      if (latePrerequisites.length === 0 && incompleteCount === 0 && cycleOrBlocked.length === 0 && redundantPrerequisites.length === 0) continue;
       const publicMocPath = this.access.toPublicPath(moc.path);
-      const severityScore = dependencyResidual.cycleNodes.size * 100 + dependencyResidual.blocked.length * 25 + latePrerequisites.length * 20 + incompleteCount * 10 + externalPrerequisites.length;
+      const severityScore = dependencyResidual.cycleNodes.size * 100 + dependencyResidual.blocked.length * 25 + latePrerequisites.length * 20 + incompleteCount * 10 + redundantPrerequisites.length * 2 + externalPrerequisites.length;
       mocSequenceItems.push({
         severityScore,
         path: publicMocPath,
         title: moc.title,
         ...(moc.revision && { revision: moc.revision }),
-        state: cycleOrBlocked.length > 0 ? 'cyclic_or_cycle_blocked' : latePrerequisites.length > 0 ? 'order_conflict' : 'incomplete_prerequisite_path',
+        state: cycleOrBlocked.length > 0 ? 'cyclic_or_cycle_blocked' : latePrerequisites.length > 0 ? 'order_conflict' : incompleteCount > 0 ? 'incomplete_prerequisite_path' : 'redundant_prerequisites',
         authoredEntries: orderedKeys.length,
         dependencyEdges: { total: edges.length, claim: edges.filter(edge => edge.dependencyType === 'claim').length, note: edges.filter(edge => edge.dependencyType === 'note').length },
         latePrerequisites: { total: latePrerequisites.length, items: latePrerequisites.slice(0, 4), truncated: latePrerequisites.length > 4 },
@@ -6521,6 +6567,16 @@ export class LlmWikiService {
           truncated: dependencyResidual.cycles.length > 3,
         },
         blockedByCycles: { total: blockedByCyclePaths.length, paths: blockedByCyclePaths.slice(0, 6), truncated: blockedByCyclePaths.length > 6 },
+        redundantPrerequisites: {
+          total: redundantPrerequisites.length,
+          items: redundantPrerequisites.slice(0, 4).map(pair => ({
+            prerequisite: this.access.toPublicPath(graphByPath.get(pair.prerequisite)?.path || pair.prerequisite),
+            dependent: this.access.toPublicPath(graphByPath.get(pair.dependent)?.path || pair.dependent),
+            alternatePath: pair.alternatePath.map(key => this.access.toPublicPath(graphByPath.get(key)?.path || key)),
+          })),
+          truncated: redundantPrerequisites.length > 4,
+          note: 'Advisory only: a direct edge may intentionally preserve emphasis or semantics.',
+        },
         cycleOrBlocked: { total: cycleOrBlocked.length, paths: cycleOrBlocked.slice(0, 6), truncated: cycleOrBlocked.length > 6, note: 'Compatibility aggregate; repair dependencyCycles first and do not edit blockedByCycles merely for being downstream.' },
         nextAction: { endpointId: endpointIdForTool('get_wiki_learning_path'), arguments: { path: publicMocPath, maxDepth: 2, limit: Math.min(30, boundedLimit), maxChars: 7000 } },
       });
@@ -6538,10 +6594,11 @@ export class LlmWikiService {
       dependencyCycles: mocSequenceCycleComponentsTotal,
       cyclicEntries: mocSequenceCycleEntriesTotal,
       blockedByCycleEntries: mocSequenceBlockedByCycleTotal,
+      redundantPrerequisiteEdges: mocSequenceRedundantTotal,
       claimDependencyEdges: mocSequenceClaimEdgesTotal,
       items: mocSequenceItems.slice(0, boundedLimit).map(({ severityScore: _severityScore, ...item }) => item),
       truncated: mocSequenceItems.length > boundedLimit,
-      note: 'This fast health pass checks each MOC direct body order using both note-level depends_on and valid cross-note dependsOnClaims edges. Actual dependencyCycles are separated from valid downstream notes blockedByCycles. Repair cycle edges first. External-only prerequisites are informational, not maintenance debt. Call wiki.learning_path for bounded nested expansion and a stable recommended order; neither view rewrites Markdown.',
+      note: 'This fast health pass checks each MOC direct body order using both note-level depends_on and valid cross-note dependsOnClaims edges. Actual dependencyCycles are separated from valid downstream notes blockedByCycles. Repair cycle edges first. Redundant prerequisite edges are low-severity review candidates, never automatic deletions. External-only prerequisites are informational, not maintenance debt. Call wiki.learning_path for bounded nested expansion and a stable recommended order; neither view rewrites Markdown.',
     };
     const includeMocSequenceHealth = mocSequenceHealth.needsAttention > 0
       || mocSequenceHealth.externalPrerequisites > 0
@@ -7007,6 +7064,7 @@ export class LlmWikiService {
           dependencyCycles: Number(mocSequenceHealth.dependencyCycles || 0),
           cyclicEntries: Number(mocSequenceHealth.cyclicEntries || 0),
           blockedByCycleEntries: Number(mocSequenceHealth.blockedByCycleEntries || 0),
+          redundantPrerequisiteEdges: Number(mocSequenceHealth.redundantPrerequisiteEdges || 0),
           claimDependencyEdges: Number(mocSequenceHealth.claimDependencyEdges || 0),
           items: Array.isArray(mocSequenceHealth.items) ? mocSequenceHealth.items.slice(0, 2) : [],
           truncated: true,
@@ -8302,6 +8360,50 @@ export class LlmWikiService {
         guidance: 'Do not edit this note merely because it is blocked; repair the upstream cycle and recompute the path.',
       };
     });
+    const redundantPairs = findRedundantDependencyPairs(
+      entries.map(entry => normalizePath(entry.internalPath).toLowerCase()),
+      adjacency,
+      new Set(cycleBlockedKeys),
+    );
+    const redundantPrerequisiteEdges = redundantPairs.map(pair => {
+      const prerequisite = entryByKey.get(pair.prerequisite)!;
+      const dependent = entryByKey.get(pair.dependent)!;
+      const directDependencyTypes = [...new Set(edges
+        .filter(edge => edge.prerequisite === pair.prerequisite && edge.dependent === pair.dependent)
+        .map(edge => edge.dependencyType))];
+      return {
+        prerequisite: prerequisite.path,
+        prerequisiteRevision: prerequisite.revision,
+        dependent: dependent.path,
+        dependentRevision: dependent.revision,
+        directDependencyTypes,
+        alternatePath: pair.alternatePath.map(key => {
+          const entry = entryByKey.get(key)!;
+          return { path: entry.path, revision: entry.revision };
+        }),
+        guidance: 'Review whether the direct edge adds useful pedagogy or semantics. Remove it only through an ordinary revision-checked edit after inspecting the alternate path.',
+      };
+    });
+    const acyclicKeySet = new Set(acyclicRecommendedKeys);
+    const unlockPoints = acyclicRecommendedKeys.map(key => {
+      const reachable = new Set<string>();
+      const queue = [...(adjacency.get(key) || [])].filter(target => acyclicKeySet.has(target));
+      for (let index = 0; index < queue.length; index += 1) {
+        const target = queue[index]!;
+        if (reachable.has(target)) continue;
+        reachable.add(target);
+        for (const downstream of adjacency.get(target) || []) if (acyclicKeySet.has(downstream) && !reachable.has(downstream)) queue.push(downstream);
+      }
+      const entry = entryByKey.get(key)!;
+      return {
+        path: entry.path,
+        revision: entry.revision,
+        stage: stageByKey.get(key),
+        directDependents: [...(adjacency.get(key) || [])].filter(target => acyclicKeySet.has(target)).length,
+        downstreamDependents: reachable.size,
+      };
+    }).filter(item => item.downstreamDependents > 0)
+      .sort((left, right) => right.downstreamDependents - left.downstreamDependents || right.directDependents - left.directDependents || left.path.localeCompare(right.path));
     const latePrerequisites = orderIssues.filter(issue => issue.type === 'prerequisite_after_dependent').length;
     const incompletePrerequisites = orderIssues.filter(issue => [
       'unresolved_or_inaccessible_prerequisite', 'ambiguous_prerequisite', 'invalid_claim_prerequisite',
@@ -8320,6 +8422,8 @@ export class LlmWikiService {
       authoredOrderConsistent: latePrerequisites === 0 && cycleBlockedKeys.length === 0,
       prerequisiteCoverageComplete: incompletePrerequisites === 0,
       prerequisiteEdges: prerequisiteEdges.slice(0, boundedLimit),
+      redundantPrerequisiteEdges: redundantPrerequisiteEdges.slice(0, boundedLimit),
+      unlockPoints: unlockPoints.slice(0, Math.min(12, boundedLimit)),
       dependencyCycles: dependencyCycles.slice(0, Math.min(8, boundedLimit)),
       cycleBlockedDependents: cycleBlockedDependents.slice(0, boundedLimit),
       externalPrerequisites: externalPrerequisites.slice(0, boundedLimit),
@@ -8338,22 +8442,26 @@ export class LlmWikiService {
         recommendedStages: recommendedStages.length,
         parallelStages: recommendedStages.filter(stage => stage.entries.length > 1).length,
         stagedEntries: acyclicRecommendedKeys.length,
+        redundantPrerequisiteEdges: redundantPrerequisiteEdges.length,
+        unlockPoints: unlockPoints.length,
         latePrerequisites,
         externalPrerequisites: externalPrerequisites.length,
         orderIssues: orderIssues.length,
         navigationIssues: navigationIssues.length,
         omittedEntries,
       },
-      guidance: 'Keep the MOC body order when it expresses pedagogy or narrative. recommendedStages groups only the internally acyclic entries whose prerequisites can be satisfied together; entries in one stage may be read in parallel, but external or incomplete prerequisites still require inspection. If the recommended order differs, inspect the cited relation and both current revisions, then edit Markdown deliberately. Repair an edge inside dependencyCycles before touching cycleBlockedDependents.',
-      truncated: truncated || recommendedStages.length > Math.min(12, boundedLimit) || prerequisiteEdges.length > boundedLimit || dependencyCycles.length > Math.min(8, boundedLimit) || cycleBlockedDependents.length > boundedLimit || externalPrerequisites.length > boundedLimit || orderIssues.length > boundedLimit || navigationIssues.length > boundedLimit,
+      guidance: 'Keep the MOC body order when it expresses pedagogy or narrative. recommendedStages groups only internally acyclic entries at the same prerequisite depth; entries in one stage may be read in parallel, but external or incomplete prerequisites still require inspection. unlockPoints identifies high-leverage reading starts, not importance or truth. redundantPrerequisiteEdges are review candidates, not automatic deletions. Repair an edge inside dependencyCycles before touching cycleBlockedDependents.',
+      truncated: truncated || recommendedStages.length > Math.min(12, boundedLimit) || prerequisiteEdges.length > boundedLimit || redundantPrerequisiteEdges.length > boundedLimit || unlockPoints.length > Math.min(12, boundedLimit) || dependencyCycles.length > Math.min(8, boundedLimit) || cycleBlockedDependents.length > boundedLimit || externalPrerequisites.length > boundedLimit || orderIssues.length > boundedLimit || navigationIssues.length > boundedLimit,
     };
     if (JSON.stringify(result).length <= boundedChars) return result;
     const compact = {
       ...result,
-      authoredOrder: authoredOrder.slice(0, Math.min(10, authoredOrder.length)),
-      recommendedOrder: recommendedOrder.slice(0, 10),
+      authoredOrder: authoredOrder.slice(0, Math.min(20, authoredOrder.length)),
+      recommendedOrder: recommendedOrder.slice(0, 20),
       recommendedStages: result.recommendedStages.slice(0, 6).map(stage => ({ ...stage, entries: stage.entries.slice(0, 6) })),
       prerequisiteEdges: result.prerequisiteEdges.slice(0, 6),
+      redundantPrerequisiteEdges: result.redundantPrerequisiteEdges.slice(0, 3),
+      unlockPoints: result.unlockPoints.slice(0, 5),
       dependencyCycles: result.dependencyCycles.slice(0, 2).map(cycle => ({ ...cycle, notes: cycle.notes.slice(0, 6), edges: cycle.edges.slice(0, 6), truncated: cycle.truncated || cycle.notes.length > 6 || cycle.edges.length > 6 })),
       cycleBlockedDependents: result.cycleBlockedDependents.slice(0, 4),
       externalPrerequisites: result.externalPrerequisites.slice(0, 5),
@@ -8361,20 +8469,24 @@ export class LlmWikiService {
       navigationIssues: result.navigationIssues.slice(0, 4),
       truncated: true,
     };
-    while (JSON.stringify(compact).length > boundedChars && compact.authoredOrder.length > 1) {
-      compact.authoredOrder.pop();
-      compact.recommendedOrder.pop();
-    }
+    // Preserve the authored path and its revision guards as long as possible.
+    // Derived convenience views can be requested again with a larger budget.
+    while (JSON.stringify(compact).length > boundedChars && compact.unlockPoints.length) compact.unlockPoints.pop();
+    while (JSON.stringify(compact).length > boundedChars && compact.redundantPrerequisiteEdges.length) compact.redundantPrerequisiteEdges.pop();
+    while (JSON.stringify(compact).length > boundedChars && compact.prerequisiteEdges.length) compact.prerequisiteEdges.pop();
     while (JSON.stringify(compact).length > boundedChars && compact.recommendedStages.length > 1) compact.recommendedStages.pop();
     while (JSON.stringify(compact).length > boundedChars && compact.recommendedStages.length > 0 && compact.recommendedStages[0]!.entries.length > 1) compact.recommendedStages[0]!.entries.pop();
     while (JSON.stringify(compact).length > boundedChars && compact.cycleBlockedDependents.length) compact.cycleBlockedDependents.pop();
     while (JSON.stringify(compact).length > boundedChars && compact.dependencyCycles.length > 1) compact.dependencyCycles.pop();
     while (JSON.stringify(compact).length > boundedChars && compact.dependencyCycles.length > 0 && compact.dependencyCycles[0]!.edges.length > 1) compact.dependencyCycles[0]!.edges.pop();
     while (JSON.stringify(compact).length > boundedChars && compact.dependencyCycles.length > 0 && compact.dependencyCycles[0]!.notes.length > 1) compact.dependencyCycles[0]!.notes.pop();
-    while (JSON.stringify(compact).length > boundedChars && compact.prerequisiteEdges.length) compact.prerequisiteEdges.pop();
-    while (JSON.stringify(compact).length > boundedChars && compact.orderIssues.length) compact.orderIssues.pop();
-    while (JSON.stringify(compact).length > boundedChars && compact.externalPrerequisites.length) compact.externalPrerequisites.pop();
     while (JSON.stringify(compact).length > boundedChars && compact.navigationIssues.length) compact.navigationIssues.pop();
+    while (JSON.stringify(compact).length > boundedChars && compact.externalPrerequisites.length) compact.externalPrerequisites.pop();
+    while (JSON.stringify(compact).length > boundedChars && compact.orderIssues.length) compact.orderIssues.pop();
+    while (JSON.stringify(compact).length > boundedChars && compact.authoredOrder.length > 1) {
+      compact.authoredOrder.pop();
+      compact.recommendedOrder.pop();
+    }
     if (JSON.stringify(compact).length <= boundedChars) return compact;
     const minimal = {
       mode: result.mode,
@@ -8521,11 +8633,19 @@ export class LlmWikiService {
     const rawMocSequences = health.mocSequenceHealth && Array.isArray(health.mocSequenceHealth.items) ? health.mocSequenceHealth.items as Array<Record<string, any>> : [];
     const mocSequenceIssues = rawMocSequences.map(item => {
       const state = String(item.state || 'incomplete_prerequisite_path');
-      const code = state === 'cyclic_or_cycle_blocked' ? 'moc_dependency_cycle' : state === 'order_conflict' ? 'moc_prerequisite_order_conflict' : 'moc_prerequisite_path_incomplete';
+      const code = state === 'cyclic_or_cycle_blocked' ? 'moc_dependency_cycle'
+        : state === 'order_conflict' ? 'moc_prerequisite_order_conflict'
+          : state === 'redundant_prerequisites' ? 'moc_redundant_prerequisite'
+            : 'moc_prerequisite_path_incomplete';
+      const repairGuidance = state === 'cyclic_or_cycle_blocked'
+        ? 'Repair a cycle edge before considering downstream edits.'
+        : state === 'redundant_prerequisites'
+          ? 'Inspect the alternate path and retain the direct edge when it carries deliberate pedagogy or semantics.'
+          : 'Inspect the detailed learning path and current revisions before editing.';
       return {
         path: item.path,
         code,
-        detail: `MOC sequence needs review: ${Number(item.latePrerequisites?.total || 0)} late, ${Number(item.externalPrerequisites?.total || 0)} external, ${Number(item.unresolved?.total || 0)} unresolved, ${Number(item.ambiguous?.total || 0)} ambiguous, ${Number(item.dependencyCycles?.total || 0)} actual cycles (${Number(item.dependencyCycles?.entries || 0)} entries), ${Number(item.blockedByCycles?.total || 0)} downstream entries blocked by cycles, ${Number(item.dependencyEdges?.claim || 0)} claim-level prerequisite edges. Repair a cycle edge before considering downstream edits.`,
+        detail: `MOC sequence needs review: ${Number(item.latePrerequisites?.total || 0)} late, ${Number(item.externalPrerequisites?.total || 0)} external, ${Number(item.unresolved?.total || 0)} unresolved, ${Number(item.ambiguous?.total || 0)} ambiguous, ${Number(item.dependencyCycles?.total || 0)} actual cycles (${Number(item.dependencyCycles?.entries || 0)} entries), ${Number(item.blockedByCycles?.total || 0)} downstream entries blocked by cycles, ${Number(item.redundantPrerequisites?.total || 0)} redundant-edge candidates, ${Number(item.dependencyEdges?.claim || 0)} claim-level prerequisite edges. ${repairGuidance}`,
         category: 'navigation',
         severity: 'warning',
         state: 'open',

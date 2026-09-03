@@ -195,6 +195,12 @@ notes in one stage can be read or investigated in parallel without pretending
 that the stable linear tie-break order is pedagogically mandatory. External or
 unresolved prerequisites remain explicit caveats rather than silently making a
 stage "ready".
+`unlockPoints` ranks only how many in-path notes a prerequisite unlocks; it is a
+reading-efficiency hint, not importance or truth. `redundantPrerequisiteEdges`
+shows a direct edge that also has a distinct multi-hop route, including the
+alternate revision-stamped path. Keep the direct edge when it conveys useful
+pedagogy or semantics; otherwise remove it only with a deliberate
+revision-checked edit.
 Every readable entry includes its current revision. The projection never
 rewrites the MOC, and a recommendation is navigation—not proof or permission
 to discard a deliberate narrative order.
@@ -529,6 +535,10 @@ can inspect the exact relation without reconstructing it from the whole MOC.
 `recommendedStages` is the bounded parallel-reading projection of the same
 graph. It excludes actual cycle members and their blocked dependents until the
 cycle is repaired, and never assigns work or mutates Markdown.
+The fast graph/organization health pass also counts redundant prerequisite
+candidates so an otherwise valid but increasingly noisy curriculum remains
+maintainable. The detailed learning path is authoritative for inspection; no
+health report deletes an edge.
 The same direct-order check is reused during graph health rather than scanning
 the Vault again. It also resolves relative Markdown links from the containing
 MOC, validates the referenced claim ID, and labels each ordering reason as a
