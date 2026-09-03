@@ -34,6 +34,9 @@ export const RETENTION_EVENTS = ['manual', 'created', 'last_modified', 'review_c
 export const FOCUS_HORIZONS = ['ground', 'project', 'area', 'goal', 'vision', 'purpose'] as const;
 /** GTD clarification outcomes. These are workflow metadata, not deletion commands. */
 export const CLARIFY_DISPOSITIONS = ['knowledge', 'reference', 'project', 'someday', 'discard', 'delegate'] as const;
+
+/** Titles are an agent-facing API: generic names are hard to rediscover. */
+const GENERIC_NOTE_TITLE = /^(?:untitled|new note|new document|note|knowledge|draft|todo|copy)(?:\s*[-_ ]?\d+)?$/i;
 /** Typed relationships are navigation metadata, never an access grant. */
 export const RELATION_FIELDS = ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'answers_questions', 'related', 'same_as', 'version_of', 'refines'] as const;
 /** These relations have a meaning that is incomplete when the reverse edge is absent. */
@@ -57,7 +60,7 @@ export const RELATION_SEMANTICS = [
 export function getOrganizationRelationContract() {
   return RELATION_SEMANTICS.map(entry => ({ ...entry }));
 }
-export const ORGANIZATION_LIST_FIELDS = ['aliases', 'key_points', 'open_questions', 'next_actions', 'project_support', 'subject_terms', 'methods', 'audience', 'see_also', ...RELATION_FIELDS] as const;
+export const ORGANIZATION_LIST_FIELDS = ['aliases', 'mocs', 'key_points', 'open_questions', 'next_actions', 'project_support', 'subject_terms', 'methods', 'audience', 'see_also', ...RELATION_FIELDS] as const;
 
 /**
  * The small, stable subset of frontmatter that MCPVault owns.  Custom
@@ -76,6 +79,7 @@ export const ORGANIZATION_PROPERTY_CONTRACT: readonly OrganizationPropertyContra
   { name: 'note_kind', type: 'text', description: 'What the note is for', allowed: NOTE_KINDS },
   { name: 'lifecycle', type: 'text', description: 'What should happen to the knowledge next', allowed: LIFECYCLES },
   { name: 'primary_moc', type: 'text', description: 'Preferred Obsidian MOC entry point for this note; navigation metadata only' },
+  { name: 'mocs', type: 'list', description: 'Additional Obsidian MOC entry points for multi-context discovery; navigation metadata only' },
   { name: 'aliases', type: 'list', description: 'Alternate Obsidian names' },
   { name: 'stable_id', type: 'text', description: 'Durable identity for a note; not an access boundary' },
   { name: 'term_status', type: 'text', description: 'Optional authority-vocabulary state for this note title', allowed: TERM_STATUSES },
@@ -498,6 +502,7 @@ export interface KnowledgeOrganizationInput {
   noteKind?: unknown;
   lifecycle?: unknown;
   primaryMoc?: unknown;
+  mocs?: unknown;
   moc?: unknown;
   project?: unknown;
   reviewAt?: unknown;
@@ -594,6 +599,7 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
   const kind = normalizeNoteKind(input.noteKind, existingKind || 'knowledge') || 'knowledge';
   const lifecycle = normalizeLifecycle(input.lifecycle, existingLifecycle || lifecycleForKnowledgeStatus(input.status)) || lifecycleForKnowledgeStatus(input.status);
   const primaryMoc = input.primaryMoc === undefined ? optionalText(existing.primary_moc, 'primaryMoc', 500) : optionalText(input.primaryMoc, 'primaryMoc', 500);
+  const mocs = input.mocs === undefined ? normalizedList(existing.mocs, 'mocs', 12, 500) : normalizedList(input.mocs, 'mocs', 12, 500);
   const moc = input.moc === undefined ? optionalText(existing.moc, 'moc', 500) : optionalText(input.moc, 'moc', 500);
   const project = input.project === undefined ? optionalText(existing.project, 'project', 500) : optionalText(input.project, 'project', 500);
   const reviewAt = input.reviewAt === undefined ? normalizeReviewAt(existing.review_at) : normalizeReviewAt(input.reviewAt);
@@ -707,6 +713,7 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
     note_kind: kind,
     lifecycle,
     ...(primaryMoc && { primary_moc: primaryMoc }),
+    ...(mocs && { mocs }),
     ...(moc && { moc }),
     ...(project && { project }),
     ...(reviewAt && { review_at: reviewAt }),
@@ -808,6 +815,12 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
   const lifecycleValue = frontmatter.lifecycle;
   const kind = kindValue === undefined ? undefined : String(kindValue).trim().toLowerCase();
   const lifecycle = lifecycleValue === undefined ? undefined : String(lifecycleValue).trim().toLowerCase();
+  if (type === 'knowledge' && ['atomic', 'knowledge', 'decision'].includes(kind || '')) {
+    const title = String(frontmatter.title || path.split(/[\\/]/).at(-1) || '').replace(/\.(?:md|markdown|txt)$/i, '').trim();
+    if (GENERIC_NOTE_TITLE.test(title)) {
+      issues.push({ code: 'generic_concept_title', detail: 'Durable knowledge should use a concept-oriented title that states the idea, not a generic name such as Note or Draft.' });
+    }
+  }
 
   const shape = (value: unknown): OrganizationPropertyContractEntry['type'] => {
     if (Array.isArray(value)) return 'list';

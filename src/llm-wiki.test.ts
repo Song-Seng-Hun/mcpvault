@@ -221,13 +221,13 @@ test('knowledge organization contract preserves aliases, projections, and typed 
     } });
     const published = await callJson(client, 'publish_knowledge', {
       path: 'Knowledge/Contract.md', content: '# Contract\n\nA compact, linked knowledge note.\n', evidencePaths: [source.value.path],
-      aliases: ['Knowledge contract', 'Metadata contract'], summary: 'Properties describe the note and typed links describe why it is related.',
+      aliases: ['Knowledge contract', 'Metadata contract'], mocs: ['[[MOCs/Research]]', '[[MOCs/Operations]]'], summary: 'Properties describe the note and typed links describe why it is related.',
       keyPoints: ['Keep the full Markdown body.', 'Use typed links for meaningful relations.'], openQuestions: ['Which relation needs review next?'],
-      relations: { related: ['[[Knowledge/Existing]]'] }, stableId: 'knowledge-contract', lifecycle: 'evergreen', taskStatus: 'next_action', noteKind: 'question', epistemicStatus: 'open', reviewPolicy: 'periodic', evidence: [{ path: source.value.path, heading: 'Evidence', blockId: 'contract-evidence', revision: source.value.revision }], author: 'codex', expectedRevision: 'missing', accessToken,
+      relations: { related: ['[[Knowledge/Existing]]'] }, claims: [{ id: 'contract-claim', text: 'Typed links explain why notes are related.', status: 'supported', confidence: 'high', evidence_paths: [source.value.path], evidence: [{ path: source.value.path, heading: 'Evidence', blockId: 'contract-evidence', revision: source.value.revision }] }], stableId: 'knowledge-contract', lifecycle: 'evergreen', taskStatus: 'next_action', noteKind: 'question', epistemicStatus: 'open', reviewPolicy: 'periodic', evidence: [{ path: source.value.path, heading: 'Evidence', blockId: 'contract-evidence', revision: source.value.revision }], author: 'codex', expectedRevision: 'missing', accessToken,
     });
     expect(published.value.success).toBe(true);
     const projection = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Contract.md', view: 'summary', accessToken });
-    expect(projection.value).toMatchObject({ aliases: ['Knowledge contract', 'Metadata contract'], stableId: 'knowledge-contract', noteKind: 'question', taskStatus: 'next_action', reviewPolicy: 'periodic', summaryFresh: true, relations: { related: ['[[Knowledge/Existing]]'] } });
+    expect(projection.value).toMatchObject({ aliases: ['Knowledge contract', 'Metadata contract'], stableId: 'knowledge-contract', noteKind: 'question', taskStatus: 'next_action', reviewPolicy: 'periodic', summaryFresh: true, navigation: { mocs: ['[[MOCs/Research]]', '[[MOCs/Operations]]'] }, claims: [{ id: 'contract-claim', text: 'Typed links explain why notes are related.', status: 'supported', confidence: 'high', evidencePaths: [source.value.path], evidence: [{ path: source.value.path, heading: 'Evidence', blockId: 'contract-evidence', revision: source.value.revision }] }], relations: { related: ['[[Knowledge/Existing]]'] } });
     const progressive = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Contract.md', view: 'progressive', accessToken });
     expect(progressive.value.content).toContain('Evidence:');
     expect(progressive.value.content).toContain(source.value.path);

@@ -32,6 +32,19 @@ describe('knowledge organization focus and summary metadata', () => {
     });
   });
 
+  test('supports bounded multi-MOC membership without replacing the primary map', () => {
+    expect(knowledgeOrganization({
+      status: 'draft', noteKind: 'atomic', primaryMoc: '[[MOCs/Main]]',
+      mocs: ['[[MOCs/Research]]', '[[MOCs/Agents]]', '[[MOCs/Research]]'],
+    })).toMatchObject({
+      primary_moc: '[[MOCs/Main]]',
+      mocs: ['[[MOCs/Research]]', '[[MOCs/Agents]]'],
+    });
+    expect(organizationLintIssues('Knowledge/BadMocs.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', mocs: 'not-a-list',
+    }, '# Bad MOCs\n').map(issue => issue.code)).toContain('invalid_mocs');
+  });
+
   test('keeps project planning support separate from executable actions', () => {
     expect(knowledgeOrganization({
       status: 'draft',
@@ -62,6 +75,12 @@ describe('knowledge organization focus and summary metadata', () => {
       review_count: 4, review_reopen_count: 3,
     }, '# Literature\n');
     expect(issues.map(issue => issue.code)).toEqual(expect.arrayContaining(['literature_interpretation_pending']));
+  });
+
+  test('warns when a durable note has a generic rediscovery-hostile title', () => {
+    expect(organizationLintIssues('Knowledge/Draft.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen',
+    }, '# Draft\n').map(issue => issue.code)).toContain('generic_concept_title');
   });
 
   test('warns when MCP-managed nested metadata is awkward for core Properties editing', () => {

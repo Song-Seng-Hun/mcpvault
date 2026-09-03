@@ -162,6 +162,7 @@ export declare class LlmWikiService {
         lifecycle?: string;
         primaryMoc?: string;
         moc?: string;
+        mocs?: unknown;
         project?: string;
         reviewAt?: string;
         reviewIntervalDays?: unknown;
@@ -1444,6 +1445,7 @@ export declare class LlmWikiService {
         lifecycle?: string;
         primaryMoc?: string;
         moc?: string;
+        mocs?: unknown;
         project?: string;
         reviewAt?: string;
         reviewIntervalDays?: unknown;
@@ -1561,6 +1563,7 @@ export declare class LlmWikiService {
         navigation?: {
             primaryMoc?: string;
             moc?: string;
+            mocs?: any[];
             project?: string;
             termStatus?: string;
             termScopeNote?: string;
@@ -1594,6 +1597,14 @@ export declare class LlmWikiService {
         openQuestions?: any[];
         summaryLayer?: any;
         summaryHighlights?: any[];
+        claims?: {
+            id: any;
+            text: string;
+            status: any;
+            confidence?: any;
+            evidencePaths?: any;
+            evidence?: any;
+        }[];
         nextActions?: any[];
         nextAction?: string;
         waitingFor?: string;

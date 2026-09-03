@@ -159,7 +159,7 @@ export declare function getOrganizationRelationContract(): ({
     target: 'A note made more precise or useful by this note.';
     reciprocal: false;
 })[];
-export declare const ORGANIZATION_LIST_FIELDS: readonly ["aliases", "key_points", "open_questions", "next_actions", "project_support", "subject_terms", "methods", "audience", "see_also", "supports", "contradicts", "supersedes", "derived_from", "depends_on", "implements", "blocked_by", "answers_questions", "related", "same_as", "version_of", "refines"];
+export declare const ORGANIZATION_LIST_FIELDS: readonly ["aliases", "mocs", "key_points", "open_questions", "next_actions", "project_support", "subject_terms", "methods", "audience", "see_also", "supports", "contradicts", "supersedes", "derived_from", "depends_on", "implements", "blocked_by", "answers_questions", "related", "same_as", "version_of", "refines"];
 /**
  * The small, stable subset of frontmatter that MCPVault owns.  Custom
  * Properties remain allowed; this contract only gives agents and lint a common
@@ -216,6 +216,7 @@ export interface KnowledgeOrganizationInput {
     noteKind?: unknown;
     lifecycle?: unknown;
     primaryMoc?: unknown;
+    mocs?: unknown;
     moc?: unknown;
     project?: unknown;
     reviewAt?: unknown;

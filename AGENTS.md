@@ -192,8 +192,9 @@ MOC hierarchy is explicit only when a child declares one resolvable
 edges. Repair missing, ambiguous, or cyclic parent signals before treating a
 MOC tree as an authoritative navigation order.
 Use `primary_moc` as the single preferred launch point for a durable note;
-keep `moc` for intentional membership in several maps. This is navigation
-metadata, not an access rule. `read_wiki_projection` returns it with compact
+use the bounded `mocs` list for intentional membership in several maps, while
+keeping one canonical note instead of copying it. This is navigation metadata,
+not an access rule. `read_wiki_projection` returns it with compact
 term/domain navigation. For precise work use `view=section` with either a
 heading in `section` or an Obsidian `blockId`; the response includes only a
 small bounded line context before and after the target and returns the current

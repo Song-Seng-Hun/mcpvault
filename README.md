@@ -390,7 +390,11 @@ typed relations remain directional. Retention metadata
 (`retention_policy`, `retention_at`, `retention_reason`, `replaced_by`) makes
 archive and replacement decisions explainable without enabling automatic
 deletion.
-Use `primary_moc` as the preferred Obsidian launch point for a note. The
+Use `primary_moc` as the preferred Obsidian launch point for a note. When a
+note legitimately belongs to more than one context, use the bounded `mocs`
+list for additional MOC links while keeping one canonical note; this avoids
+duplicate copies and lets each MOC provide a useful entry point. `mocs` is
+navigation metadata only, not a visibility boundary. The
 bounded `read_wiki_projection` response returns this navigation card together
 with freshness, provenance, and typed relations. For precise edits, request
 `view: section` with a heading or `blockId` and small `contextBefore`/

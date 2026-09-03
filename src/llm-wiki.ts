@@ -731,6 +731,7 @@ export class LlmWikiService {
     lifecycle?: string;
     primaryMoc?: string;
     moc?: string;
+    mocs?: unknown;
     project?: string;
     reviewAt?: string;
     reviewIntervalDays?: unknown;
@@ -896,6 +897,7 @@ export class LlmWikiService {
           ...(params.lifecycle !== undefined && { lifecycle: params.lifecycle }),
           ...(params.primaryMoc !== undefined && { primaryMoc: params.primaryMoc }),
           ...(params.moc !== undefined && { moc: params.moc }),
+          ...(params.mocs !== undefined && { mocs: params.mocs }),
           ...(params.project !== undefined && { project: params.project }),
           ...(params.reviewAt !== undefined && { reviewAt: params.reviewAt }),
           ...(params.reviewIntervalDays !== undefined && { reviewIntervalDays: params.reviewIntervalDays }),
@@ -1067,6 +1069,7 @@ export class LlmWikiService {
           const values = Array.isArray(value) ? value : value === undefined || value === null ? [] : [value];
           for (const item of values) increment(facet, item);
         };
+        incrementList(facetValues.moc, note.frontmatter.mocs);
         incrementList(facetValues.subjectTerm, note.frontmatter.subject_terms);
         increment(facetValues.domain, note.frontmatter.domain);
         incrementList(facetValues.method, note.frontmatter.methods);
@@ -1087,6 +1090,7 @@ export class LlmWikiService {
         ...(Array.isArray(note.frontmatter.see_also) && { seeAlso: note.frontmatter.see_also.slice(0, 12) }),
         ...(note.frontmatter.project && { project: note.frontmatter.project }),
         ...(note.frontmatter.moc && { moc: note.frontmatter.moc }),
+        ...(Array.isArray(note.frontmatter.mocs) && { mocs: note.frontmatter.mocs.slice(0, 12) }),
         ...(Array.isArray(note.frontmatter.subject_terms) && { subjectTerms: note.frontmatter.subject_terms.slice(0, 12) }),
         ...(note.frontmatter.domain && { domain: note.frontmatter.domain }),
         ...(Array.isArray(note.frontmatter.methods) && { methods: note.frontmatter.methods.slice(0, 12) }),
@@ -2831,6 +2835,7 @@ export class LlmWikiService {
     lifecycle?: string;
     primaryMoc?: string;
     moc?: string;
+    mocs?: unknown;
     project?: string;
     reviewAt?: string;
     reviewIntervalDays?: unknown;
@@ -2959,7 +2964,8 @@ export class LlmWikiService {
       ...(params.noteKind !== undefined && { noteKind: params.noteKind }),
       ...(params.lifecycle !== undefined && { lifecycle: params.lifecycle }),
       ...(params.primaryMoc !== undefined && { primaryMoc: params.primaryMoc }),
-      ...(params.moc !== undefined && { moc: params.moc }),
+          ...(params.moc !== undefined && { moc: params.moc }),
+          ...(params.mocs !== undefined && { mocs: params.mocs }),
       ...(params.project !== undefined && { project: params.project }),
       ...(params.reviewAt !== undefined && { reviewAt: params.reviewAt }),
       ...(params.reviewIntervalDays !== undefined && { reviewIntervalDays: params.reviewIntervalDays }),
@@ -3058,6 +3064,7 @@ export class LlmWikiService {
         lifecycle: updated.frontmatter.lifecycle,
         ...(updated.frontmatter.primary_moc && { primaryMoc: updated.frontmatter.primary_moc }),
         ...(updated.frontmatter.moc && { moc: updated.frontmatter.moc }),
+        ...(Array.isArray(updated.frontmatter.mocs) && { mocs: updated.frontmatter.mocs }),
         ...(updated.frontmatter.moc_purpose && { mocPurpose: updated.frontmatter.moc_purpose }),
         ...(updated.frontmatter.moc_scope && { mocScope: updated.frontmatter.moc_scope }),
         ...(updated.frontmatter.moc_questions && { mocQuestions: updated.frontmatter.moc_questions }),
@@ -3264,6 +3271,34 @@ export class LlmWikiService {
         .filter(([field, value]) => Object.prototype.hasOwnProperty.call(projectedRelations, field) && Array.isArray(value))
         .slice(0, 12).map(([field, value]) => [field, (value as unknown[]).filter((item): item is string => typeof item === 'string' && this.access.canReferenceFrom(params.path, item)).slice(0, 4).map(item => this.access.toPublicPath(item))]))
       : undefined;
+    const projectedClaims = Array.isArray(note.frontmatter.claims)
+      ? note.frontmatter.claims
+        .filter((claim: any) => claim && typeof claim.text === 'string' && claim.text.trim())
+        .slice(0, 8)
+        .map((claim: any, index: number) => {
+          const evidencePaths = Array.isArray(claim.evidence_paths)
+            ? claim.evidence_paths.filter((path: unknown): path is string => typeof path === 'string' && this.access.canReferenceFrom(params.path, path)).slice(0, 4).map((path: string) => this.access.toPublicPath(path))
+            : [];
+          const locators = Array.isArray(claim.evidence)
+            ? claim.evidence.filter((item: any) => item && typeof item === 'object' && typeof item.path === 'string' && evidencePaths.includes(this.access.toPublicPath(item.path))).slice(0, 4).map((item: any) => ({
+              path: this.access.toPublicPath(item.path),
+              ...(typeof item.heading === 'string' && { heading: boundedText(item.heading, 200) }),
+              ...(typeof item.blockId === 'string' && { blockId: boundedText(item.blockId, 100) }),
+              ...(Number.isInteger(item.startLine) && { startLine: item.startLine }),
+              ...(Number.isInteger(item.endLine) && { endLine: item.endLine }),
+              ...(typeof item.revision === 'string' && { revision: item.revision }),
+            }))
+            : [];
+          return {
+            id: typeof claim.id === 'string' && claim.id.trim() ? claim.id.trim() : `claim-${index + 1}`,
+            text: boundedText(claim.text, 700),
+            status: typeof claim.status === 'string' ? claim.status : 'unverified',
+            ...(typeof claim.confidence === 'string' && { confidence: claim.confidence }),
+            ...(evidencePaths.length > 0 && { evidencePaths }),
+            ...(locators.length > 0 && { evidence: locators }),
+          };
+        })
+      : [];
     const authority = (typeof note.frontmatter.term_status === 'string' || typeof note.frontmatter.term_scope_note === 'string' || typeof note.frontmatter.preferred_term === 'string' || typeof note.frontmatter.disambiguation === 'string' || Array.isArray(note.frontmatter.aliases))
       ? {
         preferredTerm: typeof note.frontmatter.preferred_term === 'string' ? boundedText(note.frontmatter.preferred_term, 300) : title,
@@ -3282,10 +3317,11 @@ export class LlmWikiService {
       noteKind: note.frontmatter.note_kind,
       lifecycle: note.frontmatter.lifecycle,
       ...(redirect && { redirect }),
-      ...(typeof note.frontmatter.primary_moc === 'string' || typeof note.frontmatter.moc === 'string' || typeof note.frontmatter.project === 'string' || typeof note.frontmatter.term_status === 'string' || typeof note.frontmatter.term_scope_note === 'string' || typeof note.frontmatter.preferred_term === 'string' || typeof note.frontmatter.disambiguation === 'string' || Array.isArray(note.frontmatter.aliases) || typeof note.frontmatter.domain === 'string' || Array.isArray(note.frontmatter.broader_terms) || Array.isArray(note.frontmatter.related_terms) || Array.isArray(note.frontmatter.subject_terms) || Object.keys(projectedRelations).length > 0 ? {
+      ...(typeof note.frontmatter.primary_moc === 'string' || typeof note.frontmatter.moc === 'string' || Array.isArray(note.frontmatter.mocs) || typeof note.frontmatter.project === 'string' || typeof note.frontmatter.term_status === 'string' || typeof note.frontmatter.term_scope_note === 'string' || typeof note.frontmatter.preferred_term === 'string' || typeof note.frontmatter.disambiguation === 'string' || Array.isArray(note.frontmatter.aliases) || typeof note.frontmatter.domain === 'string' || Array.isArray(note.frontmatter.broader_terms) || Array.isArray(note.frontmatter.related_terms) || Array.isArray(note.frontmatter.subject_terms) || Object.keys(projectedRelations).length > 0 ? {
         navigation: {
           ...(typeof note.frontmatter.primary_moc === 'string' && { primaryMoc: note.frontmatter.primary_moc }),
           ...(typeof note.frontmatter.moc === 'string' && { moc: note.frontmatter.moc }),
+          ...(Array.isArray(note.frontmatter.mocs) && { mocs: note.frontmatter.mocs.slice(0, 12) }),
           ...(typeof note.frontmatter.project === 'string' && { project: note.frontmatter.project }),
           ...(typeof note.frontmatter.term_status === 'string' && { termStatus: note.frontmatter.term_status }),
           ...(typeof note.frontmatter.term_scope_note === 'string' && { termScopeNote: boundedText(note.frontmatter.term_scope_note, 500) }),
@@ -3307,6 +3343,7 @@ export class LlmWikiService {
       ...(Array.isArray(note.frontmatter.open_questions) && { openQuestions: note.frontmatter.open_questions.slice(0, 20) }),
       ...(Number.isInteger(note.frontmatter.summary_layer) && { summaryLayer: note.frontmatter.summary_layer }),
       ...(Array.isArray(note.frontmatter.summary_highlights) && { summaryHighlights: note.frontmatter.summary_highlights.slice(0, 12) }),
+      ...(projectedClaims.length > 0 && { claims: projectedClaims }),
       ...(Array.isArray(note.frontmatter.next_actions) && { nextActions: note.frontmatter.next_actions.slice(0, 20) }),
       ...(typeof note.frontmatter.next_action === 'string' && { nextAction: note.frontmatter.next_action }),
       ...(typeof note.frontmatter.waiting_for === 'string' && { waitingFor: note.frontmatter.waiting_for }),
@@ -4378,36 +4415,39 @@ export class LlmWikiService {
     for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
       noteTotal += 1;
       const frontmatter = note.frontmatter || {};
-      const rawKey = typeof frontmatter.primary_moc === 'string' && frontmatter.primary_moc.trim()
-        ? frontmatter.primary_moc.trim()
-        : typeof frontmatter.moc === 'string' && frontmatter.moc.trim()
-          ? frontmatter.moc.trim()
-          : typeof frontmatter.domain === 'string' && frontmatter.domain.trim()
-            ? `domain:${frontmatter.domain.trim()}`
-            : `folder:${normalizePath(note.path).split('/')[0] || 'root'}`;
-      const key = rawKey.slice(0, 500);
-      let group = groups.get(key);
-      if (!group) {
-        if (groups.size >= 120) { overflowKeys.add(key); continue; }
-        group = { key, entryPoint: typeof frontmatter.primary_moc === 'string' && frontmatter.primary_moc.trim() ? frontmatter.primary_moc.trim() : this.access.toPublicPath(note.path), total: 0, knowledge: 0, inbox: 0, reviewDue: 0, withoutSummary: 0, withOpenQuestions: 0 };
-        groups.set(key, group);
-      }
-      group.total += 1;
       const kind = String(frontmatter.note_kind || '').toLowerCase();
-      if (['atomic', 'knowledge', 'decision', 'literature'].includes(kind)) group.knowledge += 1;
-      if (kind === 'moc' && !group.representativePath) {
-        group.representativePath = this.access.toPublicPath(note.path);
-        const representativeTitle = typeof frontmatter.title === 'string' ? frontmatter.title : note.path.split('/').at(-1);
-        if (representativeTitle) group.representativeTitle = representativeTitle;
-        if (typeof frontmatter.moc_purpose === 'string' && frontmatter.moc_purpose.trim()) group.purpose = boundedText(frontmatter.moc_purpose, 500);
-        if (typeof frontmatter.moc_scope === 'string' && frontmatter.moc_scope.trim()) group.scope = boundedText(frontmatter.moc_scope, 300);
-        if (Array.isArray(frontmatter.moc_questions)) group.questions = frontmatter.moc_questions.filter((item: unknown): item is string => typeof item === 'string' && Boolean(item.trim())).slice(0, 6).map(item => boundedText(item, 300));
-      }
-      if (String(frontmatter.lifecycle || '').toLowerCase() === 'inbox') group.inbox += 1;
+      const primaryMoc = typeof frontmatter.primary_moc === 'string' ? frontmatter.primary_moc.trim() : '';
+      const declaredMocs = Array.isArray(frontmatter.mocs) ? frontmatter.mocs.filter((item: unknown): item is string => typeof item === 'string' && Boolean(item.trim())).map(item => item.trim()) : [];
+      const mocMemberships = [...new Set([primaryMoc, ...declaredMocs, ...(typeof frontmatter.moc === 'string' && frontmatter.moc.trim() ? [frontmatter.moc.trim()] : [])].filter(Boolean))];
+      const rawKeys = mocMemberships.length > 0
+        ? mocMemberships
+        : typeof frontmatter.domain === 'string' && frontmatter.domain.trim()
+          ? [`domain:${frontmatter.domain.trim()}`]
+          : [`folder:${normalizePath(note.path).split('/')[0] || 'root'}`];
       const reviewAt = Date.parse(String(frontmatter.review_at || ''));
-      if (Number.isFinite(reviewAt) && reviewAt <= Date.now() && !['archived', 'superseded'].includes(String(frontmatter.lifecycle || '').toLowerCase())) group.reviewDue += 1;
-      if (['atomic', 'knowledge', 'decision'].includes(kind) && !frontmatter.summary && !Array.isArray(frontmatter.key_points)) group.withoutSummary += 1;
-      if (Array.isArray(frontmatter.open_questions) && frontmatter.open_questions.length > 0) group.withOpenQuestions += 1;
+      for (const rawKey of rawKeys) {
+        const key = rawKey.slice(0, 500);
+        let group = groups.get(key);
+        if (!group) {
+          if (groups.size >= 120) { overflowKeys.add(key); continue; }
+          group = { key, entryPoint: primaryMoc || rawKey || this.access.toPublicPath(note.path), total: 0, knowledge: 0, inbox: 0, reviewDue: 0, withoutSummary: 0, withOpenQuestions: 0 };
+          groups.set(key, group);
+        }
+        group.total += 1;
+        if (['atomic', 'knowledge', 'decision', 'literature'].includes(kind)) group.knowledge += 1;
+        if (kind === 'moc' && !group.representativePath) {
+          group.representativePath = this.access.toPublicPath(note.path);
+          const representativeTitle = typeof frontmatter.title === 'string' ? frontmatter.title : note.path.split('/').at(-1);
+          if (representativeTitle) group.representativeTitle = representativeTitle;
+          if (typeof frontmatter.moc_purpose === 'string' && frontmatter.moc_purpose.trim()) group.purpose = boundedText(frontmatter.moc_purpose, 500);
+          if (typeof frontmatter.moc_scope === 'string' && frontmatter.moc_scope.trim()) group.scope = boundedText(frontmatter.moc_scope, 300);
+          if (Array.isArray(frontmatter.moc_questions)) group.questions = frontmatter.moc_questions.filter((item: unknown): item is string => typeof item === 'string' && Boolean(item.trim())).slice(0, 6).map(item => boundedText(item, 300));
+        }
+        if (String(frontmatter.lifecycle || '').toLowerCase() === 'inbox') group.inbox += 1;
+        if (Number.isFinite(reviewAt) && reviewAt <= Date.now() && !['archived', 'superseded'].includes(String(frontmatter.lifecycle || '').toLowerCase())) group.reviewDue += 1;
+        if (['atomic', 'knowledge', 'decision'].includes(kind) && !frontmatter.summary && !Array.isArray(frontmatter.key_points)) group.withoutSummary += 1;
+        if (Array.isArray(frontmatter.open_questions) && frontmatter.open_questions.length > 0) group.withOpenQuestions += 1;
+      }
     }
     const items = Array.from(groups.values()).map(group => ({
       ...group,
@@ -4429,10 +4469,11 @@ export class LlmWikiService {
     const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
     const lint = await this.lint(principal, Math.max(200, boundedLimit * 4));
     const organizationCodes = new Set([
-      'invalid_note_kind', 'invalid_lifecycle', 'active_project_without_next_action', 'active_project_without_outcome',
+      'invalid_note_kind', 'invalid_lifecycle', 'generic_concept_title', 'active_project_without_next_action', 'active_project_without_outcome',
       'knowledge_note_kind_missing', 'knowledge_lifecycle_missing', 'invalid_review_at', 'invalid_review_interval_days',
       'knowledge_review_due', 'review_date_missing', 'moc_without_links',
       'inbox_lifecycle_mismatch', 'invalid_aliases', 'duplicate_aliases',
+      'invalid_mocs', 'duplicate_mocs',
       'invalid_key_points', 'invalid_open_questions', 'invalid_next_actions',
       'invalid_summary', 'invalid_stable_id', 'summary_fingerprint_missing', 'invalid_summary_fingerprint', 'stale_summary', 'invalid_task_status',
       'invalid_triage_disposition', 'invalid_clarified_by', 'invalid_clarify_note', 'invalid_triage_target', 'invalid_clarified_at', 'invalid_primary_moc', 'invalid_moc_purpose', 'invalid_moc_scope', 'invalid_moc_questions', 'invalid_moc_parent', 'moc_purpose_missing', 'moc_questions_missing',
@@ -4470,6 +4511,7 @@ export class LlmWikiService {
       ...(byCode.knowledge_review_due || byCode.review_date_missing ? ['Review due or disputed notes and reschedule only after checking their evidence.'] : []),
       ...(byCode.moc_without_links ? ['Give each MOC at least one meaningful [[wikilink]] and remove empty navigation notes.'] : []),
       ...(byCode.atomic_note_may_be_too_broad ? ['Split broad atomic notes into single-claim notes and connect them with typed links.'] : []),
+      ...(byCode.generic_concept_title ? ['Rename generic durable notes with concept-oriented titles so agents can rediscover them from the title alone.'] : []),
       ...(Object.keys(byCode).some(code => code.startsWith('invalid_') || code.startsWith('unsafe_')) ? ['Repair property shapes before relying on catalog filters or projections.'] : []),
       ...(byCode.property_type_drift ? ['Keep the same YAML property name in one native shape across notes (for example, always use a list for tags/aliases); repair drift before relying on Obsidian Properties or Bases views.'] : []),
       ...(byCode.property_contract_violation || byCode.invalid_review_interval_days ? ['Read wiki.property_contract, then repair MCP-managed Properties with the normal revision-checked triage flow.'] : []),
@@ -4831,6 +4873,11 @@ export class LlmWikiService {
         current.paths.add(this.access.toPublicPath(note.path));
         if (stableId) current.stableIds.add(stableId);
         if (typeof note.frontmatter.moc === 'string' && note.frontmatter.moc.trim()) current.mocs.add(note.frontmatter.moc.trim());
+        if (Array.isArray(note.frontmatter.mocs)) {
+          for (const moc of note.frontmatter.mocs) {
+            if (typeof moc === 'string' && moc.trim()) current.mocs.add(moc.trim());
+          }
+        }
         if (typeof note.frontmatter.disambiguation === 'string' && note.frontmatter.disambiguation.trim()) current.disambiguation.add(note.frontmatter.disambiguation.trim());
         // If preferred_term differs from the title, the title is an
         // alternate access term rather than a second canonical concept.

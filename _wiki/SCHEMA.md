@@ -41,6 +41,7 @@ moc: "[[Knowledge/MOCs/LLM Wiki]]"
 project: "[[Projects/MCPVault]]"
 review_at: 2026-10-01
 primary_moc: "[[Knowledge/MOCs/LLM Wiki]]"
+mocs: ["[[Knowledge/MOCs/Obsidian]]", "[[Knowledge/MOCs/Agent Memory]]"] # optional additional contexts; navigation only
 ```
 
 The recommended working loop is Capture -> Organize -> Distill -> Express.
@@ -378,8 +379,9 @@ deletion. Use a reason and replacement link when archiving or tombstoning.
 `retention_event` records what started the retention window,
 `preserve_until` prevents premature disposition proposals, and
 `legal_hold: true` requires explicit human release before archival or
-tombstoning. Use `primary_moc` as the preferred Obsidian launch point; it is
-navigation metadata, not an access boundary.
+tombstoning. Use `primary_moc` as the preferred Obsidian launch point and
+`mocs` for bounded additional MOC memberships; both are navigation metadata,
+not an access boundary.
 Graph health also exposes `relationNavigation`, a bounded reverse map from a
 visible target note to incoming typed relation groups and their meanings. This
 is derived navigation only and never broadens scope access. MOC hierarchy is
