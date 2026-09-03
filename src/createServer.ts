@@ -73,6 +73,7 @@ const SERVER_INSTRUCTIONS_MAINTENANCE = 'For safe organization maintenance, call
 const SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_3 = 'Use wiki.recall_queue for due high-value recall prompts and attempt each prompt before reading the body; the queue interleaves domains, MOCs, and projects when possible, and agent recall state remains private. Use wiki.duplicate_candidates only as a bounded similarity report, inspect both revisions, and use wiki.merge_preview before any consolidation. Graph health typedRelations reports unresolved, ambiguous, self-referential, question-target-mismatched, and missing-reciprocity links. Keep searchable status/navigation in native scalar or list Properties; claims, evidence, and summary_highlights are MCP-managed complex metadata and are safest in Source mode plus readable Markdown context.';
 const SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_4 = 'Use wiki.vocabulary_health to find tag spelling/case variants, subject terms without a scoped authority note, and terms shared by multiple notes. Use wiki.note_template for an optional role scaffold; it never creates a note or makes fields mandatory. Treat vocabulary and reciprocity findings as advisory repair candidates: preserve local distinctions, add a scope note or canonical_path when needed, and never rename or retag automatically. Use retention_policy with retention_reason and replaced_by to explain archive/tombstone decisions; it never triggers deletion.';
 const SERVER_INSTRUCTIONS_ORGANIZATION_PROJECTIONS = 'Use wiki.context_pack after selecting a project, MOC, question, or decision when one reusable bounded shelf should combine the root, ordered entrypoints, supporting context, counterpoints, gaps, and revisions; it is derived navigation, not a truth score. Use wiki.exception_board for one 5S-style repair board instead of separately browsing every health report. Use wiki.quality_check for one note-kind-specific advisory checklist; it never blocks publication. Use wiki.resurface_archives to rediscover archived or superseded notes only when current visible notes still link to them; never restore, move, or delete automatically.';
+const SERVER_INSTRUCTIONS_FLOW = 'Use wiki.policy to read the machine-readable organization constitution for the visible scope. Before starting more work, use wiki.flow_health: task_status=next_action is executable WIP, task_status=open with a concrete next_action is pull-ready, and waiting/blocked items should age visibly rather than being silently ignored. Use service_class=expedite|fixed_date|standard|research only to explain ordering, never to bypass evidence, scope, or moderation. For active projects, add bounded completion_criteria or a visible completion-criteria heading; set startedAt/blockedSince/waitingSince/completedAt when known. The flow report is advisory and does not assign work.';
 const SEMANTIC_QUERY_TIMEOUT_MS = 2_000;
 const REQUEST_QUEUE_WAIT_MS = 10_000;
 
@@ -462,7 +463,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
   const server = new Server({ name, version }, {
     capabilities: { tools: {} },
-    instructions: `${SERVER_INSTRUCTIONS} ${SERVER_INSTRUCTIONS_ORGANIZATION} ${SERVER_INSTRUCTIONS_FIRST_ENTRY} ${SERVER_INSTRUCTIONS_COMMUNITY} ${SERVER_INSTRUCTIONS_FEEDBACK_FORUM} ${SERVER_INSTRUCTIONS_WIKI_QUALITY} ${SERVER_INSTRUCTIONS_KNOWLEDGE_ORGANIZATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_NAVIGATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_QUALITY_2} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_3} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_4} ${SERVER_INSTRUCTIONS_ORGANIZATION_PROJECTIONS} ${SERVER_INSTRUCTIONS_IDEATION} ${SERVER_INSTRUCTIONS_MAINTENANCE} ${SERVER_INSTRUCTIONS_MOTIVATION}`,
+    instructions: `${SERVER_INSTRUCTIONS} ${SERVER_INSTRUCTIONS_ORGANIZATION} ${SERVER_INSTRUCTIONS_FIRST_ENTRY} ${SERVER_INSTRUCTIONS_COMMUNITY} ${SERVER_INSTRUCTIONS_FEEDBACK_FORUM} ${SERVER_INSTRUCTIONS_WIKI_QUALITY} ${SERVER_INSTRUCTIONS_KNOWLEDGE_ORGANIZATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_NAVIGATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_QUALITY_2} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_3} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_4} ${SERVER_INSTRUCTIONS_ORGANIZATION_PROJECTIONS} ${SERVER_INSTRUCTIONS_FLOW} ${SERVER_INSTRUCTIONS_IDEATION} ${SERVER_INSTRUCTIONS_MAINTENANCE} ${SERVER_INSTRUCTIONS_MOTIVATION}`,
   });
 
   const buildInternalTools = (): Tool[] => [
@@ -1430,6 +1431,14 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
         case "get_wiki_review_dashboard": {
           return jsonResult(await llmWiki.reviewDashboard(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+        }
+
+        case "get_wiki_flow_health": {
+          return jsonResult(await llmWiki.flowHealth(principal, trimmedArgs.wipLimit, trimmedArgs.blockedAfterDays, trimmedArgs.waitingAfterDays, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+        }
+
+        case "get_wiki_policy": {
+          return jsonResult(llmWiki.policy(trimmedArgs.maxChars), trimmedArgs.prettyPrint);
         }
 
         case "get_wiki_review_packet": {
@@ -2682,7 +2691,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     createRequestServer: () => {
       const requestServer = new Server({ name, version }, {
         capabilities: { tools: {} },
-        instructions: `${SERVER_INSTRUCTIONS} ${SERVER_INSTRUCTIONS_ORGANIZATION} ${SERVER_INSTRUCTIONS_FIRST_ENTRY} ${SERVER_INSTRUCTIONS_COMMUNITY} ${SERVER_INSTRUCTIONS_FEEDBACK_FORUM} ${SERVER_INSTRUCTIONS_WIKI_QUALITY} ${SERVER_INSTRUCTIONS_KNOWLEDGE_ORGANIZATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_NAVIGATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_QUALITY_2} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_3} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_4} ${SERVER_INSTRUCTIONS_ORGANIZATION_PROJECTIONS} ${SERVER_INSTRUCTIONS_IDEATION} ${SERVER_INSTRUCTIONS_MAINTENANCE} ${SERVER_INSTRUCTIONS_MOTIVATION}`,
+        instructions: `${SERVER_INSTRUCTIONS} ${SERVER_INSTRUCTIONS_ORGANIZATION} ${SERVER_INSTRUCTIONS_FIRST_ENTRY} ${SERVER_INSTRUCTIONS_COMMUNITY} ${SERVER_INSTRUCTIONS_FEEDBACK_FORUM} ${SERVER_INSTRUCTIONS_WIKI_QUALITY} ${SERVER_INSTRUCTIONS_KNOWLEDGE_ORGANIZATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_NAVIGATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_QUALITY_2} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_3} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_4} ${SERVER_INSTRUCTIONS_ORGANIZATION_PROJECTIONS} ${SERVER_INSTRUCTIONS_FLOW} ${SERVER_INSTRUCTIONS_IDEATION} ${SERVER_INSTRUCTIONS_MAINTENANCE} ${SERVER_INSTRUCTIONS_MOTIVATION}`,
       });
       installMcpHandlers(requestServer);
       return requestServer;

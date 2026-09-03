@@ -189,6 +189,12 @@ export declare class LlmWikiService {
         dueAt?: string;
         scheduledAt?: string;
         deferUntil?: string;
+        serviceClass?: unknown;
+        completionCriteria?: unknown;
+        startedAt?: unknown;
+        blockedSince?: unknown;
+        waitingSince?: unknown;
+        completedAt?: unknown;
         stableId?: string;
         canonicalPath?: string;
         recallPrompt?: string;
@@ -1041,6 +1047,148 @@ export declare class LlmWikiService {
         truncated: boolean;
     }>;
     /**
+     * A bounded Kanban-style flow view derived from task/project Properties.
+     * `next_action` is treated as executable WIP, while `open` items with a
+     * concrete next action are pull-ready.  This is advisory: it never assigns,
+     * moves, or changes a note.
+     */
+    flowHealth(principal?: ScopePrincipal, wipLimit?: number, blockedAfterDays?: number, waitingAfterDays?: number, limit?: number, maxChars?: number): Promise<{
+        purpose: string;
+        policy: {
+            wipLimit: number;
+            blockedAfterDays: number;
+            waitingAfterDays: number;
+            wipDefinition: string;
+            pullDefinition: string;
+            classesOfService: ("expedite" | "fixed_date" | "research" | "standard")[];
+        };
+        flow: {
+            totalWork: number;
+            activeWip: number;
+            wipOverflow: number;
+            pullAllowed: boolean;
+            readyToPull: number;
+            blocked: number;
+            waiting: number;
+            overdue: number;
+        };
+        lanes: {
+            active: Record<string, unknown>[];
+            ready: Record<string, unknown>[];
+            blocked: Record<string, unknown>[];
+            waiting: Record<string, unknown>[];
+        };
+        observability: {
+            missingTimestamps: Record<string, unknown>[];
+            cycleTimeAvailable: string;
+            note: string;
+        };
+        nextActions: string[];
+        generatedAt: string;
+    } | {
+        purpose: string;
+        policy: {
+            wipLimit: number;
+            blockedAfterDays: number;
+            waitingAfterDays: number;
+            wipDefinition: string;
+            pullDefinition: string;
+            classesOfService: ("expedite" | "fixed_date" | "research" | "standard")[];
+        };
+        flow: {
+            totalWork: number;
+            activeWip: number;
+            wipOverflow: number;
+            pullAllowed: boolean;
+            readyToPull: number;
+            blocked: number;
+            waiting: number;
+            overdue: number;
+        };
+        nextActions: string[];
+        generatedAt: string;
+        lanes: {
+            active: Record<string, unknown>[];
+            ready: Record<string, unknown>[];
+            blocked: Record<string, unknown>[];
+            waiting: Record<string, unknown>[];
+        };
+        observability: {
+            cycleTimeAvailable: string;
+            note: string;
+            missingTimestamps: Record<string, unknown>[];
+        };
+        truncated: boolean;
+    }>;
+    /** Return the machine-readable organization constitution used by agents. */
+    policy(maxChars?: number): {
+        purpose: string;
+        sourceOfTruth: string[];
+        filing: {
+            inbox: string;
+            projects: string;
+            areas: string;
+            resources: string;
+            archives: string;
+            rule: string;
+        };
+        lifecycle: ("active" | "archived" | "evergreen" | "inbox" | "review" | "superseded")[];
+        work: {
+            statuses: ("blocked" | "cancelled" | "completed" | "next_action" | "open" | "someday" | "waiting")[];
+            serviceClasses: ("expedite" | "fixed_date" | "research" | "standard")[];
+            wipLimitDefault: number;
+            completionCriteria: string;
+            separateFromKnowledgeLifecycle: boolean;
+        };
+        knowledge: {
+            durableAtomicity: string;
+            links: string;
+            evidence: string;
+            uncertainty: string;
+        };
+        review: {
+            inspectCurrentRevision: boolean;
+            useReviewQueue: boolean;
+            recordOutcome: boolean;
+            neverTreatSummaryAsTruth: boolean;
+        };
+        retention: {
+            policies: string[];
+            automaticDeletion: boolean;
+            legalHoldWins: boolean;
+        };
+        agentLoop: string[];
+        availableContracts: {
+            properties: string[];
+            relations: ("answers_questions" | "blocked_by" | "contradicts" | "depends_on" | "derived_from" | "implements" | "refines" | "related" | "same_as" | "supersedes" | "supports" | "version_of")[];
+        };
+    } | {
+        purpose: string;
+        sourceOfTruth: string[];
+        filing: {
+            inbox: string;
+            projects: string;
+            areas: string;
+            resources: string;
+            archives: string;
+            rule: string;
+        };
+        work: {
+            statuses: ("blocked" | "cancelled" | "completed" | "next_action" | "open" | "someday" | "waiting")[];
+            serviceClasses: ("expedite" | "fixed_date" | "research" | "standard")[];
+            wipLimitDefault: number;
+            completionCriteria: string;
+            separateFromKnowledgeLifecycle: boolean;
+        };
+        review: {
+            inspectCurrentRevision: boolean;
+            useReviewQueue: boolean;
+            recordOutcome: boolean;
+            neverTreatSummaryAsTruth: boolean;
+        };
+        truncated: boolean;
+    };
+    /**
      * A small action-oriented packet for agents that need to decide what to do
      * next. It is a projection over the existing Reflect/graph reports, not a
      * new task or history store.
@@ -1534,6 +1682,12 @@ export declare class LlmWikiService {
         dueAt?: string;
         scheduledAt?: string;
         deferUntil?: string;
+        serviceClass?: unknown;
+        completionCriteria?: unknown;
+        startedAt?: unknown;
+        blockedSince?: unknown;
+        waitingSince?: unknown;
+        completedAt?: unknown;
         stableId?: string;
         canonicalPath?: string;
         recallPrompt?: string;

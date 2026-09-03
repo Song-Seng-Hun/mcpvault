@@ -77,6 +77,8 @@ const EXPLICIT_IDS = {
     get_wiki_recall_queue: 'wiki.recall_queue',
     get_wiki_duplicate_candidates: 'wiki.duplicate_candidates',
     get_wiki_review_dashboard: 'wiki.review_dashboard',
+    get_wiki_flow_health: 'wiki.flow_health',
+    get_wiki_policy: 'wiki.policy',
     get_wiki_review_packet: 'wiki.review_packet',
     get_wiki_project_packet: 'wiki.project_packet',
     get_wiki_next_actions: 'wiki.next_actions',

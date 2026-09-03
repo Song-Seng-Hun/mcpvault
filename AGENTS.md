@@ -293,6 +293,17 @@ use `get_wiki_project_packet` to inspect the Natural Planning pieces and find
 projects that lack an outcome, brainstorm section, support context, or a
 concrete next action. Project support is reference material, not an alternate
 task list.
+Use `get_wiki_policy` when the scope's organization rules are unclear. Before
+starting additional project/task work, use `get_wiki_flow_health`: it treats
+`task_status: next_action` as executable WIP and `task_status: open` with a
+concrete `next_action` as pull-ready. Respect the returned WIP limit, finish
+or unblock existing work before pulling more standard work, and use
+`service_class` (`expedite`, `fixed_date`, `standard`, or `research`) only as
+an ordering explanation. Active projects should declare bounded
+`completion_criteria` (or a visible completion-criteria heading); record
+`started_at`, `blocked_since`, `waiting_since`, and `completed_at` when known.
+These are flow signals, not access rules, truth scores, or automatic
+assignments.
 For a smaller maintenance turn, use `get_wiki_review_packet`; follow its
 priority order across evidence, active recall, tasks, graph, and vocabulary
 hygiene, then inspect one selected note before editing. MOC questions are

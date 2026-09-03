@@ -3,7 +3,7 @@ import { stringify as stringifyYaml } from 'yaml';
 import { normalizeScopeId } from './scopes.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
-import { getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, normalizeClarifyDisposition, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeRetentionPolicy, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeTaskStatus, organizationLintIssues, organizationNoteTemplate, RELATION_FIELDS, RECIPROCAL_RELATIONS } from './organization.js';
+import { getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, normalizeClarifyDisposition, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeRetentionPolicy, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeServiceClass, normalizeTaskStatus, organizationLintIssues, organizationNoteTemplate, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, LIFECYCLES, TASK_STATUSES } from './organization.js';
 import { extractObsidianLinkOccurrences, resolveWikiLinkTargets } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
@@ -762,6 +762,12 @@ export class LlmWikiService {
                     ...(params.dueAt !== undefined && { dueAt: params.dueAt }),
                     ...(params.scheduledAt !== undefined && { scheduledAt: params.scheduledAt }),
                     ...(params.deferUntil !== undefined && { deferUntil: params.deferUntil }),
+                    ...(params.serviceClass !== undefined && { serviceClass: params.serviceClass }),
+                    ...(params.completionCriteria !== undefined && { completionCriteria: params.completionCriteria }),
+                    ...(params.startedAt !== undefined && { startedAt: params.startedAt }),
+                    ...(params.blockedSince !== undefined && { blockedSince: params.blockedSince }),
+                    ...(params.waitingSince !== undefined && { waitingSince: params.waitingSince }),
+                    ...(params.completedAt !== undefined && { completedAt: params.completedAt }),
                     ...(params.stableId !== undefined && { stableId: params.stableId }),
                     ...(params.canonicalPath !== undefined && { canonicalPath: params.canonicalPath }),
                     ...(params.recallPrompt !== undefined && { recallPrompt: params.recallPrompt }),
@@ -2469,6 +2475,125 @@ export class LlmWikiService {
         };
     }
     /**
+     * A bounded Kanban-style flow view derived from task/project Properties.
+     * `next_action` is treated as executable WIP, while `open` items with a
+     * concrete next action are pull-ready.  This is advisory: it never assigns,
+     * moves, or changes a note.
+     */
+    async flowHealth(principal, wipLimit = 3, blockedAfterDays = 7, waitingAfterDays = 14, limit = 20, maxChars = 7000) {
+        const boundedWipLimit = Math.min(Math.max(Number(wipLimit) || 3, 1), 50);
+        const boundedBlockedAfterDays = Math.min(Math.max(Number(blockedAfterDays) || 7, 1), 3650);
+        const boundedWaitingAfterDays = Math.min(Math.max(Number(waitingAfterDays) || 14, 1), 3650);
+        const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
+        const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 1024), 16000);
+        const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        const active = [];
+        const ready = [];
+        const blocked = [];
+        const waiting = [];
+        const missingTimestamps = [];
+        let totalWork = 0;
+        let totalActive = 0;
+        let totalReady = 0;
+        let totalBlocked = 0;
+        let totalWaiting = 0;
+        let totalOverdue = 0;
+        const nowMs = Date.now();
+        const ageDays = (value) => {
+            if (typeof value !== 'string' || !value.trim())
+                return undefined;
+            const timestamp = Date.parse(value);
+            return Number.isFinite(timestamp) ? Math.max(0, Math.floor((nowMs - timestamp) / 86400000)) : undefined;
+        };
+        const serviceClass = (value) => {
+            const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+            return SERVICE_CLASSES.includes(normalized) ? normalized : 'standard';
+        };
+        const push = (items, item) => {
+            if (items.length < boundedLimit)
+                items.push(item);
+        };
+        for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+            const kind = String(note.frontmatter.note_kind || '').trim().toLowerCase();
+            const lifecycle = String(note.frontmatter.lifecycle || '').trim().toLowerCase();
+            const taskStatus = String(note.frontmatter.task_status || '').trim().toLowerCase() || 'open';
+            if (!['project', 'task'].includes(kind) && note.frontmatter.task_status === undefined && note.frontmatter.next_action === undefined && note.frontmatter.next_actions === undefined)
+                continue;
+            if (['archived', 'superseded'].includes(lifecycle) || ['completed', 'cancelled', 'someday'].includes(taskStatus))
+                continue;
+            totalWork += 1;
+            const title = note.frontmatter.title || note.path.split('/').at(-1) || note.path;
+            const hasNextAction = Boolean((typeof note.frontmatter.next_action === 'string' && note.frontmatter.next_action.trim()) || (Array.isArray(note.frontmatter.next_actions) && note.frontmatter.next_actions.some((item) => typeof item === 'string' && item.trim())));
+            const dueAt = typeof note.frontmatter.due_at === 'string' ? note.frontmatter.due_at : undefined;
+            const overdue = Boolean(dueAt && Number.isFinite(Date.parse(dueAt)) && Date.parse(dueAt) <= nowMs);
+            if (overdue)
+                totalOverdue += 1;
+            const waitingState = taskStatus === 'waiting' || Boolean(String(note.frontmatter.waiting_for || '').trim());
+            const blockedState = taskStatus === 'blocked';
+            const startedAt = typeof note.frontmatter.started_at === 'string' ? note.frontmatter.started_at : undefined;
+            const waitingSince = typeof note.frontmatter.waiting_since === 'string' ? note.frontmatter.waiting_since : waitingState && typeof note.frontmatter.updated_at === 'string' ? note.frontmatter.updated_at : undefined;
+            const blockedSince = typeof note.frontmatter.blocked_since === 'string' ? note.frontmatter.blocked_since : blockedState && typeof note.frontmatter.updated_at === 'string' ? note.frontmatter.updated_at : undefined;
+            const age = ageDays(blockedSince || waitingSince || startedAt || note.frontmatter.updated_at || note.frontmatter.captured_at);
+            const item = {
+                path: this.access.toPublicPath(note.path), title, kind, taskStatus,
+                serviceClass: serviceClass(note.frontmatter.service_class),
+                ...(hasNextAction && { hasNextAction: true }), ...(dueAt && { dueAt }),
+                ...(overdue && { overdue: true }), ...(age !== undefined && { ageDays: age }),
+                ...(startedAt && { startedAt }), ...(blockedSince && { blockedSince }), ...(waitingSince && { waitingSince }),
+            };
+            if (waitingState) {
+                totalWaiting += 1;
+                push(waiting, { ...item, ...(note.frontmatter.waiting_for && { waitingFor: boundedText(note.frontmatter.waiting_for, 300) }), ...(age !== undefined && age >= boundedWaitingAfterDays && { aging: true, agingReason: `waiting_${boundedWaitingAfterDays}_days_or_more` }) });
+            }
+            else if (blockedState) {
+                totalBlocked += 1;
+                push(blocked, { ...item, ...(age !== undefined && age >= boundedBlockedAfterDays && { aging: true, agingReason: `blocked_${boundedBlockedAfterDays}_days_or_more` }) });
+            }
+            else if (taskStatus === 'next_action') {
+                totalActive += 1;
+                push(active, item);
+            }
+            else if (hasNextAction && taskStatus === 'open') {
+                totalReady += 1;
+                push(ready, { ...item, pullReady: true });
+            }
+            if ((taskStatus === 'next_action' || taskStatus === 'blocked' || waitingState) && age === undefined && missingTimestamps.length < boundedLimit) {
+                missingTimestamps.push({ path: this.access.toPublicPath(note.path), title, taskStatus, missing: taskStatus === 'next_action' ? 'started_at' : waitingState ? 'waiting_since' : 'blocked_since' });
+            }
+        }
+        const result = {
+            purpose: 'A bounded Kanban-style flow projection. It makes WIP, pull-ready work, blocked/waiting aging, and missing flow timestamps visible without creating a task database or mutating notes.',
+            policy: { wipLimit: boundedWipLimit, blockedAfterDays: boundedBlockedAfterDays, waitingAfterDays: boundedWaitingAfterDays, wipDefinition: 'task_status=next_action', pullDefinition: 'task_status=open with a concrete next_action and no waiting/blocked state', classesOfService: [...SERVICE_CLASSES] },
+            flow: { totalWork, activeWip: totalActive, wipOverflow: Math.max(0, totalActive - boundedWipLimit), pullAllowed: totalActive < boundedWipLimit, readyToPull: totalReady, blocked: totalBlocked, waiting: totalWaiting, overdue: totalOverdue },
+            lanes: { active, ready, blocked, waiting },
+            observability: { missingTimestamps, cycleTimeAvailable: 'started_at + completed_at', note: 'Timestamps are optional. When absent, age is not guessed from a Git commit.' },
+            nextActions: totalActive > boundedWipLimit ? ['Finish or unblock existing WIP before pulling another standard item.'] : totalReady > 0 ? ['Pull one ready item and set task_status=next_action with started_at.'] : ['Make one active item executable or identify its waiting/blocked dependency.'],
+            generatedAt: now(),
+        };
+        if (JSON.stringify(result).length <= boundedChars)
+            return result;
+        return { ...result, lanes: { active: active.slice(0, 3), ready: ready.slice(0, 3), blocked: blocked.slice(0, 3), waiting: waiting.slice(0, 3) }, observability: { ...result.observability, missingTimestamps: missingTimestamps.slice(0, 3) }, truncated: true };
+    }
+    /** Return the machine-readable organization constitution used by agents. */
+    policy(maxChars = 7000) {
+        const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 1024), 16000);
+        const result = {
+            purpose: 'The bounded organization policy for one already-authorized scope. It guides filing and review but never grants access, replaces Markdown, or replaces Git history.',
+            sourceOfTruth: ['ordinary Markdown body', 'YAML Properties', 'Git history and revisions'],
+            filing: { inbox: 'rough captures only', projects: 'outcome-oriented work', areas: 'ongoing responsibilities', resources: 'reusable references', archives: 'inactive material', rule: 'folders are filing aids, not visibility boundaries' },
+            lifecycle: [...LIFECYCLES],
+            work: { statuses: [...TASK_STATUSES], serviceClasses: [...SERVICE_CLASSES], wipLimitDefault: 3, completionCriteria: 'Use completion_criteria or a visible completion-criteria heading for active projects.', separateFromKnowledgeLifecycle: true },
+            knowledge: { durableAtomicity: 'one reusable concept or claim per atomic note when practical', links: 'prefer Obsidian [[wikilinks]] and MOCs; use typed relations to explain meaning', evidence: 'claims and published knowledge must preserve inspectable provenance', uncertainty: 'use question/hypothesis/assumption and preserve negative knowledge' },
+            review: { inspectCurrentRevision: true, useReviewQueue: true, recordOutcome: true, neverTreatSummaryAsTruth: true },
+            retention: { policies: ['preserve', 'review', 'archive', 'tombstone'], automaticDeletion: false, legalHoldWins: true },
+            agentLoop: ['capture quickly', 'clarify and file', 'distill into reusable knowledge', 'link it to a map', 'review evidence and flow', 'express or execute one next action'],
+            availableContracts: { properties: getOrganizationPropertyContract().map(entry => entry.name), relations: getOrganizationRelationContract().map(entry => entry.field) },
+        };
+        if (JSON.stringify(result).length <= boundedChars)
+            return result;
+        return { purpose: result.purpose, sourceOfTruth: result.sourceOfTruth, filing: result.filing, work: result.work, review: result.review, truncated: true };
+    }
+    /**
      * A small action-oriented packet for agents that need to decide what to do
      * next. It is a projection over the existing Reflect/graph reports, not a
      * new task or history store.
@@ -2660,6 +2785,9 @@ export class LlmWikiService {
             const nextAction = typeof note.frontmatter.next_action === 'string' ? note.frontmatter.next_action : undefined;
             const waitingFor = typeof note.frontmatter.waiting_for === 'string' ? note.frontmatter.waiting_for : undefined;
             const support = Array.isArray(note.frontmatter.project_support) ? note.frontmatter.project_support.filter((item) => typeof item === 'string').slice(0, 8) : [];
+            const completionCriteria = Array.isArray(note.frontmatter.completion_criteria)
+                ? note.frontmatter.completion_criteria.filter((item) => typeof item === 'string' && Boolean(item.trim())).slice(0, 8)
+                : [];
             const missing = [];
             if (!note.frontmatter.project_purpose)
                 missing.push('purpose');
@@ -2667,7 +2795,7 @@ export class LlmWikiService {
                 missing.push('desired_outcome');
             if (!nextAction && nextActions.length === 0 && !waitingFor)
                 missing.push('next_action');
-            const hasOutcomeCriteria = heading(note.content || '', ['Outcome', 'Desired outcome', 'Definition of done', 'Completion criteria', '완료 조건']);
+            const hasOutcomeCriteria = completionCriteria.length > 0 || heading(note.content || '', ['Outcome', 'Desired outcome', 'Definition of done', 'Completion criteria', '완료 조건']);
             if (note.frontmatter.desired_outcome && !hasOutcomeCriteria)
                 missing.push('outcome_criteria');
             if (nextAction && !concreteNextAction(nextAction))
@@ -2688,8 +2816,9 @@ export class LlmWikiService {
                 ...(nextActions.length > 0 && { nextActions }),
                 ...(waitingFor && { waitingFor: boundedText(waitingFor, 500) }),
                 ...(support.length > 0 && { projectSupport: support }),
+                ...(completionCriteria.length > 0 && { completionCriteria }),
                 ...(missing.length > 0 && { missing }),
-                planning: { purpose: Boolean(note.frontmatter.project_purpose), desiredOutcome: Boolean(note.frontmatter.desired_outcome), outcomeCriteria: hasOutcomeCriteria, brainstormSection: heading(note.content || '', ['Brainstorm']), projectSupport: support.length > 0 || heading(note.content || '', ['Project support']), nextActionConcrete: !nextAction || concreteNextAction(nextAction), ready: missing.length === 0 },
+                planning: { purpose: Boolean(note.frontmatter.project_purpose), desiredOutcome: Boolean(note.frontmatter.desired_outcome), outcomeCriteria: hasOutcomeCriteria, completionCriteria: completionCriteria.length > 0, brainstormSection: heading(note.content || '', ['Brainstorm']), projectSupport: support.length > 0 || heading(note.content || '', ['Project support']), nextActionConcrete: !nextAction || concreteNextAction(nextAction), ready: missing.length === 0 },
                 score,
             });
         }
@@ -2999,7 +3128,7 @@ export class LlmWikiService {
         if (note.frontmatter.llm_wiki_type && note.frontmatter.llm_wiki_type !== 'knowledge') {
             throw new Error(`triage_wiki_note cannot classify managed LLM Wiki type '${note.frontmatter.llm_wiki_type}'`);
         }
-        const hasOrganizationInput = [params.noteKind, params.lifecycle, params.primaryMoc, params.moc, params.project, params.reviewAt, params.reviewIntervalDays, params.reviewSnoozedUntil, params.reviewSnoozeReason, params.nextAction, params.waitingFor, params.desiredOutcome, params.projectPurpose, params.projectSupport, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.canonicalPath, params.recallPrompt, params.recallIntervalDays, params.lastRecalledAt, params.recallQuality, params.retentionPolicy, params.retentionEvent, params.retentionAt, params.preserveUntil, params.legalHold, params.retentionReason, params.replacedBy, params.knowledgeRole, params.termStatus, params.termReplacedBy, params.termScopeNote, params.preferredTerm, params.termLanguage, params.authorityScheme, params.authorityId, params.disambiguation, params.broaderTerms, params.relatedTerms, params.subjectTerms, params.domain, params.methods, params.audience, params.retrievalCues, params.useWhen, params.seeAlso, params.relations, params.relationNotes, params.relationEvidence, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.reviewChecks, params.reviewOpenItems, params.interpretationStatus, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
+        const hasOrganizationInput = [params.noteKind, params.lifecycle, params.primaryMoc, params.moc, params.project, params.reviewAt, params.reviewIntervalDays, params.reviewSnoozedUntil, params.reviewSnoozeReason, params.nextAction, params.waitingFor, params.desiredOutcome, params.projectPurpose, params.projectSupport, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.serviceClass, params.completionCriteria, params.startedAt, params.blockedSince, params.waitingSince, params.completedAt, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.canonicalPath, params.recallPrompt, params.recallIntervalDays, params.lastRecalledAt, params.recallQuality, params.retentionPolicy, params.retentionEvent, params.retentionAt, params.preserveUntil, params.legalHold, params.retentionReason, params.replacedBy, params.knowledgeRole, params.termStatus, params.termReplacedBy, params.termScopeNote, params.preferredTerm, params.termLanguage, params.authorityScheme, params.authorityId, params.disambiguation, params.broaderTerms, params.relatedTerms, params.subjectTerms, params.domain, params.methods, params.audience, params.retrievalCues, params.useWhen, params.seeAlso, params.relations, params.relationNotes, params.relationEvidence, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.reviewChecks, params.reviewOpenItems, params.interpretationStatus, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
             .some(value => value !== undefined);
         if (!hasOrganizationInput)
             throw new Error('At least one organization field is required');
@@ -3040,6 +3169,8 @@ export class LlmWikiService {
             patch.project_purpose = String(params.projectPurpose).trim().slice(0, 1000);
         if (params.taskStatus !== undefined)
             patch.task_status = normalizeTaskStatus(params.taskStatus);
+        if (params.serviceClass !== undefined)
+            patch.service_class = normalizeServiceClass(params.serviceClass);
         if (params.clarifyDisposition !== undefined)
             patch.triage_disposition = normalizeClarifyDisposition(params.clarifyDisposition);
         if (params.clarifiedBy !== undefined)
@@ -3077,6 +3208,12 @@ export class LlmWikiService {
             ...(params.dueAt !== undefined && { dueAt: params.dueAt }),
             ...(params.scheduledAt !== undefined && { scheduledAt: params.scheduledAt }),
             ...(params.deferUntil !== undefined && { deferUntil: params.deferUntil }),
+            ...(params.serviceClass !== undefined && { serviceClass: params.serviceClass }),
+            ...(params.completionCriteria !== undefined && { completionCriteria: params.completionCriteria }),
+            ...(params.startedAt !== undefined && { startedAt: params.startedAt }),
+            ...(params.blockedSince !== undefined && { blockedSince: params.blockedSince }),
+            ...(params.waitingSince !== undefined && { waitingSince: params.waitingSince }),
+            ...(params.completedAt !== undefined && { completedAt: params.completedAt }),
             ...(params.stableId !== undefined && { stableId: params.stableId }),
             ...(params.canonicalPath !== undefined && { canonicalPath: params.canonicalPath }),
             ...(params.recallPrompt !== undefined && { recallPrompt: params.recallPrompt }),
@@ -3196,6 +3333,12 @@ export class LlmWikiService {
                 ...(updated.frontmatter.next_actions && { nextActions: updated.frontmatter.next_actions }),
                 ...(updated.frontmatter.stable_id && { stableId: updated.frontmatter.stable_id }),
                 ...(updated.frontmatter.task_status && { taskStatus: updated.frontmatter.task_status }),
+                ...(updated.frontmatter.service_class && { serviceClass: updated.frontmatter.service_class }),
+                ...(updated.frontmatter.completion_criteria && { completionCriteria: updated.frontmatter.completion_criteria }),
+                ...(updated.frontmatter.started_at && { startedAt: updated.frontmatter.started_at }),
+                ...(updated.frontmatter.blocked_since && { blockedSince: updated.frontmatter.blocked_since }),
+                ...(updated.frontmatter.waiting_since && { waitingSince: updated.frontmatter.waiting_since }),
+                ...(updated.frontmatter.completed_at && { completedAt: updated.frontmatter.completed_at }),
                 ...(updated.frontmatter.review_policy && { reviewPolicy: updated.frontmatter.review_policy }),
                 ...(updated.frontmatter.last_review_outcome && { reviewOutcome: updated.frontmatter.last_review_outcome }),
                 ...(updated.frontmatter.last_reviewed_by && { reviewedBy: updated.frontmatter.last_reviewed_by }),

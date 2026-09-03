@@ -87,6 +87,9 @@ export function getLlmWikiTools() {
                     dueAt: { type: 'string', description: 'Optional ISO deadline; it is not a calendar appointment' },
                     scheduledAt: { type: 'string', description: 'Optional ISO date/time when the work should be performed' },
                     deferUntil: { type: 'string', description: 'Optional ISO date/time before which this action should not be revisited' },
+                    serviceClass: { type: 'string', enum: ['expedite', 'fixed_date', 'standard', 'research'], description: 'Optional Kanban class of service for prioritization, not access control' },
+                    completionCriteria: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'Observable conditions that define done for project/task work' },
+                    startedAt: { type: 'string', description: 'Optional ISO time when work entered progress' }, blockedSince: { type: 'string', description: 'Optional ISO time when work became blocked' }, waitingSince: { type: 'string', description: 'Optional ISO time when work began waiting' }, completedAt: { type: 'string', description: 'Optional ISO time when work completed' },
                     taskStatus: { type: 'string', enum: ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'], description: 'Workflow state for project/task notes; separate from knowledge lifecycle' },
                     reviewPolicy: { type: 'string', enum: ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit'], description: 'When a knowledge note should re-enter review; this is a derived policy, not a hidden scheduler' },
                     reviewOutcome: { type: 'string', enum: ['confirmed', 'revised', 'disputed', 'superseded', 'rescheduled'], description: 'Outcome of the latest evidence review; records completion without duplicating Git history' },
@@ -278,6 +281,23 @@ export function getLlmWikiTools() {
             inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 50, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 18000, default: 9000 }, accessToken, prettyPrint } },
         },
         {
+            name: 'get_wiki_flow_health',
+            description: 'Return a bounded Kanban-style flow view for project/task notes. It reports executable WIP, a configurable WIP limit, pull-ready work, blocked/waiting aging, overdue work, service classes, and missing timestamps without assigning or mutating anything. Use it before starting another task.',
+            inputSchema: { type: 'object', properties: {
+                    wipLimit: { type: 'integer', minimum: 1, maximum: 50, default: 3, description: 'Advisory maximum of task_status=next_action items' },
+                    blockedAfterDays: { type: 'integer', minimum: 1, maximum: 3650, default: 7 },
+                    waitingAfterDays: { type: 'integer', minimum: 1, maximum: 3650, default: 14 },
+                    limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 },
+                    maxChars: { type: 'integer', minimum: 1024, maximum: 16000, default: 7000 },
+                    accessToken, prettyPrint,
+                } },
+        },
+        {
+            name: 'get_wiki_policy',
+            description: 'Return the bounded machine-readable organization constitution for the visible scope: source-of-truth rules, PARA filing, lifecycle, WIP/pull policy, completion criteria, evidence, links, review, and retention. It is guidance, not an access grant or a mutation.',
+            inputSchema: { type: 'object', properties: { maxChars: { type: 'integer', minimum: 1024, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
+        },
+        {
             name: 'record_wiki_recall',
             description: 'Record an optional active-recall attempt for a high-value Wiki note without rewriting its Markdown body. Attempt the recallPrompt before opening the note, then record failed, partial, or good; this is separate from evidence review and never changes truth status.',
             inputSchema: { type: 'object', properties: {
@@ -357,7 +377,7 @@ export function getLlmWikiTools() {
                     keyPoints: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
                     openQuestions: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
                     nextActions: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
-                    desiredOutcome: { type: 'string', maxLength: 1000 }, projectPurpose: { type: 'string', maxLength: 1000 }, projectSupport: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 30 }, taskContext: { type: 'string', maxLength: 300 }, dueAt: { type: 'string', description: 'ISO deadline, distinct from scheduledAt' }, scheduledAt: { type: 'string', description: 'ISO execution/calendar time' }, deferUntil: { type: 'string' },
+                    desiredOutcome: { type: 'string', maxLength: 1000 }, projectPurpose: { type: 'string', maxLength: 1000 }, projectSupport: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 30 }, taskContext: { type: 'string', maxLength: 300 }, dueAt: { type: 'string', description: 'ISO deadline, distinct from scheduledAt' }, scheduledAt: { type: 'string', description: 'ISO execution/calendar time' }, deferUntil: { type: 'string' }, serviceClass: { type: 'string', enum: ['expedite', 'fixed_date', 'standard', 'research'], description: 'Optional Kanban class of service' }, completionCriteria: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'Observable conditions for considering project/task work complete' }, startedAt: { type: 'string', description: 'Optional ISO time when work entered progress' }, blockedSince: { type: 'string', description: 'Optional ISO time when work became blocked' }, waitingSince: { type: 'string', description: 'Optional ISO time when work began waiting' }, completedAt: { type: 'string', description: 'Optional ISO time when work completed' },
                     stableId: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', maxLength: 80 }, canonicalPath: { type: 'string', maxLength: 500 }, recallPrompt: { type: 'string', maxLength: 1000 }, recallIntervalDays: { type: 'integer', minimum: 1, maximum: 3650 }, lastRecalledAt: { type: 'string' }, recallQuality: { type: 'string', enum: ['unseen', 'failed', 'partial', 'good'] },
                     retentionPolicy: { type: 'string', enum: ['preserve', 'review', 'archive', 'tombstone'] }, retentionEvent: { type: 'string', enum: ['manual', 'created', 'last_modified', 'review_completed', 'superseded', 'project_completed'] }, retentionAt: { type: 'string' }, preserveUntil: { type: 'string' }, legalHold: { type: 'boolean' }, retentionReason: { type: 'string', maxLength: 1000 }, replacedBy: { type: 'string', maxLength: 500 },
                     termStatus: { type: 'string', enum: ['preferred', 'deprecated', 'redirect'] }, termReplacedBy: { type: 'string', maxLength: 500 }, preferredTerm: { type: 'string', maxLength: 300 }, disambiguation: { type: 'string', maxLength: 300 }, broaderTerms: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 }, relatedTerms: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 }, subjectTerms: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 20 }, domain: { type: 'string', maxLength: 200 }, methods: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 20 }, audience: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 12 }, retrievalCues: { type: 'array', items: { type: 'string', maxLength: 300 }, maxItems: 8 }, useWhen: { type: 'string', maxLength: 1000 },

@@ -312,6 +312,17 @@ Project notes may additionally use `project_purpose` for the reason/why and
 Keep support material separate from the executable `next_action` list; use
 `get_wiki_project_packet` for a bounded Natural Planning review of purpose,
 outcome, brainstorm, support, and next-action completeness.
+`get_wiki_policy` exposes the same organization constitution in a compact
+machine-readable form for new agents. `get_wiki_flow_health` adds the missing
+Kanban flow layer: `task_status: next_action` is executable WIP, an `open` item
+with a concrete `next_action` is pull-ready, and blocked/waiting work is
+reported with bounded aging. Its WIP limit is advisory and configurable; it
+does not assign work or create a second task database. Optional
+`service_class` (`expedite`, `fixed_date`, `standard`, `research`) explains
+ordering, while `completion_criteria` gives projects observable stop
+conditions. Optional `started_at`, `blocked_since`, `waiting_since`, and
+`completed_at` timestamps improve flow measurement without replacing Git
+history.
 Source snapshots should keep `citation_key` unique; `lint_wiki` reports a
 duplicate key before it can make source references ambiguous.
 Optional `focus_horizon` (`ground`, `project`, `area`, `goal`, `vision`, or

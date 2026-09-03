@@ -222,6 +222,54 @@ test('term resolution, merge preview, and citation graph stay bounded and non-mu
   }
 });
 
+test('projects expose bounded flow health and the organization policy contract', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'flow-policy-owner', modelId: 'codex', password: 'flow-policy-password' });
+    const accessToken = registration.value.accessToken;
+    const write = async (path: string, frontmatter: Record<string, unknown>) => {
+      const result = await client.callTool({ name: 'write_note', arguments: {
+        path, content: `# ${path}\n\nFlow fixture.\n`, frontmatter, expectedRevision: 'missing', accessToken,
+      } });
+      expect(result.isError).toBeFalsy();
+    };
+    await write('Projects/Active.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'project', lifecycle: 'active', task_status: 'next_action',
+      next_action: 'Run the bounded integration test', service_class: 'research', started_at: '2020-01-01T00:00:00.000Z',
+      completion_criteria: ['The integration test passes'],
+    });
+    await write('Projects/Ready.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'project', lifecycle: 'active', task_status: 'open',
+      next_action: 'Review the resulting report', service_class: 'standard',
+    });
+    await write('Projects/Blocked.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'task', lifecycle: 'active', task_status: 'blocked',
+      blocked_since: '2020-01-01T00:00:00.000Z',
+    });
+    await write('Projects/Waiting.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'task', lifecycle: 'active', task_status: 'waiting',
+      waiting_for: 'A source review', waiting_since: '2020-01-01T00:00:00.000Z',
+    });
+
+    const flow = await callJson(client, 'get_wiki_flow_health', { wipLimit: 3, blockedAfterDays: 7, waitingAfterDays: 14, limit: 10, maxChars: 7000, accessToken });
+    expect(flow.value.flow).toMatchObject({ totalWork: 4, activeWip: 1, readyToPull: 1, blocked: 1, waiting: 1, pullAllowed: true });
+    expect(flow.value.lanes.active).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Projects/Active.md', serviceClass: 'research' })]));
+    expect(flow.value.lanes.blocked).toEqual(expect.arrayContaining([expect.objectContaining({ aging: true })]));
+    expect(flow.value.lanes.waiting).toEqual(expect.arrayContaining([expect.objectContaining({ aging: true, waitingFor: 'A source review' })]));
+    expect(JSON.stringify(flow.value).length).toBeLessThanOrEqual(7000);
+
+    const policy = await callJson(client, 'get_wiki_policy', { maxChars: 7000, accessToken });
+    expect(policy.value.sourceOfTruth).toEqual(expect.arrayContaining(['ordinary Markdown body', 'YAML Properties', 'Git history and revisions']));
+    expect(policy.value.work).toMatchObject({ wipLimitDefault: 3, separateFromKnowledgeLifecycle: true, completionCriteria: expect.any(String) });
+    expect(policy.value.work.statuses).toEqual(expect.arrayContaining(['next_action', 'waiting', 'blocked']));
+    expect(policy.value.filing.rule).toContain('visibility boundaries');
+    expect(JSON.stringify(policy.value).length).toBeLessThanOrEqual(7000);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 async function setup() {
   const server = createServer(vault, { version: '1.0.0' });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();

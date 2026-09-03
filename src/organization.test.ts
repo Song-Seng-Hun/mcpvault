@@ -118,6 +118,31 @@ describe('knowledge organization focus and summary metadata', () => {
     }, '# Drift\n').map(issue => issue.code)).toEqual(expect.arrayContaining(['property_contract_violation', 'invalid_review_interval_days']));
   });
 
+  test('normalizes Kanban service classes, completion criteria, and flow timestamps', () => {
+    expect(knowledgeOrganization({
+      status: 'draft', noteKind: 'project', lifecycle: 'active', serviceClass: 'RESEARCH',
+      completionCriteria: ['A checked result exists', 'A reusable note is linked', 'A checked result exists'],
+      startedAt: '2030-01-01T10:00:00.000Z', completedAt: '2030-01-02T10:00:00.000Z',
+    })).toMatchObject({
+      service_class: 'research',
+      completion_criteria: ['A checked result exists', 'A reusable note is linked'],
+      started_at: '2030-01-01T10:00:00.000Z', completed_at: '2030-01-02T10:00:00.000Z',
+    });
+    expect(() => knowledgeOrganization({ status: 'draft', serviceClass: 'urgent' })).toThrow(/serviceClass/);
+  });
+
+  test('warns when active project work has no observable completion condition', () => {
+    expect(organizationLintIssues('Projects/Unbounded.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'project', lifecycle: 'active',
+      project_purpose: 'Improve the workflow', desired_outcome: 'A better workflow',
+    }, '# Unbounded project\n').map(issue => issue.code)).toContain('active_project_without_completion_criteria');
+    expect(organizationLintIssues('Projects/Bounded.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'project', lifecycle: 'active',
+      project_purpose: 'Improve the workflow', desired_outcome: 'A better workflow',
+      completion_criteria: ['The workflow is tested'],
+    }, '# Bounded project\n').map(issue => issue.code)).not.toContain('active_project_without_completion_criteria');
+  });
+
   test('publishes relation meaning without inventing inverse Properties', () => {
     expect(getOrganizationRelationContract()).toEqual(expect.arrayContaining([
       expect.objectContaining({ field: 'supports', direction: 'directional', reciprocal: false }),

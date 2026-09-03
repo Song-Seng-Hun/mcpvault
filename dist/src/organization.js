@@ -9,6 +9,8 @@ import { createHash } from 'node:crypto';
 export const NOTE_KINDS = ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'];
 export const LIFECYCLES = ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'];
 export const TASK_STATUSES = ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'];
+/** Optional Kanban-style class of service for executable work. */
+export const SERVICE_CLASSES = ['expedite', 'fixed_date', 'standard', 'research'];
 export const REVIEW_POLICIES = ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit'];
 export const REVIEW_OUTCOMES = ['confirmed', 'revised', 'disputed', 'superseded', 'rescheduled'];
 /** Small, repeatable quality checklist for an evidence review. */
@@ -102,6 +104,12 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'project_support', type: 'list', description: 'Project reference material, not another task list', appliesTo: ['project'] },
     { name: 'task_context', type: 'text', description: 'Execution context such as @research or @computer', appliesTo: ['project', 'task'] },
     { name: 'task_status', type: 'text', description: 'Operational task state, separate from lifecycle', allowed: TASK_STATUSES, appliesTo: ['project', 'task'] },
+    { name: 'service_class', type: 'text', description: 'Optional Kanban priority class; does not bypass evidence or scope rules', allowed: SERVICE_CLASSES, appliesTo: ['project', 'task'] },
+    { name: 'completion_criteria', type: 'list', description: 'Bounded observable conditions for considering project/task work complete', appliesTo: ['project', 'task'] },
+    { name: 'started_at', type: 'text', description: 'Optional ISO time when executable work entered progress', appliesTo: ['project', 'task'] },
+    { name: 'blocked_since', type: 'text', description: 'Optional ISO time when work became blocked', appliesTo: ['project', 'task'] },
+    { name: 'waiting_since', type: 'text', description: 'Optional ISO time when work began waiting on an external dependency', appliesTo: ['project', 'task'] },
+    { name: 'completed_at', type: 'text', description: 'Optional ISO time when work reached completion', appliesTo: ['project', 'task'] },
     { name: 'due_at', type: 'text', description: 'Latest acceptable completion time', appliesTo: ['project', 'task'] },
     { name: 'scheduled_at', type: 'text', description: 'Intended execution/calendar time', appliesTo: ['project', 'task'] },
     { name: 'defer_until', type: 'text', description: 'Do not reconsider before this time', appliesTo: ['project', 'task'] },
@@ -183,8 +191,8 @@ export function organizationNoteTemplate(value = 'atomic') {
         },
         project: {
             purpose: 'An outcome-oriented project with one immediately actionable next step.',
-            properties: { note_kind: 'project', lifecycle: 'active', task_status: 'open', desired_outcome: '', next_action: '' },
-            markdown: '# {{title}}\n\n## Desired outcome\n\n## Next action\n\n## Support\n- [[ ]]\n',
+            properties: { note_kind: 'project', lifecycle: 'active', task_status: 'open', desired_outcome: '', next_action: '', completion_criteria: [] },
+            markdown: '# {{title}}\n\n## Desired outcome\n\n## Completion criteria\n- [ ] \n\n## Next action\n\n## Support\n- [[ ]]\n',
         },
         moc: {
             purpose: 'A map of content that answers a bounded set of navigation questions.',
@@ -210,6 +218,7 @@ const OBSIDIAN_COMPLEX_PROPERTY_FIELDS = ['summary_highlights', 'claims', 'evide
 const noteKindSet = new Set(NOTE_KINDS);
 const lifecycleSet = new Set(LIFECYCLES);
 const taskStatusSet = new Set(TASK_STATUSES);
+const serviceClassSet = new Set(SERVICE_CLASSES);
 const reviewPolicySet = new Set(REVIEW_POLICIES);
 const reviewOutcomeSet = new Set(REVIEW_OUTCOMES);
 const reviewCheckSet = new Set(REVIEW_CHECKS);
@@ -302,6 +311,14 @@ export function normalizeTaskStatus(value, fallback) {
     const normalized = String(value).trim().toLowerCase();
     if (!taskStatusSet.has(normalized))
         throw new Error(`taskStatus must be one of: ${TASK_STATUSES.join(', ')}`);
+    return normalized;
+}
+export function normalizeServiceClass(value, fallback) {
+    if (value === undefined || value === null || String(value).trim() === '')
+        return fallback;
+    const normalized = String(value).trim().toLowerCase();
+    if (!serviceClassSet.has(normalized))
+        throw new Error(`serviceClass must be one of: ${SERVICE_CLASSES.join(', ')}`);
     return normalized;
 }
 export function normalizeReviewPolicy(value, fallback) {
@@ -550,6 +567,12 @@ export function knowledgeOrganization(input) {
     const dueAt = input.dueAt === undefined ? normalizeIsoDate(existing.due_at, 'dueAt') : normalizeIsoDate(input.dueAt, 'dueAt');
     const scheduledAt = input.scheduledAt === undefined ? normalizeIsoDate(existing.scheduled_at, 'scheduledAt') : normalizeIsoDate(input.scheduledAt, 'scheduledAt');
     const deferUntil = input.deferUntil === undefined ? normalizeIsoDate(existing.defer_until, 'deferUntil') : normalizeIsoDate(input.deferUntil, 'deferUntil');
+    const serviceClass = input.serviceClass === undefined ? normalizeServiceClass(existing.service_class) : normalizeServiceClass(input.serviceClass);
+    const completionCriteria = input.completionCriteria === undefined ? normalizedList(existing.completion_criteria, 'completionCriteria', 12, 500) : normalizedList(input.completionCriteria, 'completionCriteria', 12, 500);
+    const startedAt = input.startedAt === undefined ? normalizeIsoDate(existing.started_at, 'startedAt') : normalizeIsoDate(input.startedAt, 'startedAt');
+    const blockedSince = input.blockedSince === undefined ? normalizeIsoDate(existing.blocked_since, 'blockedSince') : normalizeIsoDate(input.blockedSince, 'blockedSince');
+    const waitingSince = input.waitingSince === undefined ? normalizeIsoDate(existing.waiting_since, 'waitingSince') : normalizeIsoDate(input.waitingSince, 'waitingSince');
+    const completedAt = input.completedAt === undefined ? normalizeIsoDate(existing.completed_at, 'completedAt') : normalizeIsoDate(input.completedAt, 'completedAt');
     const stableId = input.stableId === undefined ? optionalText(existing.stable_id, 'stable_id', 80) : optionalText(input.stableId, 'stable_id', 80);
     if (stableId && !/^[a-z0-9][a-z0-9._-]*$/i.test(stableId))
         throw new Error('stableId may contain only letters, numbers, dots, underscores, and hyphens');
@@ -668,6 +691,12 @@ export function knowledgeOrganization(input) {
         ...(dueAt && { due_at: dueAt }),
         ...(scheduledAt && { scheduled_at: scheduledAt }),
         ...(deferUntil && { defer_until: deferUntil }),
+        ...(serviceClass && { service_class: serviceClass }),
+        ...(completionCriteria && { completion_criteria: completionCriteria }),
+        ...(startedAt && { started_at: startedAt }),
+        ...(blockedSince && { blocked_since: blockedSince }),
+        ...(waitingSince && { waiting_since: waitingSince }),
+        ...(completedAt && { completed_at: completedAt }),
         ...(stableId && { stable_id: stableId }),
         ...(canonicalPath && { canonical_path: canonicalPath }),
         ...(termStatus !== 'preferred' && { term_status: termStatus }),
@@ -977,6 +1006,17 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
     if (frontmatter.task_status !== undefined && !taskStatusSet.has(String(frontmatter.task_status).trim().toLowerCase())) {
         issues.push({ code: 'invalid_task_status', detail: `task_status must be one of: ${TASK_STATUSES.join(', ')}` });
     }
+    if (frontmatter.service_class !== undefined && !serviceClassSet.has(String(frontmatter.service_class).trim().toLowerCase())) {
+        issues.push({ code: 'invalid_service_class', detail: `service_class must be one of: ${SERVICE_CLASSES.join(', ')}` });
+    }
+    if (frontmatter.completion_criteria !== undefined) {
+        try {
+            normalizedList(frontmatter.completion_criteria, 'completionCriteria', 12, 500);
+        }
+        catch (error) {
+            issues.push({ code: 'invalid_completion_criteria', detail: error instanceof Error ? error.message : 'completion_criteria must be a bounded string array.' });
+        }
+    }
     if (frontmatter.review_policy !== undefined && !reviewPolicySet.has(String(frontmatter.review_policy).trim().toLowerCase())) {
         issues.push({ code: 'invalid_review_policy', detail: `review_policy must be one of: ${REVIEW_POLICIES.join(', ')}` });
     }
@@ -994,7 +1034,7 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
     if (frontmatter.last_review_trigger !== undefined && (typeof frontmatter.last_review_trigger !== 'string' || Array.from(frontmatter.last_review_trigger).length > 120)) {
         issues.push({ code: 'invalid_last_review_trigger', detail: 'last_review_trigger must be text of 120 Unicode characters or fewer.' });
     }
-    for (const [field, value] of [['due_at', frontmatter.due_at], ['scheduled_at', frontmatter.scheduled_at], ['defer_until', frontmatter.defer_until], ['last_reviewed_at', frontmatter.last_reviewed_at], ['review_snoozed_until', frontmatter.review_snoozed_until]]) {
+    for (const [field, value] of [['due_at', frontmatter.due_at], ['scheduled_at', frontmatter.scheduled_at], ['defer_until', frontmatter.defer_until], ['started_at', frontmatter.started_at], ['blocked_since', frontmatter.blocked_since], ['waiting_since', frontmatter.waiting_since], ['completed_at', frontmatter.completed_at], ['last_reviewed_at', frontmatter.last_reviewed_at], ['review_snoozed_until', frontmatter.review_snoozed_until]]) {
         if (value !== undefined && (!/^(?:\d{4}-\d{2}-\d{2})(?:T[^\s]+)?$/.test(String(value).trim()) || Number.isNaN(Date.parse(String(value).trim())))) {
             issues.push({ code: `invalid_${field}`, detail: `${field} should be an ISO date or date-time.` });
         }
@@ -1094,6 +1134,12 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
     }
     if (kind === 'project' && lifecycle === 'active' && !frontmatter.project_purpose && !frontmatter.desired_outcome) {
         issues.push({ code: 'active_project_without_outcome', detail: 'An active project should state its purpose or desired_outcome so planning and review can distinguish it from an area.' });
+    }
+    if (kind === 'project' && lifecycle === 'active' && (frontmatter.desired_outcome || frontmatter.project_purpose)) {
+        const criteria = Array.isArray(frontmatter.completion_criteria) ? frontmatter.completion_criteria.filter((item) => typeof item === 'string' && item.trim()) : [];
+        const hasCriteriaHeading = /(^|\n) {0,3}#{1,6}\s+(?:outcome|desired outcome|definition of done|completion criteria|완료 조건)\s*#*\s*(?:\n|$)/i.test(content);
+        if (criteria.length === 0 && !hasCriteriaHeading)
+            issues.push({ code: 'active_project_without_completion_criteria', detail: 'An active project should state bounded observable completion_criteria or a completion-criteria heading so agents know when to stop.' });
     }
     if (kind === 'project' && lifecycle === 'active' && String(frontmatter.task_status || '').toLowerCase() === 'waiting' && !frontmatter.waiting_for) {
         issues.push({ code: 'waiting_project_without_owner', detail: 'A waiting project should identify the person, event, or resource it is waiting for.' });
