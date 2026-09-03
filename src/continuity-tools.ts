@@ -9,7 +9,7 @@ export function getContinuityTools(): Tool[] {
   return [
     {
       name: 'save_work_state',
-      description: 'Save a compact private resume checkpoint in this authenticated model or agent scope. Use before a context limit, handoff, session end, or interrupted multi-note edit. pendingEdits preserves only endpoint/path/expectedRevision/purpose guards; re-read every path before resuming. Never store passwords, access tokens, note bodies, or sensitive prompt text.',
+      description: 'Save a compact private resume checkpoint in this authenticated model or agent scope. Use before a context limit, handoff, session end, or interrupted multi-note edit. pendingEdits preserves only endpoint/path/expectedRevision/purpose guards; researchTrail preserves bounded query/read/finding/decision summaries without raw prompts or note bodies. Re-read every path before resuming. Never store passwords, access tokens, note bodies, or sensitive prompt text.',
       inputSchema: { type: 'object', properties: {
         topic: { type: 'string', description: 'Short name of the work in progress' },
         summary: { type: 'string', description: 'What has been established so far' },
@@ -19,6 +19,7 @@ export function getContinuityTools(): Tool[] {
         focusProjects: { type: 'array', items: { type: 'string' }, maxItems: 20, description: 'Private top-of-mind projects or outcomes' },
         focusNotes: { type: 'array', items: { type: 'string' }, maxItems: 20, description: 'Private notes/links to inspect first' },
         pendingEdits: { type: 'array', maxItems: 20, description: 'Revision guards for interrupted edits; this never reserves or locks a note', items: { type: 'object', properties: { path: { type: 'string', maxLength: 500 }, expectedRevision: { type: 'string', maxLength: 200 }, endpointId: { type: 'string', maxLength: 120 }, purpose: { type: 'string', maxLength: 500 } }, required: ['path', 'expectedRevision', 'endpointId'] } },
+        researchTrail: { type: 'array', maxItems: 20, description: 'Private compact investigation trail. Store only short conclusions and revision-stamped paths; never raw prompts, bodies, secrets, or hidden reasoning.', items: { type: 'object', properties: { kind: { type: 'string', enum: ['query', 'read', 'finding', 'decision'] }, summary: { type: 'string', maxLength: 500 }, path: { type: 'string', maxLength: 500 }, revision: { type: 'string', maxLength: 200 } }, required: ['kind', 'summary'] } },
         references: { type: 'array', items: { type: 'string' }, description: 'Note paths or scope URIs to revisit' },
         cursors: { type: 'object', description: 'Small notification/comment/message cursors for incremental resumption' },
         expectedRevision: { type: 'string', description: 'Revision returned by the prior checkpoint read; prevents stale overwrites' },

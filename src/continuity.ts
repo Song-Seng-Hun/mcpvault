@@ -28,6 +28,7 @@ function list(value: unknown, field: string): string[] | undefined {
 }
 
 type PendingEdit = { path: string; expectedRevision: string; endpointId: string; purpose?: string };
+type ResearchTrailItem = { kind: 'query' | 'read' | 'finding' | 'decision'; summary: string; path?: string; revision?: string };
 
 function pendingEdits(value: unknown): PendingEdit[] | undefined {
   if (value === undefined) return undefined;
@@ -50,7 +51,28 @@ function pendingEdits(value: unknown): PendingEdit[] | undefined {
   return result;
 }
 
-function render(state: { topic: string; summary: string; nextAction: string; openQuestions?: string[]; references?: string[]; cursors?: Record<string, unknown>; focus?: { questions?: string[]; projects?: string[]; notes?: string[] }; pendingEdits?: PendingEdit[] }): string {
+function researchTrail(value: unknown): ResearchTrailItem[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new Error('researchTrail must be an array');
+  const result: ResearchTrailItem[] = [];
+  for (const raw of value.slice(0, 20)) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Each researchTrail item must be an object');
+    const item = raw as Record<string, unknown>;
+    const kind = String(item.kind ?? '').trim().toLowerCase() as ResearchTrailItem['kind'];
+    const summary = String(item.summary ?? '').trim().replace(/\s+/g, ' ');
+    const path = String(item.path ?? '').trim().replace(/\\/g, '/');
+    const revision = String(item.revision ?? '').trim();
+    if (!['query', 'read', 'finding', 'decision'].includes(kind)) throw new Error('researchTrail.kind must be query, read, finding, or decision');
+    if (!summary || summary.length > 500) throw new Error('researchTrail.summary is required and must be 500 characters or fewer');
+    if (path && (path.length > 500 || path.split('/').includes('..'))) throw new Error('researchTrail.path must be a safe note path or scope URI of 500 characters or fewer');
+    if (revision.length > 200) throw new Error('researchTrail.revision must be 200 characters or fewer');
+    const normalized = { kind, summary, ...(path && { path }), ...(revision && { revision }) };
+    if (!result.some(existing => existing.kind === kind && existing.summary === summary && existing.path === path)) result.push(normalized);
+  }
+  return result;
+}
+
+function render(state: { topic: string; summary: string; nextAction: string; openQuestions?: string[]; references?: string[]; cursors?: Record<string, unknown>; focus?: { questions?: string[]; projects?: string[]; notes?: string[] }; pendingEdits?: PendingEdit[]; researchTrail?: ResearchTrailItem[] }): string {
   return [
     `# Work state: ${state.topic}`,
     '',
@@ -65,6 +87,7 @@ function render(state: { topic: string; summary: string; nextAction: string; ope
     ...(state.focus?.projects?.length ? ['', '## Top-of-mind projects', '', ...state.focus.projects.map(item => `- ${item}`)] : []),
     ...(state.focus?.notes?.length ? ['', '## Top-of-mind notes', '', ...state.focus.notes.map(item => `- ${item}`)] : []),
     ...(state.pendingEdits?.length ? ['', '## Pending revision-checked edits', '', ...state.pendingEdits.map(item => `- ${item.endpointId} · ${item.path} · revision ${item.expectedRevision}${item.purpose ? ` · ${item.purpose}` : ''}`)] : []),
+    ...(state.researchTrail?.length ? ['', '## Research trail', '', ...state.researchTrail.map(item => `- ${item.kind} · ${item.summary}${item.path ? ` · ${item.path}` : ''}${item.revision ? ` · revision ${item.revision}` : ''}`)] : []),
     ...(state.cursors && Object.keys(state.cursors).length ? ['', '## Cursors', '', '```json', JSON.stringify(state.cursors), '```'] : []),
     '',
   ].join('\n');
@@ -73,7 +96,7 @@ function render(state: { topic: string; summary: string; nextAction: string; ope
 export class ContinuityService {
   constructor(private readonly fileSystem: FileSystemService) {}
 
-  async save(params: { principal?: ScopePrincipal; topic: string; summary: string; nextAction: string; openQuestions?: unknown; references?: unknown; cursors?: unknown; focusQuestions?: unknown; focusProjects?: unknown; focusNotes?: unknown; pendingEdits?: unknown; expectedRevision?: string }) {
+  async save(params: { principal?: ScopePrincipal; topic: string; summary: string; nextAction: string; openQuestions?: unknown; references?: unknown; cursors?: unknown; focusQuestions?: unknown; focusProjects?: unknown; focusNotes?: unknown; pendingEdits?: unknown; researchTrail?: unknown; expectedRevision?: string }) {
     const principal = requiredPrincipal(params.principal);
     const topic = short(params.topic, 'topic', true)!;
     const summary = short(params.summary, 'summary', true)!;
@@ -84,6 +107,7 @@ export class ContinuityService {
     const focusProjects = list(params.focusProjects, 'focusProjects');
     const focusNotes = list(params.focusNotes, 'focusNotes');
     const pending = pendingEdits(params.pendingEdits);
+    const trail = researchTrail(params.researchTrail);
     if (params.cursors !== undefined && (!params.cursors || typeof params.cursors !== 'object' || Array.isArray(params.cursors))) throw new Error('cursors must be an object');
     const path = ownerPath(principal);
     const existing = await this.fileSystem.noteExists(path) ? await this.fileSystem.readNote(path) : undefined;
@@ -91,12 +115,12 @@ export class ContinuityService {
     const updatedAt = new Date().toISOString();
     await this.fileSystem.writeNote({
       path,
-      content: render({ topic, summary, nextAction, ...(openQuestions && { openQuestions }), ...(references && { references }), ...(params.cursors && { cursors: params.cursors as Record<string, unknown> }), focus: { ...(focusQuestions && { questions: focusQuestions }), ...(focusProjects && { projects: focusProjects }), ...(focusNotes && { notes: focusNotes }) }, ...(pending && { pendingEdits: pending }) }),
+      content: render({ topic, summary, nextAction, ...(openQuestions && { openQuestions }), ...(references && { references }), ...(params.cursors && { cursors: params.cursors as Record<string, unknown> }), focus: { ...(focusQuestions && { questions: focusQuestions }), ...(focusProjects && { projects: focusProjects }), ...(focusNotes && { notes: focusNotes }) }, ...(pending && { pendingEdits: pending }), ...(trail && { researchTrail: trail }) }),
       frontmatter: {
         mcpvault_type: 'agent_work_state', owner: principal.agentId || principal.modelId,
         model_id: principal.modelId, ...(principal.agentId && { agent_id: principal.agentId }),
         topic, next_action: nextAction, open_questions: openQuestions || [], references: references || [],
-        cursors: params.cursors || {}, focus_questions: focusQuestions || [], focus_projects: focusProjects || [], focus_notes: focusNotes || [], pending_edits: pending || [], updated_at: updatedAt,
+        cursors: params.cursors || {}, focus_questions: focusQuestions || [], focus_projects: focusProjects || [], focus_notes: focusNotes || [], pending_edits: pending || [], research_trail: trail || [], updated_at: updatedAt,
       },
       expectedRevision,
     });

@@ -94,6 +94,10 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'audience', type: 'list', description: 'Intended readers or consumers of the note' },
     { name: 'retrieval_cues', type: 'list', description: 'Situations or problem signals that should surface this note' },
     { name: 'use_when', type: 'text', description: 'Compact description of when this note is useful' },
+    { name: 'valid_from', type: 'text', description: 'Inclusive ISO date/time from which the claim or observation is applicable' },
+    { name: 'valid_until', type: 'text', description: 'Exclusive ISO date/time after which the claim or observation must be reviewed before reuse' },
+    { name: 'observed_at', type: 'text', description: 'ISO date/time when the represented condition was observed; distinct from file modification and source publication time' },
+    { name: 'temporal_scope', type: 'text', description: 'Short human-readable condition or period in which the knowledge applies' },
     { name: 'knowledge_role', type: 'text', description: 'Atomic-note role in the knowledge graph', allowed: KNOWLEDGE_ROLES },
     { name: 'see_also', type: 'list', description: 'Additional Obsidian links for adjacent knowledge' },
     { name: 'summary', type: 'text', description: 'Compact progressive-read projection' },
@@ -549,6 +553,41 @@ export function normalizeIsoDate(value, field) {
         throw new Error(`${field} must be an ISO date or date-time`);
     return date;
 }
+/**
+ * Derive a claim-validity card without confusing it with file, source, task,
+ * or review dates. valid_from is inclusive and valid_until is exclusive.
+ * This is a scheduling/navigation signal, never a truth judgment.
+ */
+export function temporalValidity(frontmatter, asOfMs = Date.now()) {
+    const validFrom = typeof frontmatter.valid_from === 'string' && frontmatter.valid_from.trim() ? frontmatter.valid_from.trim() : undefined;
+    const validUntil = typeof frontmatter.valid_until === 'string' && frontmatter.valid_until.trim() ? frontmatter.valid_until.trim() : undefined;
+    const observedAt = typeof frontmatter.observed_at === 'string' && frontmatter.observed_at.trim() ? frontmatter.observed_at.trim() : undefined;
+    const temporalScope = typeof frontmatter.temporal_scope === 'string' && frontmatter.temporal_scope.trim() ? frontmatter.temporal_scope.trim() : undefined;
+    const card = {
+        asOf: new Date(asOfMs).toISOString(),
+        ...(validFrom && { validFrom }),
+        ...(validUntil && { validUntil }),
+        ...(observedAt && { observedAt }),
+        ...(temporalScope && { temporalScope }),
+    };
+    const parse = (value) => value === undefined ? undefined : Date.parse(value);
+    const fromMs = parse(validFrom);
+    const untilMs = parse(validUntil);
+    const observedMs = parse(observedAt);
+    if ((validFrom && !Number.isFinite(fromMs)) || (validUntil && !Number.isFinite(untilMs)) || (observedAt && !Number.isFinite(observedMs))) {
+        return { state: 'invalid', ...card, reason: 'invalid_temporal_date' };
+    }
+    if (fromMs !== undefined && untilMs !== undefined && untilMs <= fromMs) {
+        return { state: 'invalid', ...card, reason: 'invalid_validity_range' };
+    }
+    if (fromMs !== undefined && asOfMs < fromMs)
+        return { state: 'not_yet_valid', ...card };
+    if (untilMs !== undefined && asOfMs >= untilMs)
+        return { state: 'expired', ...card };
+    if (validFrom || validUntil)
+        return { state: 'current', ...card };
+    return { state: 'unspecified', ...card };
+}
 export function knowledgeOrganization(input) {
     const existing = input.existing || {};
     const executionHints = {};
@@ -639,6 +678,12 @@ export function knowledgeOrganization(input) {
     const audience = input.audience === undefined ? normalizedList(existing.audience, 'audience', 12, 200) : normalizedList(input.audience, 'audience', 12, 200);
     const retrievalCues = input.retrievalCues === undefined ? normalizedList(existing.retrieval_cues, 'retrievalCues', 8, 300) : normalizedList(input.retrievalCues, 'retrievalCues', 8, 300);
     const useWhen = input.useWhen === undefined ? optionalText(existing.use_when, 'useWhen', 1000) : optionalText(input.useWhen, 'useWhen', 1000);
+    const validFrom = input.validFrom === undefined ? normalizeIsoDate(existing.valid_from, 'validFrom') : normalizeIsoDate(input.validFrom, 'validFrom');
+    const validUntil = input.validUntil === undefined ? normalizeIsoDate(existing.valid_until, 'validUntil') : normalizeIsoDate(input.validUntil, 'validUntil');
+    const observedAt = input.observedAt === undefined ? normalizeIsoDate(existing.observed_at, 'observedAt') : normalizeIsoDate(input.observedAt, 'observedAt');
+    const temporalScope = input.temporalScope === undefined ? optionalText(existing.temporal_scope, 'temporalScope', 1000) : optionalText(input.temporalScope, 'temporalScope', 1000);
+    if (validFrom && validUntil && Date.parse(validUntil) <= Date.parse(validFrom))
+        throw new Error('validUntil must be later than validFrom; validFrom is inclusive and validUntil is exclusive');
     const knowledgeRole = input.knowledgeRole === undefined ? normalizeKnowledgeRole(existing.knowledge_role) : normalizeKnowledgeRole(input.knowledgeRole);
     const seeAlso = input.seeAlso === undefined ? normalizedList(existing.see_also, 'seeAlso', 20, 500) : normalizedList(input.seeAlso, 'seeAlso', 20, 500);
     const relationsInput = input.relations === undefined
@@ -769,6 +814,10 @@ export function knowledgeOrganization(input) {
         ...(audience && { audience }),
         ...(retrievalCues && { retrieval_cues: retrievalCues }),
         ...(useWhen && { use_when: useWhen }),
+        ...(validFrom && { valid_from: validFrom }),
+        ...(validUntil && { valid_until: validUntil }),
+        ...(observedAt && { observed_at: observedAt }),
+        ...(temporalScope && { temporal_scope: temporalScope }),
         ...(knowledgeRole && { knowledge_role: knowledgeRole }),
         ...(seeAlso && { see_also: seeAlso }),
         ...(taskStatus && { task_status: taskStatus }),
@@ -1096,13 +1145,23 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
     if (frontmatter.last_review_trigger !== undefined && (typeof frontmatter.last_review_trigger !== 'string' || Array.from(frontmatter.last_review_trigger).length > 120)) {
         issues.push({ code: 'invalid_last_review_trigger', detail: 'last_review_trigger must be text of 120 Unicode characters or fewer.' });
     }
-    for (const [field, value] of [['due_at', frontmatter.due_at], ['scheduled_at', frontmatter.scheduled_at], ['defer_until', frontmatter.defer_until], ['started_at', frontmatter.started_at], ['blocked_since', frontmatter.blocked_since], ['waiting_since', frontmatter.waiting_since], ['completed_at', frontmatter.completed_at], ['last_reviewed_at', frontmatter.last_reviewed_at], ['review_snoozed_until', frontmatter.review_snoozed_until]]) {
+    for (const [field, value] of [['due_at', frontmatter.due_at], ['scheduled_at', frontmatter.scheduled_at], ['defer_until', frontmatter.defer_until], ['started_at', frontmatter.started_at], ['blocked_since', frontmatter.blocked_since], ['waiting_since', frontmatter.waiting_since], ['completed_at', frontmatter.completed_at], ['last_reviewed_at', frontmatter.last_reviewed_at], ['review_snoozed_until', frontmatter.review_snoozed_until], ['valid_from', frontmatter.valid_from], ['valid_until', frontmatter.valid_until], ['observed_at', frontmatter.observed_at]]) {
         if (value !== undefined && (!/^(?:\d{4}-\d{2}-\d{2})(?:T[^\s]+)?$/.test(String(value).trim()) || Number.isNaN(Date.parse(String(value).trim())))) {
             issues.push({ code: `invalid_${field}`, detail: `${field} should be an ISO date or date-time.` });
         }
     }
     if (frontmatter.review_snooze_reason !== undefined && (typeof frontmatter.review_snooze_reason !== 'string' || Array.from(String(frontmatter.review_snooze_reason)).length > 500)) {
         issues.push({ code: 'invalid_review_snooze_reason', detail: 'review_snooze_reason must be text of 500 Unicode characters or fewer.' });
+    }
+    if (frontmatter.temporal_scope !== undefined && (typeof frontmatter.temporal_scope !== 'string' || !String(frontmatter.temporal_scope).trim() || Array.from(String(frontmatter.temporal_scope)).length > 1000)) {
+        issues.push({ code: 'invalid_temporal_scope', detail: 'temporal_scope must be non-empty text of 1000 Unicode characters or fewer.' });
+    }
+    const temporal = temporalValidity(frontmatter, nowMs);
+    if (temporal.state === 'invalid' && temporal.reason === 'invalid_validity_range') {
+        issues.push({ code: 'invalid_temporal_validity_range', detail: 'valid_until must be later than valid_from; valid_from is inclusive and valid_until is exclusive.' });
+    }
+    if (type === 'knowledge' && temporal.state === 'expired' && !['archived', 'superseded'].includes(lifecycle || '')) {
+        issues.push({ code: 'knowledge_validity_expired', detail: `The knowledge validity ended at ${temporal.validUntil}; review it before reuse. File modification and review dates do not extend claim validity.` });
     }
     if (frontmatter.last_recalled_at !== undefined && (!/^\d{4}-\d{2}-\d{2}(?:T[^\s]+)?$/.test(String(frontmatter.last_recalled_at).trim()) || Number.isNaN(Date.parse(String(frontmatter.last_recalled_at).trim())))) {
         issues.push({ code: 'invalid_last_recalled_at', detail: 'last_recalled_at should be an ISO date or date-time.' });

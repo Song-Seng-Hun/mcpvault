@@ -1817,3 +1817,56 @@ test('mixed Korean and English retrieval keeps durable Wiki context ahead of noi
     await server.close();
   }
 });
+
+test('temporal validity and source-work diversity remain bounded review signals', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'temporal-owner', modelId: 'codex', password: 'temporal-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const sourceA1 = await callJson(client, 'ingest_source', { sourceId: 'temporal-a1', title: 'Study A first snapshot', content: '# Study A\n\nFirst retrieval.\n', sourceWorkId: 'study-a', sourceEditionId: 'edition-1', accessToken });
+    const sourceA2 = await callJson(client, 'ingest_source', { sourceId: 'temporal-a2', title: 'Study A second snapshot', content: '# Study A\n\nSecond retrieval.\n', sourceWorkId: 'study-a', sourceEditionId: 'edition-2', accessToken });
+    const sourceB = await callJson(client, 'ingest_source', { sourceId: 'temporal-b', title: 'Study B', content: '# Study B\n\nIndependent work.\n', sourceWorkId: 'study-b', sourceEditionId: 'edition-1', accessToken });
+    const published = await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Time bounded claim.md', content: '# Time bounded claim\n\nThis condition applies only during the declared window.\n',
+      evidencePaths: [sourceA1.value.path, sourceA2.value.path, sourceB.value.path],
+      validFrom: '2030-01-01T00:00:00.000Z', validUntil: '2030-02-01T00:00:00.000Z', observedAt: '2029-12-20T00:00:00.000Z', temporalScope: '2030 winter policy window',
+      expectedRevision: 'missing', accessToken,
+    });
+    expect(published.value.revision).toMatch(/^[a-f0-9]{64}$/);
+    const projection = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Time bounded claim.md', accessToken });
+    expect(projection.value.temporal).toMatchObject({ state: 'not_yet_valid', validFrom: '2030-01-01T00:00:00.000Z', validUntil: '2030-02-01T00:00:00.000Z', observedAt: '2029-12-20T00:00:00.000Z', temporalScope: '2030 winter policy window' });
+
+    const catalog = await callJson(client, 'get_wiki_catalog', { validity: 'current', validAt: '2030-01-15T00:00:00.000Z', includeFacets: true, limit: 20, maxChars: 8000, accessToken });
+    expect(catalog.value.entries).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Time bounded claim.md', temporal: expect.objectContaining({ state: 'current' }) })]));
+    expect(catalog.value.facets.validity.current).toBeGreaterThanOrEqual(1);
+
+    const packet = await callJson(client, 'get_wiki_answer_packet', { path: 'Knowledge/Time bounded claim.md', intent: 'decide', includeSemantic: false, maxChars: 12000, accessToken });
+    expect(packet.value.evidenceDiversity).toMatchObject({ status: 'multiple_source_works', evidencePathCount: 3, scannedSnapshotCount: 3, distinctSourceWorkCount: 2 });
+    expect(packet.value.evidenceDiversity.sourceWorks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ workId: 'study-a', snapshotCount: 2 }),
+      expect.objectContaining({ workId: 'study-b', snapshotCount: 1 }),
+    ]));
+
+    const manual = await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/Stale evidence locator.md', content: '# Stale evidence locator\n\nA manually imported legacy note.\n',
+      frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'review', evidence_paths: [sourceB.value.path], evidence: [{ path: sourceB.value.path, revision: '0'.repeat(64) }] },
+      expectedRevision: 'missing', accessToken,
+    } });
+    expect(manual.isError).toBeFalsy();
+    const stalePacket = await callJson(client, 'get_wiki_answer_packet', { path: 'Knowledge/Stale evidence locator.md', intent: 'review', includeSemantic: false, maxChars: 8000, accessToken });
+    expect(stalePacket.value.evidenceDiversity).toMatchObject({ status: 'single_source_work', distinctSourceWorkCount: 1, staleLocatorCount: 1 });
+    expect(stalePacket.value.reasoningTrail.gaps).toContain('independent_source_work_review');
+
+    await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Expired claim.md', content: '# Expired claim\n\nThis condition no longer applies.\n', evidencePaths: [sourceB.value.path],
+      validUntil: '2020-01-01T00:00:00.000Z', expectedRevision: 'missing', accessToken,
+    });
+    const review = await callJson(client, 'get_wiki_review_queue', { limit: 20, maxChars: 10000, accessToken });
+    expect(review.value.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/Expired claim.md', reviewReasons: expect.arrayContaining(['validity_ended']), temporal: expect.objectContaining({ state: 'expired' }) }),
+    ]));
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});

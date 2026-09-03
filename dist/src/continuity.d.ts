@@ -15,6 +15,7 @@ export declare class ContinuityService {
         focusProjects?: unknown;
         focusNotes?: unknown;
         pendingEdits?: unknown;
+        researchTrail?: unknown;
         expectedRevision?: string;
     }): Promise<{
         success: boolean;

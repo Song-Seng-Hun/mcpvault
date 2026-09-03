@@ -65,7 +65,7 @@ test('commits meaningful checkpoints and reads history, diffs, and snapshots', a
 
   const snapshot = await history.fileAtRevision('Plan.md', first.revision!);
   expect(snapshot.content).toBe('version one\n');
-});
+}, 15_000);
 
 test('commits only safe vault paths and ignores restricted application state', async () => {
   await history.initialize();

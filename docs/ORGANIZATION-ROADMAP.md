@@ -70,6 +70,19 @@ tools; new behaviors belong in the endpoint catalog.
   budgets. Public Home also excludes private/quarantined MOCs, ignores a huge
   irrelevant Property, and refreshes its revision after an external Markdown
   edit without a server restart.
+- Knowledge applicability now has an explicit clock: `valid_from` is
+  inclusive, `valid_until` is exclusive, and `observed_at`/`temporal_scope`
+  remain separate from file, source, task, retention, and review dates. The
+  live catalog can filter at a supplied instant, projections expose a compact
+  temporal card, and expired/invalid validity re-enters bounded review.
+- Answer packets now group cited snapshots into declared source works and
+  expose integrity, locator-staleness, unavailable, and non-source counts.
+  Several snapshots of one work no longer masquerade as independent
+  corroboration; the result remains advisory rather than a truth score.
+- Private continuity checkpoints now preserve a bounded research trail of
+  short query/read/finding/decision summaries plus optional path/revision
+  locators. Raw prompts, note bodies, credentials, secrets, and hidden
+  reasoning remain outside the checkpoint.
 
 Evidence: `moc-navigation.test.ts`, `backlinks.test.ts`, `organization.test.ts`,
 `filesystem.test.ts`, `continuity.test.ts`, `global-sync.test.ts`, and the

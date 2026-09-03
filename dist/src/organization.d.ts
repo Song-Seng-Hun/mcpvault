@@ -219,6 +219,21 @@ export declare function normalizeReviewAt(value: unknown): string | undefined;
 export declare function normalizeReviewIntervalDays(value: unknown, fallback?: number): number | undefined;
 export declare function normalizeNavOrder(value: unknown, fallback?: number): number | undefined;
 export declare function normalizeIsoDate(value: unknown, field: string): string | undefined;
+export type TemporalValidityState = 'unspecified' | 'current' | 'not_yet_valid' | 'expired' | 'invalid';
+/**
+ * Derive a claim-validity card without confusing it with file, source, task,
+ * or review dates. valid_from is inclusive and valid_until is exclusive.
+ * This is a scheduling/navigation signal, never a truth judgment.
+ */
+export declare function temporalValidity(frontmatter: Record<string, any>, asOfMs?: number): {
+    state: TemporalValidityState;
+    asOf: string;
+    validFrom?: string;
+    validUntil?: string;
+    observedAt?: string;
+    temporalScope?: string;
+    reason?: string;
+};
 export interface KnowledgeOrganizationInput {
     existing?: Record<string, any>;
     tags?: unknown;
@@ -288,6 +303,10 @@ export interface KnowledgeOrganizationInput {
     audience?: unknown;
     retrievalCues?: unknown;
     useWhen?: unknown;
+    validFrom?: unknown;
+    validUntil?: unknown;
+    observedAt?: unknown;
+    temporalScope?: unknown;
     knowledgeRole?: unknown;
     seeAlso?: unknown;
     relations?: unknown;

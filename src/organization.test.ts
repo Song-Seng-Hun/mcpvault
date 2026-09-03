@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, organizationLintIssues, organizationNoteTemplate } from './organization.js';
+import { getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, organizationLintIssues, organizationNoteTemplate, temporalValidity } from './organization.js';
 
 describe('knowledge organization focus and summary metadata', () => {
   test('filing edits and partial stale projection edits cannot certify inherited summaries', () => {
@@ -22,6 +22,30 @@ describe('knowledge organization focus and summary metadata', () => {
       interpretation_status: 'synthesized',
       answers_questions: ['[[Knowledge/Questions/Why]]'],
     });
+  });
+
+  test('keeps claim validity separate from file and workflow dates', () => {
+    const organization = knowledgeOrganization({
+      status: 'draft', noteKind: 'knowledge',
+      validFrom: '2030-01-01T00:00:00.000Z', validUntil: '2030-02-01T00:00:00.000Z',
+      observedAt: '2029-12-20T00:00:00.000Z', temporalScope: 'Applicable to the 2030 winter policy window.',
+    });
+    expect(organization).toMatchObject({
+      valid_from: '2030-01-01T00:00:00.000Z', valid_until: '2030-02-01T00:00:00.000Z',
+      observed_at: '2029-12-20T00:00:00.000Z', temporal_scope: 'Applicable to the 2030 winter policy window.',
+    });
+    expect(temporalValidity(organization, Date.parse('2030-01-15T00:00:00.000Z')).state).toBe('current');
+    expect(temporalValidity(organization, Date.parse('2029-12-31T00:00:00.000Z')).state).toBe('not_yet_valid');
+    expect(temporalValidity(organization, Date.parse('2030-02-01T00:00:00.000Z')).state).toBe('expired');
+    expect(() => knowledgeOrganization({ status: 'draft', validFrom: '2030-02-01', validUntil: '2030-01-01' })).toThrow(/validUntil/);
+    expect(organizationLintIssues('Knowledge/Expired.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', valid_until: '2029-01-01',
+    }, '# Expired\n', Date.parse('2030-01-01'))).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'knowledge_validity_expired' }),
+    ]));
+    expect(organizationLintIssues('Knowledge/InvalidRange.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'active', valid_from: '2030-02-01', valid_until: '2030-01-01',
+    }, '# Invalid\n', Date.parse('2030-01-01')).map(issue => issue.code)).toContain('invalid_temporal_validity_range');
   });
 
   test('normalizes GTD horizon and progressive summary layers', () => {

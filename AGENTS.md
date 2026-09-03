@@ -371,6 +371,17 @@ Before an interrupted multi-note edit or handoff, also save bounded
 short purpose. On resume, re-read every path and discard any stale plan; the
 checkpoint is neither a lock nor permission to overwrite. Never store note
 bodies, access tokens, passwords, or prompt text in `pendingEdits`.
+The same private checkpoint may carry a bounded `researchTrail` of
+`query`/`read`/`finding`/`decision` summaries with optional path and revision.
+Use it to preserve where an investigation went and why, not to preserve raw
+queries, prompts, note bodies, secrets, credentials, or hidden reasoning.
+For time-dependent knowledge, use `valid_from` (inclusive), `valid_until`
+(exclusive), `observed_at`, and `temporal_scope`. These describe when the
+claim or observed condition applies; they are not file modification, source
+publication/retrieval, task scheduling, retention, or review dates. Catalog
+`validity`/`validAt`, projection `temporal`, and review reason
+`validity_ended` are bounded advisory signals. Re-check expired knowledge
+before reuse; never delete or silently extend it.
 When preserving a failed path, record what was attempted/observed, the failure
 condition and reproduction, why it was rejected, and the reusable lesson.
 When a review is genuinely completed, record its outcome and reviewer rather
@@ -713,5 +724,6 @@ When modifying file operations:
 - Active recall is reader-specific. For `failed` or `partial`, record `confusion`, optionally `repairPath`, and leave `repairStatus=needed` or `in_progress`. The queue prioritizes these repairs; only mark them `resolved` after rereading and verifying the repair.
 - Search improvement telemetry is per-account, process-local, bounded, and never persisted. Call `record_search_feedback` after a useful, failed, or ambiguous search, then inspect `get_search_improvement_candidates` before adding aliases, retrieval cues, MOCs, disambiguation, or new notes.
 - Source snapshots are immutable editions. Use `sourceWorkId`/`sourceEditionId` for explicit lineage; `sourceFamily`/`sourceVersion` remain compatible aliases. Use `get_wiki_source_lineage` to compare editions, but retain source ID, hash, evidence path, and revision as the authority.
+- `get_wiki_answer_packet` includes an `evidenceDiversity` card that groups cited snapshots by declared source work. Multiple snapshots of one work are not independent corroboration, multiple works do not prove truth, and missing, non-source, integrity-failed, or stale-locator counts are review prompts rather than automatic verdicts.
 - `get_wiki_organization_manifest` returns a fingerprinted portable contract for PARA, Obsidian links/Properties, relations, lifecycles, templates, and migration rules. The default is content-free. Request `includeReadiness` only when preparing a migration: it returns bounded global path/revision/identity/Property-shape metadata and reports drift, collisions, and missing relation targets while excluding Community, all private scopes, whispers, bodies, sessions, and `.mcpvault` caches. Compare a destination manifest with `compareManifest` and an `expectedCounterpartFingerprint`; rerun when the fingerprint changes and never copy before resolving blocking findings.
 - For one maintenance turn, follow the revision-stamped `curationPlan` returned by `get_wiki_maintenance_debt` or the single selected plan in `get_wiki_review_packet`. For `decide`/`review`, follow the answer packet's `synthesisPlan`: fill missing immutable evidence and counterpoints first, then use the named Decision Record or review endpoint. A plan is advisory and never supersedes inputs. `get_wiki_promotion_candidates` also surfaces completed task retrospectives; inspect the task/discussion at its revision, keep it as history, and treat it as context rather than immutable factual evidence.

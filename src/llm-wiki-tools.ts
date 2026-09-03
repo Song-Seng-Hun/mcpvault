@@ -9,6 +9,12 @@ const executionProperties = {
   energy: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Execution energy needed by the next action' },
   effort: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Execution effort needed by the next action' },
 };
+const temporalProperties = {
+  validFrom: { type: 'string', description: 'Inclusive ISO date/time from which this knowledge applies; distinct from file/source/task dates' },
+  validUntil: { type: 'string', description: 'Exclusive ISO date/time after which this knowledge must be reviewed before reuse' },
+  observedAt: { type: 'string', description: 'ISO date/time when the represented condition was observed' },
+  temporalScope: { type: 'string', maxLength: 1000, description: 'Short condition or period in which this knowledge applies' },
+} as const;
 
 export const LLM_WIKI_MUTATING_TOOLS = [
   'initialize_llm_wiki', 'ingest_source', 'capture_wiki_note', 'clarify_wiki_note', 'distill_wiki_source', 'publish_knowledge', 'publish_decision_record', 'triage_wiki_note', 'review_wiki_note', 'review_wiki_claim', 'report_wiki_issue', 'propose_wiki_term_change', 'resolve_wiki_issue', 'export_wiki_base',
@@ -71,6 +77,7 @@ export function getLlmWikiTools(): Tool[] {
       description: 'Create or update an evidence-grounded knowledge note while preserving ordinary Markdown/Obsidian/Git behavior. Publish what another agent can verify, mark uncertainty, and make disagreements useful. Every evidence path must be an immutable source snapshot.',
       inputSchema: { type: 'object', properties: {
         ...executionProperties,
+        ...temporalProperties,
         path: { type: 'string' }, content: { type: 'string', description: 'Obsidian Markdown; resolvable [[Note]] links are automatically recorded as references' }, evidencePaths: { type: 'array', items: { type: 'string' } }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths or Obsidian [[Note]] references' },
         author: { type: 'string' }, confidence: { type: 'string', enum: ['low', 'medium', 'high'], default: 'medium' },
         status: { type: 'string', enum: ['draft', 'verified', 'disputed', 'superseded'], default: 'draft' },
@@ -127,7 +134,7 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_catalog',
-      description: 'Build a live scope-aware catalog from frontmatter instead of maintaining a stale hand-written index. Set includeFacets=true for bounded metadata-only counts across note kind, lifecycle, epistemic/task state, review policy, source type, polarity, MOC, project, domain, subject terms, and tags. Optional facet filters narrow the same metadata pass without loading note bodies. Use orderBy for LATCH-style location, alphabet, time, category, or hierarchy browsing without duplicating notes.',
+      description: 'Build a live scope-aware catalog from frontmatter instead of maintaining a stale hand-written index. Set includeFacets=true for bounded metadata-only counts across note kind, lifecycle, epistemic/task state, review policy, source type, polarity, MOC, project, domain, subject terms, tags, and temporal validity. Optional facet filters narrow the same metadata pass without loading note bodies; validity can be evaluated at validAt. Use orderBy for LATCH-style location, alphabet, time, category, or hierarchy browsing without duplicating notes.',
       inputSchema: { type: 'object', properties: {
         noteKind: { type: 'string', enum: ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'] },
         lifecycle: { type: 'string', enum: ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'] },
@@ -138,6 +145,8 @@ export function getLlmWikiTools(): Tool[] {
         polarity: { type: 'string', enum: ['positive', 'negative'], description: 'Filter preserved knowledge by positive or negative/failed-path polarity' },
         domain: { type: 'string', maxLength: 200 },
         subjectTerm: { type: 'string', maxLength: 200, description: 'Case-insensitive exact match against one subject_terms value' },
+        validity: { type: 'string', enum: ['unspecified', 'current', 'not_yet_valid', 'expired', 'invalid'], description: 'Filter by claim-validity state at validAt (or the current server time)' },
+        validAt: { type: 'string', description: 'ISO date/time used to evaluate valid_from/valid_until; defaults to now' },
         includeFacets: { type: 'boolean', description: 'Include bounded metadata-only facet counts for exploratory browsing (default: false)' },
         facetLimit: { type: 'integer', minimum: 1, maximum: 50, default: 20, description: 'Maximum values returned per facet' },
         orderBy: { type: 'string', enum: ['location', 'alphabet', 'time', 'category', 'hierarchy'], default: 'location', description: 'LATCH-style browse order: path, title/alias, recent time, category, or MOC/project hierarchy' },
@@ -185,7 +194,7 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_answer_packet',
-      description: 'Build one bounded intent-aware context packet for a selected Wiki note. It combines the current progressive projection, explainable neighbors, a question-to-claim-to-evidence-to-counterexample-to-decision reasoning trail, and bounded next guidance. Choose capture, explore, decide, execute, or review; revisions remain freshness guards and selected bodies stay compact.',
+      description: 'Build one bounded intent-aware context packet for a selected Wiki note. It combines the current progressive projection, temporal applicability, explainable neighbors, source-work diversity, a question-to-claim-to-evidence-to-counterexample-to-decision reasoning trail, and bounded next guidance. Diversity is advisory: snapshots of one work are not independent corroboration and several works do not prove truth. Choose capture, explore, decide, execute, or review; revisions remain freshness guards and selected bodies stay compact.',
       inputSchema: { type: 'object', properties: {
         path: { type: 'string', description: 'Existing visible Markdown note path' },
         maxChars: { type: 'integer', minimum: 1024, maximum: 16000, default: 7000 },
@@ -269,7 +278,7 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_review_queue',
-      description: 'Return a bounded review queue of knowledge notes that are disputed, in review, or due for evidence review. Read the selected note before revising it; this is a derived view, not a second database.',
+      description: 'Return a bounded review queue of knowledge notes that are disputed, in review, due for evidence review, or past their explicit valid_until. Read the selected note before revising it; temporal expiry is advisory and this is a derived view, not a second database.',
       inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 20, default: 5 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, accessToken, prettyPrint } },
     },
     {
@@ -379,6 +388,7 @@ export function getLlmWikiTools(): Tool[] {
       description: 'Classify one ordinary Markdown note with PARA/Zettelkasten-style metadata without changing its body or moving it. Use expectedRevision to avoid overwriting another agent.',
       inputSchema: { type: 'object', properties: {
         ...executionProperties,
+        ...temporalProperties,
         path: { type: 'string' }, noteKind: { type: 'string', enum: ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'] },
         lifecycle: { type: 'string', enum: ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'] },
         moc: { type: 'string' }, mocs: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'Additional Obsidian [[MOC]] links for multi-context discovery; navigation only' }, primaryMoc: { type: 'string', maxLength: 500, description: 'Preferred Obsidian MOC entry point for this note; navigation only' }, navOrder: { type: 'integer', minimum: 0, maximum: 1000000, description: 'Optional order among sibling MOCs; lower numbers appear first' }, project: { type: 'string' }, reviewAt: { type: 'string' },

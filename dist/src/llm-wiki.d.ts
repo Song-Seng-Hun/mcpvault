@@ -3,6 +3,7 @@ import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ReferenceService } from './references.js';
 import type { SemanticSearchService } from './semantic-search.js';
+import { type TemporalValidityState } from './organization.js';
 export declare const SOURCE_TRUST_LEVELS: readonly ['unrated', 'low', 'medium', 'high', 'verified'];
 export interface WikiCatalogOptions {
     summaryOnly?: boolean;
@@ -15,6 +16,8 @@ export interface WikiCatalogOptions {
     polarity?: string;
     domain?: string;
     subjectTerm?: string;
+    validity?: TemporalValidityState;
+    validAt?: string;
     limit?: number;
     maxChars?: number;
     /** Include bounded metadata-only facet counts for exploratory browsing. */
@@ -252,6 +255,10 @@ export declare class LlmWikiService {
         audience?: unknown;
         retrievalCues?: unknown;
         useWhen?: string;
+        validFrom?: string;
+        validUntil?: string;
+        observedAt?: string;
+        temporalScope?: string;
         seeAlso?: unknown;
         relations?: unknown;
         relationNotes?: unknown;
@@ -1260,6 +1267,7 @@ export declare class LlmWikiService {
             durableAtomicity: string;
             links: string;
             evidence: string;
+            temporalValidity: string;
             uncertainty: string;
         };
         review: {
@@ -1856,6 +1864,10 @@ export declare class LlmWikiService {
         audience?: unknown;
         retrievalCues?: unknown;
         useWhen?: string;
+        validFrom?: string;
+        validUntil?: string;
+        observedAt?: string;
+        temporalScope?: string;
         seeAlso?: unknown;
         relations?: unknown;
         relationNotes?: unknown;
@@ -1953,6 +1965,15 @@ export declare class LlmWikiService {
         };
         status: any;
         confidence: any;
+        temporal?: {
+            state: TemporalValidityState;
+            asOf: string;
+            validFrom?: string;
+            validUntil?: string;
+            observedAt?: string;
+            temporalScope?: string;
+            reason?: string;
+        };
         aliases?: any[];
         summary?: string;
         keyPoints?: any[];
@@ -2702,6 +2723,7 @@ export declare class LlmWikiService {
      * room for a counterexample or negative knowledge instead of returning a
      * large semantic dump.
      */
+    private evidenceDiversity;
     answerPacket(principal: ScopePrincipal | undefined, path: string, maxChars?: number, includeSemantic?: boolean, intent?: 'capture' | 'explore' | 'decide' | 'execute' | 'review'): Promise<Record<string, unknown>>;
     /**
      * Build a reusable shelf-like context projection without persisting a
