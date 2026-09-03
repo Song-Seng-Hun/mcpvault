@@ -40,6 +40,14 @@ export interface WikiClaimInput {
     evidence?: WikiEvidenceInput[];
     confidence?: string;
     status?: string;
+    /** Optional job of this claim inside an argument. */
+    claimRole?: string;
+    /** Obsidian block links to claims this claim supports. */
+    supportsClaims?: string[];
+    /** Obsidian block links to claims this claim challenges. */
+    contradictsClaims?: string[];
+    /** Obsidian block links to claims this claim requires. */
+    dependsOnClaims?: string[];
 }
 export interface WikiEvidenceInput {
     path: string;
@@ -1426,6 +1434,11 @@ export declare class LlmWikiService {
             roles: ("argument" | "concept" | "counterargument" | "model" | "observation")[];
             roleRule: string;
             links: string;
+            claims: {
+                roles: string[];
+                relations: ("contradicts_claims" | "depends_on_claims" | "supports_claims")[];
+                locator: string;
+            };
             evidence: string;
             temporalValidity: string;
             uncertainty: string;
@@ -3014,6 +3027,74 @@ export declare class LlmWikiService {
             status: any;
             signals: any;
         };
+        truncated: boolean;
+        note: string;
+    }>;
+    /**
+     * Build a bounded claim-to-claim argument map from structured claim metadata.
+     * Relations remain ordinary Obsidian block links; this projection verifies
+     * that both the structured claim id and its Markdown block anchor exist.
+     */
+    argumentMap(principal: ScopePrincipal | undefined, path: string, claimIdFilter?: string, maxDepth?: number, limit?: number, maxChars?: number): Promise<{
+        mode: string;
+        path: string;
+        revision: string;
+        selectedClaimId?: string;
+        maxDepth: number;
+        scannedNotes: number;
+        scannedClaims: number;
+        nodes: ({
+            path: string;
+            claimId: string;
+            depth: number | undefined;
+            role?: string;
+            anchorFound: boolean;
+        } | {
+            id: string;
+            path: string;
+            revision: string;
+            claimId: string;
+            depth: number | undefined;
+            order: number;
+            text: string;
+            status: string;
+            confidence: string;
+            role?: string;
+            locator: {
+                blockId: string;
+                line?: number;
+                navigable: boolean;
+            };
+        })[];
+        edges: {
+            from: string;
+            to: string;
+            relation: string;
+            authoredLink?: string;
+            navigable: boolean;
+        }[];
+        issues: {
+            countForReturnedNodes: number;
+            items: {
+                code: string;
+                source: string;
+                detail: string;
+                target?: string;
+            }[];
+        };
+        cycles?: {
+            relation: string;
+            nodes: string[];
+        }[];
+        truncated: boolean;
+        note: string;
+    } | {
+        mode: string;
+        path: string;
+        revision: string;
+        nodes: {
+            claimId: string;
+        }[];
         truncated: boolean;
         note: string;
     }>;

@@ -464,6 +464,16 @@ evidence snapshots by source work and reports missing, inaccessible, altered,
 stale-locator, or single-work coverage without returning source bodies. Use its
 revision with `review_wiki_claim` only after inspecting the selected evidence;
 the matrix neither changes claims nor equates source count with truth.
+Claims can also form an Obsidian-native argument map. Give a claim an optional
+`claimRole` (`premise`, `warrant`, `conclusion`, `objection`, `rebuttal`, or
+`observation`), put `^claim-id` on its corresponding Markdown block, and connect
+it with `supportsClaims`, `contradictsClaims`, or `dependsOnClaims` using
+`[[Note#^claim-id]]` links. Dynamic endpoint `wiki.argument_map` traverses both
+incoming and outgoing links under hard depth/node/character bounds and reports
+missing or ambiguous targets, absent/duplicate block anchors, role mismatches,
+self-links, and support/dependency cycles. It never rewrites a note or decides
+whether an argument is true; use the claim matrix and current source revisions
+for evidence review.
 `get_wiki_link_context_health` reports terse durable-note links with their
 line, heading, relation, and nearby context so agents can add a useful reason
 without forcing prose beside every valid link. `get_wiki_graph_health` also counts typed incoming and outgoing relations and
@@ -2512,6 +2522,10 @@ adds bounded navigation signals instead of a second database.
   ranks attention signals so repair priority does not rewrite the author's
   claim order, and routes one selected claim to the existing revision-checked
   `wiki.review_claim` endpoint.
+- `wiki.argument_map` projects claim-to-claim reasoning from Obsidian block
+  links while preserving each participating note revision. It can start from
+  one claim or every claim in a note, follows incoming and outgoing relations,
+  and returns bounded consistency issues without treating graph shape as truth.
 - `get_wiki_maintenance_debt` gives each returned repair a current revision and
   a `curationPlan`; `get_wiki_review_packet` coalesces every finding for the
   same path into one bounded slot, chooses one priority, and returns its

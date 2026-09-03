@@ -440,6 +440,14 @@ single-source-work evidence. Several snapshots of one source work are not
 independent corroboration, and several works still do not establish truth.
 Inspect the current source revisions, then use `review_wiki_claim` with the
 matrix's note revision; the matrix never changes claim text or evidence.
+When claims reason about other claims, add an optional `claimRole` and put the
+claim's id on its actual Markdown block as `^claim-id`. Use only Obsidian block
+links in `supportsClaims`, `contradictsClaims`, and `dependsOnClaims`, for
+example `[[Knowledge/Target#^target-claim]]` or local `[[#^target-claim]]`.
+Call dynamic endpoint `wiki.argument_map` to inspect bounded incoming/outgoing
+relations, target ambiguity, missing anchors, role mismatches, and cycles.
+Graph shape is not evidence or truth; re-read the returned note revisions and
+their immutable sources before accepting, disputing, or rewriting a claim.
 When preserving a failed path, record what was attempted/observed, the failure
 condition and reproduction, why it was rejected, and the reusable lesson.
 When a review is genuinely completed, record its outcome and reviewer rather

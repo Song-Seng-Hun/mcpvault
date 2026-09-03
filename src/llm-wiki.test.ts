@@ -154,6 +154,100 @@ test('MOC navigation preserves explicit sibling order, body link order, and mult
   }
 });
 
+test('claim argument maps preserve Obsidian block links, revisions, scope, and bounded repair signals', async () => {
+  const { server, client } = await setup();
+  try {
+    const account = await callJson(client, 'register_scope_account', { accountId: 'argument-owner', modelId: 'codex', password: 'argument-owner-secret' });
+    const accessToken = account.value.accessToken;
+    const source = await callJson(client, 'ingest_source', {
+      sourceId: 'argument-source', title: 'Argument source', content: '# Evidence\n\nThe premise and objection are independently inspectable.\n', capturedBy: 'codex', accessToken,
+    });
+    const conclusion = await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Conclusion.md', content: '# Conclusion\n\nThe proposed policy should be adopted. ^c1\n', evidencePaths: [source.value.path],
+      claims: [{ id: 'c1', text: 'The proposed policy should be adopted.', evidencePaths: [source.value.path], claimRole: 'conclusion', dependsOnClaims: ['[[Knowledge/Premises#^p1]]'] }],
+      author: 'codex', expectedRevision: 'missing', accessToken,
+    });
+    await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Premises.md', content: '# Premises\n\nThe policy reduces duplicated work. ^p1\n\nThe measured workflow explains that reduction. ^w1\n\nThe policy may hide minority concerns.\n', evidencePaths: [source.value.path],
+      claims: [
+        { id: 'p1', text: 'The policy reduces duplicated work.', evidencePaths: [source.value.path], claimRole: 'premise', supportsClaims: ['[[Knowledge/Conclusion#^c1]]'], dependsOnClaims: ['[[Knowledge/Conclusion#^c1]]'] },
+        { id: 'w1', text: 'The measured workflow explains that reduction.', evidencePaths: [source.value.path], claimRole: 'warrant', supportsClaims: ['[[#^p1]]'] },
+        { id: 'o1', text: 'The policy may hide minority concerns.', evidencePaths: [source.value.path], claimRole: 'objection', contradictsClaims: ['[[Knowledge/Conclusion#^c1]]'] },
+      ],
+      author: 'codex', expectedRevision: 'missing', accessToken,
+    });
+
+    const capability = await callJson(client, 'search_capabilities', { query: 'argument premise objection block link', limit: 5, maxChars: 5000, accessToken });
+    expect(capability.value.endpoints).toEqual(expect.arrayContaining([expect.objectContaining({ endpointId: 'wiki.argument_map', available: true })]));
+    const map = await callJson(client, 'call_endpoint', { endpointId: 'wiki.argument_map', arguments: { path: 'Knowledge/Conclusion.md', claimId: 'c1', maxDepth: 2, limit: 20, maxChars: 12000, accessToken } });
+    expect(map.result.isError).toBeFalsy();
+    expect(map.value).toMatchObject({ mode: 'bounded_argument_map', path: 'Knowledge/Conclusion.md', revision: conclusion.value.revision, selectedClaimId: 'c1' });
+    expect(map.value.nodes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'Knowledge/Conclusion.md#^c1', role: 'conclusion', locator: expect.objectContaining({ blockId: 'c1', navigable: true }) }),
+      expect.objectContaining({ id: 'Knowledge/Premises.md#^p1', role: 'premise', locator: expect.objectContaining({ blockId: 'p1', navigable: true }) }),
+      expect.objectContaining({ id: 'Knowledge/Premises.md#^w1', role: 'warrant', locator: expect.objectContaining({ blockId: 'w1', navigable: true }) }),
+      expect.objectContaining({ id: 'Knowledge/Premises.md#^o1', role: 'objection', locator: expect.objectContaining({ blockId: 'o1', navigable: false }) }),
+    ]));
+    expect(map.value.edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ from: 'Knowledge/Premises.md#^p1', to: 'Knowledge/Conclusion.md#^c1', relation: 'supports', navigable: true }),
+      expect.objectContaining({ from: 'Knowledge/Premises.md#^w1', to: 'Knowledge/Premises.md#^p1', relation: 'supports', authoredLink: '[[#^p1]]', navigable: true }),
+      expect.objectContaining({ from: 'Knowledge/Premises.md#^o1', to: 'Knowledge/Conclusion.md#^c1', relation: 'contradicts', navigable: true }),
+      expect.objectContaining({ from: 'Knowledge/Conclusion.md#^c1', to: 'Knowledge/Premises.md#^p1', relation: 'depends_on' }),
+    ]));
+    expect(map.value.cycles).toEqual(expect.arrayContaining([expect.objectContaining({ relation: 'depends_on' })]));
+    expect(map.value.issues.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'missing_claim_block_anchor', source: 'Knowledge/Premises.md#^o1' }),
+      expect.objectContaining({ code: 'claim_relation_cycle' }),
+    ]));
+
+    const reviewed = await callJson(client, 'review_wiki_claim', {
+      path: 'Knowledge/Conclusion.md', claimId: 'c1', status: 'supported', confidence: 'high', reviewedBy: 'codex', expectedRevision: conclusion.value.revision, accessToken,
+    });
+    const projection = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Conclusion.md', view: 'summary', accessToken });
+    expect(projection.value.claims).toEqual([expect.objectContaining({ id: 'c1', role: 'conclusion', dependsOnClaims: ['[[Knowledge/Premises#^p1]]'], status: 'supported' })]);
+    expect(reviewed.value.success).toBe(true);
+
+    const compact = await callJson(client, 'get_wiki_argument_map', { path: 'Knowledge/Conclusion.md', maxDepth: 2, limit: 20, maxChars: 1024, accessToken });
+    expect(compact.result.isError).toBeFalsy();
+    expect(JSON.stringify(compact.value).length).toBeLessThanOrEqual(1024);
+    const nodeLimited = await callJson(client, 'get_wiki_argument_map', { path: 'Knowledge/Premises.md', maxDepth: 2, limit: 1, maxChars: 4000, accessToken });
+    expect(nodeLimited.value.nodes).toHaveLength(1);
+    expect(nodeLimited.value.truncated).toBe(true);
+    const depthZero = await callJson(client, 'get_wiki_argument_map', { path: 'Knowledge/Conclusion.md', claimId: 'c1', maxDepth: 0, limit: 20, maxChars: 4000, accessToken });
+    expect(depthZero.value.maxDepth).toBe(0);
+    expect(depthZero.value.nodes).toHaveLength(1);
+
+    const other = await callJson(client, 'register_scope_account', { accountId: 'argument-outsider', modelId: 'gemini', password: 'argument-outsider-secret' });
+    const privateNote = await callJson(client, 'publish_knowledge', {
+      path: 'scope://model/codex/Knowledge/Private argument.md', content: '# Private argument\n\nA private conclusion. ^private-claim\n', evidencePaths: [source.value.path],
+      claims: [{ id: 'private-claim', text: 'A private conclusion.', evidencePaths: [source.value.path], claimRole: 'conclusion' }],
+      author: 'codex', expectedRevision: 'missing', accessToken,
+    });
+    expect(privateNote.result.isError).toBeFalsy();
+    const denied = await client.callTool({ name: 'get_wiki_argument_map', arguments: { path: 'scope://model/codex/Knowledge/Private argument.md', accessToken: other.value.accessToken } });
+    expect(denied.isError).toBe(true);
+
+    const malformed = await client.callTool({ name: 'publish_knowledge', arguments: {
+      path: 'Knowledge/Malformed.md', content: '# Malformed\n\nBad relation. ^bad\n', evidencePaths: [source.value.path],
+      claims: [{ id: 'bad', text: 'Bad relation.', evidencePaths: [source.value.path], claimRole: 'premise', supportsClaims: ['Knowledge/Conclusion#^c1'] }],
+      expectedRevision: 'missing', accessToken,
+    } });
+    expect(malformed.isError).toBe(true);
+    expect(JSON.stringify(malformed.content)).toContain('Obsidian block link');
+
+    await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Missing target.md', content: '# Missing target\n\nThis premise points to a claim that does not exist. ^missing-source\n', evidencePaths: [source.value.path],
+      claims: [{ id: 'missing-source', text: 'This premise points to a claim that does not exist.', evidencePaths: [source.value.path], claimRole: 'premise', supportsClaims: ['[[Knowledge/Conclusion#^absent]]'] }],
+      expectedRevision: 'missing', accessToken,
+    });
+    const missingTarget = await callJson(client, 'get_wiki_argument_map', { path: 'Knowledge/Missing target.md', maxChars: 5000, accessToken });
+    expect(missingTarget.value.issues.items).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'missing_claim_target' })]));
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('Decision Records preserve structured state and expose a bounded conflict-aware register', async () => {
   const { server, client } = await setup();
   try {
@@ -2125,7 +2219,7 @@ test('portable migration preflight excludes non-global content and reports revis
     await callJson(client, 'publish_blog_post', { slug: 'portable-community-only', title: 'Community only', content: 'Never enter a global migration inventory.', expectedRevision: 'missing', accessToken });
 
     const defaultManifest = await callJson(client, 'get_wiki_organization_manifest', { maxChars: 24000, accessToken });
-    expect(defaultManifest.value).toMatchObject({ manifestVersion: 4, portable: true, contentFreeByDefault: true, contractFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/), templates: expect.arrayContaining(['concept', 'model']), basesViews: expect.arrayContaining(['concepts', 'authority', 'archives']) });
+    expect(defaultManifest.value).toMatchObject({ manifestVersion: 5, portable: true, contentFreeByDefault: true, contractFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/), templates: expect.arrayContaining(['concept', 'model']), basesViews: expect.arrayContaining(['concepts', 'authority', 'archives']), contracts: expect.objectContaining({ claimRoles: expect.arrayContaining(['premise', 'conclusion', 'objection']), claimRelations: expect.arrayContaining(['supports_claims', 'contradicts_claims', 'depends_on_claims']) }) });
     expect(defaultManifest.value.readiness).toBeUndefined();
     expect(JSON.stringify(defaultManifest.value)).not.toContain('Portable One');
 

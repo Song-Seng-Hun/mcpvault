@@ -185,7 +185,7 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'focus_horizon', type: 'text', description: 'GTD horizon from ground to purpose', allowed: FOCUS_HORIZONS },
     { name: 'focus_parent', type: 'text', description: 'Higher-level outcome link' },
     { name: 'focus_supports', type: 'list', description: 'Outcomes supported by this note' },
-    { name: 'claims', type: 'list', description: 'Claim-level provenance objects' },
+    { name: 'claims', type: 'list', description: 'MCP-managed claim provenance and optional argument roles/Obsidian block-link relations' },
     { name: 'evidence', type: 'list', description: 'Evidence locator objects' },
     ...RELATION_FIELDS.map(name => ({ name, type: 'list', description: `Typed Obsidian links: ${name}` })),
     { name: 'relation_notes', type: 'object', description: 'Short rationale for typed relation fields; navigation metadata only' },

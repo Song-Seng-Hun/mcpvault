@@ -132,9 +132,13 @@ export function getLlmWikiTools() {
                     relations: { type: 'object', description: 'Typed Obsidian link arrays: supports, contradicts, supersedes, derived_from, depends_on, implements, blocked_by, answers_questions, tests, related, same_as, version_of, refines' }, relationNotes: { type: 'object', description: 'Short rationale keyed by relation field' }, relationEvidence: { type: 'object', description: 'Up to four scope-safe evidence paths keyed by relation field' },
                     mocPurpose: { type: 'string', maxLength: 1000, description: 'For MOCs: the navigation purpose' }, mocScope: { type: 'string', maxLength: 500, description: 'For MOCs: the knowledge boundary or topic scope' }, mocQuestions: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'For MOCs: representative questions the map should answer' }, mocParent: { type: 'string', maxLength: 500, description: 'Optional parent MOC wikilink' },
                     focusHorizon: { type: 'string', enum: ['ground', 'project', 'area', 'goal', 'vision', 'purpose'], description: 'Optional GTD horizon: concrete action, project, area, goal, vision, or purpose/principles' }, focusParent: { type: 'string', maxLength: 500, description: 'Optional Obsidian link/path to the higher-level outcome this note serves' }, focusSupports: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20, description: 'Optional bounded links/paths to outcomes supported by this note; navigation metadata only' },
-                    claims: { type: 'array', maxItems: 100, description: 'Optional claim-level provenance. Every claim needs text and at least one intact immutable evidence path.', items: { type: 'object', properties: {
+                    claims: { type: 'array', maxItems: 100, description: 'Optional claim-level provenance and argument structure. Every claim needs text and at least one intact immutable evidence path. Put ^claim-id on the corresponding Markdown block; claim relations use [[Note#^claim-id]] or local [[#^claim-id]] links.', items: { type: 'object', properties: {
                                 id: { type: 'string' }, text: { type: 'string' }, evidencePaths: { type: 'array', items: { type: 'string' }, maxItems: 20 }, evidence: { type: 'array', maxItems: 30, items: { type: 'object', properties: { path: { type: 'string' }, heading: { type: 'string', maxLength: 300 }, blockId: { type: 'string', maxLength: 100 }, revision: { type: 'string', maxLength: 160 }, startLine: { type: 'integer', minimum: 1 }, endLine: { type: 'integer', minimum: 1 }, quoteHash: { type: 'string', pattern: '^[a-fA-F0-9]{64}$' } }, required: ['path'] } },
                                 confidence: { type: 'string', enum: ['low', 'medium', 'high'] }, status: { type: 'string', enum: ['supported', 'disputed', 'unverified', 'superseded'] },
+                                claimRole: { type: 'string', enum: ['premise', 'warrant', 'conclusion', 'objection', 'rebuttal', 'observation'], description: 'Optional argumentative job of this claim' },
+                                supportsClaims: { type: 'array', items: { type: 'string', pattern: '^\\[\\[.*#\\^[A-Za-z0-9_-]+(?:\\|[^\\]]+)?\\]\\]$' }, maxItems: 20, description: 'Claims supported by this claim, as Obsidian block links' },
+                                contradictsClaims: { type: 'array', items: { type: 'string', pattern: '^\\[\\[.*#\\^[A-Za-z0-9_-]+(?:\\|[^\\]]+)?\\]\\]$' }, maxItems: 20, description: 'Claims challenged by this claim, as Obsidian block links' },
+                                dependsOnClaims: { type: 'array', items: { type: 'string', pattern: '^\\[\\[.*#\\^[A-Za-z0-9_-]+(?:\\|[^\\]]+)?\\]\\]$' }, maxItems: 20, description: 'Claims required by this claim, as Obsidian block links' },
                             }, required: ['text', 'evidencePaths'] } },
                     expectedRevision: { type: 'string', description: "Required revision, or 'missing' for a new note" }, accessToken, prettyPrint,
                 }, required: ['path', 'content', 'evidencePaths', 'expectedRevision'] },
@@ -222,6 +226,18 @@ export function getLlmWikiTools() {
             inputSchema: { type: 'object', properties: {
                     path: { type: 'string', description: 'Existing visible LLM Wiki knowledge-note path' },
                     limit: { type: 'integer', minimum: 1, maximum: 40, default: 20, description: 'Maximum authored claims to scan in this bounded pass' },
+                    maxChars: { type: 'integer', minimum: 1024, maximum: 16000, default: 7000 },
+                    accessToken, prettyPrint,
+                }, required: ['path'] },
+        },
+        {
+            name: 'get_wiki_argument_map',
+            description: 'Return a bounded, scope-aware claim-to-claim argument map rooted at one knowledge note or claim. It follows supportsClaims, contradictsClaims, and dependsOnClaims authored as Obsidian [[Note#^claim-id]] block links; verifies structured target ids and Markdown block anchors; and reports ambiguity, missing targets, role mismatches, self-links, and support/dependency cycles. It is a navigation and consistency projection, never a truth judgment or an automatic rewrite.',
+            inputSchema: { type: 'object', properties: {
+                    path: { type: 'string', description: 'Existing visible LLM Wiki knowledge-note path' },
+                    claimId: { type: 'string', maxLength: 80, description: 'Optional claim id within path; omit to start from every structured claim in the note' },
+                    maxDepth: { type: 'integer', minimum: 0, maximum: 4, default: 2, description: 'Maximum incoming/outgoing relation hops from the selected claim(s)' },
+                    limit: { type: 'integer', minimum: 1, maximum: 100, default: 40, description: 'Maximum claim nodes returned' },
                     maxChars: { type: 'integer', minimum: 1024, maximum: 16000, default: 7000 },
                     accessToken, prettyPrint,
                 }, required: ['path'] },
