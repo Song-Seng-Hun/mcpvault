@@ -591,7 +591,7 @@ test('capture, review completion, and bounded Reflect dashboard close the organi
     const accessToken = registration.value.accessToken;
     await client.callTool({ name: 'write_note', arguments: { path: 'Projects/Capture task.md', content: '# Capture task\n', expectedRevision: 'missing', accessToken } });
     const captured = await callJson(client, 'capture_wiki_note', { title: 'Unprocessed observation', content: 'A rough observation to classify later.', capturedBy: 'codex', capturedFrom: 'experiment', captureReason: 'Preserve the observation before deciding its final home.', captureContext: 'Observed while checking the bounded organization workflow.', relatedTask: '[[Projects/Capture task]]', accessToken });
-    expect(captured.value).toMatchObject({ noteKind: 'fleeting', lifecycle: 'inbox', nextAction: 'Read the capture and classify it with triage_wiki_note.' });
+    expect(captured.value).toMatchObject({ noteKind: 'fleeting', lifecycle: 'inbox', nextAction: { endpointId: 'wiki.clarify', arguments: { path: captured.value.path, expectedRevision: captured.value.revision } } });
     expect(captured.value.path).toMatch(/^Inbox\/capture-/);
     expect(captured.value).toMatchObject({ capturedFrom: 'experiment', relatedTask: 'Projects/Capture task.md' });
     const capturedNote = await callJson(client, 'read_note', { path: captured.value.path, accessToken });
@@ -698,12 +698,18 @@ test('clarify, source distillation, and MOC candidates complete the organization
     const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-loop-owner', modelId: 'codex', password: 'organization-loop-password' });
     const accessToken = registration.value.accessToken;
     const captured = await callJson(client, 'capture_wiki_note', { path: 'Inbox/Clarify me.md', title: 'Clarify me', content: 'A rough project observation.', capturedBy: 'codex', accessToken });
+    expect(captured.value.nextAction).toMatchObject({ endpointId: 'wiki.clarify', arguments: { path: captured.value.path, expectedRevision: captured.value.revision } });
     const clarified = await callJson(client, 'clarify_wiki_note', {
       path: captured.value.path, disposition: 'project', clarifyNote: 'This needs an explicit next action.', expectedRevision: captured.value.revision, accessToken,
     });
-    expect(clarified.value).toMatchObject({ disposition: 'project', recommendedPath: 'Projects/', recommendedLifecycle: 'active', frontmatter: { noteKind: 'project', lifecycle: 'inbox', disposition: 'project' } });
+    expect(clarified.value).toMatchObject({ disposition: 'project', recommendedPath: 'Projects/', recommendedLifecycle: 'active', frontmatter: { noteKind: 'project', lifecycle: 'active', disposition: 'project' }, nextAction: { endpointId: 'notes.move_preview' } });
     const inbox = await callJson(client, 'get_wiki_inbox', { accessToken });
     expect(inbox.value).toMatchObject({ total: 0, items: [] });
+
+    await client.callTool({ name: 'write_note', arguments: { path: 'Projects/Existing.md', content: '# Existing\n', expectedRevision: 'missing', accessToken } });
+    const collisionCapture = await callJson(client, 'capture_wiki_note', { path: 'Inbox/Collision.md', content: 'A capture whose proposed destination already exists.', accessToken });
+    const collision = await callJson(client, 'clarify_wiki_note', { path: collisionCapture.value.path, disposition: 'project', targetPath: 'Projects/Existing.md', expectedRevision: collisionCapture.value.revision, accessToken });
+    expect(collision.value).toMatchObject({ targetPath: 'Projects/Existing.md', targetExists: true, targetRevision: expect.any(String), nextAction: { endpointId: 'wiki.merge_preview' } });
 
     const source = await callJson(client, 'ingest_source', { sourceId: 'distill-source', title: 'Distill source', content: '# Evidence\n\nA durable observation.', capturedBy: 'codex', accessToken });
     const distilled = await callJson(client, 'distill_wiki_source', {
@@ -716,7 +722,49 @@ test('clarify, source distillation, and MOC candidates complete the organization
     await callJson(client, 'publish_knowledge', { path: 'Knowledge/Alpha.md', content: '# Alpha\n\nA durable idea.', evidencePaths: [source.value.path], noteKind: 'atomic', lifecycle: 'evergreen', author: 'codex', expectedRevision: 'missing', accessToken });
     await callJson(client, 'publish_knowledge', { path: 'Knowledge/Beta.md', content: '# Beta\n\nAnother durable idea.', evidencePaths: [source.value.path], noteKind: 'atomic', lifecycle: 'evergreen', author: 'codex', expectedRevision: 'missing', accessToken });
     const candidates = await callJson(client, 'get_wiki_moc_candidates', { limit: 10, accessToken });
-    expect(candidates.value).toMatchObject({ total: 2, candidates: expect.arrayContaining([expect.objectContaining({ suggestedPurpose: expect.any(String), suggestedQuestions: expect.any(Array), notePaths: expect.arrayContaining(['Knowledge/Alpha.md', 'Knowledge/Beta.md']) })]) });
+    expect(candidates.value).toMatchObject({ total: expect.any(Number), candidates: expect.arrayContaining([expect.objectContaining({ suggestedPurpose: expect.any(String), suggestedQuestions: expect.any(Array), notePaths: expect.arrayContaining(['Knowledge/Alpha.md', 'Knowledge/Beta.md']), orderedEntries: expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Alpha.md', revision: expect.any(String) })]), draftMarkdown: expect.stringContaining('[[Knowledge/Alpha|Alpha]]'), creationPlan: expect.objectContaining({ endpointId: 'notes.write' }) })]) });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('upstream review baselines resolve aliases, respect relation direction, and stop reopening after review', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'upstream-owner', modelId: 'codex', password: 'upstream-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const source = await callJson(client, 'ingest_source', { sourceId: 'upstream-source', title: 'Upstream source', content: 'A durable upstream fact.', capturedBy: 'codex', accessToken });
+    const upstream = await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Foundations/Upstream.md', content: '# Upstream\n\nA durable upstream fact.\n', aliases: ['Foundation alias'], evidencePaths: [source.value.path], noteKind: 'atomic', lifecycle: 'evergreen', status: 'verified', author: 'codex', expectedRevision: 'missing', accessToken,
+    });
+    const downstream = await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Downstream.md', content: '# Downstream\n\nA conclusion derived from the foundation.\n', evidencePaths: [source.value.path], relations: { derived_from: ['[[Foundation alias]]'] }, reviewPolicy: 'on_upstream_change', lifecycle: 'evergreen', author: 'codex', expectedRevision: 'missing', accessToken,
+    });
+    let queue = await callJson(client, 'get_wiki_review_queue', { limit: 20, maxChars: 10000, accessToken });
+    expect(queue.value.items).not.toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Downstream.md', reviewTrigger: 'upstream_changed' })]));
+
+    await callJson(client, 'review_wiki_note', { path: upstream.value.path, reviewOutcome: 'disputed', nextLifecycle: 'review', expectedRevision: upstream.value.revision, accessToken });
+    const impact = await callJson(client, 'get_wiki_impact_report', { limit: 20, maxChars: 10000, accessToken });
+    expect(impact.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Downstream.md', reasons: expect.arrayContaining(['upstream_changed', 'upstream_change_triggered_review']), upstreamChanges: expect.arrayContaining([expect.stringContaining('Knowledge/Foundations/Upstream.md')]) })]));
+    queue = await callJson(client, 'get_wiki_review_queue', { limit: 20, maxChars: 10000, accessToken });
+    expect(queue.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Downstream.md', reviewTrigger: 'upstream_changed' })]));
+
+    const currentDownstream = await callJson(client, 'read_note', { path: downstream.value.path, accessToken });
+    await callJson(client, 'review_wiki_note', { path: downstream.value.path, reviewOutcome: 'confirmed', nextLifecycle: 'evergreen', expectedRevision: currentDownstream.value.revision, accessToken });
+    queue = await callJson(client, 'get_wiki_review_queue', { limit: 20, maxChars: 10000, accessToken });
+    expect(queue.value.items).not.toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Downstream.md', reviewTrigger: 'upstream_changed' })]));
+
+    const supporter = await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Supporter.md', content: '# Supporter\n\nIndependent support for the downstream conclusion.\n', evidencePaths: [source.value.path], relations: { supports: ['[[Knowledge/Downstream]]'] }, lifecycle: 'evergreen', author: 'codex', expectedRevision: 'missing', accessToken,
+    });
+    queue = await callJson(client, 'get_wiki_review_queue', { limit: 20, maxChars: 10000, accessToken });
+    expect(queue.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Downstream.md', upstreamChanges: expect.arrayContaining([expect.stringContaining('supports')]) })]));
+    const downstreamAfterSupport = await callJson(client, 'read_note', { path: downstream.value.path, accessToken });
+    await callJson(client, 'review_wiki_note', { path: downstream.value.path, reviewOutcome: 'confirmed', nextLifecycle: 'evergreen', expectedRevision: downstreamAfterSupport.value.revision, accessToken });
+    await callJson(client, 'review_wiki_note', { path: supporter.value.path, reviewOutcome: 'disputed', nextLifecycle: 'review', expectedRevision: supporter.value.revision, accessToken });
+    queue = await callJson(client, 'get_wiki_review_queue', { limit: 20, maxChars: 10000, accessToken });
+    expect(queue.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Downstream.md', upstreamChanges: expect.arrayContaining([expect.stringContaining('supports')]) })]));
   } finally {
     await client.close();
     await server.close();

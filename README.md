@@ -214,10 +214,17 @@ native scalar/list Properties editor.
 Use `review_policy` (`manual`, `periodic`, `on_source_change`,
 `on_link_change`, `on_any_edit`, or `on_upstream_change`) to declare review
 triggers. The upstream policy watches explicit dependency relations for a
-retired or disputed prerequisite; ordinary nearby links do not trigger it. Publication
-stores a compact body/link review baseline, so later source, link, or body
+changed prerequisite; ordinary nearby links do not trigger it. Outgoing
+`derived_from`, `depends_on`, `version_of`, and `refines` links are upstream
+dependencies. A `supports` link points from the supporting note to the note it
+supports, so it is an incoming upstream signal for the supported note rather
+than an upstream dependency of the supporter. Publication and completed review
+store a bounded upstream revision/state baseline as well as a body/link baseline,
+so later source, relation, status, link, or body
 changes can be reported as derived triggers. The baseline is regenerable
-metadata and never replaces Markdown or Git. The bounded
+metadata and never replaces Markdown or Git. Completing the review refreshes
+the upstream baseline, so a known retired or disputed prerequisite does not
+reopen the same review indefinitely until it changes again. The bounded
 review metadata also records the reviewed source revision, review count,
 re-entry count, and last review trigger, so repeated stale or disputed notes
 remain visible without a duplicate history database. Use
@@ -288,18 +295,19 @@ syntheses without evidence or `derived_from` inputs. These are repair prompts,
 not automatic publication or truth judgments.
 
 For low-friction capture, `capture_wiki_note` creates an ordinary Markdown
-note in `Inbox/` with `note_kind: fleeting` and `lifecycle: inbox`. Complete
-When known, pass the bounded `capturedFrom`, `captureReason`, and
+note in `Inbox/` with `note_kind: fleeting` and `lifecycle: inbox`, then returns
+its exact revision and a `wiki.clarify` next action. When known, pass the bounded `capturedFrom`, `captureReason`, and
 `captureContext` fields, plus one existing `relatedTask` path or Obsidian
 wikilink. These preserve why an observation exists for the next agent without
 copying raw prompts, credentials, or secrets into the note. The related task
 is validated for existence and scope access and is also recorded in
 `references`; all of this remains ordinary YAML frontmatter.
-the GTD Clarify step with `clarify_wiki_note` and choose exactly one durable
+Complete the GTD Clarify step with `clarify_wiki_note` and choose exactly one durable
 disposition: `knowledge`, `reference`, `project`, `someday`, `discard`, or
-`delegate`. Clarification records the decision and a suggested PARA destination
-without silently moving or deleting the note; move it later with the normal
-revision-checked workflow after inspecting the result. A clarified capture is
+`delegate`. Clarification applies the disposition's lifecycle and records the
+decision without silently moving or deleting the note. If `targetPath` already
+exists, the response returns its revision and a merge-preview action; otherwise
+it returns a move-preview action bound to the clarified note revision. A clarified capture is
 removed from the unprocessed Inbox queue even while it remains physically in
 Inbox. `review_wiki_note` records a completed evidence review and refreshes its
 body/link baseline without requiring the agent to resubmit the whole body.
@@ -507,7 +515,10 @@ MOCs are navigation notes, not duplicate summaries. Give an MOC
 link its selected notes with ordinary `[[wikilinks]]`. Use
 `get_wiki_moc_candidates` to receive bounded, non-mutating suggestions for
 uncovered knowledge; accept a suggestion only after checking whether the map
-has a real question and useful boundary.
+has a real question and useful boundary. Each suggestion contains current note
+revisions, deterministic authored order, a small Obsidian Markdown draft, and
+destination collision state. Its `notes.write` plan is an optional scaffold,
+not an automatic MOC or a reason to overwrite an existing map.
 
 `get_wiki_bases_view` can generate standard local Obsidian Bases projections:
 `all`, `inbox`, `inbox_oldest`, `projects`, `project_next_actions`, `review`,

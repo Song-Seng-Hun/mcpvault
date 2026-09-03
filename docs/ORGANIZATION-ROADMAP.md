@@ -21,6 +21,17 @@ tools; new behaviors belong in the endpoint catalog.
   stale summary. Repairing only a fingerprint is not interpretation.
 - Ordinary triage/publication can author tags and execution-capacity hints.
 - A small orientation budget preserves a usable public first action.
+- `on_upstream_change` now compares a bounded typed-relation revision/state
+  baseline captured at publish/review time. Exact qualified paths and exact
+  visible aliases/stable IDs resolve conservatively; outgoing dependencies and
+  incoming support keep their correct direction. A completed review refreshes
+  the baseline instead of reopening forever on an unchanged disputed input.
+- Capture returns a revision-bound Clarify action. Clarify applies the selected
+  lifecycle, rejects unsafe destination paths, reports destination collisions,
+  and returns a move- or merge-preview action without moving/overwriting.
+- MOC candidates now include current revisions, deterministic authored order,
+  a bounded Obsidian Markdown draft, and collision-aware `notes.write` guidance.
+  The suggestion remains non-mutating.
 
 Evidence: `moc-navigation.test.ts`, `backlinks.test.ts`, `organization.test.ts`,
 and the onboarding/context-pack/capacity integration cases in `llm-wiki.test.ts`.
@@ -28,40 +39,36 @@ These prove the named behaviors, not completion of the whole goal.
 
 ## Open work with concrete completion evidence
 
-1. **Consolidate curator/scaffold/synthesis needs.** Unregistered draft methods
-   were removed rather than shipped as hidden APIs. Review whether each need
-   belongs in the existing maintenance, MOC-candidate, answer-packet, template,
-   or decision workflow before adding an endpoint. Prove a new agent can
-   discover and use any resulting behavior; preserve prerequisites, explicit
-   cycles, Unicode titles, scope, evidence, and revisions. Never automatically
-   declare source notes superseded because a synthesis candidate exists.
-2. **Finish upstream review semantics.** The pending `on_upstream_change`
-   implementation must agree across property contracts, schemas, review
-   queues, and impact reports. Resolve aliases/qualified paths conservatively;
-   distinguish dependency direction from a note supporting another claim.
-   Prove source edits, retractions, disputes, and later repairs update the queue
-   without indefinitely reopening a completed review.
-3. **Unify bounds and access across organization projections.** Audit direct
+1. **Finish curator/synthesis consolidation.** The MOC scaffold need now lives
+   in the existing candidate endpoint instead of a hidden API. Curator and
+   synthesis intent still need to be traced through maintenance, answer-packet,
+   decision, and publication workflows before adding any operation. Prove a
+   new agent can discover and use the resulting path; preserve prerequisites,
+   explicit cycles, Unicode titles, scope, evidence, and revisions. Never
+   automatically declare source notes superseded because a synthesis candidate
+   exists.
+2. **Unify bounds and access across organization projections.** Audit direct
    service results as well as the generic MCP response limiter. At minimum and
    normal budgets retain a next step, exact identifiers/revisions, and honest
    truncation. Test hidden content, private paths, huge Properties, several
    MOC roots, concurrent changes, and external Markdown edits.
-4. **Prove capture-to-permanent-knowledge continuity.** Check fleeting capture,
-   literature interpretation, atomic-note extraction, discussion promotion,
-   MOC placement, and completed task lessons as one workflow. Preserve the
-   immutable work/edition source and distinguish evidence from navigational
-   references; test collisions and interrupted multi-note edits.
-5. **Make portable organization practical.** The content-free manifest is
+3. **Complete capture-to-permanent-knowledge continuity.** Fleeting capture,
+   clarification lifecycle, destination collision, immutable-source distillation,
+   and MOC draft placement are now connected by revision-bound next actions.
+   Discussion promotion, completed-task lessons, and interrupted multi-note
+   edits still need one end-to-end proof. Preserve the immutable work/edition
+   source and distinguish evidence from navigational references.
+4. **Make portable organization practical.** The content-free manifest is
    exported, but destination compatibility, property type drift, vocabulary
    collisions, stable IDs, missing relation targets, and a revision-aware
    migration preview still need an end-to-end workflow. Never copy private
    scopes, sessions, or derived caches.
-6. **Validate retrieval utility with a representative corpus.** Combine Korean
+5. **Validate retrieval utility with a representative corpus.** Combine Korean
    and English notes, ambiguous aliases, multiple classifications/MOCs,
    negative results, stale summaries, and long discussions. Check that a small
    packet includes enough reason/context to select a source, and that wiki
    knowledge remains discoverable as community volume grows.
-7. **Reduce organizational burden.** Trace the same user intent through home,
+6. **Reduce organizational burden.** Trace the same user intent through home,
    catalog, graph, packets, review, and repair endpoints. Remove duplicate
    rituals and contradictory advice; retain optional templates and a short
    first-entry path. Verify externally installed clients need only the

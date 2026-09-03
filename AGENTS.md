@@ -442,9 +442,14 @@ collection section of `get_wiki_organization_health`, as advisory maintenance
 launchpads. None of these metadata fields replaces Markdown, Obsidian links,
 revision checks, or Git history.
 When a durable prerequisite should reopen a dependent note after retirement or
-dispute, use `review_policy: on_upstream_change` together with an explicit
-`derived_from`, `depends_on`, or `supports` relation. The relationship controls
-the trigger; similarity, shared tags, and ordinary nearby links do not.
+dispute, use `review_policy: on_upstream_change`. Outgoing `derived_from`,
+`depends_on`, `version_of`, and `refines` links are dependencies. `supports`
+points from the supporting note to the supported note, so the supported note
+sees an incoming support as upstream evidence; do not reverse that direction.
+Publish and completed review capture a bounded revision/state baseline, and a
+completed review stops unchanged retired/disputed inputs from reopening forever.
+The relationship controls the trigger; similarity, shared tags, and ordinary
+nearby links do not.
 
 ## Project Overview
 

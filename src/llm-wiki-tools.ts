@@ -36,14 +36,14 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'capture_wiki_note',
-      description: 'Capture a rough observation in Inbox with one call. It defaults to note_kind=fleeting and lifecycle=inbox; classify it later with triage_wiki_note. Optionally preserve bounded origin, reason, context, and one related task so a later agent can understand why the capture exists; never put raw prompts, credentials, or secrets in these fields.',
+      description: 'Capture a rough observation in Inbox with one call. It defaults to note_kind=fleeting and lifecycle=inbox and returns its revision plus an executable wiki.clarify next action. Optionally preserve bounded origin, reason, context, and one related task so a later agent can understand why the capture exists; never put raw prompts, credentials, or secrets in these fields.',
       inputSchema: { type: 'object', properties: {
         path: { type: 'string', description: 'Optional path inside Inbox/. Omit to generate a unique Inbox path.' }, title: { type: 'string', maxLength: 300 }, content: { type: 'string' }, references: { type: 'array', items: { type: 'string' }, maxItems: 20 }, capturedBy: { type: 'string' }, capturedFrom: { type: 'string', enum: ['manual', 'chat', 'community', 'issue', 'experiment', 'external_source', 'other'], description: 'Bounded origin label for the observation' }, captureReason: { type: 'string', maxLength: 500, description: 'Why this observation was captured; do not include secrets or raw prompt text' }, captureContext: { type: 'string', maxLength: 1000, description: 'Short surrounding context another agent needs to interpret the capture' }, relatedTask: { type: 'string', maxLength: 500, description: 'One existing task/project path or Obsidian wikilink related to this capture' }, expectedRevision: { type: 'string', description: "Optional; use 'missing' for a new capture" }, accessToken, prettyPrint,
       }, required: ['content'] },
     },
     {
       name: 'clarify_wiki_note',
-      description: 'Complete the GTD Clarify step for one Inbox capture. Records a durable disposition and optional PARA/task metadata without deleting or silently moving the note; the response gives a safe suggested destination.',
+      description: 'Complete the GTD Clarify step for one Inbox capture. Applies the disposition lifecycle, detects an existing proposed destination, and returns a revision-safe move-preview or merge-preview action without deleting, overwriting, or silently moving the note.',
       inputSchema: { type: 'object', properties: {
         path: { type: 'string' }, disposition: { type: 'string', enum: ['knowledge', 'reference', 'project', 'someday', 'discard', 'delegate'] }, clarifiedBy: { type: 'string' }, clarifyNote: { type: 'string', maxLength: 1000 }, targetPath: { type: 'string', description: 'Optional vault-relative destination suggestion; the note is not moved automatically' },
         noteKind: { type: 'string', enum: ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'] }, lifecycle: { type: 'string', enum: ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'] }, taskStatus: { type: 'string', enum: ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'] }, project: { type: 'string' }, nextAction: { type: 'string', maxLength: 500 }, waitingFor: { type: 'string', maxLength: 500 }, desiredOutcome: { type: 'string', maxLength: 1000 }, projectPurpose: { type: 'string', maxLength: 1000 }, projectSupport: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 30 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
@@ -102,7 +102,7 @@ export function getLlmWikiTools(): Tool[] {
         completionCriteria: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'Observable conditions that define done for project/task work' },
         startedAt: { type: 'string', description: 'Optional ISO time when work entered progress' }, blockedSince: { type: 'string', description: 'Optional ISO time when work became blocked' }, waitingSince: { type: 'string', description: 'Optional ISO time when work began waiting' }, completedAt: { type: 'string', description: 'Optional ISO time when work completed' },
         taskStatus: { type: 'string', enum: ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'], description: 'Workflow state for project/task notes; separate from knowledge lifecycle' },
-        reviewPolicy: { type: 'string', enum: ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit', 'on_upstream_change'], description: 'When a knowledge note should re-enter review; upstream means a typed dependency was retired or disputed, not any nearby link' },
+        reviewPolicy: { type: 'string', enum: ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit', 'on_upstream_change'], description: 'When a knowledge note should re-enter review; upstream compares typed dependency/support revisions and states with the last publish/review baseline, not nearby links' },
         reviewOutcome: { type: 'string', enum: ['confirmed', 'revised', 'disputed', 'superseded', 'rescheduled'], description: 'Outcome of the latest evidence review; records completion without duplicating Git history' },
         interpretationStatus: { type: 'string', enum: ['unprocessed', 'interpreted', 'synthesized'], description: 'Source-processing stage: raw literature, interpreted notes, or synthesized reusable knowledge' },
         reviewedBy: { type: 'string', maxLength: 200 }, reviewedAt: { type: 'string' }, reviewNote: { type: 'string', maxLength: 1000 },
@@ -417,7 +417,7 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_impact_report',
-      description: 'Find knowledge notes affected by missing or altered evidence, overdue review, or other freshness problems. This is a bounded derived report; it never rewrites or deletes notes.',
+      description: 'Find knowledge notes affected by missing or altered evidence, overdue review, or typed upstream revision/state changes since their publish/review baseline. Aliases and qualified paths are resolved conservatively, and a completed review refreshes the baseline so unchanged retired or disputed inputs do not reopen forever. This bounded report never rewrites or deletes notes.',
       inputSchema: { type: 'object', properties: {
         limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint,
       } },
@@ -438,7 +438,7 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_moc_candidates',
-      description: 'Suggest bounded MOC structure notes for knowledge that is not currently covered by a MOC. Suggestions include a purpose and questions but never create or rewrite notes.',
+      description: 'Suggest bounded MOC structure notes for knowledge that is not currently covered by a MOC. Suggestions include revision-stamped authored order, an Obsidian Markdown draft, destination collision state, and an optional notes.write plan, but never create or rewrite notes.',
       inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 30, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint } },
     },
     {

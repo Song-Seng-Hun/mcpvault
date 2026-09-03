@@ -159,6 +159,7 @@ function evidenceLocatorError(content, evidence) {
     }
     return undefined;
 }
+const UPSTREAM_DEPENDENCY_RELATIONS = ['derived_from', 'depends_on', 'version_of', 'refines'];
 function normalizeReviewBasisLinks(value) {
     if (!Array.isArray(value))
         return [];
@@ -178,6 +179,40 @@ function normalizeReviewBasisLinks(value) {
         links.push({ path, revision });
     }
     return links.slice(0, 50).sort((left, right) => left.path.localeCompare(right.path));
+}
+function normalizeReviewBasisUpstream(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+        return undefined;
+    const rawEntries = Array.isArray(value.entries) ? value.entries : [];
+    const seen = new Set();
+    const entries = [];
+    for (const raw of rawEntries) {
+        if (!raw || typeof raw !== 'object')
+            continue;
+        const relation = typeof raw.relation === 'string' ? raw.relation.trim().toLowerCase() : '';
+        const direction = raw.direction === 'dependency' || raw.direction === 'support' ? raw.direction : undefined;
+        const target = typeof raw.target === 'string' ? raw.target.trim() : '';
+        const state = ['current', 'missing', 'ambiguous', 'retired', 'disputed', 'unavailable'].includes(String(raw.state))
+            ? raw.state
+            : undefined;
+        if (!relation || !direction || !target || !state)
+            continue;
+        const path = typeof raw.path === 'string' && raw.path.trim() ? normalizePath(raw.path) : undefined;
+        const revision = typeof raw.revision === 'string' && raw.revision.trim() ? raw.revision.trim() : undefined;
+        const lifecycle = typeof raw.lifecycle === 'string' && raw.lifecycle.trim() ? raw.lifecycle.trim().toLowerCase() : undefined;
+        const knowledgeStatus = typeof raw.knowledgeStatus === 'string' && raw.knowledgeStatus.trim() ? raw.knowledgeStatus.trim().toLowerCase() : undefined;
+        const reviewOutcome = typeof raw.reviewOutcome === 'string' && raw.reviewOutcome.trim() ? raw.reviewOutcome.trim().toLowerCase() : undefined;
+        const key = `${direction}|${relation}|${(path || target).toLowerCase()}`;
+        if (seen.has(key))
+            continue;
+        seen.add(key);
+        entries.push({ relation, direction, target, state, ...(path && { path }), ...(revision && { revision }), ...(lifecycle && { lifecycle }), ...(knowledgeStatus && { knowledgeStatus }), ...(reviewOutcome && { reviewOutcome }) });
+    }
+    entries.sort((left, right) => `${left.direction}|${left.relation}|${left.path || left.target}`.localeCompare(`${right.direction}|${right.relation}|${right.path || right.target}`));
+    const total = Number.isInteger(Number(value.total)) && Number(value.total) >= entries.length
+        ? Number(value.total)
+        : entries.length;
+    return { entries: entries.slice(0, 80), total, truncated: value.truncated === true || entries.length > 80 };
 }
 function normalizedWords(value) {
     return new Set(value.toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}_-]{1,}/gu) || []);
@@ -327,7 +362,7 @@ and links) -> Distill (\`publish_knowledge\`/lint) -> Express (MOCs, decisions,
 discussion, and Git). These hints are intentionally non-blocking except for
 the existing evidence and integrity invariants.
 
-Use \`aliases\` for stable Obsidian navigation, optional \`stable_id\` for a durable note identity, and compact \`summary\`, \`key_points\`, and \`open_questions\` properties for progressive reads; never replace the full Markdown body with a summary. When any progressive field is present, store \`summary_of_content_sha256\` for the exact Markdown body; a body edit makes the projection stale until it is regenerated. Use \`task_status\` for the operational state of project/task notes (\`open\`, \`next_action\`, \`waiting\`, \`blocked\`, \`someday\`, \`completed\`, or \`cancelled\`); keep it separate from the knowledge \`lifecycle\`. Use \`desired_outcome\`, \`next_action\`, \`task_context\`, \`due_at\`, and \`defer_until\` for GTD-style execution details. Questions, hypotheses, and assumptions should carry \`epistemic_status\` for their kind-specific state. Use \`knowledge_polarity: negative\` with \`negative_type\` plus attempted/observed/failure condition/reproduction/reusable lesson metadata to preserve failed paths instead of deleting them. Typed link arrays such as \`supports\`, \`contradicts\`, \`supersedes\`, \`derived_from\`, \`depends_on\`, \`implements\`, \`blocked_by\`, and \`related\` explain the relationship while ordinary \`[[wikilinks]]\` remain the navigational source. Optional faceted access points use bounded \`subject_terms\`, \`domain\`, \`methods\`, and \`audience\`; keep them consistent but do not treat them as a rigid taxonomy. Use \`next_actions\` and \`waiting_for\` on project/task notes only. Evidence can include \`heading\`, \`blockId\`, source \`revision\`, 1-based line ranges, and a \`quoteHash\`; stale locators are reported by lint. Use \`review_policy\` (\`manual\`, \`periodic\`, \`on_source_change\`, \`on_link_change\`, or \`on_any_edit\`) to declare when a note should re-enter review, and record the review outcome after checking evidence; this is a derived policy, not a hidden scheduler. Call \`wiki.home\` for a bounded Home/JDex launchpad, \`wiki.review_packet\` for a compact prioritized next-action packet, \`wiki.knowledge_gaps\` for active-recall questions and disputes, and \`wiki.organization_health\` to review property, MOC coverage, atomicity, Evergreen discoverability, summary freshness, typed evidence, and link problems.
+Use \`aliases\` for stable Obsidian navigation, optional \`stable_id\` for a durable note identity, and compact \`summary\`, \`key_points\`, and \`open_questions\` properties for progressive reads; never replace the full Markdown body with a summary. When any progressive field is present, store \`summary_of_content_sha256\` for the exact Markdown body; a body edit makes the projection stale until it is regenerated. Use \`task_status\` for the operational state of project/task notes (\`open\`, \`next_action\`, \`waiting\`, \`blocked\`, \`someday\`, \`completed\`, or \`cancelled\`); keep it separate from the knowledge \`lifecycle\`. Use \`desired_outcome\`, \`next_action\`, \`task_context\`, \`due_at\`, and \`defer_until\` for GTD-style execution details. Questions, hypotheses, and assumptions should carry \`epistemic_status\` for their kind-specific state. Use \`knowledge_polarity: negative\` with \`negative_type\` plus attempted/observed/failure condition/reproduction/reusable lesson metadata to preserve failed paths instead of deleting them. Typed link arrays such as \`supports\`, \`contradicts\`, \`supersedes\`, \`derived_from\`, \`depends_on\`, \`implements\`, \`blocked_by\`, and \`related\` explain the relationship while ordinary \`[[wikilinks]]\` remain the navigational source. Optional faceted access points use bounded \`subject_terms\`, \`domain\`, \`methods\`, and \`audience\`; keep them consistent but do not treat them as a rigid taxonomy. Use \`next_actions\` and \`waiting_for\` on project/task notes only. Evidence can include \`heading\`, \`blockId\`, source \`revision\`, 1-based line ranges, and a \`quoteHash\`; stale locators are reported by lint. Use \`review_policy\` (\`manual\`, \`periodic\`, \`on_source_change\`, \`on_link_change\`, \`on_any_edit\`, or \`on_upstream_change\`) to declare when a note should re-enter review, and record the review outcome after checking evidence; typed upstream revision/state changes are compared with the last publish/review baseline. Call \`wiki.home\` for a bounded Home/JDex launchpad, \`wiki.review_packet\` for a compact prioritized next-action packet, \`wiki.knowledge_gaps\` for active-recall questions and disputes, and \`wiki.organization_health\` to review property, MOC coverage, atomicity, Evergreen discoverability, summary freshness, typed evidence, and link problems.
 Use \`wiki.note_template\` for an optional small scaffold for common note roles; it never creates a file or makes fields mandatory. Prefer reciprocal \`related\`/\`same_as\` edges when the relationship is mutual; graph health reports missing reciprocity but does not rewrite it. Use \`primary_moc\` as the preferred launch point and \`read_wiki_projection\` with \`view=section\` plus a heading or \`blockId\` when bounded nearby context is enough. Use \`retention_policy\` (\`preserve\`, \`review\`, \`archive\`, or \`tombstone\`) with \`retention_reason\`, \`retention_at\`, and \`replaced_by\`; \`retention_event\`, \`preserve_until\`, and \`legal_hold\` add auditable preservation constraints, but never authorize automatic deletion.
 
 Use \`capture_wiki_note\` to create a fleeting Inbox note first. When known,
@@ -525,22 +560,213 @@ export class LlmWikiService {
         }
         return normalizeReviewBasisLinks(result);
     }
-    async reviewChangeSignals(note, principal) {
+    /** Build one request-local metadata resolver. It is intentionally not a
+     * second persistent index: callers doing a full review scan share it once,
+     * while a single publish/review builds it once for all relation fields. */
+    async buildKnowledgeReferenceIndex(principal) {
+        const index = { qualified: new Map(), terms: new Map() };
+        const canAccess = (candidate) => this.access.canAccessPhysicalPath(candidate, principal);
+        const add = (map, key, path) => {
+            if (!key)
+                return;
+            const values = map.get(key) || new Set();
+            values.add(path);
+            map.set(key, values);
+        };
+        for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+            if (note.frontmatter.llm_wiki_type !== 'knowledge' || isModerationHidden(note.frontmatter))
+                continue;
+            const path = normalizePath(note.path);
+            const pathWithoutExtension = path.replace(/\.md$/i, '');
+            add(index.qualified, path.toLocaleLowerCase(), path);
+            add(index.qualified, pathWithoutExtension.toLocaleLowerCase(), path);
+            add(index.terms, normalizedAuthorityTerm(pathWithoutExtension.split('/').at(-1)), path);
+            const title = String(note.frontmatter.title || path.split('/').at(-1) || '').replace(/\.md$/i, '');
+            const aliases = Array.isArray(note.frontmatter.aliases) ? note.frontmatter.aliases : [];
+            for (const term of [title, note.frontmatter.preferred_term, note.frontmatter.stable_id, ...aliases]) {
+                if (typeof term === 'string' && term.trim())
+                    add(index.terms, normalizedAuthorityTerm(term), path);
+            }
+        }
+        return index;
+    }
+    /** Resolve exact qualified paths or exact visible title/alias/stable-ID terms. */
+    resolveKnowledgeReference(value, index) {
+        const target = relationDocument(value).trim();
+        if (!target)
+            return [];
+        const normalized = normalizePath(target);
+        const matches = target.includes('/')
+            ? index.qualified.get(normalized.toLocaleLowerCase()) || index.qualified.get(normalized.replace(/\.md$/i, '').toLocaleLowerCase())
+            : index.terms.get(normalizedAuthorityTerm(normalized.replace(/\.md$/i, '')));
+        return [...(matches || [])].sort((left, right) => left.localeCompare(right));
+    }
+    /**
+     * Snapshot the typed notes whose state can invalidate this note. Outgoing
+     * derived_from/depends_on/version_of/refines edges are prerequisites;
+     * incoming supports edges are evidence supplied by another knowledge note.
+     * The snapshot is bounded frontmatter, not a second graph database.
+     */
+    async collectReviewBasisUpstream(path, frontmatter, principal, providedIndex) {
+        const canAccess = (candidate) => this.access.canAccessPhysicalPath(candidate, principal);
+        let referenceIndex = providedIndex;
+        const candidates = new Map();
+        const add = (entry) => {
+            const key = `${entry.direction}|${entry.relation}|${normalizePath(entry.path || entry.target).toLowerCase()}`;
+            if (!candidates.has(key))
+                candidates.set(key, entry);
+        };
+        for (const relation of UPSTREAM_DEPENDENCY_RELATIONS) {
+            const values = Array.isArray(frontmatter[relation]) ? frontmatter[relation] : [];
+            if (values.length > 0 && !referenceIndex)
+                referenceIndex = await this.buildKnowledgeReferenceIndex(principal);
+            for (const raw of values.slice(0, 50)) {
+                if (typeof raw !== 'string' || !raw.trim())
+                    continue;
+                const target = relationDocument(raw);
+                const matches = this.resolveKnowledgeReference(target, referenceIndex)
+                    .filter(candidate => this.access.canReferenceFrom(path, candidate));
+                if (matches.length === 1)
+                    add({ relation, direction: 'dependency', target, path: matches[0] });
+                else
+                    add({ relation, direction: 'dependency', target, state: matches.length === 0 ? 'missing' : 'ambiguous' });
+            }
+        }
+        if (await this.fileSystem.noteExists(path)) {
+            try {
+                const backlinks = await this.fileSystem.getBacklinks(path, 400, canAccess);
+                for (const backlink of backlinks.backlinks) {
+                    if (backlink.relation !== 'supports')
+                        continue;
+                    if (!this.access.canReferenceFrom(path, backlink.path))
+                        continue;
+                    add({ relation: 'supports', direction: 'support', target: backlink.path, path: backlink.path });
+                }
+            }
+            catch {
+                // A transient graph refresh must not make the main write/review fail.
+                // The absent baseline will conservatively re-enter review later.
+            }
+        }
+        const entries = [];
+        for (const candidate of candidates.values()) {
+            if (candidate.state) {
+                entries.push({ relation: candidate.relation, direction: candidate.direction, target: candidate.target, state: candidate.state });
+                continue;
+            }
+            const candidatePath = candidate.path;
+            try {
+                if (!canAccess(candidatePath) || !await this.fileSystem.noteExists(candidatePath)) {
+                    entries.push({ relation: candidate.relation, direction: candidate.direction, target: candidate.target, state: 'missing' });
+                    continue;
+                }
+                const note = await this.fileSystem.readNote(candidatePath);
+                if (isModerationHidden(note.frontmatter)) {
+                    entries.push({ relation: candidate.relation, direction: candidate.direction, target: candidate.target, state: 'unavailable' });
+                    continue;
+                }
+                const lifecycle = String(note.frontmatter.lifecycle || '').trim().toLowerCase();
+                const knowledgeStatus = String(note.frontmatter.knowledge_status || '').trim().toLowerCase();
+                const reviewOutcome = String(note.frontmatter.last_review_outcome || '').trim().toLowerCase();
+                const state = ['superseded', 'archived'].includes(lifecycle) || knowledgeStatus === 'superseded' || reviewOutcome === 'superseded'
+                    ? 'retired'
+                    : knowledgeStatus === 'disputed' || reviewOutcome === 'disputed'
+                        ? 'disputed'
+                        : 'current';
+                entries.push({
+                    relation: candidate.relation,
+                    direction: candidate.direction,
+                    target: candidate.target,
+                    state,
+                    path: normalizePath(candidatePath),
+                    revision: note.revision,
+                    ...(lifecycle && { lifecycle }),
+                    ...(knowledgeStatus && { knowledgeStatus }),
+                    ...(reviewOutcome && { reviewOutcome }),
+                });
+            }
+            catch {
+                entries.push({ relation: candidate.relation, direction: candidate.direction, target: candidate.target, state: 'unavailable' });
+            }
+        }
+        entries.sort((left, right) => `${left.direction}|${left.relation}|${left.path || left.target}`.localeCompare(`${right.direction}|${right.relation}|${right.path || right.target}`));
+        return { entries: entries.slice(0, 80), total: entries.length, truncated: entries.length > 80 };
+    }
+    /** Return notes whose conclusions can be affected when this note changes. */
+    async collectDownstreamKnowledgePaths(path, frontmatter, principal, limit = 20) {
+        const canAccess = (candidate) => this.access.canAccessPhysicalPath(candidate, principal);
+        const supports = Array.isArray(frontmatter.supports) ? frontmatter.supports.slice(0, 50) : [];
+        const referenceIndex = supports.length > 0 ? await this.buildKnowledgeReferenceIndex(principal) : undefined;
+        const paths = new Set();
+        if (await this.fileSystem.noteExists(path)) {
+            try {
+                const backlinks = await this.fileSystem.getBacklinks(path, 400, canAccess);
+                for (const backlink of backlinks.backlinks) {
+                    if (!UPSTREAM_DEPENDENCY_RELATIONS.includes(String(backlink.relation || '')))
+                        continue;
+                    paths.add(normalizePath(backlink.path));
+                }
+            }
+            catch { /* a warning projection must not break the completed review */ }
+        }
+        for (const raw of supports) {
+            if (typeof raw !== 'string' || !raw.trim())
+                continue;
+            const matches = this.resolveKnowledgeReference(raw, referenceIndex);
+            if (matches.length === 1)
+                paths.add(normalizePath(matches[0]));
+        }
+        const visible = [];
+        for (const candidate of paths) {
+            try {
+                const note = await this.fileSystem.readNote(candidate);
+                if (note.frontmatter.llm_wiki_type === 'knowledge' && !isModerationHidden(note.frontmatter))
+                    visible.push(this.access.toPublicPath(candidate));
+            }
+            catch { /* ignore a concurrently moved or removed projection target */ }
+        }
+        visible.sort((left, right) => left.localeCompare(right));
+        return { total: visible.length, paths: visible.slice(0, Math.max(1, limit)), truncated: visible.length > limit };
+    }
+    async reviewChangeSignals(note, principal, referenceIndex) {
         const policy = typeof note.frontmatter.review_policy === 'string' ? note.frontmatter.review_policy.toLowerCase() : 'manual';
         const bodyDigest = hash(note.content || '');
         const baselineDigest = typeof note.frontmatter.review_basis_content_sha256 === 'string'
             ? note.frontmatter.review_basis_content_sha256
             : undefined;
         const bodyChanged = baselineDigest !== undefined && baselineDigest !== bodyDigest;
-        if (policy !== 'on_link_change')
-            return { policy, bodyChanged, linkChanged: false };
-        const baseline = normalizeReviewBasisLinks(note.frontmatter.review_basis_links);
-        if (note.frontmatter.review_basis_links === undefined)
-            return { policy, bodyChanged, linkChanged: true };
-        const current = await this.collectReviewBasisLinks(note.content || '', Array.isArray(note.frontmatter.references) ? note.frontmatter.references : [], principal);
-        const previous = JSON.stringify(baseline);
-        const next = JSON.stringify(current);
-        return { policy, bodyChanged, linkChanged: previous !== next };
+        if (policy === 'on_link_change') {
+            const baseline = normalizeReviewBasisLinks(note.frontmatter.review_basis_links);
+            if (note.frontmatter.review_basis_links === undefined)
+                return { policy, bodyChanged, linkChanged: true, upstreamChanged: false, upstreamChanges: [] };
+            const current = await this.collectReviewBasisLinks(note.content || '', Array.isArray(note.frontmatter.references) ? note.frontmatter.references : [], principal);
+            const previous = JSON.stringify(baseline);
+            const next = JSON.stringify(current);
+            return { policy, bodyChanged, linkChanged: previous !== next, upstreamChanged: false, upstreamChanges: [] };
+        }
+        if (policy === 'on_upstream_change' && typeof note.path === 'string') {
+            const baseline = normalizeReviewBasisUpstream(note.frontmatter.review_basis_upstream);
+            const current = await this.collectReviewBasisUpstream(note.path, note.frontmatter, principal, referenceIndex);
+            const previousByKey = new Map((baseline?.entries || []).map(entry => [`${entry.direction}|${entry.relation}|${(entry.path || entry.target).toLowerCase()}`, entry]));
+            const currentByKey = new Map(current.entries.map(entry => [`${entry.direction}|${entry.relation}|${(entry.path || entry.target).toLowerCase()}`, entry]));
+            const changes = [];
+            for (const [key, entry] of currentByKey) {
+                const prior = previousByKey.get(key);
+                if (!prior)
+                    changes.push(`added:${entry.relation}:${entry.path || entry.target}`);
+                else if (JSON.stringify(prior) !== JSON.stringify(entry))
+                    changes.push(`changed:${entry.relation}:${entry.path || entry.target}:${prior.state}->${entry.state}`);
+            }
+            for (const [key, entry] of previousByKey)
+                if (!currentByKey.has(key))
+                    changes.push(`removed:${entry.relation}:${entry.path || entry.target}`);
+            if (baseline && (baseline.total !== current.total || baseline.truncated !== current.truncated))
+                changes.push(`set:${baseline.total}->${current.total}`);
+            if (!baseline)
+                changes.unshift('baseline_missing');
+            return { policy, bodyChanged, linkChanged: false, upstreamChanged: changes.length > 0, upstreamChanges: changes.slice(0, 12), upstream: current };
+        }
+        return { policy, bodyChanged, linkChanged: false, upstreamChanged: false, upstreamChanges: [] };
     }
     async initialize(scopeRoot, actor) {
         const schemaPath = joinRoot(scopeRoot, '_wiki/SCHEMA.md');
@@ -671,7 +897,14 @@ export class LlmWikiService {
             interpretationStatus: noteKind === 'literature' ? 'unprocessed' : 'interpreted',
             expectedRevision: params.expectedRevision,
         });
-        return { ...published, noteKind, distilledFrom: { path: this.access.toPublicPath(sourcePath), revision: source.revision }, nextAction: noteKind === 'literature' ? 'Read and interpret this literature note, then publish an atomic note with the source retained as evidence and this note linked as context.' : 'Verify the cited source and link this note from an appropriate MOC.' };
+        return {
+            ...published,
+            noteKind,
+            distilledFrom: { path: this.access.toPublicPath(sourcePath), revision: source.revision },
+            nextAction: noteKind === 'literature'
+                ? { endpointId: endpointIdForTool('publish_knowledge'), instruction: 'After interpreting this literature note, publish a reusable atomic note with the immutable source retained as evidence and this literature note linked as navigational context.' }
+                : { endpointId: endpointIdForTool('get_wiki_moc_candidates'), instruction: 'Verify the source revision, then inspect bounded MOC placement candidates before linking this note into a map.' },
+        };
     }
     async publishKnowledge(params) {
         const content = String(params.content ?? '');
@@ -717,6 +950,15 @@ export class LlmWikiService {
         const timestamp = now();
         const references = await this.references.validateAndNormalize(params.references ?? existing?.frontmatter.references, params.path, params.principal, content);
         const reviewBasisLinks = await this.collectReviewBasisLinks(content, references, params.principal);
+        const relationFrontmatter = {
+            ...(existing?.frontmatter || {}),
+            ...knowledgeOrganization({
+                status,
+                ...(existing && { existing: existing.frontmatter }),
+                ...(params.relations !== undefined && { relations: params.relations }),
+            }),
+        };
+        const reviewBasisUpstream = await this.collectReviewBasisUpstream(params.path, relationFrontmatter, params.principal);
         const claims = normalizeClaims(params.claims, existing?.frontmatter.claims);
         if (claims) {
             for (const claim of claims) {
@@ -753,6 +995,7 @@ export class LlmWikiService {
                 references,
                 review_basis_content_sha256: hash(content),
                 review_basis_links: reviewBasisLinks,
+                review_basis_upstream: reviewBasisUpstream,
                 ...(claims && { claims }),
                 confidence,
                 knowledge_status: status,
@@ -1554,6 +1797,7 @@ export class LlmWikiService {
         // a derived view, so a large vault must not create a second full array.
         const candidates = [];
         let total = 0;
+        let referenceIndex;
         const nowMs = Date.now();
         for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
             if (note.frontmatter.llm_wiki_type !== 'knowledge')
@@ -1588,7 +1832,9 @@ export class LlmWikiService {
             }
             const summaryStale = hasProgressiveProjection(note.frontmatter)
                 && (typeof note.frontmatter.summary_of_content_sha256 !== 'string' || note.frontmatter.summary_of_content_sha256 !== hash(note.content || ''));
-            const reviewSignals = await this.reviewChangeSignals(note, principal);
+            if (reviewPolicy === 'on_upstream_change' && !referenceIndex)
+                referenceIndex = await this.buildKnowledgeReferenceIndex(principal);
+            const reviewSignals = await this.reviewChangeSignals(note, principal, referenceIndex);
             const reviewTriggers = [];
             if (reviewPolicy === 'on_source_change' && sourceChanged)
                 reviewTriggers.push('source_changed');
@@ -1596,6 +1842,8 @@ export class LlmWikiService {
                 reviewTriggers.push('link_changed');
             if (reviewPolicy === 'on_any_edit' && reviewSignals.bodyChanged)
                 reviewTriggers.push('note_edited');
+            if (reviewPolicy === 'on_upstream_change' && reviewSignals.upstreamChanged)
+                reviewTriggers.push('upstream_changed');
             if (summaryStale)
                 reviewTriggers.push('summary_stale');
             if (retentionDue)
@@ -1620,6 +1868,7 @@ export class LlmWikiService {
                 + (String(note.frontmatter.knowledge_status || '').toLowerCase() === 'disputed' ? 9 : 0)
                 + (summaryStale ? 7 : 0)
                 + (sourceChanged ? 8 : 0)
+                + (reviewSignals.upstreamChanged ? 8 : 0)
                 + (retentionDue ? 6 : 0)
                 + (String(note.frontmatter.knowledge_polarity || '').toLowerCase() === 'negative' ? 4 : 0)
                 + (reviewReasons.includes('never_reviewed') ? 3 : 0);
@@ -1644,6 +1893,7 @@ export class LlmWikiService {
                 reviewReasons,
                 reviewPolicy,
                 ...(reviewTriggers.length > 0 && { reviewTriggered: true, reviewTriggers, reviewTrigger: reviewTriggers[0] }),
+                ...(reviewSignals.upstreamChanges.length > 0 && { upstreamChanges: reviewSignals.upstreamChanges }),
                 ...(Number.isInteger(Number(note.frontmatter.review_count)) && { reviewCount: Number(note.frontmatter.review_count) }),
                 ...(Number.isInteger(Number(note.frontmatter.review_reopen_count)) && { reviewReopenCount: Number(note.frontmatter.review_reopen_count) }),
                 ...(typeof note.frontmatter.last_review_trigger === 'string' && { lastReviewTrigger: note.frontmatter.last_review_trigger }),
@@ -1854,7 +2104,7 @@ export class LlmWikiService {
         const generatedPath = `Inbox/capture-${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${randomUUID().slice(0, 8)}.md`;
         const path = normalizePath(params.path || generatedPath);
         if (!/(^|\/)inbox(?:\/|$)/i.test(path))
-            throw new Error('capture path must be inside Inbox/; use triage_wiki_note after capture to classify it');
+            throw new Error('capture path must be inside Inbox/; use clarify_wiki_note after capture to choose its disposition');
         if (!this.access.canAccessPhysicalPath(path, params.principal))
             throw new Error(`Access denied: ${this.access.toPublicPath(path)}`);
         this.access.assertMutationAllowed(path, 'capture_wiki_note');
@@ -1903,7 +2153,7 @@ export class LlmWikiService {
             ...(captureReason && { captureReason }),
             ...(captureContext && { captureContext }),
             ...(relatedTaskReferences[0] && { relatedTask: this.access.toPublicPath(relatedTaskReferences[0]) }),
-            nextAction: 'Read the capture and classify it with triage_wiki_note.',
+            nextAction: { endpointId: endpointIdForTool('clarify_wiki_note'), arguments: { path: this.access.toPublicPath(path), expectedRevision: created.revision }, instruction: 'Read this capture, choose one disposition, then clarify it at the returned revision.' },
         };
     }
     /** Apply the GTD clarification decision to an Inbox capture without
@@ -1917,10 +2167,15 @@ export class LlmWikiService {
         const path = normalizePath(params.path);
         if (!/(^|\/)inbox(?:\/|$)/i.test(path))
             throw new Error('clarify_wiki_note requires an Inbox note');
-        const targetPath = params.targetPath === undefined ? undefined : normalizePath(params.targetPath);
-        if (targetPath && (/(?:^|\/|\\)\.\.(?:\/|\\|$)/.test(targetPath) || /^(?:[A-Za-z]:[\\/]|[\\/]{1,2})/.test(targetPath))) {
+        const rawTargetPath = params.targetPath === undefined ? undefined : String(params.targetPath).trim();
+        if (rawTargetPath && (/(?:^|\/|\\)\.\.(?:\/|\\|$)/.test(rawTargetPath) || /^(?:[A-Za-z]:[\\/]|[\\/]{1,2})/.test(rawTargetPath))) {
             throw new Error('targetPath must be a vault-relative path without traversal');
         }
+        const targetPath = rawTargetPath === undefined ? undefined : normalizePath(rawTargetPath);
+        if (targetPath && !this.access.canAccessPhysicalPath(targetPath, params.principal))
+            throw new Error(`Access denied: ${this.access.toPublicPath(targetPath)}`);
+        const targetExists = targetPath ? await this.fileSystem.noteExists(targetPath) : false;
+        const targetRevision = targetExists ? (await this.fileSystem.readNote(targetPath)).revision : undefined;
         const defaults = {
             knowledge: { noteKind: 'atomic', recommendedPath: 'Knowledge/', recommendedLifecycle: 'review' },
             reference: { noteKind: 'literature', recommendedPath: 'Resources/', recommendedLifecycle: 'active' },
@@ -1934,7 +2189,7 @@ export class LlmWikiService {
             ...(params.principal && { principal: params.principal }),
             path,
             ...((params.noteKind ?? preset.noteKind) !== undefined && { noteKind: params.noteKind ?? String(preset.noteKind) }),
-            ...((params.lifecycle ?? preset.lifecycle) !== undefined && { lifecycle: params.lifecycle ?? String(preset.lifecycle) }),
+            ...((params.lifecycle ?? preset.recommendedLifecycle) !== undefined && { lifecycle: params.lifecycle ?? String(preset.recommendedLifecycle) }),
             ...((params.taskStatus ?? preset.taskStatus) !== undefined && { taskStatus: params.taskStatus ?? preset.taskStatus }),
             ...(params.project !== undefined && { project: params.project }),
             ...(params.nextAction !== undefined && { nextAction: params.nextAction }),
@@ -1948,7 +2203,21 @@ export class LlmWikiService {
             ...(targetPath !== undefined && { triageTarget: targetPath }),
             expectedRevision: params.expectedRevision,
         });
-        return { ...result, disposition, ...(targetPath && { targetPath }), recommendedPath: targetPath || preset.recommendedPath, recommendedLifecycle: preset.recommendedLifecycle, nextAction: params.nextAction || (disposition === 'discard' ? 'Archive or remove this capture only after confirming it is no longer needed.' : 'Move the clarified note with the normal revision-checked note workflow when convenient.') };
+        const nextAction = disposition === 'discard'
+            ? { endpointId: endpointIdForTool('get_wiki_retention_queue'), instruction: 'Keep the archived capture until its preservation decision has been reviewed; do not delete automatically.' }
+            : targetPath
+                ? targetExists
+                    ? { endpointId: endpointIdForTool('preview_wiki_merge'), arguments: { sourcePath: this.access.toPublicPath(path), targetPath: this.access.toPublicPath(targetPath) }, instruction: 'The proposed destination already exists. Inspect both revisions and preview consolidation or choose another path; do not overwrite it.' }
+                    : { endpointId: endpointIdForTool('preview_move_note'), arguments: { oldPath: this.access.toPublicPath(path), newPath: this.access.toPublicPath(targetPath), expectedRevision: result.revision }, instruction: 'Preview backlink impact and collision state, then move only with the same source revision.' }
+                : { endpointId: endpointIdForTool('preview_move_note'), arguments: { oldPath: this.access.toPublicPath(path), expectedRevision: result.revision }, instruction: `Choose a concrete path under ${preset.recommendedPath}, preview the move, then move at this revision.` };
+        return {
+            ...result,
+            disposition,
+            ...(targetPath && { targetPath: this.access.toPublicPath(targetPath), targetExists, ...(targetRevision && { targetRevision }) }),
+            recommendedPath: targetPath ? this.access.toPublicPath(targetPath) : preset.recommendedPath,
+            recommendedLifecycle: preset.recommendedLifecycle,
+            nextAction,
+        };
     }
     /**
      * Find bounded near-duplicate candidates using titles, aliases, compact
@@ -2302,6 +2571,7 @@ export class LlmWikiService {
         const reviewChecks = params.reviewChecks === undefined ? undefined : normalizeReviewChecks(params.reviewChecks);
         const reviewOpenItems = params.reviewOpenItems === undefined ? undefined : (Array.isArray(params.reviewOpenItems) ? params.reviewOpenItems.slice(0, 8).map(item => boundedText(String(item), 500)) : (() => { throw new Error('reviewOpenItems must be an array'); })());
         const reviewBasisLinks = await this.collectReviewBasisLinks(note.content, Array.isArray(note.frontmatter.references) ? note.frontmatter.references : [], params.principal);
+        const reviewBasisUpstream = await this.collectReviewBasisUpstream(params.path, note.frontmatter, params.principal);
         const timestamp = now();
         const currentLifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
         const reviewPolicy = String(note.frontmatter.review_policy || 'manual').toLowerCase();
@@ -2321,6 +2591,7 @@ export class LlmWikiService {
             frontmatter: {
                 review_basis_content_sha256: hash(note.content),
                 review_basis_links: reviewBasisLinks,
+                review_basis_upstream: reviewBasisUpstream,
                 last_review_outcome: outcome,
                 last_reviewed_by: boundedText(params.reviewedBy, 200),
                 last_reviewed_at: timestamp,
@@ -2342,43 +2613,17 @@ export class LlmWikiService {
         });
         const updated = await this.fileSystem.readNote(params.path);
         const followUpRequired = String(updated.frontmatter.lifecycle || '').toLowerCase() === 'review' && !nextLifecycle;
-        // Phase 2: when superseding or disputing, count notes that derive from / depend on / support this note
+        // When an upstream note is retired or disputed, point at the notes whose
+        // conclusions may need review. Direction matters: incoming dependencies
+        // and targets of this note's supports relation are downstream.
         let impactedDownstreamCount = 0;
         let impactedDownstreamPaths = [];
         if (outcome === 'superseded' || outcome === 'disputed') {
             const effectiveLifecycle = nextLifecycle || String(note.frontmatter.lifecycle || '').toLowerCase();
             if (['superseded', 'archived'].includes(effectiveLifecycle) || outcome === 'disputed') {
-                const canAccessFn = (path) => this.access.canAccessPhysicalPath(path, params.principal);
-                const thisPathNorm = normalizePath(params.path).toLowerCase();
-                const thisBasename = thisPathNorm.split('/').at(-1)?.replace(/\.md$/i, '') || '';
-                for await (const other of iterateNotes(this.fileSystem, {}, canAccessFn)) {
-                    if (other.path === params.path)
-                        continue;
-                    if (other.frontmatter.llm_wiki_type !== 'knowledge')
-                        continue;
-                    const upstreamRelations = ['derived_from', 'depends_on', 'supports'];
-                    let found = false;
-                    for (const rel of upstreamRelations) {
-                        const vals = Array.isArray(other.frontmatter[rel]) ? other.frontmatter[rel] : [];
-                        for (const raw of vals) {
-                            if (typeof raw !== 'string')
-                                continue;
-                            const target = raw.replace(/^!?\[\[/, '').replace(/\]\]$/, '').split(/[|#]/, 1)[0].trim();
-                            const targetNorm = normalizePath(target).toLowerCase();
-                            if (targetNorm === thisPathNorm || targetNorm === thisBasename || `${targetNorm}.md` === thisPathNorm) {
-                                found = true;
-                                break;
-                            }
-                        }
-                        if (found)
-                            break;
-                    }
-                    if (found) {
-                        impactedDownstreamCount += 1;
-                        if (impactedDownstreamPaths.length < 5)
-                            impactedDownstreamPaths.push(this.access.toPublicPath(other.path));
-                    }
-                }
+                const downstream = await this.collectDownstreamKnowledgePaths(params.path, updated.frontmatter, params.principal, 5);
+                impactedDownstreamCount = downstream.total;
+                impactedDownstreamPaths = downstream.paths;
             }
         }
         return {
@@ -3881,16 +4126,9 @@ export class LlmWikiService {
         const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 16000);
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
         const sourceState = new Map();
-        // Build a map of knowledge notes to their lifecycle/status for upstream dependency checks
-        const knowledgeLifecycle = new Map();
-        for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
-            if (note.frontmatter.llm_wiki_type !== 'knowledge')
-                continue;
-            const lc = String(note.frontmatter.lifecycle || '').toLowerCase();
-            knowledgeLifecycle.set(normalizePath(note.path).toLowerCase(), { lifecycle: lc, normalizedPath: normalizePath(note.path) });
-        }
         const items = [];
         let total = 0;
+        let referenceIndex;
         const nowMs = Date.now();
         for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
             if (note.frontmatter.llm_wiki_type !== 'knowledge')
@@ -3926,45 +4164,16 @@ export class LlmWikiService {
                     affectedSources.push(sourcePath);
                 }
             }
-            // Phase 2: upstream dependency cascading invalidation
-            const upstreamRelations = ['derived_from', 'depends_on', 'supports'];
-            const invalidatedUpstream = [];
-            for (const relation of upstreamRelations) {
-                const related = Array.isArray(note.frontmatter[relation]) ? note.frontmatter[relation] : [];
-                for (const raw of related) {
-                    if (typeof raw !== 'string' || !raw.trim())
-                        continue;
-                    const target = raw.replace(/^!?\[\[/, '').replace(/\]\]$/, '').split(/[|#]/, 1)[0].trim();
-                    const targetNormalized = normalizePath(target).toLowerCase();
-                    const upstream = knowledgeLifecycle.get(targetNormalized) || knowledgeLifecycle.get(`${targetNormalized}.md`);
-                    if (!upstream)
-                        continue;
-                    if (upstream.lifecycle === 'superseded' || upstream.lifecycle === 'archived') {
-                        reasons.push('upstream_dependency_superseded');
-                        invalidatedUpstream.push(this.access.toPublicPath(upstream.normalizedPath));
-                    }
-                }
-            }
-            // Check if any note this note contradicts has been verified (meaning *this* note may now be stale)
-            const contradicts = Array.isArray(note.frontmatter.contradicts) ? note.frontmatter.contradicts : [];
-            for (const raw of contradicts) {
-                if (typeof raw !== 'string' || !raw.trim())
-                    continue;
-                const target = raw.replace(/^!?\[\[/, '').replace(/\]\]$/, '').split(/[|#]/, 1)[0].trim();
-                const targetNormalized = normalizePath(target).toLowerCase();
-                const upstream = knowledgeLifecycle.get(targetNormalized) || knowledgeLifecycle.get(`${targetNormalized}.md`);
-                if (upstream && upstream.lifecycle === 'evergreen') {
-                    reasons.push('upstream_dependency_disputed');
-                    invalidatedUpstream.push(this.access.toPublicPath(upstream.normalizedPath));
-                }
-            }
             const reviewAt = typeof note.frontmatter.review_at === 'string' ? note.frontmatter.review_at : undefined;
             if (reviewAt && !Number.isNaN(Date.parse(reviewAt)) && Date.parse(reviewAt) <= nowMs)
                 reasons.push('review_due');
             if (hasProgressiveProjection(note.frontmatter)
                 && (typeof note.frontmatter.summary_of_content_sha256 !== 'string' || note.frontmatter.summary_of_content_sha256 !== hash(note.content || '')))
                 reasons.push('summary_stale');
-            const reviewSignals = await this.reviewChangeSignals(note, principal);
+            const declaredPolicy = String(note.frontmatter.review_policy || 'manual').toLowerCase();
+            if (declaredPolicy === 'on_upstream_change' && !referenceIndex)
+                referenceIndex = await this.buildKnowledgeReferenceIndex(principal);
+            const reviewSignals = await this.reviewChangeSignals(note, principal, referenceIndex);
             const reviewPolicy = reviewSignals.policy;
             if (reviewPolicy === 'on_source_change' && reasons.includes('source_changed'))
                 reasons.push('review_source_changed');
@@ -3972,14 +4181,19 @@ export class LlmWikiService {
                 reasons.push('link_changed');
             if (reviewPolicy === 'on_any_edit' && reviewSignals.bodyChanged)
                 reasons.push('note_edited');
-            if (reviewPolicy === 'on_upstream_change' && invalidatedUpstream.length > 0)
-                reasons.push('upstream_change_triggered_review');
+            if (reviewPolicy === 'on_upstream_change' && reviewSignals.upstreamChanged) {
+                reasons.push('upstream_changed', 'upstream_change_triggered_review');
+            }
             if (reasons.length === 0)
                 continue;
             total += 1;
             const uniqueReasons = [...new Set(reasons)];
             const reviewTriggers = uniqueReasons.filter(reason => ['review_source_changed', 'link_changed', 'note_edited', 'summary_stale', 'upstream_change_triggered_review'].includes(reason));
-            const hasUpstreamIssue = uniqueReasons.some(r => r.startsWith('upstream_dependency_'));
+            const upstreamSnapshot = reviewSignals.upstream;
+            const invalidatedUpstream = (upstreamSnapshot?.entries || [])
+                .filter(entry => entry.state !== 'current')
+                .map(entry => entry.path || entry.target);
+            const hasUpstreamIssue = invalidatedUpstream.length > 0;
             const item = {
                 path: this.access.toPublicPath(note.path),
                 title: note.frontmatter.title || note.path.split('/').at(-1),
@@ -3991,6 +4205,7 @@ export class LlmWikiService {
                 ...(note.frontmatter.negative_type && { negativeType: note.frontmatter.negative_type }),
                 ...(affectedSources.length > 0 && { affectedSources: [...new Set(affectedSources)].map(path => this.access.toPublicPath(path)).slice(0, 10) }),
                 ...(invalidatedUpstream.length > 0 && { invalidatedUpstream: [...new Set(invalidatedUpstream)].slice(0, 10) }),
+                ...(reviewSignals.upstreamChanges.length > 0 && { upstreamChanges: reviewSignals.upstreamChanges }),
                 ...(reviewAt && { reviewAt }),
             };
             const score = item.severity === 'high' ? 0 : 1;
@@ -4887,26 +5102,63 @@ export class LlmWikiService {
         for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
             if (!paths.has(normalizePath(note.path).toLowerCase()))
                 continue;
+            if (isModerationHidden(note.frontmatter))
+                continue;
+            const current = await this.fileSystem.readNote(note.path);
             const project = typeof note.frontmatter.project === 'string' ? note.frontmatter.project.trim() : '';
+            const domain = typeof note.frontmatter.domain === 'string' ? note.frontmatter.domain.trim() : '';
+            const subjectTerm = Array.isArray(note.frontmatter.subject_terms) ? note.frontmatter.subject_terms.find((item) => typeof item === 'string' && item.trim()) : undefined;
+            const tag = Array.isArray(note.frontmatter.tags) ? note.frontmatter.tags.find((item) => typeof item === 'string' && item.trim()) : undefined;
             const folder = normalizePath(note.path).split('/')[0] || 'Knowledge';
-            const basis = project || folder;
-            const title = project.replace(/^\[\[|\]\]$/g, '').split('|').at(0)?.trim() || folder;
-            const group = groups.get(basis) || { title: `MOC: ${title}`, basis, paths: [] };
-            if (group.paths.length < 8)
-                group.paths.push(this.access.toPublicPath(note.path));
-            groups.set(basis, group);
+            const basisKind = domain ? 'domain' : subjectTerm ? 'subject_term' : project ? 'project' : tag ? 'tag' : 'folder';
+            const basis = String(domain || subjectTerm || project || tag || folder).trim();
+            const basisTitle = relationDocument(basis).replace(/^#/, '').trim() || folder;
+            const key = `${basisKind}:${basis.toLocaleLowerCase()}`;
+            const group = groups.get(key) || { title: `MOC: ${basisTitle}`, basis, basisKind, entries: [] };
+            if (group.entries.length < 12) {
+                const ordered = navigationOrder(note.frontmatter.nav_order);
+                const navOrder = ordered === Number.MAX_SAFE_INTEGER ? undefined : ordered;
+                group.entries.push({
+                    path: this.access.toPublicPath(note.path),
+                    title: boundedText(note.frontmatter.title || note.path.split('/').at(-1)?.replace(/\.md$/i, '') || note.path, 160),
+                    revision: current.revision,
+                    ...(navOrder !== undefined && { navOrder }),
+                });
+            }
+            groups.set(key, group);
         }
-        const candidates = [...groups.values()]
-            .sort((left, right) => right.paths.length - left.paths.length || left.basis.localeCompare(right.basis))
-            .slice(0, boundedLimit)
-            .map(group => ({ suggestedTitle: group.title, suggestedPurpose: `Orient an agent through the related notes grouped by ${group.basis}.`, suggestedQuestions: [`What is the durable idea shared by these notes?`, `Which note should be the next link or source of truth?`], notePaths: group.paths, reason: 'uncovered_knowledge' }));
+        const candidateGroups = [...groups.values()]
+            .sort((left, right) => right.entries.length - left.entries.length || left.basis.localeCompare(right.basis))
+            .slice(0, boundedLimit);
         const selected = [];
-        for (const item of candidates) {
+        for (const group of candidateGroups) {
+            group.entries.sort((left, right) => navigationOrder(left.navOrder) - navigationOrder(right.navOrder) || left.title.localeCompare(right.title) || left.path.localeCompare(right.path));
+            const suggestedQuestions = [`What is the durable idea shared by these notes?`, `Which note should be the next link or source of truth?`];
+            const stem = group.title.replace(/^MOC:\s*/i, '').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 100) || 'Knowledge';
+            const suggestedPath = `Knowledge/MOCs/${stem}.md`;
+            const targetExists = await this.fileSystem.noteExists(suggestedPath);
+            const links = group.entries.slice(0, 8).map(entry => `- [[${entry.path.replace(/\.md$/i, '')}|${entry.title}]]`).join('\n');
+            const draftMarkdown = `# ${group.title}\n\n## Purpose\n\nOrient an agent through notes grouped by ${group.basisKind}: ${group.basis}.\n\n## Questions\n\n${suggestedQuestions.map(question => `- ${question}`).join('\n')}\n\n## Reading order\n\n${links}\n`;
+            const item = {
+                suggestedTitle: group.title,
+                suggestedPath,
+                targetExists,
+                suggestedPurpose: `Orient an agent through the related notes grouped by ${group.basisKind}: ${group.basis}.`,
+                suggestedQuestions,
+                basis: { kind: group.basisKind, value: group.basis },
+                notePaths: group.entries.map(entry => entry.path),
+                orderedEntries: group.entries,
+                draftMarkdown,
+                creationPlan: targetExists
+                    ? { endpointId: endpointIdForTool('read_note'), arguments: { path: suggestedPath }, instruction: 'The suggested MOC path already exists. Read its current revision and extend it deliberately instead of overwriting it.' }
+                    : { endpointId: endpointIdForTool('write_note'), arguments: { path: suggestedPath, content: draftMarkdown, frontmatter: { note_kind: 'moc', lifecycle: 'active', moc_purpose: `Navigate ${group.basis}`, moc_scope: `${group.basisKind}:${group.basis}`, moc_questions: suggestedQuestions }, expectedRevision: 'missing' }, instruction: 'This is an optional Obsidian Markdown scaffold. Review its purpose, questions, and authored link order before writing it.' },
+                reason: 'uncovered_knowledge',
+            };
             if (JSON.stringify([...selected, item]).length + 2 > boundedChars)
                 break;
             selected.push(item);
         }
-        return { candidates: selected, total: groups.size, uncoveredKnowledgeTotal: Number(graph.mocCoverage.uncoveredKnowledge?.total || 0), truncated: groups.size > selected.length || selected.length < candidates.length };
+        return { candidates: selected, total: groups.size, uncoveredKnowledgeTotal: Number(graph.mocCoverage.uncoveredKnowledge?.total || 0), truncated: groups.size > selected.length || selected.length < candidateGroups.length };
     }
     /**
      * One-pass organization quality projection. It reuses lint's authoritative

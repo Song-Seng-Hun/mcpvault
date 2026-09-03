@@ -81,6 +81,21 @@ export declare class LlmWikiService {
      * is a derived review baseline: Markdown and Git remain authoritative.
      */
     private collectReviewBasisLinks;
+    /** Build one request-local metadata resolver. It is intentionally not a
+     * second persistent index: callers doing a full review scan share it once,
+     * while a single publish/review builds it once for all relation fields. */
+    private buildKnowledgeReferenceIndex;
+    /** Resolve exact qualified paths or exact visible title/alias/stable-ID terms. */
+    private resolveKnowledgeReference;
+    /**
+     * Snapshot the typed notes whose state can invalidate this note. Outgoing
+     * derived_from/depends_on/version_of/refines edges are prerequisites;
+     * incoming supports edges are evidence supplied by another knowledge note.
+     * The snapshot is bounded frontmatter, not a second graph database.
+     */
+    private collectReviewBasisUpstream;
+    /** Return notes whose conclusions can be affected when this note changes. */
+    private collectDownstreamKnowledgePaths;
     private reviewChangeSignals;
     initialize(scopeRoot: string, actor: string): Promise<{
         success: boolean;
@@ -141,7 +156,10 @@ export declare class LlmWikiService {
             path: string;
             revision: string;
         };
-        nextAction: string;
+        nextAction: {
+            endpointId: string;
+            instruction: string;
+        };
         success: boolean;
         created: boolean;
         path: string;
@@ -451,7 +469,14 @@ export declare class LlmWikiService {
         captureReason?: string;
         captureContext?: string;
         relatedTask?: string;
-        nextAction: string;
+        nextAction: {
+            endpointId: string;
+            arguments: {
+                path: string;
+                expectedRevision: string;
+            };
+            instruction: string;
+        };
     }>;
     /** Apply the GTD clarification decision to an Inbox capture without
      * deleting it or silently moving it. The disposition is durable metadata;
@@ -477,9 +502,45 @@ export declare class LlmWikiService {
     }): Promise<{
         disposition: "delegate" | "discard" | "knowledge" | "project" | "reference" | "someday";
         targetPath?: string;
+        targetExists?: boolean;
+        targetRevision?: string;
         recommendedPath: unknown;
         recommendedLifecycle: unknown;
-        nextAction: string;
+        nextAction: {
+            endpointId: string;
+            instruction: string;
+            arguments?: never;
+        } | {
+            endpointId: string;
+            arguments: {
+                sourcePath: string;
+                targetPath: string;
+                newPath?: never;
+                oldPath?: never;
+                expectedRevision?: never;
+            };
+            instruction: string;
+        } | {
+            endpointId: string;
+            arguments: {
+                sourcePath?: never;
+                targetPath?: never;
+                oldPath: string;
+                newPath: string;
+                expectedRevision: string;
+            };
+            instruction: string;
+        } | {
+            endpointId: string;
+            arguments: {
+                sourcePath?: never;
+                targetPath?: never;
+                newPath?: never;
+                oldPath: string;
+                expectedRevision: string;
+            };
+            instruction: string;
+        };
         success: boolean;
         path: string;
         revision: string;
