@@ -4086,6 +4086,23 @@ export class LlmWikiService {
             this.vocabularyHealth(principal, Math.min(boundedLimit, 8), Math.min(3200, boundedChars)),
             this.flowHealth(principal, 3, 7, 14, Math.min(boundedLimit, 8), Math.min(4200, boundedChars)),
         ]);
+        const vocabularyFacetHealth = vocabulary.facetHealth || {};
+        const fragmentedFacetCount = Array.isArray(vocabularyFacetHealth.fragmentedFacets) ? vocabularyFacetHealth.fragmentedFacets.length : 0;
+        const lowSelectivityFacetCount = Array.isArray(vocabularyFacetHealth.lowSelectivityValues) ? vocabularyFacetHealth.lowSelectivityValues.length : 0;
+        const crossVaultActions = [
+            ...(fragmentedFacetCount > 0 ? [{
+                    reason: 'facet_fragmentation_needs_review',
+                    count: fragmentedFacetCount,
+                    inspect: { endpointId: endpointIdForTool('get_wiki_vocabulary_health'), arguments: { limit: Math.min(20, Math.max(8, boundedLimit)), maxChars: Math.min(7000, Math.max(4000, boundedChars)) } },
+                    instruction: 'Review one facet and compare its one-off values for aliases, spelling drift, or false precision. Preserve legitimate distinctions; do not bulk-retag.',
+                }] : []),
+            ...(lowSelectivityFacetCount > 0 ? [{
+                    reason: 'facet_low_selectivity_needs_review',
+                    count: lowSelectivityFacetCount,
+                    inspect: { endpointId: endpointIdForTool('get_wiki_vocabulary_health'), arguments: { limit: Math.min(20, Math.max(8, boundedLimit)), maxChars: Math.min(7000, Math.max(4000, boundedChars)) } },
+                    instruction: 'Review one value attached to most notes. Keep real collection boundaries; change only redundant metadata on individually inspected notes with their revisions.',
+                }] : []),
+        ];
         const lintByPath = new Map();
         const claimLintByPath = new Map();
         for (const issue of lint.issues) {
@@ -4181,6 +4198,7 @@ export class LlmWikiService {
         add(recall.items, 'active_recall_due', 'wiki.recall_queue', 2);
         add(vocabulary.tagVariants.map((item) => ({ path: item.paths?.[0], title: `#${item.key}` })), 'tag_variant', 'wiki.vocabulary_health', 8);
         add(vocabulary.unresolvedSubjectTerms.map((item) => ({ path: item.paths?.[0], title: item.term })), 'subject_term_needs_authority', 'wiki.vocabulary_health', 8);
+        add(vocabulary.termCollisions.map((item) => ({ path: item.paths?.[0], title: item.term })), 'authority_term_collision', 'wiki.vocabulary_health', 8);
         add([...claimLintByPath.entries()].map(([path, codes]) => ({ path, title: path.split('/').at(-1), issueCodes: codes })), 'claim_argument_needs_repair', 'wiki.argument_map', 2);
         add([...lintByPath.entries()].map(([path, codes]) => ({ path, title: path.split('/').at(-1), issueCodes: codes })), 'lint_quality_issue', 'wiki.organization_health', 8);
         const priorities = [...priorityByPath.values()]
@@ -4281,6 +4299,15 @@ export class LlmWikiService {
                         inspect = { endpointId: endpointIdForTool('read_note'), arguments: { path: selectedPriority.path, maxChars: 5000 } };
                         mutation = { endpointId: endpointIdForTool('patch_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision, dryRun: true }, requiredArguments: ['oldString and newString'], instruction: 'Dry-run the exact broken-link repair before writing.' };
                     }
+                    else if (reason === 'tag_variant' || reason === 'subject_term_needs_authority' || reason === 'authority_term_collision') {
+                        inspect = { endpointId: endpointIdForTool('get_wiki_vocabulary_health'), arguments: { limit: Math.min(20, Math.max(8, boundedLimit)), maxChars: Math.min(7000, boundedChars) }, targetPath: selectedPriority.path };
+                        mutation = {
+                            endpointId: endpointIdForTool('triage_wiki_note'),
+                            arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision },
+                            requiredArguments: [reason === 'tag_variant' ? 'verified canonical tags' : reason === 'subject_term_needs_authority' ? 'verified subjectTerms or an authority-note link' : 'aliases, canonicalPath, or a deliberately scoped distinction'],
+                            instruction: 'Change only this inspected note. Preserve intentional vocabulary distinctions and never bulk-rename, retag, merge, or redirect from aggregate statistics.',
+                        };
+                    }
                     else {
                         inspect = { endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path: selectedPriority.path, intent: 'review', maxChars: 5000 } };
                         mutation = { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['the smallest justified metadata repair'] };
@@ -4325,6 +4352,9 @@ export class LlmWikiService {
                 recallDue: Number(recall.total || 0),
                 tagVariantIssues: vocabulary.tagVariants.length,
                 unresolvedSubjectTerms: vocabulary.unresolvedSubjectTerms.length,
+                authorityTermCollisions: vocabulary.termCollisions.length,
+                fragmentedFacets: fragmentedFacetCount,
+                lowSelectivityFacetValues: lowSelectivityFacetCount,
                 lintIssues: lint.errors + lint.warnings,
             },
             supportingViews: {
@@ -4340,6 +4370,7 @@ export class LlmWikiService {
                 graph: { unresolvedLinks: graph.unresolvedLinks, orphanNotes: graph.orphanNotes },
             },
             ...(curationPlan && { curationPlan }),
+            crossVaultActions,
             nextActions: dashboard.nextActions,
             sourceTruncated: Boolean(dashboard.truncated || graph.truncated),
             generatedAt: now(),
@@ -4357,10 +4388,11 @@ export class LlmWikiService {
                 mocSequences: graph.mocSequenceHealth ? { mocsAnalyzed: graph.mocSequenceHealth.mocsAnalyzed, needsAttention: graph.mocSequenceHealth.needsAttention, items: graph.mocSequenceHealth.items?.slice(0, 2) || [], truncated: true } : undefined,
                 evergreenQuality: graph.evergreenQuality ? { total: graph.evergreenQuality.total, needsAttention: graph.evergreenQuality.needsAttention, ready: graph.evergreenQuality.ready, items: graph.evergreenQuality.items?.slice(0, 2) || [], truncated: true } : undefined,
                 recall: { total: recall.total, items: recall.items.slice(0, 2), truncated: true },
-                vocabulary: { tagVariants: vocabulary.tagVariants.slice(0, 2), unresolvedSubjectTerms: vocabulary.unresolvedSubjectTerms.slice(0, 2), termCollisions: vocabulary.termCollisions.slice(0, 2), truncated: true },
+                vocabulary: { tagVariants: vocabulary.tagVariants.slice(0, 2), unresolvedSubjectTerms: vocabulary.unresolvedSubjectTerms.slice(0, 2), termCollisions: vocabulary.termCollisions.slice(0, 2), facetHealth: { fragmentedFacets: vocabularyFacetHealth.fragmentedFacets?.slice(0, 2) || [], lowSelectivityValues: vocabularyFacetHealth.lowSelectivityValues?.slice(0, 2) || [], advisory: true }, truncated: true },
                 graph: { unresolvedLinks: graph.unresolvedLinks ? { total: graph.unresolvedLinks.total, items: graph.unresolvedLinks.items?.slice(0, 2) || [], truncated: true } : undefined, orphanNotes: graph.orphanNotes ? { total: graph.orphanNotes.total, items: graph.orphanNotes.items?.slice(0, 2) || [], truncated: true } : undefined },
             },
             ...(curationPlan && { curationPlan }),
+            crossVaultActions,
             truncated: true,
         };
         if (JSON.stringify(compactResult).length <= boundedChars)
@@ -4369,6 +4401,7 @@ export class LlmWikiService {
             purpose: result.purpose,
             counts: result.counts,
             ...(curationPlan && { curationPlan }),
+            ...(crossVaultActions.length > 0 && { crossVaultActions: crossVaultActions.slice(0, 1) }),
             sourceTruncated: true,
             truncated: true,
         };
@@ -5727,6 +5760,7 @@ export class LlmWikiService {
             { intent: 'execute_in_context', useWhen: 'You need one executable action that fits a known GTD context.', endpointId: endpointIdForTool('get_wiki_next_actions'), arguments: { taskContext: '<exact context>', limit: 5, maxChars: 4000 }, requiredArguments: ['taskContext'] },
             { intent: 'review_one', useWhen: 'You want one prioritized evidence, flow, or maintenance item.', endpointId: endpointIdForTool('get_wiki_review_packet'), arguments: { limit: 1, maxChars: 4000 } },
             { intent: 'repair_structure', useWhen: 'You are fixing derived organization debt rather than reading broadly.', endpointId: endpointIdForTool('get_wiki_exception_board'), arguments: { limit: 5, maxChars: 4000 } },
+            { intent: 'maintain_vocabulary', useWhen: 'Tags, terms, or classification facets may be inconsistent, fragmented, or too broad to narrow retrieval.', endpointId: endpointIdForTool('get_wiki_vocabulary_health'), arguments: { limit: 10, maxChars: 5000 } },
             { intent: 'migrate_contract', useWhen: 'You are preflighting organization compatibility with another Vault.', endpointId: endpointIdForTool('get_wiki_organization_manifest'), arguments: { includeReadiness: true, limit: 20, maxChars: 8000 } },
         ];
         const nextAction = reviewTotal > 0

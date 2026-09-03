@@ -366,6 +366,10 @@ values and values attached to most notes. Hidden/quarantined notes never
 contribute. These are advisory signals: preserve legitimate local distinctions
 and real collection boundaries; tags and facets remain optional access points
 and are never renamed, retagged, or consolidated automatically.
+Home routes intentional terminology work to `wiki.vocabulary_health`, and the
+review packet carries Vault-wide facet findings in `crossVaultActions` rather
+than inventing a fake note path. Any repair still begins by inspecting one real
+note and uses its current revision; there is no bulk-retag action.
 Its `typedRelations` projection additionally reports unresolved, ambiguous,
 self-referential, and `answers_questions` targets that are not question notes.
 Repair them with ordinary revision-checked edits; graph health never rewrites

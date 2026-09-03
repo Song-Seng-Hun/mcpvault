@@ -1557,6 +1557,9 @@ export declare class LlmWikiService {
             recallDue: number;
             tagVariantIssues: number;
             unresolvedSubjectTerms: number;
+            authorityTermCollisions: number;
+            fragmentedFacets: any;
+            lowSelectivityFacetValues: any;
             lintIssues: number;
         };
         supportingViews: {
@@ -1714,6 +1717,18 @@ export declare class LlmWikiService {
             };
         };
         curationPlan?: Record<string, unknown>;
+        crossVaultActions: {
+            reason: string;
+            count: any;
+            inspect: {
+                endpointId: string;
+                arguments: {
+                    limit: number;
+                    maxChars: number;
+                };
+            };
+            instruction: string;
+        }[];
         nextActions: string[];
         sourceTruncated: boolean;
         generatedAt: string;

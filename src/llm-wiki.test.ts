@@ -106,6 +106,7 @@ test('MOC navigation preserves explicit sibling order, body link order, and mult
       expect.objectContaining({ intent: 'understand_or_decide', endpointId: 'wiki.answer_packet', requiredArguments: ['path'] }),
       expect.objectContaining({ intent: 'follow_curated_sequence', endpointId: 'wiki.learning_path', requiredArguments: ['path'] }),
       expect.objectContaining({ intent: 'review_one', endpointId: 'wiki.review_packet' }),
+      expect.objectContaining({ intent: 'maintain_vocabulary', endpointId: 'wiki.vocabulary_health' }),
       expect.objectContaining({ intent: 'migrate_contract', endpointId: 'wiki.organization_manifest' }),
     ]));
     expect(home.value.nextAction.endpointId).toBe('wiki.search');
@@ -2189,6 +2190,12 @@ test('vocabulary health detects bounded facet fragmentation and low-selectivity 
       expect.objectContaining({ facet: 'domain', value: 'shared-domain', noteCount: 20, reason: 'facet_value_has_low_selectivity' }),
     ]));
     expect(vocabulary.value.facetHealth.advisory).toBe(true);
+    const review = await callJson(client, 'get_wiki_review_packet', { limit: 10, maxChars: 16000, accessToken });
+    expect(review.value.counts).toMatchObject({ fragmentedFacets: 1, lowSelectivityFacetValues: 2 });
+    expect(review.value.crossVaultActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ reason: 'facet_fragmentation_needs_review', inspect: expect.objectContaining({ endpointId: 'wiki.vocabulary_health' }) }),
+      expect.objectContaining({ reason: 'facet_low_selectivity_needs_review', inspect: expect.objectContaining({ endpointId: 'wiki.vocabulary_health' }) }),
+    ]));
   } finally {
     await client.close();
     await server.close();

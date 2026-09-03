@@ -204,6 +204,10 @@ same bounded facet view as domain, subject, method, and audience; hidden content
 is excluded. Preserve intentional local distinctions and real collection
 boundaries, and repair with scope notes, aliases, or `canonical_path`; never
 rename, retag, or consolidate automatically.
+Use the Home `maintain_vocabulary` route for an intentional terminology pass.
+The review packet exposes Vault-wide facet findings as `crossVaultActions`
+because they have no single authoritative note path; inspect the vocabulary
+report, then change at most one revision-checked note at a time.
 Use `get_wiki_note_template` when a new note role needs a low-friction
 scaffold. Templates are optional starting points, not publication gates; keep
 the body in ordinary Markdown and put only small typed values in Properties.
