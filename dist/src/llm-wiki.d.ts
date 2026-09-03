@@ -86,6 +86,13 @@ export declare class LlmWikiService {
     invalidate(): void;
     private principalKey;
     /**
+     * Build one request-local work graph so flow, project planning, and next
+     * action projections agree about whether an action is actually executable.
+     * Markdown Properties remain authoritative; this graph is never persisted.
+     */
+    private workDependencySnapshot;
+    private workDependencyProjection;
+    /**
      * Active recall is a property of the reader, not of the shared knowledge
      * note. Agent sessions therefore keep their recall result in their private
      * continuity scope; the legacy model-owner path continues to use the note
@@ -740,6 +747,11 @@ export declare class LlmWikiService {
                 total: number;
                 truncated: boolean;
             };
+            dependencyBlocked: {
+                items: Record<string, unknown>[];
+                total: number;
+                truncated: boolean;
+            };
             someday: {
                 items: Record<string, unknown>[];
                 total: number;
@@ -1069,6 +1081,11 @@ export declare class LlmWikiService {
                 truncated: boolean;
                 items: Record<string, unknown>[];
             };
+            dependencyBlocked: {
+                total: number;
+                truncated: boolean;
+                items: Record<string, unknown>[];
+            };
             someday: {
                 total: number;
                 truncated: boolean;
@@ -1378,6 +1395,7 @@ export declare class LlmWikiService {
             pullAllowed: boolean;
             readyToPull: number;
             blocked: number;
+            dependencyBlocked: number;
             waiting: number;
             overdue: number;
         };
@@ -1411,6 +1429,7 @@ export declare class LlmWikiService {
             pullAllowed: boolean;
             readyToPull: number;
             blocked: number;
+            dependencyBlocked: number;
             waiting: number;
             overdue: number;
         };
@@ -1447,6 +1466,7 @@ export declare class LlmWikiService {
             serviceClasses: ("expedite" | "fixed_date" | "research" | "standard")[];
             wipLimitDefault: number;
             completionCriteria: string;
+            dependencyPolicy: string;
             separateFromKnowledgeLifecycle: boolean;
         };
         knowledge: {
@@ -1495,6 +1515,7 @@ export declare class LlmWikiService {
             serviceClasses: ("expedite" | "fixed_date" | "research" | "standard")[];
             wipLimitDefault: number;
             completionCriteria: string;
+            dependencyPolicy: string;
             separateFromKnowledgeLifecycle: boolean;
         };
         review: {
@@ -1543,6 +1564,7 @@ export declare class LlmWikiService {
             wipOverflow: number;
             readyToPull: number;
             blocked: number;
+            dependencyBlocked: number;
             waiting: number;
             unlinkedMocQuestions: number;
             mocSequenceNeedsAttention: number;
@@ -1582,6 +1604,7 @@ export declare class LlmWikiService {
                     pullAllowed: boolean;
                     readyToPull: number;
                     blocked: number;
+                    dependencyBlocked: number;
                     waiting: number;
                     overdue: number;
                 };
@@ -1615,6 +1638,7 @@ export declare class LlmWikiService {
                     pullAllowed: boolean;
                     readyToPull: number;
                     blocked: number;
+                    dependencyBlocked: number;
                     waiting: number;
                     overdue: number;
                 };
@@ -1960,6 +1984,7 @@ export declare class LlmWikiService {
         }[];
         total: number;
         needsPlanning: number;
+        dependencyBlocked: number;
         truncated: boolean;
         generatedAt: string;
     }>;
@@ -1990,6 +2015,14 @@ export declare class LlmWikiService {
             name: string;
             count: number;
         }[];
+        exclusions?: {
+            workflowBlocked: number;
+            dependencyBlocked: number;
+            unresolvedDependencies: number;
+            dependencyCycles: number;
+            dependencyBlockedItems: Record<string, unknown>[];
+            note: string;
+        };
         total: number;
         truncated: boolean;
         generatedAt: string;
@@ -2364,6 +2397,9 @@ export declare class LlmWikiService {
         matchingNotes: any;
         matchingNotesExact: boolean;
         matchingNotesMeaning: string;
+        dependencyAware?: boolean;
+        recommendedEndpoint?: string;
+        dependencyNote?: string;
         view: string;
         availableViews: {
             id: string;
@@ -2394,6 +2430,9 @@ export declare class LlmWikiService {
         matchingNotes: any;
         matchingNotesExact: boolean;
         matchingNotesMeaning: string;
+        dependencyAware?: boolean;
+        recommendedEndpoint?: string;
+        dependencyNote?: string;
         view: string;
         availableViews: {
             id: string;
@@ -2466,7 +2505,7 @@ export declare class LlmWikiService {
                 intent?: never;
                 path?: never;
                 maxDepth?: never;
-                taskContext?: never;
+                context?: never;
                 includeReadiness?: never;
             };
             requiredArguments: string[];
@@ -2482,7 +2521,7 @@ export declare class LlmWikiService {
                 intent?: never;
                 path?: never;
                 maxDepth?: never;
-                taskContext?: never;
+                context?: never;
                 includeReadiness?: never;
                 limit?: never;
                 maxChars?: never;
@@ -2503,7 +2542,7 @@ export declare class LlmWikiService {
                 intent?: never;
                 path?: never;
                 maxDepth?: never;
-                taskContext?: never;
+                context?: never;
                 includeReadiness?: never;
             };
             followUpEndpointId: string;
@@ -2522,7 +2561,7 @@ export declare class LlmWikiService {
                 limit: number;
                 maxChars: number;
                 maxDepth?: never;
-                taskContext?: never;
+                context?: never;
                 includeReadiness?: never;
             };
             requiredArguments: string[];
@@ -2540,7 +2579,7 @@ export declare class LlmWikiService {
                 maxChars: number;
                 path?: never;
                 maxDepth?: never;
-                taskContext?: never;
+                context?: never;
                 includeReadiness?: never;
             };
             requiredArguments?: never;
@@ -2558,7 +2597,7 @@ export declare class LlmWikiService {
                 maxDepth: number;
                 limit: number;
                 maxChars: number;
-                taskContext?: never;
+                context?: never;
                 includeReadiness?: never;
             };
             requiredArguments: string[];
@@ -2574,7 +2613,7 @@ export declare class LlmWikiService {
                 intent?: never;
                 path?: never;
                 maxDepth?: never;
-                taskContext: string;
+                context: string;
                 limit: number;
                 maxChars: number;
                 includeReadiness?: never;
@@ -2593,7 +2632,7 @@ export declare class LlmWikiService {
                 intent?: never;
                 path?: never;
                 maxDepth?: never;
-                taskContext?: never;
+                context?: never;
                 includeReadiness: boolean;
                 limit: number;
                 maxChars: number;

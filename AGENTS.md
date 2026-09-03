@@ -354,6 +354,9 @@ this remains a quality hint, not a publication gate. Use
 `review_checklist`, or `collections` when a local Obsidian view is useful. Specialized views may
 report `matchingNotesExact: false` because Bases evaluates their final
 Property expression locally.
+Treat the `project_next_actions` Base as a local candidate table only. Bases
+cannot resolve cross-note completion, aliases, access, ambiguity, or cycles;
+call `get_wiki_next_actions` before executing a row.
 Use `export_wiki_base` with `expectedRevision` (`missing` for a new file) when
 you want to persist one local view; it writes only a derived `Views/*.base`
 file and never changes note content or permissions. Use
@@ -368,7 +371,12 @@ task list.
 Use `get_wiki_policy` when the scope's organization rules are unclear. Before
 starting additional project/task work, use `get_wiki_flow_health`: it treats
 `task_status: next_action` as executable WIP and `task_status: open` with a
-concrete `next_action` as pull-ready. Respect the returned WIP limit, finish
+concrete `next_action` as pull-ready only when no work dependency blocks it.
+`blocked_by` is a hard gate. `depends_on` gates only when its target resolves
+to unfinished project/task work; ordinary knowledge targets are informational.
+Unresolved, ambiguous, inactive, and cyclic prerequisites are not executable.
+Inspect the bounded blocker paths and current revisions rather than changing
+task status automatically. Respect the returned WIP limit, finish
 or unblock existing work before pulling more standard work, and use
 `service_class` (`expedite`, `fixed_date`, `standard`, or `research`) only as
 an ordering explanation. Active projects should declare bounded

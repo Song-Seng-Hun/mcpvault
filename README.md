@@ -321,7 +321,13 @@ returns only active executable actions, optionally filtered by one exact
 `maxMinutes`, `energy`, and `effort` filters using common optional
 `time_estimate_minutes`/`estimated_minutes`, `energy`, and `effort` Properties;
 unknown values are excluded and reported rather than guessed. Project purpose, support
-references, and waiting information remain separate fields. `resurface_wiki_knowledge`
+references, and waiting information remain separate fields. Waiting or explicitly
+blocked work is never returned as executable. `blocked_by` is a hard gate;
+`depends_on` gates execution only when it resolves to an unfinished project/task.
+Unresolved, ambiguous, inactive, and cyclic work prerequisites are excluded and
+reported with bounded target context and current revisions. A `depends_on` link to
+ordinary knowledge remains informational rather than becoming a false task gate.
+`resurface_wiki_knowledge`
 returns a small deterministic daily rotation of durable notes, so Zettelkasten
 style rediscovery does not require an ever-growing queue or permanent cache.
 Both are bounded and read-only: read the returned notes and check their current
@@ -378,11 +384,13 @@ Project notes may additionally use `project_purpose` for the reason/why and
 `project_support` for bounded Obsidian links or paths to planning material.
 Keep support material separate from the executable `next_action` list; use
 `get_wiki_project_packet` for a bounded Natural Planning review of purpose,
-outcome, brainstorm, support, and next-action completeness.
+outcome, brainstorm, support, next-action completeness, and the same derived
+dependency readiness used by the action and flow views.
 `get_wiki_policy` exposes the same organization constitution in a compact
 machine-readable form for new agents. `get_wiki_flow_health` adds the missing
-Kanban flow layer: `task_status: next_action` is executable WIP, an `open` item
-with a concrete `next_action` is pull-ready, and blocked/waiting work is
+Kanban flow layer: `task_status: next_action` is executable WIP only when its
+work prerequisites are satisfied, an `open` item with a concrete `next_action`
+is pull-ready only when no dependency blocks it, and blocked/waiting work is
 reported with bounded aging. Its WIP limit is advisory and configurable; it
 does not assign work or create a second task database. Optional
 `service_class` (`expedite`, `fixed_date`, `standard`, `research`) explains
@@ -678,6 +686,11 @@ revision; it is limited to that presentation file and does not change note
 content or permissions. Markdown and Git remain the source of truth.
 Specialized views may return `matchingNotesExact: false` when
 their final Property expression is intended to be evaluated by Obsidian Bases.
+The `project_next_actions` Base is deliberately labeled an action-candidate
+view: Bases can hide closed/waiting rows and display dependency Properties, but
+it cannot resolve cross-note completion, aliases, access, ambiguity, or cycles.
+Call `wiki.next_actions` before execution for the authoritative bounded
+dependency-aware projection.
 
 `ingest_source` also accepts optional citation metadata: `sourceType`,
 `citationKey`, `author`, `publishedAt`, `retrievedAt`, `sourceFamily`,

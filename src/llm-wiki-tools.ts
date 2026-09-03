@@ -351,12 +351,12 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_review_dashboard',
-      description: 'Run one bounded GTD Reflect/weekly-review pass over Inbox, next actions, due work, waiting/someday items, open questions/hypotheses, due or stale knowledge, and graph/MOC/focus health. It is advisory and never mutates notes.',
+      description: 'Run one bounded GTD Reflect/weekly-review pass over Inbox, next actions, due work, waiting/someday/dependency-blocked items, open questions/hypotheses, due or stale knowledge, and graph/MOC/focus health. Work dependency diagnostics carry current revisions; the view is advisory and never mutates notes.',
       inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 50, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 18000, default: 9000 }, accessToken, prettyPrint } },
     },
     {
       name: 'get_wiki_flow_health',
-      description: 'Return a bounded Kanban-style flow view for project/task notes. It reports executable WIP, a configurable WIP limit, pull-ready work, blocked/waiting aging, overdue work, service classes, and missing timestamps without assigning or mutating anything. Use it before starting another task.',
+      description: 'Return a bounded Kanban-style flow view for project/task notes. It reports dependency-safe executable WIP, a configurable WIP limit, pull-ready work, blocked/waiting aging, unresolved or cyclic prerequisites, overdue work, service classes, and revisions without assigning or mutating anything. Use it before starting another task.',
       inputSchema: { type: 'object', properties: {
         wipLimit: { type: 'integer', minimum: 1, maximum: 50, default: 3, description: 'Advisory maximum of task_status=next_action items' },
         blockedAfterDays: { type: 'integer', minimum: 1, maximum: 3650, default: 7 },
@@ -395,12 +395,12 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_project_packet',
-      description: 'Return a bounded GTD/Natural Planning packet for active projects. It separates purpose, desired outcome, completion criteria, brainstorming, project-support references, and concrete next actions, and flags missing planning pieces without rewriting the note.',
+      description: 'Return a bounded GTD/Natural Planning packet for active projects. It separates purpose, desired outcome, completion criteria, brainstorming, project-support references, and concrete next actions, then reports the same revision-stamped dependency readiness used by flow and next-action views without rewriting the note.',
       inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 40, default: 12 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 8000 }, accessToken, prettyPrint } },
     },
     {
       name: 'get_wiki_next_actions',
-      description: 'Return a bounded GTD action list organized by task context (for example @research or @computer), while keeping project-support material separate. Optional maxMinutes, energy, and effort filters select work that fits the current execution capacity; unknown metadata is excluded and reported. It never assigns or mutates work.',
+      description: 'Return a bounded GTD action list organized by task context (for example @research or @computer), while keeping project-support material separate. Waiting, blocked, unresolved, ambiguous, inactive, and cyclic work prerequisites are excluded and reported with current revisions. Optional maxMinutes, energy, and effort filters select work that fits the current execution capacity; unknown metadata is excluded and reported. It never assigns or mutates work.',
       inputSchema: { type: 'object', properties: {
         context: { type: 'string', description: 'Optional exact task_context filter' },
         maxMinutes: { type: 'integer', minimum: 1, maximum: 1440, description: 'Optional maximum estimated duration in minutes. Reads time_estimate_minutes, estimated_minutes, duration_minutes, or time_minutes.' },

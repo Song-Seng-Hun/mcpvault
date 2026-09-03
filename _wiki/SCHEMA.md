@@ -122,6 +122,13 @@ optional `maxMinutes`, `energy`, and `effort` execution filters. The filters
 read common optional `time_estimate_minutes`/`estimated_minutes`, `energy`, and
 `effort` Properties; missing values are excluded and reported instead of being
 guessed.
+Waiting and `task_status: blocked` notes are excluded. `blocked_by` is a hard
+execution gate; `depends_on` gates only when it resolves to unfinished
+project/task work. Unresolved, ambiguous, inactive, or cyclic work prerequisites
+are also excluded and returned as bounded diagnostics with revisions. A
+`depends_on` link to ordinary knowledge is informational. The flow dashboard,
+project packet, Reflect dashboard, and next-action view share this request-local
+interpretation and never persist a second task graph.
 Purpose, project support, and waiting information stay separate from the
 action itself. `resurface_wiki_knowledge` is a small deterministic daily
 rotation of durable notes for Zettelkasten-style rediscovery; it is derived,
@@ -255,6 +262,11 @@ and `maintenance`. These are optional local Obsidian `.base` views, not
 another database or permission boundary. Specialized Property expressions
 may return `matchingNotesExact: false` because the final filter is evaluated
 by the local Bases view.
+`project_next_actions` is an Obsidian action-candidate view, not a dependency
+solver. It hides obvious closed/waiting rows and displays `blocked_by` and
+`depends_on`, then returns `dependencyAware: false` and routes execution to
+`wiki.next_actions`, which resolves visible targets, completion, ambiguity,
+access, and cycles.
 
 Source notes may optionally declare `source_type`, `citation_key`,
 `source_author`, `published_at`, and `retrieved_at`. These make repeated use of

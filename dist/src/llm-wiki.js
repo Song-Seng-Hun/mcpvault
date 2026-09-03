@@ -788,6 +788,7 @@ scaffolds, \`wiki.quality_check\` gives advisory role checks, and role-specific
 catalog/Bases views never become truth scores or access rules.
 
 Use \`aliases\` for stable Obsidian navigation, optional \`stable_id\` for a durable note identity, and compact \`summary\`, \`key_points\`, and \`open_questions\` properties for progressive reads; never replace the full Markdown body with a summary. When any progressive field is present, store \`summary_of_content_sha256\` for the exact Markdown body; a body edit makes the projection stale until it is regenerated. Use \`task_status\` for the operational state of project/task notes (\`open\`, \`next_action\`, \`waiting\`, \`blocked\`, \`someday\`, \`completed\`, or \`cancelled\`); keep it separate from the knowledge \`lifecycle\`. Use \`desired_outcome\`, \`next_action\`, \`task_context\`, \`due_at\`, and \`defer_until\` for GTD-style execution details. Questions, hypotheses, and assumptions should carry \`epistemic_status\` for their kind-specific state. Use \`knowledge_polarity: negative\` with \`negative_type\` plus attempted/observed/failure condition/reproduction/reusable lesson metadata to preserve failed paths instead of deleting them. Typed link arrays such as \`supports\`, \`contradicts\`, \`supersedes\`, \`derived_from\`, \`depends_on\`, \`implements\`, \`blocked_by\`, and \`related\` explain the relationship while ordinary \`[[wikilinks]]\` remain the navigational source. Optional faceted access points use bounded \`subject_terms\`, \`domain\`, \`methods\`, and \`audience\`; keep them consistent but do not treat them as a rigid taxonomy. Use \`next_actions\` and \`waiting_for\` on project/task notes only. Evidence can include \`heading\`, \`blockId\`, source \`revision\`, 1-based line ranges, and a \`quoteHash\`; stale locators are reported by lint. Use \`review_policy\` (\`manual\`, \`periodic\`, \`on_source_change\`, \`on_link_change\`, \`on_any_edit\`, or \`on_upstream_change\`) to declare when a note should re-enter review, and record the review outcome after checking evidence; typed upstream revision/state changes are compared with the last publish/review baseline. Call \`wiki.home\` for a bounded Home/JDex launchpad, \`wiki.review_packet\` for a compact prioritized next-action packet, \`wiki.knowledge_gaps\` for active-recall questions and disputes, and \`wiki.organization_health\` to review property, MOC coverage, atomicity, Evergreen discoverability, summary freshness, typed evidence, and link problems.
+For work notes, \`blocked_by\` is a hard execution gate. A \`depends_on\` link gates execution only when it resolves to unfinished project/task work; a link to ordinary knowledge is informational. \`wiki.next_actions\`, \`wiki.flow_health\`, \`wiki.project_packet\`, and the Reflect dashboard exclude or flag unresolved, ambiguous, inactive, and cyclic work prerequisites rather than recommending unsafe work.
 Use \`wiki.note_template\` for an optional small scaffold for common note roles; it never creates a file or makes fields mandatory. Prefer reciprocal \`related\`/\`same_as\` edges when the relationship is mutual; graph health reports missing reciprocity but does not rewrite it. Use \`primary_moc\` as the preferred launch point and \`read_wiki_projection\` with \`view=section\` plus a heading or \`blockId\` when bounded nearby context is enough. Use \`retention_policy\` (\`preserve\`, \`review\`, \`archive\`, or \`tombstone\`) with \`retention_reason\`, \`retention_at\`, and \`replaced_by\`; \`retention_event\`, \`preserve_until\`, and \`legal_hold\` add auditable preservation constraints, but never authorize automatic deletion.
 
 Use \`capture_wiki_note\` to create a fleeting Inbox note first. When known,
@@ -969,6 +970,163 @@ export class LlmWikiService {
     }
     principalKey(principal) {
         return JSON.stringify(principal ? [principal.accountId, principal.userId || '', principal.modelId, principal.agentId || '', principal.commandCenterId || '', principal.role] : ['anonymous']);
+    }
+    /**
+     * Build one request-local work graph so flow, project planning, and next
+     * action projections agree about whether an action is actually executable.
+     * Markdown Properties remain authoritative; this graph is never persisted.
+     */
+    async workDependencySnapshot(principal, includeContent = false) {
+        const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        const notes = [];
+        for await (const note of iterateNotes(this.fileSystem, { includeContent }, canAccess)) {
+            if (!isModerationHidden(note.frontmatter))
+                notes.push(note);
+        }
+        const isWorkNote = (note) => {
+            const kind = String(note.frontmatter.note_kind || '').trim().toLowerCase();
+            return ['project', 'task'].includes(kind)
+                || note.frontmatter.task_status !== undefined
+                || note.frontmatter.next_action !== undefined
+                || note.frontmatter.next_actions !== undefined;
+        };
+        const workNotes = notes.filter(isWorkNote);
+        const visiblePaths = notes.map(note => note.path);
+        const visibleByPath = new Map(notes.map(note => [normalizePath(note.path).toLowerCase(), note]));
+        const workByPath = new Map(workNotes.map(note => [normalizePath(note.path).toLowerCase(), note]));
+        const qualified = new Map();
+        const terms = new Map();
+        const addReference = (index, key, path) => {
+            if (!key)
+                return;
+            const matches = index.get(key) || new Set();
+            matches.add(path);
+            index.set(key, matches);
+        };
+        for (const note of notes) {
+            const path = normalizePath(note.path);
+            const withoutExtension = path.replace(/\.md$/i, '');
+            addReference(qualified, path.toLowerCase(), note.path);
+            addReference(qualified, withoutExtension.toLowerCase(), note.path);
+            const aliases = Array.isArray(note.frontmatter.aliases) ? note.frontmatter.aliases : [];
+            for (const term of [withoutExtension.split('/').at(-1), note.frontmatter.title, note.frontmatter.preferred_term, note.frontmatter.stable_id, ...aliases]) {
+                if (typeof term === 'string' && term.trim())
+                    addReference(terms, normalizedAuthorityTerm(term.replace(/\.md$/i, '')), note.path);
+            }
+        }
+        const values = (value) => Array.isArray(value)
+            ? value.filter((item) => typeof item === 'string' && Boolean(item.trim())).slice(0, 40)
+            : typeof value === 'string' && value.trim() ? [value.trim()] : [];
+        const resolve = (sourcePath, raw) => {
+            const document = relationDocument(raw);
+            let matches = [];
+            if (document.startsWith('../') || document.startsWith('./')) {
+                const relative = posix.normalize(posix.join(posix.dirname(normalizePath(sourcePath)), document));
+                const direct = visibleByPath.get(relative.toLowerCase()) || visibleByPath.get(`${relative}.md`.toLowerCase());
+                if (direct)
+                    matches = [direct.path];
+            }
+            if (!matches.length) {
+                const normalizedDocument = normalizePath(document);
+                const indexed = document.includes('/')
+                    ? qualified.get(normalizedDocument.toLowerCase()) || qualified.get(normalizedDocument.replace(/\.md$/i, '').toLowerCase())
+                    : terms.get(normalizedAuthorityTerm(normalizedDocument.replace(/\.md$/i, '')));
+                matches = [...(indexed || [])];
+            }
+            if (!matches.length)
+                matches = resolveWikiLinkTargets(document, visiblePaths);
+            return [...new Set(matches.filter(target => this.access.canReferenceFrom(sourcePath, target)))];
+        };
+        const taskStatus = (note) => String(note.frontmatter.task_status || 'open').trim().toLowerCase() || 'open';
+        const lifecycle = (note) => String(note.frontmatter.lifecycle || '').trim().toLowerCase();
+        const findingsByPath = new Map();
+        const adjacency = new Map();
+        const unfinishedKeys = workNotes
+            .filter(note => !['completed', 'cancelled'].includes(taskStatus(note)))
+            .map(note => normalizePath(note.path).toLowerCase());
+        const unfinishedSet = new Set(unfinishedKeys);
+        for (const source of workNotes) {
+            const sourceKey = normalizePath(source.path).toLowerCase();
+            const findings = [];
+            for (const relation of ['blocked_by', 'depends_on']) {
+                for (const raw of values(source.frontmatter[relation])) {
+                    const targets = resolve(source.path, raw);
+                    let state;
+                    if (targets.length === 0)
+                        state = 'unresolved_or_inaccessible';
+                    else if (targets.length > 1)
+                        state = 'ambiguous';
+                    else {
+                        const targetKey = normalizePath(targets[0]).toLowerCase();
+                        const target = workByPath.get(targetKey);
+                        if (!target)
+                            state = relation === 'depends_on' ? 'informational' : 'non_work_target';
+                        else if (taskStatus(target) === 'completed')
+                            state = 'satisfied';
+                        else if (taskStatus(target) === 'cancelled')
+                            state = 'cancelled';
+                        else if (['archived', 'superseded'].includes(lifecycle(target)))
+                            state = 'inactive';
+                        else
+                            state = 'active';
+                        if (state === 'active' && unfinishedSet.has(sourceKey) && unfinishedSet.has(targetKey)) {
+                            const edges = adjacency.get(sourceKey) || new Set();
+                            edges.add(targetKey);
+                            adjacency.set(sourceKey, edges);
+                        }
+                    }
+                    findings.push({
+                        relation,
+                        raw,
+                        state,
+                        targetPaths: targets,
+                        targetStatuses: targets.map(path => {
+                            const target = visibleByPath.get(normalizePath(path).toLowerCase());
+                            return target && isWorkNote(target) ? taskStatus(target) : 'not_work';
+                        }),
+                        targetRevisions: targets.map(path => visibleByPath.get(normalizePath(path).toLowerCase())?.revision || ''),
+                    });
+                }
+            }
+            findingsByPath.set(sourceKey, findings);
+        }
+        const dependencyResidual = classifyDependencyResidual(unfinishedKeys, adjacency);
+        const cycleByPath = new Map();
+        for (const cycle of dependencyResidual.cycles) {
+            const publicPaths = cycle.map(key => this.access.toPublicPath(workByPath.get(key)?.path || key));
+            for (const key of cycle)
+                cycleByPath.set(key, publicPaths);
+        }
+        const stateByPath = new Map();
+        for (const note of workNotes) {
+            const key = normalizePath(note.path).toLowerCase();
+            const findings = findingsByPath.get(key) || [];
+            const blockers = findings.filter(item => !['satisfied', 'informational'].includes(item.state));
+            const satisfied = findings.filter(item => item.state === 'satisfied');
+            const cyclePaths = cycleByPath.get(key) || [];
+            stateByPath.set(key, { findings, blockers, satisfied, cyclePaths, executable: blockers.length === 0 && cyclePaths.length === 0 });
+        }
+        return { notes, workNotes, stateByPath };
+    }
+    workDependencyProjection(state, limit = 6) {
+        const project = (item) => ({
+            relation: item.relation,
+            target: boundedText(item.raw, 240),
+            state: item.state,
+            ...(item.targetPaths.length > 0 && { targetPaths: item.targetPaths.slice(0, 3).map(path => this.access.toPublicPath(path)) }),
+            ...(item.targetStatuses.length > 0 && { targetStatuses: item.targetStatuses.slice(0, 3) }),
+            ...(item.targetRevisions.some(Boolean) && { targetRevisions: item.targetRevisions.slice(0, 3) }),
+        });
+        const informational = state.findings.filter(item => item.state === 'informational');
+        return {
+            executable: state.executable,
+            blockerCount: state.blockers.length,
+            blockers: state.blockers.slice(0, limit).map(project),
+            satisfiedCount: state.satisfied.length,
+            informationalCount: informational.length,
+            ...(state.cyclePaths.length > 0 && { dependencyCycle: state.cyclePaths.slice(0, limit) }),
+            truncated: state.blockers.length > limit || state.cyclePaths.length > limit,
+        };
     }
     /**
      * Active recall is a property of the reader, not of the shared knowledge
@@ -3384,12 +3542,13 @@ export class LlmWikiService {
     async reviewDashboard(principal, limit = 10, maxChars = 9000) {
         const boundedLimit = Math.min(Math.max(Number(limit) || 10, 1), 50);
         const boundedChars = Math.min(Math.max(Number(maxChars) || 9000, 512), 18000);
-        const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        const dependencySnapshot = await this.workDependencySnapshot(principal);
         const actionItems = [];
         const dueItems = [];
         const scheduledItems = [];
         const projectReadinessItems = [];
         const waitingItems = [];
+        const dependencyBlockedItems = [];
         const somedayItems = [];
         const questionItems = [];
         const hypothesisItems = [];
@@ -3400,6 +3559,7 @@ export class LlmWikiService {
         let totalScheduled = 0;
         let totalProjectsAndTasks = 0;
         let totalWaiting = 0;
+        let totalDependencyBlocked = 0;
         let totalSomeday = 0;
         let totalQuestions = 0;
         let totalHypotheses = 0;
@@ -3410,12 +3570,12 @@ export class LlmWikiService {
             if (items.length < boundedLimit)
                 items.push(item);
         };
-        for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+        for (const note of dependencySnapshot.notes) {
             const kind = String(note.frontmatter.note_kind || '').toLowerCase();
             const lifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
             const taskStatus = String(note.frontmatter.task_status || '').toLowerCase();
             const title = note.frontmatter.title || note.path.split('/').at(-1);
-            const item = { path: this.access.toPublicPath(note.path), title, kind, ...(note.frontmatter.task_status && { taskStatus }) };
+            const item = { path: this.access.toPublicPath(note.path), title, kind, ...(note.revision && { revision: note.revision }), ...(note.frontmatter.task_status && { taskStatus }) };
             if (kind === 'project' || kind === 'task') {
                 if (taskStatus === 'someday') {
                     totalSomeday += 1;
@@ -3428,11 +3588,13 @@ export class LlmWikiService {
                     const overdue = Boolean(dueAt && !Number.isNaN(Date.parse(dueAt)) && Date.parse(dueAt) <= nowMs);
                     const waiting = taskStatus === 'waiting' || Boolean(note.frontmatter.waiting_for);
                     const blocked = taskStatus === 'blocked';
+                    const dependencyState = dependencySnapshot.stateByPath.get(normalizePath(note.path).toLowerCase());
+                    const dependencyBlocked = !dependencyState.executable;
                     const deferred = Boolean(deferUntil && !Number.isNaN(Date.parse(deferUntil)) && Date.parse(deferUntil) > nowMs);
                     const hasNextAction = Boolean(note.frontmatter.next_action || (Array.isArray(note.frontmatter.next_actions) && note.frontmatter.next_actions.length > 0));
-                    const missingNextAction = lifecycle === 'active' && !hasNextAction && !waiting && !blocked && !deferred;
-                    const readiness = blocked ? 'blocked' : waiting ? 'waiting' : deferred ? 'deferred' : hasNextAction ? 'ready' : 'needs_next_action';
-                    const workItem = { ...item, ...(dueAt && { dueAt }), ...(scheduledAt && { scheduledAt }), ...(deferUntil && { deferUntil }), readiness };
+                    const missingNextAction = lifecycle === 'active' && !hasNextAction && !waiting && !blocked && !dependencyBlocked && !deferred;
+                    const readiness = blocked ? 'blocked' : waiting ? 'waiting' : dependencyBlocked ? 'dependency_blocked' : deferred ? 'deferred' : hasNextAction ? 'ready' : 'needs_next_action';
+                    const workItem = { ...item, ...(dueAt && { dueAt }), ...(scheduledAt && { scheduledAt }), ...(deferUntil && { deferUntil }), readiness, ...(dependencyBlocked && { dependencies: this.workDependencyProjection(dependencyState) }) };
                     totalProjectsAndTasks += 1;
                     pushBounded(projectReadinessItems, workItem);
                     if (overdue) {
@@ -3460,6 +3622,10 @@ export class LlmWikiService {
                             ...(waitingAgeDays !== undefined && { waitingAgeDays }),
                             ...(followUpNeeded && { followUpNeeded: true, followUpReason: 'waiting_14_days_or_more' }),
                         });
+                    }
+                    if (dependencyBlocked) {
+                        totalDependencyBlocked += 1;
+                        pushBounded(dependencyBlockedItems, workItem);
                     }
                     if (missingNextAction) {
                         totalActionItems += 1;
@@ -3518,6 +3684,7 @@ export class LlmWikiService {
             'Review one due/stale knowledge note with review_wiki_note.',
             'Resolve one waiting/someday item or open question.',
             ...(totalExperiments > 0 ? ['Run, conclude, or make one pending experiment reproducible.'] : []),
+            ...(totalDependencyBlocked > 0 ? ['Inspect one dependency-blocked task or project before selecting more executable work.'] : []),
             'Repair one broken link, MOC gap, or focus alignment issue.',
             ...(Number(inbox.total || 0) > 0 ? ['Clarify the oldest Inbox capture before creating another organizational structure.'] : []),
             ...(Number(graphSignals.mocQuestionCoverage?.unlinked?.total || 0) > 0 ? ['Link one unanswered MOC question to the note that answers it, using a wikilink on or immediately below the question.'] : []),
@@ -3533,6 +3700,7 @@ export class LlmWikiService {
                 due: { items: dueItems, total: totalDue, truncated: totalDue > dueItems.length },
                 scheduled: { items: scheduledItems, total: totalScheduled, truncated: totalScheduled > scheduledItems.length },
                 waiting: { items: waitingItems, total: totalWaiting, truncated: totalWaiting > waitingItems.length },
+                dependencyBlocked: { items: dependencyBlockedItems, total: totalDependencyBlocked, truncated: totalDependencyBlocked > dependencyBlockedItems.length },
                 someday: { items: somedayItems, total: totalSomeday, truncated: totalSomeday > somedayItems.length },
                 epistemic: {
                     questions: { items: questionItems, total: totalQuestions, truncated: totalQuestions > questionItems.length },
@@ -3556,6 +3724,7 @@ export class LlmWikiService {
                 due: { ...result.sections.due, items: dueItems.slice(0, 2) },
                 scheduled: { ...result.sections.scheduled, items: scheduledItems.slice(0, 2) },
                 waiting: { ...result.sections.waiting, items: waitingItems.slice(0, 2) },
+                dependencyBlocked: { ...result.sections.dependencyBlocked, items: dependencyBlockedItems.slice(0, 2) },
                 someday: { ...result.sections.someday, items: somedayItems.slice(0, 2) },
                 epistemic: {
                     questions: { ...result.sections.epistemic.questions, items: questionItems.slice(0, 2) },
@@ -3581,7 +3750,7 @@ export class LlmWikiService {
         const boundedWaitingAfterDays = Math.min(Math.max(Number(waitingAfterDays) || 14, 1), 3650);
         const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
         const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 1024), 16000);
-        const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        const dependencySnapshot = await this.workDependencySnapshot(principal);
         const active = [];
         const ready = [];
         const blocked = [];
@@ -3591,6 +3760,7 @@ export class LlmWikiService {
         let totalActive = 0;
         let totalReady = 0;
         let totalBlocked = 0;
+        let totalDependencyBlocked = 0;
         let totalWaiting = 0;
         let totalOverdue = 0;
         const nowMs = Date.now();
@@ -3608,7 +3778,7 @@ export class LlmWikiService {
             if (items.length < boundedLimit)
                 items.push(item);
         };
-        for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+        for (const note of dependencySnapshot.workNotes) {
             const kind = String(note.frontmatter.note_kind || '').trim().toLowerCase();
             const lifecycle = String(note.frontmatter.lifecycle || '').trim().toLowerCase();
             const taskStatus = String(note.frontmatter.task_status || '').trim().toLowerCase() || 'open';
@@ -3625,27 +3795,37 @@ export class LlmWikiService {
                 totalOverdue += 1;
             const waitingState = taskStatus === 'waiting' || Boolean(String(note.frontmatter.waiting_for || '').trim());
             const blockedState = taskStatus === 'blocked';
+            const dependencyState = dependencySnapshot.stateByPath.get(normalizePath(note.path).toLowerCase());
+            const dependencyBlocked = !dependencyState.executable;
             const startedAt = typeof note.frontmatter.started_at === 'string' ? note.frontmatter.started_at : undefined;
             const waitingSince = typeof note.frontmatter.waiting_since === 'string' ? note.frontmatter.waiting_since : waitingState && typeof note.frontmatter.updated_at === 'string' ? note.frontmatter.updated_at : undefined;
             const blockedSince = typeof note.frontmatter.blocked_since === 'string' ? note.frontmatter.blocked_since : blockedState && typeof note.frontmatter.updated_at === 'string' ? note.frontmatter.updated_at : undefined;
             // Never infer cycle/blocked/waiting age from updated_at: a later edit is
             // not evidence that work entered a lane at that time. Missing explicit
             // flow timestamps must remain visible to the caller.
-            const age = ageDays(blockedSince || waitingSince || startedAt);
+            const age = ageDays(waitingState ? waitingSince : blockedState || dependencyBlocked ? blockedSince : startedAt);
             const item = {
                 path: this.access.toPublicPath(note.path), title, kind, taskStatus,
+                ...(note.revision && { revision: note.revision }),
                 serviceClass: serviceClass(note.frontmatter.service_class),
                 ...(hasNextAction && { hasNextAction: true }), ...(dueAt && { dueAt }),
                 ...(overdue && { overdue: true }), ...(age !== undefined && { ageDays: age }),
                 ...(startedAt && { startedAt }), ...(blockedSince && { blockedSince }), ...(waitingSince && { waitingSince }),
             };
+            if (dependencyBlocked)
+                totalDependencyBlocked += 1;
             if (waitingState) {
                 totalWaiting += 1;
                 push(waiting, { ...item, ...(note.frontmatter.waiting_for && { waitingFor: boundedText(note.frontmatter.waiting_for, 300) }), ...(age !== undefined && age >= boundedWaitingAfterDays && { aging: true, agingReason: `waiting_${boundedWaitingAfterDays}_days_or_more` }) });
             }
-            else if (blockedState) {
+            else if (blockedState || dependencyBlocked) {
                 totalBlocked += 1;
-                push(blocked, { ...item, ...(age !== undefined && age >= boundedBlockedAfterDays && { aging: true, agingReason: `blocked_${boundedBlockedAfterDays}_days_or_more` }) });
+                push(blocked, {
+                    ...item,
+                    blockedReason: blockedState ? 'explicit_status' : 'dependency',
+                    ...(dependencyBlocked && { dependencies: this.workDependencyProjection(dependencyState) }),
+                    ...(age !== undefined && age >= boundedBlockedAfterDays && { aging: true, agingReason: `blocked_${boundedBlockedAfterDays}_days_or_more` }),
+                });
             }
             else if (taskStatus === 'next_action') {
                 totalActive += 1;
@@ -3655,17 +3835,17 @@ export class LlmWikiService {
                 totalReady += 1;
                 push(ready, { ...item, pullReady: true });
             }
-            if ((taskStatus === 'next_action' || taskStatus === 'blocked' || waitingState) && age === undefined && missingTimestamps.length < boundedLimit) {
-                missingTimestamps.push({ path: this.access.toPublicPath(note.path), title, taskStatus, missing: taskStatus === 'next_action' ? 'started_at' : waitingState ? 'waiting_since' : 'blocked_since' });
+            if ((taskStatus === 'next_action' || taskStatus === 'blocked' || waitingState || dependencyBlocked) && age === undefined && missingTimestamps.length < boundedLimit) {
+                missingTimestamps.push({ path: this.access.toPublicPath(note.path), title, taskStatus, missing: waitingState ? 'waiting_since' : blockedState || dependencyBlocked ? 'blocked_since' : 'started_at' });
             }
         }
         const result = {
             purpose: 'A bounded Kanban-style flow projection. It makes WIP, pull-ready work, blocked/waiting aging, and missing flow timestamps visible without creating a task database or mutating notes.',
-            policy: { wipLimit: boundedWipLimit, blockedAfterDays: boundedBlockedAfterDays, waitingAfterDays: boundedWaitingAfterDays, wipDefinition: 'task_status=next_action', pullDefinition: 'task_status=open with a concrete next_action and no waiting/blocked state', classesOfService: [...SERVICE_CLASSES] },
-            flow: { totalWork, activeWip: totalActive, wipOverflow: Math.max(0, totalActive - boundedWipLimit), pullAllowed: totalActive < boundedWipLimit, readyToPull: totalReady, blocked: totalBlocked, waiting: totalWaiting, overdue: totalOverdue },
+            policy: { wipLimit: boundedWipLimit, blockedAfterDays: boundedBlockedAfterDays, waitingAfterDays: boundedWaitingAfterDays, wipDefinition: 'task_status=next_action with no unresolved work dependency', pullDefinition: 'task_status=open with a concrete next_action and no waiting/blocked/dependency-blocked state', classesOfService: [...SERVICE_CLASSES] },
+            flow: { totalWork, activeWip: totalActive, wipOverflow: Math.max(0, totalActive - boundedWipLimit), pullAllowed: totalActive < boundedWipLimit, readyToPull: totalReady, blocked: totalBlocked, dependencyBlocked: totalDependencyBlocked, waiting: totalWaiting, overdue: totalOverdue },
             lanes: { active, ready, blocked, waiting },
             observability: { missingTimestamps, cycleTimeAvailable: 'started_at + completed_at', note: 'Timestamps are optional. When absent, age is not guessed from a Git commit.' },
-            nextActions: totalActive > boundedWipLimit ? ['Finish or unblock existing WIP before pulling another standard item.'] : totalReady > 0 ? ['Pull one ready item and set task_status=next_action with started_at.'] : ['Make one active item executable or identify its waiting/blocked dependency.'],
+            nextActions: totalDependencyBlocked > 0 ? ['Inspect one dependency-blocked item and complete, repair, or explicitly replace its prerequisite before pulling it.'] : totalActive > boundedWipLimit ? ['Finish or unblock existing WIP before pulling another standard item.'] : totalReady > 0 ? ['Pull one ready item and set task_status=next_action with started_at.'] : ['Make one active item executable or identify its waiting/blocked dependency.'],
             generatedAt: now(),
         };
         if (JSON.stringify(result).length <= boundedChars)
@@ -3680,7 +3860,7 @@ export class LlmWikiService {
             sourceOfTruth: ['ordinary Markdown body', 'YAML Properties', 'Git history and revisions'],
             filing: { inbox: 'rough captures only', projects: 'outcome-oriented work', areas: 'ongoing responsibilities', resources: 'reusable references', archives: 'inactive material', rule: 'folders are filing aids, not visibility boundaries' },
             lifecycle: [...LIFECYCLES],
-            work: { statuses: [...TASK_STATUSES], serviceClasses: [...SERVICE_CLASSES], wipLimitDefault: 3, completionCriteria: 'Use completion_criteria or a visible completion-criteria heading for active projects.', separateFromKnowledgeLifecycle: true },
+            work: { statuses: [...TASK_STATUSES], serviceClasses: [...SERVICE_CLASSES], wipLimitDefault: 3, completionCriteria: 'Use completion_criteria or a visible completion-criteria heading for active projects.', dependencyPolicy: 'blocked_by is a hard gate. depends_on gates execution only when it resolves to unfinished project/task work; non-work targets are informational. Unresolved, ambiguous, inactive, or cyclic work dependencies are not executable.', separateFromKnowledgeLifecycle: true },
             knowledge: { durableAtomicity: 'one reusable concept or claim per atomic note when practical', roles: [...KNOWLEDGE_ROLES], roleRule: 'A role explains the note job and optional Markdown rubric; it is not a truth score or a new storage type.', links: 'prefer Obsidian [[wikilinks]] and MOCs; use typed relations to explain meaning', claims: { roles: [...CLAIM_ROLES], relations: CLAIM_RELATION_FIELDS.map(item => item.property), locator: 'Put ^claim-id on the corresponding Markdown block and relate claims with [[Note#^claim-id]].' }, evidence: 'claims and published knowledge must preserve inspectable provenance; source-work diversity is advisory and snapshots of one work are not independent corroboration', temporalValidity: 'valid_from is inclusive and valid_until is exclusive; observed_at and temporal_scope describe applicability, never file modification, source publication, task, or review dates', uncertainty: 'use question/hypothesis/assumption, connect reproducible experiment runs with tests, and preserve negative knowledge' },
             review: { inspectCurrentRevision: true, useReviewQueue: true, recordOutcome: true, neverTreatSummaryAsTruth: true },
             retention: { policies: ['preserve', 'review', 'archive', 'tombstone'], automaticDeletion: false, legalHoldWins: true },
@@ -4339,6 +4519,7 @@ export class LlmWikiService {
                 wipOverflow: Number(executionFlow.flow?.wipOverflow || 0),
                 readyToPull: Number(executionFlow.flow?.readyToPull || 0),
                 blocked: Number(executionFlow.flow?.blocked || 0),
+                dependencyBlocked: Number(executionFlow.flow?.dependencyBlocked || 0),
                 waiting: Number(executionFlow.flow?.waiting || 0),
                 unlinkedMocQuestions: Number(graph.mocQuestionCoverage?.unlinked?.total || 0),
                 mocSequenceNeedsAttention: Number(graph.mocSequenceHealth?.needsAttention || 0),
@@ -4475,9 +4656,10 @@ export class LlmWikiService {
     async projectPacket(principal, limit = 12, maxChars = 8000) {
         const boundedLimit = Math.min(Math.max(Number(limit) || 12, 1), 40);
         const boundedChars = Math.min(Math.max(Number(maxChars) || 8000, 512), 16000);
-        const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        const dependencySnapshot = await this.workDependencySnapshot(principal, true);
         const candidates = [];
         let total = 0;
+        let dependencyBlocked = 0;
         const heading = (content, names) => {
             const wanted = new Set(names.map(name => name.toLowerCase()));
             return content.split(/\r?\n/).some(line => {
@@ -4486,7 +4668,7 @@ export class LlmWikiService {
             });
         };
         const concreteNextAction = (value) => Boolean(value && value.length >= 8 && !/^(?:research|investigate|review|improve|handle|work on|continue|look into|figure out|explore)\b/i.test(value.trim()));
-        for await (const note of iterateNotes(this.fileSystem, { includeContent: true }, canAccess)) {
+        for (const note of dependencySnapshot.workNotes) {
             if (note.frontmatter.llm_wiki_type !== 'knowledge' || note.frontmatter.note_kind !== 'project')
                 continue;
             const lifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
@@ -4516,10 +4698,16 @@ export class LlmWikiService {
                 missing.push('brainstorm_section');
             if (support.length === 0 && !heading(note.content || '', ['Project support']))
                 missing.push('project_support');
-            const score = (missing.includes('next_action') ? 100 : 0) + (missing.includes('next_action_detail') ? 35 : 0) + (missing.includes('desired_outcome') ? 20 : 0) + (missing.includes('outcome_criteria') ? 15 : 0) + (missing.includes('purpose') ? 10 : 0) + (missing.includes('project_support') ? 5 : 0);
+            const dependencyState = dependencySnapshot.stateByPath.get(normalizePath(note.path).toLowerCase());
+            const taskStatus = String(note.frontmatter.task_status || 'open').trim().toLowerCase() || 'open';
+            const workflowClosed = ['completed', 'cancelled', 'someday'].includes(taskStatus);
+            if (!dependencyState.executable && !workflowClosed)
+                dependencyBlocked += 1;
+            const score = (!dependencyState.executable && !workflowClosed ? 60 : 0) + (missing.includes('next_action') ? 100 : 0) + (missing.includes('next_action_detail') ? 35 : 0) + (missing.includes('desired_outcome') ? 20 : 0) + (missing.includes('outcome_criteria') ? 15 : 0) + (missing.includes('purpose') ? 10 : 0) + (missing.includes('project_support') ? 5 : 0);
             candidates.push({
                 path: this.access.toPublicPath(note.path),
                 title: note.frontmatter.title || note.path.split('/').at(-1),
+                ...(note.revision && { revision: note.revision }),
                 lifecycle,
                 ...(note.frontmatter.task_status && { taskStatus: note.frontmatter.task_status }),
                 ...(note.frontmatter.project_purpose && { purpose: boundedText(note.frontmatter.project_purpose, 500) }),
@@ -4530,7 +4718,13 @@ export class LlmWikiService {
                 ...(support.length > 0 && { projectSupport: support }),
                 ...(completionCriteria.length > 0 && { completionCriteria }),
                 ...(missing.length > 0 && { missing }),
+                planningNeedsAttention: missing.length > 0,
                 planning: { purpose: Boolean(note.frontmatter.project_purpose), desiredOutcome: Boolean(note.frontmatter.desired_outcome), outcomeCriteria: hasOutcomeCriteria, completionCriteria: completionCriteria.length > 0, brainstormSection: heading(note.content || '', ['Brainstorm']), projectSupport: support.length > 0 || heading(note.content || '', ['Project support']), nextActionConcrete: !nextAction || concreteNextAction(nextAction), ready: missing.length === 0 },
+                execution: {
+                    ready: !workflowClosed && !waitingFor && !['waiting', 'blocked'].includes(taskStatus) && dependencyState.executable,
+                    workflowState: taskStatus,
+                    dependencies: this.workDependencyProjection(dependencyState),
+                },
                 score,
             });
         }
@@ -4540,7 +4734,8 @@ export class LlmWikiService {
             purpose: 'A bounded project-planning packet. Separate purpose/outcome/support from the independent next-action list; this is advisory and does not replace Git history.',
             items,
             total,
-            needsPlanning: candidates.filter(item => item.score > 0).length,
+            needsPlanning: candidates.filter(item => item.planningNeedsAttention === true).length,
+            dependencyBlocked,
             truncated: total > items.length,
             generatedAt: now(),
         };
@@ -4560,12 +4755,13 @@ export class LlmWikiService {
         const maxMinutes = optionalBoundedInteger(options.maxMinutes, 'maxMinutes', 1440);
         const requestedEnergy = optionalWorkLabel(options.energy, 'energy');
         const requestedEffort = optionalWorkLabel(options.effort, 'effort');
-        const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        const dependencySnapshot = await this.workDependencySnapshot(principal);
         const contextCounts = new Map();
         const candidates = [];
-        const filterDiagnostics = { unknownDuration: 0, unknownEnergy: 0, unknownEffort: 0 };
+        const dependencyBlockedItems = [];
+        const filterDiagnostics = { unknownDuration: 0, unknownEnergy: 0, unknownEffort: 0, workflowBlocked: 0, dependencyBlocked: 0, unresolvedDependencies: 0, dependencyCycles: 0 };
         let total = 0;
-        for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+        for (const note of dependencySnapshot.workNotes) {
             const kind = String(note.frontmatter.note_kind || '').toLowerCase();
             const lifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
             const taskStatus = String(note.frontmatter.task_status || '').toLowerCase();
@@ -4606,6 +4802,27 @@ export class LlmWikiService {
             }
             if (requestedEffort && effort !== requestedEffort)
                 continue;
+            const waitingState = taskStatus === 'waiting' || Boolean(String(note.frontmatter.waiting_for || '').trim());
+            if (taskStatus === 'blocked' || waitingState) {
+                filterDiagnostics.workflowBlocked += uniqueActions.length;
+                continue;
+            }
+            const dependencyState = dependencySnapshot.stateByPath.get(normalizePath(note.path).toLowerCase());
+            if (!dependencyState.executable) {
+                filterDiagnostics.dependencyBlocked += uniqueActions.length;
+                filterDiagnostics.unresolvedDependencies += dependencyState.blockers.filter(item => ['unresolved_or_inaccessible', 'ambiguous'].includes(item.state)).length;
+                if (dependencyState.cyclePaths.length > 0)
+                    filterDiagnostics.dependencyCycles += 1;
+                if (dependencyBlockedItems.length < boundedLimit)
+                    dependencyBlockedItems.push({
+                        path: this.access.toPublicPath(note.path),
+                        title: note.frontmatter.title || note.path.split('/').at(-1),
+                        ...(note.revision && { revision: note.revision }),
+                        actionCount: uniqueActions.length,
+                        dependencies: this.workDependencyProjection(dependencyState),
+                    });
+                continue;
+            }
             contextCounts.set(actionContext, (contextCounts.get(actionContext) || 0) + uniqueActions.length);
             for (const action of uniqueActions) {
                 total += 1;
@@ -4614,6 +4831,7 @@ export class LlmWikiService {
                 candidates.push({
                     path: this.access.toPublicPath(note.path),
                     title: note.frontmatter.title || note.path.split('/').at(-1),
+                    ...(note.revision && { revision: note.revision }),
                     action: boundedText(action, 600),
                     context: actionContext,
                     ...(taskStatus && { taskStatus }),
@@ -4634,19 +4852,45 @@ export class LlmWikiService {
             .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
             .slice(0, 30)
             .map(([name, count]) => ({ name, count }));
+        const hasWorkExclusions = filterDiagnostics.workflowBlocked > 0 || filterDiagnostics.dependencyBlocked > 0;
+        const workExclusions = {
+            workflowBlocked: filterDiagnostics.workflowBlocked,
+            dependencyBlocked: filterDiagnostics.dependencyBlocked,
+            unresolvedDependencies: filterDiagnostics.unresolvedDependencies,
+            dependencyCycles: filterDiagnostics.dependencyCycles,
+            dependencyBlockedItems,
+            note: 'blocked_by is a hard work gate. depends_on blocks only when it resolves to unfinished work; a non-work target is informational. Repair metadata deliberately and re-run this view.',
+        };
         const result = {
-            purpose: 'A bounded GTD action list grouped by execution context. Project support remains separate; each item is a concrete action candidate, not an automatic assignment.',
+            purpose: 'A bounded GTD action list grouped by execution context. Waiting, explicitly blocked, unresolved, ambiguous, inactive, and cyclic work dependencies are excluded; project support and informational knowledge dependencies remain separate.',
             ...(requestedContext && { context: requestedContext }),
-            ...((maxMinutes !== undefined || requestedEnergy || requestedEffort) && { selection: { ...(maxMinutes !== undefined && { maxMinutes }), ...(requestedEnergy && { energy: requestedEnergy }), ...(requestedEffort && { effort: requestedEffort }) }, filterDiagnostics }),
+            ...((maxMinutes !== undefined || requestedEnergy || requestedEffort) && { selection: { ...(maxMinutes !== undefined && { maxMinutes }), ...(requestedEnergy && { energy: requestedEnergy }), ...(requestedEffort && { effort: requestedEffort }) }, filterDiagnostics: { unknownDuration: filterDiagnostics.unknownDuration, unknownEnergy: filterDiagnostics.unknownEnergy, unknownEffort: filterDiagnostics.unknownEffort } }),
             items,
             contexts,
+            ...(hasWorkExclusions && { exclusions: workExclusions }),
             total,
             truncated: total > items.length,
             generatedAt: now(),
         };
         if (JSON.stringify(result).length <= boundedChars)
             return result;
-        return { ...result, items: items.slice(0, Math.min(5, boundedLimit)), truncated: true };
+        const compact = {
+            ...result,
+            purpose: 'Bounded executable GTD actions; waiting and dependency-blocked work is excluded.',
+            items: items.slice(0, Math.min(5, boundedLimit)),
+            contexts: contexts.slice(0, 8),
+            ...(hasWorkExclusions && { exclusions: { ...workExclusions, dependencyBlockedItems: dependencyBlockedItems.slice(0, 2), note: 'Inspect current revisions and repair one work dependency deliberately.' } }),
+            truncated: true,
+        };
+        while (JSON.stringify(compact).length > boundedChars && compact.items.length > 1)
+            compact.items.pop();
+        while (JSON.stringify(compact).length > boundedChars && compact.contexts.length > 1)
+            compact.contexts.pop();
+        if (hasWorkExclusions) {
+            while (JSON.stringify(compact).length > boundedChars && compact.exclusions.dependencyBlockedItems.length > 0)
+                compact.exclusions.dependencyBlockedItems.pop();
+        }
+        return compact;
     }
     /**
      * Find notes where atomicity is a useful next outcome rather than an input
@@ -5544,7 +5788,7 @@ export class LlmWikiService {
             inbox: { name: 'LLM Wiki Inbox', file: 'LLM Wiki Inbox.base', filters: ['note.lifecycle == "inbox"'] },
             inbox_oldest: { name: 'LLM Wiki Inbox (Oldest first)', file: 'LLM Wiki Inbox Oldest.base', filters: ['note.lifecycle == "inbox"'], order: ['note.captured_at', 'file.mtime', 'file.name'] },
             projects: { name: 'LLM Wiki Projects and Tasks', file: 'LLM Wiki Projects.base', filters: ['note.note_kind == "project" || note.note_kind == "task"'] },
-            project_next_actions: { name: 'LLM Wiki Project Next Actions', file: 'LLM Wiki Project Next Actions.base', filters: ['(note.note_kind == "project" || note.note_kind == "task") && note.task_status != "completed" && note.task_status != "cancelled"'], order: ['note.due_at', 'note.scheduled_at', 'file.mtime', 'file.name'] },
+            project_next_actions: { name: 'LLM Wiki Project Action Candidates', file: 'LLM Wiki Project Next Actions.base', filters: ['(note.note_kind == "project" || note.note_kind == "task") && (!note.task_status || note.task_status == "open" || note.task_status == "next_action") && (note.next_action || note.next_actions) && !note.waiting_for'], order: ['note.due_at', 'note.scheduled_at', 'file.mtime', 'file.name'] },
             review: { name: 'LLM Wiki Review', file: 'LLM Wiki Review.base', filters: ['note.lifecycle == "review"'] },
             epistemic: { name: 'LLM Wiki Epistemic Work', file: 'LLM Wiki Epistemic.base', filters: ['note.note_kind == "question" || note.note_kind == "hypothesis" || note.note_kind == "experiment" || note.note_kind == "assumption"'] },
             experiments: { name: 'LLM Wiki Experiments', file: 'LLM Wiki Experiments.base', filters: ['note.note_kind == "experiment"'], order: ['note.epistemic_status', 'file.mtime', 'file.name'] },
@@ -5609,6 +5853,7 @@ export class LlmWikiService {
                 planning_ready: 'note.note_kind != "project" || note.project_purpose || note.desired_outcome',
                 review_due: 'note.review_at && date(note.review_at) <= now()',
                 has_support: 'note.project_support && note.project_support.length > 0',
+                dependency_declared: 'note.blocked_by || note.depends_on',
                 has_summary: 'note.summary || note.key_points',
                 review_state: 'note.last_review_outcome || "never_reviewed"',
                 review_checks: 'note.review_checks || []',
@@ -5629,9 +5874,12 @@ export class LlmWikiService {
                 'note.desired_outcome': { displayName: 'Desired outcome' },
                 'note.next_action': { displayName: 'Next action' },
                 'note.project_support': { displayName: 'Project support' },
+                'note.blocked_by': { displayName: 'Blocked by' },
+                'note.depends_on': { displayName: 'Depends on' },
                 'formula.planning_ready': { displayName: 'Planning ready' },
                 'formula.review_due': { displayName: 'Review due' },
                 'formula.has_support': { displayName: 'Has support' },
+                'formula.dependency_declared': { displayName: 'Dependency declared' },
                 'formula.has_summary': { displayName: 'Has summary' },
                 'formula.review_state': { displayName: 'Review state' },
                 'note.review_checks': { displayName: 'Checks completed' },
@@ -5643,7 +5891,7 @@ export class LlmWikiService {
                     name: selectedView.name,
                     limit: boundedLimit,
                     order: selectedView.order || ['file.mtime', 'file.name'],
-                    columns: ['file.name', 'note.note_kind', 'note.lifecycle', 'note.decision_status', 'note.supersedes', 'note.replaced_by', 'note.archive_collection_id', 'note.archive_series', 'note.archive_sequence', 'note.accession_id', 'note.task_status', 'note.project_purpose', 'note.desired_outcome', 'note.next_action', 'note.primary_moc', 'note.domain', 'note.preferred_term', 'note.aliases', 'note.review_checks', 'note.review_open_items', 'formula.planning_ready', 'formula.review_due', 'formula.has_support', 'formula.has_summary', 'formula.review_state', 'file.mtime'],
+                    columns: ['file.name', 'note.note_kind', 'note.lifecycle', 'note.decision_status', 'note.supersedes', 'note.replaced_by', 'note.archive_collection_id', 'note.archive_series', 'note.archive_sequence', 'note.accession_id', 'note.task_status', 'note.project_purpose', 'note.desired_outcome', 'note.next_action', 'note.blocked_by', 'note.depends_on', 'note.primary_moc', 'note.domain', 'note.preferred_term', 'note.aliases', 'note.review_checks', 'note.review_open_items', 'formula.planning_ready', 'formula.review_due', 'formula.has_support', 'formula.dependency_declared', 'formula.has_summary', 'formula.review_state', 'file.mtime'],
                 }],
         };
         const content = stringifyYaml(base);
@@ -5655,6 +5903,7 @@ export class LlmWikiService {
             matchingNotes: resolvedMatchingNotes,
             matchingNotesExact,
             matchingNotesMeaning: matchingNotesExact ? 'exact visible count before Bases renders the view' : 'upper bound before the local Bases Property expression is evaluated',
+            ...(view === 'project_next_actions' && { dependencyAware: false, recommendedEndpoint: endpointIdForTool('get_wiki_next_actions'), dependencyNote: 'Obsidian Bases can prefilter local action candidates but cannot resolve cross-note completion, ambiguity, access, or cycles. Call wiki.next_actions before execution.' }),
             view,
             availableViews: Object.entries(viewDefinitions).map(([id, definition]) => ({ id, name: definition.name, suggestedPath: `Views/${definition.file}` })),
             filter: { ...(noteKind && { noteKind }), ...(lifecycle && { lifecycle }) },
@@ -5758,7 +6007,7 @@ export class LlmWikiService {
             { intent: 'synthesize_or_express', useWhen: 'Several explicitly related durable notes may support a model, argument, or decision without replacing their originals.', endpointId: endpointIdForTool('get_wiki_synthesis_candidates'), arguments: { limit: 5, maxChars: 6000 } },
             { intent: 'follow_curated_sequence', useWhen: 'You selected a MOC that is meant to be read or executed in order.', endpointId: endpointIdForTool('get_wiki_learning_path'), arguments: { path: '<selected MOC path>', maxDepth: 2, limit: 20, maxChars: 6000 }, requiredArguments: ['path'] },
             { intent: 'browse_source_archives', useWhen: 'You need the creator context, series, accession, or original order of an imported source collection.', endpointId: endpointIdForTool('get_wiki_archive_finding_aid'), arguments: { limit: 20, maxChars: 6000 } },
-            { intent: 'execute_in_context', useWhen: 'You need one executable action that fits a known GTD context.', endpointId: endpointIdForTool('get_wiki_next_actions'), arguments: { taskContext: '<exact context>', limit: 5, maxChars: 4000 }, requiredArguments: ['taskContext'] },
+            { intent: 'execute_in_context', useWhen: 'You need one dependency-safe executable action that fits a known GTD context.', endpointId: endpointIdForTool('get_wiki_next_actions'), arguments: { context: '<exact context>', limit: 5, maxChars: 4000 }, requiredArguments: ['context'] },
             { intent: 'review_one', useWhen: 'You want one prioritized evidence, flow, or maintenance item.', endpointId: endpointIdForTool('get_wiki_review_packet'), arguments: { limit: 1, maxChars: 4000 } },
             { intent: 'repair_structure', useWhen: 'You are fixing derived organization debt rather than reading broadly.', endpointId: endpointIdForTool('get_wiki_exception_board'), arguments: { limit: 5, maxChars: 4000 } },
             { intent: 'maintain_vocabulary', useWhen: 'Tags, terms, or classification facets may be inconsistent, fragmented, or too broad to narrow retrieval.', endpointId: endpointIdForTool('get_wiki_vocabulary_health'), arguments: { limit: 10, maxChars: 5000 } },

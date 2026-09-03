@@ -105,6 +105,7 @@ test('MOC navigation preserves explicit sibling order, body link order, and mult
       expect.objectContaining({ intent: 'find', endpointId: 'wiki.search', requiredArguments: ['query'] }),
       expect.objectContaining({ intent: 'understand_or_decide', endpointId: 'wiki.answer_packet', requiredArguments: ['path'] }),
       expect.objectContaining({ intent: 'follow_curated_sequence', endpointId: 'wiki.learning_path', requiredArguments: ['path'] }),
+      expect.objectContaining({ intent: 'execute_in_context', endpointId: 'wiki.next_actions', arguments: expect.objectContaining({ context: '<exact context>' }), requiredArguments: ['context'] }),
       expect.objectContaining({ intent: 'review_one', endpointId: 'wiki.review_packet' }),
       expect.objectContaining({ intent: 'maintain_vocabulary', endpointId: 'wiki.vocabulary_health' }),
       expect.objectContaining({ intent: 'migrate_contract', endpointId: 'wiki.organization_manifest' }),
@@ -1048,6 +1049,72 @@ test('projects expose bounded flow health and the organization policy contract',
       expect.objectContaining({ path: 'Projects/Blocked.md', reason: 'blocked_work_needs_unblocking' }),
       expect.objectContaining({ path: 'Projects/Waiting.md', reason: 'waiting_work_needs_follow_up' }),
     ]));
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('work dependency gates keep flow, project planning, and next actions consistent', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'work-dependency-owner', modelId: 'codex', password: 'work-dependency-password' });
+    const accessToken = registration.value.accessToken;
+    const write = async (path: string, frontmatter: Record<string, unknown>) => {
+      const result = await client.callTool({ name: 'write_note', arguments: {
+        path,
+        content: `# ${path}\n\n## Brainstorm\n\n- Keep the dependency explicit.\n\n## Project support\n\n[[Knowledge/Reference]]\n`,
+        frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'project', lifecycle: 'active', project_purpose: 'Verify executable work selection.', desired_outcome: 'Only dependency-safe actions are offered.', completion_criteria: ['The selected action has no unfinished prerequisite'], ...frontmatter },
+        expectedRevision: 'missing', accessToken,
+      } });
+      expect(result.isError).toBeFalsy();
+    };
+    await write('Projects/Open prerequisite.md', { task_status: 'open', next_action: 'Complete the prerequisite work', task_context: '@computer' });
+    await write('Projects/Blocked dependent.md', { task_status: 'open', next_action: 'Run the dependent action', task_context: '@computer', blocked_by: ['[[Projects/Open prerequisite]]'] });
+    await write('Projects/Completed prerequisite.md', { task_status: 'completed', aliases: ['finished-gate'] });
+    await write('Projects/Ready dependent.md', { task_status: 'open', next_action: 'Run the now-unblocked action', task_context: '@computer', depends_on: ['[[finished-gate]]'] });
+    await write('Projects/Unknown dependent.md', { task_status: 'open', next_action: 'Run an unsafe unresolved action', task_context: '@computer', blocked_by: ['[[Projects/Missing prerequisite]]'] });
+    await write('Projects/Cycle A.md', { task_status: 'open', next_action: 'Run cycle action A', task_context: '@computer', depends_on: ['[[Projects/Cycle B]]'] });
+    await write('Projects/Cycle B.md', { task_status: 'open', next_action: 'Run cycle action B', task_context: '@computer', depends_on: ['[[Projects/Cycle A]]'] });
+    await write('Projects/Waiting.md', { task_status: 'waiting', next_action: 'Premature waiting action', task_context: '@computer', waiting_for: 'A human decision' });
+    await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/Reference.md', content: '# Reference\n\nReusable context.\n',
+      frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen' }, expectedRevision: 'missing', accessToken,
+    } });
+    await write('Projects/Knowledge dependent.md', { task_status: 'open', next_action: 'Use the reference while working', task_context: '@computer', depends_on: ['[[Knowledge/Reference]]'] });
+
+    const next = await callJson(client, 'get_wiki_next_actions', { context: '@computer', limit: 20, maxChars: 12000, accessToken });
+    const nextPaths = next.value.items.map((item: any) => item.path);
+    expect(nextPaths).toEqual(expect.arrayContaining(['Projects/Open prerequisite.md', 'Projects/Ready dependent.md', 'Projects/Knowledge dependent.md']));
+    expect(nextPaths).not.toEqual(expect.arrayContaining(['Projects/Blocked dependent.md', 'Projects/Unknown dependent.md', 'Projects/Cycle A.md', 'Projects/Cycle B.md', 'Projects/Waiting.md']));
+    expect(next.value.exclusions).toMatchObject({ workflowBlocked: 1, dependencyBlocked: 4, unresolvedDependencies: 1, dependencyCycles: 2 });
+    expect(next.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Projects/Ready dependent.md', revision: expect.any(String) })]));
+    const compactNext = await callJson(client, 'get_wiki_next_actions', { context: '@computer', limit: 20, maxChars: 1200, accessToken });
+    expect(compactNext.value).toMatchObject({ total: 3, truncated: true, items: expect.any(Array), exclusions: expect.objectContaining({ dependencyBlocked: 4 }) });
+    expect(JSON.stringify(compactNext.value).length).toBeLessThanOrEqual(1200);
+
+    const flow = await callJson(client, 'get_wiki_flow_health', { limit: 20, maxChars: 12000, accessToken });
+    expect(flow.value.flow).toMatchObject({ readyToPull: 3, blocked: 4, dependencyBlocked: 4, waiting: 1 });
+    expect(flow.value.lanes.blocked).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Projects/Blocked dependent.md', blockedReason: 'dependency', dependencies: expect.objectContaining({ executable: false, blockers: expect.arrayContaining([expect.objectContaining({ targetRevisions: [expect.any(String)] })]) }) }),
+      expect.objectContaining({ path: 'Projects/Cycle A.md', dependencies: expect.objectContaining({ dependencyCycle: expect.arrayContaining(['Projects/Cycle A.md', 'Projects/Cycle B.md']) }) }),
+    ]));
+
+    const dashboard = await callJson(client, 'get_wiki_review_dashboard', { limit: 20, maxChars: 18000, accessToken });
+    expect(dashboard.value.sections.dependencyBlocked).toMatchObject({ total: 4, items: expect.arrayContaining([expect.objectContaining({ path: 'Projects/Unknown dependent.md', readiness: 'dependency_blocked' })]) });
+    const review = await callJson(client, 'get_wiki_review_packet', { limit: 20, maxChars: 16000, accessToken });
+    expect(review.value.counts).toMatchObject({ dependencyBlocked: 4 });
+    expect(review.value.priorities).toEqual(expect.arrayContaining([expect.objectContaining({ reason: 'blocked_work_needs_unblocking' })]));
+
+    const packet = await callJson(client, 'get_wiki_project_packet', { limit: 20, maxChars: 14000, accessToken });
+    expect(packet.value).toMatchObject({ dependencyBlocked: 4 });
+    expect(packet.value.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Projects/Blocked dependent.md', execution: expect.objectContaining({ ready: false, dependencies: expect.objectContaining({ blockerCount: 1 }) }) }),
+      expect.objectContaining({ path: 'Projects/Ready dependent.md', execution: expect.objectContaining({ ready: true, dependencies: expect.objectContaining({ satisfiedCount: 1 }) }) }),
+    ]));
+    const base = await callJson(client, 'get_wiki_bases_view', { view: 'project_next_actions', limit: 20, maxChars: 12000, accessToken });
+    expect(base.value).toMatchObject({ view: 'project_next_actions', dependencyAware: false, recommendedEndpoint: 'wiki.next_actions', matchingNotesExact: false });
+    expect(base.value.content).toContain('note.blocked_by');
   } finally {
     await client.close();
     await server.close();
