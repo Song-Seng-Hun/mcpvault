@@ -208,6 +208,8 @@ Use the Home `maintain_vocabulary` route for an intentional terminology pass.
 The review packet exposes Vault-wide facet findings as `crossVaultActions`
 because they have no single authoritative note path; inspect the vocabulary
 report, then change at most one revision-checked note at a time.
+Use vocabulary `issueCounts` and facet totals for prevalence; the arrays are
+bounded examples and their length is not the Vault-wide count.
 Use `get_wiki_note_template` when a new note role needs a low-friction
 scaffold. Templates are optional starting points, not publication gates; keep
 the body in ordinary Markdown and put only small typed values in Properties.

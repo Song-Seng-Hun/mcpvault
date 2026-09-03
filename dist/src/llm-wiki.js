@@ -4087,8 +4087,9 @@ export class LlmWikiService {
             this.flowHealth(principal, 3, 7, 14, Math.min(boundedLimit, 8), Math.min(4200, boundedChars)),
         ]);
         const vocabularyFacetHealth = vocabulary.facetHealth || {};
-        const fragmentedFacetCount = Array.isArray(vocabularyFacetHealth.fragmentedFacets) ? vocabularyFacetHealth.fragmentedFacets.length : 0;
-        const lowSelectivityFacetCount = Array.isArray(vocabularyFacetHealth.lowSelectivityValues) ? vocabularyFacetHealth.lowSelectivityValues.length : 0;
+        const vocabularyIssueCounts = vocabulary.issueCounts || {};
+        const fragmentedFacetCount = Number(vocabularyFacetHealth.fragmentedTotal ?? vocabularyIssueCounts.fragmentedFacets ?? (Array.isArray(vocabularyFacetHealth.fragmentedFacets) ? vocabularyFacetHealth.fragmentedFacets.length : 0));
+        const lowSelectivityFacetCount = Number(vocabularyFacetHealth.lowSelectivityTotal ?? vocabularyIssueCounts.lowSelectivityValues ?? (Array.isArray(vocabularyFacetHealth.lowSelectivityValues) ? vocabularyFacetHealth.lowSelectivityValues.length : 0));
         const crossVaultActions = [
             ...(fragmentedFacetCount > 0 ? [{
                     reason: 'facet_fragmentation_needs_review',
@@ -4350,9 +4351,9 @@ export class LlmWikiService {
                 claimArgumentIssues: [...claimLintByPath.values()].reduce((sum, codes) => sum + codes.length, 0),
                 evergreenNeedsAttention: Number(graph.evergreenQuality?.needsAttention || 0),
                 recallDue: Number(recall.total || 0),
-                tagVariantIssues: vocabulary.tagVariants.length,
-                unresolvedSubjectTerms: vocabulary.unresolvedSubjectTerms.length,
-                authorityTermCollisions: vocabulary.termCollisions.length,
+                tagVariantIssues: Number(vocabularyIssueCounts.tagVariants ?? vocabulary.tagVariants.length),
+                unresolvedSubjectTerms: Number(vocabularyIssueCounts.unresolvedSubjectTerms ?? vocabulary.unresolvedSubjectTerms.length),
+                authorityTermCollisions: Number(vocabularyIssueCounts.termCollisions ?? vocabulary.termCollisions.length),
                 fragmentedFacets: fragmentedFacetCount,
                 lowSelectivityFacetValues: lowSelectivityFacetCount,
                 lintIssues: lint.errors + lint.warnings,
@@ -9045,21 +9046,21 @@ export class LlmWikiService {
                 incrementFacet('audience', value);
         }
         const authorityKeys = new Set(authorities.keys());
-        const tagVariants = [...tags.values()]
+        const tagVariantsAll = [...tags.values()]
             .filter(item => item.variants.size > 1)
             .sort((left, right) => right.paths.size - left.paths.size || left.key.localeCompare(right.key))
-            .slice(0, boundedLimit)
             .map(item => ({ key: item.key, variants: [...item.variants].slice(0, 8), count: item.count, noteCount: item.paths.size, paths: [...item.paths].slice(0, 6), reason: 'tag_spelling_or_case_variants' }));
-        const unresolvedSubjectTerms = [...subjects.values()]
+        const unresolvedSubjectTermsAll = [...subjects.values()]
             .filter(item => !authorityKeys.has(item.key))
             .sort((left, right) => right.paths.size - left.paths.size || left.key.localeCompare(right.key))
-            .slice(0, boundedLimit)
             .map(item => ({ term: item.display, count: item.count, noteCount: item.paths.size, paths: [...item.paths].slice(0, 6), reason: 'subject_term_has_no_local_authority_note', advisory: true }));
-        const termCollisions = [...authorities.values()]
+        const termCollisionsAll = [...authorities.values()]
             .filter(item => item.paths.size > 1)
             .sort((left, right) => right.paths.size - left.paths.size || left.key.localeCompare(right.key))
-            .slice(0, boundedLimit)
             .map(item => ({ term: item.display, noteCount: item.paths.size, paths: [...item.paths].slice(0, 6), reason: 'authority_term_used_by_multiple_notes' }));
+        const tagVariants = tagVariantsAll.slice(0, boundedLimit);
+        const unresolvedSubjectTerms = unresolvedSubjectTermsAll.slice(0, boundedLimit);
+        const termCollisions = termCollisionsAll.slice(0, boundedLimit);
         const minimumHealthSample = 12;
         const fragmentationMinimumValues = 8;
         const facetRecords = [...facets.entries()].map(([facet, values]) => {
@@ -9113,18 +9114,27 @@ export class LlmWikiService {
             tagCount: tags.size,
             authorityTermCount: authorities.size,
             subjectTermCount: subjects.size,
+            issueCounts: {
+                tagVariants: tagVariantsAll.length,
+                unresolvedSubjectTerms: unresolvedSubjectTermsAll.length,
+                termCollisions: termCollisionsAll.length,
+                fragmentedFacets: fragmentedFacetsAll.length,
+                lowSelectivityValues: lowSelectivityValuesAll.length,
+            },
             tagVariants,
             unresolvedSubjectTerms,
             termCollisions,
             facetHealth: {
                 thresholds: { minimumVisibleNotes: minimumHealthSample, fragmentationMinimumValues, fragmentationSingletonRatio: 0.6, lowSelectivityCoverageRatio: 0.6 },
+                fragmentedTotal: fragmentedFacetsAll.length,
+                lowSelectivityTotal: lowSelectivityValuesAll.length,
                 fragmentedFacets,
                 lowSelectivityValues,
                 advisory: true,
             },
             facets: facetCounts,
             recommendations,
-            truncated: tagVariants.length >= boundedLimit || unresolvedSubjectTerms.length >= boundedLimit || termCollisions.length >= boundedLimit || fragmentedFacetsAll.length > fragmentedFacets.length || lowSelectivityValuesAll.length > lowSelectivityValues.length,
+            truncated: tagVariantsAll.length > tagVariants.length || unresolvedSubjectTermsAll.length > unresolvedSubjectTerms.length || termCollisionsAll.length > termCollisions.length || fragmentedFacetsAll.length > fragmentedFacets.length || lowSelectivityValuesAll.length > lowSelectivityValues.length,
             generatedAt: now(),
         };
         if (JSON.stringify(result).length <= boundedChars)

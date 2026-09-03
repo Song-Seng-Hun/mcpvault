@@ -370,6 +370,8 @@ Home routes intentional terminology work to `wiki.vocabulary_health`, and the
 review packet carries Vault-wide facet findings in `crossVaultActions` rather
 than inventing a fake note path. Any repair still begins by inspecting one real
 note and uses its current revision; there is no bulk-retag action.
+Vocabulary `issueCounts` and facet totals remain exact even when bounded item
+arrays are truncated; never infer prevalence from the example-array length.
 Its `typedRelations` projection additionally reports unresolved, ambiguous,
 self-referential, and `answers_questions` targets that are not question notes.
 Repair them with ordinary revision-checked edits; graph health never rewrites

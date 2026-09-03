@@ -584,6 +584,10 @@ low-selectivity findings even though they do not belong to one note. Path-based
 tag, subject-term, and authority collisions use a vocabulary-specific inspect
 step before one revision-checked note edit; aggregate statistics never trigger
 a bulk mutation.
+Bounded item arrays are separate from `issueCounts`: a small `limit` trims
+examples but never turns the returned total into the page length. Review-packet
+counts reuse these exact totals, so large vocabularies do not appear healthier
+merely because the context budget is small.
 Use `get_wiki_note_template` for an optional small scaffold when starting an
 atomic, literature, question, hypothesis, experiment, assumption, decision,
 project, MOC, or negative-knowledge note. It also provides role-specific

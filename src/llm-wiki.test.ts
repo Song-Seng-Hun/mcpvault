@@ -2167,7 +2167,7 @@ test('vocabulary health detects bounded facet fragmentation and low-selectivity 
     for (let index = 0; index < 20; index += 1) {
       const write = await client.callTool({ name: 'write_note', arguments: {
         path: `Knowledge/Facet ${index}.md`, content: `# Facet ${index}\n`,
-        frontmatter: { note_kind: 'atomic', lifecycle: 'evergreen', tags: ['common', `niche-${index}`], domain: 'shared-domain' },
+        frontmatter: { note_kind: 'atomic', lifecycle: 'evergreen', tags: ['common', `niche-${index}`], subject_terms: [`subject-${index}`], domain: 'shared-domain' },
         expectedRevision: 'missing', accessToken,
       } });
       expect(write.isError).toBeFalsy();
@@ -2190,8 +2190,15 @@ test('vocabulary health detects bounded facet fragmentation and low-selectivity 
       expect.objectContaining({ facet: 'domain', value: 'shared-domain', noteCount: 20, reason: 'facet_value_has_low_selectivity' }),
     ]));
     expect(vocabulary.value.facetHealth.advisory).toBe(true);
+    expect(vocabulary.value.issueCounts).toMatchObject({ unresolvedSubjectTerms: 20, fragmentedFacets: 2, lowSelectivityValues: 2 });
+    expect(vocabulary.value.facetHealth).toMatchObject({ fragmentedTotal: 2, lowSelectivityTotal: 2 });
+    const narrowVocabulary = await callJson(client, 'call_endpoint', { endpointId: 'wiki.vocabulary_health', arguments: { limit: 1, maxChars: 10000, accessToken } });
+    expect(narrowVocabulary.value.unresolvedSubjectTerms).toHaveLength(1);
+    expect(narrowVocabulary.value.facetHealth.fragmentedFacets).toHaveLength(1);
+    expect(narrowVocabulary.value.issueCounts).toMatchObject({ unresolvedSubjectTerms: 20, fragmentedFacets: 2, lowSelectivityValues: 2 });
+    expect(narrowVocabulary.value.truncated).toBe(true);
     const review = await callJson(client, 'get_wiki_review_packet', { limit: 10, maxChars: 16000, accessToken });
-    expect(review.value.counts).toMatchObject({ fragmentedFacets: 1, lowSelectivityFacetValues: 2 });
+    expect(review.value.counts).toMatchObject({ unresolvedSubjectTerms: 20, fragmentedFacets: 2, lowSelectivityFacetValues: 2 });
     expect(review.value.crossVaultActions).toEqual(expect.arrayContaining([
       expect.objectContaining({ reason: 'facet_fragmentation_needs_review', inspect: expect.objectContaining({ endpointId: 'wiki.vocabulary_health' }) }),
       expect.objectContaining({ reason: 'facet_low_selectivity_needs_review', inspect: expect.objectContaining({ endpointId: 'wiki.vocabulary_health' }) }),

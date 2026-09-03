@@ -1558,8 +1558,8 @@ export declare class LlmWikiService {
             tagVariantIssues: number;
             unresolvedSubjectTerms: number;
             authorityTermCollisions: number;
-            fragmentedFacets: any;
-            lowSelectivityFacetValues: any;
+            fragmentedFacets: number;
+            lowSelectivityFacetValues: number;
             lintIssues: number;
         };
         supportingViews: {
@@ -1654,6 +1654,13 @@ export declare class LlmWikiService {
                 tagCount: number;
                 authorityTermCount: number;
                 subjectTermCount: number;
+                issueCounts: {
+                    tagVariants: number;
+                    unresolvedSubjectTerms: number;
+                    termCollisions: number;
+                    fragmentedFacets: number;
+                    lowSelectivityValues: number;
+                };
                 tagVariants: {
                     key: string;
                     variants: string[];
@@ -1683,6 +1690,8 @@ export declare class LlmWikiService {
                         fragmentationSingletonRatio: number;
                         lowSelectivityCoverageRatio: number;
                     };
+                    fragmentedTotal: number;
+                    lowSelectivityTotal: number;
                     fragmentedFacets: {
                         facet: string;
                         distinctValues: number;
@@ -1719,7 +1728,7 @@ export declare class LlmWikiService {
         curationPlan?: Record<string, unknown>;
         crossVaultActions: {
             reason: string;
-            count: any;
+            count: number;
             inspect: {
                 endpointId: string;
                 arguments: {
@@ -3339,6 +3348,13 @@ export declare class LlmWikiService {
         tagCount: number;
         authorityTermCount: number;
         subjectTermCount: number;
+        issueCounts: {
+            tagVariants: number;
+            unresolvedSubjectTerms: number;
+            termCollisions: number;
+            fragmentedFacets: number;
+            lowSelectivityValues: number;
+        };
         tagVariants: {
             key: string;
             variants: string[];
@@ -3368,6 +3384,8 @@ export declare class LlmWikiService {
                 fragmentationSingletonRatio: number;
                 lowSelectivityCoverageRatio: number;
             };
+            fragmentedTotal: number;
+            lowSelectivityTotal: number;
             fragmentedFacets: {
                 facet: string;
                 distinctValues: number;
