@@ -108,8 +108,9 @@ atomic note so source path and revision remain provenance. Use
 `get_wiki_catalog` to filter organization metadata; add
 `includeFacets: true` when you need bounded counts by note kind, lifecycle,
 knowledge role, epistemic/task state, review policy, source type, polarity,
-MOC, project, domain, subject term, or tag without loading note bodies. Use the corresponding
-facet filters when you need one narrow metadata-only view. Use
+MOC, project, domain, subject term, method, audience, or tag without loading
+note bodies. Every facet has a matching case-insensitive exact filter; `moc`
+matches `primary_moc`, `moc`, and `mocs`, so counts remain drillable. Use
 `orderBy: location|alphabet|time|category|hierarchy` for LATCH-style browsing;
 this changes only projection order and never moves a note. Use
 `get_wiki_neighborhood` after selecting a note to inspect a bounded,
@@ -118,6 +119,13 @@ MOC/project context next, and optional semantic candidates last. Treat
 semantic similarity as discovery only; it is never proof, an access rule, or
 a reason to move a note. Read only the selected neighbor notes with their
 returned revisions. Use
+`get_wiki_synthesis_candidates` when several explicitly related durable notes
+may be ready for a model, argument, counterargument, or decision. It uses one
+authored primary MOC/moc, project, domain, or subject cue—not folder/vector
+proximity—and returns input revisions, counterpoints, existing coverage, and a
+non-mutating plan. Read every selected input, preserve disagreement and all
+original notes, cite immutable evidence, and link the synthesis through
+`derived_from`; a synthesis remains an interpretation, not truth. Use
 `get_wiki_review_queue` to find bounded due/disputed knowledge, and
 retention dates that have arrived; archive or tombstone only after checking
 the current revision and preserving a reason/replacement.

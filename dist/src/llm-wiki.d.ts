@@ -15,8 +15,13 @@ export interface WikiCatalogOptions {
     sourceType?: string;
     polarity?: string;
     knowledgeRole?: string;
+    moc?: string;
+    project?: string;
     domain?: string;
     subjectTerm?: string;
+    method?: string;
+    audience?: string;
+    tag?: string;
     validity?: TemporalValidityState;
     validAt?: string;
     limit?: number;
@@ -2437,6 +2442,24 @@ export declare class LlmWikiService {
                 expectedRevision?: never;
                 query?: never;
                 intent?: never;
+                limit: number;
+                maxChars: number;
+                path?: never;
+                maxDepth?: never;
+                taskContext?: never;
+                includeReadiness?: never;
+            };
+            requiredArguments?: never;
+        } | {
+            mutating?: never;
+            followUpEndpointId?: never;
+            intent: string;
+            useWhen: string;
+            endpointId: string;
+            arguments: {
+                expectedRevision?: never;
+                query?: never;
+                intent?: never;
                 path: string;
                 maxDepth: number;
                 limit: number;
@@ -2463,24 +2486,6 @@ export declare class LlmWikiService {
                 includeReadiness?: never;
             };
             requiredArguments: string[];
-        } | {
-            mutating?: never;
-            followUpEndpointId?: never;
-            requiredArguments?: never;
-            intent: string;
-            useWhen: string;
-            endpointId: string;
-            arguments: {
-                expectedRevision?: never;
-                query?: never;
-                intent?: never;
-                path?: never;
-                maxDepth?: never;
-                taskContext?: never;
-                limit: number;
-                maxChars: number;
-                includeReadiness?: never;
-            };
         } | {
             mutating?: never;
             followUpEndpointId?: never;
@@ -3306,6 +3311,20 @@ export declare class LlmWikiService {
         };
         truncated: boolean;
         note: string;
+    }>;
+    /**
+     * Find explicit organization clusters that have enough independently
+     * addressable notes to merit a synthesis pass. This is deliberately not a
+     * semantic clustering endpoint: MOC/project/domain/subject metadata is the
+     * authored boundary, and the returned plan preserves every input note.
+     */
+    synthesisCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        purpose: string;
+        items: Record<string, unknown>[];
+        total: number;
+        truncated: boolean;
+        groupingRule: string;
+        generatedAt: string;
     }>;
     promotionCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
         items: Record<string, unknown>[];

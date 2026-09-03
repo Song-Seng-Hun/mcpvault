@@ -26,6 +26,17 @@ export interface EndpointAvailabilityContext {
 }
 
 const CONTROL_TOOLS = new Set(['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint']);
+const ENDPOINT_QUERY_STOP_WORDS = new Set([
+  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'can', 'could', 'do', 'for', 'from', 'get', 'give', 'i', 'in', 'into', 'is', 'it', 'me', 'of', 'on', 'or', 'please', 'show', 'that', 'the', 'to', 'use', 'want', 'with', 'would',
+]);
+
+function endpointQueryTerms(text: string): string[] {
+  const raw = text.split(/\s+/).map(term => term.trim()).filter(Boolean);
+  const meaningful = raw.filter(term => !ENDPOINT_QUERY_STOP_WORDS.has(term));
+  // A one-word query such as "get" should retain its literal meaning instead
+  // of accidentally turning into an unfiltered catalog listing.
+  return meaningful.length > 0 ? meaningful : raw;
+}
 
 function catalogLimit(value: unknown): number {
   const parsed = value === undefined ? 20 : Number(value);
@@ -132,6 +143,7 @@ const EXPLICIT_IDS: Record<string, string> = {
   get_wiki_source_lineage: 'wiki.source_lineage',
   get_wiki_organization_manifest: 'wiki.organization_manifest',
   get_wiki_promotion_candidates: 'wiki.promotion_candidates',
+  get_wiki_synthesis_candidates: 'wiki.synthesis_candidates',
   get_wiki_summary_candidates: 'wiki.summary_candidates',
   get_wiki_unused_knowledge: 'wiki.unused_knowledge',
   get_wiki_retention_queue: 'wiki.retention_queue',
@@ -237,6 +249,7 @@ const EXPLICIT_ROUTES: Record<string, { method: 'GET' | 'POST'; url: string }> =
   get_wiki_source_lineage: { method: 'GET', url: '/api/wiki/source-lineage' },
   get_wiki_organization_manifest: { method: 'GET', url: '/api/wiki/organization-manifest' },
   get_wiki_promotion_candidates: { method: 'GET', url: '/api/wiki/promotion-candidates' },
+  get_wiki_synthesis_candidates: { method: 'GET', url: '/api/wiki/synthesis-candidates' },
   get_wiki_summary_candidates: { method: 'GET', url: '/api/wiki/summary-candidates' },
   get_wiki_unused_knowledge: { method: 'GET', url: '/api/wiki/unused-knowledge' },
   get_wiki_retention_queue: { method: 'GET', url: '/api/wiki/retention-queue' },
@@ -332,6 +345,7 @@ const ENDPOINT_ALIASES: Record<string, string[]> = {
   get_wiki_source_lineage: ['wiki', 'source', 'work', 'edition', 'version', 'lineage', 'bibliography'],
   get_wiki_organization_manifest: ['wiki', 'organization', 'manifest', 'portable', 'para', 'zettelkasten', 'gtd', 'obsidian', 'migration'],
   get_wiki_promotion_candidates: ['wiki', 'community', 'promote', 'promotion', 'candidate', 'knowledge'],
+  get_wiki_synthesis_candidates: ['wiki', 'synthesis', 'synthesize', 'express', 'cluster', 'related notes', 'model', 'argument', 'decision', 'derived knowledge', 'distill', '합성', '통합', '관련 노트', '논증', '모델', '지식'],
   get_wiki_summary_candidates: ['wiki', 'summary', 'summarize', 'projection', 'long note'],
   get_wiki_unused_knowledge: ['wiki', 'unused', 'old', 'stale', 'archive', 'cleanup', 'maintenance'],
   get_wiki_retention_queue: ['wiki', 'retention', 'preserve', 'archive', 'tombstone', 'disposition', 'records'],
@@ -447,7 +461,7 @@ export class EndpointRegistry {
 
   list(query: unknown, requestedLimit: unknown, requestedMaxChars: unknown, context: EndpointAvailabilityContext, activeOnly: boolean): { endpoints: Array<EndpointDescriptor & { available: boolean; state: 'ready' | 'locked' | 'disabled'; reason?: string }>; total: number; truncated: boolean } {
     const text = typeof query === 'string' ? query.trim().toLowerCase() : '';
-    const terms = text.split(/\s+/).filter(Boolean);
+    const terms = endpointQueryTerms(text);
     const limit = catalogLimit(requestedLimit);
     const maxChars = catalogMaxChars(requestedMaxChars);
     const endpoints = [...this.descriptors.values()]

@@ -34,8 +34,13 @@ export interface WikiCatalogOptions {
   sourceType?: string;
   polarity?: string;
   knowledgeRole?: string;
+  moc?: string;
+  project?: string;
   domain?: string;
   subjectTerm?: string;
+  method?: string;
+  audience?: string;
+  tag?: string;
   validity?: TemporalValidityState;
   validAt?: string;
   limit?: number;
@@ -301,6 +306,29 @@ function normalizedWords(value: string): Set<string> {
 
 function normalizedAuthorityTerm(value: unknown): string {
   return String(value ?? '').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+}
+
+function facetStrings(...values: unknown[]): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    const items = Array.isArray(value) ? value : value === undefined || value === null ? [] : [value];
+    for (const item of items) {
+      if (typeof item !== 'string') continue;
+      const trimmed = item.trim();
+      const key = trimmed.toLocaleLowerCase();
+      if (!trimmed || seen.has(key)) continue;
+      seen.add(key);
+      result.push(trimmed);
+    }
+  }
+  return result;
+}
+
+function facetIncludes(values: string[], expected: string | undefined): boolean {
+  if (!expected) return true;
+  const normalized = expected.trim().toLocaleLowerCase();
+  return values.some(value => value.toLocaleLowerCase() === normalized);
 }
 
 function relationDocument(value: string): string {
@@ -610,6 +638,9 @@ counts by note kind, lifecycle, knowledge role, epistemic/task state, review
 policy, source type, polarity, MOC, project, domain, subject term, tag, and
 temporal-validity state. Use \`knowledgeRole\` to select concept, argument,
 model, observation, or counterargument notes without loading unrelated bodies.
+Every returned facet can be drilled down with its matching exact filter;
+\`moc\` includes \`primary_moc\`, legacy \`moc\`, and the \`mocs\` list, while
+\`method\`, \`audience\`, and \`tag\` retain native Obsidian list semantics.
 Use \`validity\` with an optional \`validAt\` instant to find current, future, expired, invalid, or unspecified claims without loading bodies. Use its optional facet
 filters to narrow the same metadata pass without loading note bodies. Use
 \`get_wiki_neighborhood\` after selecting a note when nearby context is useful:
@@ -661,7 +692,7 @@ Obsidian reference examples:
 \`\`\`
 
 10. Prioritize Wiki participation: read existing notes, add grounded corrections, ingest evidence before load-bearing claims, and lint before considering a conclusion accepted.
-11. For a durable architectural or policy choice, use the structured \`wiki.decision_record\` endpoint with context, decision, alternatives, consequences, evidence, and a revision-checked status. A decision is a knowledge note, not a duplicate Git log. Use \`wiki.promotion_candidates\`, \`wiki.source_trust\`, \`wiki.summary_candidates\`, and \`wiki.unused_knowledge\` as bounded maintenance reports; verify candidates before writing, archiving, or superseding, and never auto-delete.
+11. For a durable architectural or policy choice, use the structured \`wiki.decision_record\` endpoint with context, decision, alternatives, consequences, evidence, and a revision-checked status. A decision is a knowledge note, not a duplicate Git log. Use \`wiki.synthesis_candidates\` to find explicit MOC/project/domain/subject clusters ready for a model or argument: read the returned revisions and counterpoints, preserve every input, and never infer a synthesis from folder or vector proximity. Use \`wiki.promotion_candidates\`, \`wiki.source_trust\`, \`wiki.summary_candidates\`, and \`wiki.unused_knowledge\` as bounded maintenance reports; verify candidates before writing, archiving, or superseding, and never auto-delete.
 12. Search results expose compact \`why\` match reasons and \`fresh\` state. Use \`includeRevisions\` when an exact source hash is needed before a later edit; start with bounded projections and follow only relevant references.
 13. Use Idea Lab for divergent thinking: \`idea.create\` records one problem and seed, \`idea.branch\` preserves an alternative without overwriting its parent, \`idea.contribute\` records a bounded extension/challenge/counterexample/evidence item, and \`idea.evaluate\` scores novelty, usefulness, feasibility, risk, and evidence quality separately. Use Async Workshop for a stateless meeting with phases \`diverge\`, \`cluster\`, \`critique\`, \`evaluate\`, \`synthesize\`, \`decide\`, and \`closed\`; read the bounded projection, contribute one useful item, and advance with a revision and reason. A synthesis remains proposed until checked and converted to \`wiki.decision_record\` or an agent task. Rejected and parked ideas remain recoverable history.
 14. Good public contributions earn recognition when other agents like them; raw post volume and self-likes do not count as level progress. Use the public Agora by creating a post with category=\`agora\`, debate with stance=\`for\`, \`against\`, or \`neutral\` comments, and like arguments that are useful or well-supported.
@@ -1458,7 +1489,7 @@ export class LlmWikiService {
     // A relative "now" validity filter is time-dependent even when the vault
     // generation is unchanged, so do not retain it in the summary cache.
     if (!options.summaryOnly || ((options.validity !== undefined || options.includeFacets === true) && !options.validAt)) return this.computeCatalog(principal, options);
-    const key = `${this.principalKey(principal)}|${options.noteKind || ''}|${options.lifecycle || ''}|${options.epistemicStatus || ''}|${options.taskStatus || ''}|${options.reviewPolicy || ''}|${options.sourceType || ''}|${options.polarity || ''}|${options.knowledgeRole || ''}|${options.domain || ''}|${options.subjectTerm || ''}|${options.validity || ''}|${options.validAt || ''}|${options.limit || ''}|${options.maxChars || ''}|${options.includeFacets ? 'facets' : ''}|${options.facetLimit || ''}|${normalizeCatalogOrder(options.orderBy)}`;
+    const key = `${this.principalKey(principal)}|${options.noteKind || ''}|${options.lifecycle || ''}|${options.epistemicStatus || ''}|${options.taskStatus || ''}|${options.reviewPolicy || ''}|${options.sourceType || ''}|${options.polarity || ''}|${options.knowledgeRole || ''}|${options.moc || ''}|${options.project || ''}|${options.domain || ''}|${options.subjectTerm || ''}|${options.method || ''}|${options.audience || ''}|${options.tag || ''}|${options.validity || ''}|${options.validAt || ''}|${options.limit || ''}|${options.maxChars || ''}|${options.includeFacets ? 'facets' : ''}|${options.facetLimit || ''}|${normalizeCatalogOrder(options.orderBy)}`;
     const cached = this.catalogSummaryCache.get(key);
     if (cached?.generation === this.generation) return cached.value;
     const running = this.catalogSummaryInFlight.get(key);
@@ -1528,6 +1559,11 @@ export class LlmWikiService {
       const polarity = typeof note.frontmatter.knowledge_polarity === 'string' ? note.frontmatter.knowledge_polarity.trim().toLowerCase() : undefined;
       const knowledgeRole = typeof note.frontmatter.knowledge_role === 'string' ? note.frontmatter.knowledge_role.trim().toLowerCase() : undefined;
       const domain = typeof note.frontmatter.domain === 'string' ? note.frontmatter.domain.trim() : undefined;
+      const mocs = facetStrings(note.frontmatter.primary_moc, note.frontmatter.moc, note.frontmatter.mocs);
+      const projects = facetStrings(note.frontmatter.project);
+      const methods = facetStrings(note.frontmatter.methods);
+      const audiences = facetStrings(note.frontmatter.audience);
+      const tags = facetStrings(note.frontmatter.tags);
       const temporal = temporalValidity(note.frontmatter, validAtMs);
       const subjectTerms = Array.isArray(note.frontmatter.subject_terms)
         ? note.frontmatter.subject_terms.filter((item: unknown): item is string => typeof item === 'string').map(item => item.trim()).filter(Boolean)
@@ -1538,8 +1574,13 @@ export class LlmWikiService {
       if (options.sourceType && sourceType !== options.sourceType.trim().toLowerCase()) continue;
       if (options.polarity && polarity !== options.polarity.trim().toLowerCase()) continue;
       if (options.knowledgeRole && knowledgeRole !== options.knowledgeRole.trim().toLowerCase()) continue;
-      if (options.domain && domain !== options.domain.trim()) continue;
-      if (options.subjectTerm && !subjectTerms.some(term => term.toLowerCase() === options.subjectTerm!.trim().toLowerCase())) continue;
+      if (!facetIncludes(mocs, options.moc)) continue;
+      if (!facetIncludes(projects, options.project)) continue;
+      if (options.domain && String(domain || '').toLocaleLowerCase() !== options.domain.trim().toLocaleLowerCase()) continue;
+      if (!facetIncludes(subjectTerms, options.subjectTerm)) continue;
+      if (!facetIncludes(methods, options.method)) continue;
+      if (!facetIncludes(audiences, options.audience)) continue;
+      if (!facetIncludes(tags, options.tag)) continue;
       if (options.validity && temporal.state !== options.validity) continue;
       total += 1;
       counts[catalogType] = (counts[catalogType] || 0) + 1;
@@ -1560,18 +1601,16 @@ export class LlmWikiService {
         increment(facetValues.sourceType, sourceType);
         increment(facetValues.polarity, polarity);
         increment(facetValues.knowledgeRole, knowledgeRole);
-        increment(facetValues.moc, note.frontmatter.moc);
-        increment(facetValues.project, note.frontmatter.project);
         const incrementList = (facet: Map<string, number>, value: unknown) => {
           const values = Array.isArray(value) ? value : value === undefined || value === null ? [] : [value];
           for (const item of values) increment(facet, item);
         };
-        incrementList(facetValues.moc, note.frontmatter.mocs);
+        incrementList(facetValues.moc, mocs);
+        incrementList(facetValues.project, projects);
         incrementList(facetValues.subjectTerm, subjectTerms);
         increment(facetValues.domain, note.frontmatter.domain);
-        incrementList(facetValues.method, note.frontmatter.methods);
-        incrementList(facetValues.audience, note.frontmatter.audience);
-        const tags = Array.isArray(note.frontmatter.tags) ? note.frontmatter.tags : typeof note.frontmatter.tags === 'string' ? [note.frontmatter.tags] : [];
+        incrementList(facetValues.method, methods);
+        incrementList(facetValues.audience, audiences);
         for (const tag of tags) increment(facetValues.tag, tag);
         increment(facetValues.validity, temporal.state);
       }
@@ -1597,10 +1636,11 @@ export class LlmWikiService {
         ...(note.frontmatter.moc && { moc: note.frontmatter.moc }),
         ...(Array.isArray(note.frontmatter.mocs) && { mocs: note.frontmatter.mocs.slice(0, 12) }),
         ...(note.frontmatter.nav_order !== undefined && { navOrder: note.frontmatter.nav_order }),
-        ...(Array.isArray(note.frontmatter.subject_terms) && { subjectTerms: note.frontmatter.subject_terms.slice(0, 12) }),
+        ...(subjectTerms.length > 0 && { subjectTerms: subjectTerms.slice(0, 12) }),
         ...(note.frontmatter.domain && { domain: note.frontmatter.domain }),
-        ...(Array.isArray(note.frontmatter.methods) && { methods: note.frontmatter.methods.slice(0, 12) }),
-        ...(Array.isArray(note.frontmatter.audience) && { audience: note.frontmatter.audience.slice(0, 12) }),
+        ...(methods.length > 0 && { methods: methods.slice(0, 12) }),
+        ...(audiences.length > 0 && { audience: audiences.slice(0, 12) }),
+        ...(tags.length > 0 && { tags: tags.slice(0, 12) }),
         ...(note.frontmatter.moc_purpose && { mocPurpose: note.frontmatter.moc_purpose }),
         ...(note.frontmatter.moc_scope && { mocScope: note.frontmatter.moc_scope }),
         ...(Array.isArray(note.frontmatter.moc_questions) && { mocQuestions: note.frontmatter.moc_questions.slice(0, 12) }),
@@ -5254,6 +5294,7 @@ export class LlmWikiService {
       { intent: 'capture', useWhen: 'You must preserve a new observation before classifying it.', endpointId: endpointIdForTool('capture_wiki_note'), arguments: { expectedRevision: 'missing' }, requiredArguments: ['content'], mutating: true },
       { intent: 'organize_inbox', useWhen: 'You are processing captures, not creating new knowledge.', endpointId: endpointIdForTool('get_wiki_inbox'), arguments: { limit: 5, maxChars: 4000 }, followUpEndpointId: endpointIdForTool('clarify_wiki_note') },
       { intent: 'understand_or_decide', useWhen: 'You selected one note and need bounded evidence, counterpoint, and next-step context.', endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path: '<selected path>', intent: 'decide', limit: 6, maxChars: 5000 }, requiredArguments: ['path'] },
+      { intent: 'synthesize_or_express', useWhen: 'Several explicitly related durable notes may support a model, argument, or decision without replacing their originals.', endpointId: endpointIdForTool('get_wiki_synthesis_candidates'), arguments: { limit: 5, maxChars: 6000 } },
       { intent: 'follow_curated_sequence', useWhen: 'You selected a MOC that is meant to be read or executed in order.', endpointId: endpointIdForTool('get_wiki_learning_path'), arguments: { path: '<selected MOC path>', maxDepth: 2, limit: 20, maxChars: 6000 }, requiredArguments: ['path'] },
       { intent: 'execute_in_context', useWhen: 'You need one executable action that fits a known GTD context.', endpointId: endpointIdForTool('get_wiki_next_actions'), arguments: { taskContext: '<exact context>', limit: 5, maxChars: 4000 }, requiredArguments: ['taskContext'] },
       { intent: 'review_one', useWhen: 'You want one prioritized evidence, flow, or maintenance item.', endpointId: endpointIdForTool('get_wiki_review_packet'), arguments: { limit: 1, maxChars: 4000 } },
@@ -8134,6 +8175,224 @@ export class LlmWikiService {
     const result = { mode: 'bounded_source_work_edition_lineage', sourceFamily: sourceFamily || undefined, works: items, totals: { sourceSnapshots: totalSources, works: works.size }, truncated: works.size > items.length, note: 'Source snapshots remain immutable Markdown. Work/edition identifiers are grouping metadata, not a replacement for source_id, content hash, or revision.' };
     while (JSON.stringify(result).length > boundedChars && result.works.length > 1) { result.works.pop(); result.truncated = true; }
     return result;
+  }
+
+  /**
+   * Find explicit organization clusters that have enough independently
+   * addressable notes to merit a synthesis pass. This is deliberately not a
+   * semantic clustering endpoint: MOC/project/domain/subject metadata is the
+   * authored boundary, and the returned plan preserves every input note.
+   */
+  async synthesisCandidates(principal?: ScopePrincipal, limit = 10, maxChars = 7000) {
+    const boundedLimit = Math.min(Math.max(Number(limit) || 10, 1), 30);
+    const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 768), 16000);
+    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+    type Member = {
+      physicalPath: string;
+      path: string;
+      title: string;
+      revision?: string;
+      noteKind: string;
+      knowledgeRole?: string;
+      navOrder?: number;
+      evidenceCount: number;
+      openQuestionCount: number;
+      counterpoint: boolean;
+      contradicts: string[];
+      inputLinks: string[];
+    };
+    type Group = {
+      key: string;
+      basis: { kind: 'moc' | 'project' | 'domain' | 'subject_term'; value: string };
+      inputTotal: number;
+      outputTotal: number;
+      inputs: Member[];
+      outputs: Member[];
+      truncated: boolean;
+    };
+    const groups = new Map<string, Group>();
+    const maxGroups = 500;
+    const maxMembersPerGroup = 40;
+    let scanTruncated = false;
+    const inputKinds = new Set(['atomic', 'knowledge', 'literature', 'question', 'hypothesis', 'experiment', 'assumption']);
+
+    for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+      if (isModerationHidden(note.frontmatter)) continue;
+      const frontmatter = note.frontmatter || {};
+      const noteKind = String(frontmatter.note_kind || '').trim().toLocaleLowerCase();
+      if (!inputKinds.has(noteKind) && noteKind !== 'decision') continue;
+      const lifecycle = String(frontmatter.lifecycle || '').trim().toLocaleLowerCase();
+      if (['archived', 'superseded', 'tombstoned'].includes(lifecycle)) continue;
+      const mocs = facetStrings(frontmatter.primary_moc, frontmatter.moc, frontmatter.mocs);
+      const projects = facetStrings(frontmatter.project);
+      const domains = facetStrings(frontmatter.domain);
+      const subjectTerms = facetStrings(frontmatter.subject_terms);
+      let basis: Group['basis'] | undefined;
+      if (mocs[0]) basis = { kind: 'moc', value: relationDocument(mocs[0]) };
+      else if (projects[0]) basis = { kind: 'project', value: relationDocument(projects[0]) };
+      else if (domains[0]) basis = { kind: 'domain', value: domains[0] };
+      else if (subjectTerms[0]) basis = { kind: 'subject_term', value: subjectTerms[0] };
+      if (!basis?.value) continue;
+      const key = `${basis.kind}:${basis.value.toLocaleLowerCase()}`;
+      let group = groups.get(key);
+      if (!group) {
+        if (groups.size >= maxGroups) { scanTruncated = true; continue; }
+        group = { key, basis, inputTotal: 0, outputTotal: 0, inputs: [], outputs: [], truncated: false };
+        groups.set(key, group);
+      }
+      const knowledgeRole = typeof frontmatter.knowledge_role === 'string' ? frontmatter.knowledge_role.trim().toLocaleLowerCase() : undefined;
+      // knowledge_role describes what a note does, not whether it has already
+      // synthesized this cluster. Only an explicit synthesis stage (or a
+      // Decision Record) may suppress covered inputs.
+      const isSynthesis = noteKind === 'decision'
+        || String(frontmatter.interpretation_status || '').toLocaleLowerCase() === 'synthesized';
+      const nav = navigationOrder(frontmatter.nav_order);
+      const member: Member = {
+        physicalPath: note.path,
+        path: this.access.toPublicPath(note.path),
+        title: boundedText(frontmatter.title || note.path.split('/').at(-1)?.replace(/\.md$/i, '') || note.path, 180),
+        ...(note.revision && { revision: note.revision }),
+        noteKind,
+        ...(knowledgeRole && { knowledgeRole }),
+        ...(nav !== Number.MAX_SAFE_INTEGER && { navOrder: nav }),
+        evidenceCount: facetStrings(frontmatter.evidence_paths).length + (Array.isArray(frontmatter.evidence) ? frontmatter.evidence.length : 0),
+        openQuestionCount: facetStrings(frontmatter.open_questions).length,
+        counterpoint: String(frontmatter.knowledge_polarity || '').toLocaleLowerCase() === 'negative' || knowledgeRole === 'counterargument',
+        contradicts: facetStrings(frontmatter.contradicts),
+        inputLinks: facetStrings(frontmatter.derived_from, frontmatter.refines, frontmatter.references),
+      };
+      const bucket = isSynthesis ? group.outputs : group.inputs;
+      if (isSynthesis) group.outputTotal += 1;
+      else group.inputTotal += 1;
+      if (bucket.length < maxMembersPerGroup) bucket.push(member);
+      else group.truncated = true;
+    }
+
+    const ranked = [...groups.values()].flatMap(group => {
+      if (group.inputTotal < 2 || group.inputs.length < 2) return [];
+      const inputFiles = group.inputs.map(item => item.physicalPath);
+      const inputByPhysical = new Map(group.inputs.map(item => [normalizePath(item.physicalPath).toLocaleLowerCase(), item]));
+      const coverageFor = (output: Member) => {
+        const covered = new Set<string>();
+        for (const rawTarget of output.inputLinks) {
+          for (const target of resolveWikiLinkTargets(relationDocument(rawTarget), inputFiles)) covered.add(normalizePath(target).toLocaleLowerCase());
+        }
+        return covered;
+      };
+      const outputCoverage = group.outputs.map(output => ({ output, covered: coverageFor(output) }))
+        .sort((left, right) => right.covered.size - left.covered.size || left.output.path.localeCompare(right.output.path));
+      const existing = outputCoverage[0];
+      const uncovered = existing ? group.inputs.filter(item => !existing.covered.has(normalizePath(item.physicalPath).toLocaleLowerCase())) : group.inputs;
+      if (existing && uncovered.length === 0 && !group.truncated && group.inputTotal <= group.inputs.length) return [];
+      const tensionPairs = new Set<string>();
+      for (const input of group.inputs) {
+        for (const rawTarget of input.contradicts) {
+          for (const target of resolveWikiLinkTargets(relationDocument(rawTarget), inputFiles)) {
+            const targetMember = inputByPhysical.get(normalizePath(target).toLocaleLowerCase());
+            if (!targetMember || targetMember.path === input.path) continue;
+            tensionPairs.add([input.path, targetMember.path].sort().join('|'));
+          }
+        }
+      }
+      const counterpoints = group.inputs.filter(item => item.counterpoint || item.contradicts.length > 0);
+      const openQuestionCount = group.inputs.reduce((sum, item) => sum + item.openQuestionCount, 0);
+      const evidenceReadyInputs = group.inputs.filter(item => item.evidenceCount > 0).length;
+      const score = Math.min(group.inputTotal, 20) * 2
+        + Math.min(uncovered.length, 10) * 3
+        + Math.min(tensionPairs.size, 5) * 4
+        + Math.min(openQuestionCount, 5) * 2
+        + Math.min(evidenceReadyInputs, 5)
+        + (existing ? 1 : 3);
+      return [{ group, existing, uncovered, tensionPairs: [...tensionPairs], counterpoints, openQuestionCount, evidenceReadyInputs, score }];
+    }).sort((left, right) => right.score - left.score || right.uncovered.length - left.uncovered.length || left.group.key.localeCompare(right.group.key));
+
+    const items: Array<Record<string, unknown>> = [];
+    for (const candidate of ranked.slice(0, boundedLimit)) {
+      const materialize = async (member: Member) => {
+        let revision = member.revision;
+        if (!revision) {
+          try { revision = (await this.fileSystem.readNote(member.physicalPath)).revision; } catch { /* changed during scan; omit unsafe follow-up */ }
+        }
+        return {
+          path: member.path,
+          title: member.title,
+          ...(revision && { revision }),
+          noteKind: member.noteKind,
+          ...(member.knowledgeRole && { knowledgeRole: member.knowledgeRole }),
+          ...(member.navOrder !== undefined && { navOrder: member.navOrder }),
+          evidenceCount: member.evidenceCount,
+          openQuestionCount: member.openQuestionCount,
+        };
+      };
+      const orderedInputs = [...candidate.group.inputs]
+        .sort((left, right) => navigationOrder(left.navOrder) - navigationOrder(right.navOrder) || left.title.localeCompare(right.title) || left.path.localeCompare(right.path));
+      const readOrder = [];
+      for (const input of orderedInputs.slice(0, 12)) readOrder.push(await materialize(input));
+      const existingSynthesis = candidate.existing ? await materialize(candidate.existing.output) : undefined;
+      const basisTitle = candidate.group.basis.value.split('/').at(-1)?.replace(/\.md$/i, '') || 'Knowledge';
+      const safeStem = basisTitle.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 100) || 'Knowledge';
+      const suggestedPath = existingSynthesis?.path || `Knowledge/Syntheses/${safeStem} synthesis.md`;
+      let targetExists = Boolean(existingSynthesis);
+      if (!targetExists) {
+        try { targetExists = await this.fileSystem.noteExists(this.access.resolveExternalPath(suggestedPath, principal)); } catch { targetExists = true; }
+      }
+      const references = readOrder.map(item => item.path);
+      const anchor = readOrder[0];
+      const synthesisPlan = existingSynthesis
+        ? {
+            mode: 'extend_existing_synthesis',
+            inspect: { endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path: existingSynthesis.path, intent: 'review', maxChars: 5000 } },
+            readInputs: readOrder,
+            then: { endpointId: endpointIdForTool('patch_note'), arguments: { path: existingSynthesis.path, expectedRevision: existingSynthesis.revision, dryRun: true }, requiredArguments: ['a reviewed body patch and any justified relation/property update'] },
+            guard: { autoFix: false, preserveInputs: true, inspectCounterpoints: true },
+          }
+        : targetExists
+          ? {
+              mode: 'path_collision',
+              inspect: { endpointId: endpointIdForTool('read_note'), arguments: { path: suggestedPath, maxChars: 5000 } },
+              readInputs: readOrder,
+              then: 'Choose a different path or deliberately relate the existing note after reading its current revision.',
+              guard: { autoFix: false, preserveInputs: true },
+            }
+          : {
+              mode: 'create_synthesis',
+              inspect: anchor ? { endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path: anchor.path, intent: 'decide', maxChars: 5000 } } : undefined,
+              readInputs: readOrder,
+              then: [
+                { endpointId: endpointIdForTool('preflight_wiki_publish'), arguments: { path: suggestedPath, title: `${basisTitle} synthesis` }, requiredArguments: ['content'] },
+                { endpointId: endpointIdForTool('publish_knowledge'), arguments: { path: suggestedPath, references, expectedRevision: 'missing' }, requiredArguments: ['content', 'evidencePaths', 'knowledgeRole'] },
+              ],
+              guard: { autoFix: false, preserveInputs: true, inspectCounterpoints: true },
+            };
+      const item = {
+        basis: candidate.group.basis,
+        score: candidate.score,
+        mode: synthesisPlan.mode,
+        inputTotal: candidate.group.inputTotal,
+        uncoveredInputTotal: candidate.uncovered.length,
+        existingSynthesis,
+        suggestedPath,
+        targetExists,
+        readOrder,
+        counterpointPaths: candidate.counterpoints.slice(0, 8).map(item => item.path),
+        tensionPairs: candidate.tensionPairs.slice(0, 8).map(pair => pair.split('|')),
+        evidenceReadyInputs: candidate.evidenceReadyInputs,
+        openQuestionCount: candidate.openQuestionCount,
+        inputsTruncated: candidate.group.truncated || candidate.group.inputTotal > readOrder.length,
+        synthesisPlan,
+        instruction: 'Synthesize only after reading the returned revisions. Preserve disagreement, cite immutable evidence, link derived_from inputs, and keep every source note as independent Markdown/Git history.',
+      };
+      if (JSON.stringify({ items: [...items, item] }).length > boundedChars) break;
+      items.push(item);
+    }
+    return {
+      purpose: 'Bounded, explicit-metadata synthesis opportunities for the Distill -> Express step. These are authored clusters, not semantic truth or merge instructions.',
+      items,
+      total: ranked.length,
+      truncated: scanTruncated || ranked.length > items.length,
+      groupingRule: 'One primary authored cue per note: primary MOC/moc, then project, domain, or subject term. Folder proximity and vector similarity never create a synthesis candidate.',
+      generatedAt: now(),
+    };
   }
 
   async promotionCandidates(principal?: ScopePrincipal, limit = 10, maxChars = 6000) {

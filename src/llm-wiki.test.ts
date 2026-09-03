@@ -154,6 +154,61 @@ test('MOC navigation preserves explicit sibling order, body link order, and mult
   }
 });
 
+test('drillable facets and synthesis candidates close the authored Distill to Express loop', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'synthesis-owner', modelId: 'codex', password: 'synthesis-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
+      const result = await client.callTool({ name: 'write_note', arguments: { path, content, frontmatter, expectedRevision: 'missing', accessToken } });
+      expect(result.isError).toBeFalsy();
+    };
+    const shared = { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', project: '[[Projects/Search]]', methods: ['Benchmark'], audience: ['Agents'], tags: ['Retrieval'] };
+    await write('Knowledge/Latency evidence.md', '# Latency evidence\n', { ...shared, primary_moc: '[[Knowledge/MOCs/Retrieval]]', knowledge_role: 'observation', evidence_paths: ['_sources/latency.md'], nav_order: 10 });
+    await write('Knowledge/Recall caveat.md', '# Recall caveat\n', { ...shared, mocs: ['[[Knowledge/MOCs/Retrieval]]'], knowledge_role: 'counterargument', contradicts: ['[[Knowledge/Latency evidence]]'], evidence_paths: ['_sources/recall.md'], open_questions: ['When does the tradeoff reverse?'], nav_order: 20 });
+
+    const catalog = await callJson(client, 'get_wiki_catalog', { moc: '[[knowledge/mocs/retrieval]]', project: '[[projects/search]]', method: 'benchmark', audience: 'agents', tag: 'retrieval', includeFacets: true, limit: 10, maxChars: 8000, accessToken });
+    expect(catalog.value).toMatchObject({ total: 2, facets: { moc: { '[[Knowledge/MOCs/Retrieval]]': 2 }, project: { '[[Projects/Search]]': 2 }, method: { Benchmark: 2 }, audience: { Agents: 2 }, tag: { Retrieval: 2 } } });
+    expect(catalog.value.entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/Latency evidence.md', methods: ['Benchmark'], audience: ['Agents'], tags: ['Retrieval'] }),
+      expect.objectContaining({ path: 'Knowledge/Recall caveat.md' }),
+    ]));
+
+    const discovery = await callJson(client, 'search_capabilities', { query: 'synthesize related notes into an argument', limit: 3, maxChars: 4000, accessToken });
+    expect(discovery.value.endpoints).toEqual(expect.arrayContaining([expect.objectContaining({ endpointId: 'wiki.synthesis_candidates', method: 'GET', url: '/api/wiki/synthesis-candidates' })]));
+    const candidates = await callJson(client, 'call_endpoint', { endpointId: 'wiki.synthesis_candidates', arguments: { limit: 5, maxChars: 12000, accessToken } });
+    expect(candidates.value).toMatchObject({ total: 1, groupingRule: expect.stringContaining('primary authored cue') });
+    expect(candidates.value.items[0]).toMatchObject({
+      basis: { kind: 'moc', value: 'Knowledge/MOCs/Retrieval' },
+      mode: 'create_synthesis',
+      inputTotal: 2,
+      suggestedPath: 'Knowledge/Syntheses/Retrieval synthesis.md',
+      counterpointPaths: ['Knowledge/Recall caveat.md'],
+      tensionPairs: [['Knowledge/Latency evidence.md', 'Knowledge/Recall caveat.md']],
+      synthesisPlan: { mode: 'create_synthesis', guard: { autoFix: false, preserveInputs: true, inspectCounterpoints: true } },
+    });
+    expect(candidates.value.items[0].readOrder.map((item: any) => item.path)).toEqual(['Knowledge/Latency evidence.md', 'Knowledge/Recall caveat.md']);
+    expect(candidates.value.items[0].readOrder.every((item: any) => /^[a-f0-9]{64}$/.test(item.revision))).toBe(true);
+    const tiny = await callJson(client, 'call_endpoint', { endpointId: 'wiki.synthesis_candidates', arguments: { limit: 5, maxChars: 768, accessToken } });
+    expect(JSON.stringify(tiny.value).length).toBeLessThanOrEqual(768);
+    expect(tiny.value).toMatchObject({ total: 1, items: [], truncated: true });
+
+    await write('Knowledge/Retrieval synthesis.md', '# Retrieval synthesis\n', { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'review', interpretation_status: 'synthesized', primary_moc: '[[Knowledge/MOCs/Retrieval]]', derived_from: ['[[Knowledge/Latency evidence]]', '[[Knowledge/Recall caveat]]'] });
+    const covered = await callJson(client, 'call_endpoint', { endpointId: 'wiki.synthesis_candidates', arguments: { limit: 5, maxChars: 12000, accessToken } });
+    expect(covered.value).toMatchObject({ total: 0, items: [] });
+
+    await write('Knowledge/Memory pressure.md', '# Memory pressure\n', { ...shared, primary_moc: '[[Knowledge/MOCs/Retrieval]]', knowledge_role: 'observation', evidence_paths: ['_sources/memory.md'], nav_order: 30 });
+    const extension = await callJson(client, 'call_endpoint', { endpointId: 'wiki.synthesis_candidates', arguments: { limit: 5, maxChars: 12000, accessToken } });
+    expect(extension.value.items[0]).toMatchObject({ mode: 'extend_existing_synthesis', uncoveredInputTotal: 1, existingSynthesis: { path: 'Knowledge/Retrieval synthesis.md', revision: expect.any(String) }, synthesisPlan: { then: { endpointId: 'notes.patch', arguments: { path: 'Knowledge/Retrieval synthesis.md', expectedRevision: expect.any(String), dryRun: true } } } });
+
+    const home = await callJson(client, 'get_wiki_home', { limit: 20, maxChars: 12000, accessToken });
+    expect(home.value.workflowRoutes).toEqual(expect.arrayContaining([expect.objectContaining({ intent: 'synthesize_or_express', endpointId: 'wiki.synthesis_candidates' })]));
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('dependency-aware MOC learning paths preserve authorship and diagnose prerequisite order safely', async () => {
   const { server, client } = await setup();
   try {

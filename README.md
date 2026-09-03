@@ -398,7 +398,7 @@ completion visible without duplicating Git history. Precise evidence may add
 selected source lines. `get_wiki_home` returns a bounded live Home/JDex-style
 launchpad for MOCs, active work, Inbox, review items, and stable IDs. It is also
 the low-friction intent router: choose exactly one returned route for find,
-capture, organize, decide, follow a curated sequence, execute, review, repair,
+capture, organize, decide, synthesize/express, follow a curated sequence, execute, review, repair,
 or migration instead of
 opening every overlapping dashboard. Returned note entries carry their current
 revision when the metadata index is available, so the next read/edit can keep
@@ -418,11 +418,19 @@ unprocessed captures, including capture age bands and a suggested next action;
 `get_wiki_inbox_plan` adds a bounded metadata-only GTD disposition preview.
 Suggestions are advisory and do not move or delete a note.
 `triage_wiki_note` classifies one note with its revision without moving or
-rewriting the body. `get_wiki_catalog` can filter by note kind/lifecycle,
-epistemic state, task state, review policy, source type, polarity, domain, or
-subject term and bound returned entries with `limit`/`maxChars`. Set
+rewriting the body. `get_wiki_synthesis_candidates` closes the Distill ->
+Express gap: it groups only notes that share one explicit primary MOC/moc,
+project, domain, or subject term, returns their current revisions and
+counterpoints, and distinguishes creating a synthesis from extending an
+existing one. Its plan keeps every input note and requires evidence review;
+folder proximity and vector similarity never create a candidate.
+`get_wiki_catalog` can filter by note kind/lifecycle, epistemic state, task
+state, review policy, source type, polarity, MOC, project, domain, subject
+term, method, audience, or native Obsidian tag and bound returned entries with `limit`/`maxChars`. Set
 `includeFacets: true` to receive bounded metadata-only counts for those fields,
-knowledge role, MOC, project, and tags without loading note bodies. The
+knowledge role, and temporal validity without loading note bodies. `moc`
+matches `primary_moc`, legacy `moc`, and every `mocs` membership, so a facet
+count can always be drilled into the same live metadata pass. The
 `knowledgeRole` filter selects one of concept, argument, model, observation,
 or counterargument without loading unrelated bodies. These filters and facets
 are computed from the same live frontmatter pass, so they do not introduce a
@@ -2540,6 +2548,11 @@ second source of truth:
   answers, reputation, and task retrospectives are provenance context and
   leads—not immutable factual evidence—so a promotion must preserve the
   original record and cite separately captured evidence.
+- `get_wiki_synthesis_candidates` identifies explicitly organized durable-note
+  clusters that may deserve a model, argument, counterargument, or decision.
+  It returns a bounded read order with revisions, unresolved inputs, tension
+  pairs, counterpoints, and a non-mutating preflight/publish or dry-run patch
+  plan. It never merges or deletes the input notes.
 
 ## Contributing
 
