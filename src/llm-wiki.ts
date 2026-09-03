@@ -93,6 +93,13 @@ const CLAIM_RELATION_FIELDS = [
   { input: 'dependsOnClaims', property: 'depends_on_claims', relation: 'depends_on' },
 ] as const;
 
+const CLAIM_ARGUMENT_LINT_CODES = new Set([
+  'invalid_claim_role', 'invalid_claim_relation', 'missing_claim_block_anchor', 'duplicate_claim_block_anchor',
+  'duplicate_claim_id', 'claim_graph_scan_truncated', 'unresolved_claim_note', 'ambiguous_claim_note',
+  'claim_scope_violation', 'missing_claim_target', 'ambiguous_claim_target', 'self_claim_relation',
+  'claim_relation_cycle', 'claim_role_relation_mismatch',
+]);
+
 type ClaimRelationProperty = typeof CLAIM_RELATION_FIELDS[number]['property'];
 
 interface ParsedClaimReference {
@@ -213,7 +220,8 @@ function parseClaimReference(value: unknown): ParsedClaimReference {
     throw new Error(`claim relation block id must use 1-80 letters, numbers, hyphens, or underscores: ${raw}`);
   }
   const normalizedDocument = document.replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase();
-  if (document.includes('#') || normalizedDocument.startsWith('scope://') || normalizedDocument === '_scopes' || normalizedDocument.startsWith('_scopes/') || normalizedDocument === '_whispers' || normalizedDocument.startsWith('_whispers/') || normalizedDocument === '.mcpvault' || normalizedDocument.startsWith('.mcpvault/')) {
+  const documentSegments = normalizedDocument.split('/').filter(segment => segment && segment !== '.' && segment !== '..');
+  if (document.includes('#') || normalizedDocument.startsWith('scope://') || documentSegments.some(segment => segment === '_scopes' || segment === '_whispers' || segment === '.mcpvault')) {
     throw new Error(`claim relation target must be an Obsidian note/block link, not a heading or scope URI: ${raw}`);
   }
   return { raw, document, blockId };
@@ -245,10 +253,12 @@ function claimRelationValues(claim: Record<string, any>, property: ClaimRelation
 }
 
 function blockAnchorLines(content: string, blockId: string): number[] {
-  const escaped = blockId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = new RegExp(`(?:^|\\s)\\^${escaped}\\s*$`, 'i');
+  return blockAnchorLineIndex(content).get(blockId.toLocaleLowerCase()) || [];
+}
+
+function blockAnchorLineIndex(content: string): Map<string, number[]> {
   const lines = String(content || '').replace(/\r\n?/g, '\n').split('\n');
-  const matches: number[] = [];
+  const matches = new Map<string, number[]>();
   let fence = '';
   let fenceLength = 0;
   for (let index = 0; index < lines.length; index += 1) {
@@ -265,7 +275,15 @@ function blockAnchorLines(content: string, blockId: string): number[] {
       }
       continue;
     }
-    if (!fence && pattern.test(line)) matches.push(index + 1);
+    if (!fence) {
+      const anchor = /(?:^|\s)\^([a-z0-9_-]{1,80})\s*$/i.exec(line);
+      if (anchor) {
+        const key = anchor[1]!.toLocaleLowerCase();
+        const anchorLines = matches.get(key) || [];
+        anchorLines.push(index + 1);
+        matches.set(key, anchorLines);
+      }
+    }
   }
   return matches;
 }
@@ -4007,10 +4025,16 @@ export class LlmWikiService {
       this.flowHealth(principal, 3, 7, 14, Math.min(boundedLimit, 8), Math.min(4200, boundedChars)),
     ]);
     const lintByPath = new Map<string, string[]>();
+    const claimLintByPath = new Map<string, string[]>();
     for (const issue of lint.issues) {
       const existing = lintByPath.get(issue.path) || [];
       if (!existing.includes(issue.code)) existing.push(issue.code);
       lintByPath.set(issue.path, existing);
+      if (CLAIM_ARGUMENT_LINT_CODES.has(issue.code)) {
+        const claimCodes = claimLintByPath.get(issue.path) || [];
+        if (!claimCodes.includes(issue.code)) claimCodes.push(issue.code);
+        claimLintByPath.set(issue.path, claimCodes);
+      }
     }
     type ReviewPriority = Record<string, unknown> & {
       priority: number;
@@ -4095,6 +4119,7 @@ export class LlmWikiService {
     add(recall.items, 'active_recall_due', 'wiki.recall_queue', 2);
     add(vocabulary.tagVariants.map((item: any) => ({ path: item.paths?.[0], title: `#${item.key}` })), 'tag_variant', 'wiki.vocabulary_health', 8);
     add(vocabulary.unresolvedSubjectTerms.map((item: any) => ({ path: item.paths?.[0], title: item.term })), 'subject_term_needs_authority', 'wiki.vocabulary_health', 8);
+    add([...claimLintByPath.entries()].map(([path, codes]) => ({ path, title: path.split('/').at(-1), issueCodes: codes })), 'claim_argument_needs_repair', 'wiki.argument_map', 2);
     add([...lintByPath.entries()].map(([path, codes]) => ({ path, title: path.split('/').at(-1), issueCodes: codes })), 'lint_quality_issue', 'wiki.organization_health', 8);
     const priorities = [...priorityByPath.values()]
       .sort((left, right) => left.priority - right.priority || left.sourceOrder - right.sourceOrder || left.path.localeCompare(right.path))
@@ -4144,6 +4169,14 @@ export class LlmWikiService {
               arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision, dryRun: true },
               requiredArguments: ['oldString and newString'],
               instruction: 'Dry-run a nearby answer [[wikilink]] only after verifying the answer note; a link improves discovery but does not prove the answer.',
+            };
+          } else if (reason === 'claim_argument_needs_repair') {
+            inspect = { endpointId: endpointIdForTool('get_wiki_argument_map'), arguments: { path: selectedPriority.path, maxDepth: 2, limit: Math.min(30, Math.max(10, boundedLimit)), maxChars: Math.min(7000, boundedChars) } };
+            mutation = {
+              endpointId: endpointIdForTool('patch_note'),
+              arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision, dryRun: true },
+              requiredArguments: ['oldString and newString, or patches'],
+              instruction: 'Dry-run the smallest claim role, ^block-id, or [[Note#^claim-id]] repair after inspecting both endpoint revisions. Never infer argument truth from graph shape alone.',
             };
           } else if (reason === 'atomic_projection_missing') {
             inspect = { endpointId: endpointIdForTool('read_wiki_projection'), arguments: { path: selectedPriority.path, view: 'progressive', maxChars: 5000 } };
@@ -4211,6 +4244,7 @@ export class LlmWikiService {
         epistemicIssues: Number(graph.epistemicConsistency?.needsAttention || 0),
         knowledgeFlowIssues: Number(graph.knowledgeFlow?.literatureWithoutSource?.total || 0) + Number(graph.knowledgeFlow?.synthesisWithoutInputs?.total || 0),
         typedRelationIssues: Number(graph.typedRelations?.unresolved?.total || 0) + Number(graph.typedRelations?.ambiguous?.total || 0) + Number(graph.typedRelations?.self?.total || 0) + Number(graph.typedRelations?.kindMismatches?.total || 0) + Number(graph.typedRelations?.reciprocityMissing?.total || 0),
+        claimArgumentIssues: [...claimLintByPath.values()].reduce((sum, codes) => sum + codes.length, 0),
         evergreenNeedsAttention: Number(graph.evergreenQuality?.needsAttention || 0),
         recallDue: Number(recall.total || 0),
         tagVariantIssues: vocabulary.tagVariants.length,
@@ -6650,6 +6684,7 @@ export class LlmWikiService {
       'invalid_retrieval_cues', 'invalid_use_when', 'unresolved_broader_terms', 'ambiguous_broader_terms', 'self_broader_terms',
       'unresolved_related_terms', 'ambiguous_related_terms', 'self_related_terms', 'broader_term_cycle', 'deprecated_term_used',
       'relation_target_kind_mismatch',
+      ...CLAIM_ARGUMENT_LINT_CODES,
       ...RELATION_FIELDS.flatMap(field => [`invalid_${field}`, `duplicate_${field}`, `unsafe_${field}`]),
     ]);
     const issues = lint.issues.filter(issue => organizationCodes.has(issue.code)).slice(0, boundedLimit);
@@ -6686,6 +6721,7 @@ export class LlmWikiService {
       ...(byCode.unresolved_broader_terms || byCode.ambiguous_broader_terms || byCode.unresolved_related_terms || byCode.ambiguous_related_terms ? ['Repair unresolved or ambiguous library terms, preferably with an exact Obsidian wikilink or an existing preferred title.'] : []),
       ...(byCode.deprecated_term_used ? ['Replace deprecated classification facets with their preferred term while retaining the deprecated note as a redirect.'] : []),
       ...(byCode.relation_target_kind_mismatch ? ['Repair typed relation targets so the relation meaning and note_kind agree; use ordinary related links when the relationship is intentionally broader.'] : []),
+      ...(Object.keys(byCode).some(code => CLAIM_ARGUMENT_LINT_CODES.has(code)) ? ['Inspect broken structured arguments with wiki.argument_map, then repair the smallest claim role, block anchor, or Obsidian claim relation at the current note revision.'] : []),
       ...(byCode.relation_reciprocity_missing ? ['Repair one-sided related/same_as links or document why the edge is intentionally one-sided; directional relations such as supports and supersedes do not require a reverse field.'] : []),
       ...(byCode.retention_reason_missing || byCode.tombstone_lifecycle_mismatch ? ['Give archive/tombstone decisions a reason and visible replacement, and keep retention metadata separate from automatic deletion.'] : []),
       ...(byCode.invalid_review_checks || byCode.invalid_review_open_items ? ['Repair the bounded review checklist metadata before relying on the review projection.'] : []),
@@ -8115,7 +8151,8 @@ export class LlmWikiService {
     const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 60);
     const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
     const health = await this.organizationHealth(principal, Math.min(100, Math.max(boundedLimit, 20)), Math.min(16000, Math.max(boundedChars, 7000)));
-    const categoryFor = (code: string) => code.startsWith('invalid_') || code.startsWith('unsafe_') ? 'validation' : code.includes('stale') || code.includes('review') || code.includes('fresh') ? 'freshness' : code.includes('moc') || code.includes('relation') || code.includes('link') || code.includes('orphan') ? 'navigation' : code.includes('project') || code.includes('task') || code.includes('waiting') ? 'execution' : code.includes('term') || code.includes('alias') || code.includes('vocabulary') ? 'vocabulary' : code.includes('retention') || code.includes('archive') ? 'preservation' : 'knowledge_quality';
+    const categoryFor = (code: string) => CLAIM_ARGUMENT_LINT_CODES.has(code) ? 'argument_integrity' : code.startsWith('invalid_') || code.startsWith('unsafe_') ? 'validation' : code.includes('stale') || code.includes('review') || code.includes('fresh') ? 'freshness' : code.includes('moc') || code.includes('relation') || code.includes('link') || code.includes('orphan') ? 'navigation' : code.includes('project') || code.includes('task') || code.includes('waiting') ? 'execution' : code.includes('term') || code.includes('alias') || code.includes('vocabulary') ? 'vocabulary' : code.includes('retention') || code.includes('archive') ? 'preservation' : 'knowledge_quality';
+    const repairActionFor = (code: string) => CLAIM_ARGUMENT_LINT_CODES.has(code) ? 'call_wiki_argument_map_then_edit_with_current_revision' : 'inspect_before_editing';
     const rawIssues = Array.isArray(health.issues) ? health.issues as Array<Record<string, any>> : [];
     const rawQuarantine = health.quarantine && Array.isArray(health.quarantine.items) ? health.quarantine.items as Array<Record<string, any>> : [];
     const rawMocSequences = health.mocSequenceHealth && Array.isArray(health.mocSequenceHealth.items) ? health.mocSequenceHealth.items as Array<Record<string, any>> : [];
@@ -8144,7 +8181,8 @@ export class LlmWikiService {
         category: categoryFor(String(issue.code || '')),
         severity: issue.severity || 'warning',
         state: 'open',
-        suggestedAction: 'inspect_before_editing',
+        suggestedAction: repairActionFor(String(issue.code || '')),
+        ...(CLAIM_ARGUMENT_LINT_CODES.has(String(issue.code || '')) && { nextAction: { endpointId: endpointIdForTool('get_wiki_argument_map'), arguments: { path: issue.path, maxDepth: 2, limit: 20, maxChars: 7000 } } }),
       })),
     ].slice(0, boundedLimit);
     const counts: Record<string, number> = {};
@@ -10101,6 +10139,19 @@ export class LlmWikiService {
     const propertyTypes = new Map<string, { type: string; path: string }>();
     const classificationNotes: Array<{ path: string; frontmatter: Record<string, any> }> = [];
     const resolvedRelationEdges: Array<{ source: string; target: string; relation: string; raw: string }> = [];
+    type ClaimLintRecord = {
+      path: string;
+      publicPath: string;
+      claimId: string;
+      role?: string;
+      hasArgumentMetadata: boolean;
+      anchorLines: number[];
+      relations: Record<ClaimRelationProperty, string[]>;
+    };
+    type ResolvedClaimEdge = { source: string; target: string; relation: 'supports' | 'contradicts' | 'depends_on'; raw: string };
+    const claimRecords: ClaimLintRecord[] = [];
+    const claimRecordCap = 20_000;
+    let claimGraphTruncatedAt: string | undefined;
 
     for await (const note of iterateNotes(this.fileSystem, { includeContent: true }, canAccess)) {
       const type = note.frontmatter.llm_wiki_type;
@@ -10192,6 +10243,8 @@ export class LlmWikiService {
           }
         }
         if (Array.isArray(note.frontmatter.claims)) {
+          const claimIdsInNote = new Set<string>();
+          const noteClaimAnchors = blockAnchorLineIndex(note.content || '');
           for (let claimIndex = 0; claimIndex < note.frontmatter.claims.length; claimIndex += 1) {
             const claim = note.frontmatter.claims[claimIndex];
             if (!claim || typeof claim !== 'object' || typeof claim.text !== 'string' || !claim.text.trim()) {
@@ -10202,6 +10255,10 @@ export class LlmWikiService {
               addIssue({ severity: 'error', code: 'invalid_claim_status', path: this.access.toPublicPath(note.path), detail: `Claim ${String(claim.id || claimIndex + 1)} has an unsupported status.` });
             }
             const structuredClaimId = claimId(typeof claim.id === 'string' ? claim.id : undefined, claimIndex);
+            if (claimIdsInNote.has(structuredClaimId)) {
+              addIssue({ severity: 'error', code: 'duplicate_claim_id', path: publicPath, detail: `Claim id '${structuredClaimId}' is declared more than once in this note; Obsidian block links cannot select one target safely.` });
+            }
+            claimIdsInNote.add(structuredClaimId);
             const claimRole = typeof claim.claim_role === 'string' ? claim.claim_role.trim().toLowerCase() : '';
             if (claimRole && !CLAIM_ROLES.has(claimRole)) {
               addIssue({ severity: 'warning', code: 'invalid_claim_role', path: publicPath, detail: `Claim ${structuredClaimId} has unsupported claim_role '${claim.claim_role}'.` });
@@ -10221,10 +10278,29 @@ export class LlmWikiService {
                 }
               }
             }
+            const structuredClaimAnchors = noteClaimAnchors.get(structuredClaimId) || [];
+            if (!isModerationHidden(note.frontmatter)) {
+              if (claimRecords.length < claimRecordCap) {
+                claimRecords.push({
+                  path: normalizePath(note.path),
+                  publicPath,
+                  claimId: structuredClaimId,
+                  ...(claimRole && CLAIM_ROLES.has(claimRole) && { role: claimRole }),
+                  hasArgumentMetadata,
+                  anchorLines: structuredClaimAnchors,
+                  relations: {
+                    supports_claims: claimRelationValues(claim, 'supports_claims'),
+                    contradicts_claims: claimRelationValues(claim, 'contradicts_claims'),
+                    depends_on_claims: claimRelationValues(claim, 'depends_on_claims'),
+                  },
+                });
+              } else if (!claimGraphTruncatedAt) {
+                claimGraphTruncatedAt = publicPath;
+              }
+            }
             if (hasArgumentMetadata) {
-              const anchors = blockAnchorLines(note.content || '', structuredClaimId);
-              if (anchors.length === 0) addIssue({ severity: 'warning', code: 'missing_claim_block_anchor', path: publicPath, detail: `Claim ${structuredClaimId} participates in an argument but its Markdown block has no ^${structuredClaimId} anchor.` });
-              if (anchors.length > 1) addIssue({ severity: 'warning', code: 'duplicate_claim_block_anchor', path: publicPath, detail: `Claim ${structuredClaimId} has ${anchors.length} Markdown block anchors; keep one.` });
+              if (structuredClaimAnchors.length === 0) addIssue({ severity: 'warning', code: 'missing_claim_block_anchor', path: publicPath, detail: `Claim ${structuredClaimId} participates in an argument but its Markdown block has no ^${structuredClaimId} anchor.` });
+              if (structuredClaimAnchors.length > 1) addIssue({ severity: 'warning', code: 'duplicate_claim_block_anchor', path: publicPath, detail: `Claim ${structuredClaimId} has ${structuredClaimAnchors.length} Markdown block anchors; keep one.` });
             }
             const claimEvidence = Array.isArray(claim.evidence_paths)
               ? claim.evidence_paths.filter((item: unknown): item is string => typeof item === 'string')
@@ -10310,6 +10386,196 @@ export class LlmWikiService {
         }
       }
     }
+
+    if (claimGraphTruncatedAt) {
+      addIssue({ severity: 'warning', code: 'claim_graph_scan_truncated', path: claimGraphTruncatedAt, detail: `Global claim-argument validation stopped after ${claimRecordCap} visible claims. Per-note claim and evidence checks still ran; narrow or shard this command center before relying on global relation completeness.` });
+    }
+
+    // Resolve structured claim links once across the visible vault. This turns
+    // argument-map repair signals into ordinary lint debt without adding a
+    // second graph database or one endpoint per validation rule.
+    const claimPathKey = (value: string) => normalizePath(value).toLocaleLowerCase();
+    const claimKey = (path: string, id: string) => `${claimPathKey(path)}#^${id.toLocaleLowerCase()}`;
+    const claimsByKey = new Map<string, ClaimLintRecord[]>();
+    const claimsByPath = new Map<string, ClaimLintRecord[]>();
+    for (const claim of claimRecords) {
+      const key = claimKey(claim.path, claim.claimId);
+      const keyed = claimsByKey.get(key) || [];
+      keyed.push(claim);
+      claimsByKey.set(key, keyed);
+      const pathKey = claimPathKey(claim.path);
+      const inPath = claimsByPath.get(pathKey) || [];
+      inPath.push(claim);
+      claimsByPath.set(pathKey, inPath);
+    }
+
+    const exactClaimPaths = new Map<string, string[]>();
+    const basenameClaimPaths = new Map<string, string[]>();
+    const addClaimPath = (index: Map<string, string[]>, key: string, value: string) => {
+      const existing = index.get(key) || [];
+      if (!existing.some(candidate => claimPathKey(candidate) === claimPathKey(value))) existing.push(value);
+      index.set(key, existing);
+    };
+    for (const claims of claimsByPath.values()) {
+      const path = claims[0]!.path;
+      const normalized = claimPathKey(path);
+      const withoutExtension = normalized.replace(/\.md$/i, '');
+      addClaimPath(exactClaimPaths, normalized, path);
+      addClaimPath(exactClaimPaths, withoutExtension, path);
+      addClaimPath(basenameClaimPaths, withoutExtension.split('/').at(-1) || withoutExtension, path);
+    }
+    const resolveClaimDocument = (source: ClaimLintRecord, document: string): { allowed: string[]; blocked: boolean } => {
+      if (!document) return { allowed: [source.path], blocked: false };
+      let candidates: string[] = [];
+      if (document.startsWith('../') || document.startsWith('./')) {
+        const relative = posix.normalize(posix.join(posix.dirname(source.path), document));
+        const relativeKey = claimPathKey(relative);
+        candidates = exactClaimPaths.get(relativeKey)
+          || exactClaimPaths.get(relativeKey.replace(/\.md$/i, ''))
+          || exactClaimPaths.get(`${relativeKey}.md`)
+          || [];
+      } else {
+        const normalized = claimPathKey(document);
+        const withoutExtension = normalized.replace(/\.md$/i, '');
+        candidates = normalized.includes('/')
+          ? (exactClaimPaths.get(normalized) || exactClaimPaths.get(withoutExtension) || [])
+          : (basenameClaimPaths.get(withoutExtension) || []);
+      }
+      const allowed = candidates.filter(target => this.access.canReferenceFrom(source.path, target));
+      return { allowed, blocked: candidates.length > allowed.length };
+    };
+
+    const claimEdges: ResolvedClaimEdge[] = [];
+    const targetParticipation = new Set<string>();
+    for (const source of claimRecords) {
+      const sourceKey = claimKey(source.path, source.claimId);
+      for (const definition of CLAIM_RELATION_FIELDS) {
+        for (const raw of source.relations[definition.property]) {
+          let parsed: ParsedClaimReference;
+          try {
+            parsed = parseClaimReference(raw);
+          } catch {
+            // The local claim check reports the precise syntax failure.
+            continue;
+          }
+          const resolution = resolveClaimDocument(source, parsed.document);
+          if (resolution.allowed.length === 0) {
+            addIssue({
+              severity: resolution.blocked ? 'error' : 'warning',
+              code: resolution.blocked ? 'claim_scope_violation' : 'unresolved_claim_note',
+              path: source.publicPath,
+              detail: resolution.blocked
+                ? `Claim ${source.claimId} relation cannot expose a more-private note: ${raw}`
+                : `Claim ${source.claimId} relation does not resolve to a visible knowledge note: ${raw}`,
+            });
+            continue;
+          }
+          if (resolution.allowed.length > 1) {
+            addIssue({ severity: 'warning', code: 'ambiguous_claim_note', path: source.publicPath, detail: `Claim ${source.claimId} relation matches ${resolution.allowed.length} visible notes; use a vault-relative Obsidian path: ${raw}` });
+            continue;
+          }
+          const targetPath = resolution.allowed[0]!;
+          const targetKey = claimKey(targetPath, parsed.blockId);
+          const targets = claimsByKey.get(targetKey) || [];
+          if (targets.length === 0) {
+            addIssue({ severity: 'warning', code: 'missing_claim_target', path: source.publicPath, detail: `Claim ${source.claimId} target note has no structured claim '${parsed.blockId}': ${raw}` });
+            continue;
+          }
+          if (targets.length > 1) {
+            addIssue({ severity: 'error', code: 'ambiguous_claim_target', path: source.publicPath, detail: `Claim ${source.claimId} target '${parsed.blockId}' is declared more than once in ${targets[0]!.publicPath}: ${raw}` });
+            continue;
+          }
+          if (sourceKey === targetKey) {
+            addIssue({ severity: 'warning', code: 'self_claim_relation', path: source.publicPath, detail: `Claim ${source.claimId} relates to itself through ${definition.relation}: ${raw}` });
+            continue;
+          }
+          claimEdges.push({ source: sourceKey, target: targetKey, relation: definition.relation, raw });
+          targetParticipation.add(targetKey);
+        }
+      }
+    }
+
+    // A claim with no outgoing argument metadata still needs a block anchor
+    // when another claim targets it. Source claims already received the same
+    // check in the per-note pass, so only add the missing target-side cases.
+    for (const targetKey of targetParticipation) {
+      const target = claimsByKey.get(targetKey)?.[0];
+      if (!target || target.hasArgumentMetadata) continue;
+      if (target.anchorLines.length === 0) addIssue({ severity: 'warning', code: 'missing_claim_block_anchor', path: target.publicPath, detail: `Claim ${target.claimId} is targeted by an argument relation but its Markdown block has no ^${target.claimId} anchor.` });
+      if (target.anchorLines.length > 1) addIssue({ severity: 'warning', code: 'duplicate_claim_block_anchor', path: target.publicPath, detail: `Claim ${target.claimId} is targeted by an argument relation but has ${target.anchorLines.length} Markdown block anchors; keep one.` });
+    }
+
+    const outgoingClaimEdges = new Map<string, ResolvedClaimEdge[]>();
+    const incomingClaimEdges = new Map<string, ResolvedClaimEdge[]>();
+    for (const edge of claimEdges) {
+      const outgoing = outgoingClaimEdges.get(edge.source) || [];
+      outgoing.push(edge);
+      outgoingClaimEdges.set(edge.source, outgoing);
+      const incoming = incomingClaimEdges.get(edge.target) || [];
+      incoming.push(edge);
+      incomingClaimEdges.set(edge.target, incoming);
+    }
+    for (const claim of claimRecords) {
+      if (!claim.role) continue;
+      const key = claimKey(claim.path, claim.claimId);
+      const outgoing = outgoingClaimEdges.get(key) || [];
+      const incoming = incomingClaimEdges.get(key) || [];
+      let detail = '';
+      if (['premise', 'warrant', 'observation'].includes(claim.role) && !outgoing.some(edge => edge.relation === 'supports')) detail = `${claim.role} has no resolved supports_claims edge.`;
+      else if (claim.role === 'conclusion' && !incoming.some(edge => edge.relation === 'supports') && !outgoing.some(edge => edge.relation === 'depends_on')) detail = 'conclusion has neither resolved incoming support nor a depends_on_claims edge.';
+      else if (claim.role === 'objection' && !outgoing.some(edge => edge.relation === 'contradicts')) detail = 'objection has no resolved contradicts_claims edge.';
+      else if (claim.role === 'rebuttal' && !outgoing.some(edge => edge.relation === 'contradicts' || edge.relation === 'supports')) detail = 'rebuttal has neither a resolved contradicts_claims nor supports_claims edge.';
+      if (detail) addIssue({ severity: 'warning', code: 'claim_role_relation_mismatch', path: claim.publicPath, detail: `Claim ${claim.claimId}: ${detail}` });
+    }
+
+    const reportClaimCycles = (relation: 'supports' | 'depends_on') => {
+      const adjacency = new Map<string, string[]>();
+      for (const edge of claimEdges) {
+        if (edge.relation !== relation) continue;
+        const targets = adjacency.get(edge.source) || [];
+        if (!targets.includes(edge.target)) targets.push(edge.target);
+        adjacency.set(edge.source, targets);
+      }
+      const color = new Map<string, 0 | 1 | 2>();
+      const reported = new Set<string>();
+      let reportCount = 0;
+      for (const start of adjacency.keys()) {
+        if (color.get(start)) continue;
+        const trail: string[] = [start];
+        const position = new Map<string, number>([[start, 0]]);
+        const stack: Array<{ key: string; nextIndex: number }> = [{ key: start, nextIndex: 0 }];
+        color.set(start, 1);
+        while (stack.length > 0) {
+          const frame = stack[stack.length - 1]!;
+          const neighbors = adjacency.get(frame.key) || [];
+          if (frame.nextIndex >= neighbors.length) {
+            color.set(frame.key, 2);
+            position.delete(frame.key);
+            trail.pop();
+            stack.pop();
+            continue;
+          }
+          const next = neighbors[frame.nextIndex++]!;
+          if (!color.get(next)) {
+            color.set(next, 1);
+            position.set(next, trail.length);
+            trail.push(next);
+            stack.push({ key: next, nextIndex: 0 });
+            continue;
+          }
+          if (color.get(next) !== 1 || !position.has(next) || reportCount >= 20) continue;
+          const cycle = trail.slice(position.get(next)!);
+          const cycleKey = `${relation}|${[...new Set(cycle)].sort().join('|')}`;
+          if (reported.has(cycleKey)) continue;
+          reported.add(cycleKey);
+          reportCount += 1;
+          const source = claimsByKey.get(cycle[0]!)?.[0];
+          if (source) addIssue({ severity: 'warning', code: 'claim_relation_cycle', path: source.publicPath, detail: `${relation} cycle contains ${cycle.length} structured claims; inspect it with wiki.argument_map before changing any edge.` });
+        }
+      }
+    };
+    reportClaimCycles('supports');
+    reportClaimCycles('depends_on');
 
     const relationKey = (value: string) => normalizePath(value).toLowerCase();
     const reciprocalRelations = new Set<string>(RECIPROCAL_RELATIONS);

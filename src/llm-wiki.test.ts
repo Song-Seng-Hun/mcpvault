@@ -257,6 +257,13 @@ test('claim argument maps preserve Obsidian block links, revisions, scope, and b
     } });
     expect(malformed.isError).toBe(true);
     expect(JSON.stringify(malformed.content)).toContain('Obsidian block link');
+    const reservedTraversal = await client.callTool({ name: 'publish_knowledge', arguments: {
+      path: 'Knowledge/Reserved traversal.md', content: '# Reserved traversal\n\nBad private-path relation. ^bad-private\n', evidencePaths: [source.value.path],
+      claims: [{ id: 'bad-private', text: 'Bad private-path relation.', evidencePaths: [source.value.path], claimRole: 'premise', supportsClaims: ['[[../_scopes/models/codex/Private argument#^private-claim]]'] }],
+      expectedRevision: 'missing', accessToken,
+    } });
+    expect(reservedTraversal.isError).toBe(true);
+    expect(JSON.stringify(reservedTraversal.content)).toContain('scope URI');
 
     await callJson(client, 'publish_knowledge', {
       path: 'Knowledge/Missing target.md', content: '# Missing target\n\nThis premise points to a claim that does not exist. ^missing-source\n', evidencePaths: [source.value.path],
@@ -265,6 +272,41 @@ test('claim argument maps preserve Obsidian block links, revisions, scope, and b
     });
     const missingTarget = await callJson(client, 'get_wiki_argument_map', { path: 'Knowledge/Missing target.md', maxChars: 5000, accessToken });
     expect(missingTarget.value.issues.items).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'missing_claim_target' })]));
+
+    await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Scope leak.md', content: '# Scope leak\n\nA public claim must not resolve into a private model note. ^scope-source\n', evidencePaths: [source.value.path],
+      claims: [{ id: 'scope-source', text: 'A public claim must not resolve into a private model note.', evidencePaths: [source.value.path], claimRole: 'premise', supportsClaims: ['[[Private argument#^private-claim]]'] }],
+      expectedRevision: 'missing', accessToken,
+    });
+    const lint = await callJson(client, 'lint_wiki', { limit: 200, accessToken });
+    expect(lint.value.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'claim_relation_cycle' }),
+      expect.objectContaining({ code: 'missing_claim_block_anchor', path: 'Knowledge/Premises.md' }),
+      expect.objectContaining({ code: 'missing_claim_target', path: 'Knowledge/Missing target.md' }),
+      expect.objectContaining({ code: 'claim_scope_violation', path: 'Knowledge/Scope leak.md', severity: 'error' }),
+    ]));
+    const organization = await callJson(client, 'get_wiki_organization_health', { limit: 100, maxChars: 16000, accessToken });
+    expect(organization.value.byCode).toMatchObject({ claim_relation_cycle: expect.any(Number), missing_claim_target: 1, claim_scope_violation: 1 });
+    expect(organization.value.recommendations).toEqual(expect.arrayContaining([expect.stringContaining('wiki.argument_map')]));
+    const board = await callJson(client, 'get_wiki_exception_board', { limit: 60, maxChars: 16000, accessToken });
+    expect(board.value.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path: 'Knowledge/Missing target.md',
+        code: 'missing_claim_target',
+        category: 'argument_integrity',
+        suggestedAction: 'call_wiki_argument_map_then_edit_with_current_revision',
+        nextAction: expect.objectContaining({ endpointId: 'wiki.argument_map', arguments: expect.objectContaining({ path: 'Knowledge/Missing target.md' }) }),
+      }),
+    ]));
+    const packet = await callJson(client, 'get_wiki_review_packet', { limit: 30, maxChars: 16000, accessToken });
+    expect(packet.value.counts.claimArgumentIssues).toBeGreaterThan(0);
+    expect(packet.value.priorities).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path: 'Knowledge/Missing target.md',
+        reasons: expect.arrayContaining(['claim_argument_needs_repair']),
+        suggestedTools: expect.arrayContaining(['wiki.argument_map']),
+      }),
+    ]));
   } finally {
     await client.close();
     await server.close();

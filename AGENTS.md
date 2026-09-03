@@ -448,6 +448,10 @@ Call dynamic endpoint `wiki.argument_map` to inspect bounded incoming/outgoing
 relations, target ambiguity, missing anchors, role mismatches, and cycles.
 Graph shape is not evidence or truth; re-read the returned note revisions and
 their immutable sources before accepting, disputing, or rewriting a claim.
+`lint_wiki`, `wiki.organization_health`, `wiki.exception_board`, and
+`wiki.review_packet` also surface these cross-note argument defects and route
+back to `wiki.argument_map`; treat a claim scope violation as blocking, and
+never use `_scopes`, `_whispers`, or `.mcpvault` segments in authored links.
 For `review_policy: on_upstream_change`, claim dependencies and incoming claim
 support are snapshotted by exact claim digest and Markdown block anchor, so an
 unrelated edit in the same note does not reopen review. When

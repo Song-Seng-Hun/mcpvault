@@ -1542,6 +1542,7 @@ export declare class LlmWikiService {
             epistemicIssues: number;
             knowledgeFlowIssues: number;
             typedRelationIssues: number;
+            claimArgumentIssues: number;
             evergreenNeedsAttention: number;
             recallDue: number;
             tagVariantIssues: number;

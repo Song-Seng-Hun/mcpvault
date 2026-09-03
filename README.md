@@ -473,7 +473,12 @@ incoming and outgoing links under hard depth/node/character bounds and reports
 missing or ambiguous targets, absent/duplicate block anchors, role mismatches,
 self-links, and support/dependency cycles. It never rewrites a note or decides
 whether an argument is true; use the claim matrix and current source revisions
-for evidence review. `on_upstream_change` snapshots the exact linked claim
+for evidence review. The same cross-note checks feed `lint_wiki`,
+`wiki.organization_health`, `wiki.exception_board`, and `wiki.review_packet`,
+so broken arguments become bounded repair work even when an agent did not open
+the argument map first. Reserved private/service path segments are rejected in
+claim links, and a scope boundary violation is a blocking lint error.
+`on_upstream_change` snapshots the exact linked claim
 status, confidence, anchor block, and digest, so changing an unrelated claim in
 the same note does not reopen review while changing the linked claim does.
 Reviewing a claim as disputed or superseded also returns a bounded list of
@@ -2531,6 +2536,9 @@ adds bounded navigation signals instead of a second database.
   links while preserving each participating note revision. It can start from
   one claim or every claim in a note, follows incoming and outgoing relations,
   and returns bounded consistency issues without treating graph shape as truth.
+  Global claim resolution, cycles, duplicate IDs, anchors, roles, and scope
+  violations also flow into the ordinary lint/exception/review projections;
+  those projections route inspection back here rather than duplicating a graph.
 - `get_wiki_maintenance_debt` gives each returned repair a current revision and
   a `curationPlan`; `get_wiki_review_packet` coalesces every finding for the
   same path into one bounded slot, chooses one priority, and returns its
