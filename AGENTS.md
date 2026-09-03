@@ -249,6 +249,10 @@ automatically rewrite the MOC body or invent a second prerequisite property.
 Use bounded `prerequisiteEdges` to see the exact prerequisite/dependent pair,
 both revisions, and whether the authored order already satisfies the relation;
 do not reconstruct the whole dependency graph from note bodies.
+`dependencyCycles` contains the actual strongly connected repair targets;
+`cycleBlockedDependents` contains otherwise valid downstream notes. Break or
+correct one cycle edge first and recompute the path instead of editing every
+blocked note.
 Graph and organization health expose actionable late, unresolved, ambiguous,
 and cyclic MOC sequence defects; the exception board routes them back to
 `get_wiki_learning_path`. An external-only prerequisite is informational, not

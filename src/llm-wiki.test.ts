@@ -464,6 +464,7 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
       '[[Knowledge/Claim Prerequisite]]',
       '[[Knowledge/Cycle A]]',
       '[[Knowledge/Cycle B]]',
+      '[[Knowledge/Cycle Follower]]',
     ].join('\n'), { note_kind: 'moc', lifecycle: 'evergreen', moc_purpose: 'Teach a bounded topic.' });
     await write('Knowledge/MOCs/Nested.md', '# Nested\n\n[[Knowledge/Nested Topic]]\n', { note_kind: 'moc', lifecycle: 'evergreen' });
     await write('Knowledge/Advanced.md', '# Advanced\n', { note_kind: 'atomic', lifecycle: 'evergreen', depends_on: ['[[Knowledge/Basics]]', '[[Knowledge/Unavailable prerequisite]]'] });
@@ -482,6 +483,7 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
     await write('Knowledge/External Primer.md', '# External Primer\n', { note_kind: 'atomic', lifecycle: 'evergreen' });
     await write('Knowledge/Cycle A.md', '# Cycle A\n', { note_kind: 'atomic', lifecycle: 'evergreen', depends_on: ['[[Knowledge/Cycle B]]'] });
     await write('Knowledge/Cycle B.md', '# Cycle B\n', { note_kind: 'atomic', lifecycle: 'evergreen', depends_on: ['[[Knowledge/Cycle A]]'] });
+    await write('Knowledge/Cycle Follower.md', '# Cycle Follower\n', { note_kind: 'atomic', lifecycle: 'evergreen', depends_on: ['[[Knowledge/Cycle A]]'] });
 
     const discovery = await callJson(client, 'search_capabilities', { query: 'MOC prerequisite learning path', limit: 3 });
     expect(discovery.value.endpoints).toEqual(expect.arrayContaining([expect.objectContaining({ endpointId: 'wiki.learning_path' })]));
@@ -498,6 +500,7 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
       'Knowledge/Claim Prerequisite.md',
       'Knowledge/Cycle A.md',
       'Knowledge/Cycle B.md',
+      'Knowledge/Cycle Follower.md',
     ]);
     expect(path.value.authoredOrder.every((item: any) => /^[a-f0-9]{64}$/.test(item.revision))).toBe(true);
     expect(path.value.recommendedOrder.slice(0, 5)).toEqual([
@@ -521,21 +524,40 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
       expect.objectContaining({ type: 'prerequisite_after_dependent', path: 'Knowledge/Claim Dependent.md', prerequisite: 'Knowledge/Claim Prerequisite.md', dependencyType: 'claim', sourceClaimId: 'claim-dependent', targetClaimId: 'claim-base' }),
       expect.objectContaining({ type: 'missing_claim_prerequisite_target', path: 'Knowledge/Claim Dependent.md', prerequisite: 'Knowledge/Claim Prerequisite.md', sourceClaimId: 'claim-dependent', targetClaimId: 'absent-claim' }),
       expect.objectContaining({ type: 'unresolved_or_inaccessible_prerequisite', path: 'Knowledge/Advanced.md' }),
-      expect.objectContaining({ type: 'dependency_cycle_or_cycle_blocked_path' }),
+      expect.objectContaining({ type: 'dependency_cycle_or_cycle_blocked_path', cyclePaths: ['Knowledge/Cycle A.md', 'Knowledge/Cycle B.md'], blockedPaths: ['Knowledge/Cycle Follower.md'] }),
     ]));
+    expect(path.value.dependencyCycles).toEqual([
+      expect.objectContaining({
+        cycleId: 'cycle-1',
+        notes: [
+          expect.objectContaining({ path: 'Knowledge/Cycle A.md', revision: expect.any(String) }),
+          expect.objectContaining({ path: 'Knowledge/Cycle B.md', revision: expect.any(String) }),
+        ],
+        edges: expect.arrayContaining([
+          expect.objectContaining({ prerequisite: 'Knowledge/Cycle B.md', dependent: 'Knowledge/Cycle A.md' }),
+          expect.objectContaining({ prerequisite: 'Knowledge/Cycle A.md', dependent: 'Knowledge/Cycle B.md' }),
+        ]),
+      }),
+    ]);
+    expect(path.value.cycleBlockedDependents).toEqual([
+      expect.objectContaining({ path: 'Knowledge/Cycle Follower.md', revision: expect.any(String), blockedByCycleIds: ['cycle-1'] }),
+    ]);
+    expect(path.value.summary).toMatchObject({ dependencyCycles: 1, cyclicEntries: 2, cycleBlockedDependents: 1 });
     expect(path.value.externalPrerequisites).toEqual(expect.arrayContaining([
       expect.objectContaining({ path: 'Knowledge/External Primer.md', requiredBy: 'Knowledge/Basics.md', revision: expect.any(String) }),
     ]));
     const graph = await callJson(client, 'get_wiki_graph_health', { limit: 20, maxChars: 12000, accessToken });
-    expect(graph.value.mocSequenceHealth).toMatchObject({ needsAttention: 1, latePrerequisites: 3, externalPrerequisites: 2, unresolved: 2, cycleOrBlockedEntries: 2, claimDependencyEdges: 1 });
+    expect(graph.value.mocSequenceHealth).toMatchObject({ needsAttention: 1, latePrerequisites: 3, externalPrerequisites: 2, unresolved: 2, cycleOrBlockedEntries: 3, dependencyCycles: 1, cyclicEntries: 2, blockedByCycleEntries: 1, claimDependencyEdges: 1 });
     expect(graph.value.mocSequenceHealth.items[0]).toMatchObject({
       path: 'Knowledge/MOCs/Curriculum.md',
       revision: expect.any(String),
       state: 'cyclic_or_cycle_blocked',
+      dependencyCycles: expect.objectContaining({ total: 1, entries: 2 }),
+      blockedByCycles: expect.objectContaining({ total: 1, paths: ['Knowledge/Cycle Follower.md'] }),
       nextAction: { endpointId: 'wiki.learning_path' },
     });
     const coverage = graph.value.mocCoverage.mocs.find((item: any) => item.path === 'Knowledge/MOCs/Curriculum.md');
-    expect(coverage).toMatchObject({ directKnowledge: 8, indirectKnowledge: 1, linkedKnowledge: 9, revision: expect.any(String) });
+    expect(coverage).toMatchObject({ directKnowledge: 9, indirectKnowledge: 1, linkedKnowledge: 10, revision: expect.any(String) });
     const organization = await callJson(client, 'get_wiki_organization_health', { limit: 20, maxChars: 12000, accessToken });
     expect(organization.value.mocSequenceHealth.needsAttention).toBe(1);
     expect(organization.value.recommendations).toEqual(expect.arrayContaining([expect.stringContaining('wiki.learning_path')]));

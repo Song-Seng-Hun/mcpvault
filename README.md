@@ -186,7 +186,10 @@ relations. An intra-note claim dependency remains argument structure and does
 not become a false self-prerequisite. It can expand nested MOCs to a bounded depth and
 returns a separate stable `recommendedOrder`, bounded `prerequisiteEdges` with
 both current revisions and authored-order state, external prerequisites, late
-prerequisites, ambiguous/unresolved targets, and dependency-cycle findings.
+prerequisites, ambiguous/unresolved targets, exact dependency cycles, and
+downstream notes that are merely blocked by those cycles. Repair an edge inside
+`dependencyCycles` first; do not rewrite a `cycleBlockedDependents` note merely
+because topological reading cannot yet reach it.
 Every readable entry includes its current revision. The projection never
 rewrites the MOC, and a recommendation is navigation—not proof or permission
 to discard a deliberate narrative order.
@@ -510,7 +513,9 @@ use a larger budget or read the root when `truncated` is true.
 authored order and reports where a visible note-level `depends_on` or
 claim-level `dependsOnClaims` prerequisite occurs
 later, outside the path, cannot be resolved uniquely, or participates in a
-cycle. Its stable topological recommendation keeps authored order among
+cycle. Actual strongly connected cycles are returned separately from downstream
+notes blocked by a cycle, with revision-stamped cycle members and internal edge
+candidates. Its stable topological recommendation keeps authored order among
 otherwise independent notes. It is bounded, scope-filtered, non-mutating, and
 does not create a parallel graph or a new client-side requirement.
 Each returned `prerequisiteEdges` item explains the prerequisite/dependent
