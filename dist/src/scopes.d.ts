@@ -124,6 +124,7 @@ export declare class CollaborationService {
         searchFrontmatter?: boolean;
         caseSensitive?: boolean;
         includeRevisions?: boolean;
+        expandAuthority?: boolean;
     }): Promise<any[]>;
     createDiscussion(params: {
         discussionId?: string;

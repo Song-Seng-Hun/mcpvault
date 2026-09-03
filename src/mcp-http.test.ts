@@ -21,7 +21,19 @@ test('refuses non-loopback Stateless MCP HTTP binding without TLS', async () => 
   const vault = await mkdtemp(join(tmpdir(), 'mcpvault-http-tls-'));
   const server = createServer(vault, { version: '1.0.0' });
   try {
-    await expect(startMcpHttpApi(server, { host: '0.0.0.0', port: 0 })).rejects.toThrow('requires TLS');
+    await expect(startMcpHttpApi(server, { host: '192.168.1.20', port: 0 })).rejects.toThrow('requires TLS');
+  } finally {
+    await server.close();
+    await rm(vault, { recursive: true, force: true });
+  }
+});
+
+test('refuses public and wildcard Stateless MCP HTTP binds', async () => {
+  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-http-bind-'));
+  const server = createServer(vault, { version: '1.0.0' });
+  try {
+    await expect(startMcpHttpApi(server, { host: '0.0.0.0', port: 0 })).rejects.toThrow('only to localhost or a concrete private LAN address');
+    await expect(startMcpHttpApi(server, { host: '8.8.8.8', port: 0 })).rejects.toThrow('only to localhost or a concrete private LAN address');
   } finally {
     await server.close();
     await rm(vault, { recursive: true, force: true });

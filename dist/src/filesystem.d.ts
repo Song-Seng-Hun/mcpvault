@@ -1,6 +1,6 @@
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
-import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, MoveNoteParams, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult, DailyNoteResult, ListTasksParams, ListTasksResult, QueryNotesParams, QueryNotesResult, QueryNote } from './types.js';
+import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, MoveNoteParams, MoveNotePreviewParams, MoveNotePreviewResult, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult, DailyNoteResult, ListTasksParams, ListTasksResult, UpdateTaskParams, UpdateTaskResult, QueryNotesParams, QueryNotesResult, QueryNote } from './types.js';
 import { type DailyDateInput } from './daily.js';
 import type { VaultMetadataIndex } from './vault-index.js';
 import type { VaultGraphIndex } from './vault-graph.js';
@@ -58,10 +58,17 @@ export declare class FileSystemService {
     isDirectory(path: string): Promise<boolean>;
     private moveNoteToVaultTrash;
     deleteNote(params: DeleteNoteParams): Promise<DeleteResult>;
-    moveNote(params: MoveNoteParams): Promise<MoveResult>;
+    moveNote(params: MoveNoteParams, canAccessPath?: (path: string) => boolean): Promise<MoveResult>;
     moveFile(params: MoveFileParams): Promise<MoveResult>;
     readMultipleNotes(params: BatchReadParams): Promise<BatchReadResult>;
     updateFrontmatter(params: UpdateFrontmatterParams): Promise<void>;
+    /**
+     * Preview a note move without changing files. Markdown and wikilinks remain
+     * authoritative, so this resolves the current link graph and reports the
+     * exact bounded set of source lines that would need review after a rename.
+     * It deliberately does not rewrite links automatically.
+     */
+    previewMoveNote(params: MoveNotePreviewParams, canAccessPath?: (path: string) => boolean): Promise<MoveNotePreviewResult>;
     private updateFrontmatterUnlocked;
     getNotesInfo(paths: string[]): Promise<NoteInfo[]>;
     manageTags(params: TagManagementParams): Promise<TagManagementResult>;
@@ -105,6 +112,7 @@ export declare class FileSystemService {
     }>>;
     private resolvePathPrefix;
     listTasks(params?: ListTasksParams, canAccessPath?: (path: string) => boolean): Promise<ListTasksResult>;
+    updateTask(params: UpdateTaskParams): Promise<UpdateTaskResult>;
     queryNotes(params?: QueryNotesParams, canAccessPath?: (path: string) => boolean): Promise<QueryNotesResult>;
     /** Count metadata rows without reading note bodies; used by bounded windows. */
     countNotes(params?: QueryNotesParams, canAccessPath?: (path: string) => boolean, predicate?: (note: QueryNote) => boolean): Promise<number>;

@@ -9,6 +9,7 @@ import { boundSearchResults, boundedTopK, normalizeSearchLimit, normalizeSearchM
 import { isMarkdownModerationHidden } from './moderation-policy.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 import { VaultIoCoordinator } from './vault-io.js';
+import { parse as parseYaml } from 'yaml';
 const WIKI_TYPES = new Set(['schema', 'source', 'knowledge', 'issue']);
 const SEARCH_CACHE_TTL_MS = 5_000;
 const SEARCH_CACHE_MAX_ENTRIES = 128;
@@ -19,7 +20,7 @@ const MAX_INDEXED_TEXT_BYTES = 64 * 1024 * 1024;
 const NGRAM_SIZE = 3;
 const SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.bin';
 const LEGACY_SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.gz';
-const SEARCH_SNAPSHOT_VERSION = 2;
+const SEARCH_SNAPSHOT_VERSION = 5;
 const SNAPSHOT_SAVE_DEBOUNCE_MS = 1_000;
 const DIRECTORY_CACHE_TTL_MS = 5_000;
 const DIRECTORY_CACHE_MAX_ENTRIES = 1_024;
@@ -30,6 +31,226 @@ const GRAM_COMPACTION_STALE_RATIO = 0.25;
 const gunzipAsync = promisify(gunzip);
 const SNAPSHOT_MAGIC = Buffer.from('MCPVSRCH', 'ascii');
 const MAX_SNAPSHOT_ENTRIES = 1_000_000;
+const SEARCH_TOKEN_PATTERN = /"(?:\\.|[^"])*"|'(?:\\.|[^'])*'|\S+/g;
+function splitScopedTerms(value) {
+    return (value.match(SEARCH_TOKEN_PATTERN) || [])
+        .map(unquoteSearchToken)
+        .filter(term => term && term.toUpperCase() !== 'OR');
+}
+function unquoteSearchToken(value) {
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        return value.slice(1, -1).replace(/\\(["'])/g, '$1');
+    }
+    return value;
+}
+function parseSearchQuery(query) {
+    const terms = [];
+    const excludeTerms = [];
+    const filters = {};
+    // Obsidian allows section:(...) / block:(...) / task:(...) forms. Extract
+    // these before tokenization so spaces inside the scoped expression survive.
+    const scopedQuery = query.replace(/(?:^|\s)(section|block|task-todo|task-done|task):(?:\(([^)]*)\)|("(?:\\.|[^"])*")|('(?:\\.|[^'])*')|(\S+))/gi, (_match, rawKind, parenthesized, doubleQuoted, singleQuoted, bare) => {
+        const value = parenthesized ?? doubleQuoted ?? singleQuoted ?? bare ?? '';
+        const scopedTerms = splitScopedTerms(value);
+        if (scopedTerms.length === 0)
+            return ' ';
+        const kind = String(rawKind).toLowerCase();
+        if (kind === 'section')
+            filters.sectionTerms = [...(filters.sectionTerms || []), ...scopedTerms];
+        else if (kind === 'block')
+            filters.blockTerms = [...(filters.blockTerms || []), ...scopedTerms];
+        else {
+            filters.taskTerms = [...(filters.taskTerms || []), ...scopedTerms];
+            if (kind === 'task-todo')
+                filters.taskStatus = 'open';
+            if (kind === 'task-done')
+                filters.taskStatus = 'completed';
+        }
+        terms.push(...scopedTerms);
+        return ' ';
+    });
+    const tokenizedQuery = scopedQuery.replace(/\[([^\]]+)\]/g, (_match, body) => `[${String(body).replace(/\s+OR\s+/gi, '__MCPVAULT_OR__')}]`);
+    for (const rawToken of tokenizedQuery.match(SEARCH_TOKEN_PATTERN) || []) {
+        const quoted = (rawToken.startsWith('"') && rawToken.endsWith('"')) || (rawToken.startsWith("'") && rawToken.endsWith("'"));
+        const token = unquoteSearchToken(rawToken);
+        const bracketFilter = !quoted ? token.match(/^\[([^:\]]+)(?::([^\]]+))?\]$/) : undefined;
+        const filter = !quoted && !bracketFilter ? token.match(/^(path|tag|property):(.+)$/i) : undefined;
+        if (!quoted && token.startsWith('-') && token.length > 1) {
+            const excluded = token.slice(1).trim();
+            if (excluded)
+                excludeTerms.push(unquoteSearchToken(excluded));
+            continue;
+        }
+        if (!quoted && token.toUpperCase() === 'OR')
+            continue;
+        if (bracketFilter) {
+            const key = bracketFilter[1].trim();
+            const rawValue = bracketFilter[2] === undefined ? undefined : unquoteSearchToken(bracketFilter[2].trim()).replace(/__MCPVAULT_OR__/g, ' OR ');
+            const values = rawValue?.split(/\s+OR\s+/i).map(value => value.trim()).filter(Boolean);
+            const firstValue = values?.[0];
+            if (key)
+                filters.property = { key, ...(values?.length === 1 && firstValue ? { value: firstValue } : values?.length ? { value: values } : {}) };
+            continue;
+        }
+        if (!filter) {
+            terms.push(token);
+            continue;
+        }
+        const kind = filter[1].toLowerCase();
+        const value = unquoteSearchToken(filter[2].trim());
+        if (!value) {
+            terms.push(token);
+        }
+        else if (kind === 'path') {
+            filters.pathPrefix = normalizeSubtree(value);
+        }
+        else if (kind === 'tag') {
+            filters.tag = value.replace(/^#/, '').toLowerCase();
+        }
+        else {
+            const equals = value.indexOf('=');
+            const key = (equals === -1 ? value : value.slice(0, equals)).trim();
+            if (!key)
+                terms.push(token);
+            else {
+                const rawValue = equals === -1 ? undefined : unquoteSearchToken(value.slice(equals + 1).trim());
+                const values = rawValue?.split(/\s+OR\s+/i).map(item => item.trim()).filter(Boolean);
+                const firstValue = values?.[0];
+                filters.property = { key, ...(values?.length === 1 && firstValue ? { value: firstValue } : values?.length ? { value: values } : {}) };
+            }
+        }
+    }
+    return { terms, excludeTerms, filters };
+}
+function propertyValueMatches(actual, expected) {
+    if (expected === undefined)
+        return actual !== undefined;
+    if (Array.isArray(expected))
+        return expected.some(value => propertyValueMatches(actual, value));
+    if (expected.trim().toLowerCase() === 'null') {
+        return actual === null || actual === undefined || actual === '';
+    }
+    if (Array.isArray(actual))
+        return actual.some(value => propertyValueMatches(value, expected));
+    if (actual === null || actual === undefined || typeof actual === 'object')
+        return false;
+    return String(actual).trim().toLowerCase() === expected.trim().toLowerCase();
+}
+function getProperty(frontmatter, key) {
+    let current = frontmatter;
+    for (const segment of key.split('.')) {
+        if (!current || typeof current !== 'object' || !Object.prototype.hasOwnProperty.call(current, segment))
+            return undefined;
+        current = current[segment];
+    }
+    return current;
+}
+function parseSearchFrontmatter(value) {
+    if (!value.trim())
+        return undefined;
+    try {
+        const parsed = parseYaml(value);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+            ? parsed
+            : undefined;
+    }
+    catch {
+        // A malformed frontmatter block should not make ordinary search fail.
+        return undefined;
+    }
+}
+function hasTag(document, tag) {
+    const normalized = tag.replace(/^#/, '').toLowerCase();
+    const frontmatterTags = getProperty(document.frontmatter, 'tags');
+    const values = Array.isArray(frontmatterTags) ? frontmatterTags : [frontmatterTags];
+    if (values.some(value => typeof value === 'string' && value.replace(/^#/, '').trim().toLowerCase() === normalized))
+        return true;
+    const body = `${document.body || ''}\n${document.frontmatterText || ''}`.toLowerCase();
+    return new RegExp(`(?:^|[\\s(])#${normalized.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}(?=$|[\\s),.!?:;])`, 'i').test(body);
+}
+function matchesSearchFilters(document, filters) {
+    if (filters.pathPrefix && !isWithinSubtree(document.relativePath, filters.pathPrefix))
+        return false;
+    if (filters.tag && !hasTag(document, filters.tag))
+        return false;
+    if (filters.property && !propertyValueMatches(getProperty(document.frontmatter, filters.property.key), filters.property.value))
+        return false;
+    if (filters.sectionTerms?.length && !matchesInSection(document.body || '', filters.sectionTerms))
+        return false;
+    if (filters.blockTerms?.length && !matchesInBlock(document.body || '', filters.blockTerms))
+        return false;
+    if (filters.taskTerms?.length && !matchesInTask(document.body || '', filters.taskTerms, filters.taskStatus))
+        return false;
+    return true;
+}
+function includesAllTerms(value, terms) {
+    const haystack = value.toLowerCase();
+    return terms.every(term => haystack.includes(term.toLowerCase()));
+}
+function bodyLines(body) {
+    const lines = body.split('\n').map(line => line.replace(/\r$/, ''));
+    let inFence = false;
+    let fenceChar = '';
+    let fenceLength = 0;
+    return lines.filter(line => {
+        const fence = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+        if (fence) {
+            const markers = fence[1];
+            const trailing = fence[2];
+            const char = markers.charAt(0);
+            if (!inFence) {
+                inFence = true;
+                fenceChar = char;
+                fenceLength = markers.length;
+            }
+            else if (char === fenceChar && markers.length >= fenceLength && trailing.trim() === '') {
+                inFence = false;
+                fenceChar = '';
+                fenceLength = 0;
+            }
+            return false;
+        }
+        return !inFence;
+    });
+}
+function matchesInBlock(body, terms) {
+    return bodyLines(body).join('\n').split(/\n\s*\n/).some(block => includesAllTerms(block, terms));
+}
+function matchesInTask(body, terms, status) {
+    return bodyLines(body).some(line => {
+        const match = /^\s*[-*+]\s+\[([ xX])\]\s+(.*)$/.exec(line);
+        if (!match)
+            return false;
+        const taskStatus = match[1].toLowerCase() === 'x' ? 'completed' : 'open';
+        return (!status || status === taskStatus) && includesAllTerms(match[2], terms);
+    });
+}
+function matchesInSection(body, terms) {
+    const lines = bodyLines(body);
+    const sections = [];
+    let current = [];
+    let currentLevel = 7;
+    for (const line of lines) {
+        const heading = /^(#{1,6})\s+/.exec(line);
+        if (heading) {
+            const level = heading[1].length;
+            if (current.length > 0 && level <= currentLevel)
+                sections.push(current.join('\n'));
+            currentLevel = Math.min(currentLevel, level);
+        }
+        current.push(line);
+    }
+    if (current.length > 0)
+        sections.push(current.join('\n'));
+    if (sections.length === 0)
+        sections.push(lines.join('\n'));
+    return sections.some(section => includesAllTerms(section, terms));
+}
+function isWithinSubtree(path, prefix) {
+    const normalizedPath = path.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').toLowerCase();
+    const normalizedPrefix = prefix.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').toLowerCase();
+    return !normalizedPrefix || normalizedPath === normalizedPrefix || normalizedPath.startsWith(`${normalizedPrefix}/`);
+}
 function encodeSnapshotString(value) {
     const bytes = Buffer.from(value, 'utf8');
     const length = Buffer.allocUnsafe(4);
@@ -48,6 +269,27 @@ function encodeSnapshot(snapshot) {
     for (const document of snapshot.documents) {
         chunks.push(encodeSnapshotString(document.relativePath));
         chunks.push(encodeSnapshotString(document.title));
+        const authorityCount = Buffer.allocUnsafe(4);
+        authorityCount.writeUInt32LE(document.authorityTerms.length, 0);
+        chunks.push(authorityCount);
+        for (const term of document.authorityTerms)
+            chunks.push(encodeSnapshotString(term));
+        const broaderCount = Buffer.allocUnsafe(4);
+        broaderCount.writeUInt32LE(document.broaderTerms.length, 0);
+        chunks.push(broaderCount);
+        for (const term of document.broaderTerms)
+            chunks.push(encodeSnapshotString(term));
+        const relatedCount = Buffer.allocUnsafe(4);
+        relatedCount.writeUInt32LE(document.relatedTerms.length, 0);
+        chunks.push(relatedCount);
+        for (const term of document.relatedTerms)
+            chunks.push(encodeSnapshotString(term));
+        const cueCount = Buffer.allocUnsafe(4);
+        cueCount.writeUInt32LE(document.retrievalCues.length, 0);
+        chunks.push(cueCount);
+        for (const cue of document.retrievalCues)
+            chunks.push(encodeSnapshotString(cue));
+        chunks.push(encodeSnapshotString(document.useWhen || ''));
         const flags = Buffer.from([(document.isWiki ? 1 : 0) | (document.moderationHidden ? 2 : 0)]);
         chunks.push(flags, encodeSnapshotString(document.revision));
         const numbers = Buffer.allocUnsafe(40);
@@ -121,6 +363,61 @@ function decodeSnapshot(buffer) {
         const title = readString();
         if (relativePath === undefined || title === undefined || offset + 1 > buffer.length)
             return undefined;
+        if (offset + 4 > buffer.length)
+            return undefined;
+        const authorityCount = buffer.readUInt32LE(offset);
+        offset += 4;
+        if (authorityCount > 64)
+            return undefined;
+        const authorityTerms = [];
+        for (let authorityIndex = 0; authorityIndex < authorityCount; authorityIndex += 1) {
+            const term = readString();
+            if (term === undefined)
+                return undefined;
+            authorityTerms.push(term);
+        }
+        if (offset + 4 > buffer.length)
+            return undefined;
+        const broaderCount = buffer.readUInt32LE(offset);
+        offset += 4;
+        if (broaderCount > 20)
+            return undefined;
+        const broaderTerms = [];
+        for (let broaderIndex = 0; broaderIndex < broaderCount; broaderIndex += 1) {
+            const term = readString();
+            if (term === undefined)
+                return undefined;
+            broaderTerms.push(term);
+        }
+        if (offset + 4 > buffer.length)
+            return undefined;
+        const relatedCount = buffer.readUInt32LE(offset);
+        offset += 4;
+        if (relatedCount > 20)
+            return undefined;
+        const relatedTerms = [];
+        for (let relatedIndex = 0; relatedIndex < relatedCount; relatedIndex += 1) {
+            const term = readString();
+            if (term === undefined)
+                return undefined;
+            relatedTerms.push(term);
+        }
+        if (offset + 4 > buffer.length)
+            return undefined;
+        const cueCount = buffer.readUInt32LE(offset);
+        offset += 4;
+        if (cueCount > 8)
+            return undefined;
+        const retrievalCues = [];
+        for (let cueIndex = 0; cueIndex < cueCount; cueIndex += 1) {
+            const cue = readString();
+            if (cue === undefined)
+                return undefined;
+            retrievalCues.push(cue);
+        }
+        const useWhenValue = readString();
+        if (useWhenValue === undefined)
+            return undefined;
         const flags = buffer[offset];
         offset += 1;
         const revisionValue = readString();
@@ -140,7 +437,7 @@ function decodeSnapshot(buffer) {
         const titleGramIds = readGramIds(titleGramCount);
         if (!bodyGramIds || !frontmatterGramIds || !titleGramIds)
             return undefined;
-        documents.push({ relativePath, title, isWiki: (flags & 1) !== 0, moderationHidden: (flags & 2) !== 0, revision: revisionValue, size, mtimeMs, bodyLength, frontmatterLength, textBytes, bodyGramIds, frontmatterGramIds, titleGramIds });
+        documents.push({ relativePath, title, authorityTerms, broaderTerms, relatedTerms, retrievalCues, ...(useWhenValue && { useWhen: useWhenValue }), isWiki: (flags & 1) !== 0, moderationHidden: (flags & 2) !== 0, revision: revisionValue, size, mtimeMs, bodyLength, frontmatterLength, textBytes, bodyGramIds, frontmatterGramIds, titleGramIds });
     }
     return offset === buffer.length ? { version, grams, documents } : undefined;
 }
@@ -169,16 +466,53 @@ function searchableTextFor(document, searchContent, searchFrontmatter) {
         return document.frontmatterText || '';
     return '';
 }
-function rankCandidateFor(document, documentId, terms, scoringTerms, searchContent, searchFrontmatter, caseSensitive) {
+function authorityMetadataFromFrontmatter(frontmatter) {
+    if (!frontmatter)
+        return { authorityTerms: [], broaderTerms: [], relatedTerms: [] };
+    const title = typeof frontmatter.title === 'string' && frontmatter.title.trim() ? [frontmatter.title.trim()] : [];
+    const aliases = Array.isArray(frontmatter.aliases)
+        ? frontmatter.aliases.filter((value) => typeof value === 'string' && value.trim().length > 0)
+        : [];
+    const list = (key, max) => Array.isArray(frontmatter[key])
+        ? frontmatter[key].filter((value) => typeof value === 'string' && value.trim().length > 0).slice(0, max).map(value => value.trim())
+        : [];
+    return {
+        authorityTerms: [...title, ...aliases.slice(0, 32).map(alias => alias.trim())],
+        broaderTerms: list('broader_terms', 20),
+        relatedTerms: list('related_terms', 20),
+    };
+}
+function retrievalMetadataFromFrontmatter(frontmatter) {
+    if (!frontmatter)
+        return { cues: [] };
+    const cues = Array.isArray(frontmatter.retrieval_cues)
+        ? frontmatter.retrieval_cues.filter((value) => typeof value === 'string' && value.trim().length > 0).slice(0, 8).map(value => value.trim())
+        : [];
+    const useWhen = typeof frontmatter.use_when === 'string' && frontmatter.use_when.trim() ? frontmatter.use_when.trim() : undefined;
+    return useWhen ? { cues, useWhen } : { cues };
+}
+function rankCandidateFor(document, documentId, terms, scoringTerms, searchContent, searchFrontmatter, caseSensitive, expandAuthority) {
     const searchableText = searchableTextFor(document, searchContent, searchFrontmatter);
     const searchIn = caseSensitive ? searchableText : searchableText.toLowerCase();
     const title = document.relativePath.split('/').pop()?.replace(/\.md$/, '') || document.relativePath;
     const filenameToSearch = caseSensitive ? title : title.toLowerCase();
     const filenameMatch = terms.some(term => filenameToSearch.includes(term));
+    const authorityText = document.authorityTerms.join('\n');
+    const broaderText = document.broaderTerms.join('\n');
+    const relatedText = document.relatedTerms.join('\n');
+    const authorityIn = caseSensitive ? authorityText : authorityText.toLowerCase();
+    const broaderIn = caseSensitive ? broaderText : broaderText.toLowerCase();
+    const relatedIn = caseSensitive ? relatedText : relatedText.toLowerCase();
+    const authorityMatch = terms.some(term => authorityIn.includes(term));
+    const broaderTermMatch = expandAuthority && terms.some(term => broaderIn.includes(term));
+    const relatedTermMatch = expandAuthority && terms.some(term => relatedIn.includes(term));
+    const retrievalText = [...document.retrievalCues, ...(document.useWhen ? [document.useWhen] : [])].join('\n');
+    const retrievalIn = caseSensitive ? retrievalText : retrievalText.toLowerCase();
+    const retrievalCueMatch = terms.some(term => retrievalIn.includes(term));
     const termIndices = terms.map(term => searchIn.indexOf(term));
     const matchedIndices = termIndices.filter(index => index !== -1);
     const firstIndex = matchedIndices.length > 0 ? Math.min(...matchedIndices) : -1;
-    if (firstIndex === -1 && !filenameMatch)
+    if (terms.length > 0 && firstIndex === -1 && !filenameMatch && !authorityMatch && !broaderTermMatch && !relatedTermMatch && !retrievalCueMatch)
         return undefined;
     const termFreqs = new Map();
     for (const term of scoringTerms) {
@@ -188,6 +522,16 @@ function rankCandidateFor(document, documentId, terms, scoringTerms, searchConte
             count += 1;
             searchIndex += term.length;
         }
+        let authorityIndex = 0;
+        while ((authorityIndex = authorityIn.indexOf(term, authorityIndex)) !== -1) {
+            count += 1;
+            authorityIndex += term.length;
+        }
+        let retrievalIndex = 0;
+        while ((retrievalIndex = retrievalIn.indexOf(term, retrievalIndex)) !== -1) {
+            count += 1;
+            retrievalIndex += term.length;
+        }
         termFreqs.set(term, count);
     }
     return {
@@ -196,8 +540,12 @@ function rankCandidateFor(document, documentId, terms, scoringTerms, searchConte
         firstIndex,
         firstTermIndex: firstIndex === -1 ? -1 : termIndices.indexOf(firstIndex),
         filenameMatch,
+        authorityMatch,
+        broaderTermMatch,
+        relatedTermMatch,
+        retrievalCueMatch,
         termFreqs,
-        docLength: (searchContent ? document.bodyLength : 0) + (searchFrontmatter ? document.frontmatterLength : 0),
+        docLength: (searchContent ? document.bodyLength : 0) + (searchFrontmatter ? document.frontmatterLength : 0) + countWords(authorityText) + countWords(retrievalText),
         wiki: document.isWiki,
     };
 }
@@ -290,10 +638,18 @@ export class SearchService {
             this.needsFullReconcile = true;
         }
     }
-    close() {
+    async close() {
         this.catalogUnsubscribe?.();
         this.watcher?.close();
         this.watcher = undefined;
+        if (this.snapshotTimer)
+            clearTimeout(this.snapshotTimer);
+        this.snapshotTimer = undefined;
+        // Prevent an in-flight flush from scheduling another snapshot after the
+        // server has started tearing down its temporary or mounted vault.
+        this.snapshotPending = false;
+        if (this.snapshotWrite)
+            await this.snapshotWrite.catch(() => undefined);
         this.directoryCache.clear();
         derivedCacheBudget.clearOwner(this.cacheOwner);
         derivedCacheBudget.clearOwner(this.directoryCacheOwner);
@@ -345,6 +701,13 @@ export class SearchService {
                 relativePath,
                 documentId: this.nextDocumentId++,
                 title: String(item.title || relativePath),
+                authorityTerms: Array.isArray(item.authorityTerms)
+                    ? item.authorityTerms.filter(value => typeof value === 'string').slice(0, 64)
+                    : [String(item.title || relativePath)],
+                broaderTerms: Array.isArray(item.broaderTerms) ? item.broaderTerms.filter(value => typeof value === 'string').slice(0, 20) : [],
+                relatedTerms: Array.isArray(item.relatedTerms) ? item.relatedTerms.filter(value => typeof value === 'string').slice(0, 20) : [],
+                retrievalCues: Array.isArray(item.retrievalCues) ? item.retrievalCues.filter(value => typeof value === 'string').slice(0, 8) : [],
+                ...(typeof item.useWhen === 'string' && item.useWhen && { useWhen: item.useWhen }),
                 isWiki: item.isWiki === true,
                 moderationHidden: item.moderationHidden === true,
                 revision: String(item.revision || ''),
@@ -387,6 +750,11 @@ export class SearchService {
             documents: [...this.documents.values()].map(document => ({
                 relativePath: document.relativePath,
                 title: document.title,
+                authorityTerms: document.authorityTerms,
+                broaderTerms: document.broaderTerms,
+                relatedTerms: document.relatedTerms,
+                retrievalCues: document.retrievalCues,
+                ...(document.useWhen && { useWhen: document.useWhen }),
                 isWiki: document.isWiki,
                 moderationHidden: document.moderationHidden,
                 revision: document.revision,
@@ -428,6 +796,7 @@ export class SearchService {
             throw new Error('Search query cannot be empty');
         }
         const normalizedQuery = query.trim();
+        const parsedQuery = parseSearchQuery(normalizedQuery);
         const normalizedPrefix = pathPrefix ? normalizeSubtree(pathPrefix) : '';
         const normalizedExcludes = (excludePaths || []).map(normalizeSubtree).filter(Boolean).sort();
         const cacheKey = JSON.stringify({
@@ -440,6 +809,7 @@ export class SearchService {
             excludePaths: normalizedExcludes,
             maxChars: params.maxChars,
             includeRevisions: params.includeRevisions === true,
+            expandAuthority: params.expandAuthority === true,
         });
         const cached = this.cache.get(cacheKey);
         if (cached && cached.expiresAt > Date.now()) {
@@ -463,18 +833,36 @@ export class SearchService {
             // Corpus stats for reranking. Lengths are prepared during indexing, and
             // the bounded cache lets different queries reuse the same scope stats.
             const termDocFreq = new Map();
-            const searchQuery = caseSensitive ? normalizedQuery : normalizedQuery.toLowerCase();
-            const terms = searchQuery.split(/\s+/).filter(t => t.length > 0);
-            const scoringTerms = terms.length > 1 ? [...terms, searchQuery] : terms;
+            // Keep quoted tokens as one exact phrase. Unquoted tokens are already
+            // separated by the tokenizer, so this also avoids turning a quoted phrase
+            // back into an unconstrained AND/OR sequence.
+            const terms = parsedQuery.terms
+                .map(term => caseSensitive ? term : term.toLowerCase())
+                .filter(Boolean);
+            const excludeTerms = parsedQuery.excludeTerms
+                .map(term => caseSensitive ? term : term.toLowerCase())
+                .filter(Boolean);
+            const scoringTerms = terms;
+            const authorityExpansionEnabled = params.expandAuthority === true;
             // The server-owned document index has already performed the filesystem
             // reads. Search only the visible in-memory documents on this pass.
             const scopedDocumentIds = this.scopedDocumentIds(normalizedPrefix, normalizedExcludes);
             const corpusStats = this.getCorpusStats(scopedDocumentIds, searchContent, searchFrontmatter, normalizedPrefix, normalizedExcludes);
             const { totalDocLength, docCount } = corpusStats;
             const candidateIds = this.candidateIds(terms, searchContent, searchFrontmatter, caseSensitive, scopedDocumentIds);
+            const filteredCandidateIds = new Set();
+            for (const documentId of candidateIds) {
+                const document = this.documentsById.get(documentId);
+                if (!document || !this.pathFilter.isAllowed(document.relativePath) || document.moderationHidden)
+                    continue;
+                if (Object.keys(parsedQuery.filters).length > 0 || excludeTerms.length > 0)
+                    await this.loadText(document);
+                if (matchesSearchFilters(document, parsedQuery.filters))
+                    filteredCandidateIds.add(documentId);
+            }
             // First pass loads text only as needed and computes corpus document
             // frequencies. Candidate objects are deliberately not retained yet.
-            for (const documentId of candidateIds) {
+            for (const documentId of filteredCandidateIds) {
                 const document = this.documentsById.get(documentId);
                 if (!document || !this.pathFilter.isAllowed(document.relativePath))
                     continue;
@@ -485,24 +873,38 @@ export class SearchService {
                 const searchIn = caseSensitive
                     ? searchableTextFor(document, searchContent, searchFrontmatter)
                     : searchableTextFor(document, searchContent, searchFrontmatter).toLowerCase();
+                const discoveryText = `${document.authorityTerms.join('\n')}\n${authorityExpansionEnabled ? `${document.broaderTerms.join('\n')}\n${document.relatedTerms.join('\n')}` : ''}\n${document.retrievalCues.join('\n')}\n${document.useWhen || ''}`;
+                const discoveryIn = caseSensitive ? discoveryText : discoveryText.toLowerCase();
+                const title = document.relativePath.split('/').pop()?.replace(/\.md$/, '') || document.relativePath;
+                const exclusionSearch = `${searchIn}\n${discoveryIn}\n${caseSensitive ? title : title.toLowerCase()}`;
+                if (excludeTerms.some(term => exclusionSearch.includes(term)))
+                    filteredCandidateIds.delete(documentId);
                 for (const term of scoringTerms) {
-                    if (searchIn.includes(term))
+                    if (searchIn.includes(term) || discoveryIn.includes(term))
                         termDocFreq.set(term, (termDocFreq.get(term) || 0) + 1);
                 }
             }
             const service = this;
             const candidates = (function* () {
-                for (const documentId of candidateIds) {
+                for (const documentId of filteredCandidateIds) {
                     const document = service.documentsById.get(documentId);
                     if (!document || !service.pathFilter.isAllowed(document.relativePath) || document.moderationHidden)
                         continue;
-                    const candidate = rankCandidateFor(document, documentId, terms, scoringTerms, searchContent, searchFrontmatter, caseSensitive);
+                    const candidate = rankCandidateFor(document, documentId, terms, scoringTerms, searchContent, searchFrontmatter, caseSensitive, authorityExpansionEnabled);
                     if (candidate)
                         yield candidate;
                 }
             })();
             const ranked = this.rerank(candidates, scoringTerms, termDocFreq, docCount, totalDocLength, maxLimit);
-            const results = boundSearchResults(ranked.map(candidate => this.materializeResult(candidate, terms, scoringTerms, searchContent, searchFrontmatter, caseSensitive, params.includeRevisions === true)), maxChars);
+            const filterReasons = [
+                ...(parsedQuery.filters.pathPrefix ? ['filter_path'] : []),
+                ...(parsedQuery.filters.tag ? ['filter_tag'] : []),
+                ...(parsedQuery.filters.property ? ['filter_property'] : []),
+                ...(parsedQuery.filters.sectionTerms ? ['filter_section'] : []),
+                ...(parsedQuery.filters.blockTerms ? ['filter_block'] : []),
+                ...(parsedQuery.filters.taskTerms ? ['filter_task'] : []),
+            ];
+            const results = boundSearchResults(ranked.map(candidate => this.materializeResult(candidate, terms, scoringTerms, searchContent, searchFrontmatter, caseSensitive, params.includeRevisions === true, filterReasons)), maxChars);
             if (generation === this.cacheGeneration) {
                 const cachedResults = results.map(result => ({ ...result }));
                 const entry = { expiresAt: Date.now() + SEARCH_CACHE_TTL_MS, results: cachedResults };
@@ -665,13 +1067,23 @@ export class SearchService {
             const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
             const body = frontmatterMatch ? content.slice(frontmatterMatch[0].length) : content;
             const frontmatterText = frontmatterMatch?.[1] || '';
+            const parsedFrontmatter = parseSearchFrontmatter(frontmatterText);
             const title = relativePath.split('/').pop()?.replace(/\.md$/i, '') || relativePath;
+            const authorityMetadata = authorityMetadataFromFrontmatter(parsedFrontmatter);
+            const authorityTerms = [title, ...authorityMetadata.authorityTerms];
+            const retrievalMetadata = retrievalMetadataFromFrontmatter(parsedFrontmatter);
             return {
                 relativePath,
                 documentId: existing?.documentId ?? this.nextDocumentId++,
                 body,
                 frontmatterText,
+                ...(parsedFrontmatter ? { frontmatter: parsedFrontmatter } : {}),
                 title,
+                authorityTerms,
+                broaderTerms: authorityMetadata.broaderTerms,
+                relatedTerms: authorityMetadata.relatedTerms,
+                retrievalCues: retrievalMetadata.cues,
+                ...(retrievalMetadata.useWhen && { useWhen: retrievalMetadata.useWhen }),
                 isWiki: isWikiPath(relativePath) || wikiType(content) !== undefined,
                 moderationHidden: isMarkdownModerationHidden(content),
                 revision: revision(content),
@@ -684,7 +1096,7 @@ export class SearchService {
                 lastAccessAt: Date.now(),
                 bodyGrams: this.gramIdsForText(body.toLowerCase()),
                 frontmatterGrams: this.gramIdsForText(frontmatterText.toLowerCase()),
-                titleGrams: this.gramIdsForText(title.toLowerCase()),
+                titleGrams: this.gramIdsForText([...authorityTerms, ...authorityMetadata.broaderTerms, ...authorityMetadata.relatedTerms, ...retrievalMetadata.cues, ...(retrievalMetadata.useWhen ? [retrievalMetadata.useWhen] : [])].join('\n').toLowerCase()),
             };
         }
         catch {
@@ -915,6 +1327,22 @@ export class SearchService {
             const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
             document.body = frontmatterMatch ? content.slice(frontmatterMatch[0].length) : content;
             document.frontmatterText = frontmatterMatch?.[1] || '';
+            const parsedFrontmatter = parseSearchFrontmatter(document.frontmatterText);
+            if (parsedFrontmatter)
+                document.frontmatter = parsedFrontmatter;
+            else
+                delete document.frontmatter;
+            const title = document.relativePath.split('/').pop()?.replace(/\.md$/i, '') || document.relativePath;
+            const authorityMetadata = authorityMetadataFromFrontmatter(parsedFrontmatter);
+            document.authorityTerms = [title, ...authorityMetadata.authorityTerms];
+            document.broaderTerms = authorityMetadata.broaderTerms;
+            document.relatedTerms = authorityMetadata.relatedTerms;
+            const retrievalMetadata = retrievalMetadataFromFrontmatter(parsedFrontmatter);
+            document.retrievalCues = retrievalMetadata.cues;
+            if (retrievalMetadata.useWhen)
+                document.useWhen = retrievalMetadata.useWhen;
+            else
+                delete document.useWhen;
             if (!document.textCached) {
                 this.indexedTextBytes += document.textBytes;
                 document.textCached = true;
@@ -939,13 +1367,14 @@ export class SearchService {
                 break;
             delete document.body;
             delete document.frontmatterText;
+            delete document.frontmatter;
             document.textCached = false;
             this.indexedTextBytes -= document.textBytes;
         }
     }
     candidateIds(terms, searchContent, searchFrontmatter, caseSensitive, scopedIds) {
         const all = scopedIds;
-        if (caseSensitive)
+        if (terms.length === 0 || caseSensitive)
             return all;
         if (!searchContent && !searchFrontmatter)
             return this.matchingPostingCandidates(terms, ['title'], all);
@@ -1074,7 +1503,7 @@ export class SearchService {
         }
         return boundedTopK(scoreStream(), maxLimit, compare).map(s => s.candidate);
     }
-    materializeResult(candidate, terms, scoringTerms, searchContent, searchFrontmatter, caseSensitive, includeRevision) {
+    materializeResult(candidate, terms, scoringTerms, searchContent, searchFrontmatter, caseSensitive, includeRevision, filterReasons = []) {
         const document = this.documentsById.get(candidate.documentId);
         if (!document)
             throw new Error(`Search document disappeared: ${candidate.documentId}`);
@@ -1088,6 +1517,14 @@ export class SearchService {
         const searchIn = caseSensitive ? searchableText : searchableText.toLowerCase();
         let excerpt;
         let matchCount = candidate.filenameMatch ? 1 : 0;
+        if (candidate.authorityMatch)
+            matchCount += 1;
+        if (candidate.broaderTermMatch)
+            matchCount += 1;
+        if (candidate.relatedTermMatch)
+            matchCount += 1;
+        if (candidate.retrievalCueMatch)
+            matchCount += 1;
         let lineNumber = 0;
         if (candidate.firstIndex !== -1) {
             const firstTerm = terms[candidate.firstTermIndex];
@@ -1123,12 +1560,19 @@ export class SearchService {
             uri: generateObsidianUri(this.vaultPath, document.relativePath),
             ...(document.isWiki && { wk: true }),
             why: [
+                ...filterReasons,
                 ...(document.isWiki ? ['wiki_priority'] : []),
                 ...(candidate.filenameMatch ? ['title_match'] : []),
+                ...(candidate.authorityMatch && !candidate.filenameMatch ? ['alias_match'] : []),
+                ...(candidate.broaderTermMatch ? ['broader_term_match'] : []),
+                ...(candidate.relatedTermMatch ? ['related_term_match'] : []),
+                ...(candidate.retrievalCueMatch ? ['retrieval_cue_match'] : []),
                 ...(candidate.firstIndex !== -1 && searchFrontmatter && candidate.firstIndex < (document.frontmatterText || '').length ? ['frontmatter_match'] : []),
                 ...(candidate.firstIndex !== -1 && (!searchFrontmatter || candidate.firstIndex >= (document.frontmatterText || '').length) ? ['content_match'] : []),
             ],
             fresh: 'current',
+            ...(candidate.retrievalCueMatch && document.retrievalCues.length > 0 && { rc: document.retrievalCues.slice(0, 4) }),
+            ...(candidate.retrievalCueMatch && document.useWhen && { uw: document.useWhen.slice(0, 280) }),
             ...(includeRevision && { rv: document.revision }),
         };
     }

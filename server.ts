@@ -53,7 +53,10 @@ Options:
   --http[=PORT]   Also expose the optional localhost REST adapter (default 8787)
   --mcp-http[=PORT]
                   Expose MCP 2026 Stateless Streamable HTTP (default 8788)
+                  Optional LAN/TLS flags: --mcp-http-host HOST,
+                  --mcp-http-cert FILE, --mcp-http-key FILE
                   Optional env: MCPVAULT_MCP_HTTP_HOST,
+                  MCPVAULT_MCP_HTTP_TLS_CERT, MCPVAULT_MCP_HTTP_TLS_KEY,
                   MCPVAULT_ALLOWED_HOSTS, MCPVAULT_ALLOWED_ORIGINS
 
 Examples:
@@ -69,8 +72,12 @@ Examples:
 
 // Remove runtime options before joining trailing args, preserving support for
 // unquoted vault paths with spaces. When omitted, use the current directory.
-const { vaultPathArg, readOnly, restPort, mcpHttpPort } = parseCliArgs(cliArgs);
+const { vaultPathArg, readOnly, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey } = parseCliArgs(cliArgs);
 const vaultPath = resolve(vaultPathArg || process.cwd());
+
+if (mcpHttpPort === undefined && (mcpHttpHost || mcpHttpTlsCert || mcpHttpTlsKey)) {
+  throw new Error('--mcp-http-host, --mcp-http-cert, and --mcp-http-key require --mcp-http');
+}
 
 const mcpServer = createServer(vaultPath, { version: VERSION, readOnly });
 
@@ -89,7 +96,12 @@ if (restPort !== undefined) {
 
 let mcpHttpHandle: Awaited<ReturnType<typeof startMcpHttpApi>> | undefined;
 if (mcpHttpPort !== undefined) {
-  const configuredHost = process.env.MCPVAULT_MCP_HTTP_HOST;
+  const configuredHost = mcpHttpHost || process.env.MCPVAULT_MCP_HTTP_HOST;
+  const configuredTlsCert = mcpHttpTlsCert || process.env.MCPVAULT_MCP_HTTP_TLS_CERT;
+  const configuredTlsKey = mcpHttpTlsKey || process.env.MCPVAULT_MCP_HTTP_TLS_KEY;
+  if (Boolean(configuredTlsCert) !== Boolean(configuredTlsKey)) {
+    throw new Error('MCP HTTP TLS requires both a certificate and a private key');
+  }
   const configuredHosts = String(process.env.MCPVAULT_ALLOWED_HOSTS || '').split(',').map(value => value.trim()).filter(Boolean);
   const configuredOrigins = String(process.env.MCPVAULT_ALLOWED_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean);
   mcpHttpHandle = await startMcpHttpApi(mcpServer, {
@@ -97,8 +109,14 @@ if (mcpHttpPort !== undefined) {
     ...(configuredHost && { host: configuredHost }),
     ...(configuredHosts.length > 0 && { allowedHosts: configuredHosts }),
     ...(configuredOrigins.length > 0 && { allowedOrigins: configuredOrigins }),
+    ...(configuredTlsCert && configuredTlsKey && {
+      tls: {
+        cert: readFileSync(configuredTlsCert),
+        key: readFileSync(configuredTlsKey),
+      },
+    }),
   });
-  console.error(`MCPVault Stateless MCP HTTP listening on http://${mcpHttpHandle.host}:${mcpHttpHandle.port}${mcpHttpHandle.path}`);
+  console.error(`MCPVault Stateless MCP HTTP listening on ${mcpHttpHandle.protocol}://${mcpHttpHandle.host}:${mcpHttpHandle.port}${mcpHttpHandle.path}`);
 }
 
 // Exit when the client disconnects (stdin EOF) or the process is asked to

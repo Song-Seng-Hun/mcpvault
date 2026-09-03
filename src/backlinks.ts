@@ -22,7 +22,15 @@ export function findBacklinkMatches(content: string, targetPath: string): Backli
   const targetBasename = basenameWithoutExtension(normalizedTarget);
   return extractObsidianLinkOccurrences(content)
     .filter(({ target }) => matchesTarget(target, normalizedTarget, targetBasename))
-    .map(({ line, link, context }) => ({ line, link, context, path: '' }));
+    .map(({ line, link, context, heading, targetHeading, targetBlockId }) => ({
+      line,
+      link,
+      context,
+      path: '',
+      ...(heading && { heading }),
+      ...(targetHeading && { targetHeading }),
+      ...(targetBlockId && { targetBlockId }),
+    }));
 }
 
 export function extractWikiLinkOccurrences(content: string): Array<OutlinkMatch> {
@@ -44,6 +52,7 @@ function extractLinkOccurrences(content: string, includeMarkdown: boolean): Arra
   const lines = content.split('\n');
   let fenceChar = '';
   let fenceLength = 0;
+  let currentHeading: string | undefined;
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index]!.replace(/\r$/, '');
@@ -63,18 +72,24 @@ function extractLinkOccurrences(content: string, includeMarkdown: boolean): Arra
     }
     if (fenceChar) continue;
 
+    const heading = line.match(/^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/);
+    if (heading) currentHeading = heading[1]!.trim();
+
     WIKI_LINK_PATTERN.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = WIKI_LINK_PATTERN.exec(line)) !== null) {
       const link = match[0]!;
-      const document = linkDocument(link);
-      if (!document) continue;
+      const parsed = linkDocument(link);
+      if (!parsed.document) continue;
 
       matches.push({
         line: index + 1,
         link,
-        target: document,
+        target: parsed.document,
         context: line.trim().slice(0, 300),
+        ...(currentHeading && { heading: currentHeading }),
+        ...(parsed.targetHeading && { targetHeading: parsed.targetHeading }),
+        ...(parsed.targetBlockId && { targetBlockId: parsed.targetBlockId }),
       });
     }
 
@@ -82,13 +97,16 @@ function extractLinkOccurrences(content: string, includeMarkdown: boolean): Arra
       MARKDOWN_LINK_PATTERN.lastIndex = 0;
       while ((match = MARKDOWN_LINK_PATTERN.exec(line)) !== null) {
         const link = match[0]!;
-        const document = markdownLinkDocument(match[2]!);
-        if (!document) continue;
+        const parsed = markdownLinkDocument(match[2]!);
+        if (!parsed.document) continue;
         matches.push({
           line: index + 1,
           link,
-          target: document,
+          target: parsed.document,
           context: line.trim().slice(0, 300),
+          ...(currentHeading && { heading: currentHeading }),
+          ...(parsed.targetHeading && { targetHeading: parsed.targetHeading }),
+          ...(parsed.targetBlockId && { targetBlockId: parsed.targetBlockId }),
         });
       }
     }
@@ -101,7 +119,16 @@ export function findUnresolvedLinkMatches(content: string, vaultFiles: string[])
   const normalizedFiles = vaultFiles.map(normalizePath);
   return extractObsidianLinkOccurrences(content)
     .filter(({ target }) => resolveWikiLinkTargets(target, normalizedFiles).length === 0)
-    .map(({ target, line, link, context }) => ({ target, line, link, context, path: '' }));
+    .map(({ target, line, link, context, heading, targetHeading, targetBlockId }) => ({
+      target,
+      line,
+      link,
+      context,
+      path: '',
+      ...(heading && { heading }),
+      ...(targetHeading && { targetHeading }),
+      ...(targetBlockId && { targetBlockId }),
+    }));
 }
 
 export function resolveWikiLinkTargets(target: string, vaultFiles: string[]): string[] {
@@ -124,26 +151,47 @@ export function resolveWikiLinkTargets(target: string, vaultFiles: string[]): st
   });
 }
 
-function linkDocument(rawLink: string): string {
+interface ParsedLinkTarget {
+  document: string;
+  targetHeading?: string;
+  targetBlockId?: string;
+}
+
+function parseAnchor(document: string): ParsedLinkTarget {
+  const hashIndex = document.indexOf('#');
+  if (hashIndex === -1) return { document: document.trim().replace(/^\.\//, '') };
+  const target = document.slice(hashIndex + 1).trim();
+  const result: ParsedLinkTarget = { document: document.slice(0, hashIndex).trim().replace(/^\.\//, '') };
+  if (!target) return result;
+  let decodedTarget = target;
+  try { decodedTarget = decodeURIComponent(target); } catch { /* retain the safe raw anchor */ }
+  if (decodedTarget.startsWith('^')) result.targetBlockId = decodedTarget.slice(1).trim();
+  else result.targetHeading = decodedTarget;
+  return result;
+}
+
+function linkDocument(rawLink: string): ParsedLinkTarget {
   const bracketed = rawLink.startsWith('!') ? rawLink.slice(1) : rawLink;
   let document = bracketed.slice(2, -2).replace(/\\\|/g, '|');
   const pipeIndex = document.indexOf('|');
   if (pipeIndex !== -1) document = document.slice(0, pipeIndex);
-  const hashIndex = document.indexOf('#');
-  if (hashIndex !== -1) document = document.slice(0, hashIndex);
-  return document.trim().replace(/^\.\//, '');
+  return parseAnchor(document);
 }
 
-function markdownLinkDocument(rawDestination: string): string {
+function markdownLinkDocument(rawDestination: string): ParsedLinkTarget {
   let document = rawDestination.trim();
   if (document.startsWith('<') && document.endsWith('>')) document = document.slice(1, -1).trim();
-  if (!document || /^[a-z][a-z0-9+.-]*:/i.test(document) || document.startsWith('#')) return '';
+  if (!document || /^[a-z][a-z0-9+.-]*:/i.test(document) || document.startsWith('#')) return { document: '' };
+  let anchor = '';
   const hashIndex = document.indexOf('#');
-  if (hashIndex !== -1) document = document.slice(0, hashIndex);
+  if (hashIndex !== -1) {
+    anchor = document.slice(hashIndex);
+    document = document.slice(0, hashIndex);
+  }
   const queryIndex = document.indexOf('?');
   if (queryIndex !== -1) document = document.slice(0, queryIndex);
   try { document = decodeURIComponent(document); } catch { /* retain the raw safe path */ }
-  return document.trim().replace(/^\.\//, '');
+  return parseAnchor(`${document}${anchor}`);
 }
 
 function normalizeTarget(path: string): string {

@@ -279,6 +279,42 @@ async function resultFromRow(row: IndexRow, vaultPath: string, includeRevision: 
 }
 
 /**
+ * A nearest-neighbor query can otherwise spend its whole response budget on
+ * one folder or series.  When the index contains several shelves, take one
+ * strong candidate from each shelf first, then fill the remaining slots by
+ * distance.  This is only a presentation rule; it never changes the vector
+ * index or the authoritative Markdown placement.
+ */
+function diversifyRows(items: Array<{ row: IndexRow; distance: number }>, limit: number): Array<{ row: IndexRow; distance: number }> {
+  const sorted = [...items].sort((a, b) => a.distance - b.distance || a.row.path.localeCompare(b.row.path));
+  if (limit <= 1) return sorted.slice(0, limit);
+  const groups = new Map<string, Array<{ row: IndexRow; distance: number }>>();
+  for (const item of sorted) {
+    const slash = item.row.path.lastIndexOf('/');
+    const shelf = slash > 0 ? item.row.path.slice(0, slash).toLowerCase() : '(root)';
+    const group = groups.get(shelf);
+    if (group) group.push(item);
+    else groups.set(shelf, [item]);
+  }
+  if (groups.size < 3) return sorted.slice(0, limit);
+  const selected: Array<{ row: IndexRow; distance: number }> = [];
+  const selectedIds = new Set<string>();
+  for (const group of groups.values()) {
+    const item = group[0];
+    if (!item) continue;
+    selected.push(item);
+    selectedIds.add(item.row.id);
+    if (selected.length >= limit) return selected;
+  }
+  for (const item of sorted) {
+    if (selectedIds.has(item.row.id)) continue;
+    selected.push(item);
+    if (selected.length >= limit) break;
+  }
+  return selected;
+}
+
+/**
  * Optional semantic search cache. It is deliberately a cache, not a second
  * source of truth: Markdown and Git remain authoritative. All failures are
  * contained here so lexical search and the MCP server keep working.
@@ -366,7 +402,7 @@ export class SemanticSearchService {
     if (this.semanticActive) this.scheduleIdleWork();
   }
 
-  close(): void {
+  async close(): Promise<void> {
     this.catalogUnsubscribe?.();
     if (this.idleTimer) clearTimeout(this.idleTimer);
     if (this.unloadTimer) clearTimeout(this.unloadTimer);
@@ -378,6 +414,7 @@ export class SemanticSearchService {
     // disposable and scanForChanges reconstructs it after a restart; avoiding
     // a late write also lets callers safely remove a temporary test vault.
     this.pendingSnapshotPending = false;
+    if (this.pendingSnapshotWrite) await this.pendingSnapshotWrite.catch(() => undefined);
     this.clearQueryCache();
     this.clearVectorCache();
     this.vectorInFlight.clear();
@@ -402,6 +439,7 @@ export class SemanticSearchService {
     if (!params.query?.trim()) throw new Error('Search query cannot be empty');
     const cacheKey = JSON.stringify({
       query: params.query.trim(),
+      queryVector: params.queryVector ? createHash('sha256').update(JSON.stringify(params.queryVector)).digest('hex') : undefined,
       limit,
       maxChars,
       includeRevision: params.includeRevisions === true,
@@ -450,7 +488,15 @@ export class SemanticSearchService {
       if (names.size === 0) {
         return { results: [], available: true, indexed: this.indexedCount(), pending: this.pending.size };
       }
-      const vector = await this.embedQuery(params.query.trim());
+      let vector: number[];
+      if (params.queryVector !== undefined) {
+        if (params.queryVector.length !== EMBEDDING_DIMENSIONS || params.queryVector.some(value => !Number.isFinite(value))) {
+          throw new Error(`queryVector must contain exactly ${EMBEDDING_DIMENSIONS} finite numbers`);
+        }
+        vector = params.queryVector.slice();
+      } else {
+        vector = await this.embedQuery(params.query.trim());
+      }
       const scopes = this.accessPolicy.scopeRoots(params.principal).map(root => root.kind === 'global' ? 'global' : `${root.kind}:${root.root.split('/').pop()}`);
       const bestByPath = new Map<string, { row: IndexRow; distance: number }>();
       for (const scope of scopes) {
@@ -467,9 +513,7 @@ export class SemanticSearchService {
         }
       }
 
-      const ordered = [...bestByPath.values()]
-        .sort((a, b) => a.distance - b.distance)
-        .slice(0, limit)
+      const ordered = diversifyRows([...bestByPath.values()], limit)
         .map(item => item.row);
       const hydrated = (await Promise.all(ordered.map(row => resultFromRow(row, this.vaultPath, params.includeRevisions === true, this.vaultIo))))
         .filter((result): result is SearchResult => result !== undefined);

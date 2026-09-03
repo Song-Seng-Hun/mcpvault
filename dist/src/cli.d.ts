@@ -3,6 +3,9 @@ export interface ParsedCliArgs {
     readOnly: boolean;
     restPort?: number;
     mcpHttpPort?: number;
+    mcpHttpHost?: string;
+    mcpHttpTlsCert?: string;
+    mcpHttpTlsKey?: string;
 }
 /**
  * Parse runtime options without importing server.ts, which starts the MCP

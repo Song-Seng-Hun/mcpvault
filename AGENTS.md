@@ -38,7 +38,16 @@ synchronization; Community content is public only inside the configured
 command center; User content is local host storage, while model and agent
 content are the MCP-visible private workspaces for authenticated agents.
 Use bounded pulse, notification, comment, and chat reads, and leave a grounded
-public contribution when there is something useful to add.
+public contribution when there is something useful to add. Search also accepts
+compact Obsidian-style filters: `path:Projects`, `tag:topic`,
+`property:status=open`, `property:note_kind`, `[status:open]`,
+`[status:draft OR published]`, `property:status=null`, `section:(...)`,
+`block:(...)`, `task:`, `task-todo:`, and `task-done:`. Quote a phrase for an
+exact phrase, use `OR` between alternatives, and prefix a term with `-` to
+exclude it. Scoped filters match one local section/block/task. Combine filters
+with free text or use them alone; results stay bounded. Semantic results are
+not merged into filtered/excluded searches, so the lexical constraint remains
+authoritative.
 
 ### Community action selection
 
@@ -64,6 +73,16 @@ as incomplete if verification does not show the new item. Git commit is for
 history and rollback; it is not required for Obsidian to display a newly
 written Markdown note.
 
+Before moving or renaming a note, call `preview_move_note` and inspect its
+bounded backlink impact/collision report. `move_note` does not rewrite
+wikilinks automatically. If the reviewed plan should update inbound links,
+pass `updateLinks: true` and the source `expectedRevision`; this is an explicit
+checked rewrite with rollback of link edits if the move fails. For Markdown tasks, call `list_tasks`, read the
+returned note revision, then use `update_task` with its `taskId` (preferred) or
+`path` and `line`, desired status, and `expectedRevision`; this is the
+revision-safe bridge between GTD next actions and an Obsidian checkbox even
+when surrounding lines have moved.
+
 ### Knowledge organization
 
 Inside an already-authorized scope, use PARA as a filing aid: `Inbox/` for
@@ -77,18 +96,129 @@ should happen next; use `moc`, `project`, and `review_at` only when useful.
 Use Obsidian `[[wikilinks]]` or relative Markdown links such as
 `[Guide](Resources/Guide.md#section)` for navigation and `evidence_paths` for
 provenance. The intended loop is Capture -> Organize -> Distill -> Express.
-Use `get_wiki_inbox` to find bounded unprocessed captures, read one, then use
+Use `get_wiki_inbox` to find a bounded oldest-first queue of unprocessed captures;
+use its age band to prioritize stale captures, read one, then use
 `clarify_wiki_note` with its revision and one GTD disposition (`knowledge`,
 `reference`, `project`, `someday`, `discard`, or `delegate`). It records the
 decision without silently moving/deleting; move the note later with the normal
 revision-checked workflow. Use `triage_wiki_note` for ordinary metadata edits.
 Use `distill_wiki_source` when turning an immutable source into a literature or
 atomic note so source path and revision remain provenance. Use
-`get_wiki_catalog` to filter organization metadata,
+`get_wiki_catalog` to filter organization metadata; add
+`includeFacets: true` when you need bounded counts by note kind, lifecycle,
+MOC, project, or tag without loading note bodies. Use
+`orderBy: location|alphabet|time|category|hierarchy` for LATCH-style browsing;
+this changes only projection order and never moves a note. Use
+`get_wiki_neighborhood` after selecting a note to inspect a bounded,
+explainable neighborhood: direct links and typed relations first, shared
+MOC/project context next, and optional semantic candidates last. Treat
+semantic similarity as discovery only; it is never proof, an access rule, or
+a reason to move a note. Read only the selected neighbor notes with their
+returned revisions. Use
 `get_wiki_review_queue` to find bounded due/disputed knowledge, and
-`get_wiki_moc_candidates` before creating a new MOC. MOCs should state
+retention dates that have arrived; archive or tombstone only after checking
+the current revision and preserving a reason/replacement.
+`get_wiki_maintenance_debt` for a derived 5S maintenance ledger rather than
+inventing a second task database. Use `get_wiki_authority_map` when titles,
+aliases, or stable IDs need terminology normalization; collisions are repair
+candidates, not automatic redirects. Use `get_wiki_answer_packet` after
+selecting a note when one bounded context packet should include the source,
+supporting neighbors, and a counterpoint or negative note. The packet is a
+reading projection, not a truth judgment; re-read selected notes when its
+compact context is insufficient. Use `subject_terms`, `domain`, `methods`, and
+`audience` as optional faceted access points when a note must be found from
+multiple library-like angles;
+keep them short and consistent, and prefer existing authority terms. Use
+`get_wiki_knowledge_gaps` for a bounded active-recall queue of unresolved
+questions, hypotheses, assumptions, disputes, and negative knowledge; read the
+selected note and evidence before changing its epistemic state.
+Notes may additionally declare `recall_prompt` and
+`recall_interval_days` when a durable fact benefits from active recall. Attempt
+the prompt before opening the note, then use `record_wiki_recall` with
+`failed`, `partial`, or `good`; for an agent identity the result is stored in
+that agent's private continuity scope so another agent cannot overwrite its
+recall state; that private record keeps only a bounded recent history and
+streak. Model-owner identities retain the shared frontmatter path for
+compatibility. This is separate from evidence review and does not change truth
+status. Use `canonical_path` for a visible redirect/duplicate
+and `same_as`, `version_of`, or `refines` when the relation itself is useful;
+never merge or move automatically from similarity alone.
+Use `get_wiki_recall_queue` for a reader-specific due queue; attempt each
+`recall_prompt` before opening the body and record the result with
+`record_wiki_recall`. This is a private memory aid, not a shared truth score.
+The queue interleaves different domains, MOCs, and projects when metadata is
+available so one crowded topic does not consume the whole read window. A
+successful recall is not evidence validation.
+`get_wiki_graph_health` also exposes bounded knowledge usage, lifecycle, and
+same-title/alias duplicate candidates, including high-degree hub notes that may
+need a smaller MOC or a deliberate split. Treat zero usage as a review signal,
+not proof that a note should be deleted, and inspect competing notes before
+merging them.
+Use `get_wiki_duplicate_candidates` when title and alias checks are
+insufficient. Similarity is only a review signal: read both current revisions
+and use `preview_wiki_merge` before deciding whether to consolidate.
+Use `get_wiki_moc_candidates` before creating a new MOC. MOCs should state
 `mocPurpose`, `mocScope`, `mocQuestions`, and optional `mocParent` and use
-ordinary `[[wikilinks]]` or relative Markdown links. Optional
+ordinary `[[wikilinks]]` or relative Markdown links.
+Use `get_wiki_placement_candidates` to find advisory PARA filing mismatches;
+review the note and revision before choosing `triage_wiki_note` or
+`move_note`, because folders are retrieval aids rather than visibility rules.
+For library-like terminology, mark a knowledge note with
+`term_status: preferred|deprecated|redirect`, and use `term_replaced_by`,
+`broader_terms`, and `related_terms` when applicable. `get_wiki_authority_map`
+then exposes bounded preferred-term/replacement navigation without silently
+redirecting existing links. Use `get_wiki_trail` when a question needs a
+bounded multi-hop chain between two notes; links are a navigation path, not
+proof by themselves.
+Use `get_wiki_vocabulary_health` for tag spelling/case variants, subject terms
+without a local authority note, and terms used by multiple notes. These are
+advisory library-style hygiene signals: preserve intentional local distinctions
+and repair with scope notes, aliases, or `canonical_path`; never rename or
+retag automatically.
+Use `get_wiki_note_template` when a new note role needs a low-friction
+scaffold. Templates are optional starting points, not publication gates; keep
+the body in ordinary Markdown and put only small typed values in Properties.
+Supported roles include atomic, literature, question, hypothesis, decision,
+project, moc, and negative knowledge.
+For `related` and `same_as`, prefer a reverse edge on the target note when the
+relationship is genuinely mutual. Graph health reports missing reciprocity as
+an advisory signal; directional relations such as `supports`, `contradicts`,
+`depends_on`, and `supersedes` do not require a reverse field.
+Use graph health's `relationNavigation` reverse map when starting from a note
+and needing to know which visible notes support, answer, derive from, or
+supersede it. This is bounded derived navigation, not a permission grant.
+MOC hierarchy is explicit only when a child declares one resolvable
+`moc_parent`; ordinary body links may cross branches without becoming parent
+edges. Repair missing, ambiguous, or cyclic parent signals before treating a
+MOC tree as an authoritative navigation order.
+Use `primary_moc` as the single preferred launch point for a durable note;
+keep `moc` for intentional membership in several maps. This is navigation
+metadata, not an access rule. `read_wiki_projection` returns it with compact
+term/domain navigation. For precise work use `view=section` with either a
+heading in `section` or an Obsidian `blockId`; the response includes only a
+small bounded line context before and after the target and returns the current
+revision for safe edits.
+Use `retention_policy` (`preserve`, `review`, `archive`, or `tombstone`) only
+to explain preservation intent. Pair `archive`/`tombstone` with
+`retention_reason`, `retention_at`, and, when applicable, `replaced_by`.
+These fields never delete content automatically; Markdown and Git remain the
+authoritative record.
+When a retention decision has a meaningful trigger, record `retention_event`
+(`manual`, `created`, `last_modified`, `review_completed`, `superseded`, or
+`project_completed`). Use `preserve_until` for the earliest safe preservation
+date and `legal_hold: true` for material that must not be proposed for
+archival/tombstoning until an authorized human releases the hold. These are
+safety and audit signals, not automatic deletion controls.
+When reading a superseded, archived, or tombstoned note,
+`read_wiki_projection` returns a bounded `redirect` hint. Follow its
+replacement when present, but keep the retired note for historical context
+and Git rollback; the hint never rewrites or hides the original.
+When a durable note should be easy to recall in a real work situation, add
+optional `retrieval_cues` (up to eight short problem signals) and `use_when`
+(one compact use condition). These are discovery hints only: they do not prove
+the note, change access rules, or replace evidence. Search may report an
+`alias_match` when an alternate title reaches a canonical note; verify the
+note and its current revision before acting.
 `focus_horizon` (`ground`, `project`, `area`, `goal`, `vision`, `purpose`),
 `focus_parent`, and `focus_supports` connect GTD execution to higher outcomes;
 they are advisory navigation metadata, not access rules. For progressive
@@ -98,6 +228,18 @@ deadlines and appointments distinct: use `dueAt` for the latest acceptable
 completion time and `scheduledAt` for the intended execution time. These are
 advisory organization hints; source integrity, evidence, scope, and revision
 checks remain the hard gates.
+Keep each YAML property name in one native shape across notes (scalar, list,
+number, boolean, or object). `lint_wiki` reports cross-note
+`property_type_drift` so a Bases/Properties view does not silently change
+meaning. Before authoring or repairing MCP-managed fields, call
+`get_wiki_property_contract`; it reports canonical types and allowed values
+without forbidding custom Properties. `review_interval_days` is optional
+cadence metadata: after `review_wiki_note` records a completed review, the
+server calculates the next `review_at` unless an explicit date is supplied.
+For non-manual review policies without an explicit interval, the server uses a
+bounded adaptive cadence: disputed or revised knowledge returns sooner and
+confirmed knowledge backs off gradually. Treat `adaptiveReviewInterval` and
+`reviewReasons` as scheduling hints, then inspect the evidence yourself.
 Zettelkasten-style atomic notes/MOCs suit durable knowledge, while GTD-style
 next actions suit Projects and structured tasks; do not force either format
 onto comments, chat, or journals.
@@ -113,8 +255,13 @@ goal or area and needing its projects, actions, waiting items, or supporting
 knowledge. Literature notes should normally gain a compact interpretation,
 key points, or an outgoing `[[wikilink]]` to derived atomic/knowledge notes;
 this remains a quality hint, not a publication gate. Use
-`get_wiki_bases_view` with `view` set to `all`, `inbox`, `projects`, `review`,
-or `epistemic` when a local Obsidian view is useful.
+`get_wiki_property_contract` before repairing managed Properties, and use
+`get_wiki_bases_view` with `view` set to `all`, `inbox`, `inbox_oldest`,
+`projects`, `project_next_actions`, `review`, `epistemic`, `open_questions`,
+`knowledge`, `unreviewed_evidence`, `negative_knowledge`, `deprecated_terms`,
+or `maintenance` when a local Obsidian view is useful. Specialized views may
+report `matchingNotesExact: false` because Bases evaluates their final
+Property expression locally.
 For active project notes, optionally keep `project_purpose` and
 `project_support` (bounded Obsidian links/paths) separate from `next_action`;
 use `get_wiki_project_packet` to inspect the Natural Planning pieces and find
@@ -122,7 +269,8 @@ projects that lack an outcome, brainstorm section, support context, or a
 concrete next action. Project support is reference material, not an alternate
 task list.
 For a smaller maintenance turn, use `get_wiki_review_packet`; follow its
-priority order and inspect one selected note before editing. MOC questions are
+priority order across evidence, active recall, tasks, graph, and vocabulary
+hygiene, then inspect one selected note before editing. MOC questions are
 covered only when the question list item has an answer `[[wikilink]]` on the
 same line or within the next three lines; this is a discoverability signal, not
 proof that the answer is correct. Evergreen quality hints are advisory: prefer
@@ -130,15 +278,63 @@ concept-oriented titles, a compact projection, and meaningful links, but do
 not force a split or rewrite merely to satisfy a score.
 When ingesting a reusable paper, web page, book, dataset, or code reference,
 add optional `sourceType`, `citationKey`, `author`, `publishedAt`, and
-`retrievedAt`; never use these in place of the immutable source hash and
+`retrievedAt`, plus `sourceFamily`, `sourceVersion`, and `supersedesSource`
+when this is one edition in a source lineage; never use these in place of the immutable source hash and
 evidence revision. Keep `citationKey` unique among source snapshots; lint will
 warn when two sources claim the same citation key.
+Use `resolve_wiki_term` when a title, alias, stable ID, or deprecated term is
+ambiguous; it returns a canonical navigation hint without silently rewriting
+links. Before deliberately combining two notes, call `preview_wiki_merge` with
+their current paths; inspect its revision, evidence, link, and identity
+conflicts, then perform ordinary revision-checked writes and preserve the
+superseded note when historical traceability matters. Use
+`get_wiki_citation_graph` to see which knowledge notes depend on each source
+and which sources are currently orphaned; it is derived provenance, not a
+replacement for source hashes or Git history.
+For atomic knowledge, optionally set `knowledge_role` to `concept`, `argument`,
+`model`, `observation`, or `counterargument`; this makes the note's job clear
+without forcing every note into a template. Use `see_also` for adjacent
+Obsidian links that help navigation but are not evidence. Use `term_scope_note`
+to define a term narrowly and avoid false synonymy. When capturing multiple
+immutable editions of one source, keep each snapshot and connect them with
+`sourceFamily`, `sourceVersion`, and `supersedesSource` rather than overwriting
+the old source. Treat `get_wiki_review_packet`/`get_wiki_review_queue` `limit`
+as the review budget for one turn. A legitimate deferral may set
+`reviewSnoozedUntil` and `reviewSnoozeReason` through revision-checked metadata;
+it does not delete evidence or make a note trusted. Save `focusQuestions`,
+`focusProjects`, and `focusNotes` in the private `save_work_state` checkpoint
+when a session has a small set of items that must remain top-of-mind.
 When preserving a failed path, record what was attempted/observed, the failure
 condition and reproduction, why it was rejected, and the reusable lesson.
 When a review is genuinely completed, record its outcome and reviewer rather
 than merely changing a due date; pass `nextLifecycle` when the note should
 leave `review`. For high-value citations, add a 1-based line range and
 `quoteHash`; lint will report a changed quote.
+
+Review metadata also records `review_count`, `review_reopen_count`,
+`last_reviewed_revision`, and `last_review_trigger`; use `reviewReason` when
+the queue explains why the note was revisited. For source processing, use
+`interpretation_status: unprocessed` on captured literature, `interpreted`
+after an agent has explained it, and `synthesized` for reusable conclusions.
+Use the typed `answers_questions` relation for an explicit question-to-answer
+edge; it improves backlinks but does not prove the answer is correct. Use
+`preview_wiki_split` before extracting a heading into a new atomic note; it is
+preview-only and returns the source revision needed for the subsequent writes.
+Use `get_wiki_next_actions` when you need executable GTD actions for one exact
+`task_context` such as `@computer` or `@research`; optionally pass `maxMinutes`,
+`energy`, or `effort` to select work that fits the current execution capacity.
+These filters read optional `time_estimate_minutes`/`estimated_minutes`,
+`energy`, and `effort` Properties and exclude unknown values instead of
+guessing. Do not turn project support references into tasks. Use `resurface_wiki_knowledge` for a small daily
+Zettelkasten rediscovery sample, then read the selected notes and check their
+current revisions before relying on them. Graph health also exposes advisory
+epistemic and source-flow repairs, including answered questions without an
+`answers_questions` edge, resolved claims without evidence, literature without
+an immutable source, and syntheses without evidence or `derived_from` inputs.
+Its `typedRelations` section also reports unresolved, ambiguous,
+self-referential, and question-target-mismatched typed links. Repair these
+with the ordinary revision-checked note workflow; the report never rewrites
+relations automatically.
 
 When the only goal is to preserve an observation, use `capture_wiki_note` and
 let it create an Inbox fleeting note; do not spend the capture turn deciding
@@ -150,6 +346,17 @@ should combine a summary, selected passages, claims, and open questions. Once ev
 actually been checked, use `review_wiki_note` to record the outcome and refresh
 the review baseline without resubmitting the full Markdown body. Use
 `taskStatus: someday` for intentionally deferred work, not for an active task.
+When a project/task is waiting, `get_wiki_review_dashboard` reports its
+bounded waiting age from `waiting_since` (or `updated_at`) and marks items
+waiting 14 days or longer with `followUpNeeded`; inspect the note before
+contacting the dependency or changing its status.
+
+Use `get_wiki_composition_candidates` for long or heavily sectioned durable
+notes. Atomicity is a desired outcome, not a publication gate: inspect one
+heading with `preview_wiki_split` before deciding whether to split, link, or
+leave the note composed. Use `update_wiki_projection` to refresh only
+summary/key_points/highlights with `expectedRevision`; it never rewrites the
+Markdown body or unrelated Properties.
 
 ## Project Overview
 

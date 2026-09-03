@@ -15,6 +15,13 @@ export declare class PathFilter {
     private canonicalizeForMatch;
     isAllowed(path: string): boolean;
     isAllowedForListing(path: string): boolean;
+    /**
+     * Windows treats trailing dots/spaces as equivalent to their trimmed name
+     * and treats a colon as an alternate data stream separator.  Reject those
+     * spellings before path resolution so a note API cannot address an
+     * executable, secret, or arbitrary stream through a note-looking path.
+     */
+    private hasUnsafePlatformPathSyntax;
     private isIgnoredPath;
     private isFile;
     filterPaths(paths: string[]): string[];

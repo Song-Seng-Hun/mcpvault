@@ -60,6 +60,27 @@ describe("parseCliArgs", () => {
     expect(parseCliArgs(["/vault", "--mcp-http", "9125"]).mcpHttpPort).toBe(9125);
   });
 
+  test("accepts explicit LAN host and TLS files for MCP HTTP", () => {
+    expect(parseCliArgs([
+      "/vault",
+      "--mcp-http=9125",
+      "--mcp-http-host=192.168.1.20",
+      "--mcp-http-cert", "server.crt",
+      "--mcp-http-key", "server.key",
+    ])).toMatchObject({
+      mcpHttpPort: 9125,
+      mcpHttpHost: "192.168.1.20",
+      mcpHttpTlsCert: "server.crt",
+      mcpHttpTlsKey: "server.key",
+    });
+  });
+
+  test("requires values for MCP HTTP LAN/TLS options", () => {
+    expect(() => parseCliArgs(["/vault", "--mcp-http-host"])).toThrow("--mcp-http-host requires a host");
+    expect(() => parseCliArgs(["/vault", "--mcp-http-cert"])).toThrow("--mcp-http-cert requires a file path");
+    expect(() => parseCliArgs(["/vault", "--mcp-http-key"])).toThrow("--mcp-http-key requires a file path");
+  });
+
   test("rejects invalid REST ports", () => {
     expect(() => parseCliArgs(["/vault", "--http=abc"])).toThrow("--http must be a numeric port");
   });

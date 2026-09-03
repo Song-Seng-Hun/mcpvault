@@ -203,6 +203,7 @@ export class CollaborationService {
                 ...(params.searchFrontmatter !== undefined && { searchFrontmatter: params.searchFrontmatter }),
                 ...(params.caseSensitive !== undefined && { caseSensitive: params.caseSensitive }),
                 ...(params.includeRevisions !== undefined && { includeRevisions: params.includeRevisions }),
+                ...(params.expandAuthority !== undefined && { expandAuthority: params.expandAuthority }),
                 ...(item.root ? { pathPrefix: item.root } : { excludePaths: ['_scopes', '_collaboration', '_whispers'] }),
             });
             for (const result of results) {

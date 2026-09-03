@@ -104,6 +104,10 @@ export interface SearchParams {
     semantic?: boolean;
     /** Include the source revision so a later bounded read can validate freshness. */
     includeRevisions?: boolean;
+    /** Expand exact terms through bounded broader/related authority fields. */
+    expandAuthority?: boolean;
+    /** Optional client-computed embedding for semantic search; avoids server model loading. */
+    queryVector?: number[];
 }
 export interface SearchResult {
     p: string;
@@ -118,6 +122,10 @@ export interface SearchResult {
     vs?: true;
     /** Compact explanation of why the result was returned. */
     why?: string[];
+    /** Bounded retrieval cues when the query matched a note's use situation. */
+    rc?: string[];
+    /** Compact use condition when the query matched a retrieval cue. */
+    uw?: string;
     /** Freshness of the derived result relative to the Markdown source. */
     fresh?: 'current' | 'verified';
     /** SHA-256 of the source note, included only when requested by the client. */
@@ -129,6 +137,10 @@ export interface RankCandidate {
     firstIndex: number;
     firstTermIndex: number;
     filenameMatch: boolean;
+    authorityMatch: boolean;
+    broaderTermMatch: boolean;
+    relatedTermMatch: boolean;
+    retrievalCueMatch: boolean;
     termFreqs: Map<string, number>;
     docLength: number;
     wiki: boolean;
@@ -137,6 +149,33 @@ export interface MoveNoteParams {
     oldPath: string;
     newPath: string;
     overwrite?: boolean;
+    /** Rewrite visible inbound Obsidian/Markdown links after previewing the impact. */
+    updateLinks?: boolean;
+    /** Required with updateLinks so the source cannot move after it changed. */
+    expectedRevision?: string;
+}
+export interface MoveNotePreviewParams {
+    oldPath: string;
+    newPath: string;
+    limit?: number;
+}
+export interface MoveNotePreviewResult {
+    oldPath: string;
+    newPath: string;
+    targetExists: boolean;
+    collision: boolean;
+    affectedLinks: Array<{
+        sourcePath: string;
+        line: number;
+        link: string;
+        context: string;
+        heading?: string;
+        targetHeading?: string;
+        targetBlockId?: string;
+    }>;
+    total: number;
+    truncated: boolean;
+    message: string;
 }
 export interface MoveFileParams {
     oldPath: string;
@@ -212,6 +251,12 @@ export interface BacklinkMatch {
     line: number;
     link: string;
     context: string;
+    /** Nearest preceding Markdown heading, when the link is inside a section. */
+    heading?: string;
+    /** Explicit heading targeted by an Obsidian/Markdown link, without '#'. */
+    targetHeading?: string;
+    /** Explicit block ID targeted by an Obsidian link, without '^'. */
+    targetBlockId?: string;
     /** Typed frontmatter relation such as supports or contradicts. */
     relation?: string;
 }
@@ -226,6 +271,12 @@ export interface OutlinkMatch {
     line: number;
     link: string;
     context: string;
+    /** Nearest preceding Markdown heading, when the link is inside a section. */
+    heading?: string;
+    /** Explicit heading targeted by an Obsidian/Markdown link, without '#'. */
+    targetHeading?: string;
+    /** Explicit block ID targeted by an Obsidian link, without '^'. */
+    targetBlockId?: string;
     /** Typed frontmatter relation such as supports or contradicts. */
     relation?: string;
 }
@@ -268,6 +319,28 @@ export interface TaskItem {
     line: number;
     text: string;
     status: 'open' | 'completed';
+    /** Content-derived identity; remains usable when surrounding lines move. */
+    taskId: string;
+}
+export interface UpdateTaskParams {
+    path: string;
+    /** Preferred identity from list_tasks. */
+    taskId?: string;
+    /** Backward-compatible fallback locator. */
+    line?: number;
+    status: 'open' | 'completed';
+    expectedRevision: string;
+}
+export interface UpdateTaskResult {
+    success: boolean;
+    path: string;
+    line: number;
+    status: 'open' | 'completed';
+    taskId?: string;
+    previousStatus?: 'open' | 'completed';
+    previousRevision?: string;
+    revision?: string;
+    message: string;
 }
 export interface ListTasksParams {
     status?: TaskStatus;

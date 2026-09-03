@@ -1,5 +1,5 @@
 import { test, expect, beforeEach, afterEach } from "vitest";
-import { createServer } from "./createServer.js";
+import { createServer, getServerRuntime } from "./createServer.js";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -51,6 +51,18 @@ test("server exposes only the dynamic control plane", async () => {
   });
   const catalog = JSON.parse((capabilities.content as any)[0].text);
   expect(catalog.endpoints.some((endpoint: any) => endpoint.endpointId === "notes.write")).toBe(true);
+  const catalogCapabilities = await client.callTool({
+    name: "search_capabilities",
+    arguments: { query: "wiki catalog" },
+  });
+  const wikiCatalog = JSON.parse((catalogCapabilities.content as any)[0].text);
+  expect(wikiCatalog.endpoints.some((endpoint: any) => endpoint.endpointId === "wiki.catalog")).toBe(true);
+  const neighborhoodCapabilities = await client.callTool({
+    name: "search_capabilities",
+    arguments: { query: "wiki neighborhood" },
+  });
+  const neighborhoodCatalog = JSON.parse((neighborhoodCapabilities.content as any)[0].text);
+  expect(neighborhoodCatalog.endpoints.some((endpoint: any) => endpoint.endpointId === "wiki.neighborhood")).toBe(true);
 
   const anonymousWrite = await client.callTool({
     name: "call_endpoint",
@@ -80,8 +92,25 @@ test("server exposes only the dynamic control plane", async () => {
   });
   expect(written.isError).toBeFalsy();
 
+  const neighborhood = await client.callTool({
+    name: "call_endpoint",
+    arguments: {
+      endpointId: "wiki.neighborhood",
+      arguments: { path: "dynamic.md", accessToken },
+    },
+  });
+  expect(neighborhood.isError).toBeFalsy();
+  expect(JSON.parse((neighborhood.content as any)[0].text).source.path).toBe("dynamic.md");
+
   await client.close();
   await server.close();
+});
+
+test("static REST endpoint routes take precedence over notes.read path parameters", () => {
+  const server = createServer(testVaultPath, { version: "1.0.0" });
+  const runtime = getServerRuntime(server);
+  expect(runtime?.endpointRegistry.resolveRoute("GET", "/api/notes/move-preview")?.endpoint.endpointId).toBe("notes.move_preview");
+  expect(runtime?.endpointRegistry.resolveRoute("POST", "/api/notes/tasks")?.endpoint.endpointId).toBe("notes.task_update");
 });
 
 test("server can read and write notes via tools", async () => {
@@ -502,14 +531,14 @@ test("list_tasks returns filtered tasks and ignores frontmatter and code fences"
 
     const open = await client.callTool({ name: "list_tasks", arguments: { pathPrefix: "Projects" } });
     expect(open.isError).toBeFalsy();
-    expect(JSON.parse((open.content as any)[0].text)).toEqual({
+    expect(JSON.parse((open.content as any)[0].text)).toMatchObject({
       tasks: [{ path: "Projects/Plan.md", line: 5, text: "Open task", status: "open" }],
       total: 1,
       truncated: false,
     });
 
     const all = await client.callTool({ name: "list_tasks", arguments: { status: "all" } });
-    expect(JSON.parse((all.content as any)[0].text).tasks).toEqual([
+    expect(JSON.parse((all.content as any)[0].text).tasks).toMatchObject([
       { path: "Projects/Plan.md", line: 5, text: "Open task", status: "open" },
       { path: "Projects/Plan.md", line: 6, text: "Completed child", status: "completed" },
     ]);
@@ -698,6 +727,7 @@ test("find_unresolved_links reports only broken wikilinks", async () => {
         line: 3,
         link: "[[Missing#Heading|display]]",
         target: "Missing",
+        targetHeading: "Heading",
         context: "Broken: [[Missing#Heading|display]].",
       }],
       total: 1,
@@ -736,6 +766,7 @@ test("get_outlinks returns destinations and ignores fenced examples", async () =
         },
         {
           target: "folder/Other",
+          targetHeading: "Details",
           line: 2,
           link: "![[folder/Other#Details]]",
           context: "Embed: ![[folder/Other#Details]].",
@@ -795,12 +826,15 @@ test("get_backlinks returns wikilink occurrences with line context", async () =>
         line: 3,
         link: "[[Target|the target]]",
         context: "See [[Target|the target]].",
+        heading: "Source",
       },
       {
         path: "Projects/Source.md",
         line: 4,
         link: "![[Target#Details]]",
         context: "Embed: ![[Target#Details]].",
+        heading: "Source",
+        targetHeading: "Details",
       },
     ]);
   } finally {

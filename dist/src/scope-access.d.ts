@@ -8,6 +8,7 @@ export declare class ScopeAccessPolicy {
     isCommunityPath(path: string): boolean;
     canAccessPhysicalPath(path: string, principal?: ScopePrincipal): boolean;
     resolveExternalPath(value: string, principal?: ScopePrincipal): string;
+    private isPrivateServicePath;
     assertMutationAllowed(path: string, operation: string): void;
     canReferenceFrom(containerPath: string, referencedPath: string): boolean;
     toPublicPath(path: string): string;

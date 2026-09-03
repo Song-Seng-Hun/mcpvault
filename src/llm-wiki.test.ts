@@ -49,6 +49,103 @@ afterEach(async () => {
   await rm(vault, { recursive: true, force: true });
 });
 
+test('lint reports cross-note Properties type drift as an advisory organization issue', async () => {
+  const { server, client } = await setup();
+  try {
+    await writeFile(join(vault, 'one.md'), '---\ntags: [research]\n---\nOne\n');
+    await writeFile(join(vault, 'two.md'), '---\ntags: research\n---\nTwo\n');
+    const lint = await callJson(client, 'lint_wiki', { limit: 20 });
+    expect(lint.value.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'property_type_drift', path: 'two.md' }),
+    ]));
+    const health = await callJson(client, 'get_wiki_organization_health', { limit: 20 });
+    expect(health.value.byCode.property_type_drift).toBe(1);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('lint reports library vocabulary orphans, cycles, and deprecated facet use', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'vocabulary-health-owner', modelId: 'codex', password: 'vocabulary-health-password' });
+    const accessToken = registration.value.accessToken;
+    const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
+      const result = await client.callTool({ name: 'write_note', arguments: { path, content, frontmatter, expectedRevision: 'missing', accessToken } });
+      expect(result.isError).toBeFalsy();
+    };
+    await write('Knowledge/Old Term.md', '# Old Term\n', { note_kind: 'knowledge', lifecycle: 'evergreen', term_status: 'deprecated', term_replaced_by: '[[Knowledge/Preferred Term]]' });
+    await write('Knowledge/Preferred Term.md', '# Preferred Term\n', { note_kind: 'knowledge', lifecycle: 'evergreen', broader_terms: ['[[Knowledge/Other Term]]'] });
+    await write('Knowledge/Other Term.md', '# Other Term\n', { note_kind: 'knowledge', lifecycle: 'evergreen', broader_terms: ['[[Knowledge/Preferred Term]]'] });
+    await write('Knowledge/Facet User.md', '# Facet User\n', { note_kind: 'knowledge', lifecycle: 'evergreen', subject_terms: ['Old Term'] });
+    await write('Knowledge/Missing Parent.md', '# Missing Parent\n', { note_kind: 'knowledge', lifecycle: 'evergreen', broader_terms: ['[[Knowledge/Does Not Exist]]'] });
+
+    const lint = await callJson(client, 'lint_wiki', { limit: 50, accessToken });
+    expect(lint.value.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'broader_term_cycle' }),
+      expect.objectContaining({ code: 'unresolved_broader_terms', path: 'Knowledge/Missing Parent.md' }),
+      expect.objectContaining({ code: 'deprecated_term_used', path: 'Knowledge/Facet User.md' }),
+    ]));
+    const health = await callJson(client, 'get_wiki_organization_health', { limit: 50, accessToken });
+    expect(health.value.byCode.broader_term_cycle).toBeGreaterThan(0);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('term resolution, merge preview, and citation graph stay bounded and non-mutating', async () => {
+  await mkdir(join(vault, '_sources'), { recursive: true });
+  const sourceContent = '# Evidence\n\nThe source supports a durable claim.\n';
+  const sourceHash = createHash('sha256').update(sourceContent).digest('hex');
+  await writeFile(join(vault, '_sources', 'paper.md'), [
+    '---',
+    'mcpvault_type: source',
+    'llm_wiki_type: source',
+    'immutable: true',
+    'title: A source paper',
+    'citation_key: paper-2026',
+    'source_type: paper',
+    `content_sha256: ${sourceHash}`,
+    '---',
+    sourceContent,
+  ].join('\n'));
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-resolution-owner', modelId: 'codex', password: 'organization-resolution-password' });
+    const accessToken = registration.value.accessToken;
+    const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
+      const result = await client.callTool({ name: 'write_note', arguments: { path, content, frontmatter, expectedRevision: 'missing', accessToken } });
+      expect(result.isError).toBeFalsy();
+      return callJson(client, 'read_note', { path, accessToken });
+    };
+    await write('Knowledge/AI Agent.md', '# AI Agent\n\nA canonical concept.\n', { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', aliases: ['agentic model'], stable_id: 'ai-agent' });
+    await write('Knowledge/Old Agent Term.md', '# Old Agent Term\n', { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'superseded', term_status: 'deprecated', term_replaced_by: '[[Knowledge/AI Agent]]' });
+    const resolved = await callJson(client, 'call_endpoint', { endpointId: 'wiki.resolve_term', arguments: { query: 'agentic model', accessToken, maxChars: 3000 } });
+    expect(resolved.value.resolved).toMatchObject({ canonicalTerm: 'AI Agent', path: 'Knowledge/AI Agent.md' });
+    expect(resolved.value.matches[0]).toMatchObject({ matchKind: 'alias', matchedTerm: 'agentic model' });
+
+    const source = await write('Knowledge/Source Copy.md', '# Source Copy\n\n[[Knowledge/AI Agent]]\n\nA source-backed claim.\n', { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'review', stable_id: 'source-copy', evidence_paths: ['_sources/paper.md'] });
+    const target = await write('Knowledge/Canonical Copy.md', '# Canonical Copy\n\n[[Knowledge/AI Agent]]\n\nA consolidated claim.\n', { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', stable_id: 'canonical-copy', evidence_paths: ['_sources/paper.md'] });
+    const merge = await callJson(client, 'call_endpoint', { endpointId: 'wiki.merge_preview', arguments: { sourcePath: 'Knowledge/Source Copy.md', targetPath: 'Knowledge/Canonical Copy.md', accessToken, maxChars: 5000 } });
+    expect(merge.value).toMatchObject({ mode: 'bounded_merge_preview', recommendation: 'do_not_merge_without_identity_decision' });
+    expect(merge.value.conflicts).toEqual(expect.arrayContaining(['different_titles', 'different_stable_ids', 'different_lifecycles', 'shared_evidence']));
+    expect(merge.value.source.revision).toBe(source.value.revision);
+    expect(merge.value.target.revision).toBe(target.value.revision);
+    expect(merge.value.note).toContain('no files');
+
+    const graph = await callJson(client, 'call_endpoint', { endpointId: 'wiki.citation_graph', arguments: { accessToken, limit: 10, maxChars: 5000 } });
+    expect(graph.value.totals).toMatchObject({ sources: 1 });
+    expect(graph.value.sources).toEqual(expect.arrayContaining([expect.objectContaining({ path: '_sources/paper.md', usedByCount: 2 })]));
+    expect(graph.value.edges).toEqual(expect.arrayContaining([expect.objectContaining({ from: 'Knowledge/Source Copy.md', to: '_sources/paper.md', relation: 'evidence' })]));
+    expect(JSON.stringify(graph.value).length).toBeLessThanOrEqual(5000);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 async function setup() {
   const server = createServer(vault, { version: '1.0.0' });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -76,6 +173,35 @@ test('recognizes a manually maintained public schema without frontmatter', async
     expect(orientation.value.nextActions).toEqual(expect.arrayContaining([
       expect.objectContaining({ tool: 'notes.read', arguments: { path: '_wiki/SCHEMA.md' } }),
     ]));
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('catalog facets and explainable knowledge neighborhoods stay bounded', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'neighborhood-owner', modelId: 'codex', password: 'neighborhood-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
+      const result = await client.callTool({ name: 'write_note', arguments: { path, content, frontmatter, expectedRevision: 'missing', accessToken } });
+      expect(result.isError).toBeFalsy();
+    };
+    await write('Knowledge/Anchor.md', '# Anchor\n\nA durable anchor. [[Knowledge/Linked]]\n', { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', moc: '[[MOCs/Research]]', tags: ['research', 'anchor'] });
+    await write('Knowledge/Linked.md', '# Linked\n\n[[Knowledge/Anchor]]\n', { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'review', moc: '[[MOCs/Research]]', tags: ['research'] });
+    await write('Knowledge/Project.md', '# Project\n', { llm_wiki_type: 'knowledge', note_kind: 'project', lifecycle: 'active', project: '[[Projects/Build]]', tags: ['build'] });
+
+    const catalog = await callJson(client, 'get_wiki_catalog', { includeFacets: true, facetLimit: 10, limit: 2, maxChars: 5000, accessToken });
+    expect(catalog.value.facets).toMatchObject({ noteKind: { knowledge: 1, atomic: 1, project: 1 }, lifecycle: { evergreen: 1, review: 1, active: 1 }, tag: { research: 2 } });
+    expect(catalog.value.entries).toHaveLength(2);
+
+    const neighborhood = await callJson(client, 'get_wiki_neighborhood', { path: 'Knowledge/Anchor.md', limit: 5, maxChars: 3000, accessToken });
+    expect(neighborhood.value.source.path).toBe('Knowledge/Anchor.md');
+    expect(neighborhood.value.neighbors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/Linked.md', reasons: expect.arrayContaining(['direct_link', 'shared_moc']) }),
+    ]));
+    expect(neighborhood.value.neighbors.every((item: Record<string, unknown>) => !('content' in item))).toBe(true);
   } finally {
     await client.close();
     await server.close();
@@ -127,10 +253,10 @@ test('questions, negative knowledge, locators, event review, MOC coverage, and B
     const registration = await callJson(client, 'register_scope_account', { accountId: 'remaining-priorities-owner', modelId: 'codex', password: 'remaining-priorities-password' });
     const accessToken = registration.value.accessToken;
     const source = await callJson(client, 'ingest_source', {
-      sourceId: 'remaining-priorities-source', title: 'Remaining priorities source', content: '# Source\n\n## Result\n\nThe rejected approach failed under load. ^remaining-result', sourceType: 'paper', citationKey: 'remaining-priorities-2026', author: 'Research Group', publishedAt: '2026-01-01', retrievedAt: '2026-09-03', capturedBy: 'codex', accessToken,
+      sourceId: 'remaining-priorities-source', title: 'Remaining priorities source', content: '# Source\n\n## Result\n\nThe rejected approach failed under load. ^remaining-result', sourceType: 'paper', citationKey: 'remaining-priorities-2026', author: 'Research Group', publishedAt: '2026-01-01', retrievedAt: '2026-09-03', sourceFamily: 'remaining-priorities', sourceVersion: '2026-09-edition-1', capturedBy: 'codex', accessToken,
     });
     const sourceTrust = await callJson(client, 'get_wiki_source_trust', { accessToken });
-    expect(sourceTrust.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ citationKey: 'remaining-priorities-2026', sourceType: 'paper', author: 'Research Group', publishedAt: '2026-01-01', retrievedAt: '2026-09-03' })]));
+    expect(sourceTrust.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ citationKey: 'remaining-priorities-2026', sourceType: 'paper', author: 'Research Group', publishedAt: '2026-01-01', retrievedAt: '2026-09-03', sourceFamily: 'remaining-priorities', sourceVersion: '2026-09-edition-1' })]));
     await client.callTool({ name: 'write_note', arguments: {
       path: 'Knowledge/Related.md', content: '# Related\n\nThe linked context is stable.\n', expectedRevision: 'missing', accessToken,
     } });
@@ -367,6 +493,38 @@ test('project packet exposes Natural Planning gaps and lint catches citation col
   }
 });
 
+test('review records bounded history and split preview stays revision-safe', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'review-split-owner', modelId: 'codex', password: 'review-split-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const source = await callJson(client, 'ingest_source', { sourceId: 'review-split-source', title: 'Review split source', content: 'The source supports the note.', capturedBy: 'codex', accessToken });
+    const published = await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Review.md', content: '# Review\n\nGrounded body.', evidencePaths: [source.value.path],
+      noteKind: 'knowledge', lifecycle: 'review', reviewPolicy: 'manual', author: 'codex', expectedRevision: 'missing', accessToken,
+    });
+    const reviewed = await callJson(client, 'review_wiki_note', {
+      path: 'Knowledge/Review.md', reviewOutcome: 'confirmed', reviewReason: 'source_changed', nextLifecycle: 'evergreen',
+      reviewedBy: 'codex', expectedRevision: published.value.revision, accessToken,
+    });
+    expect(reviewed.value).toMatchObject({ reviewCount: 1, reviewReopenCount: 0, reviewTrigger: 'source_changed' });
+
+    await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/Broad.md', content: '# Broad\n\n## First idea\n\nOne claim.\n\n## Second idea\n\nAnother claim.\n',
+      expectedRevision: 'missing', accessToken,
+    } });
+    const preview = await callJson(client, 'preview_wiki_split', { path: 'Knowledge/Broad.md', heading: 'First idea', targetPath: 'Knowledge/First idea.md', accessToken });
+    expect(preview.value).toMatchObject({ mode: 'preview', sourcePath: 'Knowledge/Broad.md', heading: 'First idea', targetExists: false, collision: 'none' });
+    expect(preview.value.content).toContain('One claim.');
+    expect(preview.value.nextSteps).toEqual(expect.arrayContaining([expect.stringContaining('expectedRevision') ]));
+    const broad = await callJson(client, 'read_note', { path: 'Knowledge/Broad.md', accessToken });
+    expect(broad.value.content).toContain('Second idea');
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('ingest, publish, catalog, lint, and immutable source enforcement form one workflow', async () => {
   const { server, client } = await setup();
   try {
@@ -463,10 +621,10 @@ test('organization metadata, catalog facets, review queue, and lint warnings sta
       path: 'Knowledge/MOCs/LLM Wiki.md', content: '# LLM Wiki MOC\n\n[[Projects/MCPVault]]\n', expectedRevision: 'missing', accessToken,
     } });
     await client.callTool({ name: 'write_note', arguments: {
-      path: 'Inbox/Rough capture.md', content: '# Rough capture\n\nSort this later.\n', expectedRevision: 'missing', accessToken,
+      path: 'Inbox/Rough capture.md', content: '# Rough capture\n\nSort this later.\n', frontmatter: { captured_at: '2000-01-01T00:00:00.000Z', updated_at: '2000-01-01T00:00:00.000Z' }, expectedRevision: 'missing', accessToken,
     } });
     const inbox = await callJson(client, 'get_wiki_inbox', { limit: 2, maxChars: 1600, accessToken });
-    expect(inbox.value).toMatchObject({ total: 1, items: [expect.objectContaining({ path: 'Inbox/Rough capture.md' })] });
+    expect(inbox.value).toMatchObject({ total: 1, ageBands: { stale: 1 }, oldestAgeDays: expect.any(Number), items: [expect.objectContaining({ path: 'Inbox/Rough capture.md', agingBand: 'stale', suggestedAction: 'clarify_or_archive_this_old_capture' })] });
     const rough = await callJson(client, 'read_note', { path: 'Inbox/Rough capture.md', accessToken });
     const triaged = await callJson(client, 'triage_wiki_note', {
       path: 'Inbox/Rough capture.md', noteKind: 'literature', lifecycle: 'active', project: '[[Projects/MCPVault]]',
@@ -494,6 +652,15 @@ test('organization metadata, catalog facets, review queue, and lint warnings sta
 
     const queue = await callJson(client, 'get_wiki_review_queue', { limit: 1, maxChars: 1200, accessToken });
     expect(queue.value).toMatchObject({ total: 1, truncated: false, items: [expect.objectContaining({ noteKind: 'atomic', lifecycle: 'review', overdue: true })] });
+    const organizationNote = await callJson(client, 'read_note', { path: 'Knowledge/Atomic/Organization.md', accessToken });
+    const snoozed = await callJson(client, 'triage_wiki_note', {
+      path: 'Knowledge/Atomic/Organization.md', reviewSnoozedUntil: '2099-01-01', reviewSnoozeReason: 'Waiting for the next source edition.',
+      expectedRevision: organizationNote.value.revision, accessToken,
+    });
+    const snoozedRead = await callJson(client, 'read_note', { path: 'Knowledge/Atomic/Organization.md', accessToken });
+    expect(snoozedRead.value.fm.review_snoozed_until).toBe('2099-01-01');
+    const snoozedQueue = await callJson(client, 'get_wiki_review_queue', { limit: 1, maxChars: 1200, accessToken });
+    expect(snoozedQueue.value.items).not.toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Atomic/Organization.md' })]));
 
     const lint = await callJson(client, 'lint_wiki', { accessToken });
     expect(lint.value.issues).toEqual(expect.arrayContaining([
@@ -651,6 +818,429 @@ test('claim provenance, progressive projections, duplicate preflight, impact, an
     await client.callTool({ name: 'write_note', arguments: { path: 'Knowledge/Old.md', content: '# Old\n\nOld knowledge.', frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', updated_at: '2020-01-01T00:00:00.000Z', created_at: '2020-01-01T00:00:00.000Z' }, expectedRevision: 'missing', accessToken } });
     const unused = await callJson(client, 'get_wiki_unused_knowledge', { olderThanDays: 30, accessToken });
     expect(unused.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Old.md', suggestedAction: 'review_then_archive_or_supersede' })]));
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('next actions and knowledge rediscovery stay bounded while graph health checks epistemic flow', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-signals-owner', modelId: 'codex', password: 'organization-signals-password' });
+    const accessToken = registration.value.accessToken;
+    const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
+      const result = await client.callTool({ name: 'write_note', arguments: { path, content, frontmatter, expectedRevision: 'missing', accessToken } });
+      expect(result.isError).toBeFalsy();
+    };
+    const dynamic = (endpointId: string, arguments_: Record<string, unknown>) => callJson(client, 'call_endpoint', { endpointId, arguments: arguments_ });
+
+    await write('Projects/Research.md', '# Research project\n\n## Support\n\n[[Knowledge/Atomic idea]]\n', {
+      llm_wiki_type: 'knowledge', note_kind: 'project', lifecycle: 'active', task_status: 'next_action',
+      next_action: 'Inspect the source implementation', task_context: '@computer', due_at: '2030-01-01T00:00:00.000Z', time_estimate_minutes: 30, energy: 'high', effort: 'high',
+    });
+    await write('Tasks/Read.md', '# Read task\n', {
+      llm_wiki_type: 'knowledge', note_kind: 'task', lifecycle: 'active', task_status: 'next_action',
+      next_actions: ['Read the primary paper', 'Extract one claim'], task_context: '@research', time_estimate_minutes: 10, energy: 'low', effort: 'medium',
+    });
+    await write('Knowledge/Atomic idea.md', '# Atomic idea\n\nA reusable idea.\n', {
+      llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', summary: 'A reusable idea.',
+    });
+    await write('Knowledge/Open question.md', '# Open question\n', {
+      llm_wiki_type: 'knowledge', note_kind: 'question', lifecycle: 'review', epistemic_status: 'answered',
+    });
+    await write('Knowledge/Unsupported hypothesis.md', '# Unsupported hypothesis\n', {
+      llm_wiki_type: 'knowledge', note_kind: 'hypothesis', lifecycle: 'review', epistemic_status: 'supported',
+    });
+    await write('Knowledge/Captured literature.md', '# Captured literature\n', {
+      llm_wiki_type: 'knowledge', note_kind: 'literature', lifecycle: 'active', interpretation_status: 'unprocessed',
+    });
+    await write('Knowledge/Un grounded synthesis.md', '# Un grounded synthesis\n', {
+      llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', interpretation_status: 'synthesized',
+    });
+    await write('Knowledge/Typed gap.md', '# Typed gap\n', {
+      llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', supports: ['[[Knowledge/Does not exist]]'],
+    });
+
+    const computer = await dynamic('wiki.next_actions', { context: '@computer', limit: 10, maxChars: 3000, accessToken });
+    expect(computer.value).toMatchObject({ context: '@computer', total: 1, items: [expect.objectContaining({ path: 'Projects/Research.md', context: '@computer', action: 'Inspect the source implementation' })] });
+    expect(computer.value.items[0]).not.toHaveProperty('projectSupport');
+    const lowEnergy = await dynamic('wiki.next_actions', { maxMinutes: 15, energy: 'low', accessToken });
+    expect(lowEnergy.value).toMatchObject({ selection: { maxMinutes: 15, energy: 'low' }, total: 2 });
+    expect(lowEnergy.value.items.every((item: any) => item.path === 'Tasks/Read.md')).toBe(true);
+    const allActions = await dynamic('wiki.next_actions', { limit: 2, maxChars: 1200, accessToken });
+    expect(allActions.value).toMatchObject({ total: 3, truncated: true });
+    expect(allActions.value.items.length).toBeLessThanOrEqual(2);
+    expect(JSON.stringify(allActions.value).length).toBeLessThanOrEqual(1200);
+
+    const resurfaced = await dynamic('wiki.resurface', { limit: 3, maxChars: 1800, accessToken });
+    expect(resurfaced.value).toMatchObject({ total: 8, rotationDate: expect.any(String) });
+    expect(resurfaced.value.items.length).toBeLessThanOrEqual(3);
+    for (const item of resurfaced.value.items) {
+      expect(item).toMatchObject({ path: expect.stringMatching(/^(?:Knowledge|Projects|Tasks)\//), reasons: expect.any(Array) });
+    }
+    expect(JSON.stringify(resurfaced.value).length).toBeLessThanOrEqual(1800);
+
+    const graph = await callJson(client, 'get_wiki_graph_health', { limit: 20, maxChars: 5000, accessToken });
+    expect(graph.value.epistemicConsistency.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/Open question.md', reasons: expect.arrayContaining(['answered_without_answer_relation']) }),
+      expect.objectContaining({ path: 'Knowledge/Unsupported hypothesis.md', reasons: expect.arrayContaining(['resolved_hypothesis_without_evidence']) }),
+    ]));
+    expect(graph.value.knowledgeFlow).toMatchObject({ stages: { unprocessed: 1, synthesized: 1 }, literatureWithoutSource: { total: 1 }, synthesisWithoutInputs: { total: 1 } });
+    expect(graph.value.typedRelations.unresolved.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Typed gap.md', relation: 'supports' })]));
+    const contract = await callJson(client, 'get_wiki_property_contract', { accessToken });
+    expect(contract.value.relations).toEqual(expect.arrayContaining([expect.objectContaining({ field: 'supports', direction: 'directional' })]));
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('composition candidates, projection-only updates, and waiting follow-up signals stay bounded and revision-safe', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-maintenance-owner', modelId: 'codex', password: 'organization-maintenance-password' });
+    const accessToken = registration.value.accessToken;
+    const body = [
+      '# Broad note',
+      '',
+      '## First section',
+      '',
+      'This paragraph combines several reusable claims. It links to [[Knowledge/Atomic idea]] and [[Knowledge/Supporting idea]]. It should be reviewed as a possible multi-claim block.',
+      '',
+      ...Array.from({ length: 5 }, (_, index) => [`First reusable observation ${index + 1}.`, '']).flat(),
+      '',
+      '## Second section',
+      '',
+      ...Array.from({ length: 5 }, (_, index) => [`Second reusable observation ${index + 1}.`, '']).flat(),
+      '',
+      '## Third section',
+      '',
+      ...Array.from({ length: 5 }, (_, index) => [`Third reusable observation ${index + 1}.`, '']).flat(),
+    ].join('\n');
+    const written = await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/Broad composition.md',
+      content: body,
+      frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', stable_id: 'broad-composition' },
+      expectedRevision: 'missing', accessToken,
+    } });
+    expect(written.isError).toBeFalsy();
+
+    const dynamic = (endpointId: string, arguments_: Record<string, unknown>) => callJson(client, 'call_endpoint', { endpointId, arguments: arguments_ });
+    const candidates = await dynamic('wiki.composition_candidates', { limit: 5, maxChars: 3000, accessToken });
+    expect(candidates.value).toMatchObject({ total: 1, items: [expect.objectContaining({ path: 'Knowledge/Broad composition.md', suggestedTool: 'wiki.split_preview' })] });
+    expect(candidates.value.items[0].signals).toEqual(expect.arrayContaining(['many_sections', 'many_paragraphs', 'multi_claim_paragraphs']));
+    expect(candidates.value.items[0].paragraphCandidates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ startLine: expect.any(Number), endLine: expect.any(Number), sentenceCount: 3, linkCount: 2 }),
+    ]));
+    expect(JSON.stringify(candidates.value).length).toBeLessThanOrEqual(3000);
+
+    const before = await callJson(client, 'read_note', { path: 'Knowledge/Broad composition.md', accessToken });
+    const projection = await dynamic('wiki.projection_update', {
+      path: 'Knowledge/Broad composition.md',
+      summary: 'A broad note with three reusable sections.',
+      keyPoints: ['Three sections are candidates for reuse.'],
+      summaryLayer: 2,
+      expectedRevision: before.value.revision,
+      accessToken,
+    });
+    expect(projection.value).toMatchObject({ projection: { summaryLayer: 2, summaryFresh: true, bodyChanged: false } });
+    const after = await callJson(client, 'read_note', { path: 'Knowledge/Broad composition.md', accessToken });
+    expect(after.value.content).toBe(before.value.content);
+    expect(after.value.fm.stable_id).toBe('broad-composition');
+
+    await mkdir(join(vault, 'Projects'), { recursive: true });
+    await writeFile(join(vault, 'Projects', 'Waiting.md'), [
+      '---',
+      'llm_wiki_type: knowledge',
+      'note_kind: project',
+      'lifecycle: active',
+      'task_status: waiting',
+      'waiting_for: an external review',
+      'waiting_since: 2020-01-01T00:00:00.000Z',
+      '---',
+      '# Waiting project',
+      '',
+      'A project awaiting a response.',
+      '',
+    ].join('\n'));
+    const dashboard = await callJson(client, 'get_wiki_review_dashboard', { limit: 20, accessToken });
+    expect(dashboard.value.sections.waiting.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Projects/Waiting.md', waitingAgeDays: expect.any(Number), followUpNeeded: true, followUpReason: 'waiting_14_days_or_more' }),
+    ]));
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('Property contract is discoverable and review cadence schedules the next review', async () => {
+  const { server, client } = await setup();
+  try {
+    const contract = await callJson(client, 'get_wiki_property_contract', { maxChars: 12000 });
+    expect(contract.value.fields).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'note_kind', type: 'text' }),
+      expect.objectContaining({ name: 'review_interval_days', type: 'number' }),
+    ]));
+
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'cadence-owner', modelId: 'codex', password: 'cadence-owner-password' });
+    const accessToken = registration.value.accessToken;
+    await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/Cadence.md', content: '# Cadence\n\nA note with a declared review cadence.\n',
+      frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', review_interval_days: 7 }, expectedRevision: 'missing', accessToken,
+    } });
+    const before = await callJson(client, 'read_note', { path: 'Knowledge/Cadence.md', includeContent: false, accessToken });
+    const reviewed = await callJson(client, 'review_wiki_note', { path: 'Knowledge/Cadence.md', reviewOutcome: 'confirmed', expectedRevision: before.value.revision, accessToken });
+    expect(reviewed.value).toMatchObject({ reviewOutcome: 'confirmed', reviewIntervalDays: 7, reviewAt: expect.any(String) });
+    const reviewedAt = Date.parse(reviewed.value.reviewedAt);
+    const nextReviewAt = Date.parse(reviewed.value.reviewAt);
+    expect(nextReviewAt - reviewedAt).toBe(7 * 24 * 60 * 60 * 1000);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('authority, maintenance debt, answer packets, and adaptive review stay bounded', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-views-owner', modelId: 'codex', password: 'organization-views-password' });
+    const accessToken = registration.value.accessToken;
+    const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
+      const result = await client.callTool({ name: 'write_note', arguments: { path, content, frontmatter, expectedRevision: 'missing', accessToken } });
+      expect(result.isError).toBeFalsy();
+    };
+    await write('Knowledge/Anchor.md', '# Anchor\n\nThe anchor claim. [[Knowledge/Support]] and [[Knowledge/Counter]].\n', {
+      title: 'Anchor concept', llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', aliases: ['Shared anchor'], stable_id: 'anchor-concept', review_policy: 'periodic', subject_terms: ['knowledge organization', 'retrieval'], domain: 'information management', methods: ['Zettelkasten'], audience: ['agents'],
+    });
+    await write('Knowledge/Support.md', '# Support\n\nSupporting context.\n', {
+      title: 'Supporting context', llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', aliases: ['Anchor support'], stable_id: 'anchor-support',
+    });
+    await write('Knowledge/Counter.md', '# Counter\n\nA failed counterexample worth checking.\n', {
+      title: 'Counterexample', llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'review', knowledge_status: 'disputed', knowledge_polarity: 'negative', negative_type: 'counterexample', negative_reusable_lesson: 'Check the boundary conditions before reusing the claim.',
+    });
+    await write('Knowledge/Alias-two.md', '# Alias two\n', {
+      title: 'Another concept', llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', aliases: ['Shared anchor'], stable_id: 'another-concept',
+    });
+    await write('Inbox/Rough.md', '# Rough\n\nUnsorted capture.\n', { note_kind: 'fleeting', lifecycle: 'inbox' });
+    await write('Knowledge/Stale.md', '# Stale\n\nBody changed after summary.\n', {
+      title: 'Stale projection', llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', summary: 'Old summary', summary_of_content_sha256: '0000000000000000000000000000000000000000000000000000000000000000', updated_at: '2020-01-01T00:00:00.000Z', created_at: '2020-01-01T00:00:00.000Z',
+    });
+    await write('Knowledge/Legacy-anchor.md', '# Legacy anchor\n\nUse the preferred anchor term instead.\n', {
+      title: 'Legacy anchor', llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', term_status: 'deprecated', term_replaced_by: '[[Knowledge/Anchor]]', broader_terms: ['[[Knowledge/Core]]'], related_terms: ['[[Knowledge/Support]]'],
+    });
+    await write('Knowledge/Project misplaced.md', '# Project misplaced\n\nThis belongs with active work.\n', {
+      title: 'Project misplaced', llm_wiki_type: 'knowledge', note_kind: 'project', lifecycle: 'active',
+    });
+    await write('Knowledge/Open question.md', '# Open question\n\nWhich retrieval projection is most useful?\n', {
+      title: 'Open retrieval question', llm_wiki_type: 'knowledge', note_kind: 'question', lifecycle: 'active', epistemic_status: 'open', subject_terms: ['retrieval'], domain: 'information management',
+    });
+
+    const authority = await callJson(client, 'get_wiki_authority_map', { query: 'shared anchor', accessToken });
+    expect(authority.value.entries).toEqual(expect.arrayContaining([expect.objectContaining({ term: 'Shared anchor', collision: 'term_used_by_multiple_notes', address: expect.any(String), stableIds: expect.arrayContaining(['anchor-concept', 'another-concept']) })]));
+    const legacyAuthority = await callJson(client, 'get_wiki_authority_map', { query: 'legacy anchor', accessToken });
+    expect(legacyAuthority.value.entries).toEqual(expect.arrayContaining([expect.objectContaining({ term: 'Legacy anchor', status: 'deprecated', replacedBy: ['[[Knowledge/Anchor]]'], broaderTerms: ['[[Knowledge/Core]]'] })]));
+
+    const catalog = await callJson(client, 'get_wiki_catalog', { orderBy: 'alphabet', limit: 10, accessToken });
+    expect(catalog.value).toMatchObject({ orderBy: 'alphabet' });
+    expect(catalog.value.entries[0].title).toBe('Anchor concept');
+    const facetedCatalog = await callJson(client, 'get_wiki_catalog', { includeFacets: true, limit: 10, accessToken });
+    expect(facetedCatalog.value.facets).toMatchObject({ domain: { 'information management': expect.any(Number) }, subjectTerm: { retrieval: expect.any(Number) }, method: { Zettelkasten: expect.any(Number) }, audience: { agents: expect.any(Number) } });
+
+    const debt = await callJson(client, 'get_wiki_maintenance_debt', { olderThanDays: 30, limit: 20, accessToken });
+    expect(debt.value.counts).toMatchObject({ inbox_capture: 1, stale_summary: 1 });
+    expect(debt.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Inbox/Rough.md' }), expect.objectContaining({ path: 'Knowledge/Stale.md', priority: 'high' })]));
+
+    const packet = await callJson(client, 'get_wiki_answer_packet', { path: 'Knowledge/Anchor.md', includeSemantic: false, maxChars: 5000, accessToken });
+    expect(packet.value).toMatchObject({ mode: 'bounded_answer_packet', source: expect.objectContaining({ path: 'Knowledge/Anchor.md' }) });
+    expect(packet.value.supporting).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Support.md', relationToSource: 'supporting_context' })]));
+    expect(packet.value.counterpoints).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Counter.md', relationToSource: 'counterpoint_or_review' })]));
+    const neighborhood = await callJson(client, 'get_wiki_neighborhood', { path: 'Knowledge/Anchor.md', includeSemantic: false, maxChars: 4000, accessToken });
+    expect(neighborhood.value.neighbors).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Support.md', pathTrace: expect.arrayContaining([expect.stringContaining('direct_link')]) })]));
+    const trail = await callJson(client, 'get_wiki_trail', { fromPath: 'Knowledge/Anchor.md', toPath: 'Knowledge/Support.md', maxDepth: 2, accessToken });
+    expect(trail.value.paths).toEqual(expect.arrayContaining([expect.objectContaining({ nodes: ['Knowledge/Anchor.md', 'Knowledge/Support.md'], length: 1 })]));
+    const placements = await callJson(client, 'get_wiki_placement_candidates', { limit: 10, accessToken });
+    expect(placements.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Project misplaced.md', suggestedFolder: 'Projects', reasons: expect.arrayContaining(['project_or_task_outside_projects']) })]));
+    const gaps = await callJson(client, 'get_wiki_knowledge_gaps', { limit: 10, accessToken });
+    expect(gaps.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Open question.md', noteKind: 'question', epistemicStatus: 'open', reasons: ['question_open'] })]));
+
+    const adaptive = await callJson(client, 'read_note', { path: 'Knowledge/Anchor.md', includeContent: false, accessToken });
+    const reviewed = await callJson(client, 'review_wiki_note', { path: 'Knowledge/Anchor.md', reviewOutcome: 'confirmed', reviewedBy: 'codex', expectedRevision: adaptive.value.revision, accessToken });
+    expect(reviewed.value).toMatchObject({ adaptiveReviewInterval: true, reviewIntervalDays: 30, reviewAt: expect.any(String) });
+    const health = await callJson(client, 'get_wiki_organization_health', { limit: 10, accessToken });
+    expect(health.value.quarantine).toMatchObject({ total: expect.any(Number), items: expect.any(Array) });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('canonical lineage and optional active recall stay in the Markdown organization model', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'lineage-recall-owner', modelId: 'codex', password: 'lineage-recall-password' });
+    const accessToken = registration.value.accessToken;
+    const write = await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/Legacy.md', content: '# Legacy approach\n\nThe older approach.\n', frontmatter: {
+        llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'superseded', stable_id: 'legacy-approach', canonical_path: 'Knowledge/Current.md',
+        term_status: 'redirect', term_replaced_by: '[[Knowledge/Current]]', same_as: ['[[Knowledge/Current]]'], version_of: ['[[Knowledge/Current]]'],
+      }, expectedRevision: 'missing', accessToken,
+    } });
+    expect(write.isError).toBeFalsy();
+    const projection = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Legacy.md', accessToken });
+    expect(projection.value).toMatchObject({ canonicalPath: 'Knowledge/Current.md', relations: { same_as: ['[[Knowledge/Current]]'], version_of: ['[[Knowledge/Current]]'] } });
+
+    const recallWrite = await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/Recall.md', content: '# Recall\n\nA durable fact.\n', frontmatter: {
+        llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', recall_prompt: 'What is the durable fact?', recall_interval_days: 1, last_recalled_at: '2020-01-01T00:00:00.000Z', recall_quality: 'partial',
+      }, expectedRevision: 'missing', accessToken,
+    } });
+    expect(recallWrite.isError).toBeFalsy();
+    const gaps = await callJson(client, 'get_wiki_knowledge_gaps', { limit: 10, accessToken });
+    expect(gaps.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Recall.md', reasons: expect.arrayContaining(['recall_due']), recallPrompt: 'What is the durable fact?' })]));
+    const before = await callJson(client, 'read_note', { path: 'Knowledge/Recall.md', includeContent: false, accessToken });
+    const recalled = await callJson(client, 'record_wiki_recall', { path: 'Knowledge/Recall.md', recallQuality: 'good', expectedRevision: before.value.revision, accessToken });
+    expect(recalled.value).toMatchObject({ recallQuality: 'good', recallIntervalDays: 1, nextRecallAt: expect.any(String) });
+    const after = await callJson(client, 'read_note', { path: 'Knowledge/Recall.md', includeContent: false, accessToken });
+    expect(after.value.fm).toMatchObject({ recall_quality: 'good', recall_interval_days: 1 });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('agent active recall state is isolated from the shared knowledge note', async () => {
+  const { server, client } = await setup();
+  try {
+    const owner = await callJson(client, 'register_scope_account', { accountId: 'recall-isolation-owner', modelId: 'codex', password: 'recall-isolation-owner-password' });
+    const ownerToken = owner.value.accessToken;
+    const write = await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/Shared recall.md', content: '# Shared recall\n\nA fact shared by all agents.\n',
+      frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', recall_prompt: 'What is the shared fact?', recall_interval_days: 1 },
+      expectedRevision: 'missing', accessToken: ownerToken,
+    } });
+    expect(write.isError).toBeFalsy();
+    const agent = await callJson(client, 'register_scope_account', { accountId: 'recall-isolation-worker', modelId: 'codex', agentId: 'recall-isolation-worker', userId: 'recall-isolation-owner', password: 'recall-isolation-worker-password', accessToken: ownerToken });
+    const agentToken = agent.value.accessToken;
+    const before = await callJson(client, 'read_note', { path: 'Knowledge/Shared recall.md', includeContent: false, accessToken: agentToken });
+    const recalled = await callJson(client, 'record_wiki_recall', { path: 'Knowledge/Shared recall.md', recallQuality: 'good', expectedRevision: before.value.revision, accessToken: agentToken });
+    expect(recalled.value).toMatchObject({ recallQuality: 'good', recallHistoryCount: 1, recallStreak: 1, recallSuccessCount: 1, isolatedTo: expect.stringMatching(/^scope:\/\/agent\/recall-isolation-worker\/_continuity\/recall\/[a-f0-9]{64}\.md$/) });
+    const recalledAgain = await callJson(client, 'record_wiki_recall', { path: 'Knowledge/Shared recall.md', recallQuality: 'good', expectedRevision: before.value.revision, accessToken: agentToken });
+    expect(recalledAgain.value).toMatchObject({ recallHistoryCount: 2, recallStreak: 2, recallSuccessCount: 2 });
+    const after = await callJson(client, 'read_note', { path: 'Knowledge/Shared recall.md', includeContent: false, accessToken: ownerToken });
+    expect(after.value.fm).not.toHaveProperty('last_recalled_at');
+    expect(after.value.fm).not.toHaveProperty('recall_quality');
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('recall queue, near-duplicate review, and typed relation health stay bounded', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-quality-3-owner', modelId: 'codex', password: 'organization-quality-3-password' });
+    const accessToken = registration.value.accessToken;
+    const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
+      const result = await client.callTool({ name: 'write_note', arguments: { path, content, frontmatter, expectedRevision: 'missing', accessToken } });
+      expect(result.isError).toBeFalsy();
+    };
+    await write('Knowledge/Recall queue.md', '# Recall queue\n\nA durable fact about graph health.\n', {
+      llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', recall_prompt: 'What does graph health protect?', recall_interval_days: 1, last_recalled_at: '2020-01-01T00:00:00.000Z', recall_quality: 'failed',
+    });
+    await write('Knowledge/Agent Memory.md', '# Agent memory\n\nA durable note about agents, memory, graph health, and bounded review.\n', { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen' });
+    await write('Knowledge/Agent Memory System.md', '# Agent memory system\n\nA durable note about agents, memory, graph health, and bounded review.\n', { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen' });
+    await write('Knowledge/Question.md', '# Question\n', { llm_wiki_type: 'knowledge', note_kind: 'question', lifecycle: 'review', epistemic_status: 'open' });
+    await write('Knowledge/Concept.md', '# Concept\n', { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen' });
+    await write('Knowledge/Self.md', '# Self\n', { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', related: ['[[Knowledge/Self]]'], answers_questions: ['[[Knowledge/Concept]]'] });
+    await write('Knowledge/Topic.md', '# Topic\n', { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen' });
+    await write('Knowledge/Related.md', '# Related\n', { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', related: ['[[Knowledge/Topic]]'] });
+    await write('Archive/Topic.md', '# Topic archive\n', { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'archived' });
+    await write('Knowledge/Ambiguous.md', '# Ambiguous\n', { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', related: ['Topic'] });
+    await write('Knowledge/Tag One.md', '# Tag One\n', { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', tags: ['Research'], subject_terms: ['Unmodeled concept'] });
+    await write('Knowledge/Tag Two.md', '# Tag Two\n', { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', tags: ['research'] });
+    await write('Knowledge/Retention.md', '# Retention\n', { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'active', retention_policy: 'archive', retention_at: '2020-01-01', retention_reason: 'Old experiment retained for audit.' });
+
+    const recall = await callJson(client, 'call_endpoint', { endpointId: 'wiki.recall_queue', arguments: { limit: 5, maxChars: 3000, accessToken } });
+    expect(recall.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Recall queue.md', reason: 'previous_recall_failed' })]));
+    const reviewQueue = await callJson(client, 'get_wiki_review_queue', { limit: 20, maxChars: 8000, accessToken });
+    expect(reviewQueue.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Retention.md', retentionDue: true, reviewReasons: expect.arrayContaining(['retention_due']) })]));
+    const duplicates = await callJson(client, 'call_endpoint', { endpointId: 'wiki.duplicate_candidates', arguments: { limit: 10, maxChars: 5000, accessToken } });
+    expect(duplicates.value.items.some((item: any) => new Set([item.source, item.candidate]).size === 2 && [item.source, item.candidate].some((path: string) => path.endsWith('/Agent Memory.md')) && [item.source, item.candidate].some((path: string) => path.endsWith('/Agent Memory System.md')))).toBe(true);
+
+    const graph = await callJson(client, 'get_wiki_graph_health', { limit: 20, maxChars: 8000, accessToken });
+    expect(graph.value.typedRelations.self.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Self.md', relation: 'related' })]));
+    expect(graph.value.typedRelations.kindMismatches.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Self.md', relation: 'answers_questions', targetKind: 'knowledge' })]));
+    expect(graph.value.typedRelations.reciprocityMissing.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Related.md', relation: 'related', target: 'Knowledge/Topic.md' })]));
+    expect(graph.value.typedRelations.ambiguous.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Ambiguous.md', relation: 'related' })]));
+    const vocabulary = await callJson(client, 'call_endpoint', { endpointId: 'wiki.vocabulary_health', arguments: { limit: 10, maxChars: 5000, accessToken } });
+    expect(vocabulary.value.tagVariants).toEqual(expect.arrayContaining([expect.objectContaining({ key: 'research', reason: 'tag_spelling_or_case_variants' })]));
+    expect(vocabulary.value.unresolvedSubjectTerms).toEqual(expect.arrayContaining([expect.objectContaining({ term: 'Unmodeled concept', advisory: true })]));
+    const contract = await callJson(client, 'call_endpoint', { endpointId: 'wiki.property_contract', arguments: { maxChars: 4000, accessToken } });
+    expect(contract.value.conventions.nativeCompatibility).toMatchObject({ safeTypes: expect.arrayContaining(['list']), mcpManagedComplexFields: expect.arrayContaining(['claims', 'evidence']) });
+    const template = await callJson(client, 'call_endpoint', { endpointId: 'wiki.note_template', arguments: { noteKind: 'question', maxChars: 4000, accessToken } });
+    expect(template.value).toMatchObject({ templateId: 'question', noteKind: 'question', properties: { epistemic_status: 'open' } });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('organization projections expose relation reverse navigation, MOC hierarchy, redirects, and focused Bases views', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-projections-owner', modelId: 'codex', password: 'organization-projections-password' });
+    const accessToken = registration.value.accessToken;
+    const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
+      const result = await client.callTool({ name: 'write_note', arguments: { path, content, frontmatter, expectedRevision: 'missing', accessToken } });
+      expect(result.isError).toBeFalsy();
+    };
+    await write('Knowledge/Target.md', '# Target\n\nA durable target. ^target-line\n', { note_kind: 'atomic', lifecycle: 'evergreen', summary: 'Target summary.', primary_moc: '[[Knowledge/MOCs/Parent]]', domain: 'knowledge-management', related_terms: ['[[Knowledge/Support]]'] });
+    await write('Knowledge/Support.md', '# Support\n\nSupports the target.\n\nA nearby explanation.\n', { note_kind: 'atomic', lifecycle: 'evergreen', supports: ['[[Knowledge/Target]]'] });
+    await write('Knowledge/MOCs/Parent.md', '# Parent MOC\n\n[[Knowledge/MOCs/Child]]\n', { note_kind: 'moc', lifecycle: 'evergreen' });
+    await write('Knowledge/MOCs/Child.md', '# Child MOC\n\n[[Knowledge/Target]]\n', { note_kind: 'moc', lifecycle: 'evergreen', moc_parent: '[[Knowledge/MOCs/Parent]]' });
+    await write('Knowledge/Old.md', '# Old\n\nHistorical note.\n', { note_kind: 'knowledge', lifecycle: 'superseded', replaced_by: '[[Knowledge/Target]]', retention_reason: 'Replaced by the current target note.', retention_event: 'superseded', preserve_until: '2030-01-01', legal_hold: true });
+
+    const graph = await callJson(client, 'get_wiki_graph_health', { limit: 20, maxChars: 10000, accessToken });
+    expect(graph.value.relationNavigation.targets).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/Target.md', incoming: expect.arrayContaining([expect.objectContaining({ relation: 'supports', paths: ['Knowledge/Support.md'] })]) }),
+    ]));
+    expect(graph.value.mocHierarchy).toMatchObject({ total: 2, explicitParentEdges: 1, cycles: { total: 0 }, missingParents: { total: 0 } });
+    expect(graph.value.mocHierarchy.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/MOCs/Child.md', state: 'nested', resolvedParent: 'Knowledge/MOCs/Parent.md' }),
+    ]));
+
+    const projection = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Old.md', view: 'summary', accessToken });
+    expect(projection.value.redirect).toMatchObject({ state: 'superseded', replacement: '[[Knowledge/Target]]', action: 'preserve_under_hold' });
+    expect(projection.value).toMatchObject({ retentionEvent: 'superseded', preserveUntil: '2030-01-01', legalHold: true });
+
+    const targetProjection = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Target.md', view: 'summary', accessToken });
+    expect(targetProjection.value.navigation).toMatchObject({ primaryMoc: '[[Knowledge/MOCs/Parent]]', domain: 'knowledge-management' });
+    const blockProjection = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Target.md', view: 'section', blockId: 'target-line', contextBefore: 1, contextAfter: 1, accessToken });
+    expect(blockProjection.value).toMatchObject({ section: { startLine: 12, endLine: 12 }, context: { target: { startLine: 12, endLine: 12 } } });
+    expect(blockProjection.value.context.after).toEqual(expect.arrayContaining([expect.objectContaining({ line: 13 })]));
+
+    const bases = await callJson(client, 'get_wiki_bases_view', { view: 'inbox_oldest', accessToken });
+    expect(bases.value).toMatchObject({ view: 'inbox_oldest', matchingNotesExact: true });
+    expect(bases.value.content).toContain('note.lifecycle == "inbox"');
+    expect(bases.value.content).toContain('note.captured_at');
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('triage persists primary MOC and retention safety metadata through the endpoint', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-retention-owner', modelId: 'codex', password: 'organization-retention-password' });
+    const accessToken = registration.value.accessToken;
+    const captured = await callJson(client, 'capture_wiki_note', { path: 'Inbox/Retention capture.md', content: 'A captured preservation decision.', expectedRevision: 'missing', accessToken });
+    const triaged = await callJson(client, 'triage_wiki_note', {
+      path: 'Inbox/Retention capture.md', expectedRevision: captured.value.revision, accessToken,
+      primaryMoc: '[[Knowledge/MOCs/Operations]]', retentionEvent: 'created', preserveUntil: '2031-01-01', legalHold: true,
+    });
+    expect(triaged.value.frontmatter).toMatchObject({ primaryMoc: '[[Knowledge/MOCs/Operations]]', retentionEvent: 'created', preserveUntil: '2031-01-01', legalHold: true });
   } finally {
     await client.close();
     await server.close();

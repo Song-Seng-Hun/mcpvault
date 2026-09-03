@@ -7,7 +7,7 @@ import trash from 'trash';
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
 import { generateObsidianUri } from './uri.js';
-import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, MoveNoteParams, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult, DailyNoteResult, ListTasksParams, ListTasksResult, TaskItem, QueryNotesParams, QueryNotesResult, QueryNote, QueryNotesCursor } from './types.js';
+import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, MoveNoteParams, MoveNotePreviewParams, MoveNotePreviewResult, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult, DailyNoteResult, ListTasksParams, ListTasksResult, TaskItem, UpdateTaskParams, UpdateTaskResult, QueryNotesParams, QueryNotesResult, QueryNote, QueryNotesCursor } from './types.js';
 import { extractObsidianLinkOccurrences, findBacklinkMatches, findUnresolvedLinkMatches, resolveWikiLinkTargets } from './backlinks.js';
 import { buildDailyNotePath, resolveDailyDate, type DailyDateInput } from './daily.js';
 import type { VaultMetadataIndex } from './vault-index.js';
@@ -68,6 +68,101 @@ function compareQueryNotes(a: QueryNote, b: QueryNote, sortBy: string, sortOrder
   const comparison = compareQueryValues(aValue, bValue);
   if (comparison !== 0) return sortOrder === 'asc' ? comparison : -comparison;
   return a.path.localeCompare(b.path);
+}
+
+function taskIdentity(path: string, text: string, occurrence: number, rawText: string): string {
+  const blockId = /\s+\^([A-Za-z0-9][A-Za-z0-9_-]*)\s*$/.exec(rawText)?.[1];
+  if (blockId) return `task:block:${blockId}`;
+  const normalized = text.replace(/\s+/g, ' ').trim().toLowerCase();
+  const digest = createHash('sha256').update(`${path}\0${normalized}\0${occurrence}`).digest('hex').slice(0, 16);
+  return `task:content:${digest}`;
+}
+
+function extractTasks(content: string, path: string): TaskItem[] {
+  const tasks: TaskItem[] = [];
+  const occurrences = new Map<string, number>();
+  let inFrontmatter = false;
+  let frontmatterEnded = false;
+  let inFence = false;
+  let fenceChar = '';
+  let fenceLength = 0;
+  const fenceRegex = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+  const lines = content.split('\n');
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]!.replace(/\r$/, '');
+    if (!frontmatterEnded && index === 0 && line === '---') { inFrontmatter = true; continue; }
+    if (inFrontmatter) {
+      if (line === '---') { inFrontmatter = false; frontmatterEnded = true; }
+      continue;
+    }
+    const fenceMatch = fenceRegex.exec(line);
+    if (fenceMatch) {
+      const markers = fenceMatch[1]!;
+      const trailing = fenceMatch[2]!;
+      const char = markers.charAt(0);
+      if (!inFence) { inFence = true; fenceChar = char; fenceLength = markers.length; }
+      else if (char === fenceChar && markers.length >= fenceLength && trailing.trim() === '') { inFence = false; fenceChar = ''; fenceLength = 0; }
+      continue;
+    }
+    if (inFence) continue;
+    const taskMatch = /^(\s*)[-*+]\s+\[([ xX])\]\s+(.*)$/.exec(line);
+    if (!taskMatch) continue;
+    const text = taskMatch[3]!.trim();
+    const occurrenceKey = text.replace(/\s+/g, ' ').toLowerCase();
+    const occurrence = occurrences.get(occurrenceKey) || 0;
+    occurrences.set(occurrenceKey, occurrence + 1);
+    tasks.push({
+      path,
+      line: index + 1,
+      text,
+      status: taskMatch[2]!.toLowerCase() === 'x' ? 'completed' : 'open',
+      taskId: taskIdentity(path, text, occurrence, text),
+    });
+  }
+  return tasks;
+}
+
+function normalizeNoteTarget(path: string): string {
+  return path.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').replace(/\.(?:md|markdown|txt)$/i, '').toLowerCase();
+}
+
+function rewriteLinkText(link: string, sourcePath: string, newPath: string): string {
+  if (link.includes('[[')) {
+    const prefix = link.startsWith('!') ? '![[' : '[[';
+    const inner = link.slice(prefix.length, -2);
+    const anchorOrAlias = inner.search(/[|#]/);
+    const suffix = anchorOrAlias === -1 ? '' : inner.slice(anchorOrAlias);
+    return `${prefix}${newPath}${suffix}]]`;
+  }
+  const markdown = /^(\[[^\]]*\]\(\s*<?)([^>\s)]+)(.*)$/s.exec(link);
+  if (!markdown) return link;
+  const destination = relative(dirname(sourcePath), newPath).replace(/\\/g, '/') || newPath;
+  return `${markdown[1]}${destination}${markdown[3]}`;
+}
+
+function rewriteInboundLinks(content: string, sourcePath: string, oldPath: string, newPath: string, allPaths: string[]): { content: string; count: number } {
+  const lines = content.split('\n');
+  const occurrences = extractObsidianLinkOccurrences(content)
+    .filter(occurrence => resolveWikiLinkTargets(occurrence.target, allPaths).some(target => normalizeNoteTarget(target) === normalizeNoteTarget(oldPath)))
+    .sort((a, b) => a.line - b.line);
+  const byLine = new Map<number, typeof occurrences>();
+  for (const occurrence of occurrences) byLine.set(occurrence.line, [...(byLine.get(occurrence.line) || []), occurrence]);
+  let count = 0;
+  for (const [lineNumber, lineOccurrences] of byLine) {
+    let line = lines[lineNumber - 1] || '';
+    let cursor = 0;
+    for (const occurrence of lineOccurrences) {
+      const offset = line.indexOf(occurrence.link, cursor);
+      if (offset === -1) continue;
+      const replacement = rewriteLinkText(occurrence.link, sourcePath, newPath);
+      line = `${line.slice(0, offset)}${replacement}${line.slice(offset + occurrence.link.length)}`;
+      cursor = offset + replacement.length;
+      count += 1;
+    }
+    lines[lineNumber - 1] = line;
+  }
+  return { content: lines.join('\n'), count };
 }
 
 function selectSortedNotes(notes: QueryNote[], sortBy: string, sortOrder: 'asc' | 'desc', offset: number, limit: number): QueryNote[] {
@@ -926,10 +1021,14 @@ export class FileSystemService {
     }
   }
 
-  async moveNote(params: MoveNoteParams): Promise<MoveResult> {
-    const { overwrite = false } = params;
+  async moveNote(params: MoveNoteParams, canAccessPath: (path: string) => boolean = () => true): Promise<MoveResult> {
+    const { overwrite = false, updateLinks = false } = params;
     const oldPath = this.normalizePath(params.oldPath);
     const newPath = this.normalizePath(params.newPath);
+
+    if (oldPath.toLowerCase() === newPath.toLowerCase()) {
+      return { success: false, oldPath, newPath, message: 'Source and destination are identical; no move was performed.' };
+    }
 
     if (!this.pathFilter.isAllowed(oldPath)) {
       return {
@@ -951,6 +1050,7 @@ export class FileSystemService {
 
     const oldFullPath = this.resolveWritablePath(oldPath);
     const newFullPath = this.resolveWritablePath(newPath);
+    const linkBackups: Array<{ path: string; original: string; rewritten: string; updated: boolean }> = [];
 
     try {
       // Read source content (will throw ENOENT if not found)
@@ -967,6 +1067,37 @@ export class FileSystemService {
           };
         }
         throw error;
+      }
+
+      if (updateLinks) {
+        if (!params.expectedRevision || !String(params.expectedRevision).trim()) {
+          return { success: false, oldPath, newPath, message: 'updateLinks requires expectedRevision from a fresh read of the source note.' };
+        }
+        await this.assertExpectedRevision(oldPath, params.expectedRevision);
+        try {
+          if (!overwrite) await access(newFullPath, constants.F_OK);
+          if (!overwrite) return { success: false, oldPath, newPath, message: `Target file already exists: ${newPath}. Use overwrite=true to replace it.` };
+        } catch (error) {
+          if (overwrite || !(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error;
+        }
+        const allPaths = (await this.collectVaultFiles())
+          .filter(path => this.pathFilter.isAllowed(path) && canAccessPath(path) && /\.(?:md|markdown|txt)$/i.test(path))
+          .sort((a, b) => a.localeCompare(b));
+        for (const sourcePath of allPaths) {
+          if (sourcePath.toLowerCase() === oldPath.toLowerCase() || sourcePath.toLowerCase() === newPath.toLowerCase()) continue;
+          let sourceContent: string;
+          try { sourceContent = await readFile(this.resolvePath(sourcePath), 'utf-8'); } catch { continue; }
+          const rewritten = rewriteInboundLinks(sourceContent, sourcePath, oldPath, newPath, allPaths);
+          if (rewritten.count > 0) linkBackups.push({ path: sourcePath, original: sourceContent, rewritten: rewritten.content, updated: false });
+        }
+        for (const backup of linkBackups) {
+          const current = await this.readNote(backup.path);
+          if (current.originalContent !== backup.original) throw new Error(`Inbound link source changed during rename: ${backup.path}`);
+          assertNoteContentSize(backup.rewritten, backup.path);
+          await writeFile(this.resolveWritablePath(backup.path), backup.rewritten, 'utf-8');
+          backup.updated = true;
+          this.notifyNoteChanged(backup.path, 'upsert');
+        }
       }
 
       // Create directories if needed
@@ -1002,10 +1133,18 @@ export class FileSystemService {
         success: true,
         oldPath,
         newPath,
-        message: `Successfully moved note from ${oldPath} to ${newPath}`
+        message: `Successfully moved note from ${oldPath} to ${newPath}${linkBackups.length ? ` and updated ${linkBackups.length} inbound note${linkBackups.length === 1 ? '' : 's'}` : ''}`
       };
 
     } catch (error) {
+      for (const backup of linkBackups.filter(item => item.updated).reverse()) {
+        try {
+          await writeFile(this.resolveWritablePath(backup.path), backup.original, 'utf-8');
+          this.notifyNoteChanged(backup.path, 'upsert');
+        } catch {
+          // Preserve the original failure while making the partial rollback visible in the message.
+        }
+      }
       return {
         success: false,
         oldPath,
@@ -1212,6 +1351,50 @@ export class FileSystemService {
     return this.withMutationLock(path, () => this.updateFrontmatterUnlocked({ ...params, path }));
   }
 
+  /**
+   * Preview a note move without changing files. Markdown and wikilinks remain
+   * authoritative, so this resolves the current link graph and reports the
+   * exact bounded set of source lines that would need review after a rename.
+   * It deliberately does not rewrite links automatically.
+   */
+  async previewMoveNote(params: MoveNotePreviewParams, canAccessPath: (path: string) => boolean = () => true): Promise<MoveNotePreviewResult> {
+    const oldPath = this.normalizePath(params.oldPath);
+    const newPath = this.normalizePath(params.newPath);
+    if (!this.pathFilter.isAllowed(oldPath) || !canAccessPath(oldPath)) throw new Error(`Access denied: ${oldPath}`);
+    if (!this.pathFilter.isAllowed(newPath) || !canAccessPath(newPath)) throw new Error(`Access denied: ${newPath}`);
+    const requestedLimit = params.limit ?? 100;
+    if (!Number.isInteger(requestedLimit) || requestedLimit < 1) throw new Error('limit must be a positive integer');
+    const limit = Math.min(requestedLimit, 200);
+    const allPaths = (await this.collectVaultFiles())
+      .filter(path => this.pathFilter.isAllowed(path) && canAccessPath(path) && /\.(?:md|markdown|txt)$/i.test(path))
+      .sort((a, b) => a.localeCompare(b));
+    const normalizedOld = oldPath.replace(/\.(?:md|markdown|txt)$/i, '').toLowerCase();
+    const affectedLinks: MoveNotePreviewResult['affectedLinks'] = [];
+    for (const sourcePath of allPaths) {
+      if (sourcePath.toLowerCase() === oldPath.toLowerCase()) continue;
+      let content: string;
+      try { content = await readFile(this.resolvePath(sourcePath), 'utf-8'); } catch { continue; }
+      for (const occurrence of extractObsidianLinkOccurrences(content)) {
+        const targets = resolveWikiLinkTargets(occurrence.target, allPaths);
+        const referencesOld = targets.some(target => target.replace(/\.(?:md|markdown|txt)$/i, '').toLowerCase() === normalizedOld);
+        if (!referencesOld) continue;
+        affectedLinks.push({ sourcePath, line: occurrence.line, link: occurrence.link, context: occurrence.context, ...(occurrence.heading && { heading: occurrence.heading }), ...(occurrence.targetHeading && { targetHeading: occurrence.targetHeading }), ...(occurrence.targetBlockId && { targetBlockId: occurrence.targetBlockId }) });
+      }
+    }
+    return {
+      oldPath,
+      newPath,
+      targetExists: allPaths.some(path => path.toLowerCase() === oldPath.toLowerCase()),
+      collision: allPaths.some(path => path.toLowerCase() === newPath.toLowerCase()),
+      affectedLinks: affectedLinks.slice(0, limit),
+      total: affectedLinks.length,
+      truncated: affectedLinks.length > limit,
+      message: affectedLinks.length > 0
+        ? 'Review affected links before moving. The move operation does not rewrite Markdown links automatically.'
+        : 'No visible Markdown links currently resolve to this note. The move operation still requires normal revision/Git review.',
+    };
+  }
+
   private async updateFrontmatterUnlocked(params: UpdateFrontmatterParams): Promise<void> {
     const { frontmatter, merge = true, expectedRevision } = params;
     const path = this.normalizePath(params.path);
@@ -1243,6 +1426,9 @@ export class FileSystemService {
       const updatedContent = this.frontmatterHandler.preserveStringify(note.matter, frontmatter, note.content);
       assertNoteContentSize(updatedContent, path);
       await writeFile(fullPath, updatedContent, 'utf-8');
+      // Frontmatter-only mutations bypass writeNoteUnlocked, so explicitly
+      // invalidate the shared catalog/index read models before returning.
+      this.notifyNoteChanged(path, 'upsert');
     } else {
       // Replace frontmatter entirely (or no existing matter to preserve)
       await this.writeNoteUnlocked({
@@ -1976,60 +2162,8 @@ export class FileSystemService {
       } catch {
         continue;
       }
-
-      let inFrontmatter = false;
-      let frontmatterEnded = false;
-      let inFence = false;
-      let fenceChar = '';
-      let fenceLength = 0;
-      const fenceRegex = /^ {0,3}(`{3,}|~{3,})(.*)$/;
-      const lines = content.split('\n');
-
-      for (let index = 0; index < lines.length; index++) {
-        const line = lines[index]!.replace(/\r$/, '');
-
-        if (!frontmatterEnded && index === 0 && line === '---') {
-          inFrontmatter = true;
-          continue;
-        }
-        if (inFrontmatter) {
-          if (line === '---') {
-            inFrontmatter = false;
-            frontmatterEnded = true;
-          }
-          continue;
-        }
-
-        const fenceMatch = fenceRegex.exec(line);
-        if (fenceMatch) {
-          const markers = fenceMatch[1]!;
-          const trailing = fenceMatch[2]!;
-          const char = markers.charAt(0);
-          if (!inFence) {
-            inFence = true;
-            fenceChar = char;
-            fenceLength = markers.length;
-          } else if (char === fenceChar && markers.length >= fenceLength && trailing.trim() === '') {
-            inFence = false;
-            fenceChar = '';
-            fenceLength = 0;
-          }
-          continue;
-        }
-        if (inFence) continue;
-
-        const taskMatch = /^(\s*)[-*+]\s+\[([ xX])\]\s+(.*)$/.exec(line);
-        if (!taskMatch) continue;
-
-        const taskStatus: 'open' | 'completed' = taskMatch[2]!.toLowerCase() === 'x' ? 'completed' : 'open';
-        if (status !== 'all' && status !== taskStatus) continue;
-
-        tasks.push({
-          path,
-          line: index + 1,
-          text: taskMatch[3]!.trim(),
-          status: taskStatus,
-        });
+      for (const task of extractTasks(content, path)) {
+        if (status === 'all' || status === task.status) tasks.push(task);
       }
     }
 
@@ -2038,6 +2172,76 @@ export class FileSystemService {
       total: tasks.length,
       truncated: tasks.length > limit,
     };
+  }
+
+  async updateTask(params: UpdateTaskParams): Promise<UpdateTaskResult> {
+    const path = this.normalizePath(params.path);
+    if (!this.pathFilter.isAllowed(path)) throw new Error(`Access denied: ${path}`);
+    if (!params.taskId && (!Number.isInteger(params.line) || params.line! < 1)) throw new Error('taskId or line must identify a task');
+    if (params.status !== 'open' && params.status !== 'completed') throw new Error('status must be open or completed');
+    if (!params.expectedRevision || !String(params.expectedRevision).trim()) throw new Error('expectedRevision is required; read the note first');
+
+    return this.withMutationLock(path, async () => {
+      await this.assertExpectedRevision(path, params.expectedRevision);
+      const note = await this.readNote(path);
+      const lines = note.originalContent.split('\n');
+      const locatedTask = params.taskId
+        ? extractTasks(note.originalContent, path).find(task => task.taskId === params.taskId)
+        : undefined;
+      if (params.taskId && !locatedTask) throw new Error(`Task ${params.taskId} was not found in ${path}; refresh list_tasks and retry`);
+      const targetLine = locatedTask?.line ?? params.line!;
+      if (targetLine > lines.length) throw new Error(`Task line ${targetLine} is outside ${path}`);
+      let inFrontmatter = false;
+      let frontmatterEnded = false;
+      let inFence = false;
+      let fenceChar = '';
+      let fenceLength = 0;
+      const fenceRegex = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+      const targetIndex = targetLine - 1;
+      let targetMatch: RegExpExecArray | null = null;
+      for (let index = 0; index <= targetIndex; index += 1) {
+        const line = lines[index]!.replace(/\r$/, '');
+        if (!frontmatterEnded && index === 0 && line === '---') { inFrontmatter = true; continue; }
+        if (inFrontmatter) {
+          if (line === '---') { inFrontmatter = false; frontmatterEnded = true; }
+          continue;
+        }
+        const fenceMatch = fenceRegex.exec(line);
+        if (fenceMatch) {
+          const markers = fenceMatch[1]!;
+          const trailing = fenceMatch[2]!;
+          const char = markers.charAt(0);
+          if (!inFence) { inFence = true; fenceChar = char; fenceLength = markers.length; }
+          else if (char === fenceChar && markers.length >= fenceLength && trailing.trim() === '') { inFence = false; fenceChar = ''; fenceLength = 0; }
+          continue;
+        }
+        if (!inFence) targetMatch = /^(\s*[-*+]\s+\[)([ xX])(\]\s+.*)$/.exec(line);
+      }
+      if (!targetMatch) throw new Error(`Line ${targetLine} is not a Markdown checkbox task outside frontmatter/code fences`);
+      const previousStatus: 'open' | 'completed' = targetMatch[2]!.toLowerCase() === 'x' ? 'completed' : 'open';
+      const marker = params.status === 'completed' ? 'x' : ' ';
+      if (previousStatus !== params.status) {
+        const rawLine = lines[targetIndex]!;
+        const checkboxOffset = (targetMatch.index || 0) + targetMatch[1]!.length;
+        lines[targetIndex] = `${rawLine.slice(0, checkboxOffset)}${marker}${rawLine.slice(checkboxOffset + 1)}`;
+        // We already hold this path's mutation lock. Calling the public
+        // writeNote wrapper here would queue behind our own lock forever.
+        await this.writeNoteUnlocked({ path, content: lines.join('\n'), expectedRevision: params.expectedRevision });
+      }
+      const updated = await this.readNote(path);
+      const resultingTaskId = locatedTask?.taskId || extractTasks(note.originalContent, path).find(task => task.line === targetLine)?.taskId;
+      return {
+        success: true,
+        path,
+        line: targetLine,
+        status: params.status,
+        ...(resultingTaskId ? { taskId: resultingTaskId } : {}),
+        previousStatus,
+        previousRevision: note.revision,
+        revision: updated.revision,
+        message: previousStatus === params.status ? 'Task already had the requested status; no write was needed.' : `Task status updated to ${params.status}.`,
+      };
+    });
   }
 
   async queryNotes(params: QueryNotesParams = {}, canAccessPath: (path: string) => boolean = () => true): Promise<QueryNotesResult> {

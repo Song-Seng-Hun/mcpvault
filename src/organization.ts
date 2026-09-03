@@ -12,18 +12,209 @@ export const LIFECYCLES = ['inbox', 'active', 'review', 'evergreen', 'superseded
 export const TASK_STATUSES = ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'] as const;
 export const REVIEW_POLICIES = ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit'] as const;
 export const REVIEW_OUTCOMES = ['confirmed', 'revised', 'disputed', 'superseded', 'rescheduled'] as const;
+export const INTERPRETATION_STATUSES = ['unprocessed', 'interpreted', 'synthesized'] as const;
 export const QUESTION_STATUSES = ['open', 'answered', 'blocked', 'abandoned'] as const;
 export const HYPOTHESIS_STATUSES = ['proposed', 'supported', 'refuted', 'inconclusive'] as const;
 export const ASSUMPTION_STATUSES = ['active', 'verified', 'invalidated', 'replaced'] as const;
+/** Optional controlled-vocabulary state for a note title/alias. */
+export const TERM_STATUSES = ['preferred', 'deprecated', 'redirect'] as const;
+/** A small Zettelkasten-style role vocabulary for durable knowledge notes. */
+export const KNOWLEDGE_ROLES = ['concept', 'argument', 'model', 'observation', 'counterargument'] as const;
+/** Optional recall result for high-value knowledge; separate from evidence review. */
+export const RECALL_QUALITIES = ['unseen', 'failed', 'partial', 'good'] as const;
 export const KNOWLEDGE_POLARITIES = ['positive', 'negative'] as const;
 export const NEGATIVE_KINDS = ['failure', 'rejected', 'counterexample', 'non_reproducible', 'superseded'] as const;
+/** Retention is a preservation hint, not an automatic deletion command. */
+export const RETENTION_POLICIES = ['preserve', 'review', 'archive', 'tombstone'] as const;
+/** Optional event that starts or explains a retention window. */
+export const RETENTION_EVENTS = ['manual', 'created', 'last_modified', 'review_completed', 'superseded', 'project_completed'] as const;
 /** GTD horizons from concrete action up to purpose; these are optional focus metadata. */
 export const FOCUS_HORIZONS = ['ground', 'project', 'area', 'goal', 'vision', 'purpose'] as const;
 /** GTD clarification outcomes. These are workflow metadata, not deletion commands. */
 export const CLARIFY_DISPOSITIONS = ['knowledge', 'reference', 'project', 'someday', 'discard', 'delegate'] as const;
 /** Typed relationships are navigation metadata, never an access grant. */
-export const RELATION_FIELDS = ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'related'] as const;
-export const ORGANIZATION_LIST_FIELDS = ['aliases', 'key_points', 'open_questions', 'next_actions', 'project_support', ...RELATION_FIELDS] as const;
+export const RELATION_FIELDS = ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'answers_questions', 'related', 'same_as', 'version_of', 'refines'] as const;
+/** These relations have a meaning that is incomplete when the reverse edge is absent. */
+export const RECIPROCAL_RELATIONS = ['related', 'same_as'] as const;
+/** A compact ontology so agents can choose a relation by meaning, not by name. */
+export const RELATION_SEMANTICS = [
+  { field: 'supports', direction: 'directional', target: 'A claim, decision, or note supported by this note.', reciprocal: false },
+  { field: 'contradicts', direction: 'directional', target: 'A claim or conclusion challenged by this note.', reciprocal: false },
+  { field: 'supersedes', direction: 'directional', target: 'An older or replaced note.', reciprocal: false },
+  { field: 'derived_from', direction: 'directional', target: 'The source or note from which this note was derived.', reciprocal: false },
+  { field: 'depends_on', direction: 'directional', target: 'A prerequisite note, decision, or project.', reciprocal: false },
+  { field: 'implements', direction: 'directional', target: 'The design, decision, or requirement implemented here.', reciprocal: false },
+  { field: 'blocked_by', direction: 'directional', target: 'The note or dependency currently blocking this note.', reciprocal: false },
+  { field: 'answers_questions', direction: 'directional', target: 'A question note answered by this note.', reciprocal: false },
+  { field: 'related', direction: 'mutual', target: 'A materially related note without a stronger claim.', reciprocal: true },
+  { field: 'same_as', direction: 'mutual', target: 'The same concept represented by another note or alias.', reciprocal: true },
+  { field: 'version_of', direction: 'directional', target: 'The conceptual note this version belongs to.', reciprocal: false },
+  { field: 'refines', direction: 'directional', target: 'A note made more precise or useful by this note.', reciprocal: false },
+] as const;
+
+export function getOrganizationRelationContract() {
+  return RELATION_SEMANTICS.map(entry => ({ ...entry }));
+}
+export const ORGANIZATION_LIST_FIELDS = ['aliases', 'key_points', 'open_questions', 'next_actions', 'project_support', 'subject_terms', 'methods', 'audience', 'see_also', ...RELATION_FIELDS] as const;
+
+/**
+ * The small, stable subset of frontmatter that MCPVault owns.  Custom
+ * Properties remain allowed; this contract only gives agents and lint a common
+ * shape for fields used by the Wiki projections and Obsidian Bases.
+ */
+export interface OrganizationPropertyContractEntry {
+  name: string;
+  type: 'text' | 'list' | 'number' | 'boolean' | 'object';
+  description: string;
+  allowed?: readonly string[];
+  appliesTo?: readonly string[];
+}
+
+export const ORGANIZATION_PROPERTY_CONTRACT: readonly OrganizationPropertyContractEntry[] = [
+  { name: 'note_kind', type: 'text', description: 'What the note is for', allowed: NOTE_KINDS },
+  { name: 'lifecycle', type: 'text', description: 'What should happen to the knowledge next', allowed: LIFECYCLES },
+  { name: 'primary_moc', type: 'text', description: 'Preferred Obsidian MOC entry point for this note; navigation metadata only' },
+  { name: 'aliases', type: 'list', description: 'Alternate Obsidian names' },
+  { name: 'stable_id', type: 'text', description: 'Durable identity for a note; not an access boundary' },
+  { name: 'term_status', type: 'text', description: 'Optional authority-vocabulary state for this note title', allowed: TERM_STATUSES },
+  { name: 'term_replaced_by', type: 'text', description: 'Preferred term or Obsidian link that replaces a deprecated term' },
+  { name: 'term_scope_note', type: 'text', description: 'Short definition or scope note for this term' },
+  { name: 'canonical_path', type: 'text', description: 'Visible canonical note path when this note is a redirect or duplicate' },
+  { name: 'broader_terms', type: 'list', description: 'Optional broader concepts for library-style hierarchy' },
+  { name: 'related_terms', type: 'list', description: 'Optional related concepts for authority discovery' },
+  { name: 'subject_terms', type: 'list', description: 'Controlled or local subject access terms for faceted discovery' },
+  { name: 'domain', type: 'text', description: 'Primary knowledge domain for faceted discovery' },
+  { name: 'methods', type: 'list', description: 'Methods, techniques, or frameworks discussed by the note' },
+  { name: 'audience', type: 'list', description: 'Intended readers or consumers of the note' },
+  { name: 'retrieval_cues', type: 'list', description: 'Situations or problem signals that should surface this note' },
+  { name: 'use_when', type: 'text', description: 'Compact description of when this note is useful' },
+  { name: 'knowledge_role', type: 'text', description: 'Atomic-note role in the knowledge graph', allowed: KNOWLEDGE_ROLES },
+  { name: 'see_also', type: 'list', description: 'Additional Obsidian links for adjacent knowledge' },
+  { name: 'summary', type: 'text', description: 'Compact progressive-read projection' },
+  { name: 'key_points', type: 'list', description: 'Compact key points for progressive reads' },
+  { name: 'open_questions', type: 'list', description: 'Questions that remain open' },
+  { name: 'summary_layer', type: 'number', description: 'Progressive Summarization layer from 0 to 4' },
+  { name: 'summary_highlights', type: 'list', description: 'Bounded highlighted passages; nested objects are MCP-managed' },
+  { name: 'summary_of_content_sha256', type: 'text', description: 'Body digest for projection freshness' },
+  { name: 'next_action', type: 'text', description: 'One concrete GTD action', appliesTo: ['project', 'task'] },
+  { name: 'next_actions', type: 'list', description: 'Bounded GTD action list', appliesTo: ['project', 'task'] },
+  { name: 'waiting_for', type: 'text', description: 'External dependency or owner', appliesTo: ['project', 'task'] },
+  { name: 'desired_outcome', type: 'text', description: 'Observable project outcome', appliesTo: ['project'] },
+  { name: 'project_purpose', type: 'text', description: 'Why the project exists', appliesTo: ['project'] },
+  { name: 'project_support', type: 'list', description: 'Project reference material, not another task list', appliesTo: ['project'] },
+  { name: 'task_context', type: 'text', description: 'Execution context such as @research or @computer', appliesTo: ['project', 'task'] },
+  { name: 'task_status', type: 'text', description: 'Operational task state, separate from lifecycle', allowed: TASK_STATUSES, appliesTo: ['project', 'task'] },
+  { name: 'due_at', type: 'text', description: 'Latest acceptable completion time', appliesTo: ['project', 'task'] },
+  { name: 'scheduled_at', type: 'text', description: 'Intended execution/calendar time', appliesTo: ['project', 'task'] },
+  { name: 'defer_until', type: 'text', description: 'Do not reconsider before this time', appliesTo: ['project', 'task'] },
+  { name: 'review_at', type: 'text', description: 'Next evidence review time' },
+  { name: 'review_interval_days', type: 'number', description: 'Days after a completed review before the next review' },
+  { name: 'review_snoozed_until', type: 'text', description: 'Do not surface in review queues before this ISO date/time' },
+  { name: 'review_snooze_reason', type: 'text', description: 'Why this review was deferred' },
+  { name: 'recall_prompt', type: 'text', description: 'Optional active-recall question for high-value knowledge' },
+  { name: 'recall_interval_days', type: 'number', description: 'Optional days between active-recall prompts' },
+  { name: 'last_recalled_at', type: 'text', description: 'Last time this note was actively recalled' },
+  { name: 'recall_quality', type: 'text', description: 'Result of the latest active-recall attempt', allowed: RECALL_QUALITIES },
+  { name: 'retention_policy', type: 'text', description: 'Preservation hint; never an automatic delete instruction', allowed: RETENTION_POLICIES },
+  { name: 'retention_event', type: 'text', description: 'Event from which a retention window is interpreted', allowed: RETENTION_EVENTS },
+  { name: 'retention_at', type: 'text', description: 'Optional date for preservation review or archival consideration' },
+  { name: 'preserve_until', type: 'text', description: 'Do not propose archival or tombstoning before this date' },
+  { name: 'legal_hold', type: 'boolean', description: 'Preserve this note and its history until an authorized human releases the hold' },
+  { name: 'retention_reason', type: 'text', description: 'Why the note should be preserved, reviewed, archived, or tombstoned' },
+  { name: 'replaced_by', type: 'text', description: 'Visible replacement note for a superseded or tombstoned note' },
+  { name: 'review_policy', type: 'text', description: 'Event that re-enters review', allowed: REVIEW_POLICIES },
+  { name: 'review_note', type: 'text', description: 'Short record of the latest review' },
+  { name: 'last_review_outcome', type: 'text', description: 'Outcome of the latest evidence review', allowed: REVIEW_OUTCOMES },
+  { name: 'last_reviewed_by', type: 'text', description: 'Reviewer identity' },
+  { name: 'last_reviewed_at', type: 'text', description: 'Review completion time' },
+  { name: 'last_reviewed_revision', type: 'text', description: 'Revision inspected by the reviewer' },
+  { name: 'review_count', type: 'number', description: 'Number of completed reviews' },
+  { name: 'review_reopen_count', type: 'number', description: 'Number of reviews reopened' },
+  { name: 'interpretation_status', type: 'text', description: 'Source-to-knowledge processing stage', allowed: INTERPRETATION_STATUSES },
+  { name: 'epistemic_status', type: 'text', description: 'Question, hypothesis, or assumption state' },
+  { name: 'moc_questions', type: 'list', description: 'Questions a MOC should help answer', appliesTo: ['moc'] },
+  { name: 'moc_parent', type: 'text', description: 'Parent MOC link', appliesTo: ['moc'] },
+  { name: 'focus_horizon', type: 'text', description: 'GTD horizon from ground to purpose', allowed: FOCUS_HORIZONS },
+  { name: 'focus_parent', type: 'text', description: 'Higher-level outcome link' },
+  { name: 'focus_supports', type: 'list', description: 'Outcomes supported by this note' },
+  { name: 'claims', type: 'list', description: 'Claim-level provenance objects' },
+  { name: 'evidence', type: 'list', description: 'Evidence locator objects' },
+  ...RELATION_FIELDS.map(name => ({ name, type: 'list' as const, description: `Typed Obsidian links: ${name}` })),
+] as const;
+
+export function getOrganizationPropertyContract(): OrganizationPropertyContractEntry[] {
+  return ORGANIZATION_PROPERTY_CONTRACT.map(entry => ({ ...entry, ...(entry.allowed && { allowed: [...entry.allowed] }), ...(entry.appliesTo && { appliesTo: [...entry.appliesTo] }) }));
+}
+
+export interface OrganizationNoteTemplate {
+  templateId: string;
+  noteKind: NoteKind;
+  purpose: string;
+  properties: Record<string, unknown>;
+  markdown: string;
+}
+
+/**
+ * Small, optional scaffolds for the common note roles.  Templates are
+ * intentionally suggestions: ordinary Markdown remains valid and no
+ * template is required for publication.
+ */
+export function organizationNoteTemplate(value: unknown = 'atomic'): OrganizationNoteTemplate {
+  const requested = String(value ?? 'atomic').trim().toLowerCase();
+  const templateId = requested === 'negative' ? 'negative' : (NOTE_KINDS as readonly string[]).includes(requested) ? requested : 'atomic';
+  const noteKind = templateId === 'negative' ? 'knowledge' : templateId as NoteKind;
+  const templates: Record<string, Omit<OrganizationNoteTemplate, 'noteKind' | 'templateId'>> = {
+    atomic: {
+      purpose: 'One reusable concept or claim written in your own words.',
+      properties: { note_kind: 'atomic', lifecycle: 'evergreen', knowledge_role: 'concept', summary: '', related: [] },
+      markdown: '# {{title}}\n\n## Claim\n\n## Why it matters\n\n## Links\n- [[ ]]\n',
+    },
+    literature: {
+      purpose: 'A source interpretation that preserves provenance and points to derived knowledge.',
+      properties: { note_kind: 'literature', lifecycle: 'active', interpretation_status: 'unprocessed', evidence_paths: [] },
+      markdown: '# {{title}}\n\n## Source\n\n## Key points\n- \n\n## Interpretation\n\n## Derived notes\n- [[ ]]\n',
+    },
+    question: {
+      purpose: 'An explicit unresolved question that can later receive a grounded answer.',
+      properties: { note_kind: 'question', lifecycle: 'review', epistemic_status: 'open', answers_questions: [] },
+      markdown: '# {{title}}\n\n## Question\n\n## Why it is open\n\n## Evidence to seek\n',
+    },
+    hypothesis: {
+      purpose: 'A testable proposition kept separate from established knowledge.',
+      properties: { note_kind: 'hypothesis', lifecycle: 'review', epistemic_status: 'proposed', supports: [], contradicts: [] },
+      markdown: '# {{title}}\n\n## Hypothesis\n\n## Prediction\n\n## Test\n\n## Result\n',
+    },
+    decision: {
+      purpose: 'A durable decision with alternatives, consequences, and evidence.',
+      properties: { note_kind: 'decision', lifecycle: 'active', knowledge_role: 'argument', related: [] },
+      markdown: '# {{title}}\n\n## Context\n\n## Decision\n\n## Alternatives\n- \n\n## Consequences\n- \n\n## Evidence\n- [[ ]]\n',
+    },
+    project: {
+      purpose: 'An outcome-oriented project with one immediately actionable next step.',
+      properties: { note_kind: 'project', lifecycle: 'active', task_status: 'open', desired_outcome: '', next_action: '' },
+      markdown: '# {{title}}\n\n## Desired outcome\n\n## Next action\n\n## Support\n- [[ ]]\n',
+    },
+    moc: {
+      purpose: 'A map of content that answers a bounded set of navigation questions.',
+      properties: { note_kind: 'moc', lifecycle: 'active', moc_questions: [] },
+      markdown: '# {{title}}\n\n## Purpose\n\n## Questions this map answers\n- \n\n## Map\n- [[ ]]\n',
+    },
+    negative: {
+      purpose: 'A reusable record of a failed, rejected, or non-reproducible path.',
+      properties: { note_kind: 'knowledge', lifecycle: 'review', knowledge_polarity: 'negative', negative_type: 'failure' },
+      markdown: '# {{title}}\n\n## Attempted\n\n## Observed failure\n\n## Reproduction\n\n## Reusable lesson\n',
+    },
+  };
+  const template = templates[templateId] || templates.atomic!;
+  return { templateId, noteKind, ...template };
+}
+/**
+ * Obsidian core Properties can display these values, but its native editor is
+ * intentionally scalar/list-oriented and does not provide a good editor for
+ * nested objects. Keep the structures for MCP provenance, while warning that
+ * they are best maintained in Source mode or through MCP.
+ */
+const OBSIDIAN_COMPLEX_PROPERTY_FIELDS = ['summary_highlights', 'claims', 'evidence'] as const;
 
 export type NoteKind = typeof NOTE_KINDS[number];
 export type Lifecycle = typeof LIFECYCLES[number];
@@ -33,9 +224,15 @@ const lifecycleSet = new Set<string>(LIFECYCLES);
 const taskStatusSet = new Set<string>(TASK_STATUSES);
 const reviewPolicySet = new Set<string>(REVIEW_POLICIES);
 const reviewOutcomeSet = new Set<string>(REVIEW_OUTCOMES);
+const interpretationStatusSet = new Set<string>(INTERPRETATION_STATUSES);
 const questionStatusSet = new Set<string>(QUESTION_STATUSES);
 const hypothesisStatusSet = new Set<string>(HYPOTHESIS_STATUSES);
 const assumptionStatusSet = new Set<string>(ASSUMPTION_STATUSES);
+const termStatusSet = new Set<string>(TERM_STATUSES);
+const knowledgeRoleSet = new Set<string>(KNOWLEDGE_ROLES);
+const recallQualitySet = new Set<string>(RECALL_QUALITIES);
+const retentionPolicySet = new Set<string>(RETENTION_POLICIES);
+const retentionEventSet = new Set<string>(RETENTION_EVENTS);
 const knowledgePolaritySet = new Set<string>(KNOWLEDGE_POLARITIES);
 const negativeKindSet = new Set<string>(NEGATIVE_KINDS);
 const clarifyDispositionSet = new Set<string>(CLARIFY_DISPOSITIONS);
@@ -85,6 +282,13 @@ export function normalizeReviewOutcome(value: unknown, fallback?: typeof REVIEW_
   const normalized = String(value).trim().toLowerCase();
   if (!reviewOutcomeSet.has(normalized)) throw new Error(`reviewOutcome must be one of: ${REVIEW_OUTCOMES.join(', ')}`);
   return normalized as typeof REVIEW_OUTCOMES[number];
+}
+
+export function normalizeInterpretationStatus(value: unknown, fallback?: typeof INTERPRETATION_STATUSES[number]): typeof INTERPRETATION_STATUSES[number] | undefined {
+  if (value === undefined || value === null || String(value).trim() === '') return fallback;
+  const normalized = String(value).trim().toLowerCase();
+  if (!interpretationStatusSet.has(normalized)) throw new Error(`interpretationStatus must be one of: ${INTERPRETATION_STATUSES.join(', ')}`);
+  return normalized as typeof INTERPRETATION_STATUSES[number];
 }
 
 export function normalizeEpistemicStatus(value: unknown, noteKind: NoteKind, fallback?: string): string | undefined {
@@ -141,6 +345,48 @@ export function normalizeFocusHorizon(value: unknown, fallback?: typeof FOCUS_HO
   return normalized as typeof FOCUS_HORIZONS[number];
 }
 
+export function normalizeTermStatus(value: unknown, fallback: typeof TERM_STATUSES[number] = 'preferred'): typeof TERM_STATUSES[number] {
+  const normalized = String(value ?? fallback).trim().toLowerCase() || fallback;
+  if (!termStatusSet.has(normalized)) throw new Error(`termStatus must be one of: ${TERM_STATUSES.join(', ')}`);
+  return normalized as typeof TERM_STATUSES[number];
+}
+
+export function normalizeKnowledgeRole(value: unknown, fallback?: typeof KNOWLEDGE_ROLES[number]): typeof KNOWLEDGE_ROLES[number] | undefined {
+  if (value === undefined || value === null || String(value).trim() === '') return fallback;
+  const normalized = String(value).trim().toLowerCase();
+  if (!knowledgeRoleSet.has(normalized)) throw new Error(`knowledgeRole must be one of: ${KNOWLEDGE_ROLES.join(', ')}`);
+  return normalized as typeof KNOWLEDGE_ROLES[number];
+}
+
+export function normalizeRecallQuality(value: unknown, fallback: typeof RECALL_QUALITIES[number] = 'unseen'): typeof RECALL_QUALITIES[number] {
+  const normalized = String(value ?? fallback).trim().toLowerCase() || fallback;
+  if (!recallQualitySet.has(normalized)) throw new Error(`recallQuality must be one of: ${RECALL_QUALITIES.join(', ')}`);
+  return normalized as typeof RECALL_QUALITIES[number];
+}
+
+export function normalizeRetentionPolicy(value: unknown, fallback?: typeof RETENTION_POLICIES[number]): typeof RETENTION_POLICIES[number] | undefined {
+  if (value === undefined || value === null || String(value).trim() === '') return fallback;
+  const normalized = String(value).trim().toLowerCase();
+  if (!retentionPolicySet.has(normalized)) throw new Error(`retentionPolicy must be one of: ${RETENTION_POLICIES.join(', ')}`);
+  return normalized as typeof RETENTION_POLICIES[number];
+}
+
+export function normalizeRetentionEvent(value: unknown, fallback?: typeof RETENTION_EVENTS[number]): typeof RETENTION_EVENTS[number] | undefined {
+  if (value === undefined || value === null || String(value).trim() === '') return fallback;
+  const normalized = String(value).trim().toLowerCase();
+  if (!retentionEventSet.has(normalized)) throw new Error(`retentionEvent must be one of: ${RETENTION_EVENTS.join(', ')}`);
+  return normalized as typeof RETENTION_EVENTS[number];
+}
+
+export function normalizeBoolean(value: unknown, field: string, fallback?: boolean): boolean | undefined {
+  if (value === undefined || value === null || String(value).trim() === '') return fallback;
+  if (typeof value === 'boolean') return value;
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === 'true') return true;
+  if (normalized === 'false') return false;
+  throw new Error(`${field} must be a boolean`);
+}
+
 interface SummaryHighlight {
   text: string;
   startLine?: number;
@@ -193,6 +439,13 @@ export function normalizeReviewAt(value: unknown): string | undefined {
   return date;
 }
 
+export function normalizeReviewIntervalDays(value: unknown, fallback?: number): number | undefined {
+  if (value === undefined || value === null || String(value).trim() === '') return fallback;
+  const days = Number(value);
+  if (!Number.isInteger(days) || days < 1 || days > 3650) throw new Error('reviewIntervalDays must be an integer from 1 to 3650');
+  return days;
+}
+
 export function normalizeIsoDate(value: unknown, field: string): string | undefined {
   const date = optionalText(value, field, 40);
   if (!date) return undefined;
@@ -204,9 +457,24 @@ export interface KnowledgeOrganizationInput {
   existing?: Record<string, any>;
   noteKind?: unknown;
   lifecycle?: unknown;
+  primaryMoc?: unknown;
   moc?: unknown;
   project?: unknown;
   reviewAt?: unknown;
+  reviewIntervalDays?: unknown;
+  recallPrompt?: unknown;
+  recallIntervalDays?: unknown;
+  lastRecalledAt?: unknown;
+  recallQuality?: unknown;
+  retentionPolicy?: unknown;
+  retentionEvent?: unknown;
+  retentionAt?: unknown;
+  preserveUntil?: unknown;
+  legalHold?: unknown;
+  retentionReason?: unknown;
+  replacedBy?: unknown;
+  reviewSnoozedUntil?: unknown;
+  reviewSnoozeReason?: unknown;
   status: string;
   aliases?: unknown;
   summary?: unknown;
@@ -225,6 +493,20 @@ export interface KnowledgeOrganizationInput {
   scheduledAt?: unknown;
   deferUntil?: unknown;
   stableId?: unknown;
+  canonicalPath?: unknown;
+  termStatus?: unknown;
+  termReplacedBy?: unknown;
+  termScopeNote?: unknown;
+  broaderTerms?: unknown;
+  relatedTerms?: unknown;
+  subjectTerms?: unknown;
+  domain?: unknown;
+  methods?: unknown;
+  audience?: unknown;
+  retrievalCues?: unknown;
+  useWhen?: unknown;
+  knowledgeRole?: unknown;
+  seeAlso?: unknown;
   relations?: unknown;
   taskStatus?: unknown;
   reviewPolicy?: unknown;
@@ -232,6 +514,7 @@ export interface KnowledgeOrganizationInput {
   reviewedBy?: unknown;
   reviewedAt?: unknown;
   reviewNote?: unknown;
+  interpretationStatus?: unknown;
   epistemicStatus?: unknown;
   polarity?: unknown;
   negativeType?: unknown;
@@ -264,9 +547,24 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
   const existingLifecycle = normalizeLifecycle(existing.lifecycle);
   const kind = normalizeNoteKind(input.noteKind, existingKind || 'knowledge') || 'knowledge';
   const lifecycle = normalizeLifecycle(input.lifecycle, existingLifecycle || lifecycleForKnowledgeStatus(input.status)) || lifecycleForKnowledgeStatus(input.status);
+  const primaryMoc = input.primaryMoc === undefined ? optionalText(existing.primary_moc, 'primaryMoc', 500) : optionalText(input.primaryMoc, 'primaryMoc', 500);
   const moc = input.moc === undefined ? optionalText(existing.moc, 'moc', 500) : optionalText(input.moc, 'moc', 500);
   const project = input.project === undefined ? optionalText(existing.project, 'project', 500) : optionalText(input.project, 'project', 500);
   const reviewAt = input.reviewAt === undefined ? normalizeReviewAt(existing.review_at) : normalizeReviewAt(input.reviewAt);
+  const reviewIntervalDays = input.reviewIntervalDays === undefined ? normalizeReviewIntervalDays(existing.review_interval_days) : normalizeReviewIntervalDays(input.reviewIntervalDays);
+  const reviewSnoozedUntil = input.reviewSnoozedUntil === undefined ? normalizeIsoDate(existing.review_snoozed_until, 'reviewSnoozedUntil') : normalizeIsoDate(input.reviewSnoozedUntil, 'reviewSnoozedUntil');
+  const reviewSnoozeReason = input.reviewSnoozeReason === undefined ? optionalText(existing.review_snooze_reason, 'reviewSnoozeReason', 500) : optionalText(input.reviewSnoozeReason, 'reviewSnoozeReason', 500);
+  const recallPrompt = input.recallPrompt === undefined ? optionalText(existing.recall_prompt, 'recallPrompt', 1000) : optionalText(input.recallPrompt, 'recallPrompt', 1000);
+  const recallIntervalDays = input.recallIntervalDays === undefined ? normalizeReviewIntervalDays(existing.recall_interval_days) : normalizeReviewIntervalDays(input.recallIntervalDays);
+  const lastRecalledAt = input.lastRecalledAt === undefined ? normalizeIsoDate(existing.last_recalled_at, 'lastRecalledAt') : normalizeIsoDate(input.lastRecalledAt, 'lastRecalledAt');
+  const recallQuality = input.recallQuality === undefined ? (existing.recall_quality === undefined ? undefined : normalizeRecallQuality(existing.recall_quality)) : normalizeRecallQuality(input.recallQuality);
+  const retentionPolicy = input.retentionPolicy === undefined ? normalizeRetentionPolicy(existing.retention_policy) : normalizeRetentionPolicy(input.retentionPolicy);
+  const retentionEvent = input.retentionEvent === undefined ? normalizeRetentionEvent(existing.retention_event) : normalizeRetentionEvent(input.retentionEvent);
+  const retentionAt = input.retentionAt === undefined ? normalizeIsoDate(existing.retention_at, 'retentionAt') : normalizeIsoDate(input.retentionAt, 'retentionAt');
+  const preserveUntil = input.preserveUntil === undefined ? normalizeIsoDate(existing.preserve_until, 'preserveUntil') : normalizeIsoDate(input.preserveUntil, 'preserveUntil');
+  const legalHold = input.legalHold === undefined ? normalizeBoolean(existing.legal_hold, 'legalHold') : normalizeBoolean(input.legalHold, 'legalHold');
+  const retentionReason = input.retentionReason === undefined ? optionalText(existing.retention_reason, 'retentionReason', 1000) : optionalText(input.retentionReason, 'retentionReason', 1000);
+  const replacedBy = input.replacedBy === undefined ? optionalText(existing.replaced_by, 'replacedBy', 500) : optionalText(input.replacedBy, 'replacedBy', 500);
   const aliases = input.aliases === undefined ? normalizedList(existing.aliases, 'aliases', 30, 200) : normalizedList(input.aliases, 'aliases', 30, 200);
   const summary = input.summary === undefined ? optionalText(existing.summary, 'summary', 2000) : optionalText(input.summary, 'summary', 2000);
   const keyPoints = input.keyPoints === undefined ? normalizedList(existing.key_points, 'key_points', 20, 600) : normalizedList(input.keyPoints, 'key_points', 20, 600);
@@ -288,6 +586,21 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
   const deferUntil = input.deferUntil === undefined ? normalizeIsoDate(existing.defer_until, 'deferUntil') : normalizeIsoDate(input.deferUntil, 'deferUntil');
   const stableId = input.stableId === undefined ? optionalText(existing.stable_id, 'stable_id', 80) : optionalText(input.stableId, 'stable_id', 80);
   if (stableId && !/^[a-z0-9][a-z0-9._-]*$/i.test(stableId)) throw new Error('stableId may contain only letters, numbers, dots, underscores, and hyphens');
+  const canonicalPath = input.canonicalPath === undefined ? optionalText(existing.canonical_path, 'canonicalPath', 500) : optionalText(input.canonicalPath, 'canonicalPath', 500);
+  if (canonicalPath && (/^(?:[A-Za-z]:[\\/]|\\\\|\/)/.test(canonicalPath) || canonicalPath.split(/[\\/]/).includes('..'))) throw new Error('canonicalPath must be a scope-safe vault-relative path');
+  const termStatus = input.termStatus === undefined ? normalizeTermStatus(existing.term_status) : normalizeTermStatus(input.termStatus);
+  const termReplacedBy = input.termReplacedBy === undefined ? optionalText(existing.term_replaced_by, 'termReplacedBy', 500) : optionalText(input.termReplacedBy, 'termReplacedBy', 500);
+  const termScopeNote = input.termScopeNote === undefined ? optionalText(existing.term_scope_note, 'termScopeNote', 1000) : optionalText(input.termScopeNote, 'termScopeNote', 1000);
+  const broaderTerms = input.broaderTerms === undefined ? normalizedList(existing.broader_terms, 'broaderTerms', 20, 500) : normalizedList(input.broaderTerms, 'broaderTerms', 20, 500);
+  const relatedTerms = input.relatedTerms === undefined ? normalizedList(existing.related_terms, 'relatedTerms', 20, 500) : normalizedList(input.relatedTerms, 'relatedTerms', 20, 500);
+  const subjectTerms = input.subjectTerms === undefined ? normalizedList(existing.subject_terms, 'subjectTerms', 20, 200) : normalizedList(input.subjectTerms, 'subjectTerms', 20, 200);
+  const domain = input.domain === undefined ? optionalText(existing.domain, 'domain', 200) : optionalText(input.domain, 'domain', 200);
+  const methods = input.methods === undefined ? normalizedList(existing.methods, 'methods', 20, 200) : normalizedList(input.methods, 'methods', 20, 200);
+  const audience = input.audience === undefined ? normalizedList(existing.audience, 'audience', 12, 200) : normalizedList(input.audience, 'audience', 12, 200);
+  const retrievalCues = input.retrievalCues === undefined ? normalizedList(existing.retrieval_cues, 'retrievalCues', 8, 300) : normalizedList(input.retrievalCues, 'retrievalCues', 8, 300);
+  const useWhen = input.useWhen === undefined ? optionalText(existing.use_when, 'useWhen', 1000) : optionalText(input.useWhen, 'useWhen', 1000);
+  const knowledgeRole = input.knowledgeRole === undefined ? normalizeKnowledgeRole(existing.knowledge_role) : normalizeKnowledgeRole(input.knowledgeRole);
+  const seeAlso = input.seeAlso === undefined ? normalizedList(existing.see_also, 'seeAlso', 20, 500) : normalizedList(input.seeAlso, 'seeAlso', 20, 500);
   const relationsInput = input.relations === undefined
     ? Object.fromEntries(RELATION_FIELDS.map(field => [field, existing[field]]).filter(([, value]) => value !== undefined))
     : input.relations;
@@ -302,6 +615,9 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
   const reviewedBy = input.reviewedBy === undefined ? optionalText(existing.last_reviewed_by, 'reviewedBy', 200) : optionalText(input.reviewedBy, 'reviewedBy', 200);
   const reviewedAt = input.reviewedAt === undefined ? normalizeIsoDate(existing.last_reviewed_at, 'reviewedAt') : normalizeIsoDate(input.reviewedAt, 'reviewedAt');
   const reviewNote = input.reviewNote === undefined ? optionalText(existing.review_note, 'reviewNote', 1000) : optionalText(input.reviewNote, 'reviewNote', 1000);
+  const interpretationStatus = input.interpretationStatus === undefined
+    ? normalizeInterpretationStatus(existing.interpretation_status)
+    : normalizeInterpretationStatus(input.interpretationStatus);
   const epistemicStatus = normalizeEpistemicStatus(input.epistemicStatus, kind, existing.epistemic_status);
   const polarity = input.polarity === undefined
     ? normalizeKnowledgePolarity(existing.knowledge_polarity)
@@ -338,9 +654,24 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
   return {
     note_kind: kind,
     lifecycle,
+    ...(primaryMoc && { primary_moc: primaryMoc }),
     ...(moc && { moc }),
     ...(project && { project }),
     ...(reviewAt && { review_at: reviewAt }),
+    ...(reviewIntervalDays !== undefined && { review_interval_days: reviewIntervalDays }),
+    ...(reviewSnoozedUntil && { review_snoozed_until: reviewSnoozedUntil }),
+    ...(reviewSnoozeReason && { review_snooze_reason: reviewSnoozeReason }),
+    ...(recallPrompt && { recall_prompt: recallPrompt }),
+    ...(recallIntervalDays !== undefined && { recall_interval_days: recallIntervalDays }),
+    ...(lastRecalledAt && { last_recalled_at: lastRecalledAt }),
+    ...(recallQuality && { recall_quality: recallQuality }),
+    ...(retentionPolicy && { retention_policy: retentionPolicy }),
+    ...(retentionEvent && { retention_event: retentionEvent }),
+    ...(retentionAt && { retention_at: retentionAt }),
+    ...(preserveUntil && { preserve_until: preserveUntil }),
+    ...(legalHold !== undefined && { legal_hold: legalHold }),
+    ...(retentionReason && { retention_reason: retentionReason }),
+    ...(replacedBy && { replaced_by: replacedBy }),
     ...(aliases && { aliases }),
     ...(summary && { summary }),
     ...(keyPoints && { key_points: keyPoints }),
@@ -358,12 +689,27 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
     ...(scheduledAt && { scheduled_at: scheduledAt }),
     ...(deferUntil && { defer_until: deferUntil }),
     ...(stableId && { stable_id: stableId }),
+    ...(canonicalPath && { canonical_path: canonicalPath }),
+    ...(termStatus !== 'preferred' && { term_status: termStatus }),
+    ...(termReplacedBy && { term_replaced_by: termReplacedBy }),
+    ...(termScopeNote && { term_scope_note: termScopeNote }),
+    ...(broaderTerms && { broader_terms: broaderTerms }),
+    ...(relatedTerms && { related_terms: relatedTerms }),
+    ...(subjectTerms && { subject_terms: subjectTerms }),
+    ...(domain && { domain }),
+    ...(methods && { methods }),
+    ...(audience && { audience }),
+    ...(retrievalCues && { retrieval_cues: retrievalCues }),
+    ...(useWhen && { use_when: useWhen }),
+    ...(knowledgeRole && { knowledge_role: knowledgeRole }),
+    ...(seeAlso && { see_also: seeAlso }),
     ...(taskStatus && { task_status: taskStatus }),
     ...(reviewPolicy && { review_policy: reviewPolicy }),
     ...(reviewOutcome && { last_review_outcome: reviewOutcome }),
     ...(reviewedBy && { last_reviewed_by: reviewedBy }),
     ...(reviewedAt && { last_reviewed_at: reviewedAt }),
     ...(reviewNote && { review_note: reviewNote }),
+    ...(interpretationStatus && { interpretation_status: interpretationStatus }),
     ...(epistemicStatus && { epistemic_status: epistemicStatus }),
     ...(polarity && { knowledge_polarity: polarity }),
     ...(negativeType && { negative_type: negativeType }),
@@ -405,6 +751,30 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
   const kind = kindValue === undefined ? undefined : String(kindValue).trim().toLowerCase();
   const lifecycle = lifecycleValue === undefined ? undefined : String(lifecycleValue).trim().toLowerCase();
 
+  const shape = (value: unknown): OrganizationPropertyContractEntry['type'] => {
+    if (Array.isArray(value)) return 'list';
+    if (value !== null && typeof value === 'object') return 'object';
+    if (typeof value === 'number') return 'number';
+    return 'text';
+  };
+  for (const contract of ORGANIZATION_PROPERTY_CONTRACT) {
+    if (frontmatter[contract.name] === undefined) continue;
+    const actual = shape(frontmatter[contract.name]);
+    if (actual !== contract.type) {
+      issues.push({ code: 'property_contract_violation', detail: `${contract.name} must be a ${contract.type} property for the MCPVault organization contract; found ${actual}.` });
+      continue;
+    }
+    if (contract.allowed && actual === 'text' && !contract.allowed.includes(String(frontmatter[contract.name]).trim().toLowerCase() as never)) {
+      issues.push({ code: 'property_contract_violation', detail: `${contract.name} must be one of: ${contract.allowed.join(', ')}.` });
+    }
+  }
+  if (frontmatter.review_interval_days !== undefined) {
+    try { normalizeReviewIntervalDays(frontmatter.review_interval_days); } catch (error) { issues.push({ code: 'invalid_review_interval_days', detail: error instanceof Error ? error.message : 'review_interval_days must be an integer from 1 to 3650.' }); }
+  }
+  if (frontmatter.recall_interval_days !== undefined) {
+    try { normalizeReviewIntervalDays(frontmatter.recall_interval_days); } catch (error) { issues.push({ code: 'invalid_recall_interval_days', detail: error instanceof Error ? error.message : 'recall_interval_days must be an integer from 1 to 3650.' }); }
+  }
+
   if (kindValue !== undefined && !noteKindSet.has(kind || '')) {
     issues.push({ code: 'invalid_note_kind', detail: `note_kind must be one of: ${NOTE_KINDS.join(', ')}` });
   }
@@ -442,11 +812,64 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
       }
     }
   }
+  for (const field of OBSIDIAN_COMPLEX_PROPERTY_FIELDS) {
+    const value = frontmatter[field];
+    const nested = value !== null && typeof value === 'object'
+      && (!Array.isArray(value) || value.some(item => item !== null && typeof item === 'object'));
+    if (nested) {
+      issues.push({
+        code: 'obsidian_complex_property',
+        detail: `${field} contains nested objects. Obsidian Properties can display it, but maintain this MCP-managed metadata in Source mode and keep human-readable context in the Markdown body.`,
+      });
+    }
+  }
   if (frontmatter.summary !== undefined && (typeof frontmatter.summary !== 'string' || Array.from(frontmatter.summary).length > 2000)) {
     issues.push({ code: 'invalid_summary', detail: 'summary must be a text property of 2000 Unicode characters or fewer.' });
   }
   if (frontmatter.stable_id !== undefined && (typeof frontmatter.stable_id !== 'string' || !/^[a-z0-9][a-z0-9._-]*$/i.test(frontmatter.stable_id))) {
     issues.push({ code: 'invalid_stable_id', detail: 'stable_id must contain only letters, numbers, dots, underscores, and hyphens.' });
+  }
+  if (frontmatter.canonical_path !== undefined) {
+    const canonicalPath = String(frontmatter.canonical_path).trim();
+    if (!canonicalPath || canonicalPath.length > 500 || /^(?:[A-Za-z]:[\\/]|\\\\|\/)/.test(canonicalPath) || canonicalPath.split(/[\\/]/).includes('..')) {
+      issues.push({ code: 'invalid_canonical_path', detail: 'canonical_path must be a non-empty, scope-safe vault-relative path of 500 characters or fewer.' });
+    } else if (canonicalPath.replace(/\\/g, '/').toLowerCase() === path.replace(/\\/g, '/').toLowerCase()) {
+      issues.push({ code: 'canonical_path_self_reference', detail: 'canonical_path points to the note itself; omit it or point to the actual canonical note.' });
+    }
+  }
+  if (frontmatter.term_status !== undefined && !termStatusSet.has(String(frontmatter.term_status).trim().toLowerCase())) {
+    issues.push({ code: 'invalid_term_status', detail: `term_status must be one of: ${TERM_STATUSES.join(', ')}` });
+  }
+  if (frontmatter.knowledge_role !== undefined && !knowledgeRoleSet.has(String(frontmatter.knowledge_role).trim().toLowerCase())) {
+    issues.push({ code: 'invalid_knowledge_role', detail: `knowledge_role must be one of: ${KNOWLEDGE_ROLES.join(', ')}` });
+  }
+  if (frontmatter.term_scope_note !== undefined && (typeof frontmatter.term_scope_note !== 'string' || !String(frontmatter.term_scope_note).trim() || Array.from(String(frontmatter.term_scope_note)).length > 1000)) {
+    issues.push({ code: 'invalid_term_scope_note', detail: 'term_scope_note must be non-empty text of 1000 Unicode characters or fewer.' });
+  }
+  if (['deprecated', 'redirect'].includes(String(frontmatter.term_status || '').trim().toLowerCase()) && !String(frontmatter.term_replaced_by || '').trim()) {
+    issues.push({ code: 'term_replacement_missing', detail: 'Deprecated or redirect terms should point to their preferred replacement with term_replaced_by.' });
+  }
+  for (const [field, label] of [['broader_terms', 'broaderTerms'], ['related_terms', 'relatedTerms'] as const]) {
+    if (frontmatter[field] !== undefined) {
+      try { normalizedList(frontmatter[field], label, 20, 500); } catch (error) { issues.push({ code: `invalid_${field}`, detail: error instanceof Error ? error.message : `${field} must be a string array.` }); }
+    }
+  }
+  if (frontmatter.see_also !== undefined) {
+    try { normalizedList(frontmatter.see_also, 'seeAlso', 20, 500); } catch (error) { issues.push({ code: 'invalid_see_also', detail: error instanceof Error ? error.message : 'see_also must be a bounded string array.' }); }
+  }
+  for (const [field, label, maxItems, maxChars] of [['subject_terms', 'subjectTerms', 20, 200], ['methods', 'methods', 20, 200], ['audience', 'audience', 12, 200]] as const) {
+    if (frontmatter[field] !== undefined) {
+      try { normalizedList(frontmatter[field], label, maxItems, maxChars); } catch (error) { issues.push({ code: `invalid_${field}`, detail: error instanceof Error ? error.message : `${field} must be a bounded string array.` }); }
+    }
+  }
+  if (frontmatter.retrieval_cues !== undefined) {
+    try { normalizedList(frontmatter.retrieval_cues, 'retrievalCues', 8, 300); } catch (error) { issues.push({ code: 'invalid_retrieval_cues', detail: error instanceof Error ? error.message : 'retrieval_cues must be a bounded string array.' }); }
+  }
+  if (frontmatter.use_when !== undefined && (typeof frontmatter.use_when !== 'string' || Array.from(String(frontmatter.use_when)).length > 1000 || !String(frontmatter.use_when).trim())) {
+    issues.push({ code: 'invalid_use_when', detail: 'use_when must be non-empty text of 1000 Unicode characters or fewer.' });
+  }
+  if (frontmatter.domain !== undefined && (typeof frontmatter.domain !== 'string' || Array.from(String(frontmatter.domain)).length > 200 || !String(frontmatter.domain).trim())) {
+    issues.push({ code: 'invalid_domain', detail: 'domain must be non-empty text of 200 Unicode characters or fewer.' });
   }
   if (frontmatter.focus_horizon !== undefined && !focusHorizonSet.has(String(frontmatter.focus_horizon).trim().toLowerCase())) {
     issues.push({ code: 'invalid_focus_horizon', detail: `focus_horizon must be one of: ${FOCUS_HORIZONS.join(', ')}` });
@@ -484,10 +907,61 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
   if (frontmatter.last_review_outcome !== undefined && !reviewOutcomeSet.has(String(frontmatter.last_review_outcome).trim().toLowerCase())) {
     issues.push({ code: 'invalid_review_outcome', detail: `last_review_outcome must be one of: ${REVIEW_OUTCOMES.join(', ')}` });
   }
-  for (const [field, value] of [['due_at', frontmatter.due_at], ['scheduled_at', frontmatter.scheduled_at], ['defer_until', frontmatter.defer_until], ['last_reviewed_at', frontmatter.last_reviewed_at]] as const) {
+  if (frontmatter.interpretation_status !== undefined && !interpretationStatusSet.has(String(frontmatter.interpretation_status).trim().toLowerCase())) {
+    issues.push({ code: 'invalid_interpretation_status', detail: `interpretation_status must be one of: ${INTERPRETATION_STATUSES.join(', ')}` });
+  }
+  for (const [field, label] of [['review_count', 'review_count'], ['review_reopen_count', 'review_reopen_count']] as const) {
+    if (frontmatter[field] !== undefined && (!Number.isInteger(Number(frontmatter[field])) || Number(frontmatter[field]) < 0)) {
+      issues.push({ code: `invalid_${field}`, detail: `${label} must be a non-negative integer.` });
+    }
+  }
+  if (frontmatter.last_review_trigger !== undefined && (typeof frontmatter.last_review_trigger !== 'string' || Array.from(frontmatter.last_review_trigger).length > 120)) {
+    issues.push({ code: 'invalid_last_review_trigger', detail: 'last_review_trigger must be text of 120 Unicode characters or fewer.' });
+  }
+  for (const [field, value] of [['due_at', frontmatter.due_at], ['scheduled_at', frontmatter.scheduled_at], ['defer_until', frontmatter.defer_until], ['last_reviewed_at', frontmatter.last_reviewed_at], ['review_snoozed_until', frontmatter.review_snoozed_until]] as const) {
     if (value !== undefined && (!/^(?:\d{4}-\d{2}-\d{2})(?:T[^\s]+)?$/.test(String(value).trim()) || Number.isNaN(Date.parse(String(value).trim())))) {
       issues.push({ code: `invalid_${field}`, detail: `${field} should be an ISO date or date-time.` });
     }
+  }
+  if (frontmatter.review_snooze_reason !== undefined && (typeof frontmatter.review_snooze_reason !== 'string' || Array.from(String(frontmatter.review_snooze_reason)).length > 500)) {
+    issues.push({ code: 'invalid_review_snooze_reason', detail: 'review_snooze_reason must be text of 500 Unicode characters or fewer.' });
+  }
+  if (frontmatter.last_recalled_at !== undefined && (!/^\d{4}-\d{2}-\d{2}(?:T[^\s]+)?$/.test(String(frontmatter.last_recalled_at).trim()) || Number.isNaN(Date.parse(String(frontmatter.last_recalled_at).trim())))) {
+    issues.push({ code: 'invalid_last_recalled_at', detail: 'last_recalled_at should be an ISO date or date-time.' });
+  }
+  if (frontmatter.recall_prompt !== undefined && (typeof frontmatter.recall_prompt !== 'string' || !frontmatter.recall_prompt.trim() || Array.from(String(frontmatter.recall_prompt)).length > 1000)) {
+    issues.push({ code: 'invalid_recall_prompt', detail: 'recall_prompt must be non-empty text of 1000 Unicode characters or fewer.' });
+  }
+  if (frontmatter.recall_interval_days !== undefined && !frontmatter.recall_prompt) {
+    issues.push({ code: 'recall_prompt_missing', detail: 'recall_interval_days is only useful when recall_prompt is present.' });
+  }
+  if (frontmatter.recall_quality !== undefined && !recallQualitySet.has(String(frontmatter.recall_quality).trim().toLowerCase())) {
+    issues.push({ code: 'invalid_recall_quality', detail: `recall_quality must be one of: ${RECALL_QUALITIES.join(', ')}` });
+  }
+  if (frontmatter.retention_policy !== undefined && !retentionPolicySet.has(String(frontmatter.retention_policy).trim().toLowerCase())) {
+    issues.push({ code: 'invalid_retention_policy', detail: `retention_policy must be one of: ${RETENTION_POLICIES.join(', ')}` });
+  }
+  if (frontmatter.retention_event !== undefined && !retentionEventSet.has(String(frontmatter.retention_event).trim().toLowerCase())) {
+    issues.push({ code: 'invalid_retention_event', detail: `retention_event must be one of: ${RETENTION_EVENTS.join(', ')}` });
+  }
+  if (frontmatter.retention_at !== undefined && (!/^\d{4}-\d{2}-\d{2}(?:T[^\s]+)?$/.test(String(frontmatter.retention_at).trim()) || Number.isNaN(Date.parse(String(frontmatter.retention_at).trim())))) {
+    issues.push({ code: 'invalid_retention_at', detail: 'retention_at should be an ISO date or date-time.' });
+  }
+  if (frontmatter.preserve_until !== undefined && (!/^\d{4}-\d{2}-\d{2}(?:T[^\s]+)?$/.test(String(frontmatter.preserve_until).trim()) || Number.isNaN(Date.parse(String(frontmatter.preserve_until).trim())))) {
+    issues.push({ code: 'invalid_preserve_until', detail: 'preserve_until should be an ISO date or date-time.' });
+  }
+  if (frontmatter.legal_hold !== undefined) {
+    try { normalizeBoolean(frontmatter.legal_hold, 'legalHold'); }
+    catch (error) { issues.push({ code: 'invalid_legal_hold', detail: error instanceof Error ? error.message : 'legal_hold must be a boolean.' }); }
+  }
+  if (['archive', 'tombstone'].includes(String(frontmatter.retention_policy || '').trim().toLowerCase()) && (frontmatter.legal_hold === true || String(frontmatter.legal_hold).trim().toLowerCase() === 'true')) {
+    issues.push({ code: 'legal_hold_blocks_disposition', detail: 'A legal hold is active; do not archive or tombstone this note until an authorized human releases the hold.' });
+  }
+  if (frontmatter.retention_reason !== undefined && (typeof frontmatter.retention_reason !== 'string' || !String(frontmatter.retention_reason).trim() || Array.from(String(frontmatter.retention_reason)).length > 1000)) {
+    issues.push({ code: 'invalid_retention_reason', detail: 'retention_reason must be non-empty text of 1000 Unicode characters or fewer.' });
+  }
+  if (frontmatter.replaced_by !== undefined && (typeof frontmatter.replaced_by !== 'string' || !String(frontmatter.replaced_by).trim() || Array.from(String(frontmatter.replaced_by)).length > 500)) {
+    issues.push({ code: 'invalid_replaced_by', detail: 'replaced_by must be non-empty text of 500 Unicode characters or fewer.' });
   }
   const polarity = frontmatter.knowledge_polarity === undefined ? undefined : String(frontmatter.knowledge_polarity).trim().toLowerCase();
   const negativeType = frontmatter.negative_type === undefined ? undefined : String(frontmatter.negative_type).trim().toLowerCase();
@@ -528,10 +1002,13 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
   if (kind === 'project' && lifecycle === 'active' && !frontmatter.project_purpose && !frontmatter.desired_outcome) {
     issues.push({ code: 'active_project_without_outcome', detail: 'An active project should state its purpose or desired_outcome so planning and review can distinguish it from an area.' });
   }
+  if (kind === 'project' && lifecycle === 'active' && String(frontmatter.task_status || '').toLowerCase() === 'waiting' && !frontmatter.waiting_for) {
+    issues.push({ code: 'waiting_project_without_owner', detail: 'A waiting project should identify the person, event, or resource it is waiting for.' });
+  }
   if (frontmatter.triage_disposition !== undefined && !clarifyDispositionSet.has(String(frontmatter.triage_disposition).trim().toLowerCase())) {
     issues.push({ code: 'invalid_triage_disposition', detail: `triage_disposition must be one of: ${CLARIFY_DISPOSITIONS.join(', ')}` });
   }
-  for (const [field, maximum] of [['clarified_by', 200], ['clarify_note', 1000], ['triage_target', 500], ['moc_purpose', 1000], ['moc_scope', 500], ['moc_parent', 500], ['project_purpose', 1000] ] as const) {
+  for (const [field, maximum] of [['primary_moc', 500], ['clarified_by', 200], ['clarify_note', 1000], ['triage_target', 500], ['moc_purpose', 1000], ['moc_scope', 500], ['moc_parent', 500], ['project_purpose', 1000] ] as const) {
     const value = frontmatter[field];
     if (value !== undefined && (typeof value !== 'string' || Array.from(value).length > maximum)) {
       issues.push({ code: `invalid_${field}`, detail: `${field} must be text of ${maximum} Unicode characters or fewer.` });
@@ -566,6 +1043,25 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
   if (kind === 'moc') {
     if (!frontmatter.moc_purpose) issues.push({ code: 'moc_purpose_missing', detail: 'A MOC should state what navigation or question it is meant to serve.' });
     if (!Array.isArray(frontmatter.moc_questions) || frontmatter.moc_questions.length === 0) issues.push({ code: 'moc_questions_missing', detail: 'A MOC should list representative questions so its coverage stays intentional.' });
+  }
+  if (lifecycle === 'superseded' && !frontmatter.replacement_path && !frontmatter.replaced_by && !frontmatter.superseded_by) {
+    issues.push({ code: 'superseded_without_replacement', detail: 'A superseded knowledge note should point to the replacement note with replacement_path, replaced_by, or superseded_by.' });
+  }
+  if (lifecycle === 'archived' && !frontmatter.archive_reason) {
+    issues.push({ code: 'archived_reason_missing', detail: 'An archived knowledge note should retain a short archive_reason so future agents know why it was retired.' });
+  }
+  const retentionPolicy = String(frontmatter.retention_policy || '').trim().toLowerCase();
+  if (['archive', 'tombstone'].includes(retentionPolicy) && !frontmatter.retention_reason) {
+    issues.push({ code: 'retention_reason_missing', detail: 'Archive or tombstone retention should retain a short reason so future agents know why the note is no longer active.' });
+  }
+  if (retentionPolicy === 'tombstone' && lifecycle !== 'archived' && lifecycle !== 'superseded') {
+    issues.push({ code: 'tombstone_lifecycle_mismatch', detail: 'A tombstone retention policy should use lifecycle archived or superseded and preserve a visible replacement or reason.' });
+  }
+  if (frontmatter.last_review_outcome !== undefined && (!frontmatter.last_reviewed_at || !frontmatter.last_reviewed_by)) {
+    issues.push({ code: 'review_record_incomplete', detail: 'A recorded review outcome should include both last_reviewed_at and last_reviewed_by.' });
+  }
+  if (kind === 'literature' && (!frontmatter.interpretation_status || String(frontmatter.interpretation_status).toLowerCase() === 'unprocessed')) {
+    issues.push({ code: 'literature_interpretation_pending', detail: 'A literature note is still unprocessed; add a compact interpretation or derive a reusable atomic/knowledge note.' });
   }
   if (kind === 'atomic' && content.split(/\n\s*\n/).filter(block => block.trim() && !block.trim().startsWith('#')).length > 8) {
     issues.push({ code: 'atomic_note_may_be_too_broad', detail: 'An atomic note contains many paragraphs; consider splitting durable claims and linking the resulting notes.' });

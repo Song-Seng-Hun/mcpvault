@@ -8,6 +8,9 @@ export function parseCliArgs(args) {
     let readOnly = false;
     let restPort;
     let mcpHttpPort;
+    let mcpHttpHost;
+    let mcpHttpTlsCert;
+    let mcpHttpTlsKey;
     for (let index = 0; index < args.length; index += 1) {
         const arg = args[index];
         if (arg === "--read-only") {
@@ -65,6 +68,51 @@ export function parseCliArgs(args) {
             mcpHttpPort = Number(value);
             continue;
         }
+        if (arg === "--mcp-http-host") {
+            const value = args[index + 1];
+            if (!value || value.startsWith("--"))
+                throw new Error("--mcp-http-host requires a host");
+            mcpHttpHost = value;
+            index += 1;
+            continue;
+        }
+        if (arg.startsWith("--mcp-http-host=")) {
+            const value = arg.slice("--mcp-http-host=".length).trim();
+            if (!value)
+                throw new Error("--mcp-http-host requires a host");
+            mcpHttpHost = value;
+            continue;
+        }
+        if (arg === "--mcp-http-cert") {
+            const value = args[index + 1];
+            if (!value || value.startsWith("--"))
+                throw new Error("--mcp-http-cert requires a file path");
+            mcpHttpTlsCert = value;
+            index += 1;
+            continue;
+        }
+        if (arg.startsWith("--mcp-http-cert=")) {
+            const value = arg.slice("--mcp-http-cert=".length).trim();
+            if (!value)
+                throw new Error("--mcp-http-cert requires a file path");
+            mcpHttpTlsCert = value;
+            continue;
+        }
+        if (arg === "--mcp-http-key") {
+            const value = args[index + 1];
+            if (!value || value.startsWith("--"))
+                throw new Error("--mcp-http-key requires a file path");
+            mcpHttpTlsKey = value;
+            index += 1;
+            continue;
+        }
+        if (arg.startsWith("--mcp-http-key=")) {
+            const value = arg.slice("--mcp-http-key=".length).trim();
+            if (!value)
+                throw new Error("--mcp-http-key requires a file path");
+            mcpHttpTlsKey = value;
+            continue;
+        }
         pathArgs.push(arg);
     }
     return {
@@ -72,5 +120,8 @@ export function parseCliArgs(args) {
         readOnly,
         ...(restPort !== undefined && { restPort }),
         ...(mcpHttpPort !== undefined && { mcpHttpPort }),
+        ...(mcpHttpHost !== undefined && { mcpHttpHost }),
+        ...(mcpHttpTlsCert !== undefined && { mcpHttpTlsCert }),
+        ...(mcpHttpTlsKey !== undefined && { mcpHttpTlsKey }),
     };
 }

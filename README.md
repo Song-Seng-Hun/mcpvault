@@ -159,7 +159,8 @@ Classify notes with YAML properties such as `note_kind` (`fleeting`,
 `review`, `evergreen`, `superseded`, or `archived`). Optional `moc`,
 `project`, and `review_at` properties make related notes and review work
 discoverable. `[[wikilinks]]` and relative Markdown links such as
-`[Guide](Resources/Guide.md#section)` express relationships; `evidence_paths` express
+`[Guide](Resources/Guide.md#section)` express relationships; heading and block
+anchors are preserved in graph results; `evidence_paths` express
 source provenance; Git records authorship, reasons, diffs, and rollback. Do
 not create a parallel edit log, treat links as evidence without checking
 them, or move Community-managed posts into PARA folders.
@@ -181,24 +182,91 @@ regenerated. For failed paths, use `knowledge_polarity: negative` with a
 `negative_type` such as `failure`, `rejected`, `counterexample`, or
 `non_reproducible`; preserve the note so later agents do not repeat it. Typed relationship
 properties (`supports`, `contradicts`, `supersedes`, `derived_from`,
-`depends_on`, `implements`, `blocked_by`, and `related`) explain the meaning
+`depends_on`, `implements`, `blocked_by`, `related`, `same_as`, `version_of`,
+and `refines`) explain the meaning
 of a `[[wikilink]]`; they do not grant access and their targets are checked by
 Wiki lint. Use `next_actions` and `waiting_for` for project/task notes, and
 `task_status` (`open`, `next_action`, `waiting`, `blocked`, `someday`,
 `completed`, or `cancelled`) for their operational state. Keep task status separate from the
 knowledge `lifecycle`. Evidence can carry `heading`, `blockId`, and source
 `revision` locators; the server validates them and reports stale references.
+Lint also warns when MCP-managed fields such as `summary_highlights`, `claims`,
+or structured `evidence` contain nested objects. They remain valid Markdown
+metadata, but should be maintained in Source mode rather than treated as a
+native scalar/list Properties editor.
 Use `review_policy` (`manual`, `periodic`, `on_source_change`,
 `on_link_change`, or `on_any_edit`) to declare review triggers. Publication
 stores a compact body/link review baseline, so later source, link, or body
 changes can be reported as derived triggers. The baseline is regenerable
 metadata and never replaces Markdown or Git. The bounded
+review metadata also records the reviewed source revision, review count,
+re-entry count, and last review trigger, so repeated stale or disputed notes
+remain visible without a duplicate history database. Use
+`interpretation_status` (`unprocessed`, `interpreted`, or `synthesized`) to
+distinguish captured literature from an agent's interpretation and a reusable
+knowledge synthesis. The typed `answers_questions` relation makes explicit
+question-to-answer navigation available to backlinks and graph health; it is
+not evidence by itself. Use `preview_wiki_split` to inspect a heading extract
+and its source revision before performing a normal revision-checked split.
 `get_wiki_organization_health` endpoint combines these checks with MOC
 coverage, Inbox, lifecycle, atomic-note, Evergreen discoverability, summary
 freshness, and alias/ID collision guidance. `get_wiki_review_packet` is a
 smaller priority-ordered maintenance projection for agents that should take
 one bounded next step. `get_wiki_bases_view` emits an optional Obsidian Bases YAML
 view; it is a local presentation file, never a security boundary.
+
+Properties should keep one native shape per property name across the vault
+(for example, do not use `tags: research` in one note and `tags: [research]`
+in another). `lint_wiki` and `get_wiki_organization_health` report
+`property_type_drift` as an advisory warning so Obsidian Properties/Bases
+views remain predictable. Before renaming a note, use `preview_move_note` to
+see bounded incoming wikilinks/Markdown links and destination collisions;
+`move_note` intentionally does not rewrite links automatically.
+
+Call `get_wiki_property_contract` before creating or repairing a managed note
+to see the canonical field types and allowed values. It is a read-only guide;
+custom Properties remain valid. When a note declares `review_interval_days`,
+`review_wiki_note` calculates the next `review_at` after a completed review
+unless the caller supplies an explicit date.
+
+For a redirect or duplicate that must remain addressable, set
+`canonical_path` to the visible canonical note. For high-value knowledge,
+optionally add `recall_prompt` and `recall_interval_days`; attempt the prompt
+before opening the body and record the result with `record_wiki_recall`.
+Recall quality is deliberately separate from evidence truth and review status.
+Agent identities store their result in private continuity state so agents do
+not overwrite one another; the private record retains only a bounded recent
+history and streak. Model-owner identities retain the shared frontmatter
+compatibility path.
+
+`get_wiki_recall_queue` turns these fields into a bounded reader-specific due
+queue and exposes the prompt before the body. `get_wiki_duplicate_candidates`
+adds near-duplicate suggestions beyond exact title/alias collisions; it never
+merges automatically and should be followed by revision reads and
+`preview_wiki_merge`.
+
+`get_wiki_composition_candidates` is a bounded advisory detector for long or
+section-heavy knowledge notes. Atomicity is a desired outcome, not a
+publication gate: inspect a heading with `preview_wiki_split` before deciding
+whether to split, link, or leave the note composed. `update_wiki_projection`
+updates only the compact summary/key-points/highlights projection with
+`expectedRevision`; it preserves the Markdown body and unrelated Properties.
+
+Two additional derived views keep the organization methods useful without
+creating another task or recommendation database. `get_wiki_next_actions`
+returns only active executable actions, optionally filtered by one exact
+`task_context` such as `@computer` or `@research`. It also accepts optional
+`maxMinutes`, `energy`, and `effort` filters using common optional
+`time_estimate_minutes`/`estimated_minutes`, `energy`, and `effort` Properties;
+unknown values are excluded and reported rather than guessed. Project purpose, support
+references, and waiting information remain separate fields. `resurface_wiki_knowledge`
+returns a small deterministic daily rotation of durable notes, so Zettelkasten
+style rediscovery does not require an ever-growing queue or permanent cache.
+Both are bounded and read-only: read the returned notes and check their current
+revision before acting. Graph health also reports missing evidence for resolved
+questions/hypotheses/assumptions, literature without an immutable source, and
+syntheses without evidence or `derived_from` inputs. These are repair prompts,
+not automatic publication or truth judgments.
 
 For low-friction capture, `capture_wiki_note` creates an ordinary Markdown
 note in `Inbox/` with `note_kind: fleeting` and `lifecycle: inbox`. Complete
@@ -265,14 +333,100 @@ peer discussion. `distill_wiki_source` is the explicit source-to-literature or
 source-to-atomic step: it requires an intact immutable source and carries its
 current path and revision into the new note's provenance. The source remains
 unchanged and a later atomic note may link to the literature note with
-`derived_from`. `get_wiki_inbox` finds bounded unprocessed captures and
+`derived_from`. `get_wiki_inbox` finds a bounded oldest-first queue of
+unprocessed captures, including capture age bands and a suggested next action;
+age is advisory and does not move or delete a note.
 `triage_wiki_note` classifies one note with its revision without moving or
 rewriting the body. `get_wiki_catalog` can filter by note kind/lifecycle and
-bound returned entries with `limit`/`maxChars`,
+bound returned entries with `limit`/`maxChars`. Set `includeFacets: true` to
+receive bounded metadata-only counts for note kind, lifecycle, MOC, project,
+and tags without loading note bodies. `get_wiki_neighborhood` provides a
+bounded knowledge-space view around one note: explicit Obsidian links and
+typed backlinks are ranked before shared MOC/project context, with optional
+semantic candidates. Each neighbor includes its reason and current revision;
+the endpoint never returns neighbor bodies, and vector similarity is only a
+discovery signal—not an authority, placement rule, or evidence substitute.
+Use `orderBy: location|alphabet|time|category|hierarchy` on the catalog for
+LATCH-style browse projections; this reorders the live view without moving or
+duplicating notes. The authority map exposes a stable address from
+`stable_id` when available, while collisions remain repair candidates.
 `get_wiki_review_queue` finds bounded due or disputed knowledge, and
+`get_wiki_maintenance_debt` adds a derived 5S ledger for Inbox, stale
+projections, aging reviews, missing MOCs, unfinished literature, incomplete
+projects, and empty maps. `get_wiki_authority_map` provides a library-style
+preferred-term/alias/stable-ID view and makes terminology collisions visible
+without renaming notes. `get_wiki_answer_packet` combines one progressive
+source projection with a few supporting neighbors and counterpoints, keeping
+the answer context bounded and revision-aware. Adaptive review policies shorten
+the next interval after disputed or revised knowledge and gradually lengthen it
+after confirmed reviews; this remains advisory scheduling, not a truth score.
+`get_wiki_graph_health` also counts typed incoming and outgoing relations and
+reports high-degree hub notes when a map may be carrying too many unrelated
+concepts. This is a navigation review hint only; useful links are never removed
+automatically. `get_wiki_property_contract` documents the meaning and
+direction of each typed relation.
 `lint_wiki` reports missing or inconsistent organization metadata as warnings.
 These organization hints are deliberately non-blocking; source integrity,
 evidence, access, and revision checks remain the hard quality gates.
+Controlled vocabulary is also optional Properties metadata: use
+`term_status`, `term_replaced_by`, `broader_terms`, and `related_terms` for
+preferred/deprecated/redirect terminology. `get_wiki_authority_map` exposes
+the replacement and hierarchy hints, while lint reports incomplete or invalid
+metadata without changing links. `get_wiki_trail` provides a bounded
+multi-hop traversal of existing Obsidian links, and
+`get_wiki_placement_candidates` reports likely PARA filing mismatches without
+moving notes. Both are derived navigation aids; Markdown, Properties, and Git
+remain authoritative.
+`get_wiki_vocabulary_health` adds a bounded library-style hygiene view for tag
+spelling/case variants, subject terms without a local authority note, and terms
+used by multiple notes. It suggests review only; it never renames or retags
+notes, because local distinctions may be intentional.
+Use `get_wiki_note_template` for an optional small scaffold when starting an
+atomic, literature, question, hypothesis, decision, project, MOC, or negative
+knowledge note. It returns Markdown and suggested Properties without creating
+files or imposing a schema gate. For `related` and `same_as`, graph health
+also reports missing reverse edges as advisory `reciprocityMissing`; other
+typed relations remain directional. Retention metadata
+(`retention_policy`, `retention_at`, `retention_reason`, `replaced_by`) makes
+archive and replacement decisions explainable without enabling automatic
+deletion.
+Use `primary_moc` as the preferred Obsidian launch point for a note. The
+bounded `read_wiki_projection` response returns this navigation card together
+with freshness, provenance, and typed relations. For precise edits, request
+`view: section` with a heading or `blockId` and small `contextBefore`/
+`contextAfter` values instead of loading the complete note. Optional
+`retention_event`, `preserve_until`, and `legal_hold` fields record why and
+until when content must be preserved; they never authorize automatic deletion.
+Atomic notes may additionally declare `knowledge_role` (`concept`, `argument`,
+`model`, `observation`, or `counterargument`), `see_also` for adjacent
+Obsidian links, and `term_scope_note` for a concise definition boundary. When
+one source has multiple immutable editions, preserve each snapshot and link
+them with `sourceFamily`, `sourceVersion`, and `supersedesSource`.
+Use `resolve_wiki_term` when one title, alias, stable ID, or deprecated term
+needs a canonical destination; it returns a bounded navigation hint without
+rewriting links. Before consolidating two notes, use `preview_wiki_merge` to
+compare current revisions, identity and metadata conflicts, shared evidence,
+links, and bounded body previews. It is preview-only: choose the canonical
+note and perform ordinary revision-checked writes yourself, preserving a
+superseded or redirect note when history matters. `get_wiki_citation_graph`
+shows source reuse, evidence/reference edges, and orphan source snapshots
+without creating a second provenance database.
+Optional faceted access points are available through `subject_terms`,
+`domain`, `methods`, and `audience`; they supplement, rather than replace,
+wikilinks, MOCs, and authority terms. `get_wiki_knowledge_gaps` provides a
+bounded active-recall queue for unresolved questions, hypotheses, assumptions,
+disputed claims, and negative knowledge. It is a prioritization view, not an
+automated truth engine.
+Durable notes may also declare `retrieval_cues` and `use_when` so an agent can
+recognize when the note is relevant to a live problem. These are bounded
+discovery hints only. Search can reach a canonical note through an alternate
+title or alias and reports `alias_match`; it does not silently merge or hide
+the original terminology. Organization lint reports unresolved, ambiguous,
+self-referential, or cyclic `broader_terms`, plus use of deprecated facets.
+`get_wiki_graph_health` also reports bounded knowledge usage signals, lifecycle
+counts, least-used notes, and same-title/alias duplicate candidates. These
+are review queues only: a note with no current backlink may still be valuable,
+and similar titles may represent different perspectives.
 
 MOCs are navigation notes, not duplicate summaries. Give an MOC
 `moc_purpose`, `moc_scope`, `moc_questions`, and optional `moc_parent`, then
@@ -282,14 +436,18 @@ uncovered knowledge; accept a suggestion only after checking whether the map
 has a real question and useful boundary.
 
 `get_wiki_bases_view` can generate standard local Obsidian Bases projections:
-`all`, `inbox`, `projects`, `review`, and `epistemic`. Save the returned YAML
+`all`, `inbox`, `inbox_oldest`, `projects`, `project_next_actions`, `review`,
+`epistemic`, `open_questions`, `knowledge`, `unreviewed_evidence`,
+`negative_knowledge`, `deprecated_terms`, and `maintenance`. Save the returned YAML
 as a `.base` file only when a local view is useful; Markdown and Git remain the
-source of truth.
+source of truth. Specialized views may return `matchingNotesExact: false` when
+their final Property expression is intended to be evaluated by Obsidian Bases.
 
 `ingest_source` also accepts optional citation metadata: `sourceType`,
-`citationKey`, `author`, `publishedAt`, and `retrievedAt`. Use these to
-identify a reusable source across literature notes; the immutable content
-hash and revision remain the authoritative provenance.
+`citationKey`, `author`, `publishedAt`, `retrievedAt`, `sourceFamily`,
+`sourceVersion`, and `supersedesSource`. Use these to identify a reusable
+source and its editions across literature notes; the immutable content hash
+and revision remain the authoritative provenance.
 
 An optional localhost REST adapter uses the same endpoint registry and
 dispatcher. Start it with `--http` or `--http=PORT`; use `GET /api/capabilities`,
@@ -364,16 +522,16 @@ authenticated edge in front of it.
 - AST-aware frontmatter updates preserve formatting for unchanged YAML fields.
 - Path checks block traversal, symlink escapes, dotfiles, `.obsidian`, `.git`, and `node_modules`.
 - The dynamic endpoint catalog covers note, collaboration, private scope, LLM Wiki, social journaling, public community, chat, references, agent coordination, and private coordination operations:
-  - File operations: `read_note`, `write_note`, `patch_note`, `delete_note`, `move_note`, `move_file`
+  - File operations: `read_note`, `write_note`, `patch_note`, `delete_note`, `move_note`, `preview_move_note`, `move_file`. A rename is review-first: `preview_move_note` reports bounded inbound links; `move_note` leaves them unchanged by default, while explicit `updateLinks: true` plus the source `expectedRevision` applies a checked Markdown/wikilink rewrite and rolls link edits back if the move fails.
   - Partial reads: `get_note_outline`, `read_note_lines`
   - Directory and batch reads: `list_directory`, `read_multiple_notes`
-  - Search: `search_notes` with multi-word matching, LLM Wiki-first ranking, one compact excerpt per document, bounded result count/characters, match reasons (`why`) and freshness (`fresh`), and automatic server-side incremental document indexing
+  - Search: `search_notes` with multi-word matching, LLM Wiki-first ranking, one compact excerpt per document, bounded result count/characters, match reasons (`why`) and freshness (`fresh`), Obsidian-style `path:`, `tag:`, `property:`, `[property:value]`, `section:(...)`, `block:(...)`, `task:`, `task-todo:`, `task-done:`, quoted exact phrases, `OR`, and `-excluded` terms, plus automatic server-side incremental document indexing. Scoped filters match within one section/block/task, and `property:null` finds missing or empty values. Set `expandAuthority: true` when browsing by classification: bounded `broader_terms`/`related_terms` matches are returned with explicit lower-confidence reasons rather than being confused with body or alias matches. Semantic search is skipped when lexical filters/exclusions are present so the requested filter cannot be bypassed.
   - Optional semantic search: pass `semantic: true` to add Korean-capable `multilingual-e5-small` vector matches. The model and LanceDB cache load lazily, are processed by one bounded idle worker, and are unloaded after inactivity; concurrent server instances in one Node process share one embedder. The server computes query vectors automatically and briefly caches bounded results per authorized principal/query until the semantic index changes. Background indexing uses the shared adaptive I/O scheduler at lower priority than foreground note reads. If either dependency or its local index fails, `search_notes` returns the normal lexical results. `semantic_search_status` reports cache health. The cache stores no note text—only vectors and derived path/hash/line metadata; bounded excerpts are read from the authorized Markdown source at query time. Markdown/Git remain authoritative.
   - Optional Obsidian-native search: `search_obsidian` uses the running Obsidian CLI index for public-global results; authenticated private searches must use `search_scoped_notes`
   - Metadata and tags: `get_frontmatter`, `update_frontmatter`, `get_notes_info`, `get_vault_stats`, `manage_tags`, `list_all_tags`
-  - Wiki links: `wiki_link` resolves names and returns alternative paths when a name is ambiguous; `get_backlinks` finds incoming Obsidian internal links, `get_outlinks` lists outgoing internal links, `find_unresolved_links` finds broken references, and `find_orphan_notes` finds isolated notes. Wikilinks and relative Markdown links are both supported; external URLs and fenced-code examples are ignored. Backlinks, broken-link, orphan, and aggregate-tag reads share an incremental Obsidian graph index and refresh only changed notes.
+  - Wiki links: `wiki_link` resolves names and returns alternative paths when a name is ambiguous; `get_backlinks` finds incoming Obsidian internal links, `get_outlinks` lists outgoing internal links, `find_unresolved_links` finds broken references, and `find_orphan_notes` finds isolated notes. Wikilinks and relative Markdown links are both supported; heading/block anchors are retained as `targetHeading`/`targetBlockId`; external URLs and fenced-code examples are ignored. Backlinks, broken-link, orphan, and aggregate-tag reads share an incremental Obsidian graph index and refresh only changed notes.
   - Daily notes: `get_daily_note` reads a date-based note and `daily_note` safely creates or appends to one
-  - Tasks: `list_tasks` finds open, completed, or all checkbox tasks while ignoring frontmatter and fenced code blocks
+  - Tasks: `list_tasks` finds open, completed, or all checkbox tasks while ignoring frontmatter and fenced code blocks and returns a content-derived `taskId`; `update_task` prefers that identity (falling back to `path`/`line`) with `expectedRevision`, preserving ordinary Markdown, Git history, and concurrent-edit protection when surrounding lines move
   - Structured queries: `query_notes` filters and sorts notes using YAML frontmatter properties
   - Revision history: ordinary edits remain file changes; `commit_changes` groups them into Git revisions with author and reason, while history, diff, and single-note restore tools provide safe recovery
   - Private hierarchical scopes: global is public, community is isolated to the configured command center, login tokens unlock the caller's `scope://model/<model>/...` and `scope://agent/<agent>/...` spaces, and the server-host-only user/family tree is never exposed through MCP

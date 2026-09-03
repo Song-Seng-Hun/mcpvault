@@ -73,11 +73,14 @@ export class PathFilter {
         }
         // Normalize path separators
         const normalizedPath = path.replace(/\\/g, '/');
+        if (this.hasUnsafePlatformPathSyntax(normalizedPath)) {
+            return false;
+        }
         if (this.isIgnoredPath(normalizedPath)) {
             return false;
         }
         // For files, check extension if allowedExtensions is configured
-        if (this.allowedExtensions.length > 0 && this.isFile(normalizedPath)) {
+        if (this.allowedExtensions.length > 0 && this.isFile(this.canonicalizeForMatch(normalizedPath))) {
             const hasAllowedExtension = this.allowedExtensions.some(ext => normalizedPath.toLowerCase().endsWith(ext.toLowerCase()));
             if (!hasAllowedExtension) {
                 return false;
@@ -91,8 +94,29 @@ export class PathFilter {
         }
         // Normalize path separators
         const normalizedPath = path.replace(/\\/g, '/');
+        if (this.hasUnsafePlatformPathSyntax(normalizedPath)) {
+            return false;
+        }
         // Listing includes non-note files, but still blocks restricted system paths
         return !this.isIgnoredPath(normalizedPath);
+    }
+    /**
+     * Windows treats trailing dots/spaces as equivalent to their trimmed name
+     * and treats a colon as an alternate data stream separator.  Reject those
+     * spellings before path resolution so a note API cannot address an
+     * executable, secret, or arbitrary stream through a note-looking path.
+     */
+    hasUnsafePlatformPathSyntax(normalizedPath) {
+        if (process.platform !== 'win32')
+            return false;
+        if (/[\u0000-\u001f\u007f]/.test(normalizedPath))
+            return true;
+        return normalizedPath.split('/').filter(segment => segment !== '' && segment !== '.' && segment !== '..').some(segment => {
+            if (segment.endsWith('.') || segment.endsWith(' ') || segment.includes(':'))
+                return true;
+            const base = segment.split('.')[0].toLowerCase();
+            return /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/.test(base);
+        });
     }
     isIgnoredPath(normalizedPath) {
         // Match against the canonical form so case- and trailing dot/space-variants
@@ -135,9 +159,10 @@ export class PathFilter {
             return false;
         }
         const extension = lastComponent.substring(lastDotIndex + 1);
-        // Extension should be 1-10 characters and contain only alphanumeric characters
-        // This allows .md, .txt, .markdown but not ". Project" (space after dot)
-        return extension.length >= 1 && extension.length <= 10 && /^[a-zA-Z0-9]+$/.test(extension);
+        // Treat any alphanumeric suffix as a file extension.  Limiting this to
+        // ten characters allowed file-like names with longer extensions to be
+        // mistaken for directories, bypassing the note extension allow-list.
+        return extension.length >= 1 && /^[a-zA-Z0-9]+$/.test(extension);
     }
     filterPaths(paths) {
         return paths.filter(path => this.isAllowed(path));

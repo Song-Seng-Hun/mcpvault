@@ -198,7 +198,16 @@ export class VaultGraphIndex {
                 if (!backlinkMatches(link.target, targetEntry.path))
                     continue;
                 total += 1;
-                const backlink = { path: entry.path, line: link.line, link: link.link, context: link.context, ...(link.relation && { relation: link.relation }) };
+                const backlink = {
+                    path: entry.path,
+                    line: link.line,
+                    link: link.link,
+                    context: link.context,
+                    ...(link.heading && { heading: link.heading }),
+                    ...(link.targetHeading && { targetHeading: link.targetHeading }),
+                    ...(link.targetBlockId && { targetBlockId: link.targetBlockId }),
+                    ...(link.relation && { relation: link.relation }),
+                };
                 addTopMatch(backlinks, backlink, limit, compare);
             }
         }

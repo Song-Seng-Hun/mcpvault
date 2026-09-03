@@ -76,7 +76,7 @@ export declare class SemanticSearchService {
     constructor(vaultPath: string, pathFilter: PathFilter, accessPolicy?: ScopeAccessPolicy, catalog?: VaultFileCatalog | undefined, vaultIo?: VaultIoCoordinator);
     notifyChange(path: string, kind: ChangeKind): void;
     notifyChanges(changes: readonly VaultCatalogChange[]): void;
-    close(): void;
+    close(): Promise<void>;
     private clearQueryCache;
     private clearVectorCache;
     search(params: SemanticSearchParams): Promise<SemanticSearchOutcome>;

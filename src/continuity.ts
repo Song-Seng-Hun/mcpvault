@@ -27,7 +27,7 @@ function list(value: unknown, field: string): string[] | undefined {
   return Array.from(new Set(value.map(item => String(item).trim()).filter(Boolean))).slice(0, 20).map(item => item.slice(0, 500));
 }
 
-function render(state: { topic: string; summary: string; nextAction: string; openQuestions?: string[]; references?: string[]; cursors?: Record<string, unknown> }): string {
+function render(state: { topic: string; summary: string; nextAction: string; openQuestions?: string[]; references?: string[]; cursors?: Record<string, unknown>; focus?: { questions?: string[]; projects?: string[]; notes?: string[] } }): string {
   return [
     `# Work state: ${state.topic}`,
     '',
@@ -38,6 +38,9 @@ function render(state: { topic: string; summary: string; nextAction: string; ope
     '', state.nextAction,
     ...(state.openQuestions?.length ? ['', '## Open questions', '', ...state.openQuestions.map(item => `- ${item}`)] : []),
     ...(state.references?.length ? ['', '## References', '', ...state.references.map(item => `- ${item}`)] : []),
+    ...(state.focus?.questions?.length ? ['', '## Top-of-mind questions', '', ...state.focus.questions.map(item => `- ${item}`)] : []),
+    ...(state.focus?.projects?.length ? ['', '## Top-of-mind projects', '', ...state.focus.projects.map(item => `- ${item}`)] : []),
+    ...(state.focus?.notes?.length ? ['', '## Top-of-mind notes', '', ...state.focus.notes.map(item => `- ${item}`)] : []),
     ...(state.cursors && Object.keys(state.cursors).length ? ['', '## Cursors', '', '```json', JSON.stringify(state.cursors), '```'] : []),
     '',
   ].join('\n');
@@ -46,13 +49,16 @@ function render(state: { topic: string; summary: string; nextAction: string; ope
 export class ContinuityService {
   constructor(private readonly fileSystem: FileSystemService) {}
 
-  async save(params: { principal?: ScopePrincipal; topic: string; summary: string; nextAction: string; openQuestions?: unknown; references?: unknown; cursors?: unknown; expectedRevision?: string }) {
+  async save(params: { principal?: ScopePrincipal; topic: string; summary: string; nextAction: string; openQuestions?: unknown; references?: unknown; cursors?: unknown; focusQuestions?: unknown; focusProjects?: unknown; focusNotes?: unknown; expectedRevision?: string }) {
     const principal = requiredPrincipal(params.principal);
     const topic = short(params.topic, 'topic', true)!;
     const summary = short(params.summary, 'summary', true)!;
     const nextAction = short(params.nextAction, 'nextAction', true)!;
     const openQuestions = list(params.openQuestions, 'openQuestions');
     const references = list(params.references, 'references');
+    const focusQuestions = list(params.focusQuestions, 'focusQuestions');
+    const focusProjects = list(params.focusProjects, 'focusProjects');
+    const focusNotes = list(params.focusNotes, 'focusNotes');
     if (params.cursors !== undefined && (!params.cursors || typeof params.cursors !== 'object' || Array.isArray(params.cursors))) throw new Error('cursors must be an object');
     const path = ownerPath(principal);
     const existing = await this.fileSystem.noteExists(path) ? await this.fileSystem.readNote(path) : undefined;
@@ -60,12 +66,12 @@ export class ContinuityService {
     const updatedAt = new Date().toISOString();
     await this.fileSystem.writeNote({
       path,
-      content: render({ topic, summary, nextAction, ...(openQuestions && { openQuestions }), ...(references && { references }), ...(params.cursors && { cursors: params.cursors as Record<string, unknown> }) }),
+      content: render({ topic, summary, nextAction, ...(openQuestions && { openQuestions }), ...(references && { references }), ...(params.cursors && { cursors: params.cursors as Record<string, unknown> }), focus: { ...(focusQuestions && { questions: focusQuestions }), ...(focusProjects && { projects: focusProjects }), ...(focusNotes && { notes: focusNotes }) } }),
       frontmatter: {
         mcpvault_type: 'agent_work_state', owner: principal.agentId || principal.modelId,
         model_id: principal.modelId, ...(principal.agentId && { agent_id: principal.agentId }),
         topic, next_action: nextAction, open_questions: openQuestions || [], references: references || [],
-        cursors: params.cursors || {}, updated_at: updatedAt,
+        cursors: params.cursors || {}, focus_questions: focusQuestions || [], focus_projects: focusProjects || [], focus_notes: focusNotes || [], updated_at: updatedAt,
       },
       expectedRevision,
     });

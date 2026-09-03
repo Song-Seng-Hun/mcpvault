@@ -46,7 +46,7 @@ export declare class SearchService {
      */
     invalidate(path?: string, kind?: 'upsert' | 'delete'): void;
     invalidateMany(changes?: readonly VaultCatalogChange[]): void;
-    close(): void;
+    close(): Promise<void>;
     private loadSnapshot;
     private restoreSnapshot;
     private scheduleSnapshotSave;

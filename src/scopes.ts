@@ -190,7 +190,7 @@ export class CollaborationService {
     throw new Error(`Scoped note not found in ${candidates.map(item => item.scope).join(' > ')} precedence: ${logical}`);
   }
 
-  async searchScopedNotes(params: { query: string; modelId?: string; agentId?: string; userId?: string; commandCenterId?: string; limit?: number; maxChars?: number; searchContent?: boolean; searchFrontmatter?: boolean; caseSensitive?: boolean; includeRevisions?: boolean }) {
+  async searchScopedNotes(params: { query: string; modelId?: string; agentId?: string; userId?: string; commandCenterId?: string; limit?: number; maxChars?: number; searchContent?: boolean; searchFrontmatter?: boolean; caseSensitive?: boolean; includeRevisions?: boolean; expandAuthority?: boolean }) {
     const limit = normalizeSearchLimit(params.limit);
     const maxChars = normalizeSearchMaxChars(params.maxChars);
     const modelId = await this.inferModelId(params.agentId, params.modelId);
@@ -208,6 +208,7 @@ export class CollaborationService {
         ...(params.searchFrontmatter !== undefined && { searchFrontmatter: params.searchFrontmatter }),
         ...(params.caseSensitive !== undefined && { caseSensitive: params.caseSensitive }),
         ...(params.includeRevisions !== undefined && { includeRevisions: params.includeRevisions }),
+        ...(params.expandAuthority !== undefined && { expandAuthority: params.expandAuthority }),
         ...(item.root ? { pathPrefix: item.root } : { excludePaths: ['_scopes', '_collaboration', '_whispers'] }),
       });
       for (const result of results) {

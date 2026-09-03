@@ -47,6 +47,34 @@ describe("SearchService", () => {
     expect(results[0]!.p).toBe("alpha.md");
   });
 
+  test("finds a canonical note through an Obsidian alias and explains the match", async () => {
+    await writeNote("canonical.md", "---\naliases: [Vector Retrieval]\n---\n# Canonical\n\nThe body uses another phrase.");
+
+    const results = await searchService.search({ query: "vector retrieval" });
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ p: "canonical.md", why: expect.arrayContaining(["alias_match"]) });
+  });
+
+  test("surfaces retrieval cues with bounded context", async () => {
+    await writeNote("cache.md", "---\nretrieval_cues: [stale index mismatch]\nuse_when: Reconcile a search result with Markdown.\n---\n# Cache\n\nCache guidance.");
+
+    const results = await searchService.search({ query: "stale index mismatch" });
+
+    expect(results[0]).toMatchObject({ p: "cache.md", why: expect.arrayContaining(["retrieval_cue_match"]), rc: ["stale index mismatch"], uw: "Reconcile a search result with Markdown." });
+  });
+
+  test("optionally expands controlled authority terms and explains the weaker match", async () => {
+    await writeNote("narrow.md", "---\nterms: []\nbroader_terms: [Data Systems]\nrelated_terms: [Storage Architecture]\n---\n# Narrow\n\nA narrow knowledge note.");
+
+    expect(await searchService.search({ query: "Data Systems" })).toHaveLength(0);
+    const broader = await searchService.search({ query: "Data Systems", expandAuthority: true });
+    expect(broader[0]).toMatchObject({ p: "narrow.md", why: expect.arrayContaining(["broader_term_match"]) });
+
+    const related = await searchService.search({ query: "Storage Architecture", expandAuthority: true });
+    expect(related[0]).toMatchObject({ p: "narrow.md", why: expect.arrayContaining(["related_term_match"]) });
+  });
+
   test("returns empty array when no matches", async () => {
     await writeNote("note.md", "# Note\n\nNothing relevant here.");
 
@@ -406,6 +434,68 @@ describe("SearchService", () => {
       await writeNote("Project-notes/x.md", "eta banana");
       const results = await searchService.search({ query: "banana", limit: 20, pathPrefix: "Projects" });
       expect(results.map(r => r.p)).not.toContain("Project-notes/x.md");
+    });
+  });
+
+  describe("Obsidian-style query filters", () => {
+    test("supports path, tag, and property filters without returning unrelated notes", async () => {
+      await writeNote("Projects/research.md", "---\ntags: [research]\nstatus: open\n---\n# Research\n\nUseful result.");
+      await writeNote("Projects/done.md", "---\ntags: [research]\nstatus: closed\n---\n# Done\n\nArchived result.");
+      await writeNote("Notes/other.md", "---\ntags: [other]\nstatus: open\n---\n# Other\n\nDifferent result.");
+
+      const results = await searchService.search({ query: "path:Projects tag:research property:status=open", limit: 20 });
+
+      expect(results.map(result => result.p)).toEqual(["Projects/research.md"]);
+      expect(results[0]!.why).toEqual(expect.arrayContaining(["filter_path", "filter_tag", "filter_property"]));
+    });
+
+    test("allows a filter-only query and supports property existence", async () => {
+      await writeNote("question.md", "---\nnote_kind: question\n---\n# Question\n\nOpen.");
+      await writeNote("plain.md", "# Plain\n\nNo organization property.");
+
+      const results = await searchService.search({ query: "property:note_kind", limit: 20 });
+
+      expect(results.map(result => result.p)).toEqual(["question.md"]);
+    });
+
+    test("supports exact phrases, exclusions, and Obsidian bracket properties", async () => {
+      await writeNote("keep.md", "---\nstatus: open\n---\nalpha beta survives.");
+      await writeNote("exclude.md", "---\nstatus: open\n---\nalpha beta archive.");
+      await writeNote("closed.md", "---\nstatus: closed\n---\nalpha beta survives.");
+
+      const results = await searchService.search({ query: '"alpha beta" -archive [status:open]', limit: 20 });
+      expect(results.map(result => result.p)).toEqual(["keep.md"]);
+    });
+
+    test("supports OR and null property filters", async () => {
+      await writeNote("draft.md", "---\nstatus: draft\n---\nalpha");
+      await writeNote("empty.md", "---\nstatus: \n---\nalpha");
+      await writeNote("published.md", "---\nstatus: published\n---\nalpha");
+
+      const either = await searchService.search({ query: "alpha [status:draft OR published]", limit: 20 });
+      expect(either.map(result => result.p).sort()).toEqual(["draft.md", "published.md"]);
+      const empty = await searchService.search({ query: "alpha [status:null]", limit: 20 });
+      expect(empty.map(result => result.p)).toEqual(["empty.md"]);
+    });
+
+    test("supports section, block, and task scoped searches", async () => {
+      await writeNote("work.md", [
+        "# Project",
+        "context only",
+        "## Research",
+        "semantic indexing notes",
+        "",
+        "- [ ] ship the semantic index",
+        "- [x] archive the old cache",
+        "",
+        "## Other",
+        "semantic but unrelated",
+      ].join("\n"));
+
+      expect((await searchService.search({ query: "section:(Research indexing)", limit: 20 })).map(result => result.p)).toEqual(["work.md"]);
+      expect((await searchService.search({ query: "block:(ship semantic)", limit: 20 })).map(result => result.p)).toEqual(["work.md"]);
+      expect((await searchService.search({ query: "task-todo:(ship semantic)", limit: 20 })).map(result => result.p)).toEqual(["work.md"]);
+      expect((await searchService.search({ query: "task-done:archive", limit: 20 })).map(result => result.p)).toEqual(["work.md"]);
     });
   });
 });

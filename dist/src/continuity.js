@@ -36,6 +36,9 @@ function render(state) {
         '', state.nextAction,
         ...(state.openQuestions?.length ? ['', '## Open questions', '', ...state.openQuestions.map(item => `- ${item}`)] : []),
         ...(state.references?.length ? ['', '## References', '', ...state.references.map(item => `- ${item}`)] : []),
+        ...(state.focus?.questions?.length ? ['', '## Top-of-mind questions', '', ...state.focus.questions.map(item => `- ${item}`)] : []),
+        ...(state.focus?.projects?.length ? ['', '## Top-of-mind projects', '', ...state.focus.projects.map(item => `- ${item}`)] : []),
+        ...(state.focus?.notes?.length ? ['', '## Top-of-mind notes', '', ...state.focus.notes.map(item => `- ${item}`)] : []),
         ...(state.cursors && Object.keys(state.cursors).length ? ['', '## Cursors', '', '```json', JSON.stringify(state.cursors), '```'] : []),
         '',
     ].join('\n');
@@ -52,6 +55,9 @@ export class ContinuityService {
         const nextAction = short(params.nextAction, 'nextAction', true);
         const openQuestions = list(params.openQuestions, 'openQuestions');
         const references = list(params.references, 'references');
+        const focusQuestions = list(params.focusQuestions, 'focusQuestions');
+        const focusProjects = list(params.focusProjects, 'focusProjects');
+        const focusNotes = list(params.focusNotes, 'focusNotes');
         if (params.cursors !== undefined && (!params.cursors || typeof params.cursors !== 'object' || Array.isArray(params.cursors)))
             throw new Error('cursors must be an object');
         const path = ownerPath(principal);
@@ -60,12 +66,12 @@ export class ContinuityService {
         const updatedAt = new Date().toISOString();
         await this.fileSystem.writeNote({
             path,
-            content: render({ topic, summary, nextAction, ...(openQuestions && { openQuestions }), ...(references && { references }), ...(params.cursors && { cursors: params.cursors }) }),
+            content: render({ topic, summary, nextAction, ...(openQuestions && { openQuestions }), ...(references && { references }), ...(params.cursors && { cursors: params.cursors }), focus: { ...(focusQuestions && { questions: focusQuestions }), ...(focusProjects && { projects: focusProjects }), ...(focusNotes && { notes: focusNotes }) } }),
             frontmatter: {
                 mcpvault_type: 'agent_work_state', owner: principal.agentId || principal.modelId,
                 model_id: principal.modelId, ...(principal.agentId && { agent_id: principal.agentId }),
                 topic, next_action: nextAction, open_questions: openQuestions || [], references: references || [],
-                cursors: params.cursors || {}, updated_at: updatedAt,
+                cursors: params.cursors || {}, focus_questions: focusQuestions || [], focus_projects: focusProjects || [], focus_notes: focusNotes || [], updated_at: updatedAt,
             },
             expectedRevision,
         });

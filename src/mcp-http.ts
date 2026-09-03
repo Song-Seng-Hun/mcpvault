@@ -1,5 +1,6 @@
 import { createServer as createHttpServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from 'node:http';
 import { createServer as createHttpsServer, type Server as HttpsServer } from 'node:https';
+import { isIP } from 'node:net';
 import { createMcpHandler, type Server } from '@modelcontextprotocol/server';
 import { getServerRuntime } from './createServer.js';
 
@@ -25,6 +26,7 @@ export interface McpHttpHandle {
   host: string;
   port: number;
   path: string;
+  protocol: 'http' | 'https';
   close(): Promise<void>;
 }
 
@@ -61,6 +63,28 @@ const MAX_LOGINS_PER_WINDOW = 120;
 
 function isLoopbackHost(host: string): boolean {
   return ['127.0.0.1', 'localhost', '::1'].includes(host.trim().toLowerCase());
+}
+
+/**
+ * LAN mode must be addressed to a concrete private interface. Wildcard and
+ * public binds are intentionally rejected so a typo cannot publish MCP over
+ * every interface or the public Internet.
+ */
+function isPrivateLanHost(host: string): boolean {
+  const normalized = host.trim().toLowerCase().replace(/^\[|\]$/g, '');
+  if (isLoopbackHost(normalized)) return true;
+  const family = isIP(normalized);
+  if (family === 4) {
+    const octets = normalized.split('.').map(Number);
+    const [first, second] = octets;
+    return first === 10
+      || (first === 172 && second !== undefined && second >= 16 && second <= 31)
+      || (first === 192 && second === 168);
+  }
+  if (family === 6) {
+    return normalized.startsWith('fc') || normalized.startsWith('fd');
+  }
+  return false;
 }
 
 function isRegistrationCall(value: unknown): boolean {
@@ -155,6 +179,9 @@ export async function startMcpHttpApi(server: Server, options: McpHttpOptions = 
   if (!runtime) throw new Error('The supplied MCP server has no MCPVault runtime');
 
   const host = options.host || '127.0.0.1';
+  if (!isPrivateLanHost(host)) {
+    throw new Error('Stateless MCP HTTP may bind only to localhost or a concrete private LAN address');
+  }
   if (!isLoopbackHost(host) && !options.tls) {
     throw new Error('Stateless MCP HTTP requires TLS when binding to a non-loopback host');
   }
@@ -322,6 +349,7 @@ export async function startMcpHttpApi(server: Server, options: McpHttpOptions = 
     host,
     port,
     path,
+    protocol: options.tls ? 'https' : 'http',
     close: async () => {
       await mcpHandler.close();
       await new Promise<void>((resolve, reject) => httpServer.close(error => error ? reject(error) : resolve()));

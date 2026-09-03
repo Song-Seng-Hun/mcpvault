@@ -597,6 +597,83 @@ describe("tasks", () => {
     await expect(fileSystem.listTasks({ pathPrefix: ".obsidian" })).rejects.toThrow(/Access denied/);
     await expect(fileSystem.listTasks({ pathPrefix: "../outside" })).rejects.toThrow(/within the vault/);
   });
+
+  test("updates one Markdown task with optimistic concurrency", async () => {
+    const path = "Projects/Plan.md";
+    await mkdir(join(testVaultPath, "Projects"), { recursive: true });
+    await writeFile(join(testVaultPath, path), "# Plan\n\n- [ ] Ship the change\n");
+    const before = await fileSystem.readNote(path);
+
+    await expect(fileSystem.updateTask({
+      path,
+      line: 3,
+      status: "completed",
+      expectedRevision: before.revision,
+    })).resolves.toMatchObject({
+      success: true,
+      path,
+      line: 3,
+      status: "completed",
+      previousStatus: "open",
+      previousRevision: before.revision,
+    });
+    await expect(readFile(join(testVaultPath, path), "utf-8")).resolves.toContain("- [x] Ship the change");
+
+    await expect(fileSystem.updateTask({
+      path,
+      line: 3,
+      status: "open",
+      expectedRevision: before.revision,
+    })).rejects.toThrow(/Revision conflict/);
+  });
+
+  test("updates a task by content-derived id after surrounding lines move", async () => {
+    const path = "Projects/Stable.md";
+    await mkdir(join(testVaultPath, "Projects"), { recursive: true });
+    await writeFile(join(testVaultPath, path), "# Plan\n\n- [ ] Keep this task\n");
+    const listed = await fileSystem.listTasks({ status: "open" });
+    const task = listed.tasks.find(item => item.path === path)!;
+    const before = await fileSystem.readNote(path);
+    await fileSystem.writeNote({ path, content: "# Plan\n\nNew context\n\n- [ ] Keep this task\n", expectedRevision: before.revision });
+    const shifted = await fileSystem.readNote(path);
+
+    await expect(fileSystem.updateTask({
+      path,
+      taskId: task.taskId,
+      status: "completed",
+      expectedRevision: shifted.revision,
+    })).resolves.toMatchObject({ success: true, line: 5, taskId: task.taskId });
+    await expect(readFile(join(testVaultPath, path), "utf-8")).resolves.toContain("- [x] Keep this task");
+  });
+
+  test("previews backlinks and destination collisions without moving", async () => {
+    await writeFile(join(testVaultPath, "Source.md"), "# Links\n\nSee [[Target#Decision|the decision]].\n");
+    await writeFile(join(testVaultPath, "Target.md"), "# Target\n\n## Decision\n");
+    await writeFile(join(testVaultPath, "Renamed.md"), "# Existing\n");
+
+    await expect(fileSystem.previewMoveNote({ oldPath: "Target.md", newPath: "Renamed.md" })).resolves.toMatchObject({
+      targetExists: true,
+      collision: true,
+      total: 1,
+      affectedLinks: [{ sourcePath: "Source.md", line: 3, targetHeading: "Decision" }],
+      truncated: false,
+    });
+  });
+
+  test("optionally rewrites inbound links only with an expected source revision", async () => {
+    await writeFile(join(testVaultPath, "Guide.md"), "# Guide\n\nRead [[Target#Decision|the decision]].\n");
+    await writeFile(join(testVaultPath, "Target.md"), "# Target\n\n## Decision\n");
+    const source = await fileSystem.readNote("Target.md");
+
+    await expect(fileSystem.moveNote({
+      oldPath: "Target.md",
+      newPath: "Knowledge/Decision.md",
+      updateLinks: true,
+      expectedRevision: source.revision,
+    })).resolves.toMatchObject({ success: true, oldPath: "Target.md", newPath: "Knowledge/Decision.md" });
+    await expect(readFile(join(testVaultPath, "Guide.md"), "utf-8")).resolves.toContain("[[Knowledge/Decision.md#Decision|the decision]]");
+    await expect(readFile(join(testVaultPath, "Knowledge/Decision.md"), "utf-8")).resolves.toContain("# Target");
+  });
 });
 
 describe("structured frontmatter queries", () => {

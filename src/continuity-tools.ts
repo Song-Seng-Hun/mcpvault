@@ -9,12 +9,15 @@ export function getContinuityTools(): Tool[] {
   return [
     {
       name: 'save_work_state',
-      description: 'Save a compact private resume checkpoint in this authenticated model or agent scope. Use before a context limit, handoff, or session end. Store only summary, next action, cursors, and references; never store passwords, access tokens, or sensitive prompt text.',
+      description: 'Save a compact private resume checkpoint in this authenticated model or agent scope. Use before a context limit, handoff, or session end. Store only summary, next action, bounded top-of-mind questions/projects/notes, cursors, and references; never store passwords, access tokens, or sensitive prompt text.',
       inputSchema: { type: 'object', properties: {
         topic: { type: 'string', description: 'Short name of the work in progress' },
         summary: { type: 'string', description: 'What has been established so far' },
         nextAction: { type: 'string', description: 'The first concrete action the next session should take' },
         openQuestions: { type: 'array', items: { type: 'string' }, description: 'At most 20 unresolved questions' },
+        focusQuestions: { type: 'array', items: { type: 'string' }, maxItems: 20, description: 'Private top-of-mind questions for the next session' },
+        focusProjects: { type: 'array', items: { type: 'string' }, maxItems: 20, description: 'Private top-of-mind projects or outcomes' },
+        focusNotes: { type: 'array', items: { type: 'string' }, maxItems: 20, description: 'Private notes/links to inspect first' },
         references: { type: 'array', items: { type: 'string' }, description: 'Note paths or scope URIs to revisit' },
         cursors: { type: 'object', description: 'Small notification/comment/message cursors for incremental resumption' },
         expectedRevision: { type: 'string', description: 'Revision returned by the prior checkpoint read; prevents stale overwrites' },

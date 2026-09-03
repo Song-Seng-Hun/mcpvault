@@ -2,6 +2,7 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ReferenceService } from './references.js';
+import type { SemanticSearchService } from './semantic-search.js';
 export declare const SOURCE_TRUST_LEVELS: readonly ['unrated', 'low', 'medium', 'high', 'verified'];
 export interface WikiCatalogOptions {
     summaryOnly?: boolean;
@@ -9,6 +10,12 @@ export interface WikiCatalogOptions {
     lifecycle?: string;
     limit?: number;
     maxChars?: number;
+    /** Include bounded metadata-only facet counts for exploratory browsing. */
+    includeFacets?: boolean;
+    /** Maximum number of values returned for each facet. */
+    facetLimit?: number;
+    /** LATCH-style derived browse order; location remains the default. */
+    orderBy?: 'location' | 'alphabet' | 'time' | 'category' | 'hierarchy';
 }
 export interface WikiClaimInput {
     id?: string;
@@ -45,14 +52,23 @@ export declare class LlmWikiService {
     private readonly fileSystem;
     private readonly access;
     private readonly references;
+    private readonly semanticSearch?;
     private generation;
     private readonly catalogSummaryCache;
     private readonly catalogSummaryInFlight;
     private readonly lintCache;
     private readonly lintInFlight;
-    constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, references: ReferenceService);
+    constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, references: ReferenceService, semanticSearch?: SemanticSearchService | undefined);
     invalidate(): void;
     private principalKey;
+    /**
+     * Active recall is a property of the reader, not of the shared knowledge
+     * note. Agent sessions therefore keep their recall result in their private
+     * continuity scope; the legacy model-owner path continues to use the note
+     * frontmatter for compatibility.
+     */
+    private privateRecallPath;
+    private readPrivateRecall;
     /**
      * Capture the revisions of notes linked by the current body/metadata. This
      * is a derived review baseline: Markdown and Git remain authoritative.
@@ -81,6 +97,9 @@ export declare class LlmWikiService {
         retrievedAt?: string;
         trustLevel?: string;
         trustReason?: string;
+        sourceFamily?: string;
+        sourceVersion?: string;
+        supersedesSource?: string;
     }): Promise<{
         success: boolean;
         created: boolean;
@@ -141,9 +160,11 @@ export declare class LlmWikiService {
         status?: string;
         noteKind?: string;
         lifecycle?: string;
+        primaryMoc?: string;
         moc?: string;
         project?: string;
         reviewAt?: string;
+        reviewIntervalDays?: unknown;
         aliases?: unknown;
         summary?: string;
         keyPoints?: unknown;
@@ -161,6 +182,33 @@ export declare class LlmWikiService {
         scheduledAt?: string;
         deferUntil?: string;
         stableId?: string;
+        canonicalPath?: string;
+        recallPrompt?: string;
+        recallIntervalDays?: unknown;
+        lastRecalledAt?: string;
+        recallQuality?: unknown;
+        retentionPolicy?: unknown;
+        retentionEvent?: unknown;
+        retentionAt?: unknown;
+        preserveUntil?: unknown;
+        legalHold?: unknown;
+        retentionReason?: string;
+        replacedBy?: string;
+        reviewSnoozedUntil?: unknown;
+        reviewSnoozeReason?: unknown;
+        knowledgeRole?: unknown;
+        termStatus?: string;
+        termReplacedBy?: string;
+        termScopeNote?: string;
+        broaderTerms?: unknown;
+        relatedTerms?: unknown;
+        subjectTerms?: unknown;
+        domain?: string;
+        methods?: unknown;
+        audience?: unknown;
+        retrievalCues?: unknown;
+        useWhen?: string;
+        seeAlso?: unknown;
         relations?: unknown;
         taskStatus?: unknown;
         reviewPolicy?: unknown;
@@ -168,6 +216,7 @@ export declare class LlmWikiService {
         reviewedBy?: string;
         reviewedAt?: string;
         reviewNote?: string;
+        interpretationStatus?: unknown;
         epistemicStatus?: unknown;
         polarity?: unknown;
         negativeType?: unknown;
@@ -208,14 +257,114 @@ export declare class LlmWikiService {
     }>;
     catalog(principal?: ScopePrincipal, options?: WikiCatalogOptions): Promise<any>;
     private computeCatalog;
+    /**
+     * Report likely filing mismatches without treating folders as permissions.
+     * PARA is a retrieval aid here: the note's Properties/lifecycle are the
+     * signal, while the existing Markdown path remains authoritative and no
+     * move is performed automatically.
+     */
+    placementCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        mode: string;
+        items: Record<string, unknown>[];
+        total: number;
+        truncated: boolean;
+        note: string;
+    }>;
+    /**
+     * Surface unresolved epistemic work as a small active-recall/research queue.
+     * Questions, hypotheses, assumptions, disputed claims, and negative
+     * knowledge stay as ordinary Markdown; this is only a bounded projection.
+     */
+    knowledgeGaps(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        mode: string;
+        items: Record<string, unknown>[];
+        total: number;
+        truncated: boolean;
+        note: string;
+    }>;
+    /**
+     * Return a bounded, explainable neighborhood around one note.  The note's
+     * Markdown path remains canonical; links, metadata facets, and optional
+     * semantic matches are only read-model views of nearby knowledge.
+     */
+    neighborhood(principal: ScopePrincipal | undefined, path: string, limit?: number, maxChars?: number, includeSemantic?: boolean): Promise<{
+        source: {
+            path: string;
+            title: string | undefined;
+            revision: string;
+            moc?: string;
+            project?: string;
+        };
+        neighbors: {
+            path: string;
+            title: string | undefined;
+            noteKind?: string;
+            lifecycle?: string;
+            reasons: string[];
+            relations?: string[];
+            line?: number;
+            context?: string;
+            moc?: string;
+            project?: string;
+            polarity?: string;
+            status?: string;
+            summaryFresh?: boolean;
+            pathTrace: string[];
+            revision?: string;
+        }[];
+        totalCandidates: number;
+        truncated: boolean;
+        ordering: string[];
+        semantic?: {
+            available: boolean;
+            indexed: number;
+            pending: number;
+            error?: string;
+        };
+    }>;
+    /**
+     * Find short, explainable link paths between two visible notes. This is a
+     * graph traversal projection only: it reads the existing Obsidian graph,
+     * never creates adjacency data, and never treats a path as evidence.
+     */
+    trail(principal: ScopePrincipal | undefined, fromPath: string, toPath: string, maxDepth?: number, limit?: number, maxChars?: number): Promise<{
+        mode: string;
+        from: string;
+        to: string;
+        maxDepth: number;
+        paths: {
+            nodes: string[];
+            edges: {
+                from: string;
+                to: string;
+                line: number;
+                link: string;
+                context: string;
+                relation?: string;
+            }[];
+            length: number;
+        }[];
+        totalPaths: number;
+        exploredNodes: number;
+        exploredEdges: number;
+        truncated: boolean;
+    }>;
     reviewQueue(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
         items: Record<string, unknown>[];
         total: number;
         truncated: boolean;
     }>;
     inbox(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        purpose: string;
         items: Record<string, unknown>[];
         total: number;
+        oldestAgeDays: unknown;
+        ageBands: {
+            fresh: number;
+            aging: number;
+            stale: number;
+            undated: number;
+        };
         truncated: boolean;
     }>;
     /** Capture first, classify later. The default path deliberately removes
@@ -270,13 +419,69 @@ export declare class LlmWikiService {
         revision: string;
         frontmatter: any;
     }>;
+    /**
+     * Find bounded near-duplicate candidates using titles, aliases, compact
+     * projections, and a small body sample. This is deliberately a report:
+     * similar notes can represent different perspectives and are never merged
+     * automatically.
+     */
+    duplicateCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        purpose: string;
+        total: number;
+        items: Record<string, unknown>[];
+        truncated: boolean;
+        generatedAt: string;
+    }>;
+    /** Record an optional active-recall attempt without rewriting the note body. */
+    recordRecall(params: {
+        principal?: ScopePrincipal;
+        path: string;
+        recallQuality: unknown;
+        recallPrompt?: string;
+        recallIntervalDays?: unknown;
+        expectedRevision: string;
+    }): Promise<{
+        success: boolean;
+        path: string;
+        revision: string;
+        recallQuality: "failed" | "good" | "partial" | "unseen";
+        recallPrompt: string;
+        recalledAt: string;
+        isolatedTo?: string;
+        stateRevision?: string | undefined;
+        recallHistoryCount?: any;
+        recallStreak?: any;
+        recallSuccessCount?: any;
+        recallIntervalDays?: number;
+        nextRecallAt?: string | undefined;
+        adaptiveRecallInterval?: boolean;
+        nextAction: string;
+    }>;
+    /**
+     * Return the reader's due active-recall queue without opening note bodies.
+     * Agent sessions use their private continuity record; model-owner sessions
+     * retain the legacy note Properties path for compatibility.
+     */
+    recallQueue(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        purpose: string;
+        total: number;
+        items: Record<string, unknown>[];
+        diversity: {
+            groups: number;
+            strategy: string;
+        };
+        truncated: boolean;
+        generatedAt: string;
+    }>;
     review(params: {
         principal?: ScopePrincipal;
         path: string;
         reviewOutcome: unknown;
         reviewedBy: string;
         reviewAt?: string;
+        reviewIntervalDays?: unknown;
         reviewNote?: string;
+        reviewReason?: string;
         nextLifecycle?: string;
         expectedRevision: string;
     }): Promise<{
@@ -286,7 +491,12 @@ export declare class LlmWikiService {
         reviewOutcome: "confirmed" | "disputed" | "rescheduled" | "revised" | "superseded";
         reviewedBy: any;
         reviewedAt: any;
+        reviewTrigger: string;
+        reviewCount: number;
+        reviewReopenCount: number;
         reviewAt?: string;
+        reviewIntervalDays?: number;
+        adaptiveReviewInterval?: boolean;
         nextLifecycle?: "active" | "archived" | "evergreen" | "inbox" | "review" | "superseded";
         followUpRequired?: true;
         followUp?: string;
@@ -295,8 +505,16 @@ export declare class LlmWikiService {
         purpose: string;
         sections: {
             inbox: {
+                purpose: string;
                 items: Record<string, unknown>[];
                 total: number;
+                oldestAgeDays: unknown;
+                ageBands: {
+                    fresh: number;
+                    aging: number;
+                    stale: number;
+                    undated: number;
+                };
                 truncated: boolean;
             };
             projectsAndTasks: {
@@ -378,6 +596,42 @@ export declare class LlmWikiService {
                     mocs: Record<string, unknown>[];
                     truncated: boolean;
                 };
+                mocHierarchy?: {
+                    total: number;
+                    explicitParentEdges: number;
+                    roots: {
+                        total: number;
+                        items: string[];
+                        truncated: boolean;
+                    };
+                    missingParents: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    ambiguousParents: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    cycles: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    maxDepth: number;
+                    items: {
+                        path: string;
+                        title: string;
+                        parent?: string;
+                        resolvedParent?: string;
+                        childTotal: number;
+                        children: string[];
+                        depth: number;
+                        state: string;
+                    }[];
+                    truncated: boolean;
+                };
                 evergreenQuality: {
                     total: number;
                     needsAttention: number;
@@ -392,6 +646,9 @@ export declare class LlmWikiService {
                         line: number;
                         link: string;
                         context: string;
+                        heading?: string;
+                        targetHeading?: string;
+                        targetBlockId?: string;
                         relation?: string;
                         path: string;
                     }[];
@@ -481,7 +738,15 @@ export declare class LlmWikiService {
         generatedAt: string;
         sections: {
             inbox: {
+                purpose: string;
                 total: number;
+                oldestAgeDays: unknown;
+                ageBands: {
+                    fresh: number;
+                    aging: number;
+                    stale: number;
+                    undated: number;
+                };
                 truncated: boolean;
                 items: Record<string, unknown>[];
             };
@@ -564,6 +829,42 @@ export declare class LlmWikiService {
                     mocs: Record<string, unknown>[];
                     truncated: boolean;
                 };
+                mocHierarchy?: {
+                    total: number;
+                    explicitParentEdges: number;
+                    roots: {
+                        total: number;
+                        items: string[];
+                        truncated: boolean;
+                    };
+                    missingParents: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    ambiguousParents: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    cycles: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    maxDepth: number;
+                    items: {
+                        path: string;
+                        title: string;
+                        parent?: string;
+                        resolvedParent?: string;
+                        childTotal: number;
+                        children: string[];
+                        depth: number;
+                        state: string;
+                    }[];
+                    truncated: boolean;
+                };
                 evergreenQuality: {
                     total: number;
                     needsAttention: number;
@@ -578,6 +879,9 @@ export declare class LlmWikiService {
                         line: number;
                         link: string;
                         context: string;
+                        heading?: string;
+                        targetHeading?: string;
+                        targetBlockId?: string;
                         relation?: string;
                         path: string;
                     }[];
@@ -676,12 +980,65 @@ export declare class LlmWikiService {
             projectNeedsAction: number;
             unlinkedMocQuestions: number;
             evergreenNeedsAttention: number;
+            recallDue: number;
+            tagVariantIssues: number;
+            unresolvedSubjectTerms: number;
+            lintIssues: number;
         };
         supportingViews: {
             inbox: any;
             knowledge: any;
             mocQuestions: any;
+            mocHierarchy: any;
             evergreenQuality: any;
+            recall: {
+                purpose: string;
+                total: number;
+                items: Record<string, unknown>[];
+                diversity: {
+                    groups: number;
+                    strategy: string;
+                };
+                truncated: boolean;
+                generatedAt: string;
+            };
+            vocabulary: {
+                purpose: string;
+                noteCount: number;
+                tagCount: number;
+                authorityTermCount: number;
+                subjectTermCount: number;
+                tagVariants: {
+                    key: string;
+                    variants: string[];
+                    count: number;
+                    noteCount: number;
+                    paths: string[];
+                    reason: string;
+                }[];
+                unresolvedSubjectTerms: {
+                    term: string;
+                    count: number;
+                    noteCount: number;
+                    paths: string[];
+                    reason: string;
+                    advisory: boolean;
+                }[];
+                termCollisions: {
+                    term: string;
+                    noteCount: number;
+                    paths: string[];
+                    reason: string;
+                }[];
+                facets: {
+                    [k: string]: {
+                        [k: string]: number;
+                    };
+                };
+                recommendations: string[];
+                truncated: boolean;
+                generatedAt: string;
+            };
             graph: {
                 unresolvedLinks: any;
                 orphanNotes: any;
@@ -699,6 +1056,10 @@ export declare class LlmWikiService {
             projectNeedsAction: number;
             unlinkedMocQuestions: number;
             evergreenNeedsAttention: number;
+            recallDue: number;
+            tagVariantIssues: number;
+            unresolvedSubjectTerms: number;
+            lintIssues: number;
         };
         nextActions: string[];
         sourceTruncated: boolean;
@@ -728,6 +1089,36 @@ export declare class LlmWikiService {
                 items: any;
                 truncated: boolean;
             } | undefined;
+            recall: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+            vocabulary: {
+                tagVariants: {
+                    key: string;
+                    variants: string[];
+                    count: number;
+                    noteCount: number;
+                    paths: string[];
+                    reason: string;
+                }[];
+                unresolvedSubjectTerms: {
+                    term: string;
+                    count: number;
+                    noteCount: number;
+                    paths: string[];
+                    reason: string;
+                    advisory: boolean;
+                }[];
+                termCollisions: {
+                    term: string;
+                    noteCount: number;
+                    paths: string[];
+                    reason: string;
+                }[];
+                truncated: boolean;
+            };
             graph: {
                 unresolvedLinks: {
                     total: any;
@@ -744,6 +1135,183 @@ export declare class LlmWikiService {
         truncated: boolean;
     }>;
     /**
+     * Return the shared frontmatter contract without scanning note bodies. This
+     * is intentionally read-only: agents can inspect the vocabulary before
+     * writing, while custom Properties remain valid outside this contract.
+     */
+    propertyContract(maxChars?: number): {
+        purpose: string;
+        fields: import("./organization.js").OrganizationPropertyContractEntry[];
+        relations: ({
+            field: 'supports';
+            direction: 'directional';
+            target: 'A claim, decision, or note supported by this note.';
+            reciprocal: false;
+        } | {
+            field: 'contradicts';
+            direction: 'directional';
+            target: 'A claim or conclusion challenged by this note.';
+            reciprocal: false;
+        } | {
+            field: 'supersedes';
+            direction: 'directional';
+            target: 'An older or replaced note.';
+            reciprocal: false;
+        } | {
+            field: 'derived_from';
+            direction: 'directional';
+            target: 'The source or note from which this note was derived.';
+            reciprocal: false;
+        } | {
+            field: 'depends_on';
+            direction: 'directional';
+            target: 'A prerequisite note, decision, or project.';
+            reciprocal: false;
+        } | {
+            field: 'implements';
+            direction: 'directional';
+            target: 'The design, decision, or requirement implemented here.';
+            reciprocal: false;
+        } | {
+            field: 'blocked_by';
+            direction: 'directional';
+            target: 'The note or dependency currently blocking this note.';
+            reciprocal: false;
+        } | {
+            field: 'answers_questions';
+            direction: 'directional';
+            target: 'A question note answered by this note.';
+            reciprocal: false;
+        } | {
+            field: 'related';
+            direction: 'mutual';
+            target: 'A materially related note without a stronger claim.';
+            reciprocal: true;
+        } | {
+            field: 'same_as';
+            direction: 'mutual';
+            target: 'The same concept represented by another note or alias.';
+            reciprocal: true;
+        } | {
+            field: 'version_of';
+            direction: 'directional';
+            target: 'The conceptual note this version belongs to.';
+            reciprocal: false;
+        } | {
+            field: 'refines';
+            direction: 'directional';
+            target: 'A note made more precise or useful by this note.';
+            reciprocal: false;
+        })[];
+        conventions: {
+            scalar: string;
+            lists: string;
+            nested: string;
+            nativeCompatibility: {
+                safeTypes: string[];
+                mcpManagedComplexFields: string[];
+                rule: string;
+            };
+            lifecycle: string;
+            review: string;
+        };
+        generatedAt: string;
+    } | {
+        purpose: string;
+        conventions: {
+            scalar: string;
+            lists: string;
+            nested: string;
+            nativeCompatibility: {
+                safeTypes: string[];
+                mcpManagedComplexFields: string[];
+                rule: string;
+            };
+            lifecycle: string;
+            review: string;
+        };
+        generatedAt: string;
+        fields: import("./organization.js").OrganizationPropertyContractEntry[];
+        relations: ({
+            field: 'supports';
+            direction: 'directional';
+            target: 'A claim, decision, or note supported by this note.';
+            reciprocal: false;
+        } | {
+            field: 'contradicts';
+            direction: 'directional';
+            target: 'A claim or conclusion challenged by this note.';
+            reciprocal: false;
+        } | {
+            field: 'supersedes';
+            direction: 'directional';
+            target: 'An older or replaced note.';
+            reciprocal: false;
+        } | {
+            field: 'derived_from';
+            direction: 'directional';
+            target: 'The source or note from which this note was derived.';
+            reciprocal: false;
+        } | {
+            field: 'depends_on';
+            direction: 'directional';
+            target: 'A prerequisite note, decision, or project.';
+            reciprocal: false;
+        } | {
+            field: 'implements';
+            direction: 'directional';
+            target: 'The design, decision, or requirement implemented here.';
+            reciprocal: false;
+        } | {
+            field: 'blocked_by';
+            direction: 'directional';
+            target: 'The note or dependency currently blocking this note.';
+            reciprocal: false;
+        } | {
+            field: 'answers_questions';
+            direction: 'directional';
+            target: 'A question note answered by this note.';
+            reciprocal: false;
+        } | {
+            field: 'related';
+            direction: 'mutual';
+            target: 'A materially related note without a stronger claim.';
+            reciprocal: true;
+        } | {
+            field: 'same_as';
+            direction: 'mutual';
+            target: 'The same concept represented by another note or alias.';
+            reciprocal: true;
+        } | {
+            field: 'version_of';
+            direction: 'directional';
+            target: 'The conceptual note this version belongs to.';
+            reciprocal: false;
+        } | {
+            field: 'refines';
+            direction: 'directional';
+            target: 'A note made more precise or useful by this note.';
+            reciprocal: false;
+        })[];
+        truncated: boolean;
+    };
+    noteTemplate(noteKind?: string, maxChars?: number): {
+        templateId: string;
+        noteKind: import("./organization.js").NoteKind;
+        purpose: string;
+        properties: Record<string, unknown>;
+        markdown: string;
+        usage: string;
+    } | {
+        templateId: string;
+        noteKind: import("./organization.js").NoteKind;
+        purpose: string;
+        properties: Record<string, unknown>;
+        usage: string;
+        markdown: string;
+        truncated: boolean;
+    };
+    /**
      * Project-support projection for GTD-style planning. It keeps the
      * day-to-day next action separate from purpose, outcome, brainstorming, and
      * reference material, and never mutates the project note.
@@ -758,14 +1326,117 @@ export declare class LlmWikiService {
         truncated: boolean;
         generatedAt: string;
     }>;
+    /**
+     * Return executable GTD actions by context rather than burying them in
+     * project-support material. The source remains ordinary task/project
+     * frontmatter; this is only a bounded derived view.
+     */
+    nextActions(principal?: ScopePrincipal, context?: string, limit?: number, maxChars?: number, options?: {
+        maxMinutes?: unknown;
+        energy?: unknown;
+        effort?: unknown;
+    }): Promise<{
+        purpose: string;
+        context?: string;
+        selection?: {
+            maxMinutes?: number;
+            energy?: string;
+            effort?: string;
+        };
+        filterDiagnostics?: {
+            unknownDuration: number;
+            unknownEnergy: number;
+            unknownEffort: number;
+        };
+        items: Record<string, unknown>[];
+        contexts: {
+            name: string;
+            count: number;
+        }[];
+        total: number;
+        truncated: boolean;
+        generatedAt: string;
+    }>;
+    /**
+     * Find notes where atomicity is a useful next outcome rather than an input
+     * gate. This is deliberately a suggestion: the agent decides whether the
+     * note should be split, expanded, or left as a composition/MOC.
+     */
+    compositionCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        purpose: string;
+        items: {
+            [x: string]: unknown;
+        }[];
+        total: number;
+        truncated: boolean;
+    }>;
+    /**
+     * Preview-only Zettelkasten/Obsidian section extraction. The preview carries
+     * the source revision so the caller can perform the actual write and patch
+     * as one explicit optimistic-concurrency workflow.
+     */
+    previewSplit(params: {
+        principal?: ScopePrincipal;
+        path: string;
+        heading: string;
+        targetPath?: string;
+        maxChars?: number;
+    }): Promise<{
+        mode: string;
+        sourcePath: string;
+        sourceRevision: string;
+        heading: string;
+        headingLevel: number;
+        range: {
+            startLine: number;
+            endLine: number;
+        };
+        content: string;
+        truncated: boolean;
+        links: string[];
+        targetPath?: string;
+        targetExists?: boolean;
+        targetUsable?: boolean;
+        collision?: string;
+        nextSteps: string[];
+    }>;
+    /**
+     * Advance only the progressive projection of an existing note. The body is
+     * never resubmitted or rewritten; triage supplies the current body digest
+     * and optimistic revision check while preserving every unrelated property.
+     */
+    updateProjection(params: {
+        principal?: ScopePrincipal;
+        path: string;
+        summary?: string;
+        keyPoints?: unknown;
+        openQuestions?: unknown;
+        summaryLayer?: unknown;
+        summaryHighlights?: unknown;
+        expectedRevision: string;
+    }): Promise<{
+        projection: {
+            summaryLayer: any;
+            summaryFresh: boolean;
+            summaryFingerprint: any;
+            bodyChanged: boolean;
+        };
+        nextAction: string;
+        success: boolean;
+        path: string;
+        revision: string;
+        frontmatter: any;
+    }>;
     triage(params: {
         principal?: ScopePrincipal;
         path: string;
         noteKind?: string;
         lifecycle?: string;
+        primaryMoc?: string;
         moc?: string;
         project?: string;
         reviewAt?: string;
+        reviewIntervalDays?: unknown;
         nextAction?: string;
         waitingFor?: string;
         aliases?: unknown;
@@ -783,6 +1454,33 @@ export declare class LlmWikiService {
         scheduledAt?: string;
         deferUntil?: string;
         stableId?: string;
+        canonicalPath?: string;
+        recallPrompt?: string;
+        recallIntervalDays?: unknown;
+        lastRecalledAt?: string;
+        recallQuality?: unknown;
+        retentionPolicy?: unknown;
+        retentionEvent?: unknown;
+        retentionAt?: unknown;
+        preserveUntil?: unknown;
+        legalHold?: unknown;
+        retentionReason?: string;
+        replacedBy?: string;
+        reviewSnoozedUntil?: unknown;
+        reviewSnoozeReason?: unknown;
+        knowledgeRole?: unknown;
+        termStatus?: string;
+        termReplacedBy?: string;
+        termScopeNote?: string;
+        broaderTerms?: unknown;
+        relatedTerms?: unknown;
+        subjectTerms?: unknown;
+        domain?: string;
+        methods?: unknown;
+        audience?: unknown;
+        retrievalCues?: unknown;
+        useWhen?: string;
+        seeAlso?: unknown;
         relations?: unknown;
         taskStatus?: unknown;
         reviewPolicy?: unknown;
@@ -790,6 +1488,7 @@ export declare class LlmWikiService {
         reviewedBy?: string;
         reviewedAt?: string;
         reviewNote?: string;
+        interpretationStatus?: unknown;
         epistemicStatus?: unknown;
         polarity?: unknown;
         negativeType?: unknown;
@@ -825,6 +1524,9 @@ export declare class LlmWikiService {
         path: string;
         view?: WikiProjectionView;
         section?: string;
+        blockId?: string;
+        contextBefore?: number;
+        contextAfter?: number;
         maxChars?: number;
     }): Promise<{
         path: string;
@@ -833,6 +1535,24 @@ export declare class LlmWikiService {
         revision: string;
         noteKind: any;
         lifecycle: any;
+        redirect?: {
+            state: string;
+            replacement?: string;
+            reason?: string;
+            action: string;
+            note: string;
+        };
+        navigation?: {
+            primaryMoc?: string;
+            moc?: string;
+            project?: string;
+            termStatus?: string;
+            termScopeNote?: string;
+            domain?: string;
+            broaderTerms?: any[];
+            relatedTerms?: any[];
+            subjectTerms?: any[];
+        };
         status: any;
         confidence: any;
         aliases?: any[];
@@ -852,12 +1572,29 @@ export declare class LlmWikiService {
         scheduledAt?: string;
         deferUntil?: string;
         stableId?: string;
+        canonicalPath?: string;
+        recallPrompt?: string;
+        recallIntervalDays?: any;
+        lastRecalledAt?: string;
+        recallQuality?: string;
+        retentionPolicy?: string;
+        retentionEvent?: string;
+        retentionAt?: string;
+        preserveUntil?: string;
+        legalHold?: boolean;
+        retrievalCues?: any[];
+        useWhen?: string;
         taskStatus?: string;
         reviewPolicy?: string;
         reviewOutcome?: string;
         reviewedBy?: string;
         reviewedAt?: string;
         reviewNote?: string;
+        reviewedRevision?: string;
+        reviewTrigger?: string;
+        reviewCount?: any;
+        reviewReopenCount?: any;
+        interpretationStatus?: string;
         disposition?: string;
         clarifiedBy?: string;
         clarifiedAt?: string;
@@ -892,6 +1629,20 @@ export declare class LlmWikiService {
             endLine: number;
             requested: string | undefined;
         };
+        context?: {
+            before: Array<{
+                line: number;
+                text: string;
+            }>;
+            target: {
+                startLine: number;
+                endLine: number;
+            };
+            after: Array<{
+                line: number;
+                text: string;
+            }>;
+        };
         headings?: import("./types.js").NoteHeading[];
         content: string;
         truncated: boolean;
@@ -918,6 +1669,8 @@ export declare class LlmWikiService {
         content: string;
         truncated: boolean;
         matchingNotes: any;
+        matchingNotesExact: boolean;
+        matchingNotesMeaning: string;
         view: string;
         availableViews: {
             id: string;
@@ -967,6 +1720,9 @@ export declare class LlmWikiService {
                 line: number;
                 link: string;
                 context: string;
+                heading?: string;
+                targetHeading?: string;
+                targetBlockId?: string;
                 relation?: string;
                 path: string;
             }[];
@@ -1010,6 +1766,42 @@ export declare class LlmWikiService {
                 truncated: boolean;
             };
             mocs: Record<string, unknown>[];
+            truncated: boolean;
+        };
+        mocHierarchy?: {
+            total: number;
+            explicitParentEdges: number;
+            roots: {
+                total: number;
+                items: string[];
+                truncated: boolean;
+            };
+            missingParents: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+            ambiguousParents: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+            cycles: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+            maxDepth: number;
+            items: {
+                path: string;
+                title: string;
+                parent?: string;
+                resolvedParent?: string;
+                childTotal: number;
+                children: string[];
+                depth: number;
+                state: string;
+            }[];
             truncated: boolean;
         };
         evergreenQuality: {
@@ -1080,6 +1872,106 @@ export declare class LlmWikiService {
                 truncated: boolean;
             };
         };
+        epistemicConsistency: {
+            total: number;
+            needsAttention: number;
+            consistent: number;
+            items: Record<string, unknown>[];
+            truncated: boolean;
+        };
+        knowledgeFlow: {
+            stages: {
+                unprocessed: number;
+                interpreted: number;
+                synthesized: number;
+                unspecified: number;
+            };
+            literatureWithoutSource: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+            synthesisWithoutInputs: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+        };
+        knowledgeUsage: {
+            total: number;
+            used: number;
+            unused: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+            lifecycle: Record<string, number>;
+            duplicateTerms: {
+                total: number;
+                items: {
+                    term: string;
+                    paths: string[];
+                    reason: string;
+                }[];
+                truncated: boolean;
+            };
+            leastUsed: {
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+            hubs?: {
+                total: number;
+                threshold: number;
+                items: {
+                    reason: string;
+                    threshold: number;
+                }[];
+                truncated: boolean;
+            };
+            note: string;
+        };
+        typedRelations: {
+            unresolved: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+            ambiguous: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+            self: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+            kindMismatches: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+            reciprocityMissing: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+        };
+        relationNavigation?: {
+            targets: {
+                path: string;
+                total: number;
+                incoming: {
+                    relation: string;
+                    meaning: string;
+                    total: number;
+                    paths: string[];
+                }[];
+            }[];
+            totalTargets: number;
+            truncated: boolean;
+            note: string;
+        };
     } | {
         truncated: boolean;
         note: string;
@@ -1105,20 +1997,133 @@ export declare class LlmWikiService {
      * scan instead of running separate folder/property scans, and never mutates
      * notes or treats organization hints as security boundaries.
      */
-    organizationHealth(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
-        healthy: boolean;
-        organizationIssueTotal: number;
-        byCode: Record<string, number>;
-        issues: WikiLintIssue[];
-        recommendations: string[];
-        mocCoverage?: Record<string, unknown>;
-        mocQuestionCoverage?: Record<string, any>;
-        evergreenQuality?: Record<string, any>;
-        focusHealth?: Record<string, any>;
-        knowledgeConnectivity?: Record<string, any>;
-        advisoryIssueTotal: number;
+    organizationHealth(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<any>;
+    /**
+     * Return a derived maintenance ledger.  It deliberately reports debt rather
+     * than persisting another task database: Markdown, Properties, and Git stay
+     * authoritative while agents get a small, explainable repair queue.
+     */
+    maintenanceDebt(principal?: ScopePrincipal, olderThanDays?: number, limit?: number, maxChars?: number): Promise<{
+        purpose: string;
+        olderThanDays: number;
+        scanned: number;
+        debtTotal: number;
+        counts: Record<string, number>;
+        items: Record<string, unknown>[];
         truncated: boolean;
         generatedAt: string;
+    }>;
+    /**
+     * Build one small answer-oriented context packet.  It keeps the source
+     * projection authoritative, adds a few explainable neighbors, and reserves
+     * room for a counterexample or negative knowledge instead of returning a
+     * large semantic dump.
+     */
+    answerPacket(principal: ScopePrincipal | undefined, path: string, maxChars?: number, includeSemantic?: boolean): Promise<{
+        truncated: boolean;
+    }>;
+    /**
+     * Expose a small library-like authority view derived from note titles,
+     * aliases, and stable IDs.  It suggests preferred access terms but never
+     * renames notes or creates a second taxonomy.
+     */
+    authorityMap(principal?: ScopePrincipal, query?: string, limit?: number, maxChars?: number): Promise<{
+        purpose: string;
+        query: string | undefined;
+        entries: {
+            term: string;
+            preferred: string;
+            address: string;
+            canonicalPath: string | undefined;
+            status: string;
+            replacedBy?: string[];
+            broaderTerms?: string[];
+            relatedTerms?: string[];
+            primaryMocs?: string[];
+            aliases?: string[];
+            paths: string[];
+            stableIds?: string[];
+            collision?: string;
+        }[];
+        totalTerms: number;
+        truncated: boolean;
+    }>;
+    /**
+     * Return a bounded vocabulary and tag health projection.  This borrows the
+     * useful part of library authority control without turning local tags into
+     * a mandatory taxonomy: variants and unresolved subject terms are review
+     * candidates, never automatic renames or redirects.
+     */
+    vocabularyHealth(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        purpose: string;
+        noteCount: number;
+        tagCount: number;
+        authorityTermCount: number;
+        subjectTermCount: number;
+        tagVariants: {
+            key: string;
+            variants: string[];
+            count: number;
+            noteCount: number;
+            paths: string[];
+            reason: string;
+        }[];
+        unresolvedSubjectTerms: {
+            term: string;
+            count: number;
+            noteCount: number;
+            paths: string[];
+            reason: string;
+            advisory: boolean;
+        }[];
+        termCollisions: {
+            term: string;
+            noteCount: number;
+            paths: string[];
+            reason: string;
+        }[];
+        facets: {
+            [k: string]: {
+                [k: string]: number;
+            };
+        };
+        recommendations: string[];
+        truncated: boolean;
+        generatedAt: string;
+    }>;
+    /**
+     * Resolve one human/agent-facing term without changing the vault.  This is
+     * deliberately separate from authorityMap: callers usually need one
+     * canonical destination, not a whole vocabulary dump.
+     */
+    resolveAuthorityTerm(principal: ScopePrincipal | undefined, query: string, limit?: number, maxChars?: number): Promise<{
+        query: string;
+        normalizedQuery: string;
+        resolved: {
+            canonicalTerm: unknown;
+            path: unknown;
+            replacementPath?: string;
+        } | undefined;
+        matches: {
+            [x: string]: unknown;
+        }[];
+        ambiguous: boolean;
+        totalMatches: number;
+        truncated: boolean;
+        note: string;
+    }>;
+    /**
+     * Compare two visible notes before a deliberate consolidation.  The result
+     * is a bounded plan; the caller must choose the canonical note and perform
+     * ordinary revision-checked writes so Git remains the history.
+     */
+    previewMerge(params: {
+        principal?: ScopePrincipal;
+        sourcePath: string;
+        targetPath: string;
+        maxChars?: number;
+    }): Promise<{
+        truncated: boolean;
     }>;
     preflightPublish(params: {
         principal?: ScopePrincipal;
@@ -1169,6 +2174,13 @@ export declare class LlmWikiService {
         total: number;
         truncated: boolean;
     }>;
+    /**
+     * Project the source/knowledge citation network from ordinary frontmatter.
+     * It is intentionally metadata-first and bounded: source Markdown and Git
+     * remain authoritative, while this view helps agents find unsupported or
+     * over-concentrated knowledge without creating a citation database.
+     */
+    citationGraph(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<Record<string, unknown>>;
     promotionCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
         items: Record<string, unknown>[];
         total: number;
@@ -1184,6 +2196,21 @@ export declare class LlmWikiService {
         total: number;
         truncated: boolean;
         olderThanDays: number;
+    }>;
+    /**
+     * Surface a small deterministic-but-rotating set of durable notes. This is
+     * the Zettelkasten "surprise" loop: it is intentionally stateless, does
+     * not create a recommendation database, and always returns paths for a
+     * follow-up bounded read.
+     */
+    resurfaceKnowledge(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        purpose: string;
+        rotationDate: string;
+        items: {
+            [x: string]: unknown;
+        }[];
+        total: number;
+        truncated: boolean;
     }>;
     orient(principal?: ScopePrincipal): Promise<{
         protocol: string;

@@ -22,6 +22,7 @@ export interface McpHttpHandle {
     host: string;
     port: number;
     path: string;
+    protocol: 'http' | 'https';
     close(): Promise<void>;
 }
 /**
