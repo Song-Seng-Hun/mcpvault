@@ -72,6 +72,7 @@ const SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_3 = 'Use wiki.recall_queue for du
 const SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_4 = 'Use wiki.vocabulary_health to find tag spelling/case variants, subject terms without a scoped authority note, and terms shared by multiple notes. Use wiki.note_template for an optional role scaffold; it never creates a note or makes fields mandatory. Treat vocabulary and reciprocity findings as advisory repair candidates: preserve local distinctions, add a scope note or canonical_path when needed, and never rename or retag automatically. Use retention_policy with retention_reason and replaced_by to explain archive/tombstone decisions; it never triggers deletion.';
 const SERVER_INSTRUCTIONS_ORGANIZATION_PROJECTIONS = 'Use wiki.context_pack after selecting a project, MOC, question, or decision when one reusable bounded shelf should combine the root, ordered entrypoints, supporting context, counterpoints, gaps, and revisions; it is derived navigation, not a truth score. Use wiki.exception_board for one 5S-style repair board instead of separately browsing every health report. Use wiki.quality_check for one note-kind-specific advisory checklist; it never blocks publication. Use wiki.resurface_archives to rediscover archived or superseded notes only when current visible notes still link to them; never restore, move, or delete automatically.';
 const SERVER_INSTRUCTIONS_FLOW = 'Use wiki.policy to read the machine-readable organization constitution for the visible scope. Before starting more work, use wiki.flow_health: task_status=next_action is executable WIP, task_status=open with a concrete next_action is pull-ready, and waiting/blocked items should age visibly rather than being silently ignored. The compact wiki.review_packet includes the same flow signals and prioritizes blocked/waiting follow-up. Use service_class=expedite|fixed_date|standard|research only to explain ordering, never to bypass evidence, scope, or moderation. For active projects, add bounded completion_criteria or a visible completion-criteria heading; set startedAt/blockedSince/waitingSince/completedAt when known. The flow report is advisory and does not assign work.';
+const SERVER_INSTRUCTIONS_REMAINING = 'Use the Error Book as a two-stage learning loop: resolve_wiki_issue records resolutionStatus (resolved, wont_fix, duplicate, or still in progress), then add retrospectiveStatus and a bounded retrospective lesson when the cause and prevention are understood; attach followUpPaths instead of hiding recurrence work. A failed or partial wiki.record_recall should include confusion and link a repairPath when one exists; the recall queue surfaces repair-needed items before ordinary due items, and only mark repairStatus=resolved after verifying the repair. Search automatically records only per-account, process-local counts; call record_search_feedback with useful, failed, or ambiguous after meaningful searches, then use get_search_improvement_candidates to improve aliases, retrieval_cues, MOCs, disambiguation, or missing notes. Never put search queries in Markdown or Git. Use wiki.source_lineage to inspect work/edition groupings; sourceWorkId/sourceEditionId are optional explicit identifiers and sourceFamily/sourceVersion remain compatible aliases, while source_id, immutable content hash, evidence path, and revision remain authoritative. Use wiki.organization_manifest when moving organization practices to another Vault: it is content-free and portable, but never copy private scopes, sessions, or .mcpvault caches.';
 const SEMANTIC_QUERY_TIMEOUT_MS = 2_000;
 const REQUEST_QUEUE_WAIT_MS = 10_000;
 class RequestConcurrencyGate {
@@ -205,6 +206,7 @@ const MUTATING_TOOLS = new Set([
     "initialize_revision_history",
     "commit_changes",
     "restore_note_revision",
+    "record_search_feedback",
     ...COLLABORATION_MUTATING_TOOLS,
     ...SCOPE_AUTH_MUTATING_TOOLS,
     ...LLM_WIKI_MUTATING_TOOLS,
@@ -423,7 +425,7 @@ export function createServer(vaultPath, options = {}) {
     const requestGate = new RequestConcurrencyGate();
     const server = new Server({ name, version }, {
         capabilities: { tools: {} },
-        instructions: `${SERVER_INSTRUCTIONS} ${SERVER_INSTRUCTIONS_ORGANIZATION} ${SERVER_INSTRUCTIONS_FIRST_ENTRY} ${SERVER_INSTRUCTIONS_COMMUNITY} ${SERVER_INSTRUCTIONS_FEEDBACK_FORUM} ${SERVER_INSTRUCTIONS_WIKI_QUALITY} ${SERVER_INSTRUCTIONS_KNOWLEDGE_ORGANIZATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_NAVIGATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_QUALITY_2} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_3} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_4} ${SERVER_INSTRUCTIONS_ORGANIZATION_PROJECTIONS} ${SERVER_INSTRUCTIONS_FLOW} ${SERVER_INSTRUCTIONS_IDEATION} ${SERVER_INSTRUCTIONS_MAINTENANCE} ${SERVER_INSTRUCTIONS_MOTIVATION}`,
+        instructions: `${SERVER_INSTRUCTIONS} ${SERVER_INSTRUCTIONS_ORGANIZATION} ${SERVER_INSTRUCTIONS_FIRST_ENTRY} ${SERVER_INSTRUCTIONS_COMMUNITY} ${SERVER_INSTRUCTIONS_FEEDBACK_FORUM} ${SERVER_INSTRUCTIONS_WIKI_QUALITY} ${SERVER_INSTRUCTIONS_KNOWLEDGE_ORGANIZATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_NAVIGATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_QUALITY_2} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_3} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_4} ${SERVER_INSTRUCTIONS_ORGANIZATION_PROJECTIONS} ${SERVER_INSTRUCTIONS_FLOW} ${SERVER_INSTRUCTIONS_REMAINING} ${SERVER_INSTRUCTIONS_IDEATION} ${SERVER_INSTRUCTIONS_MAINTENANCE} ${SERVER_INSTRUCTIONS_MOTIVATION}`,
     });
     const buildInternalTools = () => [
         {
@@ -523,6 +525,35 @@ export function createServer(vaultPath, options = {}) {
                     prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
                 },
                 required: ["query"]
+            }
+        },
+        {
+            name: "record_search_feedback",
+            description: "Record whether one search was useful, failed, or ambiguous so the current agent can discover bounded search-improvement candidates. The query is kept only in per-account memory and never written to Markdown, Git, snapshots, or logs.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    query: { type: "string", maxLength: 240, description: "The same search query that was attempted" },
+                    outcome: { type: "string", enum: ["useful", "failed", "ambiguous"], description: "How the result behaved for the task" },
+                    selectedPaths: { type: "array", items: { type: "string" }, maxItems: 20, description: "Optional paths that were useful" },
+                    note: { type: "string", maxLength: 300, description: "Optional short repair hint; never include secrets or raw prompts" },
+                    accessToken: { type: "string", description: "Token from login_scope; telemetry is isolated to this account" },
+                    prettyPrint: { type: "boolean", default: false }
+                },
+                required: ["query", "outcome"]
+            }
+        },
+        {
+            name: "get_search_improvement_candidates",
+            description: "Return bounded per-account candidates derived from zero-result searches, explicit failures, ambiguous results, and repeated searches without a useful selection. This is process-local telemetry and disappears when the server stops.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    limit: { type: "integer", minimum: 1, maximum: 30, default: 10 },
+                    maxChars: { type: "integer", minimum: 512, maximum: 12000, default: 6000 },
+                    accessToken: { type: "string", description: "Token from login_scope; returns only this account's telemetry" },
+                    prettyPrint: { type: "boolean", default: false }
+                }
             }
         },
         {
@@ -1319,6 +1350,9 @@ export function createServer(vaultPath, options = {}) {
                             recallQuality: trimmedArgs.recallQuality,
                             ...(typeof trimmedArgs.recallPrompt === 'string' && { recallPrompt: trimmedArgs.recallPrompt }),
                             ...(trimmedArgs.recallIntervalDays !== undefined && { recallIntervalDays: trimmedArgs.recallIntervalDays }),
+                            ...(typeof trimmedArgs.confusion === 'string' && { confusion: trimmedArgs.confusion }),
+                            ...(typeof trimmedArgs.repairPath === 'string' && { repairPath: trimmedArgs.repairPath }),
+                            ...(typeof trimmedArgs.repairStatus === 'string' && { repairStatus: trimmedArgs.repairStatus }),
                             expectedRevision: trimmedArgs.expectedRevision,
                         }), trimmedArgs.prettyPrint);
                     }
@@ -1484,6 +1518,12 @@ export function createServer(vaultPath, options = {}) {
                     }
                     case "get_wiki_citation_graph": {
                         return jsonResult(await llmWiki.citationGraph(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+                    }
+                    case "get_wiki_source_lineage": {
+                        return jsonResult(await llmWiki.sourceLineage(principal, trimmedArgs.sourceFamily, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+                    }
+                    case "get_wiki_organization_manifest": {
+                        return jsonResult(llmWiki.organizationManifest(trimmedArgs.maxChars), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_promotion_candidates": {
                         return jsonResult(await llmWiki.promotionCandidates(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
@@ -1996,6 +2036,7 @@ export function createServer(vaultPath, options = {}) {
                                 .slice(0, Math.min(20, Number(trimmedArgs.limit || 5)));
                             results = boundSearchResults(results, normalizeSearchMaxChars(trimmedArgs.maxChars));
                         }
+                        searchService.recordUsage(principal?.accountId || principal?.agentId || 'anonymous', String(trimmedArgs.query || ''), results.length);
                         const indent = trimmedArgs.prettyPrint ? 2 : undefined;
                         return {
                             content: [{ type: "text", text: JSON.stringify(results, null, indent) }]
@@ -2003,6 +2044,15 @@ export function createServer(vaultPath, options = {}) {
                     }
                     case "semantic_search_status": {
                         return jsonResult(semanticSearch.status(), trimmedArgs.prettyPrint);
+                    }
+                    case "record_search_feedback": {
+                        const outcome = String(trimmedArgs.outcome || '').toLowerCase();
+                        if (!['useful', 'failed', 'ambiguous'].includes(outcome))
+                            throw new Error('outcome must be useful, failed, or ambiguous');
+                        return jsonResult(searchService.recordFeedback(principal?.accountId || principal?.agentId || 'anonymous', String(trimmedArgs.query || ''), outcome, Array.isArray(trimmedArgs.selectedPaths) ? trimmedArgs.selectedPaths : [], typeof trimmedArgs.note === 'string' ? trimmedArgs.note : undefined), trimmedArgs.prettyPrint);
+                    }
+                    case "get_search_improvement_candidates": {
+                        return jsonResult(searchService.improvementCandidates(principal?.accountId || principal?.agentId || 'anonymous', trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
                     }
                     case "move_note": {
                         const result = await fileSystem.moveNote({
@@ -2452,7 +2502,7 @@ export function createServer(vaultPath, options = {}) {
         createRequestServer: () => {
             const requestServer = new Server({ name, version }, {
                 capabilities: { tools: {} },
-                instructions: `${SERVER_INSTRUCTIONS} ${SERVER_INSTRUCTIONS_ORGANIZATION} ${SERVER_INSTRUCTIONS_FIRST_ENTRY} ${SERVER_INSTRUCTIONS_COMMUNITY} ${SERVER_INSTRUCTIONS_FEEDBACK_FORUM} ${SERVER_INSTRUCTIONS_WIKI_QUALITY} ${SERVER_INSTRUCTIONS_KNOWLEDGE_ORGANIZATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_NAVIGATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_QUALITY_2} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_3} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_4} ${SERVER_INSTRUCTIONS_ORGANIZATION_PROJECTIONS} ${SERVER_INSTRUCTIONS_FLOW} ${SERVER_INSTRUCTIONS_IDEATION} ${SERVER_INSTRUCTIONS_MAINTENANCE} ${SERVER_INSTRUCTIONS_MOTIVATION}`,
+                instructions: `${SERVER_INSTRUCTIONS} ${SERVER_INSTRUCTIONS_ORGANIZATION} ${SERVER_INSTRUCTIONS_FIRST_ENTRY} ${SERVER_INSTRUCTIONS_COMMUNITY} ${SERVER_INSTRUCTIONS_FEEDBACK_FORUM} ${SERVER_INSTRUCTIONS_WIKI_QUALITY} ${SERVER_INSTRUCTIONS_KNOWLEDGE_ORGANIZATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_NAVIGATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_QUALITY_2} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_3} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_4} ${SERVER_INSTRUCTIONS_ORGANIZATION_PROJECTIONS} ${SERVER_INSTRUCTIONS_FLOW} ${SERVER_INSTRUCTIONS_REMAINING} ${SERVER_INSTRUCTIONS_IDEATION} ${SERVER_INSTRUCTIONS_MAINTENANCE} ${SERVER_INSTRUCTIONS_MOTIVATION}`,
             });
             installMcpHandlers(requestServer);
             return requestServer;

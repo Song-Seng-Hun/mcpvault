@@ -669,3 +669,11 @@ When modifying file operations:
 - hono serveStatic on Bun: incomplete Range support — video served by dedicated route on `Bun.file().slice()` (src/routes/video.ts), never serveStatic.
 - website-shibumi container builds from REPO ROOT context (`-f website-shibumi/Containerfile .`): root package.json must be copied to `/package.json` or server exits 1 at import (version badge reads it).
 - CSS: `animation-fill-mode: forwards` keeps finished animation attached forever and kills descendant `backdrop-filter` even with final `transform: none`; detach via `.fade-in-done { animation: none }` on animationend.
+
+## Remaining organization workflows
+
+- Error Book entries have independent `issue_resolution_status` and `issue_retrospective_status`. Resolve the exception with `resolve_wiki_issue`, then record a bounded reusable lesson and `issue_follow_up_paths`; a resolved issue without a retrospective is still incomplete learning.
+- Active recall is reader-specific. For `failed` or `partial`, record `confusion`, optionally `repairPath`, and leave `repairStatus=needed` or `in_progress`. The queue prioritizes these repairs; only mark them `resolved` after rereading and verifying the repair.
+- Search improvement telemetry is per-account, process-local, bounded, and never persisted. Call `record_search_feedback` after a useful, failed, or ambiguous search, then inspect `get_search_improvement_candidates` before adding aliases, retrieval cues, MOCs, disambiguation, or new notes.
+- Source snapshots are immutable editions. Use `sourceWorkId`/`sourceEditionId` for explicit lineage; `sourceFamily`/`sourceVersion` remain compatible aliases. Use `get_wiki_source_lineage` to compare editions, but retain source ID, hash, evidence path, and revision as the authority.
+- `get_wiki_organization_manifest` returns a content-free portable contract for PARA, Obsidian links/Properties, relations, lifecycles, templates, and migration rules. Never migrate private scopes, sessions, or `.mcpvault` derived caches.

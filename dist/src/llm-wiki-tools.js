@@ -21,7 +21,7 @@ export function getLlmWikiTools() {
             description: 'Capture one immutable raw source snapshot. Re-ingesting identical content is idempotent; changed content requires a new sourceId.',
             inputSchema: { type: 'object', properties: {
                     scopeUri, sourceId: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' },
-                    sourceUrl: { type: 'string' }, capturedBy: { type: 'string' }, capturedAt: { type: 'string' }, mediaType: { type: 'string' }, sourceType: { type: 'string', maxLength: 80, description: 'Optional source kind such as paper, web, book, dataset, or code' }, citationKey: { type: 'string', maxLength: 120, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]*$' }, author: { type: 'string', maxLength: 300 }, publishedAt: { type: 'string' }, retrievedAt: { type: 'string' }, sourceFamily: { type: 'string', maxLength: 160, description: 'Stable family key connecting immutable versions of the same source' }, sourceVersion: { type: 'string', maxLength: 120, description: 'Version, edition, or retrieval label' }, supersedesSource: { type: 'string', maxLength: 500, description: 'Previous source ID or scope-safe source path' }, trustLevel: { type: 'string', enum: ['unrated', 'low', 'medium', 'high', 'verified'], default: 'unrated' }, trustReason: { type: 'string', maxLength: 500 }, accessToken, prettyPrint,
+                    sourceUrl: { type: 'string' }, capturedBy: { type: 'string' }, capturedAt: { type: 'string' }, mediaType: { type: 'string' }, sourceType: { type: 'string', maxLength: 80, description: 'Optional source kind such as paper, web, book, dataset, or code' }, citationKey: { type: 'string', maxLength: 120, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]*$' }, author: { type: 'string', maxLength: 300 }, publishedAt: { type: 'string' }, retrievedAt: { type: 'string' }, sourceFamily: { type: 'string', maxLength: 160, description: 'Legacy-compatible stable family key connecting immutable versions of the same source' }, sourceVersion: { type: 'string', maxLength: 120, description: 'Legacy-compatible version, edition, or retrieval label' }, sourceWorkId: { type: 'string', maxLength: 160, description: 'Stable work identifier; defaults to sourceFamily' }, sourceEditionId: { type: 'string', maxLength: 160, description: 'Stable edition identifier; defaults to sourceVersion' }, supersedesSource: { type: 'string', maxLength: 500, description: 'Previous source ID or scope-safe source path' }, trustLevel: { type: 'string', enum: ['unrated', 'low', 'medium', 'high', 'verified'], default: 'unrated' }, trustReason: { type: 'string', maxLength: 500 }, accessToken, prettyPrint,
                 }, required: ['title', 'content'] },
         },
         {
@@ -301,7 +301,7 @@ export function getLlmWikiTools() {
             name: 'record_wiki_recall',
             description: 'Record an optional active-recall attempt for a high-value Wiki note without rewriting its Markdown body. Attempt the recallPrompt before opening the note, then record failed, partial, or good; this is separate from evidence review and never changes truth status.',
             inputSchema: { type: 'object', properties: {
-                    path: { type: 'string' }, recallQuality: { type: 'string', enum: ['unseen', 'failed', 'partial', 'good'] }, recallPrompt: { type: 'string', maxLength: 1000, description: 'Optional replacement prompt; otherwise use the note property' }, recallIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: 'Optional next-recall cadence; otherwise a bounded quality-based cadence is chosen' }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
+                    path: { type: 'string' }, recallQuality: { type: 'string', enum: ['unseen', 'failed', 'partial', 'good'] }, recallPrompt: { type: 'string', maxLength: 1000, description: 'Optional replacement prompt; otherwise use the note property' }, recallIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: 'Optional next-recall cadence; otherwise a bounded quality-based cadence is chosen' }, confusion: { type: 'string', maxLength: 600, description: 'What was forgotten or confused; do not include secrets' }, repairPath: { type: 'string', maxLength: 500, description: 'Optional note/task created to repair the recall failure' }, repairStatus: { type: 'string', enum: ['none', 'needed', 'in_progress', 'resolved'] }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
                 }, required: ['path', 'recallQuality', 'expectedRevision'] },
         },
         {
@@ -501,6 +501,16 @@ export function getLlmWikiTools() {
                 } },
         },
         {
+            name: 'get_wiki_source_lineage',
+            description: 'Group immutable source snapshots into bounded work/edition lineages. It uses sourceWorkId/sourceEditionId when present and remains compatible with sourceFamily/sourceVersion; source IDs, hashes, and revisions remain authoritative.',
+            inputSchema: { type: 'object', properties: { sourceFamily: { type: 'string', maxLength: 160, description: 'Optional work/family filter' }, limit: { type: 'integer', minimum: 1, maximum: 60, default: 20 }, maxChars: { type: 'integer', minimum: 1024, maximum: 20000, default: 8000 }, accessToken, prettyPrint } },
+        },
+        {
+            name: 'get_wiki_organization_manifest',
+            description: 'Return a bounded portable, content-free organization manifest containing PARA filing, Obsidian syntax, properties, relations, lifecycle, and migration rules. It is guidance only and exposes no private content or caches.',
+            inputSchema: { type: 'object', properties: { maxChars: { type: 'integer', minimum: 2048, maximum: 24000, default: 12000 }, accessToken, prettyPrint } },
+        },
+        {
             name: 'get_wiki_promotion_candidates',
             description: 'Return bounded community posts that may deserve promotion into durable Wiki knowledge. This is an advisory candidate list; an agent must verify the post, preserve provenance, and publish a separate knowledge note.',
             inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 30, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint } },
@@ -562,7 +572,7 @@ export function getLlmWikiTools() {
             name: 'resolve_wiki_issue',
             description: 'Resolve an Error Book entry with attribution, reason, and optimistic concurrency protection.',
             inputSchema: { type: 'object', properties: {
-                    path: { type: 'string' }, actor: { type: 'string' }, resolution: { type: 'string' }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
+                    path: { type: 'string' }, actor: { type: 'string' }, resolution: { type: 'string' }, resolutionStatus: { type: 'string', enum: ['open', 'in_progress', 'resolved', 'wont_fix', 'duplicate'] }, retrospectiveStatus: { type: 'string', enum: ['not_started', 'captured', 'synthesized'] }, retrospective: { type: 'string', maxLength: 1200 }, followUpPaths: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
                 }, required: ['path', 'resolution', 'expectedRevision'] },
         },
     ];

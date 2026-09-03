@@ -24,6 +24,10 @@ export declare const TERM_STATUSES: readonly ['preferred', 'deprecated', 'redire
 export declare const KNOWLEDGE_ROLES: readonly ['concept', 'argument', 'model', 'observation', 'counterargument'];
 /** Optional recall result for high-value knowledge; separate from evidence review. */
 export declare const RECALL_QUALITIES: readonly ['unseen', 'failed', 'partial', 'good'];
+/** Error Book state is split into resolution and learning so a closed issue
+ * can still leave an explicit retrospective trail. */
+export declare const ISSUE_RESOLUTION_STATUSES: readonly ['open', 'in_progress', 'resolved', 'wont_fix', 'duplicate'];
+export declare const ISSUE_RETROSPECTIVE_STATUSES: readonly ['not_started', 'captured', 'synthesized'];
 export declare const KNOWLEDGE_POLARITIES: readonly ['positive', 'negative'];
 export declare const NEGATIVE_KINDS: readonly ['failure', 'rejected', 'counterexample', 'non_reproducible', 'superseded'];
 /** Retention is a preservation hint, not an automatic deletion command. */

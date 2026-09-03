@@ -1427,3 +1427,47 @@ test('triage persists primary MOC and retention safety metadata through the endp
     await server.close();
   }
 });
+
+test('remaining organization loops connect issue retrospectives, recall repair, search learning, source lineage, and portable manifests', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'remaining-loops-owner', modelId: 'codex', password: 'remaining-loops-password' });
+    const accessToken = registration.value.accessToken;
+    const source = await callJson(client, 'ingest_source', {
+      sourceId: 'remaining-source-edition-1', title: 'Remaining source edition', content: '# Source\n\nEdition one.\n', capturedBy: 'codex',
+      sourceWorkId: 'remaining-source-work', sourceEditionId: 'edition-1', accessToken,
+    });
+    const lineage = await callJson(client, 'get_wiki_source_lineage', { accessToken, maxChars: 8000 });
+    expect(lineage.value.works).toEqual(expect.arrayContaining([expect.objectContaining({ workId: 'remaining-source-work', editionCount: 1, editions: expect.arrayContaining([expect.objectContaining({ editionId: 'edition-1', sourceId: 'remaining-source-edition-1', integrity: 'intact' })]) })]));
+
+    const issue = await callJson(client, 'report_wiki_issue', { issueId: 'remaining-exception', kind: 'other', title: 'Remaining exception', description: 'An exception to learn from.', accessToken });
+    const resolved = await callJson(client, 'resolve_wiki_issue', {
+      path: issue.value.path, expectedRevision: issue.value.revision, resolution: 'Fixed the immediate cause.', resolutionStatus: 'resolved',
+      retrospectiveStatus: 'synthesized', retrospective: 'Add a regression check before changing the reader contract.', accessToken,
+    });
+    expect(resolved.value).toMatchObject({ status: 'resolved', retrospectiveStatus: 'synthesized' });
+    const issueNote = await callJson(client, 'read_note', { path: issue.value.path, accessToken });
+    expect(issueNote.value.fm).toMatchObject({ issue_resolution_status: 'resolved', issue_retrospective_status: 'synthesized', issue_retrospective: 'Add a regression check before changing the reader contract.' });
+
+    await client.callTool({ name: 'write_note', arguments: { path: 'Knowledge/Recall repair.md', content: '# Recall repair\n', frontmatter: { note_kind: 'atomic', lifecycle: 'evergreen' }, expectedRevision: 'missing', accessToken } });
+    const knowledgeWrite = await client.callTool({ name: 'write_note', arguments: { path: 'Knowledge/Recall target.md', content: '# Recall target\n\nThe durable fact.\n', frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', recall_prompt: 'What is the durable fact?', evidence_paths: [source.value.path] }, expectedRevision: 'missing', accessToken } });
+    expect(knowledgeWrite.isError).toBeFalsy();
+    const knowledge = await callJson(client, 'read_note', { path: 'Knowledge/Recall target.md', accessToken });
+    const recalled = await callJson(client, 'record_wiki_recall', { path: 'Knowledge/Recall target.md', recallQuality: 'failed', confusion: 'Confused the edition label with the source work.', repairPath: 'Knowledge/Recall repair.md', expectedRevision: knowledge.value.revision, accessToken });
+    expect(recalled.value).toMatchObject({ recallQuality: 'failed', repairStatus: 'in_progress', repairPath: 'Knowledge/Recall repair.md' });
+    const queue = await callJson(client, 'get_wiki_recall_queue', { accessToken, limit: 10 });
+    expect(queue.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Recall target.md', repairStatus: 'in_progress', repairPath: 'Knowledge/Recall repair.md' })]));
+
+    await callJson(client, 'search_notes', { query: 'never-existing-search-term', accessToken });
+    const feedback = await callJson(client, 'record_search_feedback', { query: 'never-existing-search-term', outcome: 'failed', note: 'Add a retrieval cue if this concept is durable.', accessToken });
+    expect(feedback.value).toMatchObject({ tracked: true, query: 'never-existing-search-term', feedbackFailures: 1 });
+    const improvements = await callJson(client, 'get_search_improvement_candidates', { accessToken });
+    expect(improvements.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ query: 'never-existing-search-term', reasons: expect.arrayContaining(['zero_results', 'explicit_failure']) })]));
+
+    const manifest = await callJson(client, 'get_wiki_organization_manifest', { accessToken, maxChars: 12000 });
+    expect(manifest.value).toMatchObject({ format: 'mcpvault-organization-manifest', portable: true, contracts: expect.objectContaining({ relations: expect.any(Array) }), reservedPaths: expect.arrayContaining(['.mcpvault/']) });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});

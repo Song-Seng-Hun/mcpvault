@@ -26,6 +26,10 @@ export const TERM_STATUSES = ['preferred', 'deprecated', 'redirect'] as const;
 export const KNOWLEDGE_ROLES = ['concept', 'argument', 'model', 'observation', 'counterargument'] as const;
 /** Optional recall result for high-value knowledge; separate from evidence review. */
 export const RECALL_QUALITIES = ['unseen', 'failed', 'partial', 'good'] as const;
+/** Error Book state is split into resolution and learning so a closed issue
+ * can still leave an explicit retrospective trail. */
+export const ISSUE_RESOLUTION_STATUSES = ['open', 'in_progress', 'resolved', 'wont_fix', 'duplicate'] as const;
+export const ISSUE_RETROSPECTIVE_STATUSES = ['not_started', 'captured', 'synthesized'] as const;
 export const KNOWLEDGE_POLARITIES = ['positive', 'negative'] as const;
 export const NEGATIVE_KINDS = ['failure', 'rejected', 'counterexample', 'non_reproducible', 'superseded'] as const;
 /** Retention is a preservation hint, not an automatic deletion command. */
@@ -138,6 +142,13 @@ export const ORGANIZATION_PROPERTY_CONTRACT: readonly OrganizationPropertyContra
   { name: 'recall_interval_days', type: 'number', description: 'Optional days between active-recall prompts' },
   { name: 'last_recalled_at', type: 'text', description: 'Last time this note was actively recalled' },
   { name: 'recall_quality', type: 'text', description: 'Result of the latest active-recall attempt', allowed: RECALL_QUALITIES },
+  { name: 'recall_confusion', type: 'text', description: 'Bounded description of what was not recalled or was confused; private for agent recall state' },
+  { name: 'recall_repair_status', type: 'text', description: 'Whether a failed or partial recall needs a repair note', allowed: ['none', 'needed', 'in_progress', 'resolved'] },
+  { name: 'recall_repair_path', type: 'text', description: 'Scope-safe note or task linked to repairing a recall failure' },
+  { name: 'issue_resolution_status', type: 'text', description: 'Error Book resolution state, separate from retrospective learning', allowed: ISSUE_RESOLUTION_STATUSES },
+  { name: 'issue_retrospective_status', type: 'text', description: 'Error Book retrospective state after resolution', allowed: ISSUE_RETROSPECTIVE_STATUSES },
+  { name: 'issue_retrospective', type: 'text', description: 'Bounded reusable lesson from an exception review' },
+  { name: 'issue_follow_up_paths', type: 'list', description: 'Bounded notes or tasks created to prevent recurrence' },
   { name: 'retention_policy', type: 'text', description: 'Preservation hint; never an automatic delete instruction', allowed: RETENTION_POLICIES },
   { name: 'retention_event', type: 'text', description: 'Event from which a retention window is interpreted', allowed: RETENTION_EVENTS },
   { name: 'retention_at', type: 'text', description: 'Optional date for preservation review or archival consideration' },

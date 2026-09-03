@@ -38,6 +38,8 @@ export declare class SearchService {
     private readonly catalogUnsubscribe;
     private lastIndexReconcileAt;
     private needsFullReconcile;
+    /** Process-local, per-account telemetry; never persisted or included in logs. */
+    private readonly usageByScope;
     constructor(vaultPath: string, pathFilter: PathFilter, catalog?: VaultFileCatalog | undefined, vaultIo?: VaultIoCoordinator);
     /**
      * Search is derived from Markdown, so a short cache is safe and useful for
@@ -47,6 +49,16 @@ export declare class SearchService {
     invalidate(path?: string, kind?: 'upsert' | 'delete'): void;
     invalidateMany(changes?: readonly VaultCatalogChange[]): void;
     close(): Promise<void>;
+    recordUsage(scopeKey: string, query: string, resultCount: number): void;
+    recordFeedback(scopeKey: string, query: string, outcome: 'useful' | 'failed' | 'ambiguous', selectedPaths?: string[], note?: string): {
+        success: true;
+        tracked: boolean;
+        query: string;
+        searches: number;
+        feedbackFailures: number;
+        feedbackAmbiguous: number;
+    };
+    improvementCandidates(scopeKey: string, limit?: number, maxChars?: number): Record<string, unknown>;
     private loadSnapshot;
     private restoreSnapshot;
     private scheduleSnapshotSave;

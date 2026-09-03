@@ -122,6 +122,18 @@ interface ParsedSearchQuery {
   filters: SearchFilters;
 }
 
+interface SearchUsageRecord {
+  query: string;
+  searches: number;
+  zeroResultSearches: number;
+  feedbackFailures: number;
+  feedbackAmbiguous: number;
+  usefulSelections: number;
+  lastResultCount: number;
+  lastAt: string;
+  note?: string;
+}
+
 const SEARCH_TOKEN_PATTERN = /"(?:\\.|[^"])*"|'(?:\\.|[^'])*'|\S+/g;
 
 function splitScopedTerms(value: string): string[] {
@@ -638,6 +650,8 @@ export class SearchService {
   private readonly catalogUnsubscribe: (() => void) | undefined;
   private lastIndexReconcileAt = 0;
   private needsFullReconcile = true;
+  /** Process-local, per-account telemetry; never persisted or included in logs. */
+  private readonly usageByScope = new Map<string, Map<string, SearchUsageRecord>>();
 
   constructor(
     vaultPath: string,
@@ -700,6 +714,75 @@ export class SearchService {
     derivedCacheBudget.clearOwner(this.cacheOwner);
     derivedCacheBudget.clearOwner(this.directoryCacheOwner);
     derivedCacheBudget.clearOwner(this.corpusCacheOwner);
+    this.usageByScope.clear();
+  }
+
+  recordUsage(scopeKey: string, query: string, resultCount: number): void {
+    const normalized = query.trim().replace(/\s+/g, ' ').slice(0, 240);
+    if (!normalized) return;
+    const scope = this.usageByScope.get(scopeKey) || new Map<string, SearchUsageRecord>();
+    const key = normalized.toLocaleLowerCase();
+    const existing = scope.get(key) || { query: normalized, searches: 0, zeroResultSearches: 0, feedbackFailures: 0, feedbackAmbiguous: 0, usefulSelections: 0, lastResultCount: 0, lastAt: '' };
+    existing.searches += 1;
+    if (resultCount <= 0) existing.zeroResultSearches += 1;
+    existing.lastResultCount = Math.max(0, Math.floor(resultCount));
+    existing.lastAt = new Date().toISOString();
+    scope.delete(key);
+    scope.set(key, existing);
+    while (scope.size > 256) scope.delete(scope.keys().next().value!);
+    this.usageByScope.set(scopeKey, scope);
+    while (this.usageByScope.size > 32) this.usageByScope.delete(this.usageByScope.keys().next().value!);
+  }
+
+  recordFeedback(scopeKey: string, query: string, outcome: 'useful' | 'failed' | 'ambiguous', selectedPaths: string[] = [], note?: string): { success: true; tracked: boolean; query: string; searches: number; feedbackFailures: number; feedbackAmbiguous: number } {
+    const normalized = query.trim().replace(/\s+/g, ' ').slice(0, 240);
+    if (!normalized) throw new Error('query is required');
+    const scope = this.usageByScope.get(scopeKey) || new Map<string, SearchUsageRecord>();
+    const key = normalized.toLocaleLowerCase();
+    const existing = scope.get(key) || { query: normalized, searches: 0, zeroResultSearches: 0, feedbackFailures: 0, feedbackAmbiguous: 0, usefulSelections: 0, lastResultCount: 0, lastAt: '' };
+    if (outcome === 'failed') existing.feedbackFailures += 1;
+    else if (outcome === 'ambiguous') existing.feedbackAmbiguous += 1;
+    else existing.usefulSelections += Math.min(20, selectedPaths.length || 1);
+    if (note?.trim()) existing.note = note.trim().slice(0, 300);
+    existing.lastAt = new Date().toISOString();
+    scope.delete(key);
+    scope.set(key, existing);
+    while (scope.size > 256) scope.delete(scope.keys().next().value!);
+    this.usageByScope.set(scopeKey, scope);
+    return { success: true, tracked: true, query: normalized, searches: existing.searches, feedbackFailures: existing.feedbackFailures, feedbackAmbiguous: existing.feedbackAmbiguous };
+  }
+
+  improvementCandidates(scopeKey: string, limit = 10, maxChars = 6000) {
+    const boundedLimit = Math.min(Math.max(Number(limit) || 10, 1), 30);
+    const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 12000);
+    const records = [...(this.usageByScope.get(scopeKey)?.values() || [])]
+      .map(record => {
+        const reasons: string[] = [];
+        if (record.zeroResultSearches > 0) reasons.push('zero_results');
+        if (record.feedbackFailures > 0) reasons.push('explicit_failure');
+        if (record.feedbackAmbiguous > 0) reasons.push('ambiguous_results');
+        if (record.searches >= 3 && record.usefulSelections === 0) reasons.push('repeated_without_useful_selection');
+        const score = record.feedbackFailures * 5 + record.feedbackAmbiguous * 3 + record.zeroResultSearches * 2 + (record.searches >= 3 && record.usefulSelections === 0 ? 2 : 0);
+        return { record, reasons, score };
+      })
+      .filter(item => item.reasons.length > 0)
+      .sort((a, b) => b.score - a.score || b.record.searches - a.record.searches || a.record.query.localeCompare(b.record.query));
+    const items = records.slice(0, boundedLimit).map(({ record, reasons, score }) => ({
+      query: record.query,
+      searches: record.searches,
+      lastResultCount: record.lastResultCount,
+      ...(record.zeroResultSearches > 0 && { zeroResultSearches: record.zeroResultSearches }),
+      ...(record.feedbackFailures > 0 && { feedbackFailures: record.feedbackFailures }),
+      ...(record.feedbackAmbiguous > 0 && { feedbackAmbiguous: record.feedbackAmbiguous }),
+      usefulSelections: record.usefulSelections,
+      reasons,
+      score,
+      ...(record.note && { note: record.note }),
+      suggestedAction: reasons.includes('zero_results') ? 'Add an alias, retrieval_cue, authority term, or missing note after checking whether the concept exists.' : reasons.includes('ambiguous_results') ? 'Add a disambiguation note, stable_id, MOC, or narrower property/filter.' : 'Inspect the result projection and improve title, summary, links, or search cues before adding more content.',
+    }));
+    const result: Record<string, unknown> = { mode: 'process_local_search_improvement_candidates', items, total: records.length, truncated: records.length > items.length, privacy: 'Per-account, in-memory only; raw queries are discarded when the server stops and are never written to Markdown, Git, snapshots, or logs.' };
+    while (JSON.stringify(result).length > boundedChars && (result.items as unknown[]).length > 1) { (result.items as unknown[]).pop(); result.truncated = true; }
+    return result;
   }
 
   private async loadSnapshot(): Promise<void> {

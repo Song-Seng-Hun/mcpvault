@@ -3,7 +3,7 @@ import { stringify as stringifyYaml } from 'yaml';
 import { normalizeScopeId } from './scopes.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
-import { getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, normalizeClarifyDisposition, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeRetentionPolicy, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeServiceClass, normalizeTaskStatus, organizationLintIssues, organizationNoteTemplate, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, LIFECYCLES, TASK_STATUSES } from './organization.js';
+import { getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, normalizeClarifyDisposition, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeRetentionPolicy, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeServiceClass, normalizeTaskStatus, organizationLintIssues, organizationNoteTemplate, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES } from './organization.js';
 import { extractObsidianLinkOccurrences, resolveWikiLinkTargets } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
@@ -571,6 +571,8 @@ export class LlmWikiService {
         const sourceFamily = params.sourceFamily ? boundedText(params.sourceFamily, 160) : undefined;
         const sourceVersion = params.sourceVersion ? boundedText(params.sourceVersion, 120) : undefined;
         const supersedesSource = params.supersedesSource ? boundedText(params.supersedesSource, 500) : undefined;
+        const sourceWorkId = params.sourceWorkId ? boundedText(params.sourceWorkId, 160) : sourceFamily;
+        const sourceEditionId = params.sourceEditionId ? boundedText(params.sourceEditionId, 160) : sourceVersion;
         const sourceId = params.sourceId
             ? normalizeScopeId(params.sourceId, 'sourceId')
             : `source-${contentHash.slice(0, 16)}`;
@@ -604,6 +606,8 @@ export class LlmWikiService {
                 ...(sourceFamily && { source_family: sourceFamily }),
                 ...(sourceVersion && { source_version: sourceVersion }),
                 ...(supersedesSource && { supersedes_source: supersedesSource }),
+                ...(sourceWorkId && { source_work_id: sourceWorkId }),
+                ...(sourceEditionId && { source_edition_id: sourceEditionId }),
                 trust_level: trustLevel,
                 ...(trustReason && { trust_reason: trustReason }),
             },
@@ -2008,6 +2012,16 @@ export class LlmWikiService {
         if (!prompt)
             throw new Error('recallPrompt is required on the note or in the request');
         const quality = normalizeRecallQuality(params.recallQuality);
+        const confusion = params.confusion === undefined ? undefined : boundedText(params.confusion, 600);
+        const repairStatus = params.repairStatus === undefined
+            ? (quality === 'failed' || quality === 'partial' ? (params.repairPath ? 'in_progress' : 'needed') : 'none')
+            : String(params.repairStatus).trim().toLowerCase();
+        if (!['none', 'needed', 'in_progress', 'resolved'].includes(repairStatus))
+            throw new Error('repairStatus must be none, needed, in_progress, or resolved');
+        if (repairStatus !== 'none' && !confusion && !params.repairPath && quality !== 'good')
+            throw new Error('failed or partial recall needs confusion or repairPath context');
+        if (params.repairPath && !this.access.canAccessPhysicalPath(params.repairPath, params.principal))
+            throw new Error(`Access denied: ${this.access.toPublicPath(params.repairPath)}`);
         const suppliedInterval = params.recallIntervalDays === undefined ? undefined : normalizeReviewIntervalDays(params.recallIntervalDays);
         const existingInterval = params.recallIntervalDays === undefined ? normalizeReviewIntervalDays(note.frontmatter.recall_interval_days) : undefined;
         const adaptiveInterval = suppliedInterval === undefined && existingInterval === undefined
@@ -2022,7 +2036,7 @@ export class LlmWikiService {
         if (privatePath) {
             const existingState = await this.fileSystem.noteExists(privatePath) ? await this.fileSystem.readNote(privatePath) : undefined;
             const previousHistory = Array.isArray(existingState?.frontmatter.recall_history) ? existingState.frontmatter.recall_history : [];
-            const history = [{ quality, at: timestamp, ...(interval !== undefined && { intervalDays: interval }) }, ...previousHistory]
+            const history = [{ quality, at: timestamp, ...(interval !== undefined && { intervalDays: interval }), ...(confusion && { confusion }), ...(params.repairPath && { repairPath: this.access.toPublicPath(params.repairPath) }), ...(repairStatus !== 'none' && { repairStatus }) }, ...previousHistory]
                 .filter((item) => item && typeof item === 'object')
                 .slice(0, 32);
             let streak = 0;
@@ -2043,6 +2057,9 @@ export class LlmWikiService {
                 recall_history: history,
                 recall_streak: streak,
                 recall_success_count: successCount,
+                ...(confusion && { recall_confusion: confusion }),
+                recall_repair_status: repairStatus,
+                ...(params.repairPath && { recall_repair_path: this.access.toPublicPath(params.repairPath) }),
                 updated_at: timestamp,
             };
             await this.fileSystem.writeNote({
@@ -2063,6 +2080,9 @@ export class LlmWikiService {
                     recall_quality: quality,
                     last_recalled_at: timestamp,
                     ...(interval !== undefined && { recall_interval_days: interval }),
+                    ...(confusion && { recall_confusion: confusion }),
+                    recall_repair_status: repairStatus,
+                    ...(params.repairPath && { recall_repair_path: this.access.toPublicPath(params.repairPath) }),
                     updated_at: timestamp,
                 },
                 merge: true,
@@ -2087,6 +2107,10 @@ export class LlmWikiService {
             }),
             ...(interval !== undefined && { recallIntervalDays: interval, nextRecallAt }),
             ...(adaptiveInterval !== undefined && { adaptiveRecallInterval: true }),
+            ...(confusion && { confusion }),
+            repairStatus,
+            ...(params.repairPath && { repairPath: this.access.toPublicPath(params.repairPath) }),
+            ...(repairStatus !== 'none' && { repairAction: repairStatus === 'resolved' ? 'Review the linked repair and confirm the next recall.' : 'Create or update a repair note, link it with refines or derived_from, then recall again.' }),
             nextAction: 'Use the note body only after attempting recall; update the prompt when the note’s durable question changes.',
         };
     }
@@ -2107,6 +2131,7 @@ export class LlmWikiService {
                 continue;
             const privateState = await this.readPrivateRecall(principal, note.path);
             const quality = String(privateState?.recall_quality || note.frontmatter.recall_quality || 'unseen').toLowerCase();
+            const repairStatus = String(privateState?.recall_repair_status || note.frontmatter.recall_repair_status || (quality === 'failed' || quality === 'partial' ? 'needed' : 'none')).toLowerCase();
             const lastRecalledAt = String(privateState?.last_recalled_at || note.frontmatter.last_recalled_at || '').trim();
             const intervalValue = privateState?.recall_interval_days ?? note.frontmatter.recall_interval_days;
             const intervalDays = Number(intervalValue);
@@ -2114,11 +2139,13 @@ export class LlmWikiService {
             const nextMs = Number.isFinite(lastMs) && Number.isFinite(intervalDays) && intervalDays > 0
                 ? lastMs + intervalDays * 24 * 60 * 60 * 1000
                 : 0;
-            if (nextMs > current)
+            // An unfinished repair is actionable immediately, even when the normal
+            // spaced-repetition interval has not elapsed yet.
+            if (nextMs > current && repairStatus === 'none')
                 continue;
             total += 1;
             const ageDays = Number.isFinite(lastMs) ? Math.max(0, Math.floor((current - lastMs) / (24 * 60 * 60 * 1000))) : 9999;
-            const priority = (quality === 'failed' ? 400 : quality === 'partial' ? 300 : quality === 'unseen' ? 200 : 100) + Math.min(ageDays, 365);
+            const priority = (repairStatus === 'needed' ? 500 : repairStatus === 'in_progress' ? 450 : quality === 'failed' ? 400 : quality === 'partial' ? 300 : quality === 'unseen' ? 200 : 100) + Math.min(ageDays, 365);
             const contrastWith = [];
             for (const relation of ['contradicts', 'same_as', 'version_of', 'refines']) {
                 const values = Array.isArray(note.frontmatter[relation]) ? note.frontmatter[relation] : [];
@@ -2151,6 +2178,9 @@ export class LlmWikiService {
                 title: note.frontmatter.title || note.path.split('/').at(-1),
                 noteKind: note.frontmatter.note_kind || 'knowledge',
                 recallQuality: quality,
+                ...(repairStatus !== 'none' && { repairStatus }),
+                ...(typeof (privateState?.recall_confusion || note.frontmatter.recall_confusion) === 'string' && { confusion: boundedText(privateState?.recall_confusion || note.frontmatter.recall_confusion, 600) }),
+                ...(typeof (privateState?.recall_repair_path || note.frontmatter.recall_repair_path) === 'string' && { repairPath: boundedText(privateState?.recall_repair_path || note.frontmatter.recall_repair_path, 500) }),
                 ...(typeof note.frontmatter.domain === 'string' && note.frontmatter.domain.trim() && { domain: note.frontmatter.domain.trim() }),
                 ...(typeof note.frontmatter.moc === 'string' && note.frontmatter.moc.trim() && { moc: note.frontmatter.moc.trim() }),
                 ...(typeof note.frontmatter.project === 'string' && note.frontmatter.project.trim() && { project: note.frontmatter.project.trim() }),
@@ -2158,8 +2188,13 @@ export class LlmWikiService {
                 ...(Number.isFinite(intervalDays) && intervalDays > 0 && { recallIntervalDays: intervalDays }),
                 ...(nextMs > 0 && { nextRecallAt: new Date(nextMs).toISOString() }),
                 ageDays,
+                // Keep the original reason contract stable; repairStatus and
+                // suggestedAction carry the richer repair signal for new clients.
                 reason: quality === 'failed' ? 'previous_recall_failed' : quality === 'partial' ? 'previous_recall_partial' : !lastRecalledAt ? 'never_recalled' : 'recall_due',
                 recallPrompt: boundedText(note.frontmatter.recall_prompt, 500),
+                suggestedAction: repairStatus === 'needed' || repairStatus === 'in_progress'
+                    ? 'Inspect the confusion, create or update the linked repair note, then record another recall with repairStatus=resolved only after the repair is verified.'
+                    : 'Attempt recallPrompt before opening the note body, then record the result.',
                 ...(contrastWith.length > 0 && { contrastWith }),
                 priority,
             });
@@ -2595,6 +2630,42 @@ export class LlmWikiService {
         if (JSON.stringify(result).length <= boundedChars)
             return result;
         return { purpose: result.purpose, sourceOfTruth: result.sourceOfTruth, filing: result.filing, work: result.work, review: result.review, truncated: true };
+    }
+    /** Return a portable, content-free organization contract for another Vault. */
+    organizationManifest(maxChars = 12000) {
+        const boundedChars = Math.min(Math.max(Number(maxChars) || 12000, 2048), 24000);
+        const result = {
+            manifestVersion: 1,
+            format: 'mcpvault-organization-manifest',
+            portable: true,
+            sourceOfTruth: ['ordinary Markdown', 'YAML Properties', 'Git history and revisions'],
+            filing: { Inbox: 'unclear or newly captured material', Projects: 'outcome-oriented work', Areas: 'ongoing responsibilities', Resources: 'reusable references', Archives: 'inactive material' },
+            reservedPaths: ['_sources/', '_wiki/', 'Community/', '_scopes/', '.mcpvault/'],
+            syntax: { links: ['[[Note]]', '[[folder/Note#Heading]]', '[[Note|display text]]', '[Guide](Resources/Guide.md#section)'], tags: '#tag', sourceIntegrity: 'immutable source snapshot + content_sha256 + revision' },
+            pipeline: ['capture', 'organize', 'distill', 'express', 'review'],
+            contracts: {
+                noteKinds: ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'],
+                lifecycles: [...LIFECYCLES],
+                taskStatuses: [...TASK_STATUSES],
+                serviceClasses: [...SERVICE_CLASSES],
+                properties: getOrganizationPropertyContract(),
+                relations: getOrganizationRelationContract(),
+            },
+            templates: ['atomic', 'literature', 'question', 'hypothesis', 'assumption', 'decision', 'project', 'moc', 'negative'],
+            importRules: ['Do not copy private user scope, agent continuity, sessions, or .mcpvault caches.', 'Treat this manifest as organization guidance, not an access grant.', 'Preserve source IDs, content hashes, evidence paths, and revisions when migrating knowledge.', 'Review aliases, stable IDs, citation keys, and typed links for collisions in the destination Vault.'],
+        };
+        if (JSON.stringify(result).length <= boundedChars)
+            return result;
+        return {
+            manifestVersion: result.manifestVersion,
+            format: result.format,
+            portable: true,
+            sourceOfTruth: result.sourceOfTruth,
+            filing: result.filing,
+            reservedPaths: result.reservedPaths,
+            contracts: { noteKinds: result.contracts.noteKinds, lifecycles: result.contracts.lifecycles, taskStatuses: result.contracts.taskStatuses, serviceClasses: result.contracts.serviceClasses, relations: getOrganizationRelationContract().map(entry => entry.field) },
+            truncated: true,
+        };
     }
     /**
      * A small action-oriented packet for agents that need to decide what to do
@@ -5903,6 +5974,8 @@ export class LlmWikiService {
                 ...(note.frontmatter.source_family && { sourceFamily: boundedText(note.frontmatter.source_family, 160) }),
                 ...(note.frontmatter.source_version && { sourceVersion: boundedText(note.frontmatter.source_version, 120) }),
                 ...(note.frontmatter.supersedes_source && { supersedesSource: boundedText(note.frontmatter.supersedes_source, 500) }),
+                ...(note.frontmatter.source_work_id && { workId: boundedText(note.frontmatter.source_work_id, 160) }),
+                ...(note.frontmatter.source_edition_id && { editionId: boundedText(note.frontmatter.source_edition_id, 160) }),
                 capturedBy: note.frontmatter.captured_by,
                 usedByKnowledgeNotes: usage.get(normalizePath(note.path)) || 0,
                 integrity: intact ? 'intact' : 'invalid',
@@ -6015,6 +6088,57 @@ export class LlmWikiService {
         }
         while (JSON.stringify(result).length > boundedChars && result.sources.length > 1) {
             result.sources.pop();
+            result.truncated = true;
+        }
+        return result;
+    }
+    /**
+     * Group immutable source snapshots into portable works and editions. The
+     * existing source_family/source_version fields remain compatible; the
+     * explicit source_work_id/source_edition_id fields make the model clear
+     * when a publisher changes its label or a work has several editions.
+     */
+    async sourceLineage(principal, sourceFamily, limit = 20, maxChars = 8000) {
+        const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 60);
+        const boundedChars = Math.min(Math.max(Number(maxChars) || 8000, 1024), 20000);
+        const requestedFamily = sourceFamily?.trim().toLowerCase();
+        const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        const works = new Map();
+        let totalSources = 0;
+        for await (const note of iterateNotes(this.fileSystem, { pathPrefix: '_sources' }, canAccess)) {
+            if (String(note.frontmatter.llm_wiki_type || '').toLowerCase() !== 'source')
+                continue;
+            totalSources += 1;
+            const sourceNote = await this.fileSystem.readNote(note.path);
+            const workId = String(note.frontmatter.source_work_id || note.frontmatter.source_family || note.frontmatter.source_id || note.path).trim();
+            if (requestedFamily && workId.toLowerCase() !== requestedFamily && String(note.frontmatter.source_family || '').toLowerCase() !== requestedFamily)
+                continue;
+            const editionId = String(note.frontmatter.source_edition_id || note.frontmatter.source_version || note.frontmatter.source_id || note.path).trim();
+            const key = workId.toLowerCase();
+            const work = works.get(key) || { workId: boundedText(workId, 160), label: boundedText(String(note.frontmatter.title || workId), 240), editions: [] };
+            work.editions.push({
+                editionId: boundedText(editionId, 160),
+                sourceId: boundedText(String(note.frontmatter.source_id || note.path.split('/').at(-1) || ''), 160),
+                path: this.access.toPublicPath(note.path),
+                title: boundedText(String(note.frontmatter.title || note.path.split('/').at(-1) || ''), 240),
+                sourceVersion: note.frontmatter.source_version,
+                ...(note.frontmatter.published_at && { publishedAt: note.frontmatter.published_at }),
+                ...(note.frontmatter.retrieved_at && { retrievedAt: note.frontmatter.retrieved_at }),
+                ...(note.frontmatter.supersedes_source && { supersedesSource: boundedText(note.frontmatter.supersedes_source, 500) }),
+                revision: sourceNote.revision,
+                integrity: sourceNote.frontmatter.immutable === true && sourceNote.frontmatter.content_sha256 === hash(sourceNote.content || '') ? 'intact' : 'invalid',
+            });
+            works.set(key, work);
+        }
+        const items = [...works.values()].sort((a, b) => a.workId.localeCompare(b.workId)).slice(0, boundedLimit).map(work => ({
+            ...work,
+            editionCount: work.editions.length,
+            editions: work.editions.slice().sort((a, b) => String(a.editionId).localeCompare(String(b.editionId))),
+            nextAction: work.editions.length > 1 ? 'Compare editions and cite the exact source revision used by each knowledge note.' : 'Add a source_work_id/source_edition_id pair when a later edition or revision is captured.',
+        }));
+        const result = { mode: 'bounded_source_work_edition_lineage', sourceFamily: sourceFamily || undefined, works: items, totals: { sourceSnapshots: totalSources, works: works.size }, truncated: works.size > items.length, note: 'Source snapshots remain immutable Markdown. Work/edition identifiers are grouping metadata, not a replacement for source_id, content hash, or revision.' };
+        while (JSON.stringify(result).length > boundedChars && result.works.length > 1) {
+            result.works.pop();
             result.truncated = true;
         }
         return result;
@@ -7001,7 +7125,7 @@ export class LlmWikiService {
             path,
             content: `# ${params.title.trim()}\n\n${params.description.trim()}\n\n## Resolution\n\nOpen.\n`,
             frontmatter: {
-                llm_wiki_type: 'issue', issue_id: id, issue_kind: params.kind, status: 'open',
+                llm_wiki_type: 'issue', issue_id: id, issue_kind: params.kind, status: 'open', issue_resolution_status: 'open', issue_retrospective_status: 'not_started',
                 reported_by: params.reportedBy, created_at: timestamp, updated_at: timestamp,
                 ...(params.subjectPath && { subject_path: params.subjectPath }),
                 ...(params.evidencePaths?.length && { evidence_paths: params.evidencePaths }),
@@ -7018,19 +7142,32 @@ export class LlmWikiService {
         const issue = await this.fileSystem.readNote(params.path);
         if (issue.frontmatter.llm_wiki_type !== 'issue')
             throw new Error('path is not an LLM Wiki issue');
+        const resolutionStatus = String(params.resolutionStatus || 'resolved').trim().toLowerCase();
+        const retrospectiveStatus = String(params.retrospectiveStatus || (params.retrospective ? 'captured' : issue.frontmatter.issue_retrospective_status || 'not_started')).trim().toLowerCase();
+        if (!ISSUE_RESOLUTION_STATUSES.includes(resolutionStatus))
+            throw new Error(`resolutionStatus must be one of ${ISSUE_RESOLUTION_STATUSES.join(', ')}`);
+        if (!ISSUE_RETROSPECTIVE_STATUSES.includes(retrospectiveStatus))
+            throw new Error(`retrospectiveStatus must be one of ${ISSUE_RETROSPECTIVE_STATUSES.join(', ')}`);
+        if (retrospectiveStatus !== 'not_started' && !params.retrospective?.trim() && !issue.frontmatter.issue_retrospective)
+            throw new Error('retrospective text is required when retrospectiveStatus is captured or synthesized');
+        const followUpPaths = (params.followUpPaths || []).filter(path => typeof path === 'string' && path.trim()).slice(0, 12).map(path => normalizePath(path));
+        for (const path of followUpPaths) {
+            if (!this.access.canReferenceFrom(params.path, path))
+                throw new Error(`A public issue cannot expose a more-private follow-up: ${this.access.toPublicPath(path)}`);
+        }
         const timestamp = now();
         const marker = '## Resolution';
-        const replacement = `${marker}\n\n${timestamp} — Resolved by ${params.actor}: ${params.resolution.trim()}\n`;
+        const replacement = `${marker}\n\n- status: ${resolutionStatus}\n- ${timestamp} — ${resolutionStatus === 'resolved' ? 'Resolved' : 'Updated'} by ${params.actor}: ${params.resolution.trim()}\n\n## Retrospective\n\n- status: ${retrospectiveStatus}\n${params.retrospective?.trim() || issue.frontmatter.issue_retrospective || 'Not recorded yet.'}\n`;
         const content = issue.content.includes(marker)
             ? issue.content.replace(/## Resolution[\s\S]*$/, replacement)
             : `${issue.content.trimEnd()}\n\n${replacement}`;
         await this.fileSystem.writeNote({
             path: params.path,
             content,
-            frontmatter: { ...issue.frontmatter, status: 'resolved', resolved_by: params.actor, resolved_at: timestamp, updated_at: timestamp },
+            frontmatter: { ...issue.frontmatter, status: resolutionStatus, issue_resolution_status: resolutionStatus, issue_retrospective_status: retrospectiveStatus, ...(params.retrospective?.trim() && { issue_retrospective: boundedText(params.retrospective, 1200) }), ...(followUpPaths.length > 0 && { issue_follow_up_paths: followUpPaths }), resolved_by: params.actor, resolved_at: timestamp, updated_at: timestamp },
             expectedRevision: params.expectedRevision,
         });
         const updated = await this.fileSystem.readNote(params.path);
-        return { success: true, path: this.access.toPublicPath(params.path), status: 'resolved', revision: updated.revision };
+        return { success: true, path: this.access.toPublicPath(params.path), status: resolutionStatus, retrospectiveStatus, ...(followUpPaths.length > 0 && { followUpPaths: followUpPaths.map(path => this.access.toPublicPath(path)) }), revision: updated.revision };
     }
 }

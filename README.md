@@ -2363,6 +2363,26 @@ remain derived projections over Markdown rather than a new database.
 These are advisory organization aids. They never grant access, replace
 revision checks, auto-move notes, or turn a generated summary into truth.
 
+## Organization learning workflows
+
+The organization layer now connects five maintenance loops without adding a
+second source of truth:
+
+- Error Book resolution and retrospective are separate states. Use
+  `resolve_wiki_issue` with `resolutionStatus`, `retrospectiveStatus`, a short
+  lesson, and optional `followUpPaths`.
+- Failed or partial active recall can carry `confusion`, `repairPath`, and
+  `repairStatus`. The bounded recall queue puts unfinished repairs first.
+- Search usage feedback is per-account and process-local. Use
+  `record_search_feedback`, then inspect `get_search_improvement_candidates`;
+  queries are never written to Markdown, Git, snapshots, or logs.
+- Immutable sources can declare `sourceWorkId` and `sourceEditionId`.
+  `get_wiki_source_lineage` groups editions while source IDs, hashes, evidence,
+  and revisions remain authoritative.
+- `get_wiki_organization_manifest` returns a portable, content-free contract
+  for PARA, Obsidian syntax, Properties, relations, lifecycles, and migration.
+  Private scopes and `.mcpvault` caches are never portable content.
+
 ## Contributing
 
 1. Fork the repository

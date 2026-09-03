@@ -107,6 +107,8 @@ export declare class LlmWikiService {
         sourceFamily?: string;
         sourceVersion?: string;
         supersedesSource?: string;
+        sourceWorkId?: string;
+        sourceEditionId?: string;
     }): Promise<{
         success: boolean;
         created: boolean;
@@ -496,6 +498,9 @@ export declare class LlmWikiService {
         recallQuality: unknown;
         recallPrompt?: string;
         recallIntervalDays?: unknown;
+        confusion?: string;
+        repairPath?: string;
+        repairStatus?: string;
         expectedRevision: string;
     }): Promise<{
         success: boolean;
@@ -512,6 +517,10 @@ export declare class LlmWikiService {
         recallIntervalDays?: number;
         nextRecallAt?: string | undefined;
         adaptiveRecallInterval?: boolean;
+        confusion?: string;
+        repairStatus: string;
+        repairPath?: string;
+        repairAction?: string;
         nextAction: string;
     }>;
     /**
@@ -1185,6 +1194,118 @@ export declare class LlmWikiService {
             useReviewQueue: boolean;
             recordOutcome: boolean;
             neverTreatSummaryAsTruth: boolean;
+        };
+        truncated: boolean;
+    };
+    /** Return a portable, content-free organization contract for another Vault. */
+    organizationManifest(maxChars?: number): {
+        manifestVersion: number;
+        format: string;
+        portable: boolean;
+        sourceOfTruth: string[];
+        filing: {
+            Inbox: string;
+            Projects: string;
+            Areas: string;
+            Resources: string;
+            Archives: string;
+        };
+        reservedPaths: string[];
+        syntax: {
+            links: string[];
+            tags: string;
+            sourceIntegrity: string;
+        };
+        pipeline: string[];
+        contracts: {
+            noteKinds: string[];
+            lifecycles: ("active" | "archived" | "evergreen" | "inbox" | "review" | "superseded")[];
+            taskStatuses: ("blocked" | "cancelled" | "completed" | "next_action" | "open" | "someday" | "waiting")[];
+            serviceClasses: ("expedite" | "fixed_date" | "research" | "standard")[];
+            properties: import("./organization.js").OrganizationPropertyContractEntry[];
+            relations: ({
+                field: 'supports';
+                direction: 'directional';
+                target: 'A claim, decision, or note supported by this note.';
+                reciprocal: false;
+            } | {
+                field: 'contradicts';
+                direction: 'directional';
+                target: 'A claim or conclusion challenged by this note.';
+                reciprocal: false;
+            } | {
+                field: 'supersedes';
+                direction: 'directional';
+                target: 'An older or replaced note.';
+                reciprocal: false;
+            } | {
+                field: 'derived_from';
+                direction: 'directional';
+                target: 'The source or note from which this note was derived.';
+                reciprocal: false;
+            } | {
+                field: 'depends_on';
+                direction: 'directional';
+                target: 'A prerequisite note, decision, or project.';
+                reciprocal: false;
+            } | {
+                field: 'implements';
+                direction: 'directional';
+                target: 'The design, decision, or requirement implemented here.';
+                reciprocal: false;
+            } | {
+                field: 'blocked_by';
+                direction: 'directional';
+                target: 'The note or dependency currently blocking this note.';
+                reciprocal: false;
+            } | {
+                field: 'answers_questions';
+                direction: 'directional';
+                target: 'A question note answered by this note.';
+                reciprocal: false;
+            } | {
+                field: 'related';
+                direction: 'mutual';
+                target: 'A materially related note without a stronger claim.';
+                reciprocal: true;
+            } | {
+                field: 'same_as';
+                direction: 'mutual';
+                target: 'The same concept represented by another note or alias.';
+                reciprocal: true;
+            } | {
+                field: 'version_of';
+                direction: 'directional';
+                target: 'The conceptual note this version belongs to.';
+                reciprocal: false;
+            } | {
+                field: 'refines';
+                direction: 'directional';
+                target: 'A note made more precise or useful by this note.';
+                reciprocal: false;
+            })[];
+        };
+        templates: string[];
+        importRules: string[];
+    } | {
+        manifestVersion: number;
+        format: string;
+        portable: boolean;
+        sourceOfTruth: string[];
+        filing: {
+            Inbox: string;
+            Projects: string;
+            Areas: string;
+            Resources: string;
+            Archives: string;
+        };
+        reservedPaths: string[];
+        contracts: {
+            noteKinds: string[];
+            lifecycles: ("active" | "archived" | "evergreen" | "inbox" | "review" | "superseded")[];
+            taskStatuses: ("blocked" | "cancelled" | "completed" | "next_action" | "open" | "someday" | "waiting")[];
+            serviceClasses: ("expedite" | "fixed_date" | "research" | "standard")[];
+            relations: ("answers_questions" | "blocked_by" | "contradicts" | "depends_on" | "derived_from" | "implements" | "refines" | "related" | "same_as" | "supersedes" | "supports" | "version_of")[];
         };
         truncated: boolean;
     };
@@ -2771,6 +2892,29 @@ export declare class LlmWikiService {
      * over-concentrated knowledge without creating a citation database.
      */
     citationGraph(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<Record<string, unknown>>;
+    /**
+     * Group immutable source snapshots into portable works and editions. The
+     * existing source_family/source_version fields remain compatible; the
+     * explicit source_work_id/source_edition_id fields make the model clear
+     * when a publisher changes its label or a work has several editions.
+     */
+    sourceLineage(principal?: ScopePrincipal, sourceFamily?: string, limit?: number, maxChars?: number): Promise<{
+        mode: string;
+        sourceFamily: string | undefined;
+        works: {
+            workId: string;
+            label: string;
+            editionCount: number;
+            editions: Record<string, unknown>[];
+            nextAction: string;
+        }[];
+        totals: {
+            sourceSnapshots: number;
+            works: number;
+        };
+        truncated: boolean;
+        note: string;
+    }>;
     promotionCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
         items: Record<string, unknown>[];
         total: number;
@@ -2924,11 +3068,17 @@ export declare class LlmWikiService {
         path: string;
         actor: string;
         resolution: string;
+        resolutionStatus?: string;
+        retrospectiveStatus?: string;
+        retrospective?: string;
+        followUpPaths?: string[];
         expectedRevision: string;
     }): Promise<{
         success: boolean;
         path: string;
         status: string;
+        retrospectiveStatus: string;
+        followUpPaths?: string[];
         revision: string;
     }>;
 }
