@@ -26,6 +26,12 @@ export const ASSUMPTION_STATUSES = ['active', 'verified', 'invalidated', 'replac
 export const TERM_STATUSES = ['preferred', 'deprecated', 'redirect'] as const;
 /** A small Zettelkasten-style role vocabulary for durable knowledge notes. */
 export const KNOWLEDGE_ROLES = ['concept', 'argument', 'model', 'observation', 'counterargument'] as const;
+/** Optional note-template IDs. Knowledge-role templates refine a durable note
+ * without introducing another note kind or storage format. */
+export const NOTE_TEMPLATE_IDS = ['atomic', 'literature', 'question', 'hypothesis', 'experiment', 'assumption', 'decision', 'project', 'moc', 'negative', ...KNOWLEDGE_ROLES] as const;
+/** Standard Obsidian Bases projections. Keep the runtime and tool schema on
+ * one shared list so a documented view cannot become unreachable. */
+export const BASES_VIEW_IDS = ['all', 'inbox', 'inbox_oldest', 'projects', 'project_next_actions', 'review', 'epistemic', 'experiments', 'open_questions', 'knowledge', 'concepts', 'arguments', 'models', 'observations', 'counterarguments', 'unreviewed_evidence', 'negative_knowledge', 'deprecated_terms', 'maintenance', 'authority', 'review_checklist', 'collections'] as const;
 /** Optional recall result for high-value knowledge; separate from evidence review. */
 export const RECALL_QUALITIES = ['unseen', 'failed', 'partial', 'good'] as const;
 /** Error Book state is split into resolution and learning so a closed issue
@@ -212,8 +218,7 @@ export interface OrganizationNoteTemplate {
  */
 export function organizationNoteTemplate(value: unknown = 'atomic'): OrganizationNoteTemplate {
   const requested = String(value ?? 'atomic').trim().toLowerCase();
-  const templateId = requested === 'negative' ? 'negative' : (NOTE_KINDS as readonly string[]).includes(requested) ? requested : 'atomic';
-  const noteKind = templateId === 'negative' ? 'knowledge' : templateId as NoteKind;
+  const templateId = (NOTE_TEMPLATE_IDS as readonly string[]).includes(requested) ? requested : 'atomic';
   const templates: Record<string, Omit<OrganizationNoteTemplate, 'noteKind' | 'templateId'>> = {
     atomic: {
       purpose: 'One reusable concept or claim written in your own words.',
@@ -265,8 +270,34 @@ export function organizationNoteTemplate(value: unknown = 'atomic'): Organizatio
       properties: { note_kind: 'knowledge', lifecycle: 'review', knowledge_polarity: 'negative', negative_type: 'failure' },
       markdown: '# {{title}}\n\n## Attempted\n\n## Observed failure\n\n## Reproduction\n\n## Reusable lesson\n',
     },
+    concept: {
+      purpose: 'A durable concept card with a clear boundary, examples, and nearby concepts.',
+      properties: { note_kind: 'atomic', lifecycle: 'evergreen', knowledge_role: 'concept', summary: '', aliases: [], related: [] },
+      markdown: '# {{title}}\n\n## Definition\n\n## Key properties\n- \n\n## Examples\n- \n\n## Non-examples and boundaries\n- \n\n## Related concepts\n- [[ ]]\n',
+    },
+    argument: {
+      purpose: 'A reviewable argument that separates its claim, evidence, warrant, and objections.',
+      properties: { note_kind: 'atomic', lifecycle: 'review', knowledge_role: 'argument', summary: '', supports: [], contradicts: [], related: [] },
+      markdown: '# {{title}}\n\n## Claim\n\n## Grounds and evidence\n- [[ ]]\n\n## Warrant\n\n## Counterarguments\n- [[ ]]\n\n## Implications\n',
+    },
+    model: {
+      purpose: 'An explanatory model whose components, mechanism, assumptions, predictions, and limits remain inspectable.',
+      properties: { note_kind: 'knowledge', lifecycle: 'review', knowledge_role: 'model', summary: '', derived_from: [], related: [] },
+      markdown: '# {{title}}\n\n## Purpose and scope\n\n## Components\n- \n\n## Relationships and mechanism\n\n## Assumptions\n- \n\n## Predictions\n- \n\n## Limits and failure modes\n- \n\n## Related knowledge\n- [[ ]]\n',
+    },
+    observation: {
+      purpose: 'A durable observation that keeps context and measurement separate from interpretation.',
+      properties: { note_kind: 'atomic', lifecycle: 'review', knowledge_role: 'observation', summary: '', derived_from: [], related: [] },
+      markdown: '# {{title}}\n\n## Context\n\n## Observation\n\n## Method or measurement\n\n## Interpretation\n\n## Related evidence\n- [[ ]]\n',
+    },
+    counterargument: {
+      purpose: 'A durable objection linked to the exact claim it challenges and the evidence that supports the objection.',
+      properties: { note_kind: 'atomic', lifecycle: 'review', knowledge_role: 'counterargument', summary: '', contradicts: [], evidence_paths: [], related: [] },
+      markdown: '# {{title}}\n\n## Target claim\n- [[ ]]\n\n## Objection\n\n## Evidence\n- [[ ]]\n\n## What would change this objection\n\n## Implication\n',
+    },
   };
   const template = templates[templateId] || templates.atomic!;
+  const noteKind = template.properties.note_kind as NoteKind;
   return { templateId, noteKind, ...template };
 }
 /**

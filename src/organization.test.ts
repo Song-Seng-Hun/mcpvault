@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, organizationLintIssues, organizationNoteTemplate, temporalValidity } from './organization.js';
+import { BASES_VIEW_IDS, NOTE_TEMPLATE_IDS, getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, organizationLintIssues, organizationNoteTemplate, temporalValidity } from './organization.js';
 
 describe('knowledge organization focus and summary metadata', () => {
   test('filing edits and partial stale projection edits cannot certify inherited summaries', () => {
@@ -225,6 +225,8 @@ describe('knowledge organization focus and summary metadata', () => {
   });
 
   test('provides optional role templates without making them publication gates', () => {
+    expect(NOTE_TEMPLATE_IDS).toEqual(expect.arrayContaining(['concept', 'argument', 'model', 'observation', 'counterargument']));
+    expect(BASES_VIEW_IDS).toEqual(expect.arrayContaining(['concepts', 'arguments', 'models', 'observations', 'counterarguments', 'authority', 'review_checklist', 'collections']));
     expect(organizationNoteTemplate('question')).toMatchObject({
       templateId: 'question', noteKind: 'question',
       properties: { epistemic_status: 'open' },
@@ -237,6 +239,23 @@ describe('knowledge organization focus and summary metadata', () => {
       templateId: 'assumption', noteKind: 'assumption',
       properties: { epistemic_status: 'active' },
     });
+    expect(organizationNoteTemplate('concept')).toMatchObject({
+      templateId: 'concept', noteKind: 'atomic',
+      properties: { knowledge_role: 'concept' },
+      markdown: expect.stringContaining('## Non-examples and boundaries'),
+    });
+    expect(organizationNoteTemplate('model')).toMatchObject({
+      templateId: 'model', noteKind: 'knowledge',
+      properties: { knowledge_role: 'model' },
+      markdown: expect.stringContaining('## Limits and failure modes'),
+    });
+    expect(organizationNoteTemplate('observation').properties).not.toHaveProperty('observed_at');
+    expect(organizationNoteTemplate('counterargument')).toMatchObject({
+      templateId: 'counterargument', noteKind: 'atomic',
+      properties: { knowledge_role: 'counterargument', contradicts: [] },
+      markdown: expect.stringContaining('## What would change this objection'),
+    });
+    expect(organizationNoteTemplate('journal')).toMatchObject({ templateId: 'atomic', noteKind: 'atomic' });
     expect(organizationNoteTemplate('unknown')).toMatchObject({ templateId: 'atomic', noteKind: 'atomic' });
   });
 

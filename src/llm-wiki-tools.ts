@@ -1,4 +1,5 @@
 import type { Tool } from '@modelcontextprotocol/server';
+import { BASES_VIEW_IDS, KNOWLEDGE_ROLES, NOTE_TEMPLATE_IDS } from './organization.js';
 
 const prettyPrint = { type: 'boolean', description: 'Format JSON response with indentation', default: false } as const;
 const accessToken = { type: 'string', description: 'Token from login_scope. Omit for public global scope only.' } as const;
@@ -134,7 +135,7 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_catalog',
-      description: 'Build a live scope-aware catalog from frontmatter instead of maintaining a stale hand-written index. Set includeFacets=true for bounded metadata-only counts across note kind, lifecycle, epistemic/task state, review policy, source type, polarity, MOC, project, domain, subject terms, tags, and temporal validity. Optional facet filters narrow the same metadata pass without loading note bodies; validity can be evaluated at validAt. Use orderBy for LATCH-style location, alphabet, time, category, or hierarchy browsing without duplicating notes.',
+      description: 'Build a live scope-aware catalog from frontmatter instead of maintaining a stale hand-written index. Set includeFacets=true for bounded metadata-only counts across note kind, lifecycle, knowledge role, epistemic/task state, review policy, source type, polarity, MOC, project, domain, subject terms, tags, and temporal validity. Optional facet filters narrow the same metadata pass without loading note bodies; validity can be evaluated at validAt. Use orderBy for LATCH-style location, alphabet, time, category, or hierarchy browsing without duplicating notes.',
       inputSchema: { type: 'object', properties: {
         noteKind: { type: 'string', enum: ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'experiment', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'] },
         lifecycle: { type: 'string', enum: ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'] },
@@ -143,6 +144,7 @@ export function getLlmWikiTools(): Tool[] {
         reviewPolicy: { type: 'string', enum: ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit', 'on_upstream_change'] },
         sourceType: { type: 'string', maxLength: 80, description: 'Optional source kind filter such as paper, web, book, dataset, or code' },
         polarity: { type: 'string', enum: ['positive', 'negative'], description: 'Filter preserved knowledge by positive or negative/failed-path polarity' },
+        knowledgeRole: { type: 'string', enum: [...KNOWLEDGE_ROLES], description: 'Optional exact durable-knowledge role filter' },
         domain: { type: 'string', maxLength: 200 },
         subjectTerm: { type: 'string', maxLength: 200, description: 'Case-insensitive exact match against one subject_terms value' },
         validity: { type: 'string', enum: ['unspecified', 'current', 'not_yet_valid', 'expired', 'invalid'], description: 'Filter by claim-validity state at validAt (or the current server time)' },
@@ -475,17 +477,17 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_note_template',
-      description: 'Return a small optional Obsidian Markdown/Properties scaffold for an atomic, literature, question, hypothesis, experiment, assumption, decision, project, MOC, or negative knowledge note. It never creates a file and never makes templates mandatory.',
+      description: 'Return a small optional Obsidian Markdown/Properties scaffold for a common note kind or a concept, argument, model, observation, or counterargument knowledge role. It never creates a file and never makes templates mandatory.',
       inputSchema: { type: 'object', properties: {
-        noteKind: { type: 'string', enum: ['atomic', 'literature', 'question', 'hypothesis', 'experiment', 'assumption', 'decision', 'project', 'moc', 'negative'], default: 'atomic' },
+        noteKind: { type: 'string', enum: [...NOTE_TEMPLATE_IDS], default: 'atomic', description: 'Template ID; role templates still use ordinary atomic/knowledge notes plus knowledge_role' },
         maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint,
       } },
     },
     {
       name: 'get_wiki_bases_view',
-      description: 'Return a bounded, optional Obsidian Bases YAML view for visible Wiki notes. Standard projections include all, inbox, inbox_oldest, projects, project_next_actions, review, epistemic, experiments, open_questions, knowledge, unreviewed_evidence, negative_knowledge, deprecated_terms, and maintenance. This exports a local view definition only; it is not an MCP permission boundary and does not write a file.',
+      description: 'Return a bounded, optional Obsidian Bases YAML view for visible Wiki notes, including focused concept, argument, model, observation, and counterargument shelves. This exports a local view definition only; it is not an MCP permission boundary and does not write a file.',
       inputSchema: { type: 'object', properties: {
-        view: { type: 'string', enum: ['all', 'inbox', 'inbox_oldest', 'projects', 'project_next_actions', 'review', 'epistemic', 'experiments', 'open_questions', 'knowledge', 'unreviewed_evidence', 'negative_knowledge', 'deprecated_terms', 'maintenance'], default: 'all', description: 'Optional standard Obsidian Bases projection' },
+        view: { type: 'string', enum: [...BASES_VIEW_IDS], default: 'all', description: 'Optional standard Obsidian Bases projection' },
         noteKind: { type: 'string', description: 'Optional exact note_kind filter' },
         lifecycle: { type: 'string', description: 'Optional exact lifecycle filter' },
         limit: { type: 'integer', minimum: 1, maximum: 500, default: 100 },
@@ -497,7 +499,7 @@ export function getLlmWikiTools(): Tool[] {
       name: 'export_wiki_base',
       description: 'Save one bounded Obsidian Bases view as a derived Views/*.base file. This is an explicit mutation, limited to a single file directly under Views/, and requires expectedRevision (use missing for a new file); it never changes note content or permissions.',
       inputSchema: { type: 'object', properties: {
-        view: { type: 'string', enum: ['all', 'inbox', 'inbox_oldest', 'projects', 'project_next_actions', 'review', 'epistemic', 'experiments', 'open_questions', 'knowledge', 'unreviewed_evidence', 'negative_knowledge', 'deprecated_terms', 'maintenance'], default: 'all' },
+        view: { type: 'string', enum: [...BASES_VIEW_IDS], default: 'all' },
         path: { type: 'string', description: 'Optional single Views/*.base path; defaults to the view suggestedPath' },
         noteKind: { type: 'string' }, lifecycle: { type: 'string' },
         limit: { type: 'integer', minimum: 1, maximum: 500, default: 100 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 12000 },

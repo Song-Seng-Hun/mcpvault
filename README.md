@@ -407,7 +407,9 @@ rewriting the body. `get_wiki_catalog` can filter by note kind/lifecycle,
 epistemic state, task state, review policy, source type, polarity, domain, or
 subject term and bound returned entries with `limit`/`maxChars`. Set
 `includeFacets: true` to receive bounded metadata-only counts for those fields,
-MOC, project, and tags without loading note bodies. These filters and facets
+knowledge role, MOC, project, and tags without loading note bodies. The
+`knowledgeRole` filter selects one of concept, argument, model, observation,
+or counterargument without loading unrelated bodies. These filters and facets
 are computed from the same live frontmatter pass, so they do not introduce a
 second index that can drift from Markdown. `get_wiki_neighborhood` provides a
 bounded knowledge-space view around one note: explicit Obsidian links and
@@ -483,9 +485,15 @@ spelling/case variants, subject terms without a local authority note, and terms
 used by multiple notes. It suggests review only; it never renames or retags
 notes, because local distinctions may be intentional.
 Use `get_wiki_note_template` for an optional small scaffold when starting an
-atomic, literature, question, hypothesis, experiment, assumption, decision, project, MOC, or negative
-knowledge note. It returns Markdown and suggested Properties without creating
-files or imposing a schema gate. For `related` and `same_as`, graph health
+atomic, literature, question, hypothesis, experiment, assumption, decision,
+project, MOC, or negative-knowledge note. It also provides role-specific
+concept, argument, model, observation, and counterargument scaffolds. These
+remain ordinary atomic/knowledge notes and only add `knowledge_role` plus a
+useful Markdown outline. `get_wiki_quality_check` checks the corresponding
+definition/boundary, claim/warrant, model-mechanism, observation/interpretation,
+or rebuttal structure without making it a publication gate. The template
+returns Markdown and suggested Properties without creating files. For
+`related` and `same_as`, graph health
 also reports missing reverse edges as advisory `reciprocityMissing`; other
 typed relations remain directional. Retention metadata
 (`retention_policy`, `retention_at`, `retention_reason`, `replaced_by`) makes
@@ -545,8 +553,10 @@ not an automatic MOC or a reason to overwrite an existing map.
 
 `get_wiki_bases_view` can generate standard local Obsidian Bases projections:
 `all`, `inbox`, `inbox_oldest`, `projects`, `project_next_actions`, `review`,
-`epistemic`, `experiments`, `open_questions`, `knowledge`, `unreviewed_evidence`,
-`negative_knowledge`, `deprecated_terms`, and `maintenance`. `export_wiki_base`
+`epistemic`, `experiments`, `open_questions`, `knowledge`, `concepts`,
+`arguments`, `models`, `observations`, `counterarguments`,
+`unreviewed_evidence`, `negative_knowledge`, `deprecated_terms`, `maintenance`,
+`authority`, `review_checklist`, and `collections`. `export_wiki_base`
 can persist one derived view under `Views/*.base` with an explicit file
 revision; it is limited to that presentation file and does not change note
 content or permissions. Markdown and Git remain the source of truth.

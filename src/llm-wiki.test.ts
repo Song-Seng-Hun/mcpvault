@@ -262,6 +262,52 @@ test('experiment notes connect epistemic work, reproducible Markdown, graph navi
   }
 });
 
+test('knowledge roles provide role templates, catalog facets, quality rubrics, and focused Obsidian views', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'knowledge-role-owner', modelId: 'codex', password: 'knowledge-role-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
+      const result = await client.callTool({ name: 'write_note', arguments: { path, content, frontmatter, expectedRevision: 'missing', accessToken } });
+      expect(result.isError).toBeFalsy();
+    };
+
+    const template = await callJson(client, 'call_endpoint', { endpointId: 'wiki.note_template', arguments: { noteKind: 'concept', accessToken } });
+    expect(template.value).toMatchObject({ templateId: 'concept', noteKind: 'atomic', properties: { knowledge_role: 'concept' } });
+    expect(template.value.markdown).toContain('## Non-examples and boundaries');
+
+    await write('Knowledge/Bounded queue.md', '# Bounded queue\n\n## Definition\nA queue with a fixed capacity.\n\n## Examples\n- A worker pool input buffer.\n\n## Non-examples and boundaries\n- An unbounded append-only log.\n\n## Related concepts\n- [[Knowledge/Backpressure]]\n', {
+      llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', knowledge_role: 'concept', summary: 'A queue whose capacity is fixed.',
+    });
+    await write('Knowledge/Latency observation.md', '# Latency observation\n\n## Context\nWindows benchmark.\n\n## Observation\nMedian latency rose under saturation.\n\n## Method or measurement\nOne hundred timed requests.\n', {
+      llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'review', knowledge_role: 'observation', observed_at: '2026-09-04T00:00:00.000Z', summary: 'Latency rose under saturation.',
+    });
+
+    const catalog = await callJson(client, 'call_endpoint', { endpointId: 'wiki.catalog', arguments: { knowledgeRole: 'concept', includeFacets: true, limit: 10, maxChars: 6000, accessToken } });
+    expect(catalog.value).toMatchObject({ total: 1, organization: { knowledgeRoles: { concept: 1 } }, facets: { knowledgeRole: { concept: 1 } } });
+    expect(catalog.value.entries).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Bounded queue.md', knowledgeRole: 'concept' })]));
+
+    const conceptQuality = await callJson(client, 'call_endpoint', { endpointId: 'wiki.quality_check', arguments: { path: 'Knowledge/Bounded queue.md', maxChars: 6000, accessToken } });
+    expect(conceptQuality.value).toMatchObject({ knowledgeRole: 'concept' });
+    expect(conceptQuality.value.checks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'concept_definition', passed: true }),
+      expect.objectContaining({ id: 'concept_examples', passed: true }),
+      expect.objectContaining({ id: 'concept_boundaries', passed: true }),
+    ]));
+    const observationQuality = await callJson(client, 'call_endpoint', { endpointId: 'wiki.quality_check', arguments: { path: 'Knowledge/Latency observation.md', maxChars: 6000, accessToken } });
+    expect(observationQuality.value.nextActions).toContain('observation_interpretation_boundary');
+
+    const concepts = await callJson(client, 'call_endpoint', { endpointId: 'wiki.bases_view', arguments: { view: 'concepts', limit: 20, accessToken } });
+    expect(concepts.value).toMatchObject({ view: 'concepts', suggestedPath: 'Views/LLM Wiki Concepts.base', matchingNotes: 1, matchingNotesExact: true });
+    expect(concepts.value.content).toContain('note.knowledge_role == "concept"');
+    const authority = await callJson(client, 'call_endpoint', { endpointId: 'wiki.bases_view', arguments: { view: 'authority', limit: 20, accessToken } });
+    expect(authority.value).toMatchObject({ view: 'authority', suggestedPath: 'Views/LLM Wiki Authority.base' });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('knowledge organization helpers stay bounded and revision-safe', async () => {
   const { server, client } = await setup();
   try {
@@ -1754,7 +1800,7 @@ test('portable migration preflight excludes non-global content and reports revis
     await callJson(client, 'publish_blog_post', { slug: 'portable-community-only', title: 'Community only', content: 'Never enter a global migration inventory.', expectedRevision: 'missing', accessToken });
 
     const defaultManifest = await callJson(client, 'get_wiki_organization_manifest', { maxChars: 24000, accessToken });
-    expect(defaultManifest.value).toMatchObject({ manifestVersion: 2, portable: true, contentFreeByDefault: true, contractFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    expect(defaultManifest.value).toMatchObject({ manifestVersion: 3, portable: true, contentFreeByDefault: true, contractFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/), templates: expect.arrayContaining(['concept', 'model']), basesViews: expect.arrayContaining(['concepts', 'authority']) });
     expect(defaultManifest.value.readiness).toBeUndefined();
     expect(JSON.stringify(defaultManifest.value)).not.toContain('Portable One');
 
@@ -1777,7 +1823,9 @@ test('portable migration preflight excludes non-global content and reports revis
     expect(compared.value.migrationPreview.issues).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'counterpart_changed', severity: 'blocking' }),
       expect.objectContaining({ code: 'property_contract_type_conflict', severity: 'blocking' }),
+      expect.objectContaining({ code: 'missing_bases_views', severity: 'warning' }),
     ]));
+    expect(compared.value.migrationPreview.issueCounts).toMatchObject({ missing_templates: 1, missing_bases_views: 1 });
     expect(compared.value.migrationPreview.issueCounts.missing_relation_contract).toBeGreaterThan(0);
     const tinyCompared = await callJson(client, 'get_wiki_organization_manifest', { compareManifest: counterpart, expectedCounterpartFingerprint: 'a'.repeat(64), limit: 50, maxChars: 512, prettyPrint: true, accessToken });
     expect(String((tinyCompared.result.content as any)[0].text).length).toBeLessThanOrEqual(512);

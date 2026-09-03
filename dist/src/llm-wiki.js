@@ -4,7 +4,7 @@ import { stringify as stringifyYaml } from 'yaml';
 import { normalizeScopeId } from './scopes.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
-import { getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, normalizeClarifyDisposition, normalizeIsoDate, normalizeLifecycle, normalizeNavOrder, normalizeNoteKind, normalizeRecallQuality, normalizeRetentionPolicy, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeServiceClass, normalizeTaskStatus, organizationLintIssues, organizationNoteTemplate, temporalValidity, NOTE_KINDS, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES } from './organization.js';
+import { getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, normalizeClarifyDisposition, normalizeIsoDate, normalizeLifecycle, normalizeNavOrder, normalizeNoteKind, normalizeRecallQuality, normalizeRetentionPolicy, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeServiceClass, normalizeTaskStatus, organizationLintIssues, organizationNoteTemplate, temporalValidity, BASES_VIEW_IDS, KNOWLEDGE_ROLES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES } from './organization.js';
 import { extractObsidianLinkOccurrences, resolveWikiLinkTargets } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
@@ -371,6 +371,8 @@ function comparableOrganizationManifest(value) {
         format: String(value.format || ''),
         manifestVersion: Number(value.manifestVersion || 0),
         reservedPaths: manifestStringList(value.reservedPaths, 100),
+        templates: manifestStringList(value.templates, 100),
+        basesViews: manifestStringList(value.basesViews, 100),
         contracts: {
             noteKinds: manifestStringList(contracts.noteKinds),
             lifecycles: manifestStringList(contracts.lifecycles),
@@ -457,6 +459,16 @@ typed \`tests\` relation, and record Protocol, Environment, Observations,
 Result, and Reproduction in ordinary Markdown. A failed run may later be
 distilled into negative knowledge; do not erase the experiment record.
 
+For durable notes, optional \`knowledge_role\` states what kind of reasoning the
+note performs. A \`concept\` defines boundaries and examples; an \`argument\`
+separates claim, grounds, warrant, and objections; a \`model\` exposes components,
+mechanism, assumptions, predictions, and limits; an \`observation\` keeps context
+and measurement separate from interpretation; and a \`counterargument\` links
+the exact claim challenged plus the evidence and condition that would change
+the objection. \`wiki.note_template\` provides optional ordinary-Markdown
+scaffolds, \`wiki.quality_check\` gives advisory role checks, and role-specific
+catalog/Bases views never become truth scores or access rules.
+
 Use \`aliases\` for stable Obsidian navigation, optional \`stable_id\` for a durable note identity, and compact \`summary\`, \`key_points\`, and \`open_questions\` properties for progressive reads; never replace the full Markdown body with a summary. When any progressive field is present, store \`summary_of_content_sha256\` for the exact Markdown body; a body edit makes the projection stale until it is regenerated. Use \`task_status\` for the operational state of project/task notes (\`open\`, \`next_action\`, \`waiting\`, \`blocked\`, \`someday\`, \`completed\`, or \`cancelled\`); keep it separate from the knowledge \`lifecycle\`. Use \`desired_outcome\`, \`next_action\`, \`task_context\`, \`due_at\`, and \`defer_until\` for GTD-style execution details. Questions, hypotheses, and assumptions should carry \`epistemic_status\` for their kind-specific state. Use \`knowledge_polarity: negative\` with \`negative_type\` plus attempted/observed/failure condition/reproduction/reusable lesson metadata to preserve failed paths instead of deleting them. Typed link arrays such as \`supports\`, \`contradicts\`, \`supersedes\`, \`derived_from\`, \`depends_on\`, \`implements\`, \`blocked_by\`, and \`related\` explain the relationship while ordinary \`[[wikilinks]]\` remain the navigational source. Optional faceted access points use bounded \`subject_terms\`, \`domain\`, \`methods\`, and \`audience\`; keep them consistent but do not treat them as a rigid taxonomy. Use \`next_actions\` and \`waiting_for\` on project/task notes only. Evidence can include \`heading\`, \`blockId\`, source \`revision\`, 1-based line ranges, and a \`quoteHash\`; stale locators are reported by lint. Use \`review_policy\` (\`manual\`, \`periodic\`, \`on_source_change\`, \`on_link_change\`, \`on_any_edit\`, or \`on_upstream_change\`) to declare when a note should re-enter review, and record the review outcome after checking evidence; typed upstream revision/state changes are compared with the last publish/review baseline. Call \`wiki.home\` for a bounded Home/JDex launchpad, \`wiki.review_packet\` for a compact prioritized next-action packet, \`wiki.knowledge_gaps\` for active-recall questions and disputes, and \`wiki.organization_health\` to review property, MOC coverage, atomicity, Evergreen discoverability, summary freshness, typed evidence, and link problems.
 Use \`wiki.note_template\` for an optional small scaffold for common note roles; it never creates a file or makes fields mandatory. Prefer reciprocal \`related\`/\`same_as\` edges when the relationship is mutual; graph health reports missing reciprocity but does not rewrite it. Use \`primary_moc\` as the preferred launch point and \`read_wiki_projection\` with \`view=section\` plus a heading or \`blockId\` when bounded nearby context is enough. Use \`retention_policy\` (\`preserve\`, \`review\`, \`archive\`, or \`tombstone\`) with \`retention_reason\`, \`retention_at\`, and \`replaced_by\`; \`retention_event\`, \`preserve_until\`, and \`legal_hold\` add auditable preservation constraints, but never authorize automatic deletion.
 
@@ -497,8 +509,11 @@ with an expected revision; it preserves the full Markdown body and unrelated
 Properties.
 
 Use \`get_wiki_catalog\` with \`includeFacets: true\` for bounded metadata-only
-counts by note kind, lifecycle, epistemic/task state, review policy, source type,
-polarity, MOC, project, domain, subject term, tag, and temporal-validity state. Use \`validity\` with an optional \`validAt\` instant to find current, future, expired, invalid, or unspecified claims without loading bodies. Use its optional facet
+counts by note kind, lifecycle, knowledge role, epistemic/task state, review
+policy, source type, polarity, MOC, project, domain, subject term, tag, and
+temporal-validity state. Use \`knowledgeRole\` to select concept, argument,
+model, observation, or counterargument notes without loading unrelated bodies.
+Use \`validity\` with an optional \`validAt\` instant to find current, future, expired, invalid, or unspecified claims without loading bodies. Use its optional facet
 filters to narrow the same metadata pass without loading note bodies. Use
 \`get_wiki_neighborhood\` after selecting a note when nearby context is useful:
 direct links and typed relations come first, followed by shared MOC/project
@@ -1223,7 +1238,7 @@ export class LlmWikiService {
         // generation is unchanged, so do not retain it in the summary cache.
         if (!options.summaryOnly || ((options.validity !== undefined || options.includeFacets === true) && !options.validAt))
             return this.computeCatalog(principal, options);
-        const key = `${this.principalKey(principal)}|${options.noteKind || ''}|${options.lifecycle || ''}|${options.epistemicStatus || ''}|${options.taskStatus || ''}|${options.reviewPolicy || ''}|${options.sourceType || ''}|${options.polarity || ''}|${options.domain || ''}|${options.subjectTerm || ''}|${options.validity || ''}|${options.validAt || ''}|${options.limit || ''}|${options.maxChars || ''}|${options.includeFacets ? 'facets' : ''}|${options.facetLimit || ''}|${normalizeCatalogOrder(options.orderBy)}`;
+        const key = `${this.principalKey(principal)}|${options.noteKind || ''}|${options.lifecycle || ''}|${options.epistemicStatus || ''}|${options.taskStatus || ''}|${options.reviewPolicy || ''}|${options.sourceType || ''}|${options.polarity || ''}|${options.knowledgeRole || ''}|${options.domain || ''}|${options.subjectTerm || ''}|${options.validity || ''}|${options.validAt || ''}|${options.limit || ''}|${options.maxChars || ''}|${options.includeFacets ? 'facets' : ''}|${options.facetLimit || ''}|${normalizeCatalogOrder(options.orderBy)}`;
         const cached = this.catalogSummaryCache.get(key);
         if (cached?.generation === this.generation)
             return cached.value;
@@ -1252,6 +1267,7 @@ export class LlmWikiService {
         let schemaPresent = false;
         const noteKinds = {};
         const lifecycles = {};
+        const knowledgeRoles = {};
         const facetValues = options.includeFacets ? {
             noteKind: new Map(),
             lifecycle: new Map(),
@@ -1260,6 +1276,7 @@ export class LlmWikiService {
             reviewPolicy: new Map(),
             sourceType: new Map(),
             polarity: new Map(),
+            knowledgeRole: new Map(),
             moc: new Map(),
             project: new Map(),
             subjectTerm: new Map(),
@@ -1297,6 +1314,7 @@ export class LlmWikiService {
             const reviewPolicy = typeof note.frontmatter.review_policy === 'string' ? note.frontmatter.review_policy.trim().toLowerCase() : undefined;
             const sourceType = typeof note.frontmatter.source_type === 'string' ? note.frontmatter.source_type.trim().toLowerCase() : undefined;
             const polarity = typeof note.frontmatter.knowledge_polarity === 'string' ? note.frontmatter.knowledge_polarity.trim().toLowerCase() : undefined;
+            const knowledgeRole = typeof note.frontmatter.knowledge_role === 'string' ? note.frontmatter.knowledge_role.trim().toLowerCase() : undefined;
             const domain = typeof note.frontmatter.domain === 'string' ? note.frontmatter.domain.trim() : undefined;
             const temporal = temporalValidity(note.frontmatter, validAtMs);
             const subjectTerms = Array.isArray(note.frontmatter.subject_terms)
@@ -1312,6 +1330,8 @@ export class LlmWikiService {
                 continue;
             if (options.polarity && polarity !== options.polarity.trim().toLowerCase())
                 continue;
+            if (options.knowledgeRole && knowledgeRole !== options.knowledgeRole.trim().toLowerCase())
+                continue;
             if (options.domain && domain !== options.domain.trim())
                 continue;
             if (options.subjectTerm && !subjectTerms.some(term => term.toLowerCase() === options.subjectTerm.trim().toLowerCase()))
@@ -1326,6 +1346,8 @@ export class LlmWikiService {
                 noteKinds[noteKind] = (noteKinds[noteKind] || 0) + 1;
             if (lifecycle)
                 lifecycles[lifecycle] = (lifecycles[lifecycle] || 0) + 1;
+            if (knowledgeRole)
+                knowledgeRoles[knowledgeRole] = (knowledgeRoles[knowledgeRole] || 0) + 1;
             if (facetValues) {
                 const increment = (facet, value) => {
                     const normalized = String(value ?? '').trim();
@@ -1339,6 +1361,7 @@ export class LlmWikiService {
                 increment(facetValues.reviewPolicy, reviewPolicy);
                 increment(facetValues.sourceType, sourceType);
                 increment(facetValues.polarity, polarity);
+                increment(facetValues.knowledgeRole, knowledgeRole);
                 increment(facetValues.moc, note.frontmatter.moc);
                 increment(facetValues.project, note.frontmatter.project);
                 const incrementList = (facet, value) => {
@@ -1372,7 +1395,7 @@ export class LlmWikiService {
                 ...(sourceType && { sourceType }),
                 ...(polarity && { polarity }),
                 ...((temporal.state !== 'unspecified' || temporal.observedAt || temporal.temporalScope) && { temporal }),
-                ...(note.frontmatter.knowledge_role && { knowledgeRole: note.frontmatter.knowledge_role }),
+                ...(knowledgeRole && { knowledgeRole }),
                 ...(Array.isArray(note.frontmatter.see_also) && { seeAlso: note.frontmatter.see_also.slice(0, 12) }),
                 ...(note.frontmatter.project && { project: note.frontmatter.project }),
                 ...(note.frontmatter.primary_moc && { primaryMoc: note.frontmatter.primary_moc }),
@@ -1415,7 +1438,7 @@ export class LlmWikiService {
         const facets = facetValues ? Object.fromEntries(Object.entries(facetValues).map(([name, values]) => [name, Object.fromEntries([...values.entries()]
                 .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
                 .slice(0, facetLimit))])) : undefined;
-        return { counts, organization: { noteKinds, lifecycles }, ...(facets && { facets }), entries: boundedEntries, total, orderBy, ...(options.validity || options.validAt ? { validAt } : {}), truncated: responseTruncated, schemaPresent };
+        return { counts, organization: { noteKinds, lifecycles, knowledgeRoles }, ...(facets && { facets }), entries: boundedEntries, total, orderBy, ...(options.validity || options.validAt ? { validAt } : {}), truncated: responseTruncated, schemaPresent };
     }
     /**
      * Report likely filing mismatches without treating folders as permissions.
@@ -3094,7 +3117,7 @@ export class LlmWikiService {
             filing: { inbox: 'rough captures only', projects: 'outcome-oriented work', areas: 'ongoing responsibilities', resources: 'reusable references', archives: 'inactive material', rule: 'folders are filing aids, not visibility boundaries' },
             lifecycle: [...LIFECYCLES],
             work: { statuses: [...TASK_STATUSES], serviceClasses: [...SERVICE_CLASSES], wipLimitDefault: 3, completionCriteria: 'Use completion_criteria or a visible completion-criteria heading for active projects.', separateFromKnowledgeLifecycle: true },
-            knowledge: { durableAtomicity: 'one reusable concept or claim per atomic note when practical', links: 'prefer Obsidian [[wikilinks]] and MOCs; use typed relations to explain meaning', evidence: 'claims and published knowledge must preserve inspectable provenance; source-work diversity is advisory and snapshots of one work are not independent corroboration', temporalValidity: 'valid_from is inclusive and valid_until is exclusive; observed_at and temporal_scope describe applicability, never file modification, source publication, task, or review dates', uncertainty: 'use question/hypothesis/assumption, connect reproducible experiment runs with tests, and preserve negative knowledge' },
+            knowledge: { durableAtomicity: 'one reusable concept or claim per atomic note when practical', roles: [...KNOWLEDGE_ROLES], roleRule: 'A role explains the note job and optional Markdown rubric; it is not a truth score or a new storage type.', links: 'prefer Obsidian [[wikilinks]] and MOCs; use typed relations to explain meaning', evidence: 'claims and published knowledge must preserve inspectable provenance; source-work diversity is advisory and snapshots of one work are not independent corroboration', temporalValidity: 'valid_from is inclusive and valid_until is exclusive; observed_at and temporal_scope describe applicability, never file modification, source publication, task, or review dates', uncertainty: 'use question/hypothesis/assumption, connect reproducible experiment runs with tests, and preserve negative knowledge' },
             review: { inspectCurrentRevision: true, useReviewQueue: true, recordOutcome: true, neverTreatSummaryAsTruth: true },
             retention: { policies: ['preserve', 'review', 'archive', 'tombstone'], automaticDeletion: false, legalHoldWins: true },
             agentLoop: ['capture quickly', 'clarify and file', 'distill into reusable knowledge', 'link it to a map', 'review evidence and flow', 'express or execute one next action'],
@@ -3125,7 +3148,7 @@ export class LlmWikiService {
             relations: getOrganizationRelationContract(),
         };
         const base = {
-            manifestVersion: 2,
+            manifestVersion: 3,
             format: 'mcpvault-organization-manifest',
             portable: true,
             contentFreeByDefault: true,
@@ -3135,7 +3158,8 @@ export class LlmWikiService {
             syntax: { links: ['[[Note]]', '[[folder/Note#Heading]]', '[[Note|display text]]', '[Guide](Resources/Guide.md#section)'], tags: '#tag', sourceIntegrity: 'immutable source snapshot + content_sha256 + revision' },
             pipeline: ['capture', 'organize', 'distill', 'express', 'review'],
             contracts,
-            templates: ['atomic', 'literature', 'question', 'hypothesis', 'experiment', 'assumption', 'decision', 'project', 'moc', 'negative'],
+            templates: [...NOTE_TEMPLATE_IDS],
+            basesViews: [...BASES_VIEW_IDS],
             importRules: [
                 'Do not copy Community, private user/model/agent scopes, whispers, sessions, or .mcpvault caches.',
                 'Treat this manifest as organization guidance, not an access grant.',
@@ -3341,6 +3365,13 @@ export class LlmWikiService {
                 const missing = (Array.isArray(currentContracts[key]) ? currentContracts[key] : []).filter((value) => !other.has(value));
                 if (missing.length)
                     addCompatibility('warning', `missing_${key}`, `Counterpart does not declare: ${missing.slice(0, 30).join(', ')}.`);
+            }
+            for (const key of ['templates', 'basesViews']) {
+                const currentValues = Array.isArray(comparableCurrent[key]) ? comparableCurrent[key] : [];
+                const otherValues = new Set(Array.isArray(comparableCounterpart[key]) ? comparableCounterpart[key] : []);
+                const missing = currentValues.filter(value => !otherValues.has(value));
+                if (missing.length)
+                    addCompatibility('warning', key === 'basesViews' ? 'missing_bases_views' : 'missing_templates', `Counterpart does not declare: ${missing.slice(0, 30).join(', ')}.`);
             }
             const otherProperties = new Map((Array.isArray(otherContracts.properties) ? otherContracts.properties : []).map((entry) => [entry.name, entry]));
             for (const property of Array.isArray(currentContracts.properties) ? currentContracts.properties : []) {
@@ -4739,6 +4770,11 @@ export class LlmWikiService {
             experiments: { name: 'LLM Wiki Experiments', file: 'LLM Wiki Experiments.base', filters: ['note.note_kind == "experiment"'], order: ['note.epistemic_status', 'file.mtime', 'file.name'] },
             open_questions: { name: 'LLM Wiki Open Questions', file: 'LLM Wiki Open Questions.base', filters: ['(note.note_kind == "question" && (note.epistemic_status == "open" || note.epistemic_status == "blocked")) || (note.note_kind == "hypothesis" && (note.epistemic_status == "proposed" || note.epistemic_status == "inconclusive")) || (note.note_kind == "assumption" && note.epistemic_status == "active")'] },
             knowledge: { name: 'LLM Wiki Durable Knowledge', file: 'LLM Wiki Knowledge.base', filters: ['note.note_kind == "atomic" || note.note_kind == "knowledge" || note.note_kind == "decision"'] },
+            concepts: { name: 'LLM Wiki Concepts', file: 'LLM Wiki Concepts.base', filters: ['note.knowledge_role == "concept"'], order: ['note.primary_moc', 'file.name'] },
+            arguments: { name: 'LLM Wiki Arguments', file: 'LLM Wiki Arguments.base', filters: ['note.knowledge_role == "argument"'], order: ['note.lifecycle', 'file.mtime', 'file.name'] },
+            models: { name: 'LLM Wiki Models', file: 'LLM Wiki Models.base', filters: ['note.knowledge_role == "model"'], order: ['note.lifecycle', 'file.name'] },
+            observations: { name: 'LLM Wiki Observations', file: 'LLM Wiki Observations.base', filters: ['note.knowledge_role == "observation"'], order: ['note.observed_at', 'file.mtime', 'file.name'] },
+            counterarguments: { name: 'LLM Wiki Counterarguments', file: 'LLM Wiki Counterarguments.base', filters: ['note.knowledge_role == "counterargument"'], order: ['note.lifecycle', 'file.mtime', 'file.name'] },
             unreviewed_evidence: { name: 'LLM Wiki Unreviewed Evidence', file: 'LLM Wiki Unreviewed Evidence.base', filters: ['note.note_kind == "literature" && note.interpretation_status == "unprocessed"'], order: ['file.mtime', 'file.name'] },
             negative_knowledge: { name: 'LLM Wiki Negative Knowledge', file: 'LLM Wiki Negative Knowledge.base', filters: ['note.knowledge_polarity == "negative"'], order: ['file.mtime', 'file.name'] },
             deprecated_terms: { name: 'LLM Wiki Deprecated Terms', file: 'LLM Wiki Deprecated Terms.base', filters: ['note.term_status == "deprecated" || note.term_status == "redirect"'], order: ['file.name'] },
@@ -4747,16 +4783,17 @@ export class LlmWikiService {
             review_checklist: { name: 'LLM Wiki Review Checklist', file: 'LLM Wiki Review Checklist.base', filters: ['note.lifecycle == "review" || note.review_at'], order: ['note.review_at', 'file.name'] },
             collections: { name: 'LLM Wiki Collections', file: 'LLM Wiki Collections.base', filters: ['note.primary_moc || note.moc || note.domain'], order: ['note.primary_moc', 'note.domain', 'file.name'] },
         };
-        if (!viewDefinitions[view])
-            throw new Error(`view must be one of: ${Object.keys(viewDefinitions).join(', ')}`);
+        if (!BASES_VIEW_IDS.includes(view) || !viewDefinitions[view])
+            throw new Error(`view must be one of: ${BASES_VIEW_IDS.join(', ')}`);
         const selectedView = viewDefinitions[view];
-        const catalog = await this.catalog(principal, { summaryOnly: true, ...(noteKind && { noteKind }), ...(lifecycle && { lifecycle }), limit: boundedLimit, maxChars: boundedChars });
+        const roleView = { concepts: 'concept', arguments: 'argument', models: 'model', observations: 'observation', counterarguments: 'counterargument' }[view];
+        const catalog = await this.catalog(principal, { summaryOnly: true, ...(noteKind && { noteKind }), ...(lifecycle && { lifecycle }), ...(roleView && { knowledgeRole: roleView }), limit: boundedLimit, maxChars: boundedChars });
         const filters = ['file.ext == "md"', ...selectedView.filters];
         if (noteKind)
             filters.push(`note.note_kind == ${JSON.stringify(String(noteKind).trim())}`);
         if (lifecycle)
             filters.push(`note.lifecycle == ${JSON.stringify(String(lifecycle).trim())}`);
-        const matchingNotes = view === 'all' || noteKind || lifecycle
+        const matchingNotes = roleView || view === 'all' || noteKind || lifecycle
             ? catalog.total
             : view === 'inbox'
                 ? Number(catalog.organization.lifecycles?.inbox || 0)
@@ -4777,7 +4814,7 @@ export class LlmWikiService {
             ? Number(catalog.organization.noteKinds?.atomic || 0) + Number(catalog.organization.noteKinds?.knowledge || 0) + Number(catalog.organization.noteKinds?.decision || 0)
             : undefined;
         const resolvedMatchingNotes = viewTotal === undefined ? matchingNotes : viewTotal;
-        const matchingNotesExact = ['all', 'inbox', 'inbox_oldest', 'projects', 'review', 'epistemic', 'experiments', 'knowledge', 'maintenance'].includes(view)
+        const matchingNotesExact = ['all', 'inbox', 'inbox_oldest', 'projects', 'review', 'epistemic', 'experiments', 'knowledge', 'concepts', 'arguments', 'models', 'observations', 'counterarguments', 'maintenance'].includes(view)
             && !noteKind && !lifecycle;
         const base = {
             filters: { and: filters },
@@ -6755,11 +6792,46 @@ export class LlmWikiService {
             if (['failed', 'reproduced'].includes(String(fm.epistemic_status || '').trim().toLowerCase()))
                 add('reproduction', markdownSectionHasContent(note.content || '', ['reproduction', 'reproduce', '재현', '재현 방법']), 'Record a bounded reproduction recipe for failed or reproduced runs.');
         }
+        const knowledgeRole = String(fm.knowledge_role || '').trim().toLowerCase();
+        if (KNOWLEDGE_ROLES.includes(knowledgeRole)) {
+            const hasSection = (...names) => markdownSectionHasContent(note.content || '', names);
+            if (knowledgeRole === 'concept') {
+                add('concept_definition', hasSection('definition', 'meaning', '정의', '의미'), 'Define the concept in your own words.');
+                add('concept_examples', hasSection('examples', 'example', '예시', '사례'), 'Give at least one concrete example that anchors the abstraction.');
+                add('concept_boundaries', hasSection('non-examples and boundaries', 'non-examples', 'boundaries', 'limits', '비예시', '경계', '한계'), 'State a non-example, boundary, or limit to prevent false synonymy.');
+            }
+            else if (knowledgeRole === 'argument') {
+                add('argument_claim', hasSection('claim', 'thesis', '주장', '논지'), 'State the exact claim being defended.');
+                add('argument_grounds', hasSection('grounds and evidence', 'grounds', 'evidence', '근거', '증거'), 'Separate grounds and evidence from the claim.');
+                add('argument_warrant', hasSection('warrant', 'reasoning', '논거', '추론'), 'Explain why the evidence supports the claim instead of leaving the inference implicit.');
+                add('argument_objections', hasSection('counterarguments', 'counterargument', 'objections', '반론', '이의'), 'Record a serious objection or link a counterargument note.');
+            }
+            else if (knowledgeRole === 'model') {
+                add('model_scope', hasSection('purpose and scope', 'scope', '목적과 범위', '범위'), 'State what the model explains and where it applies.');
+                add('model_components', hasSection('components', 'elements', '구성요소', '요소'), 'Name the model components rather than leaving one undifferentiated explanation.');
+                add('model_mechanism', hasSection('relationships and mechanism', 'mechanism', 'relationships', '메커니즘', '관계'), 'Explain how the components interact.');
+                add('model_assumptions', hasSection('assumptions', '가정'), 'Make the model assumptions inspectable.');
+                add('model_limits', hasSection('limits and failure modes', 'limits', 'failure modes', '한계', '실패 조건'), 'Record where the model breaks down or should not be applied.');
+            }
+            else if (knowledgeRole === 'observation') {
+                add('observation_context', hasSection('context', 'environment', '환경', '맥락'), 'Preserve the situation in which the observation was made.');
+                add('observation_record', hasSection('observation', 'observations', '관찰'), 'Record what was observed without replacing it with a conclusion.');
+                add('observation_method', hasSection('method or measurement', 'measurement', 'method', '측정', '방법'), 'State how the observation or measurement was obtained.');
+                add('observation_interpretation_boundary', hasSection('interpretation', '해석'), 'Keep interpretation in its own section so later agents can challenge it without erasing the observation.');
+            }
+            else if (knowledgeRole === 'counterargument') {
+                add('counterargument_target', hasSection('target claim', 'target', '대상 주장', '대상'), 'Link or name the exact claim being challenged.');
+                add('counterargument_objection', hasSection('objection', 'counterargument', '이의', '반론'), 'State the objection independently of the target claim.');
+                add('counterargument_evidence', hasSection('evidence', 'grounds', '증거', '근거'), 'Ground the objection in inspectable evidence.');
+                add('counterargument_falsifier', hasSection('what would change this objection', 'falsifier', 'revision condition', '반론 변경 조건'), 'State what evidence would weaken or withdraw the objection.');
+            }
+        }
         const passed = checks.filter(check => check.passed).length;
         const result = {
             path: visiblePath,
             title,
             noteKind: kind,
+            ...(knowledgeRole && { knowledgeRole }),
             revision: note.revision,
             score: { passed, total: checks.length, ratio: checks.length ? Number((passed / checks.length).toFixed(3)) : 1 },
             checks,

@@ -14,6 +14,7 @@ export interface WikiCatalogOptions {
     reviewPolicy?: string;
     sourceType?: string;
     polarity?: string;
+    knowledgeRole?: string;
     domain?: string;
     subjectTerm?: string;
     validity?: TemporalValidityState;
@@ -1276,6 +1277,8 @@ export declare class LlmWikiService {
         };
         knowledge: {
             durableAtomicity: string;
+            roles: ("argument" | "concept" | "counterargument" | "model" | "observation")[];
+            roleRule: string;
             links: string;
             evidence: string;
             temporalValidity: string;
@@ -2860,6 +2863,7 @@ export declare class LlmWikiService {
         path: string;
         title: string;
         noteKind: string;
+        knowledgeRole?: string;
         revision: string;
         score: {
             passed: number;
@@ -2878,6 +2882,7 @@ export declare class LlmWikiService {
         path: string;
         title: string;
         noteKind: string;
+        knowledgeRole?: string;
         revision: string;
         score: {
             passed: number;

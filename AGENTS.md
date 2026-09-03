@@ -107,8 +107,8 @@ Use `distill_wiki_source` when turning an immutable source into a literature or
 atomic note so source path and revision remain provenance. Use
 `get_wiki_catalog` to filter organization metadata; add
 `includeFacets: true` when you need bounded counts by note kind, lifecycle,
-epistemic/task state, review policy, source type, polarity, MOC, project,
-domain, subject term, or tag without loading note bodies. Use the corresponding
+knowledge role, epistemic/task state, review policy, source type, polarity,
+MOC, project, domain, subject term, or tag without loading note bodies. Use the corresponding
 facet filters when you need one narrow metadata-only view. Use
 `orderBy: location|alphabet|time|category|hierarchy` for LATCH-style browsing;
 this changes only projection order and never moves a note. Use
@@ -197,8 +197,12 @@ retag automatically.
 Use `get_wiki_note_template` when a new note role needs a low-friction
 scaffold. Templates are optional starting points, not publication gates; keep
 the body in ordinary Markdown and put only small typed values in Properties.
-Supported roles include atomic, literature, question, hypothesis, experiment, assumption, decision,
-project, moc, and negative knowledge.
+Supported templates include atomic, literature, question, hypothesis,
+experiment, assumption, decision, project, moc, and negative knowledge, plus
+the durable knowledge roles concept, argument, model, observation, and
+counterargument. Role templates still create ordinary atomic/knowledge notes:
+they only provide a useful Markdown shape. Use `get_wiki_quality_check` to
+inspect the matching advisory rubric; it never blocks publication.
 For one reproducible run, use `note_kind: experiment` with `epistemic_status`
 set to `planned`, `running`, `completed`, `failed`, `inconclusive`, or
 `reproduced`. Link the exact question, hypothesis, or assumption with `tests`,
@@ -296,9 +300,11 @@ key points, or an outgoing `[[wikilink]]` to derived atomic/knowledge notes;
 this remains a quality hint, not a publication gate. Use
 `get_wiki_property_contract` before repairing managed Properties, and use
 `get_wiki_bases_view` with `view` set to `all`, `inbox`, `inbox_oldest`,
-`projects`, `project_next_actions`, `review`, `epistemic`, `experiments`, `open_questions`,
-`knowledge`, `unreviewed_evidence`, `negative_knowledge`, `deprecated_terms`,
-or `maintenance` when a local Obsidian view is useful. Specialized views may
+`projects`, `project_next_actions`, `review`, `epistemic`, `experiments`,
+`open_questions`, `knowledge`, `concepts`, `arguments`, `models`,
+`observations`, `counterarguments`, `unreviewed_evidence`,
+`negative_knowledge`, `deprecated_terms`, `maintenance`, `authority`,
+`review_checklist`, or `collections` when a local Obsidian view is useful. Specialized views may
 report `matchingNotesExact: false` because Bases evaluates their final
 Property expression locally.
 Use `export_wiki_base` with `expectedRevision` (`missing` for a new file) when
