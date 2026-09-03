@@ -779,6 +779,9 @@ export class LlmWikiService {
                     ...(params.termReplacedBy !== undefined && { termReplacedBy: params.termReplacedBy }),
                     ...(params.termScopeNote !== undefined && { termScopeNote: params.termScopeNote }),
                     ...(params.preferredTerm !== undefined && { preferredTerm: params.preferredTerm }),
+                    ...(params.termLanguage !== undefined && { termLanguage: params.termLanguage }),
+                    ...(params.authorityScheme !== undefined && { authorityScheme: params.authorityScheme }),
+                    ...(params.authorityId !== undefined && { authorityId: params.authorityId }),
                     ...(params.disambiguation !== undefined && { disambiguation: params.disambiguation }),
                     ...(params.broaderTerms !== undefined && { broaderTerms: params.broaderTerms }),
                     ...(params.relatedTerms !== undefined && { relatedTerms: params.relatedTerms }),
@@ -1653,6 +1656,7 @@ export class LlmWikiService {
                 noteKind: note.frontmatter.note_kind,
                 lifecycle,
                 ...(capturedAt && { capturedAt }),
+                ...(typeof note.frontmatter.captured_from === 'string' && note.frontmatter.captured_from.trim() && { capturedFrom: note.frontmatter.captured_from.trim() }),
                 ...(updatedAt && { updatedAt }),
                 ...(ageDays !== undefined && { ageDays }),
                 agingBand,
@@ -1689,6 +1693,104 @@ export class LlmWikiService {
             oldestAgeDays: oldest?.ageDays,
             ageBands,
             truncated: total > items.length,
+        };
+    }
+    /**
+     * Produce a read-only plan for Inbox clarification.  Suggestions are based
+     * only on existing Properties, so the agent can review the evidence before
+     * choosing a GTD disposition; this endpoint never moves or edits notes.
+     */
+    async inboxPlan(principal, limit = 20, maxChars = 7000) {
+        const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
+        const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
+        const queue = await this.inbox(principal, boundedLimit, boundedChars);
+        const items = queue.items.map((item) => {
+            const kind = String(item.noteKind || '').toLowerCase();
+            const suggestion = kind === 'project' || kind === 'task'
+                ? { disposition: 'project', destination: 'Projects/', reason: 'note_kind already describes an outcome or action' }
+                : kind === 'literature' || kind === 'resource'
+                    ? { disposition: 'reference', destination: 'Resources/', reason: 'note_kind describes reusable source or reference material' }
+                    : kind === 'question' || kind === 'hypothesis' || kind === 'assumption' || kind === 'atomic' || kind === 'knowledge'
+                        ? { disposition: 'knowledge', destination: 'Knowledge/', reason: 'note_kind describes durable or epistemic knowledge' }
+                        : { disposition: 'needs_agent_decision', reason: 'no reliable metadata-based disposition is available yet' };
+            return {
+                path: item.path,
+                title: item.title,
+                noteKind: item.noteKind,
+                lifecycle: item.lifecycle,
+                ...(item.capturedAt && { capturedAt: item.capturedAt }),
+                ...(item.capturedFrom && { capturedFrom: item.capturedFrom }),
+                ...(item.ageDays !== undefined && { ageDays: item.ageDays }),
+                suggested: suggestion,
+                nextAction: 'Read this capture, then call clarify_wiki_note with the current revision and a deliberate disposition.',
+            };
+        });
+        while (JSON.stringify(items).length > boundedChars && items.length > 1)
+            items.pop();
+        return {
+            purpose: 'A bounded GTD Clarify preview. Suggestions are advisory metadata hints, not automatic filing decisions.',
+            items,
+            total: queue.total,
+            truncated: queue.truncated || items.length < queue.items.length,
+            note: 'Inspect one capture before clarifying it. A suggested destination is not applied automatically and never authorizes deletion.',
+        };
+    }
+    /**
+     * Flag links in durable Wiki notes that have no explanatory nearby text.
+     * This is intentionally advisory: a short link can be correct, and the
+     * report is meant to improve Zettelkasten discoverability rather than impose
+     * a prose style on every note.
+     */
+    async linkContextHealth(principal, limit = 30, maxChars = 7000) {
+        const boundedLimit = Math.min(Math.max(Number(limit) || 30, 1), 100);
+        const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
+        const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        const items = [];
+        let total = 0;
+        let scannedNotes = 0;
+        for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+            const kind = String(note.frontmatter.note_kind || '').toLowerCase();
+            if (!kind && note.frontmatter.llm_wiki_type !== 'knowledge')
+                continue;
+            if (['fleeting', 'journal', 'project', 'task'].includes(kind))
+                continue;
+            scannedNotes += 1;
+            let outlinks;
+            try {
+                outlinks = await this.fileSystem.getOutlinks(note.path, 200, canAccess);
+            }
+            catch {
+                continue;
+            }
+            for (const link of outlinks.outlinks) {
+                const context = String(link.context || '').trim();
+                if (context.length >= 32)
+                    continue;
+                total += 1;
+                if (items.length >= boundedLimit)
+                    continue;
+                const item = {
+                    source: this.access.toPublicPath(note.path),
+                    line: link.line,
+                    target: link.target,
+                    link: link.link,
+                    ...(link.heading && { heading: link.heading }),
+                    ...(link.relation && { relation: link.relation }),
+                    context: boundedText(context, 240),
+                    issue: 'link_has_little_explanatory_context',
+                    recommendation: 'Add a short reason, claim, or question next to the [[wikilink]] so a later reader can understand why this edge matters.',
+                };
+                if (JSON.stringify([...items, item]).length <= boundedChars)
+                    items.push(item);
+            }
+        }
+        return {
+            purpose: 'Advisory Zettelkasten link-context health. It helps agents make graph edges meaningful without requiring every link to become a paragraph.',
+            scannedNotes,
+            total,
+            items,
+            truncated: total > items.length,
+            generatedAt: now(),
         };
     }
     /** Capture first, classify later. The default path deliberately removes
@@ -2511,7 +2613,11 @@ export class LlmWikiService {
         };
         if (JSON.stringify(result).length <= boundedChars)
             return result;
-        return { ...result, fields: result.fields.slice(0, Math.max(1, Math.floor(result.fields.length / 2))), relations: result.relations.slice(0, Math.max(1, Math.floor(result.relations.length / 2))), truncated: true };
+        // Keep every field name discoverable when the descriptive contract is too
+        // large. Dropping the latter half made important fields appear absent to
+        // clients; compact the prose instead of hiding the vocabulary.
+        const compactFields = result.fields.map(field => ({ name: field.name, type: field.type, ...(field.allowed && { allowed: field.allowed }), ...(field.appliesTo && { appliesTo: field.appliesTo }) }));
+        return { ...result, fields: compactFields, truncated: true };
     }
     noteTemplate(noteKind = 'atomic', maxChars = 7000) {
         const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
@@ -2893,7 +2999,7 @@ export class LlmWikiService {
         if (note.frontmatter.llm_wiki_type && note.frontmatter.llm_wiki_type !== 'knowledge') {
             throw new Error(`triage_wiki_note cannot classify managed LLM Wiki type '${note.frontmatter.llm_wiki_type}'`);
         }
-        const hasOrganizationInput = [params.noteKind, params.lifecycle, params.primaryMoc, params.moc, params.project, params.reviewAt, params.reviewIntervalDays, params.reviewSnoozedUntil, params.reviewSnoozeReason, params.nextAction, params.waitingFor, params.desiredOutcome, params.projectPurpose, params.projectSupport, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.canonicalPath, params.recallPrompt, params.recallIntervalDays, params.lastRecalledAt, params.recallQuality, params.retentionPolicy, params.retentionEvent, params.retentionAt, params.preserveUntil, params.legalHold, params.retentionReason, params.replacedBy, params.knowledgeRole, params.termStatus, params.termReplacedBy, params.termScopeNote, params.preferredTerm, params.disambiguation, params.broaderTerms, params.relatedTerms, params.subjectTerms, params.domain, params.methods, params.audience, params.retrievalCues, params.useWhen, params.seeAlso, params.relations, params.relationNotes, params.relationEvidence, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.reviewChecks, params.reviewOpenItems, params.interpretationStatus, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
+        const hasOrganizationInput = [params.noteKind, params.lifecycle, params.primaryMoc, params.moc, params.project, params.reviewAt, params.reviewIntervalDays, params.reviewSnoozedUntil, params.reviewSnoozeReason, params.nextAction, params.waitingFor, params.desiredOutcome, params.projectPurpose, params.projectSupport, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.canonicalPath, params.recallPrompt, params.recallIntervalDays, params.lastRecalledAt, params.recallQuality, params.retentionPolicy, params.retentionEvent, params.retentionAt, params.preserveUntil, params.legalHold, params.retentionReason, params.replacedBy, params.knowledgeRole, params.termStatus, params.termReplacedBy, params.termScopeNote, params.preferredTerm, params.termLanguage, params.authorityScheme, params.authorityId, params.disambiguation, params.broaderTerms, params.relatedTerms, params.subjectTerms, params.domain, params.methods, params.audience, params.retrievalCues, params.useWhen, params.seeAlso, params.relations, params.relationNotes, params.relationEvidence, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.reviewChecks, params.reviewOpenItems, params.interpretationStatus, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
             .some(value => value !== undefined);
         if (!hasOrganizationInput)
             throw new Error('At least one organization field is required');
@@ -2989,6 +3095,9 @@ export class LlmWikiService {
             ...(params.termReplacedBy !== undefined && { termReplacedBy: params.termReplacedBy }),
             ...(params.termScopeNote !== undefined && { termScopeNote: params.termScopeNote }),
             ...(params.preferredTerm !== undefined && { preferredTerm: params.preferredTerm }),
+            ...(params.termLanguage !== undefined && { termLanguage: params.termLanguage }),
+            ...(params.authorityScheme !== undefined && { authorityScheme: params.authorityScheme }),
+            ...(params.authorityId !== undefined && { authorityId: params.authorityId }),
             ...(params.disambiguation !== undefined && { disambiguation: params.disambiguation }),
             ...(params.broaderTerms !== undefined && { broaderTerms: params.broaderTerms }),
             ...(params.relatedTerms !== undefined && { relatedTerms: params.relatedTerms }),
@@ -3626,6 +3735,22 @@ export class LlmWikiService {
             availableViews: Object.entries(viewDefinitions).map(([id, definition]) => ({ id, name: definition.name, suggestedPath: `Views/${definition.file}` })),
             filter: { ...(noteKind && { noteKind }), ...(lifecycle && { lifecycle }) },
             note: 'This is a local Obsidian view definition, not an MCP access boundary. Save it as a .base file only where the local viewer may see the selected scope.',
+        };
+    }
+    /** Persist one generated Bases projection with an explicit file revision. */
+    async writeBasesView(params) {
+        const exported = await this.exportBasesView(params.principal, params.noteKind, params.lifecycle, params.limit, params.maxChars, params.view);
+        if (exported.truncated)
+            throw new Error('Bases definition exceeded maxChars; request a larger bounded maxChars before saving it');
+        const path = params.path || exported.suggestedPath;
+        const written = await this.fileSystem.writeBaseFile({ path, content: exported.content, expectedRevision: params.expectedRevision });
+        return {
+            ...exported,
+            persisted: true,
+            path: written.path,
+            previousRevision: written.previousRevision,
+            revision: written.revision,
+            note: 'Saved as a derived local Obsidian Bases view. It is not an MCP access boundary; Markdown and Git remain authoritative.',
         };
     }
     /**
@@ -4969,7 +5094,7 @@ export class LlmWikiService {
                 const key = normalizedAuthorityTerm(rawTerm);
                 if (!key || (wanted && !key.includes(wanted) && !titleKey.includes(wanted) && !preferredKey.includes(wanted)))
                     return;
-                const current = terms.get(key) || { term: rawTerm.trim(), preferred: preferredTerm, aliases: new Set(), paths: new Set(), stableIds: new Set(), mocs: new Set(), statuses: new Set(), replacements: new Set(), broader: new Set(), narrower: new Set(), related: new Set(), disambiguation: new Set() };
+                const current = terms.get(key) || { term: rawTerm.trim(), preferred: preferredTerm, aliases: new Set(), paths: new Set(), stableIds: new Set(), mocs: new Set(), statuses: new Set(), replacements: new Set(), broader: new Set(), narrower: new Set(), related: new Set(), disambiguation: new Set(), languages: new Set(), schemes: new Set(), authorityIds: new Set() };
                 current.paths.add(this.access.toPublicPath(note.path));
                 if (stableId)
                     current.stableIds.add(stableId);
@@ -4983,6 +5108,12 @@ export class LlmWikiService {
                 }
                 if (typeof note.frontmatter.disambiguation === 'string' && note.frontmatter.disambiguation.trim())
                     current.disambiguation.add(note.frontmatter.disambiguation.trim());
+                if (typeof note.frontmatter.term_language === 'string' && note.frontmatter.term_language.trim())
+                    current.languages.add(note.frontmatter.term_language.trim());
+                if (typeof note.frontmatter.authority_scheme === 'string' && note.frontmatter.authority_scheme.trim())
+                    current.schemes.add(note.frontmatter.authority_scheme.trim());
+                if (typeof note.frontmatter.authority_id === 'string' && note.frontmatter.authority_id.trim())
+                    current.authorityIds.add(note.frontmatter.authority_id.trim());
                 // If preferred_term differs from the title, the title is an
                 // alternate access term rather than a second canonical concept.
                 const canonical = key === preferredKey;
@@ -5024,7 +5155,7 @@ export class LlmWikiService {
         const entries = [...terms.values()]
             .sort((left, right) => Number(right.paths.size > 1) - Number(left.paths.size > 1) || left.term.localeCompare(right.term))
             .slice(0, boundedLimit)
-            .map(item => ({ term: item.term, preferred: item.preferred, address: [...item.stableIds][0] || item.preferred, canonicalPath: [...item.paths][0], status: [...item.statuses].includes('deprecated') ? 'deprecated' : [...item.statuses].includes('redirect') ? 'redirect' : 'preferred', ...(item.disambiguation.size > 0 && { disambiguation: [...item.disambiguation].slice(0, 4).map(value => boundedText(value, 300)) }), ...(item.replacements.size > 0 && { replacedBy: [...item.replacements].slice(0, 4) }), ...(item.broader.size > 0 && { broaderTerms: [...item.broader].slice(0, 8) }), ...(item.narrower.size > 0 && { narrowerTerms: [...item.narrower].slice(0, 8) }), ...(item.related.size > 0 && { relatedTerms: [...item.related].slice(0, 8) }), ...(item.mocs.size > 0 && { primaryMocs: [...item.mocs].slice(0, 4) }), ...(item.aliases.size > 0 && { aliases: [...item.aliases].slice(0, 12) }), paths: [...item.paths].slice(0, 8), ...(item.stableIds.size > 0 && { stableIds: [...item.stableIds].slice(0, 8) }), ...(item.paths.size > 1 && { collision: 'term_used_by_multiple_notes' }) }));
+            .map(item => ({ term: item.term, preferred: item.preferred, address: [...item.stableIds][0] || item.preferred, canonicalPath: [...item.paths][0], status: [...item.statuses].includes('deprecated') ? 'deprecated' : [...item.statuses].includes('redirect') ? 'redirect' : 'preferred', ...(item.disambiguation.size > 0 && { disambiguation: [...item.disambiguation].slice(0, 4).map(value => boundedText(value, 300)) }), ...(item.languages.size > 0 && { languages: [...item.languages].slice(0, 4) }), ...(item.schemes.size > 0 && { authoritySchemes: [...item.schemes].slice(0, 4) }), ...(item.authorityIds.size > 0 && { authorityIds: [...item.authorityIds].slice(0, 8) }), ...(item.replacements.size > 0 && { replacedBy: [...item.replacements].slice(0, 4) }), ...(item.broader.size > 0 && { broaderTerms: [...item.broader].slice(0, 8) }), ...(item.narrower.size > 0 && { narrowerTerms: [...item.narrower].slice(0, 8) }), ...(item.related.size > 0 && { relatedTerms: [...item.related].slice(0, 8) }), ...(item.mocs.size > 0 && { primaryMocs: [...item.mocs].slice(0, 4) }), ...(item.aliases.size > 0 && { aliases: [...item.aliases].slice(0, 12) }), paths: [...item.paths].slice(0, 8), ...(item.stableIds.size > 0 && { stableIds: [...item.stableIds].slice(0, 8) }), ...(item.paths.size > 1 && { collision: 'term_used_by_multiple_notes' }) }));
         let bounded = entries;
         while (JSON.stringify(bounded).length > boundedChars && bounded.length > 1)
             bounded = bounded.slice(0, -1);

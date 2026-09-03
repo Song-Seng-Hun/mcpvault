@@ -48,6 +48,21 @@ export declare class FileSystemService {
     noteExists(path: string): Promise<boolean>;
     private assertExpectedRevision;
     writeNote(params: NoteWriteParams): Promise<void>;
+    /**
+     * Write an Obsidian Bases definition as a derived, revision-checked view.
+     * Bases files are deliberately limited to Views/ so an export cannot become
+     * a general-purpose non-Markdown write primitive. Markdown and Git remain
+     * authoritative; this file is disposable presentation metadata.
+     */
+    writeBaseFile(params: {
+        path: string;
+        content: string;
+        expectedRevision: string;
+    }): Promise<{
+        path: string;
+        previousRevision: string;
+        revision: string;
+    }>;
     private writeNoteUnlocked;
     patchNote(params: PatchNoteParams): Promise<PatchNoteResult>;
     private patchNoteUnlocked;

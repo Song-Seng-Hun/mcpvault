@@ -528,6 +528,36 @@ export class FileSystemService {
     return this.withMutationLock(path, () => this.writeNoteUnlocked({ ...params, path }));
   }
 
+  /**
+   * Write an Obsidian Bases definition as a derived, revision-checked view.
+   * Bases files are deliberately limited to Views/ so an export cannot become
+   * a general-purpose non-Markdown write primitive. Markdown and Git remain
+   * authoritative; this file is disposable presentation metadata.
+   */
+  async writeBaseFile(params: { path: string; content: string; expectedRevision: string }): Promise<{ path: string; previousRevision: string; revision: string }> {
+    const path = this.normalizePath(params.path);
+    if (!/^Views\/[^/]+\.base$/i.test(path)) throw new Error('Bases export path must be a single .base file directly under Views/');
+    if (!this.pathFilter.isAllowed(path)) throw new Error(`Access denied: ${path}`);
+    if (!params.expectedRevision) throw new Error("expectedRevision is required; use 'missing' for a new Bases file");
+    const content = String(params.content ?? '');
+    assertNoteContentSize(content, path);
+    return this.withMutationLock(path, async () => {
+      const fullPath = this.resolveWritablePath(path);
+      let previousRevision = 'missing';
+      try {
+        previousRevision = this.revision(await readFile(fullPath, 'utf-8'));
+      } catch (error) {
+        if (!(error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT')) throw error;
+      }
+      if (params.expectedRevision !== previousRevision) {
+        throw new Error(`Revision conflict for ${path}: expected ${params.expectedRevision}, current ${previousRevision}. Read the Bases file again before replacing it.`);
+      }
+      await mkdir(dirname(fullPath), { recursive: true });
+      await writeFile(fullPath, content, 'utf-8');
+      return { path, previousRevision, revision: this.revision(content) };
+    });
+  }
+
   private async writeNoteUnlocked(params: NoteWriteParams): Promise<void> {
     const { content, frontmatter, mode = 'overwrite', expectedRevision } = params;
     const path = this.normalizePath(params.path);

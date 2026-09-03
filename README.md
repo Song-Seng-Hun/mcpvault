@@ -341,7 +341,8 @@ current path and revision into the new note's provenance. The source remains
 unchanged and a later atomic note may link to the literature note with
 `derived_from`. `get_wiki_inbox` finds a bounded oldest-first queue of
 unprocessed captures, including capture age bands and a suggested next action;
-age is advisory and does not move or delete a note.
+`get_wiki_inbox_plan` adds a bounded metadata-only GTD disposition preview.
+Suggestions are advisory and do not move or delete a note.
 `triage_wiki_note` classifies one note with its revision without moving or
 rewriting the body. `get_wiki_catalog` can filter by note kind/lifecycle,
 epistemic state, task state, review policy, source type, polarity, domain, or
@@ -369,7 +370,9 @@ source projection with a few supporting neighbors and counterpoints, keeping
 the answer context bounded and revision-aware. Adaptive review policies shorten
 the next interval after disputed or revised knowledge and gradually lengthen it
 after confirmed reviews; this remains advisory scheduling, not a truth score.
-`get_wiki_graph_health` also counts typed incoming and outgoing relations and
+`get_wiki_link_context_health` reports terse durable-note links with their
+line, heading, relation, and nearby context so agents can add a useful reason
+without forcing prose beside every valid link. `get_wiki_graph_health` also counts typed incoming and outgoing relations and
 reports high-degree hub notes when a map may be carrying too many unrelated
 concepts. This is a navigation review hint only; useful links are never removed
 automatically. `get_wiki_property_contract` documents the meaning and
@@ -451,14 +454,18 @@ has a real question and useful boundary.
 `get_wiki_bases_view` can generate standard local Obsidian Bases projections:
 `all`, `inbox`, `inbox_oldest`, `projects`, `project_next_actions`, `review`,
 `epistemic`, `open_questions`, `knowledge`, `unreviewed_evidence`,
-`negative_knowledge`, `deprecated_terms`, and `maintenance`. Save the returned YAML
-as a `.base` file only when a local view is useful; Markdown and Git remain the
-source of truth. Specialized views may return `matchingNotesExact: false` when
+`negative_knowledge`, `deprecated_terms`, and `maintenance`. `export_wiki_base`
+can persist one derived view under `Views/*.base` with an explicit file
+revision; it is limited to that presentation file and does not change note
+content or permissions. Markdown and Git remain the source of truth.
+Specialized views may return `matchingNotesExact: false` when
 their final Property expression is intended to be evaluated by Obsidian Bases.
 
 `ingest_source` also accepts optional citation metadata: `sourceType`,
 `citationKey`, `author`, `publishedAt`, `retrievedAt`, `sourceFamily`,
-`sourceVersion`, and `supersedesSource`. Use these to identify a reusable
+`sourceVersion`, and `supersedesSource`. Authority notes may additionally use
+`termLanguage`, `authorityScheme`, and `authorityId` to retain multilingual
+vocabulary provenance. Use these to identify a reusable
 source and its editions across literature notes; the immutable content hash
 and revision remain the authoritative provenance.
 

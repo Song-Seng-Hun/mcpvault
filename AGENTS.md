@@ -97,7 +97,8 @@ Use Obsidian `[[wikilinks]]` or relative Markdown links such as
 `[Guide](Resources/Guide.md#section)` for navigation and `evidence_paths` for
 provenance. The intended loop is Capture -> Organize -> Distill -> Express.
 Use `get_wiki_inbox` to find a bounded oldest-first queue of unprocessed captures;
-use its age band to prioritize stale captures, read one, then use
+use `get_wiki_inbox_plan` for an optional metadata-only disposition preview,
+then use its age band to prioritize stale captures, read one, then use
 `clarify_wiki_note` with its revision and one GTD disposition (`knowledge`,
 `reference`, `project`, `someday`, `discard`, or `delegate`). It records the
 decision without silently moving/deleting; move the note later with the normal
@@ -271,6 +272,11 @@ this remains a quality hint, not a publication gate. Use
 or `maintenance` when a local Obsidian view is useful. Specialized views may
 report `matchingNotesExact: false` because Bases evaluates their final
 Property expression locally.
+Use `export_wiki_base` with `expectedRevision` (`missing` for a new file) when
+you want to persist one local view; it writes only a derived `Views/*.base`
+file and never changes note content or permissions. Use
+`get_wiki_link_context_health` for an advisory report of terse durable-note
+links that need a nearby reason or claim.
 For active project notes, optionally keep `project_purpose` and
 `project_support` (bounded Obsidian links/paths) separate from `next_action`;
 use `get_wiki_project_packet` to inspect the Natural Planning pieces and find
@@ -291,6 +297,10 @@ add optional `sourceType`, `citationKey`, `author`, `publishedAt`, and
 when this is one edition in a source lineage; never use these in place of the immutable source hash and
 evidence revision. Keep `citationKey` unique among source snapshots; lint will
 warn when two sources claim the same citation key.
+Authority-style notes may additionally declare `termLanguage`,
+`authorityScheme`, and `authorityId` when a preferred term comes from a named
+multilingual vocabulary; these are provenance/discovery metadata, not access
+rules.
 Use `resolve_wiki_term` when a title, alias, stable ID, or deprecated term is
 ambiguous; it returns a canonical navigation hint without silently rewriting
 links. Before deliberately combining two notes, call `preview_wiki_merge` with

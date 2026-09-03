@@ -209,6 +209,9 @@ export declare class LlmWikiService {
         termReplacedBy?: string;
         termScopeNote?: string;
         preferredTerm?: string;
+        termLanguage?: string;
+        authorityScheme?: string;
+        authorityId?: string;
         disambiguation?: string;
         broaderTerms?: unknown;
         relatedTerms?: unknown;
@@ -380,6 +383,32 @@ export declare class LlmWikiService {
             undated: number;
         };
         truncated: boolean;
+    }>;
+    /**
+     * Produce a read-only plan for Inbox clarification.  Suggestions are based
+     * only on existing Properties, so the agent can review the evidence before
+     * choosing a GTD disposition; this endpoint never moves or edits notes.
+     */
+    inboxPlan(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        purpose: string;
+        items: any[];
+        total: number;
+        truncated: boolean;
+        note: string;
+    }>;
+    /**
+     * Flag links in durable Wiki notes that have no explanatory nearby text.
+     * This is intentionally advisory: a short link can be correct, and the
+     * report is meant to improve Zettelkasten discoverability rather than impose
+     * a prose style on every note.
+     */
+    linkContextHealth(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        purpose: string;
+        scannedNotes: number;
+        total: number;
+        items: Record<string, unknown>[];
+        truncated: boolean;
+        generatedAt: string;
     }>;
     /** Capture first, classify later. The default path deliberately removes
      * filing decisions from the first interaction and keeps the note ordinary
@@ -1264,20 +1293,6 @@ export declare class LlmWikiService {
         generatedAt: string;
     } | {
         purpose: string;
-        conventions: {
-            scalar: string;
-            lists: string;
-            nested: string;
-            nativeCompatibility: {
-                safeTypes: string[];
-                mcpManagedComplexFields: string[];
-                rule: string;
-            };
-            lifecycle: string;
-            review: string;
-        };
-        generatedAt: string;
-        fields: import("./organization.js").OrganizationPropertyContractEntry[];
         relations: ({
             field: 'supports';
             direction: 'directional';
@@ -1339,6 +1354,25 @@ export declare class LlmWikiService {
             target: 'A note made more precise or useful by this note.';
             reciprocal: false;
         })[];
+        conventions: {
+            scalar: string;
+            lists: string;
+            nested: string;
+            nativeCompatibility: {
+                safeTypes: string[];
+                mcpManagedComplexFields: string[];
+                rule: string;
+            };
+            lifecycle: string;
+            review: string;
+        };
+        generatedAt: string;
+        fields: {
+            name: string;
+            type: "boolean" | "list" | "number" | "object" | "text";
+            allowed?: readonly string[];
+            appliesTo?: readonly string[];
+        }[];
         truncated: boolean;
     };
     noteTemplate(noteKind?: string, maxChars?: number): {
@@ -1520,6 +1554,9 @@ export declare class LlmWikiService {
         termReplacedBy?: string;
         termScopeNote?: string;
         preferredTerm?: string;
+        termLanguage?: string;
+        authorityScheme?: string;
+        authorityId?: string;
         disambiguation?: string;
         broaderTerms?: unknown;
         relatedTerms?: unknown;
@@ -1755,6 +1792,40 @@ export declare class LlmWikiService {
             noteKind?: string;
             lifecycle?: string;
         };
+        note: string;
+    }>;
+    /** Persist one generated Bases projection with an explicit file revision. */
+    writeBasesView(params: {
+        principal?: ScopePrincipal;
+        view?: string;
+        noteKind?: string;
+        lifecycle?: string;
+        limit?: number;
+        maxChars?: number;
+        path?: string;
+        expectedRevision: string;
+    }): Promise<{
+        format: string;
+        suggestedPath: string;
+        content: string;
+        truncated: boolean;
+        matchingNotes: any;
+        matchingNotesExact: boolean;
+        matchingNotesMeaning: string;
+        view: string;
+        availableViews: {
+            id: string;
+            name: string;
+            suggestedPath: string;
+        }[];
+        filter: {
+            noteKind?: string;
+            lifecycle?: string;
+        };
+        persisted: boolean;
+        path: string;
+        previousRevision: string;
+        revision: string;
         note: string;
     }>;
     /**
@@ -2134,6 +2205,9 @@ export declare class LlmWikiService {
             canonicalPath: string | undefined;
             status: string;
             disambiguation?: string[];
+            languages?: string[];
+            authoritySchemes?: string[];
+            authorityIds?: string[];
             replacedBy?: string[];
             broaderTerms?: string[];
             narrowerTerms?: string[];

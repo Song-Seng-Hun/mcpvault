@@ -90,6 +90,9 @@ export const ORGANIZATION_PROPERTY_CONTRACT: readonly OrganizationPropertyContra
   { name: 'term_replaced_by', type: 'text', description: 'Preferred term or Obsidian link that replaces a deprecated term' },
   { name: 'term_scope_note', type: 'text', description: 'Short definition or scope note for this term' },
   { name: 'preferred_term', type: 'text', description: 'Preferred display term for an authority record; defaults to the note title' },
+  { name: 'term_language', type: 'text', description: 'Optional language or script tag for authority labels, such as ko or en-US' },
+  { name: 'authority_scheme', type: 'text', description: 'Optional vocabulary or authority source name' },
+  { name: 'authority_id', type: 'text', description: 'Optional stable identifier in the declared authority scheme' },
   { name: 'disambiguation', type: 'text', description: 'Short qualifier distinguishing this term from homonyms' },
   { name: 'canonical_path', type: 'text', description: 'Visible canonical note path when this note is a redirect or duplicate' },
   { name: 'broader_terms', type: 'list', description: 'Optional broader concepts for library-style hierarchy' },
@@ -547,6 +550,9 @@ export interface KnowledgeOrganizationInput {
   termReplacedBy?: unknown;
   termScopeNote?: unknown;
   preferredTerm?: unknown;
+  termLanguage?: unknown;
+  authorityScheme?: unknown;
+  authorityId?: unknown;
   disambiguation?: unknown;
   broaderTerms?: unknown;
   relatedTerms?: unknown;
@@ -648,6 +654,9 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
   const termReplacedBy = input.termReplacedBy === undefined ? optionalText(existing.term_replaced_by, 'termReplacedBy', 500) : optionalText(input.termReplacedBy, 'termReplacedBy', 500);
   const termScopeNote = input.termScopeNote === undefined ? optionalText(existing.term_scope_note, 'termScopeNote', 1000) : optionalText(input.termScopeNote, 'termScopeNote', 1000);
   const preferredTerm = input.preferredTerm === undefined ? optionalText(existing.preferred_term, 'preferredTerm', 300) : optionalText(input.preferredTerm, 'preferredTerm', 300);
+  const termLanguage = input.termLanguage === undefined ? optionalText(existing.term_language, 'termLanguage', 40) : optionalText(input.termLanguage, 'termLanguage', 40);
+  const authorityScheme = input.authorityScheme === undefined ? optionalText(existing.authority_scheme, 'authorityScheme', 120) : optionalText(input.authorityScheme, 'authorityScheme', 120);
+  const authorityId = input.authorityId === undefined ? optionalText(existing.authority_id, 'authorityId', 200) : optionalText(input.authorityId, 'authorityId', 200);
   const disambiguation = input.disambiguation === undefined ? optionalText(existing.disambiguation, 'disambiguation', 300) : optionalText(input.disambiguation, 'disambiguation', 300);
   const broaderTerms = input.broaderTerms === undefined ? normalizedList(existing.broader_terms, 'broaderTerms', 20, 500) : normalizedList(input.broaderTerms, 'broaderTerms', 20, 500);
   const relatedTerms = input.relatedTerms === undefined ? normalizedList(existing.related_terms, 'relatedTerms', 20, 500) : normalizedList(input.relatedTerms, 'relatedTerms', 20, 500);
@@ -757,6 +766,9 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
     ...(termReplacedBy && { term_replaced_by: termReplacedBy }),
     ...(termScopeNote && { term_scope_note: termScopeNote }),
     ...(preferredTerm && { preferred_term: preferredTerm }),
+    ...(termLanguage && { term_language: termLanguage }),
+    ...(authorityScheme && { authority_scheme: authorityScheme }),
+    ...(authorityId && { authority_id: authorityId }),
     ...(disambiguation && { disambiguation }),
     ...(broaderTerms && { broader_terms: broaderTerms }),
     ...(relatedTerms && { related_terms: relatedTerms }),

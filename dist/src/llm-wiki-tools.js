@@ -2,7 +2,7 @@ const prettyPrint = { type: 'boolean', description: 'Format JSON response with i
 const accessToken = { type: 'string', description: 'Token from login_scope. Omit for public global scope only.' };
 const scopeUri = { type: 'string', description: 'Target scope root; defaults to scope://global/. Private scopes require an authorized accessToken.', default: 'scope://global/' };
 export const LLM_WIKI_MUTATING_TOOLS = [
-    'initialize_llm_wiki', 'ingest_source', 'capture_wiki_note', 'clarify_wiki_note', 'distill_wiki_source', 'publish_knowledge', 'publish_decision_record', 'triage_wiki_note', 'review_wiki_note', 'review_wiki_claim', 'report_wiki_issue', 'propose_wiki_term_change', 'resolve_wiki_issue',
+    'initialize_llm_wiki', 'ingest_source', 'capture_wiki_note', 'clarify_wiki_note', 'distill_wiki_source', 'publish_knowledge', 'publish_decision_record', 'triage_wiki_note', 'review_wiki_note', 'review_wiki_claim', 'report_wiki_issue', 'propose_wiki_term_change', 'resolve_wiki_issue', 'export_wiki_base',
 ];
 export function getLlmWikiTools() {
     return [
@@ -100,6 +100,7 @@ export function getLlmWikiTools() {
                     stableId: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', maxLength: 80, description: 'Optional stable identity for durable notes; not a security boundary' },
                     termStatus: { type: 'string', enum: ['preferred', 'deprecated', 'redirect'], description: 'Optional controlled-vocabulary state for the note title' }, termReplacedBy: { type: 'string', maxLength: 500, description: 'Preferred term or Obsidian link replacing a deprecated term' }, preferredTerm: { type: 'string', maxLength: 300, description: 'Preferred authority display term; defaults to the note title' }, disambiguation: { type: 'string', maxLength: 300, description: 'Short qualifier for homonymous terms' }, broaderTerms: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 }, relatedTerms: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 }, subjectTerms: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 20, description: 'Bounded subject access terms for faceted retrieval' }, domain: { type: 'string', maxLength: 200, description: 'Primary domain for faceted retrieval' }, methods: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 20 }, audience: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 12 }, retrievalCues: { type: 'array', items: { type: 'string', maxLength: 300 }, maxItems: 8, description: 'Situations or problem signals that should surface this note' }, useWhen: { type: 'string', maxLength: 1000, description: 'Compact description of when this note is useful' },
                     termScopeNote: { type: 'string', maxLength: 1000, description: 'Short definition that prevents a term from being used too broadly' },
+                    termLanguage: { type: 'string', maxLength: 40, description: 'Optional language/script tag such as ko or en-US' }, authorityScheme: { type: 'string', maxLength: 120, description: 'Optional vocabulary or authority source name' }, authorityId: { type: 'string', maxLength: 200, description: 'Optional stable identifier in that authority scheme' },
                     relations: { type: 'object', description: 'Typed Obsidian link arrays: supports, contradicts, supersedes, derived_from, depends_on, implements, blocked_by, answers_questions, related, same_as, version_of, refines' }, relationNotes: { type: 'object', description: 'Short rationale keyed by relation field' }, relationEvidence: { type: 'object', description: 'Up to four scope-safe evidence paths keyed by relation field' },
                     mocPurpose: { type: 'string', maxLength: 1000, description: 'For MOCs: the navigation purpose' }, mocScope: { type: 'string', maxLength: 500, description: 'For MOCs: the knowledge boundary or topic scope' }, mocQuestions: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'For MOCs: representative questions the map should answer' }, mocParent: { type: 'string', maxLength: 500, description: 'Optional parent MOC wikilink' },
                     focusHorizon: { type: 'string', enum: ['ground', 'project', 'area', 'goal', 'vision', 'purpose'], description: 'Optional GTD horizon: concrete action, project, area, goal, vision, or purpose/principles' }, focusParent: { type: 'string', maxLength: 500, description: 'Optional Obsidian link/path to the higher-level outcome this note serves' }, focusSupports: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20, description: 'Optional bounded links/paths to outcomes supported by this note; navigation metadata only' },
@@ -317,6 +318,11 @@ export function getLlmWikiTools() {
             inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 50, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 5000 }, accessToken, prettyPrint } },
         },
         {
+            name: 'get_wiki_inbox_plan',
+            description: 'Preview bounded GTD Clarify dispositions for Inbox captures using only existing Properties. Suggestions are advisory and include the current revision; inspect the note and then call clarify_wiki_note explicitly. It never moves, deletes, or rewrites files.',
+            inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
+        },
+        {
             name: 'triage_wiki_note',
             description: 'Classify one ordinary Markdown note with PARA/Zettelkasten-style metadata without changing its body or moving it. Use expectedRevision to avoid overwriting another agent.',
             inputSchema: { type: 'object', properties: {
@@ -334,7 +340,7 @@ export function getLlmWikiTools() {
                     stableId: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', maxLength: 80 }, canonicalPath: { type: 'string', maxLength: 500 }, recallPrompt: { type: 'string', maxLength: 1000 }, recallIntervalDays: { type: 'integer', minimum: 1, maximum: 3650 }, lastRecalledAt: { type: 'string' }, recallQuality: { type: 'string', enum: ['unseen', 'failed', 'partial', 'good'] },
                     retentionPolicy: { type: 'string', enum: ['preserve', 'review', 'archive', 'tombstone'] }, retentionEvent: { type: 'string', enum: ['manual', 'created', 'last_modified', 'review_completed', 'superseded', 'project_completed'] }, retentionAt: { type: 'string' }, preserveUntil: { type: 'string' }, legalHold: { type: 'boolean' }, retentionReason: { type: 'string', maxLength: 1000 }, replacedBy: { type: 'string', maxLength: 500 },
                     termStatus: { type: 'string', enum: ['preferred', 'deprecated', 'redirect'] }, termReplacedBy: { type: 'string', maxLength: 500 }, preferredTerm: { type: 'string', maxLength: 300 }, disambiguation: { type: 'string', maxLength: 300 }, broaderTerms: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 }, relatedTerms: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 }, subjectTerms: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 20 }, domain: { type: 'string', maxLength: 200 }, methods: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 20 }, audience: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 12 }, retrievalCues: { type: 'array', items: { type: 'string', maxLength: 300 }, maxItems: 8 }, useWhen: { type: 'string', maxLength: 1000 },
-                    reviewSnoozedUntil: { type: 'string', description: 'Temporarily omit this note from review queues until an ISO date/time' }, reviewSnoozeReason: { type: 'string', maxLength: 500 }, knowledgeRole: { type: 'string', enum: ['concept', 'argument', 'model', 'observation', 'counterargument'] }, seeAlso: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 }, termScopeNote: { type: 'string', maxLength: 1000 },
+                    reviewSnoozedUntil: { type: 'string', description: 'Temporarily omit this note from review queues until an ISO date/time' }, reviewSnoozeReason: { type: 'string', maxLength: 500 }, knowledgeRole: { type: 'string', enum: ['concept', 'argument', 'model', 'observation', 'counterargument'] }, seeAlso: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 }, termScopeNote: { type: 'string', maxLength: 1000 }, termLanguage: { type: 'string', maxLength: 40 }, authorityScheme: { type: 'string', maxLength: 120 }, authorityId: { type: 'string', maxLength: 200 },
                     taskStatus: { type: 'string', enum: ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'], description: 'Workflow state for project/task notes' },
                     reviewPolicy: { type: 'string', enum: ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit'] },
                     reviewOutcome: { type: 'string', enum: ['confirmed', 'revised', 'disputed', 'superseded', 'rescheduled'] }, reviewedBy: { type: 'string', maxLength: 200 }, reviewedAt: { type: 'string' }, reviewChecks: { type: 'array', items: { type: 'string', enum: ['evidence', 'links', 'summary', 'moc', 'counterexamples', 'scope', 'freshness'] }, maxItems: 7 }, reviewOpenItems: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 8 }, reviewNote: { type: 'string', maxLength: 1000 }, interpretationStatus: { type: 'string', enum: ['unprocessed', 'interpreted', 'synthesized'], description: 'Source-processing stage' }, epistemicStatus: { type: 'string' },
@@ -368,6 +374,13 @@ export function getLlmWikiTools() {
             description: 'Report broken links, orphan notes, empty MOCs, GTD focus problems, Zettelkasten connectivity gaps, typed relation meaning, high-degree graph hubs, knowledge usage, and same-title/alias duplicate candidates with bounded samples. Use it to repair navigation without creating a parallel index; never auto-merge or archive from this report.',
             inputSchema: { type: 'object', properties: {
                     limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint,
+                } },
+        },
+        {
+            name: 'get_wiki_link_context_health',
+            description: 'Find bounded links in durable Wiki notes whose surrounding line is too terse to explain the relationship. This is an advisory Zettelkasten quality signal; it returns line, heading, relation, and context, never rewrites notes, and does not require prose beside every valid link.',
+            inputSchema: { type: 'object', properties: {
+                    limit: { type: 'integer', minimum: 1, maximum: 100, default: 30 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint,
                 } },
         },
         {
@@ -406,6 +419,17 @@ export function getLlmWikiTools() {
                     maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 12000 },
                     accessToken, prettyPrint,
                 } },
+        },
+        {
+            name: 'export_wiki_base',
+            description: 'Save one bounded Obsidian Bases view as a derived Views/*.base file. This is an explicit mutation, limited to a single file directly under Views/, and requires expectedRevision (use missing for a new file); it never changes note content or permissions.',
+            inputSchema: { type: 'object', properties: {
+                    view: { type: 'string', enum: ['all', 'inbox', 'inbox_oldest', 'projects', 'project_next_actions', 'review', 'epistemic', 'open_questions', 'knowledge', 'unreviewed_evidence', 'negative_knowledge', 'deprecated_terms', 'maintenance'], default: 'all' },
+                    path: { type: 'string', description: 'Optional single Views/*.base path; defaults to the view suggestedPath' },
+                    noteKind: { type: 'string' }, lifecycle: { type: 'string' },
+                    limit: { type: 'integer', minimum: 1, maximum: 500, default: 100 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 12000 },
+                    expectedRevision: { type: 'string', description: "Required file revision; use 'missing' for a new Bases file" }, accessToken, prettyPrint,
+                }, required: ['expectedRevision'] },
         },
         {
             name: 'get_wiki_home',

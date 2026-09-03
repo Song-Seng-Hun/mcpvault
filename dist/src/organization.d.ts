@@ -257,6 +257,9 @@ export interface KnowledgeOrganizationInput {
     termReplacedBy?: unknown;
     termScopeNote?: unknown;
     preferredTerm?: unknown;
+    termLanguage?: unknown;
+    authorityScheme?: unknown;
+    authorityId?: unknown;
     disambiguation?: unknown;
     broaderTerms?: unknown;
     relatedTerms?: unknown;

@@ -45,6 +45,37 @@ test('weekly review separates schedule from deadline and exposes reverse focus c
   }
 });
 
+test('knowledge organization helpers stay bounded and revision-safe', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-helper-owner', modelId: 'codex', password: 'organization-helper-password' });
+    const accessToken = registration.value.accessToken;
+    const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
+      const result = await client.callTool({ name: 'write_note', arguments: { path, content, frontmatter, expectedRevision: 'missing', accessToken } });
+      expect(result.isError).toBeFalsy();
+    };
+    await write('Knowledge/Target.md', '# Target\n', { note_kind: 'atomic', lifecycle: 'evergreen', term_language: 'ko', authority_scheme: 'local-vocabulary', authority_id: 'target-1' });
+    await write('Knowledge/Contextless.md', '# Contextless\n\n[[Knowledge/Target]]\n', { note_kind: 'atomic', lifecycle: 'evergreen' });
+    await write('Inbox/Project capture.md', '# Project capture\n', { note_kind: 'project', lifecycle: 'inbox' });
+
+    const plan = await callJson(client, 'get_wiki_inbox_plan', { limit: 5, accessToken });
+    expect(plan.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Inbox/Project capture.md', suggested: expect.objectContaining({ disposition: 'project' }) })]));
+
+    const linkHealth = await callJson(client, 'get_wiki_link_context_health', { limit: 10, accessToken });
+    expect(linkHealth.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ source: 'Knowledge/Contextless.md', target: 'Knowledge/Target' })]));
+
+    const exported = await callJson(client, 'export_wiki_base', { view: 'knowledge', expectedRevision: 'missing', accessToken });
+    expect(exported.value).toMatchObject({ persisted: true, path: 'Views/LLM Wiki Knowledge.base', revision: expect.any(String) });
+    const base = await callJson(client, 'read_note', { path: 'Views/LLM Wiki Knowledge.base', accessToken });
+    expect(base.value.content).toContain('note.note_kind');
+    const conflict = await client.callTool({ name: 'export_wiki_base', arguments: { view: 'knowledge', expectedRevision: 'missing', accessToken } });
+    expect(conflict.isError).toBe(true);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 afterEach(async () => {
   await rm(vault, { recursive: true, force: true });
 });

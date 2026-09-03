@@ -1453,6 +1453,10 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           return jsonResult(await llmWiki.inbox(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
         }
 
+        case "get_wiki_inbox_plan": {
+          return jsonResult(await llmWiki.inboxPlan(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+        }
+
         case "triage_wiki_note": {
           await requireExpectedRevisionForExisting(fileSystem, trimmedArgs.path, trimmedArgs.expectedRevision, 'triage_wiki_note');
           return jsonResult(await llmWiki.triage({
@@ -1499,6 +1503,9 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             ...(typeof trimmedArgs.termReplacedBy === 'string' && { termReplacedBy: trimmedArgs.termReplacedBy }),
             ...(typeof trimmedArgs.termScopeNote === 'string' && { termScopeNote: trimmedArgs.termScopeNote }),
             ...(typeof trimmedArgs.preferredTerm === 'string' && { preferredTerm: trimmedArgs.preferredTerm }),
+            ...(typeof trimmedArgs.termLanguage === 'string' && { termLanguage: trimmedArgs.termLanguage }),
+            ...(typeof trimmedArgs.authorityScheme === 'string' && { authorityScheme: trimmedArgs.authorityScheme }),
+            ...(typeof trimmedArgs.authorityId === 'string' && { authorityId: trimmedArgs.authorityId }),
             ...(typeof trimmedArgs.disambiguation === 'string' && { disambiguation: trimmedArgs.disambiguation }),
             ...(trimmedArgs.broaderTerms !== undefined && { broaderTerms: trimmedArgs.broaderTerms }),
             ...(trimmedArgs.relatedTerms !== undefined && { relatedTerms: trimmedArgs.relatedTerms }),
@@ -1610,6 +1617,10 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           return jsonResult(await llmWiki.graphHealth(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
         }
 
+        case "get_wiki_link_context_health": {
+          return jsonResult(await llmWiki.linkContextHealth(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+        }
+
         case "get_wiki_moc_candidates": {
           return jsonResult(await llmWiki.mocCandidates(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
         }
@@ -1632,6 +1643,19 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
         case "get_wiki_bases_view": {
           return jsonResult(await llmWiki.exportBasesView(principal, trimmedArgs.noteKind, trimmedArgs.lifecycle, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.view), trimmedArgs.prettyPrint);
+        }
+
+        case "export_wiki_base": {
+          return jsonResult(await llmWiki.writeBasesView({
+            ...(principal && { principal }),
+            ...(typeof trimmedArgs.view === 'string' && { view: trimmedArgs.view }),
+            ...(typeof trimmedArgs.noteKind === 'string' && { noteKind: trimmedArgs.noteKind }),
+            ...(typeof trimmedArgs.lifecycle === 'string' && { lifecycle: trimmedArgs.lifecycle }),
+            ...(trimmedArgs.limit !== undefined && { limit: trimmedArgs.limit }),
+            ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
+            ...(typeof trimmedArgs.path === 'string' && { path: trimmedArgs.path }),
+            expectedRevision: trimmedArgs.expectedRevision,
+          }), trimmedArgs.prettyPrint);
         }
 
         case "get_wiki_home": {
