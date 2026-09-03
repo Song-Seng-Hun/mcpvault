@@ -67,6 +67,7 @@ export interface WikiEvidenceInput {
 }
 
 type NormalizedEvidence = { path: string; heading?: string; blockId?: string; revision?: string; startLine?: number; endLine?: number; quoteHash?: string };
+type ReadNoteResult = Awaited<ReturnType<FileSystemService['readNote']>>;
 
 type WikiProjectionView = 'summary' | 'progressive' | 'key_points' | 'outline' | 'section' | 'full';
 
@@ -488,6 +489,7 @@ Use YAML properties and Obsidian links together:
 - \`lifecycle\`: inbox, active, review, evergreen, superseded, or archived.
 - \`project\`, \`moc\`, and \`review_at\`: optional navigation and review hints.
 - A knowledge note remains grounded by \`evidence_paths\`; links are not evidence by themselves. In answer packets, source-work diversity groups snapshots by \`source_work_id\`, \`source_family\`, or \`source_id\`; multiple snapshots of one work are not independent corroboration, and multiple works still do not establish truth.
+- For structured \`claims\`, use the bounded claim matrix to preserve authored order while separately prioritizing missing, unavailable, altered, stale-locator, or single-source-work evidence. Inspect current sources before recording a claim review.
 - Optional \`valid_from\` (inclusive), \`valid_until\` (exclusive), \`observed_at\`, and \`temporal_scope\` describe when the represented claim or condition applies. They are separate from file modification, source publication/retrieval, task, and review dates. Expired validity is a review signal, never automatic deletion.
 
 Obsidian navigation accepts both \`[[wikilinks]]\` and relative Markdown links
@@ -6137,18 +6139,24 @@ export class LlmWikiService {
    * room for a counterexample or negative knowledge instead of returning a
    * large semantic dump.
    */
-  private async evidenceDiversity(principal: ScopePrincipal | undefined, knowledgePath: string, limit = 12) {
-    const note = await this.fileSystem.readNote(knowledgePath);
+  private async evidenceDiversityFor(
+    principal: ScopePrincipal | undefined,
+    knowledgePath: string,
+    evidenceValue: unknown,
+    evidencePathsValue: unknown,
+    limit = 12,
+    sourceCache = new Map<string, ReadNoteResult | undefined>(),
+  ) {
     let locators: NormalizedEvidence[] = [];
     try {
-      locators = normalizeEvidenceEntries(note.frontmatter.evidence, Array.isArray(note.frontmatter.evidence_paths) ? note.frontmatter.evidence_paths : []);
+      locators = normalizeEvidenceEntries(evidenceValue, Array.isArray(evidencePathsValue) ? evidencePathsValue.filter((item: unknown): item is string => typeof item === 'string') : []);
     } catch {
-      locators = Array.isArray(note.frontmatter.evidence_paths)
-        ? note.frontmatter.evidence_paths.filter((item: unknown): item is string => typeof item === 'string').map(path => ({ path }))
+      locators = Array.isArray(evidencePathsValue)
+        ? evidencePathsValue.filter((item: unknown): item is string => typeof item === 'string').map(path => ({ path }))
         : [];
     }
     const evidencePaths = [...new Set([
-      ...(Array.isArray(note.frontmatter.evidence_paths) ? note.frontmatter.evidence_paths : []),
+      ...(Array.isArray(evidencePathsValue) ? evidencePathsValue : []),
       ...locators.map(item => item.path),
     ].filter((item): item is string => typeof item === 'string' && Boolean(item.trim())))];
     const boundedLimit = Math.min(Math.max(Number(limit) || 12, 1), 20);
@@ -6160,11 +6168,17 @@ export class LlmWikiService {
         return undefined;
       }
       try {
-        if (!await this.fileSystem.noteExists(evidencePath)) {
+        let source: ReadNoteResult | undefined;
+        if (sourceCache.has(evidencePath)) {
+          source = sourceCache.get(evidencePath);
+        } else {
+          source = await this.fileSystem.noteExists(evidencePath) ? await this.fileSystem.readNote(evidencePath) : undefined;
+          sourceCache.set(evidencePath, source);
+        }
+        if (!source) {
           unavailableCount += 1;
           return undefined;
         }
-        const source = await this.fileSystem.readNote(evidencePath);
         if (source.frontmatter.llm_wiki_type !== 'source') {
           nonSourceCount += 1;
           return undefined;
@@ -6210,6 +6224,130 @@ export class LlmWikiService {
       ...(staleLocatorCount > 0 && { staleLocatorCount }),
       truncated: evidencePaths.length > boundedLimit,
       note: 'Source-work diversity is an advisory review signal derived from source_work_id/source_family/source_id. Multiple snapshots of one work are not independent corroboration, and multiple works do not establish truth.',
+    };
+  }
+
+  private async evidenceDiversity(principal: ScopePrincipal | undefined, knowledgePath: string, limit = 12) {
+    const note = await this.fileSystem.readNote(knowledgePath);
+    return this.evidenceDiversityFor(principal, knowledgePath, note.frontmatter.evidence, note.frontmatter.evidence_paths, limit);
+  }
+
+  /**
+   * Project claim-level evidence coverage without loading source bodies into the
+   * response. Authored claim order remains stable; a separate attention list
+   * prioritizes repair so the projection does not silently reorder the note.
+   */
+  async claimMatrix(principal: ScopePrincipal | undefined, path: string, limit = 20, maxChars = 7000) {
+    const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 40);
+    const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 1024), 16000);
+    if (!this.access.canAccessPhysicalPath(path, principal)) throw new Error('Access denied');
+    const note = await this.fileSystem.readNote(path);
+    if (isModerationHidden(note.frontmatter)) throw new Error('The source note is unavailable');
+    if (note.frontmatter.llm_wiki_type !== 'knowledge') throw new Error('get_wiki_claim_matrix requires an LLM Wiki knowledge note');
+    const claims = Array.isArray(note.frontmatter.claims)
+      ? note.frontmatter.claims.filter((claim: unknown): claim is Record<string, any> => Boolean(claim && typeof claim === 'object' && typeof (claim as any).text === 'string' && (claim as any).text.trim()))
+      : [];
+    const reviews = note.frontmatter.claim_reviews && typeof note.frontmatter.claim_reviews === 'object' && !Array.isArray(note.frontmatter.claim_reviews)
+      ? note.frontmatter.claim_reviews as Record<string, any>
+      : {};
+    const sourceCache = new Map<string, ReadNoteResult | undefined>();
+    const rows: Array<Record<string, any>> = [];
+    for (let index = 0; index < Math.min(claims.length, boundedLimit); index += 1) {
+      const claim = claims[index]!;
+      const id = String(claim.id || `claim-${index + 1}`);
+      const diversity = await this.evidenceDiversityFor(principal, path, claim.evidence, claim.evidence_paths, 12, sourceCache);
+      const signals: string[] = [];
+      if (diversity.evidencePathCount === 0) signals.push('missing_evidence');
+      else if (diversity.unavailableCount) signals.push('unavailable_evidence');
+      if (diversity.nonSourceCount) signals.push('non_source_evidence');
+      if (diversity.integrityFailureCount) signals.push('source_integrity_failure');
+      if (diversity.staleLocatorCount) signals.push('stale_locator');
+      if (diversity.distinctSourceWorkCount === 1) signals.push('single_source_work');
+      if (String(claim.status || 'unverified').toLowerCase() === 'disputed') signals.push('disputed');
+      if (String(claim.status || 'unverified').toLowerCase() === 'unverified') signals.push('unverified');
+      const review = reviews[id];
+      if (!review || typeof review !== 'object') signals.push('not_reviewed');
+      rows.push({
+        order: index + 1,
+        claimId: id,
+        text: boundedText(claim.text, 360),
+        status: typeof claim.status === 'string' ? claim.status : 'unverified',
+        confidence: typeof claim.confidence === 'string' ? claim.confidence : 'medium',
+        evidence: {
+          coverage: signals.find(signal => ['missing_evidence', 'unavailable_evidence', 'non_source_evidence', 'source_integrity_failure', 'stale_locator', 'single_source_work'].includes(signal)) || 'multiple_source_works',
+          evidencePathCount: diversity.evidencePathCount,
+          scannedSnapshotCount: diversity.scannedSnapshotCount,
+          distinctSourceWorkCount: diversity.distinctSourceWorkCount,
+          sourceWorks: diversity.sourceWorks.slice(0, 4).map(work => ({ workId: work.workId, snapshotCount: work.snapshotCount, paths: work.paths.slice(0, 2) })),
+          ...(diversity.unavailableCount && { unavailableCount: diversity.unavailableCount }),
+          ...(diversity.nonSourceCount && { nonSourceCount: diversity.nonSourceCount }),
+          ...(diversity.integrityFailureCount && { integrityFailureCount: diversity.integrityFailureCount }),
+          ...(diversity.staleLocatorCount && { staleLocatorCount: diversity.staleLocatorCount }),
+          ...(diversity.truncated && { truncated: true }),
+        },
+        ...(review && typeof review === 'object' && {
+          review: {
+            ...(typeof review.status === 'string' && { status: review.status }),
+            ...(typeof review.confidence === 'string' && { confidence: review.confidence }),
+            ...(typeof review.reviewed_by === 'string' && { reviewedBy: boundedText(review.reviewed_by, 160) }),
+            ...(typeof review.reviewed_at === 'string' && { reviewedAt: review.reviewed_at }),
+          },
+        }),
+        signals,
+      });
+    }
+    const attentionScore = (row: Record<string, any>) => {
+      const weights: Record<string, number> = { source_integrity_failure: 100, unavailable_evidence: 90, non_source_evidence: 80, stale_locator: 70, missing_evidence: 60, disputed: 50, unverified: 30, single_source_work: 20, not_reviewed: 10 };
+      return Math.max(0, ...(row.signals as string[]).map(signal => weights[signal] || 0));
+    };
+    const buildResult = (selectedRows: Array<Record<string, any>>, compact = false) => {
+      const returnedIds = new Set(selectedRows.map(row => row.claimId));
+      const attention = [...rows]
+        .filter(row => returnedIds.has(row.claimId) && attentionScore(row) > 0)
+        .sort((left, right) => attentionScore(right) - attentionScore(left) || left.order - right.order)
+        .slice(0, 5)
+        .map(row => ({ claimId: row.claimId, signals: row.signals, score: attentionScore(row) }));
+      const counts = selectedRows.reduce((result, row) => {
+        result[row.evidence.coverage] = (result[row.evidence.coverage] || 0) + 1;
+        return result;
+      }, {} as Record<string, number>);
+      const next = attention[0];
+      return {
+        path: this.access.toPublicPath(path),
+        revision: note.revision,
+        temporal: temporalValidity(note.frontmatter),
+        totalClaims: claims.length,
+        scannedClaims: rows.length,
+        returnedClaims: selectedRows.length,
+        countsForReturnedClaims: counts,
+        authoredOrder: compact ? selectedRows.map(row => ({ order: row.order, claimId: row.claimId, status: row.status, signals: row.signals })) : selectedRows,
+        attention,
+        ...(next && {
+          nextAction: next.signals.includes('missing_evidence')
+            ? { endpointId: endpointIdForTool('ingest_source'), requiredArguments: ['title', 'content'], reason: `Claim ${next.claimId} needs inspectable immutable evidence before review.` }
+            : { endpointId: endpointIdForTool('review_wiki_claim'), arguments: { path: this.access.toPublicPath(path), claimId: next.claimId, expectedRevision: note.revision }, requiredArguments: ['status'], reason: `Inspect claim ${next.claimId} and its current evidence before recording a review.` },
+        }),
+        truncated: claims.length > selectedRows.length || rows.length > selectedRows.length,
+        note: 'The matrix preserves authored claim order and separately prioritizes attention. Source-work diversity and review status are advisory; inspect current source revisions and locators before changing a claim.',
+      };
+    };
+    let selectedRows = [...rows];
+    let result = buildResult(selectedRows);
+    while (JSON.stringify(result).length > boundedChars && selectedRows.length > 1) {
+      selectedRows = selectedRows.slice(0, -1);
+      result = buildResult(selectedRows);
+    }
+    if (JSON.stringify(result).length <= boundedChars) return result;
+    const compact = buildResult(selectedRows.slice(0, 1), true);
+    if (JSON.stringify(compact).length <= boundedChars) return compact;
+    const first = rows[0];
+    return {
+      path: boundedText(this.access.toPublicPath(path), 300),
+      revision: note.revision,
+      totalClaims: claims.length,
+      ...(first && { claim: { claimId: first.claimId, status: first.status, signals: first.signals } }),
+      truncated: true,
+      note: 'Increase maxChars to receive the bounded claim-evidence matrix.',
     };
   }
 

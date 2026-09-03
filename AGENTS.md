@@ -382,6 +382,13 @@ publication/retrieval, task scheduling, retention, or review dates. Catalog
 `validity`/`validAt`, projection `temporal`, and review reason
 `validity_ended` are bounded advisory signals. Re-check expired knowledge
 before reuse; never delete or silently extend it.
+When a knowledge note has structured `claims`, use `get_wiki_claim_matrix`
+before reviewing the whole document. It preserves authored claim order while a
+separate attention list flags missing, unavailable, altered, stale-locator, or
+single-source-work evidence. Several snapshots of one source work are not
+independent corroboration, and several works still do not establish truth.
+Inspect the current source revisions, then use `review_wiki_claim` with the
+matrix's note revision; the matrix never changes claim text or evidence.
 When preserving a failed path, record what was attempted/observed, the failure
 condition and reproduction, why it was rejected, and the reusable lesson.
 When a review is genuinely completed, record its outcome and reviewer rather

@@ -1829,6 +1829,11 @@ test('temporal validity and source-work diversity remain bounded review signals'
     const published = await callJson(client, 'publish_knowledge', {
       path: 'Knowledge/Time bounded claim.md', content: '# Time bounded claim\n\nThis condition applies only during the declared window.\n',
       evidencePaths: [sourceA1.value.path, sourceA2.value.path, sourceB.value.path],
+      claims: [
+        { id: 'same-work-snapshots', text: 'Two snapshots represent one underlying study.', evidencePaths: [sourceA1.value.path, sourceA2.value.path], status: 'supported', confidence: 'high' },
+        { id: 'independent-study', text: 'A second source work reports an independent observation.', evidencePaths: [sourceB.value.path], status: 'unverified', confidence: 'medium' },
+        { id: 'combined-view', text: 'The combined view draws on two distinct source works.', evidencePaths: [sourceA1.value.path, sourceA2.value.path, sourceB.value.path], status: 'supported', confidence: 'medium' },
+      ],
       validFrom: '2030-01-01T00:00:00.000Z', validUntil: '2030-02-01T00:00:00.000Z', observedAt: '2029-12-20T00:00:00.000Z', temporalScope: '2030 winter policy window',
       expectedRevision: 'missing', accessToken,
     });
@@ -1846,6 +1851,20 @@ test('temporal validity and source-work diversity remain bounded review signals'
       expect.objectContaining({ workId: 'study-a', snapshotCount: 2 }),
       expect.objectContaining({ workId: 'study-b', snapshotCount: 1 }),
     ]));
+
+    const capability = await callJson(client, 'search_capabilities', { query: 'claim evidence matrix', limit: 5, maxChars: 5000, accessToken });
+    expect(capability.value.endpoints).toEqual(expect.arrayContaining([expect.objectContaining({ endpointId: 'wiki.claim_matrix', available: true })]));
+    const matrix = await callJson(client, 'call_endpoint', { endpointId: 'wiki.claim_matrix', arguments: { path: 'Knowledge/Time bounded claim.md', limit: 20, maxChars: 12000, accessToken } });
+    expect(matrix.value).toMatchObject({ revision: published.value.revision, totalClaims: 3, scannedClaims: 3, returnedClaims: 3 });
+    expect(matrix.value.authoredOrder.map((item: any) => item.claimId)).toEqual(['same-work-snapshots', 'independent-study', 'combined-view']);
+    expect(matrix.value.authoredOrder).toEqual(expect.arrayContaining([
+      expect.objectContaining({ claimId: 'same-work-snapshots', evidence: expect.objectContaining({ distinctSourceWorkCount: 1, scannedSnapshotCount: 2 }), signals: expect.arrayContaining(['single_source_work']) }),
+      expect.objectContaining({ claimId: 'combined-view', evidence: expect.objectContaining({ distinctSourceWorkCount: 2, scannedSnapshotCount: 3 }) }),
+    ]));
+    expect(matrix.value.nextAction).toMatchObject({ endpointId: 'wiki.review_claim', arguments: { path: 'Knowledge/Time bounded claim.md', expectedRevision: published.value.revision } });
+    const compactMatrix = await callJson(client, 'get_wiki_claim_matrix', { path: 'Knowledge/Time bounded claim.md', limit: 20, maxChars: 1024, accessToken });
+    expect(JSON.stringify(compactMatrix.value).length).toBeLessThanOrEqual(1024);
+    expect(compactMatrix.value).toMatchObject({ revision: published.value.revision, totalClaims: 3, truncated: true });
 
     const manual = await client.callTool({ name: 'write_note', arguments: {
       path: 'Knowledge/Stale evidence locator.md', content: '# Stale evidence locator\n\nA manually imported legacy note.\n',

@@ -83,6 +83,10 @@ tools; new behaviors belong in the endpoint catalog.
   short query/read/finding/decision summaries plus optional path/revision
   locators. Raw prompts, note bodies, credentials, secrets, and hidden
   reasoning remain outside the checkpoint.
+- Structured claims now have a bounded claim/evidence matrix. Authored order is
+  stable, attention priority is separate, snapshots are grouped by source
+  work, and missing/unavailable/altered/stale/single-work evidence routes to an
+  existing revision-checked review action without changing the note.
 
 Evidence: `moc-navigation.test.ts`, `backlinks.test.ts`, `organization.test.ts`,
 `filesystem.test.ts`, `continuity.test.ts`, `global-sync.test.ts`, and the

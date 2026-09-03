@@ -2723,7 +2723,69 @@ export declare class LlmWikiService {
      * room for a counterexample or negative knowledge instead of returning a
      * large semantic dump.
      */
+    private evidenceDiversityFor;
     private evidenceDiversity;
+    /**
+     * Project claim-level evidence coverage without loading source bodies into the
+     * response. Authored claim order remains stable; a separate attention list
+     * prioritizes repair so the projection does not silently reorder the note.
+     */
+    claimMatrix(principal: ScopePrincipal | undefined, path: string, limit?: number, maxChars?: number): Promise<{
+        path: string;
+        revision: string;
+        temporal: {
+            state: TemporalValidityState;
+            asOf: string;
+            validFrom?: string;
+            validUntil?: string;
+            observedAt?: string;
+            temporalScope?: string;
+            reason?: string;
+        };
+        totalClaims: number;
+        scannedClaims: number;
+        returnedClaims: number;
+        countsForReturnedClaims: Record<string, any>;
+        authoredOrder: Record<string, any>[] | {
+            order: any;
+            claimId: any;
+            status: any;
+            signals: any;
+        }[];
+        attention: {
+            claimId: any;
+            signals: any;
+            score: number;
+        }[];
+        nextAction?: {
+            arguments?: never;
+            endpointId: string;
+            requiredArguments: string[];
+            reason: string;
+        } | {
+            endpointId: string;
+            arguments: {
+                path: string;
+                claimId: any;
+                expectedRevision: string;
+            };
+            requiredArguments: string[];
+            reason: string;
+        };
+        truncated: boolean;
+        note: string;
+    } | {
+        path: string;
+        revision: string;
+        totalClaims: number;
+        claim?: {
+            claimId: any;
+            status: any;
+            signals: any;
+        };
+        truncated: boolean;
+        note: string;
+    }>;
     answerPacket(principal: ScopePrincipal | undefined, path: string, maxChars?: number, includeSemantic?: boolean, intent?: 'capture' | 'explore' | 'decide' | 'execute' | 'review'): Promise<Record<string, unknown>>;
     /**
      * Build a reusable shelf-like context projection without persisting a

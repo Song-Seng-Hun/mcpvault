@@ -200,6 +200,16 @@ export function getLlmWikiTools() {
                 }, required: ['path'] },
         },
         {
+            name: 'get_wiki_claim_matrix',
+            description: 'Return a bounded claim-by-evidence review matrix for one knowledge note. It preserves authored claim order, groups cited snapshots by source work, flags missing/unavailable/altered/stale/single-work evidence, and separately prioritizes claims needing attention. It never treats source count as truth or changes a claim; inspect current revisions before review_wiki_claim.',
+            inputSchema: { type: 'object', properties: {
+                    path: { type: 'string', description: 'Existing visible LLM Wiki knowledge-note path' },
+                    limit: { type: 'integer', minimum: 1, maximum: 40, default: 20, description: 'Maximum authored claims to scan in this bounded pass' },
+                    maxChars: { type: 'integer', minimum: 1024, maximum: 16000, default: 7000 },
+                    accessToken, prettyPrint,
+                }, required: ['path'] },
+        },
+        {
             name: 'get_wiki_context_pack',
             description: 'Build a reusable bounded shelf around one visible Wiki note, project, MOC, question, or decision. It provides a stable root, ordered entrypoints, supporting context, counterpoints, gaps, and revisions in one response without creating a second index. Re-read returned notes before editing or relying on them; this is navigation, not a truth score.',
             inputSchema: { type: 'object', properties: {

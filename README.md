@@ -425,6 +425,12 @@ corroboration. Bounded missing, non-source, integrity-failed, and stale-locator
 counts are review prompts, not truth scores. Adaptive review policies shorten
 the next interval after disputed or revised knowledge and gradually lengthen it
 after confirmed reviews; this remains advisory scheduling, not a truth score.
+For notes with structured `claims`, `get_wiki_claim_matrix` keeps authored
+claim order but adds a separate bounded attention ranking. Each row groups
+evidence snapshots by source work and reports missing, inaccessible, altered,
+stale-locator, or single-work coverage without returning source bodies. Use its
+revision with `review_wiki_claim` only after inspecting the selected evidence;
+the matrix neither changes claims nor equates source count with truth.
 `get_wiki_link_context_health` reports terse durable-note links with their
 line, heading, relation, and nearby context so agents can add a useful reason
 without forcing prose beside every valid link. `get_wiki_graph_health` also counts typed incoming and outgoing relations and
@@ -2428,6 +2434,11 @@ adds bounded navigation signals instead of a second database.
   Projection reads return a compact `temporal` card; catalog `validity` with an
   optional `validAt` instant filters current, future, expired, invalid, or
   unspecified knowledge; expired validity enters the bounded review queue.
+- `get_wiki_claim_matrix` projects authored claims against immutable evidence
+  and source-work groupings under one hard character budget. It separately
+  ranks attention signals so repair priority does not rewrite the author's
+  claim order, and routes one selected claim to the existing revision-checked
+  `wiki.review_claim` endpoint.
 - `get_wiki_maintenance_debt` gives each returned repair a current revision and
   a `curationPlan`; `get_wiki_review_packet` chooses one bounded priority and
   returns its inspect-then-mutate route. These projections reuse
