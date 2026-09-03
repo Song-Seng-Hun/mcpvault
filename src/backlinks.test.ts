@@ -2,6 +2,13 @@ import { describe, expect, test } from 'vitest';
 import { extractObsidianLinkOccurrences, extractWikiLinkOccurrences, findBacklinkMatches, findUnresolvedLinkMatches } from './backlinks.js';
 
 describe('Obsidian link extraction', () => {
+  test('bounded reading order preserves mixed link positions and ignores complete fences', () => {
+    const content = '## Real\n~~~md\n## Example\n[[Ignore]]\n~~~\n[first](First.md#Start) [[Second#^claim]] [third](Third.md)';
+    expect(extractObsidianLinkOccurrences(content, 2)).toEqual([
+      expect.objectContaining({ target: 'First.md', line: 6, heading: 'Real', targetHeading: 'Start' }),
+      expect.objectContaining({ target: 'Second', line: 6, heading: 'Real', targetBlockId: 'claim' }),
+    ]);
+  });
   test('keeps wikilinks backward compatible and adds internal Markdown links', () => {
     const content = [
       '## References\n\n[[Knowledge/Atomic]] and [the resource](Resources/Guide.md#setup) and [encoded](Resources/My%20Note.md).',

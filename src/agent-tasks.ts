@@ -100,7 +100,18 @@ export class AgentTaskService {
     return { tasks: bounded.items, total, truncated: window.truncated || total > window.notes.length || bounded.truncated };
   }
 
-  async update(params: { principal?: ScopePrincipal; taskId: string; status?: string; assignee?: string; description?: string; references?: unknown; reason?: string; expectedRevision: string }) {
+  async update(params: {
+    principal?: ScopePrincipal;
+    taskId: string;
+    status?: string;
+    assignee?: string;
+    description?: string;
+    references?: unknown;
+    reason?: string;
+    retrospective?: string;
+    knowledgeNotes?: unknown;
+    expectedRevision: string;
+  }) {
     const principal = requireLogin(params.principal);
     if (!params.expectedRevision) throw new Error('expectedRevision is required; read the task first');
     const taskId = normalizeScopeId(params.taskId, 'taskId');
@@ -120,12 +131,25 @@ export class AgentTaskService {
     if (status !== previousStatus && !reason) throw new Error('reason is required when changing task status');
     const description = params.description === undefined ? String(note.frontmatter.description || note.content).trim() : shortText(params.description, 'description', 4000, true);
     const refs = await this.references.validateAndNormalize(params.references ?? note.frontmatter.references, path, principal, params.description);
+    const retrospective = params.retrospective === undefined ? undefined : shortText(params.retrospective, 'retrospective', 1000);
+    let knowledgeNotes: string[] | undefined;
+    if (params.knowledgeNotes !== undefined) {
+      if (!Array.isArray(params.knowledgeNotes)) throw new Error('knowledgeNotes must be an array of note paths');
+      knowledgeNotes = [...new Set(params.knowledgeNotes.map(item => shortText(item, 'knowledgeNote', 500, true).replace(/\\/g, '/').replace(/^\/+/, '')))].slice(0, 20);
+      for (const knowledgePath of knowledgeNotes) {
+        if (/^(?:[A-Za-z]:|\\\\|scope:\/\/|_scopes\/|\.)/i.test(knowledgePath) || knowledgePath.split('/').includes('..')) {
+          throw new Error('knowledgeNotes must contain scope-safe public vault paths');
+        }
+      }
+    }
     const timestamp = now();
     const frontmatter: Record<string, any> = {
       ...note.frontmatter, description,
       ...(requestedAssignee ? { assignee: requestedAssignee } : {}),
       status, references: refs, updated_at: timestamp,
       ...(status !== previousStatus && { status_reason: reason, status_changed_by: actor, status_changed_at: timestamp }),
+      ...(retrospective && { retrospective }),
+      ...(knowledgeNotes && { knowledge_notes: knowledgeNotes }),
     };
     if (!requestedAssignee) delete frontmatter.assignee;
     await this.fileSystem.writeNote({
@@ -135,6 +159,15 @@ export class AgentTaskService {
       expectedRevision: params.expectedRevision,
     });
     const updated = await this.fileSystem.readNote(path);
-    return { success: true, taskId, status, assignee: requestedAssignee || undefined, reason: status !== previousStatus ? reason : undefined, revision: updated.revision };
+    return {
+      success: true,
+      taskId,
+      status,
+      assignee: requestedAssignee || undefined,
+      reason: status !== previousStatus ? reason : undefined,
+      ...(updated.frontmatter.retrospective && { retrospective: updated.frontmatter.retrospective }),
+      ...(updated.frontmatter.knowledge_notes && { knowledgeNotes: updated.frontmatter.knowledge_notes }),
+      revision: updated.revision,
+    };
   }
 }

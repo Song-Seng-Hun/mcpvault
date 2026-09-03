@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { posix } from 'node:path';
 import { stringify as stringifyYaml } from 'yaml';
 import { normalizeScopeId } from './scopes.js';
 import { endpointIdForTool } from './endpoint-registry.js';
@@ -7,6 +8,7 @@ import { getOrganizationPropertyContract, getOrganizationRelationContract, knowl
 import { extractObsidianLinkOccurrences, resolveWikiLinkTargets } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
+import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
 const KNOWLEDGE_STATUSES = new Set(['draft', 'verified', 'disputed', 'superseded']);
 const CONFIDENCE_LEVELS = new Set(['low', 'medium', 'high']);
 const ISSUE_KINDS = new Set(['contradiction', 'unsupported_claim', 'stale', 'broken_link', 'missing_context', 'authority_change', 'other']);
@@ -191,30 +193,18 @@ function relationDocument(value) {
         return value.trim();
     }
 }
-function navigationOrder(value) {
-    return Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 1_000_000 ? Number(value) : Number.MAX_SAFE_INTEGER;
-}
 function compareMocNavigation(left, right) {
     return navigationOrder(left.navOrder ?? left.nav_order) - navigationOrder(right.navOrder ?? right.nav_order)
         || String(left.title || left.path).localeCompare(String(right.title || right.path))
         || String(left.path).localeCompare(String(right.path));
 }
 function mocBodyOutline(content, limit = 24) {
-    const outline = [];
-    let section = '';
-    const lines = String(content || '').split(/\r?\n/);
-    for (let index = 0; index < lines.length && outline.length < limit; index += 1) {
-        const line = lines[index] || '';
-        const heading = line.match(/^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$/);
-        if (heading)
-            section = heading[1].trim();
-        for (const link of extractObsidianLinkOccurrences(line)) {
-            outline.push({ target: link.target, line: index + 1, ...(section && { section }) });
-            if (outline.length >= limit)
-                break;
-        }
-    }
-    return outline;
+    return extractObsidianLinkOccurrences(content, limit).map(link => ({
+        target: link.target, line: link.line,
+        ...(link.heading && { section: boundedText(link.heading, 200) }),
+        ...(link.targetHeading && { targetHeading: boundedText(link.targetHeading, 200) }),
+        ...(link.targetBlockId && { targetBlockId: boundedText(link.targetBlockId, 200) }),
+    }));
 }
 function catalogEntryCompare(left, right, orderBy = 'location') {
     if (orderBy === 'time') {
@@ -650,6 +640,8 @@ export class LlmWikiService {
         if (!this.access.canAccessPhysicalPath(sourcePath, params.principal))
             throw new Error(`Access denied: ${this.access.toPublicPath(sourcePath)}`);
         const source = await this.fileSystem.readNote(sourcePath);
+        if (isModerationHidden(source.frontmatter))
+            throw new Error('The source note is unavailable');
         if (source.frontmatter.llm_wiki_type !== 'source' || source.frontmatter.immutable !== true) {
             throw new Error('sourcePath must point to an immutable LLM Wiki source snapshot');
         }
@@ -765,6 +757,10 @@ export class LlmWikiService {
                 confidence,
                 knowledge_status: status,
                 ...knowledgeOrganization({
+                    ...(params.tags !== undefined && { tags: params.tags }),
+                    ...(params.timeEstimateMinutes !== undefined && { timeEstimateMinutes: params.timeEstimateMinutes }),
+                    ...(params.energy !== undefined && { energy: params.energy }),
+                    ...(params.effort !== undefined && { effort: params.effort }),
                     ...(existing && { existing: existing.frontmatter }),
                     ...(params.noteKind !== undefined && { noteKind: params.noteKind }),
                     ...(params.lifecycle !== undefined && { lifecycle: params.lifecycle }),
@@ -1412,9 +1408,11 @@ export class LlmWikiService {
             || Math.min(...[...left.reasons].map(reason => reasonPriority[reason] ?? 9)) - Math.min(...[...right.reasons].map(reason => reasonPriority[reason] ?? 9))
             || left.path.localeCompare(right.path)).slice(0, boundedLimit);
         const neighbors = await Promise.all(ordered.map(async (candidate) => {
-            if (!candidate.title || !candidate.revision || candidate.polarity === undefined || candidate.status === undefined) {
+            {
                 try {
                     const note = await this.fileSystem.readNote(candidate.path);
+                    if (isModerationHidden(note.frontmatter))
+                        return undefined;
                     const title = typeof note.frontmatter.title === 'string' ? note.frontmatter.title : candidate.path.split('/').at(-1);
                     if (title)
                         candidate.title = title;
@@ -2344,7 +2342,64 @@ export class LlmWikiService {
         });
         const updated = await this.fileSystem.readNote(params.path);
         const followUpRequired = String(updated.frontmatter.lifecycle || '').toLowerCase() === 'review' && !nextLifecycle;
-        return { success: true, path: this.access.toPublicPath(params.path), revision: updated.revision, reviewOutcome: outcome, reviewedBy: updated.frontmatter.last_reviewed_by, reviewedAt: updated.frontmatter.last_reviewed_at, reviewTrigger, reviewCount, reviewReopenCount, ...(reviewChecks && { reviewChecks }), ...(reviewOpenItems && { reviewOpenItems }), ...(reviewAt && { reviewAt }), ...(effectiveReviewIntervalDays !== undefined && { reviewIntervalDays: effectiveReviewIntervalDays }), ...(adaptiveInterval !== undefined && { adaptiveReviewInterval: true }), ...(nextLifecycle && { nextLifecycle }), ...(followUpRequired && { followUpRequired, followUp: 'Choose nextLifecycle or revise the note; a confirmed review does not silently remove the note from the review queue.' }) };
+        // Phase 2: when superseding or disputing, count notes that derive from / depend on / support this note
+        let impactedDownstreamCount = 0;
+        let impactedDownstreamPaths = [];
+        if (outcome === 'superseded' || outcome === 'disputed') {
+            const effectiveLifecycle = nextLifecycle || String(note.frontmatter.lifecycle || '').toLowerCase();
+            if (['superseded', 'archived'].includes(effectiveLifecycle) || outcome === 'disputed') {
+                const canAccessFn = (path) => this.access.canAccessPhysicalPath(path, params.principal);
+                const thisPathNorm = normalizePath(params.path).toLowerCase();
+                const thisBasename = thisPathNorm.split('/').at(-1)?.replace(/\.md$/i, '') || '';
+                for await (const other of iterateNotes(this.fileSystem, {}, canAccessFn)) {
+                    if (other.path === params.path)
+                        continue;
+                    if (other.frontmatter.llm_wiki_type !== 'knowledge')
+                        continue;
+                    const upstreamRelations = ['derived_from', 'depends_on', 'supports'];
+                    let found = false;
+                    for (const rel of upstreamRelations) {
+                        const vals = Array.isArray(other.frontmatter[rel]) ? other.frontmatter[rel] : [];
+                        for (const raw of vals) {
+                            if (typeof raw !== 'string')
+                                continue;
+                            const target = raw.replace(/^!?\[\[/, '').replace(/\]\]$/, '').split(/[|#]/, 1)[0].trim();
+                            const targetNorm = normalizePath(target).toLowerCase();
+                            if (targetNorm === thisPathNorm || targetNorm === thisBasename || `${targetNorm}.md` === thisPathNorm) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (found)
+                            break;
+                    }
+                    if (found) {
+                        impactedDownstreamCount += 1;
+                        if (impactedDownstreamPaths.length < 5)
+                            impactedDownstreamPaths.push(this.access.toPublicPath(other.path));
+                    }
+                }
+            }
+        }
+        return {
+            success: true,
+            path: this.access.toPublicPath(params.path),
+            revision: updated.revision,
+            reviewOutcome: outcome,
+            reviewedBy: updated.frontmatter.last_reviewed_by,
+            reviewedAt: updated.frontmatter.last_reviewed_at,
+            reviewTrigger,
+            reviewCount,
+            reviewReopenCount,
+            ...(reviewChecks && { reviewChecks }),
+            ...(reviewOpenItems && { reviewOpenItems }),
+            ...(reviewAt && { reviewAt }),
+            ...(effectiveReviewIntervalDays !== undefined && { reviewIntervalDays: effectiveReviewIntervalDays }),
+            ...(adaptiveInterval !== undefined && { adaptiveReviewInterval: true }),
+            ...(nextLifecycle && { nextLifecycle }),
+            ...(followUpRequired && { followUpRequired, followUp: 'Choose nextLifecycle or revise the note; a confirmed review does not silently remove the note from the review queue.' }),
+            ...(impactedDownstreamCount > 0 && { impactedDownstreamCount, impactedDownstreamPaths, downstreamWarning: `${impactedDownstreamCount} note(s) derive from, depend on, or support this note. Call endpoint ${endpointIdForTool('get_wiki_impact_report')} to identify and schedule their review.` }),
+        };
     }
     async reviewClaim(params) {
         if (!params.expectedRevision)
@@ -3256,7 +3311,7 @@ export class LlmWikiService {
         }
         const hasOrganizationInput = [params.noteKind, params.lifecycle, params.primaryMoc, params.mocs, params.moc, params.navOrder, params.project, params.reviewAt, params.reviewIntervalDays, params.reviewSnoozedUntil, params.reviewSnoozeReason, params.nextAction, params.waitingFor, params.desiredOutcome, params.projectPurpose, params.projectSupport, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.serviceClass, params.completionCriteria, params.startedAt, params.blockedSince, params.waitingSince, params.completedAt, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.canonicalPath, params.recallPrompt, params.recallIntervalDays, params.lastRecalledAt, params.recallQuality, params.retentionPolicy, params.retentionEvent, params.retentionAt, params.preserveUntil, params.legalHold, params.retentionReason, params.replacedBy, params.knowledgeRole, params.termStatus, params.termReplacedBy, params.termScopeNote, params.preferredTerm, params.termLanguage, params.authorityScheme, params.authorityId, params.disambiguation, params.broaderTerms, params.relatedTerms, params.subjectTerms, params.domain, params.methods, params.audience, params.retrievalCues, params.useWhen, params.seeAlso, params.relations, params.relationNotes, params.relationEvidence, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.reviewChecks, params.reviewOpenItems, params.interpretationStatus, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
             .some(value => value !== undefined);
-        if (!hasOrganizationInput)
+        if (!hasOrganizationInput && [params.tags, params.timeEstimateMinutes, params.energy, params.effort].every(value => value === undefined))
             throw new Error('At least one organization field is required');
         const patch = {};
         if (params.noteKind !== undefined)
@@ -3311,6 +3366,10 @@ export class LlmWikiService {
             patch.triage_target = boundedText(params.triageTarget, 500);
         const organization = knowledgeOrganization({
             existing: note.frontmatter,
+            ...(params.tags !== undefined && { tags: params.tags }),
+            ...(params.timeEstimateMinutes !== undefined && { timeEstimateMinutes: params.timeEstimateMinutes }),
+            ...(params.energy !== undefined && { energy: params.energy }),
+            ...(params.effort !== undefined && { effort: params.effort }),
             ...(params.noteKind !== undefined && { noteKind: params.noteKind }),
             ...(params.lifecycle !== undefined && { lifecycle: params.lifecycle }),
             ...(params.primaryMoc !== undefined && { primaryMoc: params.primaryMoc }),
@@ -3422,6 +3481,10 @@ export class LlmWikiService {
             frontmatter: {
                 noteKind: updated.frontmatter.note_kind,
                 lifecycle: updated.frontmatter.lifecycle,
+                ...(Array.isArray(updated.frontmatter.tags) && { tags: updated.frontmatter.tags }),
+                ...(updated.frontmatter.time_estimate_minutes !== undefined && { timeEstimateMinutes: updated.frontmatter.time_estimate_minutes }),
+                ...(updated.frontmatter.energy && { energy: updated.frontmatter.energy }),
+                ...(updated.frontmatter.effort && { effort: updated.frontmatter.effort }),
                 ...(updated.frontmatter.primary_moc && { primaryMoc: updated.frontmatter.primary_moc }),
                 ...(updated.frontmatter.nav_order !== undefined && { navOrder: updated.frontmatter.nav_order }),
                 ...(updated.frontmatter.moc && { moc: updated.frontmatter.moc }),
@@ -3511,6 +3574,8 @@ export class LlmWikiService {
             throw new Error('Provide either section or blockId, not both');
         const maxChars = Math.min(Math.max(Number(params.maxChars) || 4000, 512), 12000);
         const note = await this.fileSystem.readNote(params.path);
+        if (isModerationHidden(note.frontmatter))
+            throw new Error('The source note is unavailable');
         const title = String(note.frontmatter.title || params.path.split('/').at(-1) || params.path);
         const headings = await this.fileSystem.getNoteOutline(params.path);
         const lines = note.originalContent.split('\n');
@@ -3816,6 +3881,14 @@ export class LlmWikiService {
         const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 16000);
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
         const sourceState = new Map();
+        // Build a map of knowledge notes to their lifecycle/status for upstream dependency checks
+        const knowledgeLifecycle = new Map();
+        for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+            if (note.frontmatter.llm_wiki_type !== 'knowledge')
+                continue;
+            const lc = String(note.frontmatter.lifecycle || '').toLowerCase();
+            knowledgeLifecycle.set(normalizePath(note.path).toLowerCase(), { lifecycle: lc, normalizedPath: normalizePath(note.path) });
+        }
         const items = [];
         let total = 0;
         const nowMs = Date.now();
@@ -3853,6 +3926,38 @@ export class LlmWikiService {
                     affectedSources.push(sourcePath);
                 }
             }
+            // Phase 2: upstream dependency cascading invalidation
+            const upstreamRelations = ['derived_from', 'depends_on', 'supports'];
+            const invalidatedUpstream = [];
+            for (const relation of upstreamRelations) {
+                const related = Array.isArray(note.frontmatter[relation]) ? note.frontmatter[relation] : [];
+                for (const raw of related) {
+                    if (typeof raw !== 'string' || !raw.trim())
+                        continue;
+                    const target = raw.replace(/^!?\[\[/, '').replace(/\]\]$/, '').split(/[|#]/, 1)[0].trim();
+                    const targetNormalized = normalizePath(target).toLowerCase();
+                    const upstream = knowledgeLifecycle.get(targetNormalized) || knowledgeLifecycle.get(`${targetNormalized}.md`);
+                    if (!upstream)
+                        continue;
+                    if (upstream.lifecycle === 'superseded' || upstream.lifecycle === 'archived') {
+                        reasons.push('upstream_dependency_superseded');
+                        invalidatedUpstream.push(this.access.toPublicPath(upstream.normalizedPath));
+                    }
+                }
+            }
+            // Check if any note this note contradicts has been verified (meaning *this* note may now be stale)
+            const contradicts = Array.isArray(note.frontmatter.contradicts) ? note.frontmatter.contradicts : [];
+            for (const raw of contradicts) {
+                if (typeof raw !== 'string' || !raw.trim())
+                    continue;
+                const target = raw.replace(/^!?\[\[/, '').replace(/\]\]$/, '').split(/[|#]/, 1)[0].trim();
+                const targetNormalized = normalizePath(target).toLowerCase();
+                const upstream = knowledgeLifecycle.get(targetNormalized) || knowledgeLifecycle.get(`${targetNormalized}.md`);
+                if (upstream && upstream.lifecycle === 'evergreen') {
+                    reasons.push('upstream_dependency_disputed');
+                    invalidatedUpstream.push(this.access.toPublicPath(upstream.normalizedPath));
+                }
+            }
             const reviewAt = typeof note.frontmatter.review_at === 'string' ? note.frontmatter.review_at : undefined;
             if (reviewAt && !Number.isNaN(Date.parse(reviewAt)) && Date.parse(reviewAt) <= nowMs)
                 reasons.push('review_due');
@@ -3867,21 +3972,25 @@ export class LlmWikiService {
                 reasons.push('link_changed');
             if (reviewPolicy === 'on_any_edit' && reviewSignals.bodyChanged)
                 reasons.push('note_edited');
+            if (reviewPolicy === 'on_upstream_change' && invalidatedUpstream.length > 0)
+                reasons.push('upstream_change_triggered_review');
             if (reasons.length === 0)
                 continue;
             total += 1;
             const uniqueReasons = [...new Set(reasons)];
-            const reviewTriggers = uniqueReasons.filter(reason => ['review_source_changed', 'link_changed', 'note_edited', 'summary_stale'].includes(reason));
+            const reviewTriggers = uniqueReasons.filter(reason => ['review_source_changed', 'link_changed', 'note_edited', 'summary_stale', 'upstream_change_triggered_review'].includes(reason));
+            const hasUpstreamIssue = uniqueReasons.some(r => r.startsWith('upstream_dependency_'));
             const item = {
                 path: this.access.toPublicPath(note.path),
                 title: note.frontmatter.title || note.path.split('/').at(-1),
-                severity: uniqueReasons.includes('missing_evidence') || uniqueReasons.includes('source_changed') ? 'high' : 'medium',
+                severity: uniqueReasons.includes('missing_evidence') || uniqueReasons.includes('source_changed') ? 'high' : hasUpstreamIssue ? 'high' : 'medium',
                 reasons: uniqueReasons,
                 reviewPolicy: note.frontmatter.review_policy || 'manual',
                 ...(reviewTriggers.length > 0 && { reviewTriggered: true, reviewTriggers, reviewTrigger: reviewTriggers[0] }),
                 ...(note.frontmatter.knowledge_polarity && { polarity: note.frontmatter.knowledge_polarity }),
                 ...(note.frontmatter.negative_type && { negativeType: note.frontmatter.negative_type }),
                 ...(affectedSources.length > 0 && { affectedSources: [...new Set(affectedSources)].map(path => this.access.toPublicPath(path)).slice(0, 10) }),
+                ...(invalidatedUpstream.length > 0 && { invalidatedUpstream: [...new Set(invalidatedUpstream)].slice(0, 10) }),
                 ...(reviewAt && { reviewAt }),
             };
             const score = item.severity === 'high' ? 0 : 1;
@@ -4035,7 +4144,7 @@ export class LlmWikiService {
         const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
         const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
-        const mocs = [];
+        const mocNodes = [];
         const projects = [];
         const inbox = [];
         const review = [];
@@ -4044,6 +4153,8 @@ export class LlmWikiService {
         let mocTotal = 0;
         for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
             const isSchema = normalizePath(note.path).toLowerCase() === PUBLIC_SCHEMA_PATH.toLowerCase();
+            if (isModerationHidden(note.frontmatter))
+                continue;
             if (!isSchema && typeof note.frontmatter.llm_wiki_type !== 'string' && typeof note.frontmatter.note_kind !== 'string' && note.frontmatter.lifecycle !== 'inbox')
                 continue;
             total += 1;
@@ -4055,12 +4166,8 @@ export class LlmWikiService {
             };
             if (note.frontmatter.note_kind === 'moc') {
                 mocTotal += 1;
-                const navOrder = Number.isInteger(Number(note.frontmatter.nav_order)) && Number(note.frontmatter.nav_order) >= 0 && Number(note.frontmatter.nav_order) <= 1_000_000
-                    ? Number(note.frontmatter.nav_order) : undefined;
-                mocs.push({ ...item, ...(navOrder !== undefined && { navOrder }) });
-                mocs.sort(compareMocNavigation);
-                if (mocs.length > boundedLimit)
-                    mocs.pop();
+                const navOrder = navigationOrder(note.frontmatter.nav_order);
+                mocNodes.push({ ...item, path: note.path, title: String(item.title), ...(typeof note.frontmatter.moc_parent === 'string' && { parent: note.frontmatter.moc_parent }), ...(navOrder !== Number.MAX_SAFE_INTEGER && { navOrder }) });
             }
             if ((note.frontmatter.note_kind === 'project' || note.frontmatter.note_kind === 'task') && projects.length < boundedLimit)
                 projects.push({ ...item, ...(note.frontmatter.task_status && { taskStatus: note.frontmatter.task_status }), ...(note.frontmatter.next_action && { nextAction: note.frontmatter.next_action }) });
@@ -4075,6 +4182,12 @@ export class LlmWikiService {
             if (typeof note.frontmatter.stable_id === 'string' && stableIds.length < boundedLimit)
                 stableIds.push({ stableId: note.frontmatter.stable_id, path: this.access.toPublicPath(note.path), title: item.title });
         }
+        const mocs = buildMocNavigation(mocNodes).items.slice(0, boundedLimit).map(({ children, ...item }) => ({
+            ...item, path: this.access.toPublicPath(item.path),
+            ...(item.resolvedParent && { resolvedParent: this.access.toPublicPath(item.resolvedParent) }),
+            children: children.slice(0, boundedLimit).map(path => this.access.toPublicPath(path)),
+            childrenTruncated: children.length > boundedLimit,
+        }));
         const result = {
             scope: principal ? (principal.commandCenterId ? `command-center:${principal.commandCenterId}` : 'authorized-scope') : 'global',
             purpose: 'A live, bounded launchpad for this scope. It is derived from Markdown and is not a security boundary or a second database.',
@@ -4086,6 +4199,7 @@ export class LlmWikiService {
             ],
             counts: { total, mocs: mocTotal, projects: projects.length, inbox: inbox.length, review: review.length, stableIds: stableIds.length },
             mocs,
+            mocOrdering: 'preorder: parent, then its branch; siblings by nav_order then title/path',
             projects,
             inbox,
             review,
@@ -4112,6 +4226,8 @@ export class LlmWikiService {
         let mocTotal = 0;
         let emptyMocTotal = 0;
         for await (const note of iterateNotes(this.fileSystem, { includeContent: true }, canAccess)) {
+            if (isModerationHidden(note.frontmatter))
+                continue;
             visibleNotePaths.push(note.path);
             const kind = String(note.frontmatter.note_kind || '').toLowerCase();
             const managedType = String(note.frontmatter.llm_wiki_type || '').toLowerCase();
@@ -4150,8 +4266,8 @@ export class LlmWikiService {
             const questions = Array.isArray(note.frontmatter.moc_questions)
                 ? note.frontmatter.moc_questions.filter((item) => typeof item === 'string' && Boolean(item.trim())).slice(0, 12)
                 : [];
-            const navOrder = Number.isInteger(Number(note.frontmatter.nav_order)) && Number(note.frontmatter.nav_order) >= 0 && Number(note.frontmatter.nav_order) <= 1_000_000
-                ? Number(note.frontmatter.nav_order) : undefined;
+            const order = navigationOrder(note.frontmatter.nav_order);
+            const navOrder = order === Number.MAX_SAFE_INTEGER ? undefined : order;
             mocDrafts.push({ path: note.path, title: note.frontmatter.title || note.path.split('/').at(-1) || note.path, links, questions, content: note.content || '', outline: mocBodyOutline(note.content || '', Math.min(24, boundedLimit * 2)), ...(navOrder !== undefined && { navOrder }), ...(typeof note.frontmatter.moc_parent === 'string' && { parent: note.frontmatter.moc_parent }) });
             if (links.length === 0) {
                 emptyMocTotal += 1;
@@ -4616,93 +4732,26 @@ export class LlmWikiService {
             });
             mocCoverageItems.push({ path: this.access.toPublicPath(moc.path), title: moc.title, ...(moc.navOrder !== undefined && { navOrder: moc.navOrder }), orderedEntries: moc.outline.map(entry => ({ ...entry, target: boundedText(entry.target, 300) })), linkedNotes: linked.size, linkedKnowledge: linkedKnowledge.length, directKnowledge: directKnowledge.length, indirectKnowledge: indirectKnowledge.length, nestedMocs: nestedMocs.size, unresolvedTargets, linkDensity: moc.links.length ? Number((linked.size / moc.links.length).toFixed(3)) : 0, knowledgeCoverage: knowledgePaths.size ? Number((linkedKnowledge.length / knowledgePaths.size).toFixed(3)) : 1, questionTotal: questionCoverage.length, questionLinked: linkedQuestions, questionCoverage: questionCoverage.length ? Number((linkedQuestions / questionCoverage.length).toFixed(3)) : 1 });
         }
-        // An explicit moc_parent is a hierarchy edge, distinct from ordinary
-        // cross-links in an MOC body. This keeps navigation predictable while
-        // still allowing MOCs to link across branches freely.
-        const mocChildren = new Map();
-        const mocParentByPath = new Map();
-        const mocMissingParents = [];
-        const mocAmbiguousParents = [];
-        for (const moc of mocDrafts) {
-            if (!moc.parent?.trim())
-                continue;
-            const source = normalizePath(moc.path).toLowerCase();
-            const targets = resolveWikiLinkTargets(relationDocument(moc.parent), visibleNotePaths)
-                .map(path => normalizePath(path).toLowerCase())
-                .filter(path => mocPathSet.has(path));
-            if (targets.length === 0) {
-                mocMissingParents.push({ path: this.access.toPublicPath(moc.path), parent: boundedText(moc.parent, 300), reason: 'moc_parent_does_not_resolve_to_an_moc' });
-                continue;
-            }
-            if (targets.length > 1) {
-                mocAmbiguousParents.push({ path: this.access.toPublicPath(moc.path), parent: boundedText(moc.parent, 300), matches: targets.slice(0, boundedLimit).map(path => this.access.toPublicPath(path)), reason: 'moc_parent_matches_multiple_mocs' });
-                continue;
-            }
-            const parent = targets[0];
-            if (parent === source) {
-                mocMissingParents.push({ path: this.access.toPublicPath(moc.path), parent: boundedText(moc.parent, 300), reason: 'moc_parent_points_to_itself' });
-                continue;
-            }
-            mocParentByPath.set(source, parent);
-            const children = mocChildren.get(parent) || new Set();
-            children.add(source);
-            mocChildren.set(parent, children);
-        }
-        const mocHierarchyCycles = [];
-        const mocVisit = new Map();
-        const mocDepth = new Map();
-        const walkMocHierarchy = (path, trail) => {
-            const state = mocVisit.get(path);
-            if (state === 'visiting') {
-                const start = trail.indexOf(path);
-                const cycle = (start >= 0 ? trail.slice(start) : trail).map(item => this.access.toPublicPath(item));
-                if (cycle.length > 0 && !mocHierarchyCycles.some(item => JSON.stringify(item.nodes) === JSON.stringify(cycle)))
-                    mocHierarchyCycles.push({ nodes: cycle, reason: 'moc_parent_cycle' });
-                return 0;
-            }
-            if (state === 'visited')
-                return mocDepth.get(path) || 0;
-            mocVisit.set(path, 'visiting');
-            const parent = mocParentByPath.get(path);
-            const depth = parent ? walkMocHierarchy(parent, [...trail, path]) + 1 : 0;
-            mocDepth.set(path, depth);
-            mocVisit.set(path, 'visited');
-            return depth;
-        };
-        for (const moc of mocDrafts)
-            walkMocHierarchy(normalizePath(moc.path).toLowerCase(), []);
-        const mocHierarchyItems = mocDrafts
-            .map(moc => {
-            const path = normalizePath(moc.path).toLowerCase();
-            const children = [...(mocChildren.get(path) || new Set())]
-                .map(child => mocByPath.get(child))
-                .filter((child) => Boolean(child))
-                .sort((left, right) => compareMocNavigation(left, right));
-            return {
-                path: this.access.toPublicPath(moc.path),
-                title: moc.title,
-                ...(moc.navOrder !== undefined && { navOrder: moc.navOrder }),
-                ...(moc.parent && { parent: boundedText(moc.parent, 300) }),
-                ...(mocParentByPath.has(path) && { resolvedParent: this.access.toPublicPath(graphByPath.get(mocParentByPath.get(path))?.path || mocParentByPath.get(path)) }),
-                childTotal: children.length,
-                children: children.slice(0, boundedLimit).map(child => this.access.toPublicPath(child.path)),
-                depth: mocDepth.get(path) || 0,
-                state: mocHierarchyCycles.some(item => item.nodes.includes(this.access.toPublicPath(moc.path))) ? 'cycle' : mocMissingParents.some(item => item.path === this.access.toPublicPath(moc.path)) ? 'unresolved_parent' : mocParentByPath.has(path) ? 'nested' : 'root',
-            };
-        })
-            .sort((left, right) => Number(left.depth) - Number(right.depth) || compareMocNavigation(left, right));
-        const mocRoots = mocHierarchyItems.filter(item => item.state === 'root').map(item => item.path);
+        const navigation = buildMocNavigation(mocDrafts.map(({ path, title, navOrder, parent }) => ({ path, title, navOrder, parent })));
+        const mocHierarchyItems = navigation.items.map(item => ({
+            ...item,
+            path: this.access.toPublicPath(item.path),
+            ...(item.parent && { parent: boundedText(item.parent, 300) }),
+            ...(item.resolvedParent && { resolvedParent: this.access.toPublicPath(item.resolvedParent) }),
+            children: item.children.slice(0, boundedLimit).map(path => this.access.toPublicPath(path)),
+            childrenTruncated: item.childTotal > boundedLimit,
+        }));
         const mocHierarchy = {
             total: mocTotal,
-            explicitParentEdges: mocParentByPath.size,
-            roots: { total: mocRoots.length, items: mocRoots.slice(0, boundedLimit), truncated: mocRoots.length > boundedLimit },
-            missingParents: { total: mocMissingParents.length, items: mocMissingParents.slice(0, boundedLimit), truncated: mocMissingParents.length > boundedLimit },
-            ambiguousParents: { total: mocAmbiguousParents.length, items: mocAmbiguousParents.slice(0, boundedLimit), truncated: mocAmbiguousParents.length > boundedLimit },
-            cycles: { total: mocHierarchyCycles.length, items: mocHierarchyCycles.slice(0, boundedLimit), truncated: mocHierarchyCycles.length > boundedLimit },
-            maxDepth: Math.max(0, ...mocHierarchyItems.map(item => Number(item.depth))),
+            explicitParentEdges: navigation.explicitParentEdges,
+            roots: { total: navigation.roots.length, items: navigation.roots.slice(0, boundedLimit).map(path => this.access.toPublicPath(path)), truncated: navigation.roots.length > boundedLimit },
+            missingParents: { total: navigation.missingParents.length, items: navigation.missingParents.slice(0, boundedLimit).map(item => ({ ...item, path: this.access.toPublicPath(item.path), parent: boundedText(item.parent, 300) })), truncated: navigation.missingParents.length > boundedLimit },
+            ambiguousParents: { total: navigation.ambiguousParents.length, items: navigation.ambiguousParents.slice(0, boundedLimit).map(item => ({ ...item, path: this.access.toPublicPath(item.path), parent: boundedText(item.parent, 300), matches: item.matches.slice(0, boundedLimit).map(path => this.access.toPublicPath(path)), matchesTruncated: item.matches.length > boundedLimit })), truncated: navigation.ambiguousParents.length > boundedLimit },
+            cycles: { total: navigation.cycles.length, items: navigation.cycles.slice(0, boundedLimit).map(item => ({ ...item, nodes: item.nodes.slice(0, boundedLimit).map(path => this.access.toPublicPath(path)), nodeTotal: item.nodes.length, truncated: item.nodes.length > boundedLimit })), truncated: navigation.cycles.length > boundedLimit },
+            maxDepth: navigation.maxDepth,
             items: mocHierarchyItems.slice(0, boundedLimit),
             truncated: mocHierarchyItems.length > boundedLimit,
-            ordering: 'depth asc, nav_order asc, then title/path; body orderedEntries preserve Markdown link order',
+            ordering: 'preorder: parent then its complete branch; siblings by nav_order then title/path; unresolved and cyclic branches follow valid roots',
         };
         const uncoveredKnowledge = visibleNotePaths
             .filter(path => knowledgePaths.has(normalizePath(path).toLowerCase()) && !mocCoveredKnowledge.has(normalizePath(path).toLowerCase()))
@@ -5364,12 +5413,64 @@ export class LlmWikiService {
      */
     async contextPack(principal, path, maxChars = 7000, includeSemantic = false, intent = 'decide') {
         const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 1024), 16000);
+        if (!this.access.canAccessPhysicalPath(path, principal))
+            throw new Error('Access denied');
+        const rootNote = await this.fileSystem.readNote(path);
+        if (isModerationHidden(rootNote.frontmatter))
+            throw new Error('The source note is unavailable');
         const packet = await this.answerPacket(principal, path, boundedChars, includeSemantic, intent);
         const source = packet.source;
+        if (source.revision !== rootNote.revision)
+            throw new Error('The root note changed while building its context pack; re-read it and retry.');
         const supporting = Array.isArray(packet.supporting) ? packet.supporting : [];
         const counterpoints = Array.isArray(packet.counterpoints) ? packet.counterpoints : [];
+        const outline = rootNote.frontmatter.note_kind === 'moc' ? extractObsidianLinkOccurrences(rootNote.content, 25) : [];
+        const orderedEntries = [];
+        let unavailableEntries = 0;
+        const canAccess = (target) => this.access.canAccessPhysicalPath(target, principal);
+        // Resolve only this MOC's bounded link window; never scan/read all bodies.
+        for (let offset = 0; offset < Math.min(24, outline.length); offset += 4) {
+            const rows = await Promise.all(outline.slice(offset, Math.min(offset + 4, 24)).map(async (link) => {
+                try {
+                    let matches = [];
+                    if (!link.link.startsWith('[[') && !link.link.startsWith('![[')) {
+                        const relative = posix.normalize(posix.join(posix.dirname(normalizePath(path)), link.target));
+                        if (canAccess(relative) && await this.fileSystem.noteExists(relative))
+                            matches = [relative];
+                    }
+                    if (!matches.length)
+                        matches = await this.fileSystem.findPathForWikiLink(link.target.replace(/\.md$/i, ''), canAccess);
+                    if (matches.length !== 1 || !canAccess(matches[0]))
+                        return undefined;
+                    const target = matches[0];
+                    const note = await this.fileSystem.readNote(target);
+                    if (isModerationHidden(note.frontmatter))
+                        return undefined;
+                    return {
+                        path: this.access.toPublicPath(target), revision: note.revision,
+                        title: boundedText(note.frontmatter.title || target.split('/').at(-1), 160), role: 'moc_reading_order',
+                        line: link.line,
+                        ...(link.heading && { section: boundedText(link.heading, 160) }),
+                        ...(link.targetHeading && { targetHeading: boundedText(link.targetHeading, 160) }),
+                        ...(link.targetBlockId && { targetBlockId: boundedText(link.targetBlockId, 160) }),
+                    };
+                }
+                catch {
+                    return undefined;
+                }
+            }));
+            for (const row of rows) {
+                if (!row) {
+                    unavailableEntries += 1;
+                    continue;
+                }
+                if (row.path !== source.path && !orderedEntries.some(entry => entry.path === row.path))
+                    orderedEntries.push(row);
+            }
+        }
         const entrypoints = [
             { path: source.path, title: source.title, revision: source.revision, role: 'root' },
+            ...orderedEntries,
             ...supporting.map(item => ({ path: item.path, title: item.title, revision: item.revision, role: 'supporting_context' })),
             ...counterpoints.map(item => ({ path: item.path, title: item.title, revision: item.revision, role: 'counterpoint_or_review' })),
         ].filter((item, index, all) => item.path && all.findIndex(candidate => candidate.path === item.path) === index);
@@ -5381,6 +5482,7 @@ export class LlmWikiService {
             root: { path: source.path, title: source.title, revision: source.revision },
             readOrder: entrypoints.map(item => item.path),
             entrypoints,
+            navigation: { order: outline.length ? 'MOC body links, then supporting context and counterpoints' : 'root, supporting context, counterpoints', unavailableEntries, truncated: outline.length > 24 },
             freshness: {
                 rootRevision: source.revision,
                 rootSummaryFresh: source.summaryFresh,
@@ -5390,7 +5492,7 @@ export class LlmWikiService {
             gaps: Array.isArray(trail?.gaps) ? trail.gaps : [],
             guidance: packet.intentGuidance,
             packet,
-            truncated: Boolean(packet.truncated),
+            truncated: Boolean(packet.truncated) || outline.length > 24,
         };
         if (JSON.stringify(result).length <= boundedChars)
             return result;
@@ -5401,6 +5503,7 @@ export class LlmWikiService {
             root: result.root,
             readOrder: result.readOrder.slice(0, 8),
             entrypoints: result.entrypoints.slice(0, 8),
+            navigation: result.navigation,
             freshness: result.freshness,
             gaps: result.gaps,
             guidance: result.guidance,
@@ -5412,13 +5515,27 @@ export class LlmWikiService {
             },
             truncated: true,
         };
-        return JSON.stringify(compact).length <= boundedChars ? compact : {
+        if (JSON.stringify(compact).length <= boundedChars)
+            return compact;
+        const minimal = {
             mode: 'context_pack',
-            root: result.root,
-            readOrder: result.readOrder.slice(0, 3),
-            gaps: result.gaps.slice(0, 8),
+            root: { path: source.path, revision: source.revision },
+            readOrder: [source.path],
+            entrypoints: [{ path: source.path, revision: source.revision, role: 'root' }],
             truncated: true,
         };
+        for (const entry of result.entrypoints.slice(1)) {
+            minimal.entrypoints.push({ path: entry.path, revision: entry.revision, role: entry.role });
+            minimal.readOrder.push(entry.path);
+            if (JSON.stringify(minimal).length > boundedChars) {
+                minimal.entrypoints.pop();
+                minimal.readOrder.pop();
+                break;
+            }
+        }
+        if (JSON.stringify(minimal).length > boundedChars)
+            throw new Error('maxChars is too small to preserve this root path and revision; increase the read budget.');
+        return minimal;
     }
     /**
      * Present existing organization, graph, and quarantine findings as one
@@ -6462,7 +6579,8 @@ export class LlmWikiService {
             return result;
         return { ...result, items: items.slice(0, Math.min(4, boundedLimit)), truncated: true };
     }
-    async orient(principal) {
+    async orient(principal, maxChars = 12000) {
+        const boundedChars = Math.min(Math.max(Number(maxChars) || 12000, 512), 20000);
         const [catalog, lint, welcomeExists] = await Promise.all([
             this.catalog(principal, { summaryOnly: true }),
             this.lint(principal, 200),
@@ -6519,10 +6637,7 @@ export class LlmWikiService {
             nextActions.push({ tool: endpointIdForTool('get_wiki_review_queue'), reason: 'Review one bounded due or disputed knowledge note before starting unrelated work; inspect evidence and revise with expectedRevision.' });
             nextActions.push({ tool: endpointIdForTool('create_discussion'), reason: 'Use an equal-peer discussion for competing interpretations or challenges.' });
         }
-        if (!principal) {
-            nextActions.push({ tool: endpointIdForTool('register_scope_account'), reason: 'Public reading is available now; attributed posts, comments, chat, journals, and notifications require a stable identity. Choose your actual modelId and a stable accountId, generate a new 12+ character password, and register yourself. Registration returns an active session token.' });
-        }
-        return {
+        const result = {
             protocol: 'mcpvault-llm-wiki/v1',
             purpose: 'A shared, scope-aware, evidence-grounded Markdown memory and peer community with Obsidian compatibility and Git history.',
             mission: 'Help future agents think farther by leaving verifiable knowledge, respectful challenges, useful references, and clear decisions. Reading is orientation; contribution is how the Wiki compounds.',
@@ -6591,7 +6706,7 @@ export class LlmWikiService {
                     'Generate a new password with at least 12 characters yourself and store it before calling call_endpoint with endpointId auth.register. Use the host secret store or password manager. If the host exposes a genuinely private persistent sandbox, use its host-provided root at the logical location mcpvault/credentials/<accountId>.json with encryption or owner-only ACL. Never guess a path or use the shared project .agents directory, vault, prompt, source snapshot, logs, or Git. If no private storage is available, do not create a persistent account; continue with public reading.',
                 ],
                 steps: ['auth.register via call_endpoint', 'get_agent_pulse'],
-                note: 'For a first-time worker or sub-agent, include a unique agentId and the human owner\'s stable userId. Agents with the same userId share the private family scope, while agentId remains their own continuity identity. Omit agentId only when you are claiming the durable model owner identity. Registration immediately creates the session. If this exact account already exists, use its existing secret with endpointId auth.login rather than creating a duplicate identity.',
+                note: 'For a first-time worker, include a unique agentId and the human owner\'s stable userId. userId identifies a family for accountability; it never grants MCP access to host-only user storage. Registration creates a session. If the exact account exists, recover its secret from your authorized private storage and use auth.login; never guess or create a duplicate.',
             },
             invariants: [
                 'Existing _sources snapshots are immutable; ingest a new snapshot when content changes.',
@@ -6603,6 +6718,31 @@ export class LlmWikiService {
             lint,
             nextActions,
         };
+        if (JSON.stringify(result).length <= boundedChars)
+            return result;
+        const compact = {
+            protocol: result.protocol, purpose: result.purpose, mission: result.mission,
+            access: result.access, visibleScopes, publicOnboarding: result.publicOnboarding,
+            authentication: result.authentication,
+            routing: 'For an endpoint use call_endpoint with endpointId=tool and arguments. get_agent_pulse is a direct MCP tool. Follow the first action before discovering others.',
+            nextActions: nextActions.slice(0, 4).map(action => ({ ...action, reason: boundedText(action.reason, 160) })),
+            catalog: { counts: catalog.counts }, lint: { errors: lint.errors, warnings: lint.warnings },
+            truncated: true,
+        };
+        if (JSON.stringify(compact).length <= boundedChars)
+            return compact;
+        // Tiny budgets must still leave one executable public reading step. Do
+        // not suggest registration after dropping credential-storage guidance.
+        const firstRead = nextActions.find(action => action.tool === endpointIdForTool('read_note'));
+        const minimal = {
+            protocol: result.protocol,
+            nextActions: firstRead ? [{ tool: firstRead.tool, arguments: firstRead.arguments }] : [],
+            guidance: firstRead
+                ? 'Use call_endpoint(endpointId=tool, arguments). Read welcome/schema before contributing. User storage is host-only; use public reading if no private credential store exists.'
+                : 'Search capabilities for wiki.home to inspect public setup. User storage is host-only; registration needs a private credential store.',
+            truncated: true,
+        };
+        return minimal;
     }
     async validateCommitPaths(paths, principal) {
         const relevant = new Set();

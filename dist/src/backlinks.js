@@ -38,16 +38,16 @@ export function extractWikiLinkOccurrences(content) {
  * based and bounded so callers can provide a useful locator without loading
  * the source note again.
  */
-export function extractObsidianLinkOccurrences(content) {
-    return extractLinkOccurrences(content, true);
+export function extractObsidianLinkOccurrences(content, limit = Number.POSITIVE_INFINITY) {
+    return extractLinkOccurrences(content, true, limit);
 }
-function extractLinkOccurrences(content, includeMarkdown) {
+function extractLinkOccurrences(content, includeMarkdown, limit = Number.POSITIVE_INFINITY) {
     const matches = [];
     const lines = content.split('\n');
     let fenceChar = '';
     let fenceLength = 0;
     let currentHeading;
-    for (let index = 0; index < lines.length; index += 1) {
+    for (let index = 0; index < lines.length && matches.length < limit; index += 1) {
         const line = lines[index].replace(/\r$/, '');
         const fence = FENCE_PATTERN.exec(line);
         if (fence) {
@@ -70,21 +70,22 @@ function extractLinkOccurrences(content, includeMarkdown) {
         if (heading)
             currentHeading = heading[1].trim();
         WIKI_LINK_PATTERN.lastIndex = 0;
+        const lineMatches = [];
         let match;
         while ((match = WIKI_LINK_PATTERN.exec(line)) !== null) {
             const link = match[0];
             const parsed = linkDocument(link);
             if (!parsed.document)
                 continue;
-            matches.push({
-                line: index + 1,
-                link,
-                target: parsed.document,
-                context: line.trim().slice(0, 300),
-                ...(currentHeading && { heading: currentHeading }),
-                ...(parsed.targetHeading && { targetHeading: parsed.targetHeading }),
-                ...(parsed.targetBlockId && { targetBlockId: parsed.targetBlockId }),
-            });
+            lineMatches.push({ offset: match.index, item: {
+                    line: index + 1,
+                    link,
+                    target: parsed.document,
+                    context: line.trim().slice(0, 300),
+                    ...(currentHeading && { heading: currentHeading }),
+                    ...(parsed.targetHeading && { targetHeading: parsed.targetHeading }),
+                    ...(parsed.targetBlockId && { targetBlockId: parsed.targetBlockId }),
+                } });
         }
         if (includeMarkdown) {
             MARKDOWN_LINK_PATTERN.lastIndex = 0;
@@ -93,16 +94,22 @@ function extractLinkOccurrences(content, includeMarkdown) {
                 const parsed = markdownLinkDocument(match[2]);
                 if (!parsed.document)
                     continue;
-                matches.push({
-                    line: index + 1,
-                    link,
-                    target: parsed.document,
-                    context: line.trim().slice(0, 300),
-                    ...(currentHeading && { heading: currentHeading }),
-                    ...(parsed.targetHeading && { targetHeading: parsed.targetHeading }),
-                    ...(parsed.targetBlockId && { targetBlockId: parsed.targetBlockId }),
-                });
+                lineMatches.push({ offset: match.index, item: {
+                        line: index + 1,
+                        link,
+                        target: parsed.document,
+                        context: line.trim().slice(0, 300),
+                        ...(currentHeading && { heading: currentHeading }),
+                        ...(parsed.targetHeading && { targetHeading: parsed.targetHeading }),
+                        ...(parsed.targetBlockId && { targetBlockId: parsed.targetBlockId }),
+                    } });
             }
+        }
+        lineMatches.sort((left, right) => left.offset - right.offset);
+        for (const match of lineMatches) {
+            if (matches.length >= limit)
+                break;
+            matches.push(match.item);
         }
     }
     return matches;

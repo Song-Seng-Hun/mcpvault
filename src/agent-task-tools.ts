@@ -27,9 +27,9 @@ export function getAgentTaskTools(): Tool[] {
     },
     {
       name: 'update_agent_task',
-      description: 'Update a task owned by its requester or assignee. Status changes require a short reason and expectedRevision, so concurrent agent decisions remain auditable in Git history.',
+      description: 'Update a task owned by its requester or assignee. Status changes require a short reason and expectedRevision, so concurrent agent decisions remain auditable in Git history. When completing a task, record an optional retrospective and linked knowledgeNotes to prevent insight loss.',
       inputSchema: { type: 'object', properties: {
-        taskId: { type: 'string' }, status: { type: 'string', enum: ['proposed', 'accepted', 'in_progress', 'blocked', 'completed', 'cancelled'] }, assignee: { type: 'string' }, description: { type: 'string', maxLength: 4000 }, references: { type: 'array', items: { type: 'string' } }, reason: { type: 'string', maxLength: 500 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
+        taskId: { type: 'string' }, status: { type: 'string', enum: ['proposed', 'accepted', 'in_progress', 'blocked', 'completed', 'cancelled'] }, assignee: { type: 'string' }, description: { type: 'string', maxLength: 4000 }, references: { type: 'array', items: { type: 'string' } }, reason: { type: 'string', maxLength: 500 }, retrospective: { type: 'string', maxLength: 1000, description: 'Key insight, summary of findings, or reflection upon completing or updating the task' }, knowledgeNotes: { type: 'array', items: { type: 'string' }, description: 'Paths of durable knowledge notes created or updated as an outcome of this task' }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
       }, required: ['taskId', 'expectedRevision', 'accessToken'] },
     },
   ];

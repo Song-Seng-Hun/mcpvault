@@ -159,6 +159,10 @@ export declare class LlmWikiService {
         revision: string;
     }>;
     publishKnowledge(params: {
+        tags?: unknown;
+        timeEstimateMinutes?: unknown;
+        energy?: unknown;
+        effort?: unknown;
         principal?: ScopePrincipal;
         path: string;
         content: string;
@@ -573,6 +577,9 @@ export declare class LlmWikiService {
         nextLifecycle?: "active" | "archived" | "evergreen" | "inbox" | "review" | "superseded";
         followUpRequired?: true;
         followUp?: string;
+        impactedDownstreamCount?: number;
+        impactedDownstreamPaths?: string[];
+        downstreamWarning?: string;
     }>;
     reviewClaim(params: {
         principal?: ScopePrincipal;
@@ -699,30 +706,46 @@ export declare class LlmWikiService {
                     };
                     missingParents: {
                         total: number;
-                        items: Record<string, unknown>[];
+                        items: {
+                            reason: string;
+                            path: string;
+                            parent: string;
+                        }[];
                         truncated: boolean;
                     };
                     ambiguousParents: {
                         total: number;
-                        items: Record<string, unknown>[];
+                        items: {
+                            reason: string;
+                            path: string;
+                            parent: string;
+                            matches: string[];
+                            matchesTruncated: boolean;
+                        }[];
                         truncated: boolean;
                     };
                     cycles: {
                         total: number;
-                        items: Record<string, unknown>[];
+                        items: {
+                            reason: string;
+                            nodes: string[];
+                            nodeTotal: number;
+                            truncated: boolean;
+                        }[];
                         truncated: boolean;
                     };
                     maxDepth: number;
                     items: {
-                        path: string;
-                        title: string;
-                        navOrder?: number;
-                        parent?: string;
                         resolvedParent?: string;
                         childTotal: number;
-                        children: string[];
                         depth: number;
                         state: string;
+                        title: string;
+                        navOrder: number | undefined;
+                        parent: string | undefined;
+                        path: string;
+                        children: string[];
+                        childrenTruncated: boolean;
                     }[];
                     truncated: boolean;
                     ordering: string;
@@ -934,30 +957,46 @@ export declare class LlmWikiService {
                     };
                     missingParents: {
                         total: number;
-                        items: Record<string, unknown>[];
+                        items: {
+                            reason: string;
+                            path: string;
+                            parent: string;
+                        }[];
                         truncated: boolean;
                     };
                     ambiguousParents: {
                         total: number;
-                        items: Record<string, unknown>[];
+                        items: {
+                            reason: string;
+                            path: string;
+                            parent: string;
+                            matches: string[];
+                            matchesTruncated: boolean;
+                        }[];
                         truncated: boolean;
                     };
                     cycles: {
                         total: number;
-                        items: Record<string, unknown>[];
+                        items: {
+                            reason: string;
+                            nodes: string[];
+                            nodeTotal: number;
+                            truncated: boolean;
+                        }[];
                         truncated: boolean;
                     };
                     maxDepth: number;
                     items: {
-                        path: string;
-                        title: string;
-                        navOrder?: number;
-                        parent?: string;
                         resolvedParent?: string;
                         childTotal: number;
-                        children: string[];
                         depth: number;
                         state: string;
+                        title: string;
+                        navOrder: number | undefined;
+                        parent: string | undefined;
+                        path: string;
+                        children: string[];
+                        childrenTruncated: boolean;
                     }[];
                     truncated: boolean;
                     ordering: string;
@@ -1881,6 +1920,10 @@ export declare class LlmWikiService {
         frontmatter: any;
     }>;
     triage(params: {
+        tags?: unknown;
+        timeEstimateMinutes?: unknown;
+        energy?: unknown;
+        effort?: unknown;
         principal?: ScopePrincipal;
         path: string;
         noteKind?: string;
@@ -2230,7 +2273,19 @@ export declare class LlmWikiService {
             review: number;
             stableIds: number;
         };
-        mocs: Record<string, unknown>[];
+        mocs: {
+            resolvedParent?: string;
+            childTotal: number;
+            depth: number;
+            state: string;
+            title: string;
+            parent?: string;
+            navOrder?: number;
+            path: string;
+            children: string[];
+            childrenTruncated: boolean;
+        }[];
+        mocOrdering: string;
         projects: Record<string, unknown>[];
         inbox: Record<string, unknown>[];
         review: Record<string, unknown>[];
@@ -2303,30 +2358,46 @@ export declare class LlmWikiService {
             };
             missingParents: {
                 total: number;
-                items: Record<string, unknown>[];
+                items: {
+                    reason: string;
+                    path: string;
+                    parent: string;
+                }[];
                 truncated: boolean;
             };
             ambiguousParents: {
                 total: number;
-                items: Record<string, unknown>[];
+                items: {
+                    reason: string;
+                    path: string;
+                    parent: string;
+                    matches: string[];
+                    matchesTruncated: boolean;
+                }[];
                 truncated: boolean;
             };
             cycles: {
                 total: number;
-                items: Record<string, unknown>[];
+                items: {
+                    reason: string;
+                    nodes: string[];
+                    nodeTotal: number;
+                    truncated: boolean;
+                }[];
                 truncated: boolean;
             };
             maxDepth: number;
             items: {
-                path: string;
-                title: string;
-                navOrder?: number;
-                parent?: string;
                 resolvedParent?: string;
                 childTotal: number;
-                children: string[];
                 depth: number;
                 state: string;
+                title: string;
+                navOrder: number | undefined;
+                parent: string | undefined;
+                path: string;
+                children: string[];
+                childrenTruncated: boolean;
             }[];
             truncated: boolean;
             ordering: string;
@@ -2579,77 +2650,12 @@ export declare class LlmWikiService {
      */
     contextPack(principal: ScopePrincipal | undefined, path: string, maxChars?: number, includeSemantic?: boolean, intent?: 'capture' | 'explore' | 'decide' | 'execute' | 'review'): Promise<{
         mode: string;
-        purpose: string;
-        intent: unknown;
         root: {
             path: any;
-            title: any;
             revision: any;
         };
         readOrder: any[];
-        entrypoints: {
-            path: any;
-            title: any;
-            revision: any;
-            role: string;
-        }[];
-        freshness: {
-            rootRevision: any;
-            rootSummaryFresh: any;
-            rootSummaryStale: any;
-            note: string;
-        };
-        gaps: any[];
-        guidance: unknown;
-        packet: Record<string, unknown>;
-        truncated: boolean;
-    } | {
-        mode: string;
-        purpose: string;
-        intent: unknown;
-        root: {
-            path: any;
-            title: any;
-            revision: any;
-        };
-        readOrder: any[];
-        entrypoints: {
-            path: any;
-            title: any;
-            revision: any;
-            role: string;
-        }[];
-        freshness: {
-            rootRevision: any;
-            rootSummaryFresh: any;
-            rootSummaryStale: any;
-            note: string;
-        };
-        gaps: any[];
-        guidance: unknown;
-        packet: {
-            mode: string;
-            intent: unknown;
-            source: {
-                path: any;
-                title: any;
-                revision: any;
-            };
-            reasoningTrail: {
-                gaps: any[];
-                note: any;
-            };
-        };
-        truncated: boolean;
-    } | {
-        mode: string;
-        root: {
-            path: any;
-            title: any;
-            revision: any;
-        };
-        readOrder: any[];
-        gaps: any[];
+        entrypoints: Array<Record<string, any>>;
         truncated: boolean;
     }>;
     /**
@@ -2964,7 +2970,7 @@ export declare class LlmWikiService {
         total: number;
         truncated: boolean;
     }>;
-    orient(principal?: ScopePrincipal): Promise<{
+    orient(principal?: ScopePrincipal, maxChars?: number): Promise<{
         protocol: string;
         purpose: string;
         mission: string;
@@ -3023,6 +3029,73 @@ export declare class LlmWikiService {
             arguments?: Record<string, string>;
             reason: string;
         }[];
+    } | {
+        protocol: string;
+        purpose: string;
+        mission: string;
+        access: {
+            mode: string;
+            principal: {
+                accountId: string;
+                userId?: string;
+                familyId?: string;
+                modelId: string;
+                agentId?: string;
+                commandCenterId: string;
+                role: "agent" | "model";
+            } | null;
+            note: string;
+        };
+        visibleScopes: {
+            kind: "agent" | "community" | "global" | "model";
+            uri: string;
+        }[];
+        publicOnboarding: {
+            welcomePath: string;
+            schemaPath: string | null;
+            readableWithoutLogin: boolean;
+            commandCenterId: string;
+            note: string;
+        };
+        authentication: {
+            status: string;
+            identity: string;
+            userId?: string;
+            familyId?: string;
+            commandCenterId: string;
+            note: string;
+            why?: never;
+            beforeRegister?: never;
+            steps?: never;
+        } | {
+            status: string;
+            why: string;
+            beforeRegister: string[];
+            steps: string[];
+            note: string;
+        };
+        routing: string;
+        nextActions: {
+            tool: string;
+            arguments?: Record<string, string>;
+            reason: string;
+        }[];
+        catalog: {
+            counts: any;
+        };
+        lint: {
+            errors: number;
+            warnings: number;
+        };
+        truncated: boolean;
+    } | {
+        protocol: string;
+        nextActions: {
+            tool: string;
+            arguments: Record<string, string> | undefined;
+        }[];
+        guidance: string;
+        truncated: boolean;
     }>;
     validateCommitPaths(paths: string[], principal?: ScopePrincipal): Promise<{
         checked: boolean;

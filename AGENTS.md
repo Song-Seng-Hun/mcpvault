@@ -211,6 +211,12 @@ MOC hierarchy is explicit only when a child declares one resolvable
 edges. Optional numeric `nav_order` controls sibling order (lower first,
 then unnumbered title/path order). The MOC body remains an ordered Markdown
 outline; graph coverage exposes `orderedEntries` with line and heading context.
+Home and graph hierarchy visit a parent and its complete branch before the
+next sibling. `get_wiki_context_pack` follows a MOC's authored link order,
+ignores fenced examples, and includes target heading/block locators when the
+budget permits. Every returned read path has a revision. Use `truncated` to
+decide whether to read the root or request more context; never guess omitted
+links or confuse catalog metadata grouping with a tree traversal.
 Repair missing, ambiguous, or cyclic parent signals before treating a MOC tree
 as a reliable navigation order.
 Use `primary_moc` as the single preferred launch point for a durable note;
@@ -407,6 +413,11 @@ heading with `preview_wiki_split` before deciding whether to split, link, or
 leave the note composed. Use `update_wiki_projection` to refresh only
 summary/key_points/highlights with `expectedRevision`; it never rewrites the
 Markdown body or unrelated Properties.
+Filing metadata edits do not certify summaries. If several stored projection
+fields are stale, review and refresh them together before treating the whole
+projection as current. `triage_wiki_note` can set native `tags`,
+`timeEstimateMinutes`, `energy`, and `effort`; these feed catalog discovery and
+next-action filtering without rewriting the body.
 
 For richer hand-offs, attach `relationNotes` and `relationEvidence` to typed
 links when the reason or supporting path matters. Authority-style knowledge
@@ -430,6 +441,10 @@ Use the `authority`, `review_checklist`, and `collections` Bases views, and the
 collection section of `get_wiki_organization_health`, as advisory maintenance
 launchpads. None of these metadata fields replaces Markdown, Obsidian links,
 revision checks, or Git history.
+When a durable prerequisite should reopen a dependent note after retirement or
+dispute, use `review_policy: on_upstream_change` together with an explicit
+`derived_from`, `depends_on`, or `supports` relation. The relationship controls
+the trigger; similarity, shared tags, and ordinary nearby links do not.
 
 ## Project Overview
 

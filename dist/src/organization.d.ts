@@ -10,7 +10,7 @@ export declare const LIFECYCLES: readonly ['inbox', 'active', 'review', 'evergre
 export declare const TASK_STATUSES: readonly ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'];
 /** Optional Kanban-style class of service for executable work. */
 export declare const SERVICE_CLASSES: readonly ['expedite', 'fixed_date', 'standard', 'research'];
-export declare const REVIEW_POLICIES: readonly ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit'];
+export declare const REVIEW_POLICIES: readonly ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit', 'on_upstream_change'];
 export declare const REVIEW_OUTCOMES: readonly ['confirmed', 'revised', 'disputed', 'superseded', 'rescheduled'];
 /** Small, repeatable quality checklist for an evidence review. */
 export declare const REVIEW_CHECKS: readonly ['evidence', 'links', 'summary', 'moc', 'counterexamples', 'scope', 'freshness'];
@@ -221,6 +221,10 @@ export declare function normalizeNavOrder(value: unknown, fallback?: number): nu
 export declare function normalizeIsoDate(value: unknown, field: string): string | undefined;
 export interface KnowledgeOrganizationInput {
     existing?: Record<string, any>;
+    tags?: unknown;
+    timeEstimateMinutes?: unknown;
+    energy?: unknown;
+    effort?: unknown;
     noteKind?: unknown;
     lifecycle?: unknown;
     primaryMoc?: unknown;

@@ -106,6 +106,31 @@ test("server exposes only the dynamic control plane", async () => {
   await server.close();
 });
 
+test("dynamic control plane preserves compact onboarding and organization schemas", async () => {
+  await writeFile(join(testVaultPath, '환영합니다!.md'), '# Welcome\nRead this first.');
+  const server = createServer(testVaultPath, { version: '1.0.0' });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: 'organization-surface-test', version: '1.0.0' });
+  await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
+  try {
+    const orientation = await client.callTool({ name: 'orient_wiki', arguments: { maxChars: 512, prettyPrint: true } });
+    const text = String((orientation.content as any)[0].text);
+    const compact = JSON.parse(text);
+    expect(text.length).toBeLessThanOrEqual(512);
+    expect(compact.nextActions[0]).toMatchObject({ tool: 'notes.read', arguments: { path: '환영합니다!.md' } });
+
+    const found = await client.callTool({ name: 'search_capabilities', arguments: { query: 'triage wiki note', limit: 3 } });
+    const catalog = JSON.parse(String((found.content as any)[0].text));
+    const triage = catalog.endpoints.find((endpoint: any) => endpoint.endpointId === 'wiki.triage');
+    expect(triage.input.properties).toEqual(expect.objectContaining({
+      tags: expect.objectContaining({ type: 'array' }),
+      timeEstimateMinutes: expect.objectContaining({ type: 'integer' }),
+      energy: expect.objectContaining({ enum: ['low', 'medium', 'high'] }),
+      effort: expect.objectContaining({ enum: ['low', 'medium', 'high'] }),
+    }));
+  } finally { await client.close(); await server.close(); }
+});
+
 test("static REST endpoint routes take precedence over notes.read path parameters", () => {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const runtime = getServerRuntime(server);

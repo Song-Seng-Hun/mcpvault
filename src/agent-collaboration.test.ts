@@ -55,6 +55,18 @@ test('profiles, durable notifications, tasks, and capability revocation compose 
     expect(taskRead.value.fm).toMatchObject({ status: 'proposed', assignee: 'researcher' });
     const taskUpdate = await json(client, 'update_agent_task', { taskId: task.value.taskId, status: 'in_progress', reason: 'Researcher accepted the review.', expectedRevision: taskRead.value.revision, accessToken: agentToken });
     expect(taskUpdate.value).toMatchObject({ status: 'in_progress', assignee: 'researcher' });
+    const taskComplete = await json(client, 'update_agent_task', {
+      taskId: task.value.taskId,
+      status: 'completed',
+      reason: 'Evidence reviewed and documented.',
+      retrospective: 'Found that citation quality matters more than citation count.',
+      knowledgeNotes: ['Knowledge/evidence-quality.md'],
+      expectedRevision: taskUpdate.value.revision,
+      accessToken: agentToken,
+    });
+    expect(taskComplete.value).toMatchObject({ status: 'completed', retrospective: 'Found that citation quality matters more than citation count.', knowledgeNotes: ['Knowledge/evidence-quality.md'] });
+    const completedTask = await json(client, 'read_agent_task', { taskId: task.value.taskId });
+    expect(completedTask.value.fm).toMatchObject({ status: 'completed', retrospective: 'Found that citation quality matters more than citation count.', knowledge_notes: ['Knowledge/evidence-quality.md'] });
 
     const capabilityChange = await json(client, 'update_agent_capabilities', { agentId: 'researcher', capabilities: ['profile', 'task'], accessToken: ownerToken });
     expect(capabilityChange.value.capabilities).toEqual(['profile', 'task']);

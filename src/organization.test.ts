@@ -2,6 +2,16 @@ import { describe, expect, test } from 'vitest';
 import { getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, organizationLintIssues, organizationNoteTemplate } from './organization.js';
 
 describe('knowledge organization focus and summary metadata', () => {
+  test('filing edits and partial stale projection edits cannot certify inherited summaries', () => {
+    const existing = { summary: 'Old summary', key_points: ['Old point'], summary_of_content_sha256: 'a'.repeat(64) };
+    const metadataOnly = knowledgeOrganization({ existing, status: 'draft', tags: ['research'], contentDigest: 'b'.repeat(64) });
+    expect(metadataOnly.summary_of_content_sha256).toBe('a'.repeat(64));
+    const partial = knowledgeOrganization({ existing, status: 'draft', keyPoints: ['New point'], contentDigest: 'b'.repeat(64) });
+    expect(partial.summary_of_content_sha256).toBe('a'.repeat(64));
+    const refreshed = knowledgeOrganization({ existing, status: 'draft', summary: 'New summary', keyPoints: ['New point'], contentDigest: 'b'.repeat(64) });
+    expect(refreshed.summary_of_content_sha256).toBe('b'.repeat(64));
+    expect(() => knowledgeOrganization({ status: 'draft', timeEstimateMinutes: -1 })).toThrow('timeEstimateMinutes');
+  });
   test('normalizes interpretation stages and question answer relations', () => {
     expect(knowledgeOrganization({
       status: 'draft',

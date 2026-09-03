@@ -43,18 +43,18 @@ export function extractWikiLinkOccurrences(content: string): Array<OutlinkMatch>
  * based and bounded so callers can provide a useful locator without loading
  * the source note again.
  */
-export function extractObsidianLinkOccurrences(content: string): Array<OutlinkMatch> {
-  return extractLinkOccurrences(content, true);
+export function extractObsidianLinkOccurrences(content: string, limit = Number.POSITIVE_INFINITY): Array<OutlinkMatch> {
+  return extractLinkOccurrences(content, true, limit);
 }
 
-function extractLinkOccurrences(content: string, includeMarkdown: boolean): Array<OutlinkMatch> {
+function extractLinkOccurrences(content: string, includeMarkdown: boolean, limit = Number.POSITIVE_INFINITY): Array<OutlinkMatch> {
   const matches: OutlinkMatch[] = [];
   const lines = content.split('\n');
   let fenceChar = '';
   let fenceLength = 0;
   let currentHeading: string | undefined;
 
-  for (let index = 0; index < lines.length; index += 1) {
+  for (let index = 0; index < lines.length && matches.length < limit; index += 1) {
     const line = lines[index]!.replace(/\r$/, '');
     const fence = FENCE_PATTERN.exec(line);
     if (fence) {
@@ -76,13 +76,14 @@ function extractLinkOccurrences(content: string, includeMarkdown: boolean): Arra
     if (heading) currentHeading = heading[1]!.trim();
 
     WIKI_LINK_PATTERN.lastIndex = 0;
+    const lineMatches: Array<{ offset: number; item: OutlinkMatch }> = [];
     let match: RegExpExecArray | null;
     while ((match = WIKI_LINK_PATTERN.exec(line)) !== null) {
       const link = match[0]!;
       const parsed = linkDocument(link);
       if (!parsed.document) continue;
 
-      matches.push({
+      lineMatches.push({ offset: match.index, item: {
         line: index + 1,
         link,
         target: parsed.document,
@@ -90,7 +91,7 @@ function extractLinkOccurrences(content: string, includeMarkdown: boolean): Arra
         ...(currentHeading && { heading: currentHeading }),
         ...(parsed.targetHeading && { targetHeading: parsed.targetHeading }),
         ...(parsed.targetBlockId && { targetBlockId: parsed.targetBlockId }),
-      });
+      } });
     }
 
     if (includeMarkdown) {
@@ -99,7 +100,7 @@ function extractLinkOccurrences(content: string, includeMarkdown: boolean): Arra
         const link = match[0]!;
         const parsed = markdownLinkDocument(match[2]!);
         if (!parsed.document) continue;
-        matches.push({
+        lineMatches.push({ offset: match.index, item: {
           line: index + 1,
           link,
           target: parsed.document,
@@ -107,8 +108,13 @@ function extractLinkOccurrences(content: string, includeMarkdown: boolean): Arra
           ...(currentHeading && { heading: currentHeading }),
           ...(parsed.targetHeading && { targetHeading: parsed.targetHeading }),
           ...(parsed.targetBlockId && { targetBlockId: parsed.targetBlockId }),
-        });
+        } });
       }
+    }
+    lineMatches.sort((left, right) => left.offset - right.offset);
+    for (const match of lineMatches) {
+      if (matches.length >= limit) break;
+      matches.push(match.item);
     }
   }
 

@@ -126,12 +126,26 @@ export class AgentTaskService {
             throw new Error('reason is required when changing task status');
         const description = params.description === undefined ? String(note.frontmatter.description || note.content).trim() : shortText(params.description, 'description', 4000, true);
         const refs = await this.references.validateAndNormalize(params.references ?? note.frontmatter.references, path, principal, params.description);
+        const retrospective = params.retrospective === undefined ? undefined : shortText(params.retrospective, 'retrospective', 1000);
+        let knowledgeNotes;
+        if (params.knowledgeNotes !== undefined) {
+            if (!Array.isArray(params.knowledgeNotes))
+                throw new Error('knowledgeNotes must be an array of note paths');
+            knowledgeNotes = [...new Set(params.knowledgeNotes.map(item => shortText(item, 'knowledgeNote', 500, true).replace(/\\/g, '/').replace(/^\/+/, '')))].slice(0, 20);
+            for (const knowledgePath of knowledgeNotes) {
+                if (/^(?:[A-Za-z]:|\\\\|scope:\/\/|_scopes\/|\.)/i.test(knowledgePath) || knowledgePath.split('/').includes('..')) {
+                    throw new Error('knowledgeNotes must contain scope-safe public vault paths');
+                }
+            }
+        }
         const timestamp = now();
         const frontmatter = {
             ...note.frontmatter, description,
             ...(requestedAssignee ? { assignee: requestedAssignee } : {}),
             status, references: refs, updated_at: timestamp,
             ...(status !== previousStatus && { status_reason: reason, status_changed_by: actor, status_changed_at: timestamp }),
+            ...(retrospective && { retrospective }),
+            ...(knowledgeNotes && { knowledge_notes: knowledgeNotes }),
         };
         if (!requestedAssignee)
             delete frontmatter.assignee;
@@ -142,6 +156,15 @@ export class AgentTaskService {
             expectedRevision: params.expectedRevision,
         });
         const updated = await this.fileSystem.readNote(path);
-        return { success: true, taskId, status, assignee: requestedAssignee || undefined, reason: status !== previousStatus ? reason : undefined, revision: updated.revision };
+        return {
+            success: true,
+            taskId,
+            status,
+            assignee: requestedAssignee || undefined,
+            reason: status !== previousStatus ? reason : undefined,
+            ...(updated.frontmatter.retrospective && { retrospective: updated.frontmatter.retrospective }),
+            ...(updated.frontmatter.knowledge_notes && { knowledgeNotes: updated.frontmatter.knowledge_notes }),
+            revision: updated.revision,
+        };
     }
 }

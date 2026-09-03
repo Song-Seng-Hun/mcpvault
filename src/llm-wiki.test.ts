@@ -12,6 +12,73 @@ beforeEach(async () => {
   vault = await mkdtemp(join(tmpdir(), 'mcpvault-llm-wiki-'));
 });
 
+test('compact onboarding retains a usable first action without duplicate signup or lost privacy guidance', async () => {
+  const { server, client } = await setup();
+  try {
+    await writeFile(join(vault, '환영합니다!.md'), '# Welcome\nRead before registering.');
+    for (const maxChars of [512, 1024, 4500, 12000]) {
+      const { result, value } = await callJson(client, 'orient_wiki', { maxChars, prettyPrint: true });
+      expect(result.isError).toBeFalsy();
+      expect(result.content.filter((item: any) => item.type === 'text').map((item: any) => item.text).join('').length).toBeLessThanOrEqual(maxChars);
+      expect(value.nextActions[0]).toMatchObject({ tool: 'notes.read', arguments: { path: '환영합니다!.md' } });
+      expect(value.nextActions.filter((item: any) => item.tool === 'auth.register').length).toBeLessThanOrEqual(1);
+      expect(JSON.stringify(value)).toContain('host-only');
+      if (value.nextActions.some((item: any) => item.tool === 'auth.register')) expect(JSON.stringify(value)).toContain('private storage');
+    }
+  } finally { await client.close(); await server.close(); }
+});
+
+test('MOC context packs follow authored links with revisions and exclude example and hidden targets', async () => {
+  const { server, client } = await setup();
+  try {
+    await mkdir(join(vault, 'Maps'), { recursive: true });
+    await mkdir(join(vault, 'Knowledge'), { recursive: true });
+    await writeFile(join(vault, 'Maps', 'Root.md'), '---\nnote_kind: moc\n---\n# Root\n\n## Read this way\n~~~md\n[[Knowledge/Example]]\n~~~\n[Z first](../Knowledge/Z.md#Start) [[Knowledge/A#^claim]]\n[[Knowledge/Hidden]]\n');
+    await writeFile(join(vault, 'Knowledge', 'Z.md'), '---\nnote_kind: atomic\n---\n# Z\n## Start\nGrounded context.');
+    await writeFile(join(vault, 'Knowledge', 'A.md'), '---\nnote_kind: atomic\n---\n# A\nA claim. ^claim');
+    await writeFile(join(vault, 'Knowledge', 'Example.md'), '# Not a real entry');
+    await writeFile(join(vault, 'Knowledge', 'Hidden.md'), '---\nmoderation_status: quarantined\n---\nHidden content');
+    const read = await callJson(client, 'read_note', { path: 'Knowledge/Z.md' });
+    const pack = await callJson(client, 'get_wiki_context_pack', { path: 'Maps/Root.md', maxChars: 16000, includeSemantic: false });
+    expect(pack.result.isError).toBeFalsy();
+    expect(pack.value.readOrder.slice(0, 3)).toEqual(['Maps/Root.md', 'Knowledge/Z.md', 'Knowledge/A.md']);
+    expect(pack.value.entrypoints.find((item: any) => item.path === 'Knowledge/Z.md')).toMatchObject({ revision: read.value.revision, section: 'Read this way', line: 7, targetHeading: 'Start' });
+    expect(pack.value.entrypoints.find((item: any) => item.path === 'Knowledge/A.md')).toMatchObject({ targetBlockId: 'claim' });
+    expect(pack.value.readOrder).not.toContain('Knowledge/Example.md');
+    expect(pack.value.readOrder).not.toContain('Knowledge/Hidden.md');
+    for (const maxChars of [1024, 2200]) {
+      const small = await callJson(client, 'get_wiki_context_pack', { path: 'Maps/Root.md', maxChars, includeSemantic: false });
+      expect(small.result.isError).toBeFalsy();
+      expect(JSON.stringify(small.value).length).toBeLessThanOrEqual(maxChars);
+      expect(small.value.readOrder).toEqual(small.value.entrypoints.map((item: any) => item.path));
+      expect(small.value.entrypoints.every((item: any) => typeof item.revision === 'string' && item.revision.length === 64)).toBe(true);
+    }
+  } finally { await client.close(); await server.close(); }
+});
+
+test('triage exposes execution capacity and tags without rebasing stale summaries or accepting stale revisions', async () => {
+  const { server, client } = await setup();
+  try {
+    const account = await callJson(client, 'register_scope_account', { accountId: 'capacity-owner', modelId: 'codex', password: 'capacity-owner-secret' });
+    const accessToken = account.value.accessToken;
+    const created = await client.callTool({ name: 'write_note', arguments: { path: 'Tasks/Next.md', content: '# Next\nCurrent body', expectedRevision: 'missing', frontmatter: { note_kind: 'task', lifecycle: 'active', task_status: 'next_action', next_action: 'Run the selected regression test', task_context: '@computer', summary: 'Outdated summary', summary_of_content_sha256: 'a'.repeat(64) }, accessToken } });
+    expect(created.isError).toBeFalsy();
+    const before = await callJson(client, 'read_note', { path: 'Tasks/Next.md', accessToken });
+    const updated = await callJson(client, 'triage_wiki_note', { path: 'Tasks/Next.md', tags: ['testing', 'testing'], timeEstimateMinutes: 15, energy: 'low', effort: 'medium', expectedRevision: before.value.revision, accessToken });
+    expect(updated.result.isError).toBeFalsy();
+    expect(updated.value.frontmatter).toMatchObject({ tags: ['testing'], timeEstimateMinutes: 15, energy: 'low', effort: 'medium' });
+    const after = await callJson(client, 'read_note', { path: 'Tasks/Next.md', accessToken });
+    expect(after.value.content).toBe(before.value.content);
+    expect(after.value.fm.summary_of_content_sha256).toBe('a'.repeat(64));
+    const selected = await callJson(client, 'get_wiki_next_actions', { context: '@computer', maxMinutes: 20, energy: 'low', effort: 'medium', accessToken });
+    expect(selected.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Tasks/Next.md', estimatedMinutes: 15 })]));
+    const conflict = await client.callTool({ name: 'triage_wiki_note', arguments: { path: 'Tasks/Next.md', tags: ['overwrite'], expectedRevision: before.value.revision, accessToken } });
+    expect(conflict.isError).toBe(true);
+    const cleared = await callJson(client, 'triage_wiki_note', { path: 'Tasks/Next.md', tags: [], expectedRevision: after.value.revision, accessToken });
+    expect(cleared.value.frontmatter.tags).toEqual([]);
+  } finally { await client.close(); await server.close(); }
+});
+
 test('MOC navigation preserves explicit sibling order, body link order, and multi-MOC neighborhoods', async () => {
   const { server, client } = await setup();
   try {
@@ -40,6 +107,11 @@ test('MOC navigation preserves explicit sibling order, body link order, and mult
       expect.objectContaining({ target: 'Knowledge/Z note', line: 4, section: 'Reading order' }),
       expect.objectContaining({ target: 'Knowledge/A note', line: 5, section: 'Reading order' }),
     ]);
+
+    await write('Knowledge/MOCs/A child.md', '# Child\n', { note_kind: 'moc', lifecycle: 'evergreen', moc_parent: '[[Knowledge/MOCs/A]]', nav_order: 900 });
+    await write('Knowledge/MOCs/Other root.md', '# Other\n', { note_kind: 'moc', lifecycle: 'evergreen', nav_order: 1 });
+    const treeHome = await callJson(client, 'get_wiki_home', { accessToken, limit: 10 });
+    expect(treeHome.value.mocs.map((item: any) => item.path)).toEqual(['Knowledge/MOCs/Root.md', 'Knowledge/MOCs/A.md', 'Knowledge/MOCs/A child.md', 'Knowledge/MOCs/Z.md', 'Knowledge/MOCs/Other root.md']);
 
     const neighborhood = await callJson(client, 'get_wiki_neighborhood', { path: 'Knowledge/Source.md', accessToken, limit: 10, maxChars: 5000 });
     expect(neighborhood.value.neighbors).toEqual(expect.arrayContaining([

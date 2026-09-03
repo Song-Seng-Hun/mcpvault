@@ -167,12 +167,18 @@ them, or move Community-managed posts into PARA folders.
 
 Obsidian's native `tags` property is a bounded discovery facet; keep it a
 list of short tag values and use `subject_terms` for controlled vocabulary.
+`triage_wiki_note` and `publish_knowledge` accept `tags`, `timeEstimateMinutes`,
+`energy`, and `effort`. These write native Properties used by the catalog and
+`get_wiki_next_actions`; `tags: []` clears the list with revision checking.
 MOCs may declare numeric `nav_order`: lower values appear first among
 siblings, followed by unnumbered MOCs in title/path order. Their Markdown
 body is an ordered outline; graph coverage exposes `orderedEntries` with the
 link's line and heading context. `moc_parent` defines the tree edge, while
-ordinary body links may cross branches. Home, hierarchy, catalog
-`orderBy=hierarchy`, and graph coverage follow these rules consistently.
+ordinary body links may cross branches. Home and graph hierarchy use preorder:
+read a parent, then its whole branch, before visiting the next sibling.
+Unresolved, ambiguous, and cyclic branches are marked; they are not valid roots.
+Catalog `orderBy=hierarchy` is a metadata grouping by preferred MOC/project,
+not the tree traversal. Code-fenced examples never become reading-order links.
 
 Use `question` for an unresolved question, `hypothesis` for a testable
 proposition, and `assumption` for a working premise. Keep these visibly
@@ -187,7 +193,9 @@ summary/remix) and bounded `summary_highlights` make the compression layer
 explicit while the complete Markdown body remains authoritative. Whenever a progressive
 field is present, store `summary_of_content_sha256` as the SHA-256 of the
 exact Markdown body; a body edit makes the projection stale until it is
-regenerated. For failed paths, use `knowledge_polarity: negative` with a
+regenerated. Filing or review changes never refresh that fingerprint. When
+several stored projection fields are stale, refresh them together: replacing
+only key points cannot certify an inherited old summary. For failed paths, use `knowledge_polarity: negative` with a
 `negative_type` such as `failure`, `rejected`, `counterexample`, or
 `non_reproducible`; preserve the note so later agents do not repeat it. Typed relationship
 properties (`supports`, `contradicts`, `supersedes`, `derived_from`,
@@ -204,7 +212,9 @@ or structured `evidence` contain nested objects. They remain valid Markdown
 metadata, but should be maintained in Source mode rather than treated as a
 native scalar/list Properties editor.
 Use `review_policy` (`manual`, `periodic`, `on_source_change`,
-`on_link_change`, or `on_any_edit`) to declare review triggers. Publication
+`on_link_change`, `on_any_edit`, or `on_upstream_change`) to declare review
+triggers. The upstream policy watches explicit dependency relations for a
+retired or disputed prerequisite; ordinary nearby links do not trigger it. Publication
 stores a compact body/link review baseline, so later source, link, or body
 changes can be reported as derived triggers. The baseline is regenerable
 metadata and never replaces Markdown or Git. The bounded
@@ -408,7 +418,12 @@ automatically. `get_wiki_property_contract` documents the meaning and
 `get_wiki_context_pack` builds a reusable shelf around one selected project,
 MOC, question, or decision. It adds a stable root, ordered entrypoints,
 supporting context, counterpoints, gaps, and revisions without persisting a
-second index. `get_wiki_exception_board` combines organization, graph,
+second index. For a MOC, its authored body-link order comes first, including
+mixed wikilinks/relative Markdown links and heading/block locators. Only
+uniquely resolved, accessible, non-hidden targets enter the reading order.
+The bounded result always pairs returned read paths with their revisions;
+use a larger budget or read the root when `truncated` is true.
+`get_wiki_exception_board` combines organization, graph,
 quarantine, freshness, vocabulary, and execution findings into one 5S-style
 repair board. `get_wiki_quality_check` applies a small role-specific checklist
 to one note, while `resurface_wiki_archives` shows archived or superseded notes
@@ -418,6 +433,11 @@ restores, or automatic moves.
 `lint_wiki` reports missing or inconsistent organization metadata as warnings.
 These organization hints are deliberately non-blocking; source integrity,
 evidence, access, and revision checks remain the hard quality gates.
+`orient_wiki(maxChars)` preserves an actionable public first read even at
+512 characters. Full signup guidance is deferred to the welcome/schema when
+the budget cannot contain it; compact output never instructs blind signup.
+The remaining cross-workflow audit is tracked in
+[the organization roadmap](docs/ORGANIZATION-ROADMAP.md).
 Controlled vocabulary is also optional Properties metadata: use
 `term_status`, `term_replaced_by`, `broader_terms`, and `related_terms` for
 preferred/deprecated/redirect terminology. `get_wiki_authority_map` exposes

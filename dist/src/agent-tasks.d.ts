@@ -64,14 +64,9 @@ export declare class AgentTaskService {
         description?: string;
         references?: unknown;
         reason?: string;
+        retrospective?: string;
+        knowledgeNotes?: unknown;
         expectedRevision: string;
-    }): Promise<{
-        success: boolean;
-        taskId: string;
-        status: "accepted" | "blocked" | "cancelled" | "completed" | "in_progress" | "proposed";
-        assignee: string | undefined;
-        reason: string | undefined;
-        revision: string;
-    }>;
+    }): Promise<any>;
 }
 //# sourceMappingURL=agent-tasks.d.ts.map

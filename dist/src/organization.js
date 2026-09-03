@@ -11,7 +11,7 @@ export const LIFECYCLES = ['inbox', 'active', 'review', 'evergreen', 'superseded
 export const TASK_STATUSES = ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'];
 /** Optional Kanban-style class of service for executable work. */
 export const SERVICE_CLASSES = ['expedite', 'fixed_date', 'standard', 'research'];
-export const REVIEW_POLICIES = ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit'];
+export const REVIEW_POLICIES = ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit', 'on_upstream_change'];
 export const REVIEW_OUTCOMES = ['confirmed', 'revised', 'disputed', 'superseded', 'rescheduled'];
 /** Small, repeatable quality checklist for an evidence review. */
 export const REVIEW_CHECKS = ['evidence', 'links', 'summary', 'moc', 'counterexamples', 'scope', 'freshness'];
@@ -533,6 +533,8 @@ export function normalizeReviewIntervalDays(value, fallback) {
 export function normalizeNavOrder(value, fallback) {
     if (value === undefined || value === null || String(value).trim() === '')
         return fallback;
+    if (typeof value !== 'number' && typeof value !== 'string')
+        throw new Error('navOrder must be an integer from 0 to 1000000');
     const order = Number(value);
     if (!Number.isInteger(order) || order < 0 || order > 1_000_000)
         throw new Error('navOrder must be an integer from 0 to 1000000');
@@ -548,6 +550,22 @@ export function normalizeIsoDate(value, field) {
 }
 export function knowledgeOrganization(input) {
     const existing = input.existing || {};
+    const executionHints = {};
+    if (input.tags !== undefined)
+        executionHints.tags = normalizedList(input.tags, 'tags', 30, 100) || [];
+    if (input.timeEstimateMinutes !== undefined) {
+        if (typeof input.timeEstimateMinutes !== 'number' || !Number.isInteger(input.timeEstimateMinutes) || input.timeEstimateMinutes < 1 || input.timeEstimateMinutes > 1440)
+            throw new Error('timeEstimateMinutes must be an integer from 1 to 1440');
+        executionHints.time_estimate_minutes = input.timeEstimateMinutes;
+    }
+    for (const field of ['energy', 'effort']) {
+        if (input[field] === undefined)
+            continue;
+        const value = String(input[field]).trim().toLowerCase();
+        if (!['low', 'medium', 'high'].includes(value))
+            throw new Error(`${field} must be low, medium, or high`);
+        executionHints[field] = value;
+    }
     const existingKind = normalizeNoteKind(existing.note_kind);
     const existingLifecycle = normalizeLifecycle(existing.lifecycle);
     const kind = normalizeNoteKind(input.noteKind, existingKind || 'knowledge') || 'knowledge';
@@ -675,12 +693,21 @@ export function knowledgeOrganization(input) {
     if (polarity === 'negative' && !negativeType)
         throw new Error('polarity=negative requires negativeType');
     const summaryFieldsPresent = Boolean(summary || keyPoints?.length || openQuestions?.length || summaryLayer !== undefined || summaryHighlights?.length);
-    const summaryDigest = summaryFieldsPresent && input.contentDigest !== undefined
+    // Filing/review edits must never certify an inherited stale summary.
+    const projectionRewritten = [input.summary, input.keyPoints, input.openQuestions, input.summaryHighlights].some(value => value !== undefined);
+    const inheritedProjectionChecked = existing.summary_of_content_sha256 === input.contentDigest
+        || ['summary', 'key_points', 'open_questions', 'summary_highlights'].every((field, index) => {
+            const value = existing[field];
+            const present = Array.isArray(value) ? value.length > 0 : typeof value === 'string' && Boolean(value.trim());
+            return !present || [input.summary, input.keyPoints, input.openQuestions, input.summaryHighlights][index] !== undefined;
+        });
+    const summaryDigest = summaryFieldsPresent && projectionRewritten && inheritedProjectionChecked && input.contentDigest !== undefined
         ? optionalText(input.contentDigest, 'summary_of_content_sha256', 128)
         : optionalText(existing.summary_of_content_sha256, 'summary_of_content_sha256', 128);
     return {
         note_kind: kind,
         lifecycle,
+        ...executionHints,
         ...(primaryMoc && { primary_moc: primaryMoc }),
         ...(mocs && { mocs }),
         ...(moc && { moc }),
