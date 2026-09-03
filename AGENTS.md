@@ -354,7 +354,13 @@ prioritizes blocked/waiting work before suggesting more work. Treat missing
 signal rather than inventing timestamps from file edits.
 For a smaller maintenance turn, use `get_wiki_review_packet`; follow its
 priority order across evidence, active recall, tasks, graph, and vocabulary
-hygiene, then inspect one selected note before editing. MOC questions are
+hygiene, then inspect one selected note before editing. Findings for the same
+path are coalesced into one slot with all reasons retained. Follow the selected
+issue-specific `curationPlan`: recall must use the recall route rather than an
+evidence review, blocked work uses the project packet, and a MOC sequence
+defect uses `get_wiki_learning_path` followed only by a deliberate dry-run
+patch at the returned revision. `autoFix=false` means no plan may silently
+rewrite or reorder Markdown. MOC questions are
 covered only when the question list item has an answer `[[wikilink]]` on the
 same line or within the next three lines; this is a discoverability signal, not
 proof that the answer is correct. Evergreen quality hints are advisory: prefer

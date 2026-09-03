@@ -771,6 +771,21 @@ export declare class LlmWikiService {
                     mocs: Record<string, unknown>[];
                     truncated: boolean;
                 };
+                mocSequenceHealth?: {
+                    mocsAnalyzed: number;
+                    needsAttention: number;
+                    ready: number;
+                    latePrerequisites: number;
+                    externalPrerequisites: number;
+                    unresolved: number;
+                    ambiguous: number;
+                    cycleOrBlockedEntries: number;
+                    items: {
+                        [x: string]: unknown;
+                    }[];
+                    truncated: boolean;
+                    note: string;
+                };
                 mocHierarchy?: {
                     total: number;
                     explicitParentEdges: number;
@@ -1026,6 +1041,21 @@ export declare class LlmWikiService {
                     };
                     mocs: Record<string, unknown>[];
                     truncated: boolean;
+                };
+                mocSequenceHealth?: {
+                    mocsAnalyzed: number;
+                    needsAttention: number;
+                    ready: number;
+                    latePrerequisites: number;
+                    externalPrerequisites: number;
+                    unresolved: number;
+                    ambiguous: number;
+                    cycleOrBlockedEntries: number;
+                    items: {
+                        [x: string]: unknown;
+                    }[];
+                    truncated: boolean;
+                    note: string;
                 };
                 mocHierarchy?: {
                     total: number;
@@ -1346,7 +1376,15 @@ export declare class LlmWikiService {
      */
     reviewPacket(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<Record<string, any> | {
         purpose: string;
-        priorities: Record<string, unknown>[];
+        priorities: {
+            [x: string]: unknown;
+            priority: number;
+            path: string;
+            reason: string;
+            reasons: string[];
+            suggestedTool: string;
+            suggestedTools: string[];
+        }[];
         counts: {
             inbox: number;
             knowledgeReview: number;
@@ -1358,6 +1396,7 @@ export declare class LlmWikiService {
             blocked: number;
             waiting: number;
             unlinkedMocQuestions: number;
+            mocSequenceNeedsAttention: number;
             evergreenNeedsAttention: number;
             recallDue: number;
             tagVariantIssues: number;
@@ -1436,6 +1475,7 @@ export declare class LlmWikiService {
                 truncated: boolean;
             };
             mocQuestions: any;
+            mocSequences: any;
             mocHierarchy: any;
             evergreenQuality: any;
             recall: {

@@ -231,6 +231,19 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
     expect(exceptionBoard.value.items).toEqual(expect.arrayContaining([
       expect.objectContaining({ path: 'Knowledge/MOCs/Curriculum.md', code: 'moc_dependency_cycle', suggestedAction: 'call_wiki_learning_path_then_edit_with_current_revision' }),
     ]));
+    const dashboard = await callJson(client, 'get_wiki_review_dashboard', { limit: 20, maxChars: 16000, accessToken });
+    expect(dashboard.value.sections.graph.mocSequenceHealth).toMatchObject({ needsAttention: 1 });
+    const reviewPacket = await callJson(client, 'get_wiki_review_packet', { limit: 20, maxChars: 12000, accessToken });
+    expect(reviewPacket.value.counts.mocSequenceNeedsAttention).toBe(1);
+    const sequencePriorities = reviewPacket.value.priorities.filter((item: any) => item.path === 'Knowledge/MOCs/Curriculum.md');
+    expect(sequencePriorities).toHaveLength(1);
+    expect(sequencePriorities[0]).toMatchObject({ reason: 'moc_sequence_needs_repair', reasons: expect.arrayContaining(['moc_sequence_needs_repair', 'lint_quality_issue']), suggestedTool: 'wiki.learning_path' });
+    expect(reviewPacket.value.curationPlan).toMatchObject({
+      selected: { path: 'Knowledge/MOCs/Curriculum.md', revision: expect.any(String), reason: 'moc_sequence_needs_repair' },
+      inspect: { endpointId: 'wiki.learning_path' },
+      then: { endpointId: 'notes.patch', arguments: { path: 'Knowledge/MOCs/Curriculum.md', dryRun: true, expectedRevision: expect.any(String) } },
+      guard: { oneNotePerPlan: true, expectedRevisionRequired: true, autoFix: false },
+    });
     const tiny = await callJson(client, 'get_wiki_learning_path', { path: 'Knowledge/MOCs/Curriculum.md', maxDepth: 2, limit: 20, maxChars: 1024, accessToken, prettyPrint: true });
     expect(String((tiny.result.content as any)[0].text).length).toBeLessThanOrEqual(1024);
     expect(tiny.value.root).toMatchObject({ path: 'Knowledge/MOCs/Curriculum.md', revision: expect.any(String) });
@@ -1680,6 +1693,15 @@ test('canonical lineage and optional active recall stay in the Markdown organiza
     expect(recallWrite.isError).toBeFalsy();
     const gaps = await callJson(client, 'get_wiki_knowledge_gaps', { limit: 10, accessToken });
     expect(gaps.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Recall.md', reasons: expect.arrayContaining(['recall_due']), recallPrompt: 'What is the durable fact?' })]));
+    const reviewPacket = await callJson(client, 'get_wiki_review_packet', { limit: 10, maxChars: 12000, accessToken });
+    const recallPriorities = reviewPacket.value.priorities.filter((item: any) => item.path === 'Knowledge/Recall.md');
+    expect(recallPriorities).toHaveLength(1);
+    expect(recallPriorities[0]).toMatchObject({ reason: 'active_recall_due', reasons: expect.arrayContaining(['active_recall_due', 'evergreen_quality_hint']), recallPrompt: 'What is the durable fact?', suggestedTool: 'wiki.recall_queue' });
+    expect(reviewPacket.value.curationPlan).toMatchObject({
+      selected: { path: 'Knowledge/Recall.md', revision: expect.any(String), reason: 'active_recall_due' },
+      inspect: { endpointId: 'wiki.recall_queue', targetPath: 'Knowledge/Recall.md' },
+      then: { endpointId: 'wiki.record_recall', arguments: { path: 'Knowledge/Recall.md', expectedRevision: expect.any(String) }, requiredArguments: ['recallQuality'] },
+    });
     const before = await callJson(client, 'read_note', { path: 'Knowledge/Recall.md', includeContent: false, accessToken });
     const recalled = await callJson(client, 'record_wiki_recall', { path: 'Knowledge/Recall.md', recallQuality: 'good', expectedRevision: before.value.revision, accessToken });
     expect(recalled.value).toMatchObject({ recallQuality: 'good', recallIntervalDays: 1, nextRecallAt: expect.any(String) });

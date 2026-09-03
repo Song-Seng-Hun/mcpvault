@@ -355,7 +355,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_review_packet',
-            description: 'Return a smaller action-oriented knowledge-review packet. It prioritizes due evidence, Inbox captures, active recall, projects without a next action, MOC questions without linked answers, Evergreen quality hints, graph repairs, and vocabulary/tag hygiene. It is derived and advisory; it never mutates notes or replaces Git history.',
+            description: 'Return a smaller action-oriented knowledge-review packet. It coalesces all findings for one path into one bounded slot, prioritizes due evidence, Inbox captures, active recall, blocked work, dependency-conflicted MOC sequences, unanswered MOC questions, graph repairs, and vocabulary/tag hygiene, then returns one revision-safe issue-specific inspect/repair plan. It is derived and advisory; it never mutates notes, auto-reorders a MOC, or replaces Git history.',
             inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 30, default: 8 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
         },
         {

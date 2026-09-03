@@ -3085,7 +3085,17 @@ export class LlmWikiService {
       this.graphHealth(principal, boundedLimit, Math.floor(boundedChars / 3)),
     ]);
     const graphView = 'mocCoverage' in graph
-      ? { mocCoverage: graph.mocCoverage, mocQuestionCoverage: graph.mocQuestionCoverage, ...(graph.mocHierarchy && { mocHierarchy: graph.mocHierarchy }), evergreenQuality: graph.evergreenQuality, unresolvedLinks: graph.unresolvedLinks, orphanNotes: graph.orphanNotes, ...(graph.focusHealth && { focusHealth: graph.focusHealth }), ...(graph.knowledgeConnectivity && { knowledgeConnectivity: graph.knowledgeConnectivity }) }
+      ? {
+          mocCoverage: graph.mocCoverage,
+          mocQuestionCoverage: graph.mocQuestionCoverage,
+          ...(graph.mocSequenceHealth && { mocSequenceHealth: graph.mocSequenceHealth }),
+          ...(graph.mocHierarchy && { mocHierarchy: graph.mocHierarchy }),
+          evergreenQuality: graph.evergreenQuality,
+          unresolvedLinks: graph.unresolvedLinks,
+          orphanNotes: graph.orphanNotes,
+          ...(graph.focusHealth && { focusHealth: graph.focusHealth }),
+          ...(graph.knowledgeConnectivity && { knowledgeConnectivity: graph.knowledgeConnectivity }),
+        }
       : { truncated: true, note: graph.note };
     const graphSignals = graphView as Record<string, any>;
     const nextActions = [
@@ -3098,6 +3108,7 @@ export class LlmWikiService {
       'Repair one broken link, MOC gap, or focus alignment issue.',
       ...(Number(inbox.total || 0) > 0 ? ['Clarify the oldest Inbox capture before creating another organizational structure.'] : []),
       ...(Number(graphSignals.mocQuestionCoverage?.unlinked?.total || 0) > 0 ? ['Link one unanswered MOC question to the note that answers it, using a wikilink on or immediately below the question.'] : []),
+      ...(Number(graphSignals.mocSequenceHealth?.needsAttention || 0) > 0 ? ['Inspect one dependency-conflicted MOC with wiki.learning_path, then deliberately repair its authored order or depends_on links at the returned revision.'] : []),
       ...(Number(graphSignals.evergreenQuality?.needsAttention || 0) > 0 ? ['Improve one Evergreen note: give it a concept-oriented title, a compact projection, or a meaningful graph connection.'] : []),
     ];
     const result = {
@@ -3591,6 +3602,7 @@ export class LlmWikiService {
     // budget so this smaller action packet can still name the repair target.
     const graphNeedsDetail = [
       graph.mocQuestionCoverage?.unlinked,
+      graph.mocSequenceHealth,
       graph.mocHierarchy?.missingParents,
       graph.mocHierarchy?.cycles,
       graph.evergreenQuality,
@@ -3613,8 +3625,17 @@ export class LlmWikiService {
       if (!existing.includes(issue.code)) existing.push(issue.code);
       lintByPath.set(issue.path, existing);
     }
-    const priorities: Array<Record<string, unknown>> = [];
-    const seen = new Set<string>();
+    type ReviewPriority = Record<string, unknown> & {
+      priority: number;
+      path: string;
+      reason: string;
+      reasons: string[];
+      suggestedTool: string;
+      suggestedTools: string[];
+      sourceOrder: number;
+    };
+    const priorityByPath = new Map<string, ReviewPriority>();
+    let sourceOrder = 0;
     const add = (items: unknown, reason: string, tool: string, priority: number) => {
       if (!Array.isArray(items)) return;
       for (const raw of items) {
@@ -3622,10 +3643,31 @@ export class LlmWikiService {
         const item = raw as Record<string, unknown>;
         const path = typeof item.path === 'string' ? item.path : typeof item.mocPath === 'string' ? item.mocPath : undefined;
         if (!path) continue;
-        const key = `${priority}|${path}|${reason}`;
-        if (seen.has(key) || priorities.length >= boundedLimit) continue;
-        seen.add(key);
-        priorities.push({ priority, path, ...(typeof item.title === 'string' && { title: item.title }), ...(typeof item.question === 'string' && { question: item.question }), reason, suggestedTool: tool });
+        const details = Object.fromEntries(['title', 'question', 'recallPrompt', 'repairStatus', 'repairPath', 'state', 'target', 'line']
+          .filter(key => item[key] !== undefined)
+          .map(key => [key, item[key]]));
+        const existing = priorityByPath.get(path);
+        if (!existing) {
+          priorityByPath.set(path, {
+            priority,
+            path,
+            ...details,
+            reason,
+            reasons: [reason],
+            suggestedTool: tool,
+            suggestedTools: [tool],
+            sourceOrder: sourceOrder++,
+          });
+          continue;
+        }
+        if (!existing.reasons.includes(reason)) existing.reasons.push(reason);
+        if (!existing.suggestedTools.includes(tool)) existing.suggestedTools.push(tool);
+        for (const [key, value] of Object.entries(details)) if (existing[key] === undefined) existing[key] = value;
+        if (priority < existing.priority) {
+          existing.priority = priority;
+          existing.reason = reason;
+          existing.suggestedTool = tool;
+        }
       }
     };
     add(sections.knowledge?.items, 'knowledge_needs_review', 'wiki.review_queue', 1);
@@ -3634,6 +3676,7 @@ export class LlmWikiService {
     add(sections.projectsAndTasks?.items, 'project_needs_next_action', 'wiki.triage', 3);
     add(executionFlow.lanes?.blocked, 'blocked_work_needs_unblocking', 'wiki.flow_health', 1);
     add(executionFlow.lanes?.waiting, 'waiting_work_needs_follow_up', 'wiki.flow_health', 2);
+    add(graph.mocSequenceHealth?.items, 'moc_sequence_needs_repair', 'wiki.learning_path', 3);
     add(graph.mocQuestionCoverage?.unlinked?.items, 'moc_question_has_no_linked_answer', 'wiki.graph_health', 4);
     add(graph.evergreenQuality?.items?.filter((item: any) => item?.state === 'needs_attention'), 'evergreen_quality_hint', 'wiki.graph_health', 5);
     add(graph.unresolvedLinks?.items, 'broken_link', 'wiki.graph_health', 6);
@@ -3642,7 +3685,10 @@ export class LlmWikiService {
     add(vocabulary.tagVariants.map((item: any) => ({ path: item.paths?.[0], title: `#${item.key}` })), 'tag_variant', 'wiki.vocabulary_health', 8);
     add(vocabulary.unresolvedSubjectTerms.map((item: any) => ({ path: item.paths?.[0], title: item.term })), 'subject_term_needs_authority', 'wiki.vocabulary_health', 8);
     add([...lintByPath.entries()].map(([path, codes]) => ({ path, title: path.split('/').at(-1), issueCodes: codes })), 'lint_quality_issue', 'wiki.organization_health', 8);
-    priorities.sort((left, right) => Number(left.priority) - Number(right.priority) || String(left.path).localeCompare(String(right.path)));
+    const priorities = [...priorityByPath.values()]
+      .sort((left, right) => left.priority - right.priority || left.sourceOrder - right.sourceOrder || left.path.localeCompare(right.path))
+      .slice(0, boundedLimit)
+      .map(({ sourceOrder: _sourceOrder, ...item }) => item);
 
     let curationPlan: Record<string, unknown> | undefined;
     const selectedPriority = priorities[0];
@@ -3653,17 +3699,57 @@ export class LlmWikiService {
           const selectedNote = await this.fileSystem.readNote(physicalPath);
           selectedPriority.revision = selectedNote.revision;
           const reason = String(selectedPriority.reason || 'review');
-          const inspectIntent = reason.includes('inbox') ? 'capture' : reason.includes('project') || reason.includes('blocked') || reason.includes('waiting') ? 'execute' : 'review';
-          const mutation = reason === 'oldest_inbox_capture'
-            ? { endpointId: endpointIdForTool('clarify_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['disposition'] }
-            : reason === 'knowledge_needs_review' || reason === 'active_recall_due'
-              ? { endpointId: endpointIdForTool('review_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['reviewOutcome'] }
-              : { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['the smallest justified metadata repair'] };
+          const reasons = Array.isArray(selectedPriority.reasons)
+            ? selectedPriority.reasons.filter((item): item is string => typeof item === 'string')
+            : [reason];
+          let inspect: Record<string, unknown>;
+          let mutation: Record<string, unknown>;
+          if (reason === 'oldest_inbox_capture') {
+            inspect = { endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path: selectedPriority.path, intent: 'capture', maxChars: 5000 } };
+            mutation = { endpointId: endpointIdForTool('clarify_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['disposition'] };
+          } else if (reason === 'knowledge_needs_review') {
+            inspect = { endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path: selectedPriority.path, intent: 'review', maxChars: 5000 } };
+            mutation = { endpointId: endpointIdForTool('review_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['reviewOutcome'] };
+          } else if (reason === 'active_recall_due') {
+            inspect = {
+              endpointId: endpointIdForTool('get_wiki_recall_queue'),
+              arguments: { limit: Math.min(8, boundedLimit), maxChars: Math.min(4000, boundedChars) },
+              targetPath: selectedPriority.path,
+              instruction: 'Use the selected recallPrompt before opening the note body. If a repair is pending, inspect its bounded repairPath only after attempting recall.',
+            };
+            mutation = { endpointId: endpointIdForTool('record_wiki_recall'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['recallQuality'] };
+          } else if (reason === 'moc_sequence_needs_repair') {
+            inspect = { endpointId: endpointIdForTool('get_wiki_learning_path'), arguments: { path: selectedPriority.path, maxDepth: 2, limit: Math.min(30, Math.max(10, boundedLimit)), maxChars: Math.min(7000, boundedChars) } };
+            mutation = {
+              endpointId: endpointIdForTool('patch_note'),
+              arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision, dryRun: true },
+              requiredArguments: ['oldString and newString, or patches'],
+              instruction: 'Dry-run the smallest deliberate MOC body or depends_on repair. Never apply recommendedOrder automatically; preserve intentional narrative order when justified.',
+            };
+          } else if (reason === 'moc_question_has_no_linked_answer') {
+            inspect = { endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path: selectedPriority.path, intent: 'review', maxChars: 5000 } };
+            mutation = {
+              endpointId: endpointIdForTool('patch_note'),
+              arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision, dryRun: true },
+              requiredArguments: ['oldString and newString'],
+              instruction: 'Dry-run a nearby answer [[wikilink]] only after verifying the answer note; a link improves discovery but does not prove the answer.',
+            };
+          } else if (reason.includes('project') || reason.includes('blocked') || reason.includes('waiting')) {
+            inspect = { endpointId: endpointIdForTool('get_wiki_project_packet'), arguments: { path: selectedPriority.path, maxChars: 5000 } };
+            mutation = { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['the smallest justified execution-state or next-action repair'] };
+          } else if (reason === 'broken_link') {
+            inspect = { endpointId: endpointIdForTool('read_note'), arguments: { path: selectedPriority.path, maxChars: 5000 } };
+            mutation = { endpointId: endpointIdForTool('patch_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision, dryRun: true }, requiredArguments: ['oldString and newString'], instruction: 'Dry-run the exact broken-link repair before writing.' };
+          } else {
+            inspect = { endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path: selectedPriority.path, intent: 'review', maxChars: 5000 } };
+            mutation = { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['the smallest justified metadata repair'] };
+          }
           curationPlan = {
-            selected: { path: selectedPriority.path, title: selectedPriority.title, revision: selectedNote.revision, reason },
-            inspect: { endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path: selectedPriority.path, intent: inspectIntent, maxChars: 5000 } },
+            selected: { path: selectedPriority.path, title: selectedPriority.title, revision: selectedNote.revision, reason, reasons },
+            inspect,
             then: mutation,
-            instruction: 'Finish one bounded repair before pulling another. Re-read at the returned revision; the plan never edits, archives, merges, or supersedes automatically.',
+            guard: { oneNotePerPlan: true, expectedRevisionRequired: true, autoFix: false },
+            instruction: 'Finish one bounded repair before pulling another. Re-read at the returned revision; the plan never edits, archives, merges, reorders, or supersedes automatically.',
           };
         }
       } catch {
@@ -3686,6 +3772,7 @@ export class LlmWikiService {
         blocked: Number(executionFlow.flow?.blocked || 0),
         waiting: Number(executionFlow.flow?.waiting || 0),
         unlinkedMocQuestions: Number(graph.mocQuestionCoverage?.unlinked?.total || 0),
+        mocSequenceNeedsAttention: Number(graph.mocSequenceHealth?.needsAttention || 0),
         evergreenNeedsAttention: Number(graph.evergreenQuality?.needsAttention || 0),
         recallDue: Number(recall.total || 0),
         tagVariantIssues: vocabulary.tagVariants.length,
@@ -3697,6 +3784,7 @@ export class LlmWikiService {
         knowledge: sections.knowledge,
         executionFlow,
         mocQuestions: graph.mocQuestionCoverage,
+        mocSequences: graph.mocSequenceHealth,
         mocHierarchy: graph.mocHierarchy,
         evergreenQuality: graph.evergreenQuality,
         recall,
@@ -3717,6 +3805,7 @@ export class LlmWikiService {
         knowledge: sections.knowledge ? { total: sections.knowledge.total, items: sections.knowledge.items?.slice(0, 2) || [], truncated: true } : undefined,
         executionFlow: { flow: executionFlow.flow, lanes: { active: executionFlow.lanes?.active?.slice(0, 2) || [], ready: executionFlow.lanes?.ready?.slice(0, 2) || [], blocked: executionFlow.lanes?.blocked?.slice(0, 2) || [], waiting: executionFlow.lanes?.waiting?.slice(0, 2) || [] }, truncated: true },
         mocQuestions: graph.mocQuestionCoverage ? { total: graph.mocQuestionCoverage.total, linked: graph.mocQuestionCoverage.linked, ratio: graph.mocQuestionCoverage.ratio, unlinked: { ...graph.mocQuestionCoverage.unlinked, items: graph.mocQuestionCoverage.unlinked.items?.slice(0, 2) || [], truncated: true } } : undefined,
+        mocSequences: graph.mocSequenceHealth ? { mocsAnalyzed: graph.mocSequenceHealth.mocsAnalyzed, needsAttention: graph.mocSequenceHealth.needsAttention, items: graph.mocSequenceHealth.items?.slice(0, 2) || [], truncated: true } : undefined,
         evergreenQuality: graph.evergreenQuality ? { total: graph.evergreenQuality.total, needsAttention: graph.evergreenQuality.needsAttention, ready: graph.evergreenQuality.ready, items: graph.evergreenQuality.items?.slice(0, 2) || [], truncated: true } : undefined,
         recall: { total: recall.total, items: recall.items.slice(0, 2), truncated: true },
         vocabulary: { tagVariants: vocabulary.tagVariants.slice(0, 2), unresolvedSubjectTerms: vocabulary.unresolvedSubjectTerms.slice(0, 2), termCollisions: vocabulary.termCollisions.slice(0, 2), truncated: true },

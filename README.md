@@ -2482,10 +2482,14 @@ adds bounded navigation signals instead of a second database.
   claim order, and routes one selected claim to the existing revision-checked
   `wiki.review_claim` endpoint.
 - `get_wiki_maintenance_debt` gives each returned repair a current revision and
-  a `curationPlan`; `get_wiki_review_packet` chooses one bounded priority and
-  returns its inspect-then-mutate route. These projections reuse
-  `wiki.answer_packet`, `wiki.clarify`, `wiki.review`, `wiki.triage`, and
-  `wiki.projection_update` instead of creating a second curator task system.
+  a `curationPlan`; `get_wiki_review_packet` coalesces every finding for the
+  same path into one bounded slot, chooses one priority, and returns its
+  issue-specific inspect-then-repair route. Active recall remains separate
+  from evidence review, blocked work opens the project packet, MOC sequence
+  defects open `wiki.learning_path`, and body repairs begin with a dry-run
+  `notes.patch`. Every plan carries the current revision and `autoFix=false`.
+  These projections reuse existing endpoints instead of creating a second
+  curator task system.
 - `get_wiki_organization_health` includes bounded collection health grouped by
   primary MOC, MOC, domain, or top-level filing area. `get_wiki_bases_view`
   offers optional `authority`, `review_checklist`, and `collections` views.
