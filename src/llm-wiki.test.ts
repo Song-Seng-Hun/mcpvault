@@ -366,6 +366,43 @@ test('capture, review completion, and bounded Reflect dashboard close the organi
   }
 });
 
+test('retention queue, claim review, contextual resurfacing, and term proposals stay bounded and revision-safe', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-batch-owner', modelId: 'codex', password: 'organization-batch-password' });
+    const accessToken = registration.value.accessToken;
+    const source = await callJson(client, 'ingest_source', { sourceId: 'organization-batch-source', title: 'Organization batch source', content: '# Evidence\n\nThe approach is useful for debugging retrieval.\n', capturedBy: 'codex', accessToken });
+    const published = await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Batch.md', content: '# Batch\n\nThe approach is useful for debugging retrieval.\n', evidencePaths: [source.value.path],
+      claims: [{ id: 'debugging-claim', text: 'The approach is useful for debugging retrieval.', evidencePaths: [source.value.path], status: 'supported', confidence: 'medium' }],
+      retrievalCues: ['debugging retrieval', 'search results are stale'], useWhen: 'When investigating a broken or stale knowledge lookup.',
+      retentionPolicy: 'review', retentionAt: '2020-01-01T00:00:00.000Z', retentionReason: 'Recheck after major search changes.',
+      noteKind: 'atomic', lifecycle: 'evergreen', expectedRevision: 'missing', author: 'codex', accessToken,
+    });
+
+    const retention = await callJson(client, 'get_wiki_retention_queue', { accessToken, limit: 10, maxChars: 5000 });
+    expect(retention.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Batch.md', reasons: expect.arrayContaining(['retention_review_due']), suggestedAction: 'choose_retention_policy_and_reason' })]));
+
+    const resurfaced = await callJson(client, 'resurface_wiki_knowledge', { context: 'debugging retrieval', accessToken, limit: 20, maxChars: 6000 });
+    expect(resurfaced.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Batch.md', reasons: expect.arrayContaining(['retrieval_cue_match']), contextMatch: expect.any(Number) })]));
+
+    const reviewed = await callJson(client, 'review_wiki_claim', { path: 'Knowledge/Batch.md', claimId: 'debugging-claim', status: 'disputed', confidence: 'low', reviewedBy: 'codex', reviewNote: 'Needs an independent reproduction.', expectedRevision: published.value.revision, accessToken });
+    expect(reviewed.value).toMatchObject({ success: true, claimId: 'debugging-claim', status: 'disputed', confidence: 'low' });
+    const projection = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Batch.md', accessToken });
+    expect(projection.value.claims).toEqual([expect.objectContaining({ id: 'debugging-claim', status: 'disputed', confidence: 'low', review: expect.objectContaining({ reviewedBy: 'codex', note: 'Needs an independent reproduction.' }) })]);
+    const body = await callJson(client, 'read_note', { path: 'Knowledge/Batch.md', accessToken });
+    expect(body.value.content).toContain('The approach is useful for debugging retrieval.');
+
+    const proposal = await callJson(client, 'propose_wiki_term_change', { currentTerm: 'debugging retrieval', proposedTerm: 'retrieval debugging', rationale: 'The preferred wording matches the surrounding authority vocabulary.', affectedPath: 'Knowledge/Batch.md', reportedBy: 'codex', accessToken });
+    expect(proposal.value).toMatchObject({ success: true, path: expect.stringContaining('_wiki/issues/term-change-') });
+    const proposalNote = await callJson(client, 'read_note', { path: proposal.value.path, accessToken });
+    expect(proposalNote.value.fm).toMatchObject({ issue_kind: 'authority_change', proposal_status: 'proposed', current_term: 'debugging retrieval', proposed_term: 'retrieval debugging' });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('organization health exposes GTD focus, Zettelkasten connectivity, and progressive context', async () => {
   const { server, client } = await setup();
   try {

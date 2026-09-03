@@ -512,6 +512,26 @@ export declare class LlmWikiService {
         followUpRequired?: true;
         followUp?: string;
     }>;
+    reviewClaim(params: {
+        principal?: ScopePrincipal;
+        path: string;
+        claimId: string;
+        status: string;
+        confidence?: string;
+        reviewedBy: string;
+        reviewNote?: string;
+        expectedRevision: string;
+    }): Promise<{
+        success: boolean;
+        path: string;
+        claimId: string;
+        status: unknown;
+        confidence: unknown;
+        reviewedBy: string;
+        reviewedAt: string;
+        reviewNote?: string;
+        revision: string;
+    }>;
     reviewDashboard(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
         purpose: string;
         sections: {
@@ -1597,14 +1617,7 @@ export declare class LlmWikiService {
         openQuestions?: any[];
         summaryLayer?: any;
         summaryHighlights?: any[];
-        claims?: {
-            id: any;
-            text: string;
-            status: any;
-            confidence?: any;
-            evidencePaths?: any;
-            evidence?: any;
-        }[];
+        claims?: any[];
         nextActions?: any[];
         nextAction?: string;
         waitingFor?: string;
@@ -2274,9 +2287,17 @@ export declare class LlmWikiService {
      * not create a recommendation database, and always returns paths for a
      * follow-up bounded read.
      */
-    resurfaceKnowledge(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+    retentionQueue(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        purpose: string;
+        items: Record<string, unknown>[];
+        total: number;
+        truncated: boolean;
+        generatedAt: string;
+    }>;
+    resurfaceKnowledge(principal?: ScopePrincipal, limit?: number, maxChars?: number, context?: string): Promise<{
         purpose: string;
         rotationDate: string;
+        context?: string;
         items: {
             [x: string]: unknown;
         }[];
@@ -2351,6 +2372,20 @@ export declare class LlmWikiService {
     }>;
     lint(principal?: ScopePrincipal, limit?: number): Promise<WikiLintResult>;
     private computeLint;
+    proposeTermChange(params: {
+        principal?: ScopePrincipal;
+        scopeRoot: string;
+        currentTerm: string;
+        proposedTerm: string;
+        rationale: string;
+        affectedPath?: string;
+        reportedBy: string;
+    }): Promise<{
+        success: boolean;
+        issueId: string;
+        path: string;
+        revision: string;
+    }>;
     reportIssue(params: {
         scopeRoot: string;
         issueId?: string;
@@ -2360,6 +2395,7 @@ export declare class LlmWikiService {
         subjectPath?: string;
         evidencePaths?: string[];
         reportedBy: string;
+        extraFrontmatter?: Record<string, unknown>;
     }): Promise<{
         success: boolean;
         issueId: string;

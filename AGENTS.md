@@ -118,6 +118,8 @@ returned revisions. Use
 `get_wiki_review_queue` to find bounded due/disputed knowledge, and
 retention dates that have arrived; archive or tombstone only after checking
 the current revision and preserving a reason/replacement.
+Use `get_wiki_retention_queue` for the dedicated bounded preservation queue;
+legal holds and `preserve_until` always take precedence over disposition.
 `get_wiki_maintenance_debt` for a derived 5S maintenance ledger rather than
 inventing a second task database. Use `get_wiki_authority_map` when titles,
 aliases, or stable IDs need terminology normalization; collisions are repair
@@ -365,6 +367,11 @@ may use `preferredTerm`, `disambiguation`, `aliases`, `termStatus`, and
 `termReplacedBy`; projection reads expose a bounded `authority` card. After a
 real evidence review, pass `reviewChecks` and `reviewOpenItems` to
 `review_wiki_note` so later agents can see what was checked and what remains.
+Use `review_wiki_claim` when only one persisted claim changed status or
+confidence; it records the reviewer without rewriting the note body. For
+authority changes, use `propose_wiki_term_change` to create a Git-visible
+proposal, inspect aliases/backlinks/collisions, and resolve it only after the
+impact is understood; never rename or rewrite links automatically.
 Use `get_wiki_answer_packet` with the smallest fitting intent: `capture` for
 Inbox clarification, `explore` for graph navigation, `decide` for evidence and
 counterexamples, `execute` for a concrete next action, and `review` for stale

@@ -5,7 +5,7 @@ const accessToken = { type: 'string', description: 'Token from login_scope. Omit
 const scopeUri = { type: 'string', description: 'Target scope root; defaults to scope://global/. Private scopes require an authorized accessToken.', default: 'scope://global/' } as const;
 
 export const LLM_WIKI_MUTATING_TOOLS = [
-  'initialize_llm_wiki', 'ingest_source', 'capture_wiki_note', 'clarify_wiki_note', 'distill_wiki_source', 'publish_knowledge', 'publish_decision_record', 'triage_wiki_note', 'review_wiki_note', 'report_wiki_issue', 'resolve_wiki_issue',
+  'initialize_llm_wiki', 'ingest_source', 'capture_wiki_note', 'clarify_wiki_note', 'distill_wiki_source', 'publish_knowledge', 'publish_decision_record', 'triage_wiki_note', 'review_wiki_note', 'review_wiki_claim', 'report_wiki_issue', 'propose_wiki_term_change', 'resolve_wiki_issue',
 ] as const;
 
 export function getLlmWikiTools(): Tool[] {
@@ -234,6 +234,13 @@ export function getLlmWikiTools(): Tool[] {
       }, required: ['path', 'reviewOutcome', 'expectedRevision'] },
     },
     {
+      name: 'review_wiki_claim',
+      description: 'Review one persisted claim inside a knowledge note without rewriting the Markdown body. Updates only that claim status/confidence and records a bounded reviewer note with the expected revision; evidence remains unchanged and must still be verified separately.',
+      inputSchema: { type: 'object', properties: {
+        path: { type: 'string' }, claimId: { type: 'string', maxLength: 80 }, status: { type: 'string', enum: ['supported', 'disputed', 'unverified', 'superseded'] }, confidence: { type: 'string', enum: ['low', 'medium', 'high'] }, reviewedBy: { type: 'string', maxLength: 200 }, reviewNote: { type: 'string', maxLength: 1000 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
+      }, required: ['path', 'claimId', 'status', 'reviewedBy', 'expectedRevision'] },
+    },
+    {
       name: 'get_wiki_review_dashboard',
       description: 'Run one bounded GTD Reflect/weekly-review pass over Inbox, next actions, due work, waiting/someday items, open questions/hypotheses, due or stale knowledge, and graph/MOC/focus health. It is advisory and never mutates notes.',
       inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 50, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 18000, default: 9000 }, accessToken, prettyPrint } },
@@ -434,9 +441,14 @@ export function getLlmWikiTools(): Tool[] {
       inputSchema: { type: 'object', properties: { olderThanDays: { type: 'integer', minimum: 1, maximum: 3650, default: 180 }, limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
     },
     {
+      name: 'get_wiki_retention_queue',
+      description: 'Return a bounded preservation and disposition queue for knowledge notes with retention metadata or an overdue retention review. It distinguishes preserve, legal hold, review, archive, and tombstone candidates; it never deletes or archives automatically.',
+      inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
+    },
+    {
       name: 'resurface_wiki_knowledge',
-      description: 'Return a small deterministic rotating set of durable notes for Zettelkasten-style serendipitous rediscovery. Read selected notes before relying on them; this is a bounded derived view and never mutates files.',
-      inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 20, default: 8 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 5000 }, accessToken, prettyPrint } },
+      description: 'Return a small deterministic rotating set of durable notes for Zettelkasten-style serendipitous rediscovery. An optional context/problem signal makes retrieval cues and use_when metadata influence the bounded ranking. Read selected notes before relying on them; this is a derived view and never mutates files.',
+      inputSchema: { type: 'object', properties: { context: { type: 'string', maxLength: 1000, description: 'Optional current task, question, or problem signal used only to rank retrieval cues' }, limit: { type: 'integer', minimum: 1, maximum: 20, default: 8 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 5000 }, accessToken, prettyPrint } },
     },
     {
       name: 'update_wiki_projection',
@@ -454,10 +466,17 @@ export function getLlmWikiTools(): Tool[] {
       name: 'report_wiki_issue',
       description: 'Add a durable Error Book entry for a contradiction, unsupported claim, stale knowledge, broken link, or missing context.',
       inputSchema: { type: 'object', properties: {
-        scopeUri, issueId: { type: 'string' }, kind: { type: 'string', enum: ['contradiction', 'unsupported_claim', 'stale', 'broken_link', 'missing_context', 'other'] },
+        scopeUri, issueId: { type: 'string' }, kind: { type: 'string', enum: ['contradiction', 'unsupported_claim', 'stale', 'broken_link', 'missing_context', 'authority_change', 'other'] },
         title: { type: 'string' }, description: { type: 'string' }, subjectPath: { type: 'string' }, evidencePaths: { type: 'array', items: { type: 'string' } },
         reportedBy: { type: 'string' }, accessToken, prettyPrint,
       }, required: ['kind', 'title', 'description'] },
+    },
+    {
+      name: 'propose_wiki_term_change',
+      description: 'Create a Git-visible authority-control proposal for renaming or deprecating a term. Records current term, proposed preferred term, rationale, and affected note without renaming, redirecting, or rewriting any links automatically; resolve the proposal only after reviewing its impact.',
+      inputSchema: { type: 'object', properties: {
+        currentTerm: { type: 'string', maxLength: 300 }, proposedTerm: { type: 'string', maxLength: 300 }, rationale: { type: 'string', maxLength: 1200 }, affectedPath: { type: 'string' }, reportedBy: { type: 'string', maxLength: 200 }, scopeUri, accessToken, prettyPrint,
+      }, required: ['currentTerm', 'proposedTerm', 'rationale'] },
     },
     {
       name: 'resolve_wiki_issue',

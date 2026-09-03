@@ -15,7 +15,7 @@ import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 
 const KNOWLEDGE_STATUSES = new Set(['draft', 'verified', 'disputed', 'superseded']);
 const CONFIDENCE_LEVELS = new Set(['low', 'medium', 'high']);
-const ISSUE_KINDS = new Set(['contradiction', 'unsupported_claim', 'stale', 'broken_link', 'missing_context', 'other']);
+const ISSUE_KINDS = new Set(['contradiction', 'unsupported_claim', 'stale', 'broken_link', 'missing_context', 'authority_change', 'other']);
 export const SOURCE_TRUST_LEVELS = ['unrated', 'low', 'medium', 'high', 'verified'] as const;
 const sourceTrustLevels = new Set<string>(SOURCE_TRUST_LEVELS);
 const PROMOTION_CATEGORIES = new Map([['research', 5], ['proposal', 4], ['agora', 3], ['discussion', 2], ['feedback', 2]]);
@@ -2179,6 +2179,42 @@ export class LlmWikiService {
     return { success: true, path: this.access.toPublicPath(params.path), revision: updated.revision, reviewOutcome: outcome, reviewedBy: updated.frontmatter.last_reviewed_by, reviewedAt: updated.frontmatter.last_reviewed_at, reviewTrigger, reviewCount, reviewReopenCount, ...(reviewChecks && { reviewChecks }), ...(reviewOpenItems && { reviewOpenItems }), ...(reviewAt && { reviewAt }), ...(effectiveReviewIntervalDays !== undefined && { reviewIntervalDays: effectiveReviewIntervalDays }), ...(adaptiveInterval !== undefined && { adaptiveReviewInterval: true }), ...(nextLifecycle && { nextLifecycle }), ...(followUpRequired && { followUpRequired, followUp: 'Choose nextLifecycle or revise the note; a confirmed review does not silently remove the note from the review queue.' }) };
   }
 
+  async reviewClaim(params: { principal?: ScopePrincipal; path: string; claimId: string; status: string; confidence?: string; reviewedBy: string; reviewNote?: string; expectedRevision: string }) {
+    if (!params.expectedRevision) throw new Error('expectedRevision is required; use the current note revision');
+    if (!this.access.canAccessPhysicalPath(params.path, params.principal)) throw new Error(`Access denied: ${this.access.toPublicPath(params.path)}`);
+    this.access.assertMutationAllowed(params.path, 'review_wiki_claim');
+    if (!CLAIM_STATUSES.has(params.status)) throw new Error('status must be supported, disputed, unverified, or superseded');
+    if (params.confidence !== undefined && !CONFIDENCE_LEVELS.has(params.confidence)) throw new Error('confidence must be low, medium, or high');
+    if (!params.reviewedBy?.trim()) throw new Error('reviewedBy is required');
+    const note = await this.fileSystem.readNote(params.path);
+    if (note.frontmatter.llm_wiki_type !== 'knowledge') throw new Error('review_wiki_claim requires an LLM Wiki knowledge note');
+    const claims = normalizeClaims(undefined, note.frontmatter.claims) || [];
+    const claimIndex = claims.findIndex(claim => String(claim.id) === String(params.claimId).trim());
+    if (claimIndex < 0) throw new Error(`Claim not found: ${params.claimId}`);
+    const claim = claims[claimIndex]!;
+    const reviewedAt = now();
+    if (params.confidence !== undefined) claim.confidence = params.confidence;
+    claim.status = params.status;
+    const existingReviews = note.frontmatter.claim_reviews && typeof note.frontmatter.claim_reviews === 'object' && !Array.isArray(note.frontmatter.claim_reviews)
+      ? { ...note.frontmatter.claim_reviews }
+      : {};
+    existingReviews[String(claim.id)] = {
+      status: params.status,
+      ...(params.confidence !== undefined && { confidence: params.confidence }),
+      reviewed_by: boundedText(params.reviewedBy, 200),
+      reviewed_at: reviewedAt,
+      ...(params.reviewNote?.trim() && { review_note: boundedText(params.reviewNote, 1000) }),
+    };
+    await this.fileSystem.updateFrontmatter({
+      path: params.path,
+      frontmatter: { claims, claim_reviews: existingReviews, updated_by: params.reviewedBy, updated_at: reviewedAt },
+      merge: true,
+      expectedRevision: params.expectedRevision,
+    });
+    const updated = await this.fileSystem.readNote(params.path);
+    return { success: true, path: this.access.toPublicPath(params.path), claimId: String(claim.id), status: claim.status, confidence: claim.confidence, reviewedBy: params.reviewedBy, reviewedAt, ...(params.reviewNote?.trim() && { reviewNote: boundedText(params.reviewNote, 1000) }), revision: updated.revision };
+  }
+
   async reviewDashboard(principal?: ScopePrincipal, limit = 10, maxChars = 9000) {
     const boundedLimit = Math.min(Math.max(Number(limit) || 10, 1), 50);
     const boundedChars = Math.min(Math.max(Number(maxChars) || 9000, 512), 18000);
@@ -3276,6 +3312,10 @@ export class LlmWikiService {
         .filter((claim: any) => claim && typeof claim.text === 'string' && claim.text.trim())
         .slice(0, 8)
         .map((claim: any, index: number) => {
+          const claimReviews = note.frontmatter.claim_reviews && typeof note.frontmatter.claim_reviews === 'object' && !Array.isArray(note.frontmatter.claim_reviews)
+            ? note.frontmatter.claim_reviews as Record<string, any>
+            : {};
+          const claimReview = claimReviews[String(claim.id || `claim-${index + 1}`)];
           const evidencePaths = Array.isArray(claim.evidence_paths)
             ? claim.evidence_paths.filter((path: unknown): path is string => typeof path === 'string' && this.access.canReferenceFrom(params.path, path)).slice(0, 4).map((path: string) => this.access.toPublicPath(path))
             : [];
@@ -3296,6 +3336,15 @@ export class LlmWikiService {
             ...(typeof claim.confidence === 'string' && { confidence: claim.confidence }),
             ...(evidencePaths.length > 0 && { evidencePaths }),
             ...(locators.length > 0 && { evidence: locators }),
+            ...(claimReview && typeof claimReview === 'object' && {
+              review: {
+                ...(typeof claimReview.status === 'string' && { status: claimReview.status }),
+                ...(typeof claimReview.confidence === 'string' && { confidence: claimReview.confidence }),
+                ...(typeof claimReview.reviewed_by === 'string' && { reviewedBy: boundedText(claimReview.reviewed_by, 200) }),
+                ...(typeof claimReview.reviewed_at === 'string' && { reviewedAt: claimReview.reviewed_at }),
+                ...(typeof claimReview.review_note === 'string' && { note: boundedText(claimReview.review_note, 500) }),
+              },
+            }),
           };
         })
       : [];
@@ -5511,11 +5560,70 @@ export class LlmWikiService {
    * not create a recommendation database, and always returns paths for a
    * follow-up bounded read.
    */
-  async resurfaceKnowledge(principal?: ScopePrincipal, limit = 8, maxChars = 5000) {
+  async retentionQueue(principal?: ScopePrincipal, limit = 20, maxChars = 7000) {
+    const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
+    const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
+    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+    const nowMs = Date.now();
+    const candidates: Array<Record<string, unknown> & { priority: number; sortAt: number }> = [];
+    let total = 0;
+    for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+      if (note.frontmatter.llm_wiki_type !== 'knowledge') continue;
+      const policy = typeof note.frontmatter.retention_policy === 'string' ? note.frontmatter.retention_policy.trim().toLowerCase() : '';
+      const retentionAt = Date.parse(String(note.frontmatter.retention_at || ''));
+      const preserveUntil = Date.parse(String(note.frontmatter.preserve_until || ''));
+      const legalHold = note.frontmatter.legal_hold === true;
+      if (!policy && !Number.isFinite(retentionAt) && !Number.isFinite(preserveUntil) && !legalHold) continue;
+      if (policy === 'preserve' && !Number.isFinite(retentionAt) && !legalHold) continue;
+      total += 1;
+      const due = Number.isFinite(retentionAt) && retentionAt <= nowMs;
+      const protectedUntil = Number.isFinite(preserveUntil) && preserveUntil > nowMs;
+      const lifecycle = String(note.frontmatter.lifecycle || '').trim().toLowerCase();
+      const reasons = [
+        ...(due ? ['retention_review_due'] : []),
+        ...(legalHold ? ['legal_hold'] : []),
+        ...(protectedUntil ? ['preserve_until_active'] : []),
+        ...(policy ? [`policy_${policy}`] : []),
+        ...(lifecycle === 'archived' || lifecycle === 'superseded' ? ['already_inactive'] : []),
+      ];
+      const action = legalHold || protectedUntil || policy === 'preserve'
+        ? 'preserve_and_review_metadata'
+        : policy === 'tombstone' || policy === 'archive'
+          ? 'review_then_apply_revision_checked_disposition'
+          : 'choose_retention_policy_and_reason';
+      const priority = (due ? 5 : 0) + (legalHold ? 4 : 0) + (policy === 'tombstone' ? 3 : policy === 'archive' ? 2 : 1);
+      candidates.push({
+        path: this.access.toPublicPath(note.path),
+        title: note.frontmatter.title || note.path.split('/').at(-1),
+        policy: policy || undefined,
+        lifecycle: lifecycle || undefined,
+        ...(Number.isFinite(retentionAt) && { retentionAt: new Date(retentionAt).toISOString(), due }),
+        ...(Number.isFinite(preserveUntil) && { preserveUntil: new Date(preserveUntil).toISOString(), protectedUntil }),
+        ...(legalHold && { legalHold: true }),
+        ...(typeof note.frontmatter.retention_reason === 'string' && note.frontmatter.retention_reason.trim() && { reason: boundedText(note.frontmatter.retention_reason, 500) }),
+        ...(typeof note.frontmatter.replaced_by === 'string' && note.frontmatter.replaced_by.trim() && { replacedBy: note.frontmatter.replaced_by }),
+        reasons,
+        priority,
+        suggestedAction: action,
+        sortAt: Number.isFinite(retentionAt) ? retentionAt : Number.isFinite(preserveUntil) ? preserveUntil : Number.MAX_SAFE_INTEGER,
+      });
+    }
+    candidates.sort((left, right) => right.priority - left.priority || left.sortAt - right.sortAt || String(left.path).localeCompare(String(right.path)));
+    const items: Array<Record<string, unknown>> = [];
+    for (const candidate of candidates.slice(0, boundedLimit)) {
+      const { priority: _priority, sortAt: _sortAt, ...item } = candidate;
+      if (JSON.stringify([...items, item]).length + 2 > boundedChars) break;
+      items.push(item);
+    }
+    return { purpose: 'Bounded preservation/disposition queue derived from note Properties. It never deletes, archives, or tombstones automatically.', items, total, truncated: total > items.length, generatedAt: now() };
+  }
+
+  async resurfaceKnowledge(principal?: ScopePrincipal, limit = 8, maxChars = 5000, context?: string) {
     const boundedLimit = Math.min(Math.max(Number(limit) || 8, 1), 20);
     const boundedChars = Math.min(Math.max(Number(maxChars) || 5000, 512), 12000);
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
     const day = new Date().toISOString().slice(0, 10);
+    const contextWords = normalizedWords(String(context || ''));
     const candidates: Array<Record<string, unknown> & { rank: number }> = [];
     let total = 0;
     for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
@@ -5525,8 +5633,13 @@ export class LlmWikiService {
       if (['archived', 'superseded'].includes(lifecycle)) continue;
       total += 1;
       const digest = hash(`${day}|${normalizePath(note.path).toLowerCase()}`);
-      const rank = Number.parseInt(digest.slice(0, 12), 16);
+      const cues = Array.isArray(note.frontmatter.retrieval_cues) ? note.frontmatter.retrieval_cues.filter((item: unknown): item is string => typeof item === 'string' && Boolean(item.trim())).slice(0, 8) : [];
+      const useWhen = typeof note.frontmatter.use_when === 'string' ? note.frontmatter.use_when : '';
+      const cueWords = normalizedWords(`${cues.join(' ')} ${useWhen}`);
+      const contextMatch = contextWords.size > 0 ? jaccard(contextWords, cueWords) : 0;
+      const rank = Number.parseInt(digest.slice(0, 12), 16) - Math.floor(contextMatch * 0x100000000);
       const reasons = ['daily_serendipity'];
+      if (contextMatch > 0) reasons.unshift('retrieval_cue_match');
       if (lifecycle === 'review') reasons.unshift('review_candidate');
       if (typeof note.frontmatter.interpretation_status === 'string' && note.frontmatter.interpretation_status === 'unprocessed') reasons.unshift('unprocessed_interpretation');
       candidates.push({
@@ -5536,6 +5649,9 @@ export class LlmWikiService {
         ...(lifecycle && { lifecycle }),
         reasons,
         ...(typeof note.frontmatter.summary === 'string' && { summary: boundedText(note.frontmatter.summary, 500) }),
+        ...(cues.length > 0 && { retrievalCues: cues }),
+        ...(useWhen && { useWhen: boundedText(useWhen, 500) }),
+        ...(context && { contextMatch: Number(contextMatch.toFixed(3)) }),
         rank,
       });
     }
@@ -5544,6 +5660,7 @@ export class LlmWikiService {
     const result = {
       purpose: 'A bounded serendipity queue for reconnecting with durable knowledge. Read the selected notes before treating them as relevant; this projection is not evidence or a truth score.',
       rotationDate: day,
+      ...(context && { context: boundedText(context, 1000) }),
       items,
       total,
       truncated: total > items.length,
@@ -6064,6 +6181,33 @@ export class LlmWikiService {
     };
   }
 
+  async proposeTermChange(params: {
+    principal?: ScopePrincipal;
+    scopeRoot: string;
+    currentTerm: string;
+    proposedTerm: string;
+    rationale: string;
+    affectedPath?: string;
+    reportedBy: string;
+  }) {
+    const currentTerm = boundedText(params.currentTerm, 300);
+    const proposedTerm = boundedText(params.proposedTerm, 300);
+    const rationale = boundedText(params.rationale, 1200);
+    if (!currentTerm || !proposedTerm || !rationale) throw new Error('currentTerm, proposedTerm, and rationale are required');
+    if (currentTerm.toLocaleLowerCase() === proposedTerm.toLocaleLowerCase()) throw new Error('proposedTerm must differ from currentTerm');
+    if (params.affectedPath && !this.access.canAccessPhysicalPath(params.affectedPath, params.principal)) throw new Error(`Access denied: ${this.access.toPublicPath(params.affectedPath)}`);
+    return this.reportIssue({
+      scopeRoot: params.scopeRoot,
+      issueId: `term-change-${randomUUID().slice(0, 12)}`,
+      kind: 'authority_change',
+      title: `Authority term proposal: ${currentTerm} -> ${proposedTerm}`,
+      description: `Current term: ${currentTerm}\n\nProposed preferred term: ${proposedTerm}\n\nRationale: ${rationale}\n\nThis proposal does not rename notes or rewrite links. Review authority collisions, aliases, deprecated uses, and backlinks before resolving it.`,
+      ...(params.affectedPath && { subjectPath: params.affectedPath }),
+      reportedBy: params.reportedBy,
+      extraFrontmatter: { proposal_status: 'proposed', current_term: currentTerm, proposed_term: proposedTerm, rationale },
+    });
+  }
+
   async reportIssue(params: {
     scopeRoot: string;
     issueId?: string;
@@ -6073,6 +6217,7 @@ export class LlmWikiService {
     subjectPath?: string;
     evidencePaths?: string[];
     reportedBy: string;
+    extraFrontmatter?: Record<string, unknown>;
   }) {
     if (!ISSUE_KINDS.has(params.kind)) throw new Error(`Unsupported issue kind: ${params.kind}`);
     if (!params.title?.trim() || !params.description?.trim()) throw new Error('title and description are required');
@@ -6092,6 +6237,7 @@ export class LlmWikiService {
         reported_by: params.reportedBy, created_at: timestamp, updated_at: timestamp,
         ...(params.subjectPath && { subject_path: params.subjectPath }),
         ...(params.evidencePaths?.length && { evidence_paths: params.evidencePaths }),
+        ...(params.extraFrontmatter || {}),
       },
       expectedRevision: 'missing',
     });
