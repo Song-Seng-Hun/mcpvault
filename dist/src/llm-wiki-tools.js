@@ -163,11 +163,12 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_answer_packet',
-            description: 'Build one bounded answer-oriented context packet for a selected Wiki note. It combines the current progressive projection, explainable supporting neighbors, and up to two counterpoints or negative/review notes; revisions remain freshness guards and selected bodies stay compact.',
+            description: 'Build one bounded intent-aware context packet for a selected Wiki note. It combines the current progressive projection, explainable neighbors, a question-to-claim-to-evidence-to-counterexample-to-decision reasoning trail, and bounded next guidance. Choose capture, explore, decide, execute, or review; revisions remain freshness guards and selected bodies stay compact.',
             inputSchema: { type: 'object', properties: {
                     path: { type: 'string', description: 'Existing visible Markdown note path' },
                     maxChars: { type: 'integer', minimum: 1024, maximum: 16000, default: 7000 },
                     includeSemantic: { type: 'boolean', description: 'Add optional bounded semantic candidates to neighbor discovery (default: true)' },
+                    intent: { type: 'string', enum: ['capture', 'explore', 'decide', 'execute', 'review'], default: 'decide', description: 'Order and interpret the compact packet for the current job: capture rough input, explore connections, decide with evidence, execute a next action, or review freshness/quality.' },
                     accessToken, prettyPrint,
                 }, required: ['path'] },
         },

@@ -364,6 +364,13 @@ may use `preferredTerm`, `disambiguation`, `aliases`, `termStatus`, and
 `termReplacedBy`; projection reads expose a bounded `authority` card. After a
 real evidence review, pass `reviewChecks` and `reviewOpenItems` to
 `review_wiki_note` so later agents can see what was checked and what remains.
+Use `get_wiki_answer_packet` with the smallest fitting intent: `capture` for
+Inbox clarification, `explore` for graph navigation, `decide` for evidence and
+counterexamples, `execute` for a concrete next action, and `review` for stale
+or unresolved work. Its `reasoningTrail` is a compact question -> claim ->
+evidence -> counterexample -> decision checklist; missing stages are prompts,
+not proof. Collection health exposes a representative MOC, purpose/scope,
+questions, attention signals, and a suggested next action when available.
 Use the `authority`, `review_checklist`, and `collections` Bases views, and the
 collection section of `get_wiki_organization_health`, as advisory maintenance
 launchpads. None of these metadata fields replaces Markdown, Obsidian links,

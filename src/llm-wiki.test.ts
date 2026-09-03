@@ -1011,7 +1011,7 @@ test('authority, maintenance debt, answer packets, and adaptive review stay boun
       expect(result.isError).toBeFalsy();
     };
     await write('Knowledge/Anchor.md', '# Anchor\n\nThe anchor claim. [[Knowledge/Support]] and [[Knowledge/Counter]].\n', {
-      title: 'Anchor concept', llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', aliases: ['Shared anchor'], stable_id: 'anchor-concept', review_policy: 'periodic', subject_terms: ['knowledge organization', 'retrieval'], domain: 'information management', methods: ['Zettelkasten'], audience: ['agents'],
+      title: 'Anchor concept', llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', aliases: ['Shared anchor'], preferred_term: 'Anchor concept (canonical)', disambiguation: 'The central organization example', stable_id: 'anchor-concept', review_policy: 'periodic', subject_terms: ['knowledge organization', 'retrieval'], domain: 'information management', methods: ['Zettelkasten'], audience: ['agents'],
     });
     await write('Knowledge/Support.md', '# Support\n\nSupporting context.\n', {
       title: 'Supporting context', llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', aliases: ['Anchor support'], stable_id: 'anchor-support',
@@ -1038,6 +1038,8 @@ test('authority, maintenance debt, answer packets, and adaptive review stay boun
 
     const authority = await callJson(client, 'get_wiki_authority_map', { query: 'shared anchor', accessToken });
     expect(authority.value.entries).toEqual(expect.arrayContaining([expect.objectContaining({ term: 'Shared anchor', collision: 'term_used_by_multiple_notes', address: expect.any(String), stableIds: expect.arrayContaining(['anchor-concept', 'another-concept']) })]));
+    const preferredAuthority = await callJson(client, 'get_wiki_authority_map', { query: 'canonical', accessToken });
+    expect(preferredAuthority.value.entries).toEqual(expect.arrayContaining([expect.objectContaining({ term: 'Anchor concept (canonical)', preferred: 'Anchor concept (canonical)', disambiguation: ['The central organization example'] })]));
     const legacyAuthority = await callJson(client, 'get_wiki_authority_map', { query: 'legacy anchor', accessToken });
     expect(legacyAuthority.value.entries).toEqual(expect.arrayContaining([expect.objectContaining({ term: 'Legacy anchor', status: 'deprecated', replacedBy: ['[[Knowledge/Anchor]]'], broaderTerms: ['[[Knowledge/Core]]'] })]));
 
@@ -1051,8 +1053,9 @@ test('authority, maintenance debt, answer packets, and adaptive review stay boun
     expect(debt.value.counts).toMatchObject({ inbox_capture: 1, stale_summary: 1 });
     expect(debt.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Inbox/Rough.md' }), expect.objectContaining({ path: 'Knowledge/Stale.md', priority: 'high' })]));
 
-    const packet = await callJson(client, 'get_wiki_answer_packet', { path: 'Knowledge/Anchor.md', includeSemantic: false, maxChars: 5000, accessToken });
-    expect(packet.value).toMatchObject({ mode: 'bounded_answer_packet', source: expect.objectContaining({ path: 'Knowledge/Anchor.md' }) });
+    const packet = await callJson(client, 'get_wiki_answer_packet', { path: 'Knowledge/Anchor.md', intent: 'decide', includeSemantic: false, maxChars: 5000, accessToken });
+    expect(packet.value).toMatchObject({ mode: 'bounded_answer_packet', intent: 'decide', source: expect.objectContaining({ path: 'Knowledge/Anchor.md' }), reasoningTrail: expect.objectContaining({ claims: expect.any(Array), evidence: expect.any(Array), counterexamples: expect.any(Array), gaps: expect.any(Array) }) });
+    expect(JSON.stringify(packet.value).length).toBeLessThanOrEqual(5000);
     expect(packet.value.supporting).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Support.md', relationToSource: 'supporting_context' })]));
     expect(packet.value.counterpoints).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Counter.md', relationToSource: 'counterpoint_or_review' })]));
     const neighborhood = await callJson(client, 'get_wiki_neighborhood', { path: 'Knowledge/Anchor.md', includeSemantic: false, maxChars: 4000, accessToken });
@@ -1069,6 +1072,8 @@ test('authority, maintenance debt, answer packets, and adaptive review stay boun
     expect(reviewed.value).toMatchObject({ adaptiveReviewInterval: true, reviewIntervalDays: 30, reviewAt: expect.any(String) });
     const health = await callJson(client, 'get_wiki_organization_health', { limit: 10, accessToken });
     expect(health.value.quarantine).toMatchObject({ total: expect.any(Number), items: expect.any(Array) });
+    expect(health.value.collectionHealth.items).toEqual(expect.arrayContaining([expect.objectContaining({ nextAction: expect.any(String), signals: expect.any(Array), attentionScore: expect.any(Number) })]));
+    expect(legacyAuthority.value.entries).toEqual(expect.arrayContaining([expect.objectContaining({ term: 'Legacy anchor', preferred: 'Legacy anchor' })]));
   } finally {
     await client.close();
     await server.close();

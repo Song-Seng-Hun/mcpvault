@@ -2039,12 +2039,20 @@ export declare class LlmWikiService {
         items: {
             key: string;
             entryPoint: string;
+            representativePath?: string;
+            representativeTitle?: string;
+            purpose?: string;
+            scope?: string;
+            questions?: string[];
             total: number;
             knowledge: number;
             inbox: number;
             reviewDue: number;
             withoutSummary: number;
             withOpenQuestions: number;
+            attentionScore: number;
+            signals: string[];
+            nextAction: string;
         }[];
         truncated: boolean;
         generatedAt: string;
@@ -2071,9 +2079,7 @@ export declare class LlmWikiService {
      * room for a counterexample or negative knowledge instead of returning a
      * large semantic dump.
      */
-    answerPacket(principal: ScopePrincipal | undefined, path: string, maxChars?: number, includeSemantic?: boolean): Promise<{
-        truncated: boolean;
-    }>;
+    answerPacket(principal: ScopePrincipal | undefined, path: string, maxChars?: number, includeSemantic?: boolean, intent?: 'capture' | 'explore' | 'decide' | 'execute' | 'review'): Promise<Record<string, unknown>>;
     /**
      * Expose a small library-like authority view derived from note titles,
      * aliases, and stable IDs.  It suggests preferred access terms but never
@@ -2088,8 +2094,10 @@ export declare class LlmWikiService {
             address: string;
             canonicalPath: string | undefined;
             status: string;
+            disambiguation?: string[];
             replacedBy?: string[];
             broaderTerms?: string[];
+            narrowerTerms?: string[];
             relatedTerms?: string[];
             primaryMocs?: string[];
             aliases?: string[];

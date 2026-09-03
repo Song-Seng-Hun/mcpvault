@@ -2299,9 +2299,20 @@ adds bounded navigation signals instead of a second database.
   `moc`, `counterexamples`, `scope`, `freshness`) and bounded
   `reviewOpenItems`; this preserves an auditable hand-off without duplicating
   Git history.
+- `get_wiki_answer_packet` accepts an optional intent (`capture`, `explore`,
+  `decide`, `execute`, or `review`). The packet keeps the same bounded source
+  and neighbor reads but changes the guidance and adds a compact reasoning
+  trail: question, claims, evidence locators/revisions, counterexamples, and
+  related decisions. Treat gaps as prompts for investigation, never as proof.
 - `get_wiki_organization_health` includes bounded collection health grouped by
   primary MOC, MOC, domain, or top-level filing area. `get_wiki_bases_view`
   offers optional `authority`, `review_checklist`, and `collections` views.
+
+Authority results now retain a preferred display term, disambiguation, stable
+address, aliases, broader/narrower terms, and related terms. Collection
+health includes a representative MOC when discoverable, purpose/scope and
+questions, an attention score, signals, and a suggested next action. These
+remain derived projections over Markdown rather than a new database.
 
 These are advisory organization aids. They never grant access, replace
 revision checks, auto-move notes, or turn a generated summary into truth.

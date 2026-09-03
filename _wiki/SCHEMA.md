@@ -480,3 +480,18 @@ follow-ups in `reviewOpenItems`. This is a hand-off aid, not a parallel log.
 `get_wiki_organization_health` also reports collection-level debt grouped by
 MOC, domain, or filing area, while `get_wiki_bases_view` offers optional
 `authority`, `review_checklist`, and `collections` views.
+
+`get_wiki_answer_packet` accepts `intent=capture|explore|decide|execute|review`.
+The intent changes the compact reading guidance without changing visibility:
+capture points to Inbox clarification, explore prioritizes navigable links,
+decide emphasizes evidence and counterpoints, execute emphasizes the concrete
+next action, and review emphasizes freshness and open repair items. Every
+packet also exposes a bounded `reasoningTrail` of question, claims, evidence,
+counterexamples, decisions, and missing stages. It is a navigation aid, not a
+truth assertion.
+
+Collection health is a derived projection, not a folder policy. Each item may
+include a representative MOC, its purpose/scope/questions, `attentionScore`,
+bounded `signals`, and `nextAction`. The authority projection also reports
+`preferred`, `disambiguation`, `aliases`, `broaderTerms`, `narrowerTerms`, and
+`relatedTerms` so a library-style term can be browsed in both directions.

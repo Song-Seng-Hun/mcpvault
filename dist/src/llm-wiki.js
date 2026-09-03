@@ -4269,7 +4269,7 @@ export class LlmWikiService {
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
         const groups = new Map();
         let noteTotal = 0;
-        let overflow = 0;
+        const overflowKeys = new Set();
         for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
             noteTotal += 1;
             const frontmatter = note.frontmatter || {};
@@ -4284,7 +4284,7 @@ export class LlmWikiService {
             let group = groups.get(key);
             if (!group) {
                 if (groups.size >= 120) {
-                    overflow += 1;
+                    overflowKeys.add(key);
                     continue;
                 }
                 group = { key, entryPoint: typeof frontmatter.primary_moc === 'string' && frontmatter.primary_moc.trim() ? frontmatter.primary_moc.trim() : this.access.toPublicPath(note.path), total: 0, knowledge: 0, inbox: 0, reviewDue: 0, withoutSummary: 0, withOpenQuestions: 0 };
@@ -4294,6 +4294,18 @@ export class LlmWikiService {
             const kind = String(frontmatter.note_kind || '').toLowerCase();
             if (['atomic', 'knowledge', 'decision', 'literature'].includes(kind))
                 group.knowledge += 1;
+            if (kind === 'moc' && !group.representativePath) {
+                group.representativePath = this.access.toPublicPath(note.path);
+                const representativeTitle = typeof frontmatter.title === 'string' ? frontmatter.title : note.path.split('/').at(-1);
+                if (representativeTitle)
+                    group.representativeTitle = representativeTitle;
+                if (typeof frontmatter.moc_purpose === 'string' && frontmatter.moc_purpose.trim())
+                    group.purpose = boundedText(frontmatter.moc_purpose, 500);
+                if (typeof frontmatter.moc_scope === 'string' && frontmatter.moc_scope.trim())
+                    group.scope = boundedText(frontmatter.moc_scope, 300);
+                if (Array.isArray(frontmatter.moc_questions))
+                    group.questions = frontmatter.moc_questions.filter((item) => typeof item === 'string' && Boolean(item.trim())).slice(0, 6).map(item => boundedText(item, 300));
+            }
             if (String(frontmatter.lifecycle || '').toLowerCase() === 'inbox')
                 group.inbox += 1;
             const reviewAt = Date.parse(String(frontmatter.review_at || ''));
@@ -4304,8 +4316,18 @@ export class LlmWikiService {
             if (Array.isArray(frontmatter.open_questions) && frontmatter.open_questions.length > 0)
                 group.withOpenQuestions += 1;
         }
-        const items = Array.from(groups.values()).sort((a, b) => (b.reviewDue + b.withoutSummary + b.inbox) - (a.reviewDue + a.withoutSummary + a.inbox) || a.key.localeCompare(b.key)).slice(0, boundedLimit);
-        const result = { purpose: 'Bounded collection-level health for MOCs, domains, or top-level filing areas. It is an advisory view; it never moves or rewrites notes.', totalNotes: noteTotal, collectionTotal: groups.size + overflow, items, truncated: groups.size > items.length || overflow > 0, generatedAt: now() };
+        const items = Array.from(groups.values()).map(group => ({
+            ...group,
+            attentionScore: group.reviewDue * 3 + group.inbox * 2 + group.withoutSummary + group.withOpenQuestions,
+            signals: [
+                ...(group.reviewDue > 0 ? ['review_due'] : []),
+                ...(group.inbox > 0 ? ['inbox_capture'] : []),
+                ...(group.withoutSummary > 0 ? ['missing_progressive_summary'] : []),
+                ...(group.withOpenQuestions > 0 ? ['open_questions'] : []),
+            ],
+            nextAction: group.reviewDue > 0 ? 'review_due_notes' : group.inbox > 0 ? 'clarify_inbox_captures' : group.withoutSummary > 0 ? 'add_compact_projections' : group.withOpenQuestions > 0 ? 'connect_questions_to_evidence' : 'keep_collection_healthy',
+        })).sort((a, b) => b.attentionScore - a.attentionScore || a.key.localeCompare(b.key)).slice(0, boundedLimit);
+        const result = { purpose: 'Bounded collection-level health for MOCs, domains, or top-level filing areas. It is an advisory view; it never moves or rewrites notes.', totalNotes: noteTotal, collectionTotal: groups.size + overflowKeys.size, items, truncated: groups.size > items.length || overflowKeys.size > 0, generatedAt: now() };
         return JSON.stringify(result).length <= boundedChars ? result : { ...result, items: items.slice(0, Math.max(1, Math.floor(items.length / 2))), truncated: true };
     }
     async organizationHealth(principal, limit = 30, maxChars = 7000) {
@@ -4594,8 +4616,9 @@ export class LlmWikiService {
      * room for a counterexample or negative knowledge instead of returning a
      * large semantic dump.
      */
-    async answerPacket(principal, path, maxChars = 7000, includeSemantic = true) {
+    async answerPacket(principal, path, maxChars = 7000, includeSemantic = true, intent = 'decide') {
         const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 1024), 16000);
+        const selectedIntent = ['capture', 'explore', 'decide', 'execute', 'review'].includes(intent) ? intent : 'decide';
         const source = await this.readProjection({ ...(principal && { principal }), path, view: 'progressive', maxChars: Math.min(2400, Math.max(1200, Math.floor(boundedChars * 0.34))) });
         const sourcePacket = {
             path: source.path,
@@ -4606,6 +4629,12 @@ export class LlmWikiService {
             ...(source.status && { status: source.status }),
             ...(source.confidence && { confidence: source.confidence }),
             ...(source.summaryFresh !== undefined && { summaryFresh: source.summaryFresh }),
+            ...(source.summaryStale !== undefined && { summaryStale: source.summaryStale }),
+            ...(Array.isArray(source.keyPoints) && { keyPoints: source.keyPoints.slice(0, 8) }),
+            ...(Array.isArray(source.openQuestions) && { openQuestions: source.openQuestions.slice(0, 8) }),
+            ...(source.navigation && { navigation: source.navigation }),
+            ...(source.reviewChecks && { reviewChecks: source.reviewChecks }),
+            ...(source.reviewOpenItems && { reviewOpenItems: source.reviewOpenItems }),
             content: boundedText(source.content, Math.min(1800, Math.max(420, Math.floor(boundedChars * 0.25)))),
             ...(Array.isArray(source.references) && { references: source.references.slice(0, 8) }),
             ...(Array.isArray(source.evidence) && { evidence: source.evidence.slice(0, 8) }),
@@ -4619,8 +4648,8 @@ export class LlmWikiService {
                 || String(item.status || '').toLowerCase() === 'disputed'
                 || String(item.lifecycle || '').toLowerCase() === 'review';
         };
-        const counterpoints = neighborRows.filter(isCounterpoint).slice(0, 2);
-        const supporting = neighborRows.filter(item => !isCounterpoint(item)).slice(0, 3);
+        const counterpoints = neighborRows.filter(isCounterpoint).slice(0, selectedIntent === 'decide' || selectedIntent === 'review' ? 3 : 2);
+        const supporting = neighborRows.filter(item => !isCounterpoint(item)).slice(0, selectedIntent === 'explore' ? 4 : 3);
         const selected = [...supporting, ...counterpoints].filter((item, index, all) => all.findIndex(candidate => candidate.path === item.path) === index);
         const readNeighbor = async (item) => {
             try {
@@ -4645,28 +4674,76 @@ export class LlmWikiService {
             }
         };
         const context = (await Promise.all(selected.map(readNeighbor))).filter((item) => item !== undefined);
+        const intentGuidance = {
+            capture: { goal: 'Turn the observation into a bounded Inbox capture before deciding its final home.', next: 'If this is new, use capture_wiki_note; clarify it later with one GTD disposition.' },
+            explore: { goal: 'Map the note through direct links, typed relations, MOCs, and nearby reusable knowledge.', next: 'Read one selected neighbor or follow an explicit link; semantic similarity is a lead, not evidence.' },
+            decide: { goal: 'Compare claims with evidence, supporting context, and counterpoints before choosing a position.', next: 'Check evidence revisions and record a decision or review outcome only after inspection.' },
+            execute: { goal: 'Turn the note into one concrete next action while keeping support material separate from task state.', next: 'Use the returned nextAction, taskContext, dueAt, and waitingFor; do not infer a task from a knowledge note.' },
+            review: { goal: 'Find what became stale, disputed, unresolved, or structurally disconnected since the last review.', next: 'Re-read the affected note, record review checks/open items, and preserve rejected paths as negative knowledge when useful.' },
+        }[selectedIntent];
+        const evidence = Array.isArray(source.evidence) ? source.evidence.slice(0, 8) : [];
+        const claims = Array.isArray(source.keyPoints) ? source.keyPoints.slice(0, 8) : [];
+        const decisions = context
+            .filter(item => String(item.noteKind || '').toLowerCase() === 'decision' || String(item.relationToSource || '').includes('decision'))
+            .slice(0, 3)
+            .map(item => ({ path: item.path, title: item.title, revision: item.revision, content: item.content }));
+        const reasoningTrail = {
+            question: Array.isArray(source.openQuestions) && source.openQuestions.length > 0 ? source.openQuestions.slice(0, 4) : (String(source.noteKind || '').toLowerCase() === 'question' ? [source.title] : []),
+            claims,
+            evidence: evidence.map((item) => ({ path: item.path, ...(item.heading && { heading: item.heading }), ...(item.blockId && { blockId: item.blockId }), ...(item.startLine && { startLine: item.startLine }), ...(item.endLine && { endLine: item.endLine }), ...(item.revision && { revision: item.revision }), ...(item.quoteHash && { quoteHash: item.quoteHash }) })),
+            counterexamples: context.filter(item => item.relationToSource === 'counterpoint_or_review').slice(0, 3).map(item => ({ path: item.path, title: item.title, revision: item.revision, polarity: item.polarity, status: item.status, content: item.content })),
+            decisions,
+            gaps: [
+                ...(claims.length === 0 ? ['claim'] : []),
+                ...(evidence.length === 0 ? ['evidence'] : []),
+                ...(counterpoints.length === 0 ? ['counterpoint_or_negative_knowledge'] : []),
+                ...(decisions.length === 0 && ['decide', 'review'].includes(selectedIntent) ? ['decision_or_review_record'] : []),
+            ],
+            note: 'This is a navigation and reasoning aid. It does not establish truth; inspect the cited Markdown at the returned revision before acting.',
+        };
         const result = {
             mode: 'bounded_answer_packet',
-            instructions: 'Start with source, then inspect supporting context and at least one counterpoint when present. Re-read a selected note at a larger bound only when the compact packet is insufficient; revisions are freshness guards, not truth scores.',
+            intent: selectedIntent,
+            intentGuidance,
+            instructions: 'Start with the source and follow the intent guidance. Re-read a selected note at a larger bound only when the compact packet is insufficient; revisions are freshness guards, not truth scores.',
             source: sourcePacket,
             supporting: context.filter(item => item.relationToSource === 'supporting_context'),
             counterpoints: context.filter(item => item.relationToSource === 'counterpoint_or_review'),
+            reasoningTrail,
             neighborhood: {
                 totalCandidates: neighborhood.totalCandidates,
                 truncated: neighborhood.truncated,
                 ...(neighborhood.semantic && { semantic: neighborhood.semantic }),
             },
         };
-        while (JSON.stringify(result).length > boundedChars && (result.supporting.length > 0 || result.counterpoints.length > 0)) {
+        while (JSON.stringify(result).length > boundedChars && (result.supporting.length > 0 || result.counterpoints.length > 0 || result.reasoningTrail.decisions.length > 0 || result.reasoningTrail.counterexamples.length > 0)) {
             if (result.supporting.length > 0)
                 result.supporting.pop();
-            else
+            else if (result.counterpoints.length > 0)
                 result.counterpoints.pop();
+            else if (result.reasoningTrail.decisions.length > 0)
+                result.reasoningTrail.decisions.pop();
+            else
+                result.reasoningTrail.counterexamples.pop();
         }
         while (JSON.stringify(result).length > boundedChars && result.source.content.length > 160) {
             result.source.content = boundedText(result.source.content, Math.max(160, Math.floor(result.source.content.length * 0.7)));
         }
-        return { ...result, truncated: JSON.stringify(result).length > boundedChars };
+        if (JSON.stringify(result).length <= boundedChars)
+            return { ...result, truncated: false };
+        // A caller-supplied budget is a hard response contract. Metadata such as
+        // aliases or relation explanations can be large even after bodies are
+        // trimmed, so retain only the identity needed for a safe follow-up read.
+        const compact = {
+            mode: 'bounded_answer_packet',
+            intent: selectedIntent,
+            source: { path: result.source.path, title: result.source.title, revision: result.source.revision },
+            reasoningTrail: { gaps: result.reasoningTrail.gaps, note: result.reasoningTrail.note },
+            truncated: true,
+        };
+        if (JSON.stringify(compact).length <= boundedChars)
+            return compact;
+        return { mode: 'bounded_answer_packet', intent: selectedIntent, source: { path: String(result.source.path).slice(0, 160), revision: String(result.source.revision).slice(0, 160) }, truncated: true };
     }
     /**
      * Expose a small library-like authority view derived from note titles,
@@ -4679,47 +4756,74 @@ export class LlmWikiService {
         const wanted = normalizedAuthorityTerm(query);
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
         const terms = new Map();
+        const narrowerByBroader = new Map();
         for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
             if (['source', 'schema', 'issue'].includes(String(note.frontmatter.llm_wiki_type || '').toLowerCase()))
                 continue;
             const title = String(note.frontmatter.title || note.path.split('/').at(-1) || '').replace(/\.(?:md|markdown|txt)$/i, '').trim();
             if (!title)
                 continue;
+            const preferredTerm = typeof note.frontmatter.preferred_term === 'string' && note.frontmatter.preferred_term.trim()
+                ? note.frontmatter.preferred_term.trim()
+                : title;
+            const preferredKey = normalizedAuthorityTerm(preferredTerm);
+            const titleKey = normalizedAuthorityTerm(title);
             const aliases = Array.isArray(note.frontmatter.aliases) ? note.frontmatter.aliases.filter((item) => typeof item === 'string' && item.trim().length > 0) : [];
             const stableId = typeof note.frontmatter.stable_id === 'string' ? note.frontmatter.stable_id.trim() : '';
             const addTerm = (rawTerm) => {
                 const key = normalizedAuthorityTerm(rawTerm);
-                if (!key || (wanted && !key.includes(wanted) && !normalizedAuthorityTerm(title).includes(wanted)))
+                if (!key || (wanted && !key.includes(wanted) && !titleKey.includes(wanted) && !preferredKey.includes(wanted)))
                     return;
-                const current = terms.get(key) || { term: rawTerm.trim(), preferred: title, aliases: new Set(), paths: new Set(), stableIds: new Set(), mocs: new Set(), statuses: new Set(), replacements: new Set(), broader: new Set(), related: new Set() };
+                const current = terms.get(key) || { term: rawTerm.trim(), preferred: preferredTerm, aliases: new Set(), paths: new Set(), stableIds: new Set(), mocs: new Set(), statuses: new Set(), replacements: new Set(), broader: new Set(), narrower: new Set(), related: new Set(), disambiguation: new Set() };
                 current.paths.add(this.access.toPublicPath(note.path));
                 if (stableId)
                     current.stableIds.add(stableId);
                 if (typeof note.frontmatter.moc === 'string' && note.frontmatter.moc.trim())
                     current.mocs.add(note.frontmatter.moc.trim());
-                current.statuses.add(key === normalizedAuthorityTerm(title) ? String(note.frontmatter.term_status || 'preferred').trim().toLowerCase() : 'alias');
-                if (key === normalizedAuthorityTerm(title)) {
+                if (typeof note.frontmatter.disambiguation === 'string' && note.frontmatter.disambiguation.trim())
+                    current.disambiguation.add(note.frontmatter.disambiguation.trim());
+                // If preferred_term differs from the title, the title is an
+                // alternate access term rather than a second canonical concept.
+                const canonical = key === preferredKey;
+                current.statuses.add(canonical ? String(note.frontmatter.term_status || 'preferred').trim().toLowerCase() : 'alias');
+                if (canonical) {
                     if (typeof note.frontmatter.term_replaced_by === 'string' && note.frontmatter.term_replaced_by.trim())
                         current.replacements.add(note.frontmatter.term_replaced_by.trim());
                     for (const item of ['broader_terms', 'related_terms']) {
                         const values = Array.isArray(note.frontmatter[item]) ? note.frontmatter[item] : [];
                         for (const value of values)
-                            if (typeof value === 'string' && value.trim())
+                            if (typeof value === 'string' && value.trim()) {
                                 (item === 'broader_terms' ? current.broader : current.related).add(value.trim());
+                                if (item === 'broader_terms') {
+                                    const broaderKey = normalizedAuthorityTerm(value);
+                                    if (broaderKey) {
+                                        const narrower = narrowerByBroader.get(broaderKey) || new Set();
+                                        narrower.add(preferredTerm);
+                                        narrowerByBroader.set(broaderKey, narrower);
+                                    }
+                                }
+                            }
                     }
                 }
-                if (key !== normalizedAuthorityTerm(title))
+                if (!canonical)
                     current.aliases.add(rawTerm.trim());
                 terms.set(key, current);
             };
+            addTerm(preferredTerm);
             addTerm(title);
             for (const alias of aliases.slice(0, 30))
                 addTerm(alias);
         }
+        for (const [key, narrower] of narrowerByBroader) {
+            const record = terms.get(key);
+            if (record)
+                for (const value of narrower)
+                    record.narrower.add(value);
+        }
         const entries = [...terms.values()]
             .sort((left, right) => Number(right.paths.size > 1) - Number(left.paths.size > 1) || left.term.localeCompare(right.term))
             .slice(0, boundedLimit)
-            .map(item => ({ term: item.term, preferred: item.preferred, address: [...item.stableIds][0] || item.term, canonicalPath: [...item.paths][0], status: [...item.statuses].includes('deprecated') ? 'deprecated' : [...item.statuses].includes('redirect') ? 'redirect' : 'preferred', ...(item.replacements.size > 0 && { replacedBy: [...item.replacements].slice(0, 4) }), ...(item.broader.size > 0 && { broaderTerms: [...item.broader].slice(0, 8) }), ...(item.related.size > 0 && { relatedTerms: [...item.related].slice(0, 8) }), ...(item.mocs.size > 0 && { primaryMocs: [...item.mocs].slice(0, 4) }), ...(item.aliases.size > 0 && { aliases: [...item.aliases].slice(0, 12) }), paths: [...item.paths].slice(0, 8), ...(item.stableIds.size > 0 && { stableIds: [...item.stableIds].slice(0, 8) }), ...(item.paths.size > 1 && { collision: 'term_used_by_multiple_notes' }) }));
+            .map(item => ({ term: item.term, preferred: item.preferred, address: [...item.stableIds][0] || item.preferred, canonicalPath: [...item.paths][0], status: [...item.statuses].includes('deprecated') ? 'deprecated' : [...item.statuses].includes('redirect') ? 'redirect' : 'preferred', ...(item.disambiguation.size > 0 && { disambiguation: [...item.disambiguation].slice(0, 4).map(value => boundedText(value, 300)) }), ...(item.replacements.size > 0 && { replacedBy: [...item.replacements].slice(0, 4) }), ...(item.broader.size > 0 && { broaderTerms: [...item.broader].slice(0, 8) }), ...(item.narrower.size > 0 && { narrowerTerms: [...item.narrower].slice(0, 8) }), ...(item.related.size > 0 && { relatedTerms: [...item.related].slice(0, 8) }), ...(item.mocs.size > 0 && { primaryMocs: [...item.mocs].slice(0, 4) }), ...(item.aliases.size > 0 && { aliases: [...item.aliases].slice(0, 12) }), paths: [...item.paths].slice(0, 8), ...(item.stableIds.size > 0 && { stableIds: [...item.stableIds].slice(0, 8) }), ...(item.paths.size > 1 && { collision: 'term_used_by_multiple_notes' }) }));
         let bounded = entries;
         while (JSON.stringify(bounded).length > boundedChars && bounded.length > 1)
             bounded = bounded.slice(0, -1);
