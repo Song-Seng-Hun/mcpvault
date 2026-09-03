@@ -152,6 +152,23 @@ describe('knowledge organization focus and summary metadata', () => {
     }, '# Drift\n').map(issue => issue.code)).toEqual(expect.arrayContaining(['property_contract_violation', 'invalid_review_interval_days']));
   });
 
+  test('keeps archival arrangement on immutable source records only', () => {
+    expect(getOrganizationPropertyContract()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'archive_collection_id', type: 'text', appliesTo: ['source'] }),
+      expect.objectContaining({ name: 'archive_series', type: 'list', appliesTo: ['source'] }),
+      expect.objectContaining({ name: 'archive_sequence', type: 'number', appliesTo: ['source'] }),
+    ]));
+    expect(organizationLintIssues('_sources/ordered.md', {
+      llm_wiki_type: 'source', immutable: true, archive_collection_id: 'research-2030', archive_series: ['Interviews', 'Experts'], archive_sequence: 4,
+    }, '# Source\n').map(issue => issue.code)).not.toEqual(expect.arrayContaining(['invalid_archive_series', 'invalid_archive_sequence']));
+    expect(organizationLintIssues('_sources/missing-collection.md', {
+      llm_wiki_type: 'source', immutable: true, archive_series: ['Interviews'], archive_sequence: 1,
+    }, '# Source\n').map(issue => issue.code)).toContain('archive_collection_id_missing');
+    expect(organizationLintIssues('Knowledge/wrong-place.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'atomic', archive_collection_id: 'research-2030',
+    }, '# Wrong place\n').map(issue => issue.code)).toContain('archive_metadata_wrong_type');
+  });
+
   test('normalizes Kanban service classes, completion criteria, and flow timestamps', () => {
     expect(knowledgeOrganization({
       status: 'draft', noteKind: 'project', lifecycle: 'active', serviceClass: 'RESEARCH',
@@ -226,7 +243,7 @@ describe('knowledge organization focus and summary metadata', () => {
 
   test('provides optional role templates without making them publication gates', () => {
     expect(NOTE_TEMPLATE_IDS).toEqual(expect.arrayContaining(['concept', 'argument', 'model', 'observation', 'counterargument']));
-    expect(BASES_VIEW_IDS).toEqual(expect.arrayContaining(['decisions', 'concepts', 'arguments', 'models', 'observations', 'counterarguments', 'authority', 'review_checklist', 'collections']));
+    expect(BASES_VIEW_IDS).toEqual(expect.arrayContaining(['decisions', 'concepts', 'arguments', 'models', 'observations', 'counterarguments', 'authority', 'review_checklist', 'collections', 'archives']));
     expect(organizationNoteTemplate('question')).toMatchObject({
       templateId: 'question', noteKind: 'question',
       properties: { epistemic_status: 'open' },

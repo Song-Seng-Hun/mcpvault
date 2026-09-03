@@ -1457,7 +1457,8 @@ test('private source and knowledge workflows are visible only to their logged-in
     const betaToken = (await callJson(client, 'login_scope', { accountId: 'beta-owner', password: 'beta-private-password' })).value.accessToken;
 
     const source = await callJson(client, 'ingest_source', {
-      scopeUri: 'scope://model/alpha/', sourceId: 'private-source', title: 'Private', content: 'alpha-only evidence', accessToken: alphaToken,
+      scopeUri: 'scope://model/alpha/', sourceId: 'private-source', title: 'Private', content: 'alpha-only evidence',
+      sourceWorkId: 'alpha-private-work', sourceEditionId: 'edition-1', archiveCollectionId: 'alpha-private-archive', archiveSeries: ['Private series'], archiveSequence: 1, accessToken: alphaToken,
     });
     expect(source.value.path).toBe('scope://model/alpha/_sources/private-source.md');
     const unsafePublicPublish = await client.callTool({ name: 'publish_knowledge', arguments: {
@@ -1477,6 +1478,14 @@ test('private source and knowledge workflows are visible only to their logged-in
     expect(anonymousCatalog.value.total).toBe(0);
     const betaRead = await client.callTool({ name: 'read_note', arguments: { path: 'scope://model/alpha/Private Knowledge.md', accessToken: betaToken } });
     expect(betaRead.isError).toBe(true);
+    const alphaArchive = await callJson(client, 'get_wiki_archive_finding_aid', { collectionId: 'alpha-private-archive', accessToken: alphaToken });
+    expect(alphaArchive.value).toMatchObject({ totals: { matchingSources: 1 }, items: [expect.objectContaining({ path: 'scope://model/alpha/_sources/private-source.md' })] });
+    const betaArchive = await callJson(client, 'get_wiki_archive_finding_aid', { collectionId: 'alpha-private-archive', accessToken: betaToken });
+    expect(betaArchive.value).toMatchObject({ totals: { matchingSources: 0 }, items: [] });
+    const alphaLineage = await callJson(client, 'get_wiki_source_lineage', { sourceFamily: 'alpha-private-work', accessToken: alphaToken });
+    expect(alphaLineage.value.works).toEqual([expect.objectContaining({ workId: 'alpha-private-work' })]);
+    const betaLineage = await callJson(client, 'get_wiki_source_lineage', { sourceFamily: 'alpha-private-work', accessToken: betaToken });
+    expect(betaLineage.value.works).toEqual([]);
   } finally {
     await client.close();
     await server.close();
@@ -2054,6 +2063,51 @@ test('remaining organization loops connect issue retrospectives, recall repair, 
   }
 });
 
+test('archival finding aid preserves collection context and original order without loading source bodies', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'archive-owner', modelId: 'codex', password: 'archive-owner-password' });
+    const accessToken = registration.value.accessToken;
+    for (const source of [
+      { sourceId: 'archive-third', title: 'Third interview', content: '# Third\n\nBody must not appear in the finding aid.\n', archiveCollectionId: 'fieldwork-2030', archiveSeries: ['Interviews', 'Experts'], archiveSequence: 3, accessionId: 'acc-2030-01' },
+      { sourceId: 'archive-first', title: 'First interview', content: '# First\n\nPrivate-looking source body marker.\n', archiveCollectionId: 'fieldwork-2030', archiveSeries: ['Interviews', 'Experts'], archiveSequence: 1, accessionId: 'acc-2030-01', custodialHistory: 'Transferred from the field recorder.', originalOrderNote: 'Recorder sequence retained.' },
+      { sourceId: 'archive-duplicate', title: 'Duplicate position', content: '# Duplicate\n\nDuplicate order test.\n', archiveCollectionId: 'fieldwork-2030', archiveSeries: ['Interviews', 'Experts'], archiveSequence: 1, accessionId: 'acc-2030-02' },
+      { sourceId: 'archive-other', title: 'Other collection', content: '# Other\n\nOther collection.\n', archiveCollectionId: 'lab-2030', archiveSeries: ['Runs'], archiveSequence: 1 },
+    ]) {
+      const ingested = await callJson(client, 'ingest_source', { ...source, accessToken });
+      expect(ingested.result.isError).toBeFalsy();
+    }
+    const invalid = await client.callTool({ name: 'ingest_source', arguments: { sourceId: 'archive-invalid', title: 'Invalid archive source', content: '# Invalid\n', archiveSeries: ['Unowned series'], accessToken } });
+    expect(invalid.isError).toBe(true);
+
+    const overview = await callJson(client, 'get_wiki_archive_finding_aid', { accessToken, limit: 20, maxChars: 9000 });
+    expect(overview.value).toMatchObject({ mode: 'archive_finding_aid_overview', totals: { archivalSources: 4, collections: 2, collectionsExact: true } });
+    expect(overview.value.collections).toEqual(expect.arrayContaining([
+      expect.objectContaining({ collectionId: 'fieldwork-2030', sourceCount: 3, originalOrder: { sequenced: 3, unsequenced: 0 }, seriesCount: 1, accessionCount: 2 }),
+    ]));
+    expect(JSON.stringify(overview.value)).not.toContain('Private-looking source body marker');
+
+    const detail = await callJson(client, 'get_wiki_archive_finding_aid', { collectionId: 'fieldwork-2030', series: ['Interviews'], accessToken, limit: 20, maxChars: 9000 });
+    expect(detail.value).toMatchObject({ mode: 'archive_finding_aid_detail', totals: { matchingSources: 3 } });
+    expect(detail.value.items.map((item: any) => item.sequence)).toEqual([1, 1, 3]);
+    expect(detail.value.items.every((item: any) => typeof item.revision === 'string' && item.revision.length === 64)).toBe(true);
+    expect(detail.value.issues).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'duplicate_archive_sequence', sequence: 1 })]));
+    const tiny = await callJson(client, 'get_wiki_archive_finding_aid', { collectionId: 'fieldwork-2030', accessToken, limit: 20, maxChars: 512 });
+    expect(JSON.stringify(tiny.value).length).toBeLessThanOrEqual(512);
+    expect(tiny.value.truncated).toBe(true);
+
+    const bases = await callJson(client, 'get_wiki_bases_view', { view: 'archives', accessToken, maxChars: 12000 });
+    expect(bases.value).toMatchObject({ view: 'archives', matchingNotes: 4, matchingNotesExact: true, suggestedPath: 'Views/LLM Wiki Source Archives.base' });
+    expect(bases.value.content).toContain('note.archive_collection_id');
+
+    const capabilities = await callJson(client, 'search_capabilities', { query: 'archive original order', accessToken, limit: 5 });
+    expect(capabilities.value.endpoints).toEqual(expect.arrayContaining([expect.objectContaining({ endpointId: 'wiki.archive_finding_aid' })]));
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('portable migration preflight excludes non-global content and reports revision-safe compatibility hazards', async () => {
   const { server, client } = await setup();
   try {
@@ -2071,7 +2125,7 @@ test('portable migration preflight excludes non-global content and reports revis
     await callJson(client, 'publish_blog_post', { slug: 'portable-community-only', title: 'Community only', content: 'Never enter a global migration inventory.', expectedRevision: 'missing', accessToken });
 
     const defaultManifest = await callJson(client, 'get_wiki_organization_manifest', { maxChars: 24000, accessToken });
-    expect(defaultManifest.value).toMatchObject({ manifestVersion: 3, portable: true, contentFreeByDefault: true, contractFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/), templates: expect.arrayContaining(['concept', 'model']), basesViews: expect.arrayContaining(['concepts', 'authority']) });
+    expect(defaultManifest.value).toMatchObject({ manifestVersion: 4, portable: true, contentFreeByDefault: true, contractFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/), templates: expect.arrayContaining(['concept', 'model']), basesViews: expect.arrayContaining(['concepts', 'authority', 'archives']) });
     expect(defaultManifest.value.readiness).toBeUndefined();
     expect(JSON.stringify(defaultManifest.value)).not.toContain('Portable One');
 

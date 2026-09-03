@@ -600,7 +600,7 @@ not an automatic MOC or a reason to overwrite an existing map.
 `epistemic`, `experiments`, `open_questions`, `knowledge`, `concepts`,
 `arguments`, `models`, `observations`, `counterarguments`,
 `unreviewed_evidence`, `negative_knowledge`, `deprecated_terms`, `maintenance`,
-`authority`, `review_checklist`, and `collections`. `export_wiki_base`
+`authority`, `review_checklist`, `collections`, and `archives`. `export_wiki_base`
 can persist one derived view under `Views/*.base` with an explicit file
 revision; it is limited to that presentation file and does not change note
 content or permissions. Markdown and Git remain the source of truth.
@@ -614,6 +614,17 @@ their final Property expression is intended to be evaluated by Obsidian Bases.
 vocabulary provenance. Use these to identify a reusable
 source and its editions across literature notes; the immutable content hash
 and revision remain the authoritative provenance.
+
+For a provenance-bearing batch of source snapshots, `ingest_source` also
+accepts `archiveCollectionId`, a broad-to-narrow `archiveSeries`, optional
+`archiveSequence`, `accessionId`, `custodialHistory`, and
+`originalOrderNote`. `wiki.archive_finding_aid` first returns a bounded
+collection overview; pass a collection ID and optional series prefix to get
+revision-stamped source rows in original order plus duplicate/invalid order
+signals. The projection reads metadata only. Archival arrangement preserves
+creator context and transfer history; it does not replace PARA placement,
+MOCs, source hashes, immutable bodies, or Git history. The `archives` Bases
+view exposes the same Properties locally in Obsidian.
 
 An optional localhost REST adapter uses the same endpoint registry and
 dispatcher. Start it with `--http` or `--http=PORT`; use `GET /api/capabilities`,
@@ -2542,6 +2553,11 @@ second source of truth:
 - Immutable sources can declare `sourceWorkId` and `sourceEditionId`.
   `get_wiki_source_lineage` groups editions while source IDs, hashes, evidence,
   and revisions remain authoritative.
+- Archival source sets can declare a collection, hierarchical series,
+  accession, custody note, and original-order sequence at ingestion.
+  `get_wiki_archive_finding_aid` browses them without loading source bodies and
+  reports incomplete metadata or duplicate order positions without moving or
+  rewriting anything.
 - `get_wiki_organization_manifest` returns a versioned, fingerprinted portable
   contract for PARA, Obsidian syntax, Properties, relations, lifecycles, and
   migration. Its default response is content-free. `includeReadiness` adds a

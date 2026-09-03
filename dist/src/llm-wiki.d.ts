@@ -133,6 +133,12 @@ export declare class LlmWikiService {
         supersedesSource?: string;
         sourceWorkId?: string;
         sourceEditionId?: string;
+        archiveCollectionId?: string;
+        archiveSeries?: unknown;
+        archiveSequence?: unknown;
+        accessionId?: string;
+        custodialHistory?: string;
+        originalOrderNote?: string;
     }): Promise<{
         success: boolean;
         created: boolean;
@@ -2342,6 +2348,7 @@ export declare class LlmWikiService {
             inbox: number;
             review: number;
             decisions: number;
+            archivedSources: number;
             stableIds: number;
         };
         nextAction: {
@@ -2536,6 +2543,7 @@ export declare class LlmWikiService {
             inbox: number;
             review: number;
             decisions: number;
+            archivedSources: number;
             stableIds: number;
         };
         nextAction: {
@@ -3341,6 +3349,13 @@ export declare class LlmWikiService {
         truncated: boolean;
         note: string;
     }>;
+    /**
+     * Project archival provenance and original order without inventing another
+     * source database. An overview lists collections; a collection/series drill
+     * down returns revision-stamped source rows in authored archival order.
+     * Source bodies are never hydrated by this endpoint.
+     */
+    archiveFindingAid(principal?: ScopePrincipal, collectionId?: string, series?: unknown, limit?: number, maxChars?: number): Promise<Record<string, any>>;
     /**
      * Find explicit organization clusters that have enough independently
      * addressable notes to merit a synthesis pass. This is deliberately not a

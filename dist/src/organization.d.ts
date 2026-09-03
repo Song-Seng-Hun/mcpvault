@@ -32,7 +32,7 @@ export declare const KNOWLEDGE_ROLES: readonly ['concept', 'argument', 'model', 
 export declare const NOTE_TEMPLATE_IDS: readonly ["atomic", "literature", "question", "hypothesis", "experiment", "assumption", "decision", "project", "moc", "negative", "concept", "argument", "model", "observation", "counterargument"];
 /** Standard Obsidian Bases projections. Keep the runtime and tool schema on
  * one shared list so a documented view cannot become unreachable. */
-export declare const BASES_VIEW_IDS: readonly ['all', 'inbox', 'inbox_oldest', 'projects', 'project_next_actions', 'review', 'epistemic', 'experiments', 'open_questions', 'decisions', 'knowledge', 'concepts', 'arguments', 'models', 'observations', 'counterarguments', 'unreviewed_evidence', 'negative_knowledge', 'deprecated_terms', 'maintenance', 'authority', 'review_checklist', 'collections'];
+export declare const BASES_VIEW_IDS: readonly ['all', 'inbox', 'inbox_oldest', 'projects', 'project_next_actions', 'review', 'epistemic', 'experiments', 'open_questions', 'decisions', 'knowledge', 'concepts', 'arguments', 'models', 'observations', 'counterarguments', 'unreviewed_evidence', 'negative_knowledge', 'deprecated_terms', 'maintenance', 'authority', 'review_checklist', 'collections', 'archives'];
 /** Optional recall result for high-value knowledge; separate from evidence review. */
 export declare const RECALL_QUALITIES: readonly ['unseen', 'failed', 'partial', 'good'];
 /** Error Book state is split into resolution and learning so a closed issue

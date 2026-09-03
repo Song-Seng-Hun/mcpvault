@@ -85,6 +85,37 @@ function boundedText(value: unknown, maxChars: number): string {
   return `${text.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
 }
 
+function normalizeArchiveIdentifier(value: unknown, field: string): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const normalized = String(value).trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(normalized)) {
+    throw new Error(`${field} must be 1-160 characters using letters, numbers, dots, underscores, colons, or hyphens`);
+  }
+  return normalized;
+}
+
+function normalizeArchiveSeries(value: unknown): string[] | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (!Array.isArray(value) || value.length === 0 || value.length > 8) {
+    throw new Error('archiveSeries must be a broad-to-narrow array of 1-8 labels');
+  }
+  const normalized = value.map((item, index) => {
+    const label = String(item ?? '').trim();
+    if (!label || Array.from(label).length > 160) throw new Error(`archiveSeries[${index}] must be a non-empty label of at most 160 characters`);
+    return label;
+  });
+  return normalized;
+}
+
+function normalizeArchiveSequence(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 1_000_000_000) {
+    throw new Error('archiveSequence must be an integer from 0 to 1000000000');
+  }
+  return parsed;
+}
+
 function markdownSectionHasContent(content: string, names: readonly string[]): boolean {
   const wanted = new Set(names.map(name => name.trim().toLowerCase()));
   const lines = String(content || '').replace(/\r\n?/g, '\n').split('\n');
@@ -548,6 +579,7 @@ Use YAML properties and Obsidian links together:
 - \`project\`, \`moc\`, and \`review_at\`: optional navigation and review hints.
 - A knowledge note remains grounded by \`evidence_paths\`; links are not evidence by themselves. In answer packets, source-work diversity groups snapshots by \`source_work_id\`, \`source_family\`, or \`source_id\`; multiple snapshots of one work are not independent corroboration, and multiple works still do not establish truth.
 - For structured \`claims\`, use the bounded claim matrix to preserve authored order while separately prioritizing missing, unavailable, altered, stale-locator, or single-source-work evidence. Inspect current sources before recording a claim review.
+- When immutable sources arrive as a provenance-bearing archival set, keep optional \`archive_collection_id\`, broad-to-narrow \`archive_series\`, \`archive_sequence\`, \`accession_id\`, \`custodial_history\`, and \`original_order_note\` at ingestion. Use \`wiki.archive_finding_aid\` to browse the collection without loading bodies. This preserves creator context and original order; it does not replace MOCs, folders, source hashes, or Git.
 - Optional \`valid_from\` (inclusive), \`valid_until\` (exclusive), \`observed_at\`, and \`temporal_scope\` describe when the represented claim or condition applies. They are separate from file modification, source publication/retrieval, task, and review dates. Expired validity is a review signal, never automatic deletion.
 
 Obsidian navigation accepts both \`[[wikilinks]]\` and relative Markdown links
@@ -1031,6 +1063,12 @@ export class LlmWikiService {
     supersedesSource?: string;
     sourceWorkId?: string;
     sourceEditionId?: string;
+    archiveCollectionId?: string;
+    archiveSeries?: unknown;
+    archiveSequence?: unknown;
+    accessionId?: string;
+    custodialHistory?: string;
+    originalOrderNote?: string;
   }) {
     const title = String(params.title || '').trim();
     const inputContent = String(params.content ?? '').replace(/\r\n/g, '\n');
@@ -1053,6 +1091,16 @@ export class LlmWikiService {
     const supersedesSource = params.supersedesSource ? boundedText(params.supersedesSource, 500) : undefined;
     const sourceWorkId = params.sourceWorkId ? boundedText(params.sourceWorkId, 160) : sourceFamily;
     const sourceEditionId = params.sourceEditionId ? boundedText(params.sourceEditionId, 160) : sourceVersion;
+    const archiveCollectionId = normalizeArchiveIdentifier(params.archiveCollectionId, 'archiveCollectionId');
+    const archiveSeries = normalizeArchiveSeries(params.archiveSeries);
+    const archiveSequence = normalizeArchiveSequence(params.archiveSequence);
+    const accessionId = normalizeArchiveIdentifier(params.accessionId, 'accessionId');
+    const custodialHistory = params.custodialHistory ? boundedText(params.custodialHistory, 1000) : undefined;
+    const originalOrderNote = params.originalOrderNote ? boundedText(params.originalOrderNote, 1000) : undefined;
+    if ((archiveSeries || archiveSequence !== undefined || accessionId || custodialHistory || originalOrderNote) && !archiveCollectionId) {
+      throw new Error('archiveCollectionId is required when archival series, order, accession, or custody metadata is supplied');
+    }
+    if (archiveSequence !== undefined && !archiveSeries) throw new Error('archiveSequence requires archiveSeries');
     const sourceId = params.sourceId
       ? normalizeScopeId(params.sourceId, 'sourceId')
       : `source-${contentHash.slice(0, 16)}`;
@@ -1090,6 +1138,12 @@ export class LlmWikiService {
         ...(supersedesSource && { supersedes_source: supersedesSource }),
         ...(sourceWorkId && { source_work_id: sourceWorkId }),
         ...(sourceEditionId && { source_edition_id: sourceEditionId }),
+        ...(archiveCollectionId && { archive_collection_id: archiveCollectionId }),
+        ...(archiveSeries && { archive_series: archiveSeries }),
+        ...(archiveSequence !== undefined && { archive_sequence: archiveSequence }),
+        ...(accessionId && { accession_id: accessionId }),
+        ...(custodialHistory && { custodial_history: custodialHistory }),
+        ...(originalOrderNote && { original_order_note: originalOrderNote }),
         trust_level: trustLevel,
         ...(trustReason && { trust_reason: trustReason }),
       },
@@ -3348,7 +3402,7 @@ export class LlmWikiService {
       relations: getOrganizationRelationContract(),
     };
     const base = {
-      manifestVersion: 3,
+      manifestVersion: 4,
       format: 'mcpvault-organization-manifest',
       portable: true,
       contentFreeByDefault: true,
@@ -5130,6 +5184,7 @@ export class LlmWikiService {
       authority: { name: 'LLM Wiki Authority Terms', file: 'LLM Wiki Authority.base', filters: ['note.term_status || note.preferred_term || note.aliases'], order: ['note.term_status', 'file.name'] },
       review_checklist: { name: 'LLM Wiki Review Checklist', file: 'LLM Wiki Review Checklist.base', filters: ['note.lifecycle == "review" || note.review_at'], order: ['note.review_at', 'file.name'] },
       collections: { name: 'LLM Wiki Collections', file: 'LLM Wiki Collections.base', filters: ['note.primary_moc || note.moc || note.domain'], order: ['note.primary_moc', 'note.domain', 'file.name'] },
+      archives: { name: 'LLM Wiki Source Archives', file: 'LLM Wiki Source Archives.base', filters: ['note.llm_wiki_type == "source" && note.archive_collection_id'], order: ['note.archive_collection_id', 'note.archive_series', 'note.archive_sequence', 'file.name'] },
     };
     if (!(BASES_VIEW_IDS as readonly string[]).includes(view) || !viewDefinitions[view]) throw new Error(`view must be one of: ${BASES_VIEW_IDS.join(', ')}`);
     const selectedView = viewDefinitions[view]!;
@@ -5137,10 +5192,13 @@ export class LlmWikiService {
     const viewNoteKind = view === 'decisions' ? 'decision' : undefined;
     const selectedNoteKind = noteKind || viewNoteKind;
     const catalog = await this.catalog(principal, { summaryOnly: true, ...(selectedNoteKind && { noteKind: selectedNoteKind }), ...(lifecycle && { lifecycle }), ...(roleView && { knowledgeRole: roleView }), limit: boundedLimit, maxChars: boundedChars });
+    const archiveAid = view === 'archives' ? await this.archiveFindingAid(principal, undefined, undefined, 1, Math.max(512, Math.min(2000, boundedChars))) : undefined;
     const filters: string[] = ['file.ext == "md"', ...selectedView.filters];
     if (noteKind) filters.push(`note.note_kind == ${JSON.stringify(String(noteKind).trim())}`);
     if (lifecycle) filters.push(`note.lifecycle == ${JSON.stringify(String(lifecycle).trim())}`);
-    const matchingNotes = roleView || view === 'all' || view === 'decisions' || noteKind || lifecycle
+    const matchingNotes = view === 'archives'
+      ? Number((archiveAid as any)?.totals?.archivalSources || 0)
+      : roleView || view === 'all' || view === 'decisions' || noteKind || lifecycle
       ? catalog.total
       : view === 'inbox'
         ? Number((catalog.organization as any).lifecycles?.inbox || 0)
@@ -5161,7 +5219,7 @@ export class LlmWikiService {
       ? Number((catalog.organization as any).noteKinds?.atomic || 0) + Number((catalog.organization as any).noteKinds?.knowledge || 0) + Number((catalog.organization as any).noteKinds?.decision || 0)
       : undefined;
     const resolvedMatchingNotes = viewTotal === undefined ? matchingNotes : viewTotal;
-    const matchingNotesExact = ['all', 'inbox', 'inbox_oldest', 'projects', 'review', 'epistemic', 'experiments', 'decisions', 'knowledge', 'concepts', 'arguments', 'models', 'observations', 'counterarguments', 'maintenance'].includes(view)
+    const matchingNotesExact = ['all', 'inbox', 'inbox_oldest', 'projects', 'review', 'epistemic', 'experiments', 'decisions', 'knowledge', 'concepts', 'arguments', 'models', 'observations', 'counterarguments', 'maintenance', 'archives'].includes(view)
       && !noteKind && !lifecycle;
     const base = {
       filters: { and: filters },
@@ -5180,6 +5238,10 @@ export class LlmWikiService {
         'note.decision_status': { displayName: 'Decision status' },
         'note.supersedes': { displayName: 'Supersedes' },
         'note.replaced_by': { displayName: 'Replaced by' },
+        'note.archive_collection_id': { displayName: 'Archive collection' },
+        'note.archive_series': { displayName: 'Archive series' },
+        'note.archive_sequence': { displayName: 'Original order' },
+        'note.accession_id': { displayName: 'Accession' },
         'note.task_status': { displayName: 'Task status' },
         'note.project_purpose': { displayName: 'Purpose' },
         'note.desired_outcome': { displayName: 'Desired outcome' },
@@ -5199,7 +5261,7 @@ export class LlmWikiService {
         name: selectedView.name,
         limit: boundedLimit,
         order: selectedView.order || ['file.mtime', 'file.name'],
-        columns: ['file.name', 'note.note_kind', 'note.lifecycle', 'note.decision_status', 'note.supersedes', 'note.replaced_by', 'note.task_status', 'note.project_purpose', 'note.desired_outcome', 'note.next_action', 'note.primary_moc', 'note.domain', 'note.preferred_term', 'note.aliases', 'note.review_checks', 'note.review_open_items', 'formula.planning_ready', 'formula.review_due', 'formula.has_support', 'formula.has_summary', 'formula.review_state', 'file.mtime'],
+        columns: ['file.name', 'note.note_kind', 'note.lifecycle', 'note.decision_status', 'note.supersedes', 'note.replaced_by', 'note.archive_collection_id', 'note.archive_series', 'note.archive_sequence', 'note.accession_id', 'note.task_status', 'note.project_purpose', 'note.desired_outcome', 'note.next_action', 'note.primary_moc', 'note.domain', 'note.preferred_term', 'note.aliases', 'note.review_checks', 'note.review_open_items', 'formula.planning_ready', 'formula.review_due', 'formula.has_support', 'formula.has_summary', 'formula.review_state', 'file.mtime'],
       }],
     };
     const content = stringifyYaml(base);
@@ -5263,6 +5325,7 @@ export class LlmWikiService {
     let inboxTotal = 0;
     let reviewTotal = 0;
     let decisionTotal = 0;
+    let archivedSourceTotal = 0;
     let stableIdTotal = 0;
     for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
       const isSchema = normalizePath(note.path).toLowerCase() === PUBLIC_SCHEMA_PATH.toLowerCase();
@@ -5286,6 +5349,7 @@ export class LlmWikiService {
         if (projects.length < boundedLimit) projects.push({ ...item, ...(note.frontmatter.task_status && { taskStatus: note.frontmatter.task_status }), ...(note.frontmatter.next_action && { nextAction: note.frontmatter.next_action }) });
       }
       if (note.frontmatter.note_kind === 'decision') decisionTotal += 1;
+      if (note.frontmatter.llm_wiki_type === 'source' && typeof note.frontmatter.archive_collection_id === 'string' && note.frontmatter.archive_collection_id.trim()) archivedSourceTotal += 1;
       if (note.frontmatter.lifecycle === 'inbox' || /(^|\/)inbox(?:\/|$)/i.test(note.path)) {
         inboxTotal += 1;
         if (inbox.length < boundedLimit) inbox.push(item);
@@ -5313,6 +5377,7 @@ export class LlmWikiService {
       { intent: 'govern_decisions', useWhen: 'You need current, proposed, retired, conflicting, or legacy Decision Records and their lineage.', endpointId: endpointIdForTool('get_wiki_decision_register'), arguments: { limit: 20, maxChars: 6000 } },
       { intent: 'synthesize_or_express', useWhen: 'Several explicitly related durable notes may support a model, argument, or decision without replacing their originals.', endpointId: endpointIdForTool('get_wiki_synthesis_candidates'), arguments: { limit: 5, maxChars: 6000 } },
       { intent: 'follow_curated_sequence', useWhen: 'You selected a MOC that is meant to be read or executed in order.', endpointId: endpointIdForTool('get_wiki_learning_path'), arguments: { path: '<selected MOC path>', maxDepth: 2, limit: 20, maxChars: 6000 }, requiredArguments: ['path'] },
+      { intent: 'browse_source_archives', useWhen: 'You need the creator context, series, accession, or original order of an imported source collection.', endpointId: endpointIdForTool('get_wiki_archive_finding_aid'), arguments: { limit: 20, maxChars: 6000 } },
       { intent: 'execute_in_context', useWhen: 'You need one executable action that fits a known GTD context.', endpointId: endpointIdForTool('get_wiki_next_actions'), arguments: { taskContext: '<exact context>', limit: 5, maxChars: 4000 }, requiredArguments: ['taskContext'] },
       { intent: 'review_one', useWhen: 'You want one prioritized evidence, flow, or maintenance item.', endpointId: endpointIdForTool('get_wiki_review_packet'), arguments: { limit: 1, maxChars: 4000 } },
       { intent: 'repair_structure', useWhen: 'You are fixing derived organization debt rather than reading broadly.', endpointId: endpointIdForTool('get_wiki_exception_board'), arguments: { limit: 5, maxChars: 4000 } },
@@ -5335,7 +5400,7 @@ export class LlmWikiService {
         { path: this.access.toPublicPath(PUBLIC_SCHEMA_PATH), reason: 'scope rules and writing contract' },
         { path: this.access.toPublicPath(WELCOME_NOTE_PATH), reason: 'first-session orientation' },
       ],
-      counts: { total, mocs: mocTotal, projects: projectTotal, inbox: inboxTotal, review: reviewTotal, decisions: decisionTotal, stableIds: stableIdTotal },
+      counts: { total, mocs: mocTotal, projects: projectTotal, inbox: inboxTotal, review: reviewTotal, decisions: decisionTotal, archivedSources: archivedSourceTotal, stableIds: stableIdTotal },
       nextAction,
       workflowRoutes,
       mocs,
@@ -8275,11 +8340,14 @@ export class LlmWikiService {
     }
     const items: Array<Record<string, unknown>> = [];
     let total = 0;
-    for await (const note of iterateNotes(this.fileSystem, { pathPrefix: '_sources', includeContent: true }, canAccess)) {
+    for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
       if (note.frontmatter.llm_wiki_type !== 'source') continue;
       total += 1;
       if (items.length >= boundedLimit) continue;
-      const intact = note.frontmatter.immutable === true && note.frontmatter.content_sha256 === hash(note.content || '');
+      // Hydrate only the selected source rows. Querying all visible bodies here
+      // would make a small trust projection scale with the entire vault.
+      const sourceNote = await this.fileSystem.readNote(note.path);
+      const intact = sourceNote.frontmatter.immutable === true && sourceNote.frontmatter.content_sha256 === hash(sourceNote.content || '');
       items.push({
         path: this.access.toPublicPath(note.path),
         title: note.frontmatter.title || note.path.split('/').at(-1),
@@ -8297,7 +8365,7 @@ export class LlmWikiService {
         ...(note.frontmatter.source_work_id && { workId: boundedText(note.frontmatter.source_work_id, 160) }),
         ...(note.frontmatter.source_edition_id && { editionId: boundedText(note.frontmatter.source_edition_id, 160) }),
         capturedBy: note.frontmatter.captured_by,
-        usedByKnowledgeNotes: usage.get(normalizePath(note.path)) || 0,
+        usedByKnowledgeNotes: usage.get(normalizePath(note.path)) || usage.get(normalizePath(this.access.toPublicPath(note.path))) || 0,
         integrity: intact ? 'intact' : 'invalid',
       });
     }
@@ -8317,7 +8385,7 @@ export class LlmWikiService {
     const boundedChars = Math.min(Math.max(Number(maxChars) || 8000, 1024), 20000);
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
     const sources = new Map<string, { path: string; title: string; citationKey?: string; sourceType?: string; sourceFamily?: string; sourceVersion?: string; supersedesSource?: string; usedBy: Set<string> }>();
-    for await (const note of iterateNotes(this.fileSystem, { pathPrefix: '_sources' }, canAccess)) {
+    for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
       if (String(note.frontmatter.llm_wiki_type || '').toLowerCase() !== 'source') continue;
       const key = normalizePath(note.path).toLowerCase();
       sources.set(key, {
@@ -8411,12 +8479,15 @@ export class LlmWikiService {
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
     const works = new Map<string, { workId: string; label: string; editions: Array<Record<string, unknown>> }>();
     let totalSources = 0;
-    for await (const note of iterateNotes(this.fileSystem, { pathPrefix: '_sources' }, canAccess)) {
+    // Sources can live under an authorized model/agent scope as well as the
+    // global _sources root. The access predicate is the boundary; filtering
+    // by one physical prefix would silently omit private lineages.
+    for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
       if (String(note.frontmatter.llm_wiki_type || '').toLowerCase() !== 'source') continue;
       totalSources += 1;
-      const sourceNote = await this.fileSystem.readNote(note.path);
       const workId = String(note.frontmatter.source_work_id || note.frontmatter.source_family || note.frontmatter.source_id || note.path).trim();
       if (requestedFamily && workId.toLowerCase() !== requestedFamily && String(note.frontmatter.source_family || '').toLowerCase() !== requestedFamily) continue;
+      const sourceNote = await this.fileSystem.readNote(note.path);
       const editionId = String(note.frontmatter.source_edition_id || note.frontmatter.source_version || note.frontmatter.source_id || note.path).trim();
       const key = workId.toLowerCase();
       const work = works.get(key) || { workId: boundedText(workId, 160), label: boundedText(String(note.frontmatter.title || workId), 240), editions: [] };
@@ -8442,6 +8513,212 @@ export class LlmWikiService {
     }));
     const result = { mode: 'bounded_source_work_edition_lineage', sourceFamily: sourceFamily || undefined, works: items, totals: { sourceSnapshots: totalSources, works: works.size }, truncated: works.size > items.length, note: 'Source snapshots remain immutable Markdown. Work/edition identifiers are grouping metadata, not a replacement for source_id, content hash, or revision.' };
     while (JSON.stringify(result).length > boundedChars && result.works.length > 1) { result.works.pop(); result.truncated = true; }
+    return result;
+  }
+
+  /**
+   * Project archival provenance and original order without inventing another
+   * source database. An overview lists collections; a collection/series drill
+   * down returns revision-stamped source rows in authored archival order.
+   * Source bodies are never hydrated by this endpoint.
+   */
+  async archiveFindingAid(principal?: ScopePrincipal, collectionId?: string, series?: unknown, limit = 30, maxChars = 9000) {
+    const boundedLimit = Math.min(Math.max(Number(limit) || 30, 1), 100);
+    const boundedChars = Math.min(Math.max(Number(maxChars) || 9000, 512), 20000);
+    const requestedCollection = normalizeArchiveIdentifier(collectionId, 'collectionId');
+    const requestedSeries = normalizeArchiveSeries(series);
+    const requestedCollectionKey = requestedCollection?.toLowerCase();
+    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+    type ArchiveItem = {
+      collectionId: string;
+      series: string[];
+      seriesPath: string;
+      sequence?: number;
+      accessionId?: string;
+      path: string;
+      title: string;
+      sourceId: string;
+      capturedAt?: string;
+      revision?: string;
+    };
+    type CollectionSummary = {
+      collectionId: string;
+      sourceCount: number;
+      sequencedCount: number;
+      unsequencedCount: number;
+      series: Map<string, { labels: string[]; count: number }>;
+      accessions: Set<string>;
+      truncatedSeries: boolean;
+      truncatedAccessions: boolean;
+    };
+    const collections = new Map<string, CollectionSummary>();
+    const collectionLabels = new Map<string, Set<string>>();
+    const matchingCollectionKeys = new Set<string>();
+    const selected: ArchiveItem[] = [];
+    const issues: Array<Record<string, unknown>> = [];
+    const sequenceOwners = new Map<string, string>();
+    let visibleSources = 0;
+    let archivalSources = 0;
+    let matchingSources = 0;
+    let incompleteArchivalSources = 0;
+    let collectionOverflow = 0;
+    let totalIssues = 0;
+    const MAX_COLLECTIONS = 5000;
+    const MAX_SERIES_PER_COLLECTION = 1000;
+    const compareItems = (left: ArchiveItem, right: ArchiveItem) => {
+      const collectionOrder = left.collectionId.localeCompare(right.collectionId);
+      if (collectionOrder) return collectionOrder;
+      const seriesOrder = left.seriesPath.localeCompare(right.seriesPath);
+      if (seriesOrder) return seriesOrder;
+      const leftOrder = left.sequence ?? Number.MAX_SAFE_INTEGER;
+      const rightOrder = right.sequence ?? Number.MAX_SAFE_INTEGER;
+      return leftOrder - rightOrder || left.path.localeCompare(right.path);
+    };
+    const retainItem = (item: ArchiveItem) => {
+      let low = 0;
+      let high = selected.length;
+      while (low < high) {
+        const middle = (low + high) >>> 1;
+        if (compareItems(selected[middle]!, item) <= 0) low = middle + 1;
+        else high = middle;
+      }
+      selected.splice(low, 0, item);
+      if (selected.length > boundedLimit) selected.pop();
+    };
+    const addIssue = (issue: Record<string, unknown>) => {
+      totalIssues += 1;
+      if (issues.length < boundedLimit) issues.push(issue);
+    };
+
+    for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+      if (String(note.frontmatter.llm_wiki_type || '').toLowerCase() !== 'source' || isModerationHidden(note.frontmatter)) continue;
+      visibleSources += 1;
+      const rawCollection = typeof note.frontmatter.archive_collection_id === 'string' ? note.frontmatter.archive_collection_id.trim() : '';
+      const hasArchiveMetadata = ['archive_series', 'archive_sequence', 'accession_id', 'custodial_history', 'original_order_note']
+        .some(field => note.frontmatter[field] !== undefined);
+      if (!rawCollection) {
+        if (hasArchiveMetadata) {
+          incompleteArchivalSources += 1;
+          addIssue({ code: 'archive_collection_id_missing', path: this.access.toPublicPath(note.path), revision: note.revision });
+        }
+        continue;
+      }
+      if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(rawCollection)) {
+        addIssue({ code: 'invalid_archive_collection_id', path: this.access.toPublicPath(note.path), revision: note.revision });
+      }
+      archivalSources += 1;
+      const collectionKey = rawCollection.toLowerCase();
+      const labels = collectionLabels.get(collectionKey) || new Set<string>();
+      labels.add(rawCollection);
+      collectionLabels.set(collectionKey, labels);
+      const rawSeries = note.frontmatter.archive_series;
+      const seriesValid = rawSeries === undefined || (Array.isArray(rawSeries) && rawSeries.length >= 1 && rawSeries.length <= 8
+        && rawSeries.every((item: unknown) => typeof item === 'string' && Boolean(item.trim()) && Array.from(item).length <= 160));
+      const seriesLabels = seriesValid && Array.isArray(rawSeries)
+        ? rawSeries.map((item: string) => item.trim())
+        : [];
+      const seriesPath = seriesLabels.join(' / ') || '(unfiled)';
+      const sequenceValid = note.frontmatter.archive_sequence === undefined || (Number.isInteger(note.frontmatter.archive_sequence) && note.frontmatter.archive_sequence >= 0 && note.frontmatter.archive_sequence <= 1_000_000_000);
+      const sequence = sequenceValid && Number.isInteger(note.frontmatter.archive_sequence)
+        ? Number(note.frontmatter.archive_sequence)
+        : undefined;
+      const accessionId = typeof note.frontmatter.accession_id === 'string' && note.frontmatter.accession_id.trim()
+        ? boundedText(note.frontmatter.accession_id, 160)
+        : undefined;
+      let summary = collections.get(collectionKey);
+      if (!summary && collections.size < MAX_COLLECTIONS) {
+        summary = { collectionId: boundedText(rawCollection, 160), sourceCount: 0, sequencedCount: 0, unsequencedCount: 0, series: new Map(), accessions: new Set(), truncatedSeries: false, truncatedAccessions: false };
+        collections.set(collectionKey, summary);
+      } else if (!summary) {
+        collectionOverflow += 1;
+      }
+      if (summary) {
+        summary.sourceCount += 1;
+        if (sequence === undefined) summary.unsequencedCount += 1;
+        else summary.sequencedCount += 1;
+        const seriesKey = seriesPath.toLowerCase();
+        const existingSeries = summary.series.get(seriesKey);
+        if (existingSeries) existingSeries.count += 1;
+        else if (summary.series.size < MAX_SERIES_PER_COLLECTION) summary.series.set(seriesKey, { labels: seriesLabels, count: 1 });
+        else summary.truncatedSeries = true;
+        if (accessionId) {
+          if (summary.accessions.size < MAX_SERIES_PER_COLLECTION) summary.accessions.add(accessionId);
+          else summary.truncatedAccessions = true;
+        }
+      }
+      if (requestedCollectionKey && collectionKey !== requestedCollectionKey) continue;
+      if (!seriesValid) addIssue({ code: 'invalid_archive_series', path: this.access.toPublicPath(note.path), revision: note.revision });
+      if (!sequenceValid) addIssue({ code: 'invalid_archive_sequence', path: this.access.toPublicPath(note.path), revision: note.revision });
+      if (sequence !== undefined && seriesLabels.length === 0) addIssue({ code: 'archive_sequence_without_series', path: this.access.toPublicPath(note.path), revision: note.revision });
+      if (requestedSeries && !requestedSeries.every((label, index) => seriesLabels[index]?.toLowerCase() === label.toLowerCase())) continue;
+      matchingSources += 1;
+      matchingCollectionKeys.add(collectionKey);
+      const publicPath = this.access.toPublicPath(note.path);
+      if (requestedCollection || requestedSeries) {
+        if (sequence !== undefined) {
+          const orderKey = `${collectionKey}\u0000${seriesPath.toLowerCase()}\u0000${sequence}`;
+          const existingOwner = sequenceOwners.get(orderKey);
+          if (existingOwner) addIssue({ code: 'duplicate_archive_sequence', collectionId: rawCollection, series: seriesLabels, sequence, paths: [existingOwner, publicPath] });
+          else sequenceOwners.set(orderKey, publicPath);
+        }
+        retainItem({
+          collectionId: boundedText(rawCollection, 160),
+          series: seriesLabels,
+          seriesPath,
+          ...(sequence !== undefined && { sequence }),
+          ...(accessionId && { accessionId }),
+          path: publicPath,
+          title: boundedText(String(note.frontmatter.title || note.path.split('/').at(-1) || ''), 240),
+          sourceId: boundedText(String(note.frontmatter.source_id || note.path.split('/').at(-1) || ''), 160),
+          ...(typeof note.frontmatter.captured_at === 'string' && { capturedAt: note.frontmatter.captured_at }),
+          ...(note.revision && { revision: note.revision }),
+        });
+      }
+    }
+
+    for (const [key, labels] of collectionLabels) {
+      if (labels.size > 1 && (!requestedCollectionKey || requestedCollectionKey === key)) addIssue({ code: 'archive_collection_case_collision', normalizedCollectionId: key, labels: [...labels].sort() });
+    }
+    const filteredCollections = [...collections.entries()]
+      .filter(([key]) => !(requestedCollection || requestedSeries) || matchingCollectionKeys.has(key))
+      .map(([, value]) => value);
+    const collectionItems = filteredCollections
+      .sort((left, right) => left.collectionId.localeCompare(right.collectionId))
+      .slice(0, boundedLimit)
+      .map(collection => ({
+        collectionId: collection.collectionId,
+        sourceCount: collection.sourceCount,
+        originalOrder: { sequenced: collection.sequencedCount, unsequenced: collection.unsequencedCount },
+        seriesCount: collection.series.size,
+        series: [...collection.series.values()].sort((left, right) => left.labels.join('/').localeCompare(right.labels.join('/'))).slice(0, 12).map(entry => ({ path: entry.labels, count: entry.count })),
+        accessionCount: collection.accessions.size,
+        accessions: [...collection.accessions].sort().slice(0, 12),
+        truncated: collection.truncatedSeries || collection.truncatedAccessions || collection.series.size > 12 || collection.accessions.size > 12,
+      }));
+    const result: Record<string, any> = {
+      mode: requestedCollection || requestedSeries ? 'archive_finding_aid_detail' : 'archive_finding_aid_overview',
+      purpose: 'Preserve provenance groups, archival series, accessions, and original order for immutable source snapshots. This metadata-only projection never reads source bodies, moves files, or replaces MOCs, folders, source hashes, or Git.',
+      filter: { ...(requestedCollection && { collectionId: requestedCollection }), ...(requestedSeries && { series: requestedSeries }) },
+      totals: { visibleSources, archivalSources, matchingSources: requestedCollection || requestedSeries ? matchingSources : archivalSources, collections: collections.size, collectionsExact: collectionOverflow === 0, incompleteArchivalSources, issues: totalIssues },
+      collections: collectionItems,
+      ...(requestedCollection || requestedSeries ? { items: selected, itemOrder: 'collection, broad-to-narrow series, archive_sequence, path' } : {}),
+      issues,
+      truncated: collectionOverflow > 0 || filteredCollections.length > collectionItems.length || (requestedCollection || requestedSeries ? matchingSources > selected.length : false) || totalIssues > issues.length,
+      nextAction: requestedCollection || requestedSeries
+        ? 'Inspect duplicate or invalid order signals, then cite the returned immutable source path and revision; do not reorder files or rewrite source bodies automatically.'
+        : `Choose one collectionId and call ${endpointIdForTool('get_wiki_archive_finding_aid')} again for its bounded original-order inventory.`,
+    };
+    while (JSON.stringify(result).length > boundedChars && result.items?.length > 1) { result.items.pop(); result.truncated = true; }
+    while (JSON.stringify(result).length > boundedChars && result.collections.length > 1) { result.collections.pop(); result.truncated = true; }
+    while (JSON.stringify(result).length > boundedChars && result.issues.length > 0) { result.issues.pop(); result.truncated = true; }
+    if (JSON.stringify(result).length > boundedChars) {
+      return {
+        mode: result.mode,
+        totals: result.totals,
+        truncated: true,
+        nextAction: result.nextAction,
+      };
+    }
     return result;
   }
 

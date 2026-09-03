@@ -33,7 +33,7 @@ export const KNOWLEDGE_ROLES = ['concept', 'argument', 'model', 'observation', '
 export const NOTE_TEMPLATE_IDS = ['atomic', 'literature', 'question', 'hypothesis', 'experiment', 'assumption', 'decision', 'project', 'moc', 'negative', ...KNOWLEDGE_ROLES];
 /** Standard Obsidian Bases projections. Keep the runtime and tool schema on
  * one shared list so a documented view cannot become unreachable. */
-export const BASES_VIEW_IDS = ['all', 'inbox', 'inbox_oldest', 'projects', 'project_next_actions', 'review', 'epistemic', 'experiments', 'open_questions', 'decisions', 'knowledge', 'concepts', 'arguments', 'models', 'observations', 'counterarguments', 'unreviewed_evidence', 'negative_knowledge', 'deprecated_terms', 'maintenance', 'authority', 'review_checklist', 'collections'];
+export const BASES_VIEW_IDS = ['all', 'inbox', 'inbox_oldest', 'projects', 'project_next_actions', 'review', 'epistemic', 'experiments', 'open_questions', 'decisions', 'knowledge', 'concepts', 'arguments', 'models', 'observations', 'counterarguments', 'unreviewed_evidence', 'negative_knowledge', 'deprecated_terms', 'maintenance', 'authority', 'review_checklist', 'collections', 'archives'];
 /** Optional recall result for high-value knowledge; separate from evidence review. */
 export const RECALL_QUALITIES = ['unseen', 'failed', 'partial', 'good'];
 /** Error Book state is split into resolution and learning so a closed issue
@@ -80,6 +80,12 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'note_kind', type: 'text', description: 'What the note is for', allowed: NOTE_KINDS },
     { name: 'lifecycle', type: 'text', description: 'What should happen to the knowledge next', allowed: LIFECYCLES },
     { name: 'decision_status', type: 'text', description: 'Structured Decision Record state, distinct from knowledge_status', allowed: DECISION_STATUSES, appliesTo: ['decision'] },
+    { name: 'archive_collection_id', type: 'text', description: 'Stable provenance-group identifier for an immutable source collection', appliesTo: ['source'] },
+    { name: 'archive_series', type: 'list', description: 'Broad-to-narrow archival series path preserving creator context without replacing folders or MOCs', appliesTo: ['source'] },
+    { name: 'archive_sequence', type: 'number', description: 'Optional original-order position within one exact archival series', appliesTo: ['source'] },
+    { name: 'accession_id', type: 'text', description: 'Optional ingestion or transfer batch identifier for chain-of-custody review', appliesTo: ['source'] },
+    { name: 'custodial_history', type: 'text', description: 'Bounded custody/provenance note for an immutable source snapshot', appliesTo: ['source'] },
+    { name: 'original_order_note', type: 'text', description: 'Bounded explanation of how the source order was preserved or reconstructed', appliesTo: ['source'] },
     { name: 'captured_from', type: 'text', description: 'Bounded origin label for a fleeting Inbox capture', allowed: ['manual', 'chat', 'community', 'issue', 'experiment', 'external_source', 'other'], appliesTo: ['fleeting'] },
     { name: 'capture_reason', type: 'text', description: 'Why a fleeting observation was preserved; never a secret or raw prompt', appliesTo: ['fleeting'] },
     { name: 'capture_context', type: 'text', description: 'Short interpretation context for a fleeting observation', appliesTo: ['fleeting'] },
@@ -951,6 +957,27 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
     const lifecycleValue = frontmatter.lifecycle;
     const kind = kindValue === undefined ? undefined : String(kindValue).trim().toLowerCase();
     const lifecycle = lifecycleValue === undefined ? undefined : String(lifecycleValue).trim().toLowerCase();
+    const archiveFieldsPresent = ['archive_collection_id', 'archive_series', 'archive_sequence', 'accession_id', 'custodial_history', 'original_order_note']
+        .some(field => frontmatter[field] !== undefined);
+    if (archiveFieldsPresent && type !== 'source') {
+        issues.push({ code: 'archive_metadata_wrong_type', detail: 'Archival collection, series, accession, and original-order metadata belongs only on immutable source snapshots.' });
+    }
+    if (type === 'source' && archiveFieldsPresent) {
+        const collectionId = typeof frontmatter.archive_collection_id === 'string' ? frontmatter.archive_collection_id.trim() : '';
+        if (!collectionId)
+            issues.push({ code: 'archive_collection_id_missing', detail: 'Archival metadata requires one stable archive_collection_id so the provenance group remains reconstructable.' });
+        else if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(collectionId))
+            issues.push({ code: 'invalid_archive_collection_id', detail: 'archive_collection_id must be 1-160 characters using letters, numbers, dots, underscores, colons, or hyphens.' });
+        if (frontmatter.archive_series !== undefined && (!Array.isArray(frontmatter.archive_series) || frontmatter.archive_series.length === 0 || frontmatter.archive_series.length > 8 || frontmatter.archive_series.some((item) => typeof item !== 'string' || !item.trim() || Array.from(item).length > 160))) {
+            issues.push({ code: 'invalid_archive_series', detail: 'archive_series must be a broad-to-narrow list of 1-8 non-empty labels, each at most 160 characters.' });
+        }
+        if (frontmatter.archive_sequence !== undefined && (!Number.isInteger(frontmatter.archive_sequence) || frontmatter.archive_sequence < 0 || frontmatter.archive_sequence > 1_000_000_000)) {
+            issues.push({ code: 'invalid_archive_sequence', detail: 'archive_sequence must be an integer from 0 to 1000000000.' });
+        }
+        if (frontmatter.archive_sequence !== undefined && (!Array.isArray(frontmatter.archive_series) || frontmatter.archive_series.length === 0)) {
+            issues.push({ code: 'archive_sequence_without_series', detail: 'archive_sequence is meaningful only inside one explicit archive_series path.' });
+        }
+    }
     if (type === 'knowledge' && ['atomic', 'knowledge', 'decision'].includes(kind || '')) {
         const title = String(frontmatter.title || path.split(/[\\/]/).at(-1) || '').replace(/\.(?:md|markdown|txt)$/i, '').trim();
         if (GENERIC_NOTE_TITLE.test(title)) {

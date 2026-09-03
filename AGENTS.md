@@ -383,6 +383,14 @@ add optional `sourceType`, `citationKey`, `author`, `publishedAt`, and
 when this is one edition in a source lineage; never use these in place of the immutable source hash and
 evidence revision. Keep `citationKey` unique among source snapshots; lint will
 warn when two sources claim the same citation key.
+When source snapshots arrive as one archival body, preserve provenance and
+original order at ingestion with `archiveCollectionId`, broad-to-narrow
+`archiveSeries`, optional `archiveSequence`, `accessionId`,
+`custodialHistory`, and `originalOrderNote`. Use
+`wiki.archive_finding_aid` for a bounded metadata-only collection overview or
+ordered drill-down. A MOC expresses a reader's route; archival arrangement
+preserves creator context. Do not substitute one for the other, auto-reorder
+files, or rewrite immutable bodies to satisfy the finding aid.
 Authority-style notes may additionally declare `termLanguage`,
 `authorityScheme`, and `authorityId` when a preferred term comes from a named
 multilingual vocabulary; these are provenance/discovery metadata, not access
@@ -775,6 +783,7 @@ When modifying file operations:
 - Active recall is reader-specific. For `failed` or `partial`, record `confusion`, optionally `repairPath`, and leave `repairStatus=needed` or `in_progress`. The queue prioritizes these repairs; only mark them `resolved` after rereading and verifying the repair.
 - Search improvement telemetry is per-account, process-local, bounded, and never persisted. Call `record_search_feedback` after a useful, failed, or ambiguous search, then inspect `get_search_improvement_candidates` before adding aliases, retrieval cues, MOCs, disambiguation, or new notes.
 - Source snapshots are immutable editions. Use `sourceWorkId`/`sourceEditionId` for explicit lineage; `sourceFamily`/`sourceVersion` remain compatible aliases. Use `get_wiki_source_lineage` to compare editions, but retain source ID, hash, evidence path, and revision as the authority.
+- Archival source batches may use `archiveCollectionId`, `archiveSeries`, `archiveSequence`, `accessionId`, `custodialHistory`, and `originalOrderNote` at ingestion. Use `wiki.archive_finding_aid` to browse creator context and original order without loading bodies; duplicate sequence positions are review signals, never an automatic reorder.
 - `get_wiki_answer_packet` includes an `evidenceDiversity` card that groups cited snapshots by declared source work. Multiple snapshots of one work are not independent corroboration, multiple works do not prove truth, and missing, non-source, integrity-failed, or stale-locator counts are review prompts rather than automatic verdicts.
 - `get_wiki_organization_manifest` returns a fingerprinted portable contract for PARA, Obsidian links/Properties, relations, lifecycles, templates, and migration rules. The default is content-free. Request `includeReadiness` only when preparing a migration: it returns bounded global path/revision/identity/Property-shape metadata and reports drift, collisions, and missing relation targets while excluding Community, all private scopes, whispers, bodies, sessions, and `.mcpvault` caches. Compare a destination manifest with `compareManifest` and an `expectedCounterpartFingerprint`; rerun when the fingerprint changes and never copy before resolving blocking findings.
 - For one maintenance turn, follow the revision-stamped `curationPlan` returned by `get_wiki_maintenance_debt` or the single selected plan in `get_wiki_review_packet`. For `decide`/`review`, follow the answer packet's `synthesisPlan`: fill missing immutable evidence and counterpoints first, then use the named Decision Record or review endpoint. A plan is advisory and never supersedes inputs. `get_wiki_promotion_candidates` also surfaces completed task retrospectives; inspect the task/discussion at its revision, keep it as history, and treat it as context rather than immutable factual evidence.
