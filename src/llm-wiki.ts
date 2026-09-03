@@ -2638,7 +2638,10 @@ export class LlmWikiService {
       const startedAt = typeof note.frontmatter.started_at === 'string' ? note.frontmatter.started_at : undefined;
       const waitingSince = typeof note.frontmatter.waiting_since === 'string' ? note.frontmatter.waiting_since : waitingState && typeof note.frontmatter.updated_at === 'string' ? note.frontmatter.updated_at : undefined;
       const blockedSince = typeof note.frontmatter.blocked_since === 'string' ? note.frontmatter.blocked_since : blockedState && typeof note.frontmatter.updated_at === 'string' ? note.frontmatter.updated_at : undefined;
-      const age = ageDays(blockedSince || waitingSince || startedAt || note.frontmatter.updated_at || note.frontmatter.captured_at);
+      // Never infer cycle/blocked/waiting age from updated_at: a later edit is
+      // not evidence that work entered a lane at that time. Missing explicit
+      // flow timestamps must remain visible to the caller.
+      const age = ageDays(blockedSince || waitingSince || startedAt);
       const item: Record<string, unknown> = {
         path: this.access.toPublicPath(note.path), title, kind, taskStatus,
         serviceClass: serviceClass(note.frontmatter.service_class),
@@ -2723,9 +2726,10 @@ export class LlmWikiService {
       if ('mocCoverage' in detailedGraph) graph = detailedGraph as Record<string, any>;
     }
     const lint = await this.lint(principal, Math.max(200, boundedLimit * 4));
-    const [recall, vocabulary] = await Promise.all([
+    const [recall, vocabulary, executionFlow] = await Promise.all([
       this.recallQueue(principal, Math.min(boundedLimit, 8), Math.min(3200, boundedChars)),
       this.vocabularyHealth(principal, Math.min(boundedLimit, 8), Math.min(3200, boundedChars)),
+      this.flowHealth(principal, 3, 7, 14, Math.min(boundedLimit, 8), Math.min(4200, boundedChars)),
     ]);
     const lintByPath = new Map<string, string[]>();
     for (const issue of lint.issues) {
@@ -2752,6 +2756,8 @@ export class LlmWikiService {
     add(sections.inbox?.items, 'oldest_inbox_capture', 'wiki.inbox', 1);
     add(sections.due?.items, 'deadline_due', 'wiki.review_dashboard', 2);
     add(sections.projectsAndTasks?.items, 'project_needs_next_action', 'wiki.triage', 3);
+    add(executionFlow.lanes?.blocked, 'blocked_work_needs_unblocking', 'wiki.flow_health', 1);
+    add(executionFlow.lanes?.waiting, 'waiting_work_needs_follow_up', 'wiki.flow_health', 2);
     add(graph.mocQuestionCoverage?.unlinked?.items, 'moc_question_has_no_linked_answer', 'wiki.graph_health', 4);
     add(graph.evergreenQuality?.items?.filter((item: any) => item?.state === 'needs_attention'), 'evergreen_quality_hint', 'wiki.graph_health', 5);
     add(graph.unresolvedLinks?.items, 'broken_link', 'wiki.graph_health', 6);
@@ -2770,6 +2776,11 @@ export class LlmWikiService {
         knowledgeReview: Number(sections.knowledge?.total || 0),
         due: Number(sections.due?.total || 0),
         projectNeedsAction: Number(sections.projectsAndTasks?.total || 0),
+        activeWip: Number(executionFlow.flow?.activeWip || 0),
+        wipOverflow: Number(executionFlow.flow?.wipOverflow || 0),
+        readyToPull: Number(executionFlow.flow?.readyToPull || 0),
+        blocked: Number(executionFlow.flow?.blocked || 0),
+        waiting: Number(executionFlow.flow?.waiting || 0),
         unlinkedMocQuestions: Number(graph.mocQuestionCoverage?.unlinked?.total || 0),
         evergreenNeedsAttention: Number(graph.evergreenQuality?.needsAttention || 0),
         recallDue: Number(recall.total || 0),
@@ -2780,6 +2791,7 @@ export class LlmWikiService {
       supportingViews: {
         inbox: sections.inbox,
         knowledge: sections.knowledge,
+        executionFlow,
         mocQuestions: graph.mocQuestionCoverage,
         mocHierarchy: graph.mocHierarchy,
         evergreenQuality: graph.evergreenQuality,
@@ -2798,6 +2810,7 @@ export class LlmWikiService {
       supportingViews: {
         inbox: sections.inbox ? { total: sections.inbox.total, items: sections.inbox.items?.slice(0, 2) || [], truncated: true } : undefined,
         knowledge: sections.knowledge ? { total: sections.knowledge.total, items: sections.knowledge.items?.slice(0, 2) || [], truncated: true } : undefined,
+        executionFlow: { flow: executionFlow.flow, lanes: { active: executionFlow.lanes?.active?.slice(0, 2) || [], ready: executionFlow.lanes?.ready?.slice(0, 2) || [], blocked: executionFlow.lanes?.blocked?.slice(0, 2) || [], waiting: executionFlow.lanes?.waiting?.slice(0, 2) || [] }, truncated: true },
         mocQuestions: graph.mocQuestionCoverage ? { total: graph.mocQuestionCoverage.total, linked: graph.mocQuestionCoverage.linked, ratio: graph.mocQuestionCoverage.ratio, unlinked: { ...graph.mocQuestionCoverage.unlinked, items: graph.mocQuestionCoverage.unlinked.items?.slice(0, 2) || [], truncated: true } } : undefined,
         evergreenQuality: graph.evergreenQuality ? { total: graph.evergreenQuality.total, needsAttention: graph.evergreenQuality.needsAttention, ready: graph.evergreenQuality.ready, items: graph.evergreenQuality.items?.slice(0, 2) || [], truncated: true } : undefined,
         recall: { total: recall.total, items: recall.items.slice(0, 2), truncated: true },
@@ -4900,13 +4913,14 @@ export class LlmWikiService {
       'inbox_lifecycle_mismatch', 'invalid_aliases', 'duplicate_aliases',
       'invalid_mocs', 'duplicate_mocs',
       'invalid_key_points', 'invalid_open_questions', 'invalid_next_actions',
-      'invalid_summary', 'invalid_stable_id', 'summary_fingerprint_missing', 'invalid_summary_fingerprint', 'stale_summary', 'invalid_task_status',
+      'invalid_summary', 'invalid_summary_layer', 'invalid_summary_highlights', 'summary_fingerprint_missing', 'invalid_summary_fingerprint', 'stale_summary', 'stale_summary_highlight', 'summary_highlight_out_of_range', 'invalid_stable_id', 'invalid_task_status',
       'invalid_triage_disposition', 'invalid_clarified_by', 'invalid_clarify_note', 'invalid_triage_target', 'invalid_clarified_at', 'invalid_primary_moc', 'invalid_moc_purpose', 'invalid_moc_scope', 'invalid_moc_questions', 'invalid_moc_parent', 'moc_purpose_missing', 'moc_questions_missing',
       'duplicate_alias_across_notes', 'duplicate_stable_id', 'invalid_review_policy', 'invalid_review_outcome', 'invalid_interpretation_status', 'invalid_review_count', 'invalid_review_reopen_count', 'invalid_last_review_trigger', 'invalid_due_at', 'invalid_scheduled_at', 'invalid_defer_until', 'invalid_last_reviewed_at', 'invalid_epistemic_status', 'epistemic_status_wrong_kind', 'invalid_knowledge_polarity', 'invalid_negative_type', 'negative_lesson_missing', 'negative_reproduction_missing', 'waiting_project_without_owner', 'literature_interpretation_pending', 'superseded_without_replacement', 'archived_reason_missing', 'review_record_incomplete', 'invalid_term_status', 'term_replacement_missing', 'invalid_broader_terms', 'invalid_related_terms',
       'negative_type_without_negative_polarity', 'negative_polarity_without_type', 'atomic_note_may_be_too_broad',
       'invalid_retention_policy', 'invalid_retention_event', 'invalid_retention_at', 'invalid_preserve_until', 'invalid_legal_hold', 'legal_hold_blocks_disposition', 'invalid_retention_reason', 'invalid_replaced_by', 'retention_reason_missing', 'tombstone_lifecycle_mismatch',
       'invalid_evidence_locator', 'evidence_path_mismatch', 'stale_evidence_revision', 'invalid_claim_evidence_locator', 'stale_claim_evidence_revision', 'epistemic_status_missing',
       'invalid_relation', 'relation_self_reference', 'invalid_relation_notes', 'invalid_relation_evidence', 'invalid_review_checks', 'invalid_review_open_items', 'invalid_preferred_term', 'invalid_disambiguation',
+      'invalid_service_class', 'invalid_completion_criteria', 'invalid_started_at', 'invalid_blocked_since', 'invalid_waiting_since', 'invalid_completed_at', 'active_project_without_completion_criteria', 'active_work_without_started_at', 'blocked_work_without_blocked_since', 'waiting_work_without_waiting_since', 'completed_work_without_completed_at',
       'property_type_drift',
       'duplicate_citation_key',
       'invalid_retrieval_cues', 'invalid_use_when', 'unresolved_broader_terms', 'ambiguous_broader_terms', 'self_broader_terms',
@@ -4933,6 +4947,9 @@ export class LlmWikiService {
       ...(byCode.active_project_without_next_action ? ['Add a concrete next_action or waiting_for to each active project.'] : []),
       ...(byCode.active_project_without_outcome ? ['State the purpose or desired_outcome of each active project so it remains distinguishable from an Area.'] : []),
       ...(byCode.waiting_project_without_owner ? ['Identify who or what each waiting project is waiting for; keep waiting_for separate from the next action.'] : []),
+      ...(byCode.active_project_without_completion_criteria ? ['Give each active project bounded observable completion_criteria so agents know when the work is done.'] : []),
+      ...(byCode.active_work_without_started_at || byCode.blocked_work_without_blocked_since || byCode.waiting_work_without_waiting_since || byCode.completed_work_without_completed_at ? ['Record explicit flow timestamps when work enters, leaves, or waits in a lane; do not infer them from updated_at.'] : []),
+      ...(byCode.invalid_service_class || byCode.invalid_completion_criteria ? ['Repair service_class and completion_criteria shapes before using the Kanban flow projection.'] : []),
       ...(byCode.literature_interpretation_pending ? ['Interpret captured literature into a reusable conclusion or link it to a derived atomic/knowledge note.'] : []),
       ...(byCode.knowledge_review_due || byCode.review_date_missing ? ['Review due or disputed notes and reschedule only after checking their evidence.'] : []),
       ...(byCode.moc_without_links ? ['Give each MOC at least one meaningful [[wikilink]] and remove empty navigation notes.'] : []),

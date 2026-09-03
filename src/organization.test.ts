@@ -143,6 +143,19 @@ describe('knowledge organization focus and summary metadata', () => {
     }, '# Bounded project\n').map(issue => issue.code)).not.toContain('active_project_without_completion_criteria');
   });
 
+  test('keeps flow timestamps explicit instead of guessing from edits', () => {
+    const issues = organizationLintIssues('Tasks/Flow.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'task', lifecycle: 'active', task_status: 'next_action',
+    }, '# Flow task\n');
+    expect(issues.map(issue => issue.code)).toContain('active_work_without_started_at');
+    expect(organizationLintIssues('Tasks/Blocked.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'task', lifecycle: 'active', task_status: 'blocked',
+    }, '# Blocked task\n').map(issue => issue.code)).toContain('blocked_work_without_blocked_since');
+    expect(organizationLintIssues('Tasks/Done.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'task', lifecycle: 'active', task_status: 'completed',
+    }, '# Done task\n').map(issue => issue.code)).toContain('completed_work_without_completed_at');
+  });
+
   test('publishes relation meaning without inventing inverse Properties', () => {
     expect(getOrganizationRelationContract()).toEqual(expect.arrayContaining([
       expect.objectContaining({ field: 'supports', direction: 'directional', reciprocal: false }),

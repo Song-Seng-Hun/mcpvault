@@ -323,6 +323,11 @@ ordering, while `completion_criteria` gives projects observable stop
 conditions. Optional `started_at`, `blocked_since`, `waiting_since`, and
 `completed_at` timestamps improve flow measurement without replacing Git
 history.
+The compact `get_wiki_review_packet` also includes this flow projection and
+puts blocked/waiting follow-up into its bounded priorities, so an agent does
+not pull more work while an existing dependency is unattended. Missing flow
+timestamps are reported as repair signals; they are never reconstructed from
+an unrelated file edit.
 Source snapshots should keep `citation_key` unique; `lint_wiki` reports a
 duplicate key before it can make source references ambiguous.
 Optional `focus_horizon` (`ground`, `project`, `area`, `goal`, `vision`, or

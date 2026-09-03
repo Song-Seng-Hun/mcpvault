@@ -1141,6 +1141,18 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
         if (criteria.length === 0 && !hasCriteriaHeading)
             issues.push({ code: 'active_project_without_completion_criteria', detail: 'An active project should state bounded observable completion_criteria or a completion-criteria heading so agents know when to stop.' });
     }
+    if (kind && ['project', 'task'].includes(kind)) {
+        const taskStatus = String(frontmatter.task_status || '').trim().toLowerCase();
+        const waiting = taskStatus === 'waiting' || Boolean(String(frontmatter.waiting_for || '').trim());
+        if (taskStatus === 'next_action' && !frontmatter.started_at)
+            issues.push({ code: 'active_work_without_started_at', detail: 'Executable work should record started_at when it enters the next_action lane; do not infer it from updated_at.' });
+        if (taskStatus === 'blocked' && !frontmatter.blocked_since)
+            issues.push({ code: 'blocked_work_without_blocked_since', detail: 'Blocked work should record blocked_since so aging and escalation remain explainable.' });
+        if (waiting && !frontmatter.waiting_since)
+            issues.push({ code: 'waiting_work_without_waiting_since', detail: 'Waiting work should record waiting_since so follow-up aging remains explainable.' });
+        if (taskStatus === 'completed' && !frontmatter.completed_at)
+            issues.push({ code: 'completed_work_without_completed_at', detail: 'Completed work should record completed_at so cycle-time history is measurable.' });
+    }
     if (kind === 'project' && lifecycle === 'active' && String(frontmatter.task_status || '').toLowerCase() === 'waiting' && !frontmatter.waiting_for) {
         issues.push({ code: 'waiting_project_without_owner', detail: 'A waiting project should identify the person, event, or resource it is waiting for.' });
     }

@@ -304,6 +304,10 @@ an ordering explanation. Active projects should declare bounded
 `started_at`, `blocked_since`, `waiting_since`, and `completed_at` when known.
 These are flow signals, not access rules, truth scores, or automatic
 assignments.
+`get_wiki_review_packet` includes the same execution-flow projection and
+prioritizes blocked/waiting work before suggesting more work. Treat missing
+`started_at`, `blocked_since`, `waiting_since`, or `completed_at` as a repair
+signal rather than inventing timestamps from file edits.
 For a smaller maintenance turn, use `get_wiki_review_packet`; follow its
 priority order across evidence, active recall, tasks, graph, and vocabulary
 hygiene, then inspect one selected note before editing. MOC questions are

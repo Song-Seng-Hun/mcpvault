@@ -1201,6 +1201,11 @@ export declare class LlmWikiService {
             knowledgeReview: number;
             due: number;
             projectNeedsAction: number;
+            activeWip: number;
+            wipOverflow: number;
+            readyToPull: number;
+            blocked: number;
+            waiting: number;
             unlinkedMocQuestions: number;
             evergreenNeedsAttention: number;
             recallDue: number;
@@ -1211,6 +1216,74 @@ export declare class LlmWikiService {
         supportingViews: {
             inbox: any;
             knowledge: any;
+            executionFlow: {
+                purpose: string;
+                policy: {
+                    wipLimit: number;
+                    blockedAfterDays: number;
+                    waitingAfterDays: number;
+                    wipDefinition: string;
+                    pullDefinition: string;
+                    classesOfService: ("expedite" | "fixed_date" | "research" | "standard")[];
+                };
+                flow: {
+                    totalWork: number;
+                    activeWip: number;
+                    wipOverflow: number;
+                    pullAllowed: boolean;
+                    readyToPull: number;
+                    blocked: number;
+                    waiting: number;
+                    overdue: number;
+                };
+                lanes: {
+                    active: Record<string, unknown>[];
+                    ready: Record<string, unknown>[];
+                    blocked: Record<string, unknown>[];
+                    waiting: Record<string, unknown>[];
+                };
+                observability: {
+                    missingTimestamps: Record<string, unknown>[];
+                    cycleTimeAvailable: string;
+                    note: string;
+                };
+                nextActions: string[];
+                generatedAt: string;
+            } | {
+                purpose: string;
+                policy: {
+                    wipLimit: number;
+                    blockedAfterDays: number;
+                    waitingAfterDays: number;
+                    wipDefinition: string;
+                    pullDefinition: string;
+                    classesOfService: ("expedite" | "fixed_date" | "research" | "standard")[];
+                };
+                flow: {
+                    totalWork: number;
+                    activeWip: number;
+                    wipOverflow: number;
+                    pullAllowed: boolean;
+                    readyToPull: number;
+                    blocked: number;
+                    waiting: number;
+                    overdue: number;
+                };
+                nextActions: string[];
+                generatedAt: string;
+                lanes: {
+                    active: Record<string, unknown>[];
+                    ready: Record<string, unknown>[];
+                    blocked: Record<string, unknown>[];
+                    waiting: Record<string, unknown>[];
+                };
+                observability: {
+                    cycleTimeAvailable: string;
+                    note: string;
+                    missingTimestamps: Record<string, unknown>[];
+                };
+                truncated: boolean;
+            };
             mocQuestions: any;
             mocHierarchy: any;
             evergreenQuality: any;
@@ -1277,6 +1350,11 @@ export declare class LlmWikiService {
             knowledgeReview: number;
             due: number;
             projectNeedsAction: number;
+            activeWip: number;
+            wipOverflow: number;
+            readyToPull: number;
+            blocked: number;
+            waiting: number;
             unlinkedMocQuestions: number;
             evergreenNeedsAttention: number;
             recallDue: number;
@@ -1299,6 +1377,25 @@ export declare class LlmWikiService {
                 items: any;
                 truncated: boolean;
             } | undefined;
+            executionFlow: {
+                flow: {
+                    totalWork: number;
+                    activeWip: number;
+                    wipOverflow: number;
+                    pullAllowed: boolean;
+                    readyToPull: number;
+                    blocked: number;
+                    waiting: number;
+                    overdue: number;
+                };
+                lanes: {
+                    active: Record<string, unknown>[];
+                    ready: Record<string, unknown>[];
+                    blocked: Record<string, unknown>[];
+                    waiting: Record<string, unknown>[];
+                };
+                truncated: boolean;
+            };
             mocQuestions: {
                 total: any;
                 linked: any;

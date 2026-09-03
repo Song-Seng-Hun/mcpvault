@@ -264,6 +264,14 @@ test('projects expose bounded flow health and the organization policy contract',
     expect(policy.value.work.statuses).toEqual(expect.arrayContaining(['next_action', 'waiting', 'blocked']));
     expect(policy.value.filing.rule).toContain('visibility boundaries');
     expect(JSON.stringify(policy.value).length).toBeLessThanOrEqual(7000);
+
+    const packet = await callJson(client, 'get_wiki_review_packet', { limit: 10, maxChars: 12000, accessToken });
+    expect(packet.value.counts).toMatchObject({ activeWip: 1, readyToPull: 1, blocked: 1, waiting: 1 });
+    expect(packet.value.supportingViews.executionFlow.flow).toMatchObject({ activeWip: 1, blocked: 1, waiting: 1 });
+    expect(packet.value.priorities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Projects/Blocked.md', reason: 'blocked_work_needs_unblocking' }),
+      expect.objectContaining({ path: 'Projects/Waiting.md', reason: 'waiting_work_needs_follow_up' }),
+    ]));
   } finally {
     await client.close();
     await server.close();
