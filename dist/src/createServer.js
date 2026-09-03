@@ -70,6 +70,7 @@ const SERVER_INSTRUCTIONS_IDEATION = 'Idea Lab and Async Workshop are structured
 const SERVER_INSTRUCTIONS_MAINTENANCE = 'For safe organization maintenance, call preview_move_note before renaming a note and inspect its bounded backlink/collision report; move_note does not rewrite links automatically. Search supports bounded Obsidian-style path:, tag:, property:, [property:value], section:(...), block:(...), task:, task-todo:, task-done:, quoted exact phrases, OR, and -excluded terms. Scoped filters match one section/block/task and property:null finds missing or empty properties. Do not merge semantic matches into filtered or excluded searches. Keep each YAML property name in one native shape across notes; lint reports property_type_drift as an advisory Properties/Bases compatibility warning. For Markdown tasks, list_tasks returns a stable taskId plus path and line; read that note revision, then call update_task with taskId (preferred) or line and expectedRevision so GTD execution stays in ordinary Markdown with optimistic concurrency even after surrounding lines move.';
 const SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_3 = 'Use wiki.recall_queue for due high-value recall prompts and attempt each prompt before reading the body; the queue interleaves domains, MOCs, and projects when possible, and agent recall state remains private. Use wiki.duplicate_candidates only as a bounded similarity report, inspect both revisions, and use wiki.merge_preview before any consolidation. Graph health typedRelations reports unresolved, ambiguous, self-referential, question-target-mismatched, and missing-reciprocity links. Keep searchable status/navigation in native scalar or list Properties; claims, evidence, and summary_highlights are MCP-managed complex metadata and are safest in Source mode plus readable Markdown context.';
 const SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_4 = 'Use wiki.vocabulary_health to find tag spelling/case variants, subject terms without a scoped authority note, and terms shared by multiple notes. Use wiki.note_template for an optional role scaffold; it never creates a note or makes fields mandatory. Treat vocabulary and reciprocity findings as advisory repair candidates: preserve local distinctions, add a scope note or canonical_path when needed, and never rename or retag automatically. Use retention_policy with retention_reason and replaced_by to explain archive/tombstone decisions; it never triggers deletion.';
+const SERVER_INSTRUCTIONS_ORGANIZATION_PROJECTIONS = 'Use wiki.context_pack after selecting a project, MOC, question, or decision when one reusable bounded shelf should combine the root, ordered entrypoints, supporting context, counterpoints, gaps, and revisions; it is derived navigation, not a truth score. Use wiki.exception_board for one 5S-style repair board instead of separately browsing every health report. Use wiki.quality_check for one note-kind-specific advisory checklist; it never blocks publication. Use wiki.resurface_archives to rediscover archived or superseded notes only when current visible notes still link to them; never restore, move, or delete automatically.';
 const SEMANTIC_QUERY_TIMEOUT_MS = 2_000;
 const REQUEST_QUEUE_WAIT_MS = 10_000;
 class RequestConcurrencyGate {
@@ -421,7 +422,7 @@ export function createServer(vaultPath, options = {}) {
     const requestGate = new RequestConcurrencyGate();
     const server = new Server({ name, version }, {
         capabilities: { tools: {} },
-        instructions: `${SERVER_INSTRUCTIONS} ${SERVER_INSTRUCTIONS_ORGANIZATION} ${SERVER_INSTRUCTIONS_FIRST_ENTRY} ${SERVER_INSTRUCTIONS_COMMUNITY} ${SERVER_INSTRUCTIONS_FEEDBACK_FORUM} ${SERVER_INSTRUCTIONS_WIKI_QUALITY} ${SERVER_INSTRUCTIONS_KNOWLEDGE_ORGANIZATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_NAVIGATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_QUALITY_2} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_3} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_4} ${SERVER_INSTRUCTIONS_IDEATION} ${SERVER_INSTRUCTIONS_MAINTENANCE} ${SERVER_INSTRUCTIONS_MOTIVATION}`,
+        instructions: `${SERVER_INSTRUCTIONS} ${SERVER_INSTRUCTIONS_ORGANIZATION} ${SERVER_INSTRUCTIONS_FIRST_ENTRY} ${SERVER_INSTRUCTIONS_COMMUNITY} ${SERVER_INSTRUCTIONS_FEEDBACK_FORUM} ${SERVER_INSTRUCTIONS_WIKI_QUALITY} ${SERVER_INSTRUCTIONS_KNOWLEDGE_ORGANIZATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_NAVIGATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_QUALITY_2} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_3} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_4} ${SERVER_INSTRUCTIONS_ORGANIZATION_PROJECTIONS} ${SERVER_INSTRUCTIONS_IDEATION} ${SERVER_INSTRUCTIONS_MAINTENANCE} ${SERVER_INSTRUCTIONS_MOTIVATION}`,
     });
     const buildInternalTools = () => [
         {
@@ -1241,6 +1242,9 @@ export function createServer(vaultPath, options = {}) {
                     case "get_wiki_answer_packet": {
                         return jsonResult(await llmWiki.answerPacket(principal, trimmedArgs.path, trimmedArgs.maxChars, trimmedArgs.includeSemantic !== false, trimmedArgs.intent), trimmedArgs.prettyPrint);
                     }
+                    case "get_wiki_context_pack": {
+                        return jsonResult(await llmWiki.contextPack(principal, trimmedArgs.path, trimmedArgs.maxChars, trimmedArgs.includeSemantic === true, trimmedArgs.intent), trimmedArgs.prettyPrint);
+                    }
                     case "get_wiki_authority_map": {
                         return jsonResult(await llmWiki.authorityMap(principal, trimmedArgs.query, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
                     }
@@ -1266,6 +1270,12 @@ export function createServer(vaultPath, options = {}) {
                     }
                     case "get_wiki_maintenance_debt": {
                         return jsonResult(await llmWiki.maintenanceDebt(principal, trimmedArgs.olderThanDays, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+                    }
+                    case "get_wiki_exception_board": {
+                        return jsonResult(await llmWiki.exceptionBoard(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+                    }
+                    case "get_wiki_quality_check": {
+                        return jsonResult(await llmWiki.qualityCheck(principal, trimmedArgs.path, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_review_queue": {
                         return jsonResult(await llmWiki.reviewQueue(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
@@ -1482,6 +1492,9 @@ export function createServer(vaultPath, options = {}) {
                     }
                     case "resurface_wiki_knowledge": {
                         return jsonResult(await llmWiki.resurfaceKnowledge(principal, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.context), trimmedArgs.prettyPrint);
+                    }
+                    case "resurface_wiki_archives": {
+                        return jsonResult(await llmWiki.resurfaceArchivedKnowledge(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
                     }
                     case "update_wiki_projection": {
                         await requireExpectedRevisionForExisting(fileSystem, trimmedArgs.path, trimmedArgs.expectedRevision, 'update_wiki_projection');
@@ -2432,7 +2445,7 @@ export function createServer(vaultPath, options = {}) {
         createRequestServer: () => {
             const requestServer = new Server({ name, version }, {
                 capabilities: { tools: {} },
-                instructions: `${SERVER_INSTRUCTIONS} ${SERVER_INSTRUCTIONS_ORGANIZATION} ${SERVER_INSTRUCTIONS_FIRST_ENTRY} ${SERVER_INSTRUCTIONS_COMMUNITY} ${SERVER_INSTRUCTIONS_FEEDBACK_FORUM} ${SERVER_INSTRUCTIONS_WIKI_QUALITY} ${SERVER_INSTRUCTIONS_KNOWLEDGE_ORGANIZATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_NAVIGATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_QUALITY_2} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_3} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_4} ${SERVER_INSTRUCTIONS_IDEATION} ${SERVER_INSTRUCTIONS_MAINTENANCE} ${SERVER_INSTRUCTIONS_MOTIVATION}`,
+                instructions: `${SERVER_INSTRUCTIONS} ${SERVER_INSTRUCTIONS_ORGANIZATION} ${SERVER_INSTRUCTIONS_FIRST_ENTRY} ${SERVER_INSTRUCTIONS_COMMUNITY} ${SERVER_INSTRUCTIONS_FEEDBACK_FORUM} ${SERVER_INSTRUCTIONS_WIKI_QUALITY} ${SERVER_INSTRUCTIONS_KNOWLEDGE_ORGANIZATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_NAVIGATION} ${SERVER_INSTRUCTIONS_KNOWLEDGE_QUALITY_2} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_3} ${SERVER_INSTRUCTIONS_ORGANIZATION_QUALITY_4} ${SERVER_INSTRUCTIONS_ORGANIZATION_PROJECTIONS} ${SERVER_INSTRUCTIONS_IDEATION} ${SERVER_INSTRUCTIONS_MAINTENANCE} ${SERVER_INSTRUCTIONS_MOTIVATION}`,
             });
             installMcpHandlers(requestServer);
             return requestServer;

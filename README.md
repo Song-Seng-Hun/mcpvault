@@ -376,7 +376,17 @@ without forcing prose beside every valid link. `get_wiki_graph_health` also coun
 reports high-degree hub notes when a map may be carrying too many unrelated
 concepts. This is a navigation review hint only; useful links are never removed
 automatically. `get_wiki_property_contract` documents the meaning and
-direction of each typed relation.
+ direction of each typed relation.
+`get_wiki_context_pack` builds a reusable shelf around one selected project,
+MOC, question, or decision. It adds a stable root, ordered entrypoints,
+supporting context, counterpoints, gaps, and revisions without persisting a
+second index. `get_wiki_exception_board` combines organization, graph,
+quarantine, freshness, vocabulary, and execution findings into one 5S-style
+repair board. `get_wiki_quality_check` applies a small role-specific checklist
+to one note, while `resurface_wiki_archives` shows archived or superseded notes
+only when current visible notes still link to them. These are advisory read
+projections: they never become truth scores, publication gates, automatic
+restores, or automatic moves.
 `lint_wiki` reports missing or inconsistent organization metadata as warnings.
 These organization hints are deliberately non-blocking; source integrity,
 evidence, access, and revision checks remain the hard quality gates.

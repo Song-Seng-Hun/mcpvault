@@ -185,6 +185,17 @@ export function getLlmWikiTools(): Tool[] {
       }, required: ['path'] },
     },
     {
+      name: 'get_wiki_context_pack',
+      description: 'Build a reusable bounded shelf around one visible Wiki note, project, MOC, question, or decision. It provides a stable root, ordered entrypoints, supporting context, counterpoints, gaps, and revisions in one response without creating a second index. Re-read returned notes before editing or relying on them; this is navigation, not a truth score.',
+      inputSchema: { type: 'object', properties: {
+        path: { type: 'string', description: 'Visible Markdown note to use as the context root' },
+        intent: { type: 'string', enum: ['capture', 'explore', 'decide', 'execute', 'review'], default: 'decide' },
+        includeSemantic: { type: 'boolean', description: 'Include optional bounded semantic discovery candidates (default: false)' },
+        maxChars: { type: 'integer', minimum: 1024, maximum: 16000, default: 7000 },
+        accessToken, prettyPrint,
+      }, required: ['path'] },
+    },
+    {
       name: 'get_wiki_authority_map',
       description: 'Return a bounded library-style authority view derived from note titles, Obsidian aliases, and stable IDs. It helps normalize terminology and exposes title/alias collisions without renaming notes or creating a parallel taxonomy.',
       inputSchema: { type: 'object', properties: {
@@ -235,6 +246,16 @@ export function getLlmWikiTools(): Tool[] {
         maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 },
         accessToken, prettyPrint,
       } },
+    },
+    {
+      name: 'get_wiki_exception_board',
+      description: 'Combine existing organization, graph, quarantine, freshness, vocabulary, and execution findings into one bounded 5S-style exception board. It makes repair work visible and prioritized without creating another task database or changing notes.',
+      inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 60, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
+    },
+    {
+      name: 'get_wiki_quality_check',
+      description: 'Check one visible note against a small role-specific rubric for titles, projections, evidence, navigation, project execution, MOC purpose, literature interpretation, or epistemic status. Results are advisory and never block publishing or rewrite the note.',
+      inputSchema: { type: 'object', properties: { path: { type: 'string' }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 6000 }, accessToken, prettyPrint }, required: ['path'] },
     },
     {
       name: 'get_wiki_review_queue',
@@ -487,6 +508,11 @@ export function getLlmWikiTools(): Tool[] {
       name: 'resurface_wiki_knowledge',
       description: 'Return a small deterministic rotating set of durable notes for Zettelkasten-style serendipitous rediscovery. An optional context/problem signal makes retrieval cues and use_when metadata influence the bounded ranking. Read selected notes before relying on them; this is a derived view and never mutates files.',
       inputSchema: { type: 'object', properties: { context: { type: 'string', maxLength: 1000, description: 'Optional current task, question, or problem signal used only to rank retrieval cues' }, limit: { type: 'integer', minimum: 1, maximum: 20, default: 8 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 5000 }, accessToken, prettyPrint } },
+    },
+    {
+      name: 'resurface_wiki_archives',
+      description: 'Find a bounded set of archived or superseded notes that are still referenced by current visible notes. It supports “forget without deleting” while never restoring, moving, or deleting anything automatically.',
+      inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 20, default: 8 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 5000 }, accessToken, prettyPrint } },
     },
     {
       name: 'update_wiki_projection',

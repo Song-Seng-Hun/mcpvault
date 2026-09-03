@@ -76,6 +76,41 @@ test('knowledge organization helpers stay bounded and revision-safe', async () =
   }
 });
 
+test('context shelves, exception board, role quality, and archive resurfacing compose existing views', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-projection-owner', modelId: 'codex', password: 'organization-projection-password' });
+    const accessToken = registration.value.accessToken;
+    const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
+      const result = await client.callTool({ name: 'write_note', arguments: { path, content, frontmatter, expectedRevision: 'missing', accessToken } });
+      expect(result.isError).toBeFalsy();
+    };
+    await write('Knowledge/Anchor.md', '# Anchor\n\nA durable anchor.\n', { note_kind: 'atomic', lifecycle: 'evergreen', summary: 'A durable anchor.' });
+    await write('Knowledge/Support.md', '# Support\n\n[[Knowledge/Anchor]]\n[[Archives/Old]]\n', { note_kind: 'atomic', lifecycle: 'evergreen', summary: 'Supporting context.' });
+    await write('Archives/Old.md', '# Old\n\nHistorical context.\n', { note_kind: 'knowledge', lifecycle: 'archived', summary: 'Historical context.', retention_reason: 'Kept for traceability.' });
+    await write('Projects/Incomplete.md', '# Incomplete\n', { llm_wiki_type: 'knowledge', note_kind: 'project', lifecycle: 'active' });
+
+    const pack = await callJson(client, 'get_wiki_context_pack', { path: 'Knowledge/Anchor.md', includeSemantic: false, maxChars: 6000, accessToken });
+    expect(pack.value).toMatchObject({ mode: 'context_pack', root: expect.objectContaining({ path: 'Knowledge/Anchor.md', revision: expect.any(String) }), readOrder: expect.arrayContaining(['Knowledge/Anchor.md']), entrypoints: expect.any(Array) });
+    expect(JSON.stringify(pack.value).length).toBeLessThanOrEqual(6000);
+
+    const quality = await callJson(client, 'get_wiki_quality_check', { path: 'Projects/Incomplete.md', maxChars: 4000, accessToken });
+    expect(quality.value).toMatchObject({ path: 'Projects/Incomplete.md', noteKind: 'project', advisory: true });
+    expect(quality.value.nextActions).toEqual(expect.arrayContaining(['desired_outcome', 'next_action_or_waiting', 'execution_state']));
+
+    const archives = await callJson(client, 'resurface_wiki_archives', { limit: 5, maxChars: 5000, accessToken });
+    expect(archives.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Archives/Old.md', incomingLinks: 1, reason: 'referenced_by_current_visible_note' })]));
+
+    const board = await callJson(client, 'get_wiki_exception_board', { limit: 20, maxChars: 7000, accessToken });
+    expect(board.value).toMatchObject({ advisory: true, items: expect.any(Array), counts: expect.any(Object) });
+    expect(board.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Projects/Incomplete.md' })]));
+    expect(JSON.stringify(board.value).length).toBeLessThanOrEqual(7000);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 afterEach(async () => {
   await rm(vault, { recursive: true, force: true });
 });

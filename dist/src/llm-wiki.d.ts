@@ -2191,6 +2191,172 @@ export declare class LlmWikiService {
      */
     answerPacket(principal: ScopePrincipal | undefined, path: string, maxChars?: number, includeSemantic?: boolean, intent?: 'capture' | 'explore' | 'decide' | 'execute' | 'review'): Promise<Record<string, unknown>>;
     /**
+     * Build a reusable shelf-like context projection without persisting a
+     * second index.  The selected note remains the entry point; the existing
+     * answer packet supplies the bounded supporting and counterpoint context.
+     */
+    contextPack(principal: ScopePrincipal | undefined, path: string, maxChars?: number, includeSemantic?: boolean, intent?: 'capture' | 'explore' | 'decide' | 'execute' | 'review'): Promise<{
+        mode: string;
+        purpose: string;
+        intent: unknown;
+        root: {
+            path: any;
+            title: any;
+            revision: any;
+        };
+        readOrder: any[];
+        entrypoints: {
+            path: any;
+            title: any;
+            revision: any;
+            role: string;
+        }[];
+        freshness: {
+            rootRevision: any;
+            rootSummaryFresh: any;
+            rootSummaryStale: any;
+            note: string;
+        };
+        gaps: any[];
+        guidance: unknown;
+        packet: Record<string, unknown>;
+        truncated: boolean;
+    } | {
+        mode: string;
+        purpose: string;
+        intent: unknown;
+        root: {
+            path: any;
+            title: any;
+            revision: any;
+        };
+        readOrder: any[];
+        entrypoints: {
+            path: any;
+            title: any;
+            revision: any;
+            role: string;
+        }[];
+        freshness: {
+            rootRevision: any;
+            rootSummaryFresh: any;
+            rootSummaryStale: any;
+            note: string;
+        };
+        gaps: any[];
+        guidance: unknown;
+        packet: {
+            mode: string;
+            intent: unknown;
+            source: {
+                path: any;
+                title: any;
+                revision: any;
+            };
+            reasoningTrail: {
+                gaps: any[];
+                note: any;
+            };
+        };
+        truncated: boolean;
+    } | {
+        mode: string;
+        root: {
+            path: any;
+            title: any;
+            revision: any;
+        };
+        readOrder: any[];
+        gaps: any[];
+        truncated: boolean;
+    }>;
+    /**
+     * Present existing organization, graph, and quarantine findings as one
+     * bounded visual-management board.  It is intentionally a projection:
+     * Markdown, Properties, and Git remain authoritative.
+     */
+    exceptionBoard(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        purpose: string;
+        counts: Record<string, number>;
+        total: number;
+        items: ({
+            category: string;
+            severity: string;
+            state: string;
+            suggestedAction: string;
+        } | {
+            path: any;
+            code: any;
+            detail: any;
+            category: string;
+            severity: any;
+            state: string;
+            suggestedAction: string;
+        })[];
+        recommendations: any;
+        sourceViews: string[];
+        advisory: boolean;
+        truncated: boolean;
+        generatedAt: string;
+    }>;
+    /**
+     * Check one note against a small role-specific quality rubric.  The rubric
+     * is advisory and deliberately does not become a publication gate.
+     */
+    qualityCheck(principal: ScopePrincipal | undefined, path: string, maxChars?: number): Promise<{
+        path: string;
+        title: string;
+        noteKind: string;
+        revision: string;
+        score: {
+            passed: number;
+            total: number;
+            ratio: number;
+        };
+        checks: {
+            id: string;
+            passed: boolean;
+            detail: string;
+        }[];
+        nextActions: string[];
+        advisory: boolean;
+        note: string;
+    } | {
+        path: string;
+        title: string;
+        noteKind: string;
+        revision: string;
+        score: {
+            passed: number;
+            total: number;
+            ratio: number;
+        };
+        advisory: boolean;
+        note: string;
+        checks: {
+            id: string;
+            passed: boolean;
+            detail: string;
+        }[];
+        nextActions: string[];
+        truncated: boolean;
+    }>;
+    /**
+     * Rediscover inactive notes only when current visible notes still point at
+     * them.  This preserves PARA's “forget without deleting” behavior without
+     * automatically reopening or moving archived knowledge.
+     */
+    resurfaceArchivedKnowledge(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        purpose: string;
+        totalInactive: number;
+        probed: number;
+        items: {
+            [x: string]: any;
+        }[];
+        truncated: boolean;
+        generatedAt: string;
+    }>;
+    /**
      * Expose a small library-like authority view derived from note titles,
      * aliases, and stable IDs.  It suggests preferred access terms but never
      * renames notes or creates a second taxonomy.

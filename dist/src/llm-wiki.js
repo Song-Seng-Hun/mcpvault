@@ -5066,6 +5066,213 @@ export class LlmWikiService {
         return { mode: 'bounded_answer_packet', intent: selectedIntent, source: { path: String(result.source.path).slice(0, 160), revision: String(result.source.revision).slice(0, 160) }, truncated: true };
     }
     /**
+     * Build a reusable shelf-like context projection without persisting a
+     * second index.  The selected note remains the entry point; the existing
+     * answer packet supplies the bounded supporting and counterpoint context.
+     */
+    async contextPack(principal, path, maxChars = 7000, includeSemantic = false, intent = 'decide') {
+        const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 1024), 16000);
+        const packet = await this.answerPacket(principal, path, boundedChars, includeSemantic, intent);
+        const source = packet.source;
+        const supporting = Array.isArray(packet.supporting) ? packet.supporting : [];
+        const counterpoints = Array.isArray(packet.counterpoints) ? packet.counterpoints : [];
+        const entrypoints = [
+            { path: source.path, title: source.title, revision: source.revision, role: 'root' },
+            ...supporting.map(item => ({ path: item.path, title: item.title, revision: item.revision, role: 'supporting_context' })),
+            ...counterpoints.map(item => ({ path: item.path, title: item.title, revision: item.revision, role: 'counterpoint_or_review' })),
+        ].filter((item, index, all) => item.path && all.findIndex(candidate => candidate.path === item.path) === index);
+        const trail = packet.reasoningTrail;
+        const result = {
+            mode: 'context_pack',
+            purpose: 'A live, bounded shelf for one question, project, MOC, or decision. It is derived from Markdown and must be re-read at the returned revisions before editing or relying on it.',
+            intent: packet.intent,
+            root: { path: source.path, title: source.title, revision: source.revision },
+            readOrder: entrypoints.map(item => item.path),
+            entrypoints,
+            freshness: {
+                rootRevision: source.revision,
+                rootSummaryFresh: source.summaryFresh,
+                rootSummaryStale: source.summaryStale,
+                note: 'A revision is a freshness guard, not a truth score. Re-read a stale or changed entrypoint before acting.',
+            },
+            gaps: Array.isArray(trail?.gaps) ? trail.gaps : [],
+            guidance: packet.intentGuidance,
+            packet,
+            truncated: Boolean(packet.truncated),
+        };
+        if (JSON.stringify(result).length <= boundedChars)
+            return result;
+        const compact = {
+            mode: 'context_pack',
+            purpose: result.purpose,
+            intent: result.intent,
+            root: result.root,
+            readOrder: result.readOrder.slice(0, 8),
+            entrypoints: result.entrypoints.slice(0, 8),
+            freshness: result.freshness,
+            gaps: result.gaps,
+            guidance: result.guidance,
+            packet: {
+                mode: 'bounded_answer_packet',
+                intent: result.intent,
+                source: result.root,
+                reasoningTrail: { gaps: result.gaps, note: trail?.note },
+            },
+            truncated: true,
+        };
+        return JSON.stringify(compact).length <= boundedChars ? compact : {
+            mode: 'context_pack',
+            root: result.root,
+            readOrder: result.readOrder.slice(0, 3),
+            gaps: result.gaps.slice(0, 8),
+            truncated: true,
+        };
+    }
+    /**
+     * Present existing organization, graph, and quarantine findings as one
+     * bounded visual-management board.  It is intentionally a projection:
+     * Markdown, Properties, and Git remain authoritative.
+     */
+    async exceptionBoard(principal, limit = 20, maxChars = 7000) {
+        const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 60);
+        const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
+        const health = await this.organizationHealth(principal, Math.min(100, Math.max(boundedLimit, 20)), Math.min(16000, Math.max(boundedChars, 7000)));
+        const categoryFor = (code) => code.startsWith('invalid_') || code.startsWith('unsafe_') ? 'validation' : code.includes('stale') || code.includes('review') || code.includes('fresh') ? 'freshness' : code.includes('moc') || code.includes('relation') || code.includes('link') || code.includes('orphan') ? 'navigation' : code.includes('project') || code.includes('task') || code.includes('waiting') ? 'execution' : code.includes('term') || code.includes('alias') || code.includes('vocabulary') ? 'vocabulary' : code.includes('retention') || code.includes('archive') ? 'preservation' : 'knowledge_quality';
+        const rawIssues = Array.isArray(health.issues) ? health.issues : [];
+        const rawQuarantine = health.quarantine && Array.isArray(health.quarantine.items) ? health.quarantine.items : [];
+        const items = [
+            ...rawQuarantine.map(item => ({ ...item, category: 'validation', severity: 'error', state: 'quarantined', suggestedAction: 'inspect_and_repair_with_revision' })),
+            ...rawIssues.filter(issue => !rawQuarantine.some(item => item.path === issue.path && item.code === issue.code)).map(issue => ({
+                path: issue.path,
+                code: issue.code,
+                detail: issue.detail,
+                category: categoryFor(String(issue.code || '')),
+                severity: issue.severity || 'warning',
+                state: 'open',
+                suggestedAction: 'inspect_before_editing',
+            })),
+        ].slice(0, boundedLimit);
+        const counts = {};
+        for (const item of [...rawQuarantine, ...rawIssues]) {
+            const category = item.state === 'quarantined' ? 'validation' : categoryFor(String(item.code || ''));
+            counts[category] = (counts[category] || 0) + 1;
+        }
+        const result = {
+            purpose: 'A bounded 5S-style exception board: make repair work visible, prioritized, and explainable without creating another task database or changing notes.',
+            counts,
+            total: Object.values(counts).reduce((sum, value) => sum + value, 0),
+            items,
+            recommendations: Array.isArray(health.recommendations) ? health.recommendations.slice(0, boundedLimit) : [],
+            sourceViews: ['wiki.organization_health', 'wiki.graph_health', 'wiki.review_packet'],
+            advisory: true,
+            truncated: rawIssues.length + rawQuarantine.length > items.length || Boolean(health.truncated),
+            generatedAt: now(),
+        };
+        if (JSON.stringify(result).length <= boundedChars)
+            return result;
+        return { ...result, items: items.slice(0, Math.max(1, Math.floor(boundedLimit / 2))), recommendations: result.recommendations.slice(0, 4), truncated: true };
+    }
+    /**
+     * Check one note against a small role-specific quality rubric.  The rubric
+     * is advisory and deliberately does not become a publication gate.
+     */
+    async qualityCheck(principal, path, maxChars = 6000) {
+        const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 12000);
+        if (!this.access.canAccessPhysicalPath(path, principal))
+            throw new Error('Access denied');
+        const note = await this.fileSystem.readNote(path);
+        const visiblePath = this.access.toPublicPath(normalizePath(path));
+        const fm = note.frontmatter || {};
+        const kind = String(fm.note_kind || fm.llm_wiki_type || 'note').toLowerCase();
+        const title = String(fm.title || visiblePath.split('/').at(-1) || '').replace(/\.(?:md|markdown|txt)$/i, '').trim();
+        const links = extractObsidianLinkOccurrences(note.content || '').length;
+        const evidence = Array.isArray(fm.evidence_paths) ? fm.evidence_paths.length : 0;
+        const checks = [];
+        const add = (id, passed, detail) => checks.push({ id, passed, detail });
+        add('title', title.length > 0 && !/^(new|note|untitled|test)(?:\s|$)/i.test(title), 'Use a concept- or outcome-oriented title that another agent can rediscover.');
+        const durable = ['atomic', 'knowledge', 'decision', 'literature', 'moc', 'question', 'hypothesis', 'assumption'].includes(kind);
+        if (durable)
+            add('compact_projection', Boolean(String(fm.summary || '').trim() || (Array.isArray(fm.key_points) && fm.key_points.length > 0)), 'Add a compact summary or key_points projection; keep the full Markdown body authoritative.');
+        if (['knowledge', 'atomic', 'decision'].includes(kind))
+            add('evidence_or_explicit_uncertainty', evidence > 0 || ['draft', 'disputed'].includes(String(fm.knowledge_status || fm.status || '').toLowerCase()), 'Ground load-bearing knowledge in immutable evidence or mark its uncertainty explicitly.');
+        if (['atomic', 'knowledge', 'decision', 'moc'].includes(kind))
+            add('navigation', links > 0 || (Array.isArray(fm.references) && fm.references.length > 0), 'Connect the note to an existing concept, MOC, decision, or source with an Obsidian link.');
+        if (kind === 'literature')
+            add('interpretation', String(fm.interpretation_status || '').toLowerCase() !== 'unprocessed' || links > 0, 'Interpret the source or link it to a reusable derived note.');
+        if (['project', 'task'].includes(kind)) {
+            add('desired_outcome', Boolean(String(fm.desired_outcome || '').trim()), 'State an observable outcome so the project is distinguishable from an Area.');
+            add('next_action_or_waiting', Boolean(String(fm.next_action || '').trim() || String(fm.waiting_for || '').trim() || (Array.isArray(fm.next_actions) && fm.next_actions.length > 0)), 'Keep one concrete next action or an explicit waiting dependency.');
+            add('execution_state', Boolean(String(fm.task_status || '').trim()), 'Record operational task state separately from knowledge lifecycle.');
+        }
+        if (kind === 'moc') {
+            add('moc_purpose', Boolean(String(fm.moc_purpose || '').trim()), 'State what this map is for and where its boundary lies.');
+            add('moc_questions_or_links', Boolean((Array.isArray(fm.moc_questions) && fm.moc_questions.length > 0) || links > 0), 'Give the map questions or linked entrypoints that make coverage discoverable.');
+        }
+        if (['question', 'hypothesis', 'assumption'].includes(kind))
+            add('epistemic_status', Boolean(String(fm.epistemic_status || '').trim()), 'State the current epistemic status and update it when evidence changes.');
+        const passed = checks.filter(check => check.passed).length;
+        const result = {
+            path: visiblePath,
+            title,
+            noteKind: kind,
+            revision: note.revision,
+            score: { passed, total: checks.length, ratio: checks.length ? Number((passed / checks.length).toFixed(3)) : 1 },
+            checks,
+            nextActions: checks.filter(check => !check.passed).map(check => check.id),
+            advisory: true,
+            note: 'This is a role-specific quality hint, not a truth score or publication gate.',
+        };
+        if (JSON.stringify(result).length <= boundedChars)
+            return result;
+        return { ...result, checks: result.checks.slice(0, 6), nextActions: result.nextActions.slice(0, 6), truncated: true };
+    }
+    /**
+     * Rediscover inactive notes only when current visible notes still point at
+     * them.  This preserves PARA's “forget without deleting” behavior without
+     * automatically reopening or moving archived knowledge.
+     */
+    async resurfaceArchivedKnowledge(principal, limit = 8, maxChars = 5000) {
+        const boundedLimit = Math.min(Math.max(Number(limit) || 8, 1), 20);
+        const boundedChars = Math.min(Math.max(Number(maxChars) || 5000, 512), 12000);
+        const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        const candidates = [];
+        let totalInactive = 0;
+        const probeLimit = Math.min(200, Math.max(20, boundedLimit * 10));
+        const probe = [];
+        for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+            const lifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
+            if (!['archived', 'superseded'].includes(lifecycle))
+                continue;
+            totalInactive += 1;
+            if (probe.length < probeLimit)
+                probe.push({ path: note.path, title: String(note.frontmatter.title || note.path.split('/').at(-1) || ''), lifecycle, ...(note.frontmatter.replaced_by && { replacedBy: String(note.frontmatter.replaced_by) }), ...(note.frontmatter.retention_reason && { reason: boundedText(note.frontmatter.retention_reason, 300) }) });
+        }
+        for (let offset = 0; offset < probe.length; offset += 8) {
+            const batch = probe.slice(offset, offset + 8);
+            const rows = await Promise.all(batch.map(async (item) => {
+                try {
+                    const backlinks = await this.fileSystem.getBacklinks(item.path, 4, canAccess);
+                    if (backlinks.total === 0)
+                        return undefined;
+                    const note = await this.fileSystem.readNote(item.path);
+                    return { path: this.access.toPublicPath(item.path), title: item.title, lifecycle: item.lifecycle, revision: note.revision, incomingLinks: backlinks.total, referringNotes: backlinks.backlinks.slice(0, 4).map((link) => ({ path: this.access.toPublicPath(link.path), line: link.line, context: boundedText(link.context, 240) })), ...(item.replacedBy && { replacedBy: item.replacedBy }), ...(item.reason && { retentionReason: item.reason }), reason: 'referenced_by_current_visible_note', suggestedAction: 'read_current_revision_before_restoring_or_replacing', rank: backlinks.total };
+                }
+                catch {
+                    return undefined;
+                }
+            }));
+            for (const row of rows)
+                if (row)
+                    candidates.push(row);
+        }
+        candidates.sort((left, right) => right.rank - left.rank || String(left.path).localeCompare(String(right.path)));
+        const items = candidates.slice(0, boundedLimit).map(({ rank: _rank, ...item }) => item);
+        const result = { purpose: 'A bounded Archive resurfacing view. Inactive notes appear only when current visible notes still reference them; nothing is automatically restored, moved, or deleted.', totalInactive, probed: probe.length, items, truncated: candidates.length > items.length || totalInactive > probe.length, generatedAt: now() };
+        if (JSON.stringify(result).length <= boundedChars)
+            return result;
+        return { ...result, items: items.slice(0, Math.max(1, Math.floor(boundedLimit / 2))), truncated: true };
+    }
+    /**
      * Expose a small library-like authority view derived from note titles,
      * aliases, and stable IDs.  It suggests preferred access terms but never
      * renames notes or creates a second taxonomy.

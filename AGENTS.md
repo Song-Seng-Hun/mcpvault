@@ -134,6 +134,16 @@ compact context is insufficient. Use `subject_terms`, `domain`, `methods`, and
 `audience` as optional faceted access points when a note must be found from
 multiple library-like angles;
 keep them short and consistent, and prefer existing authority terms. Use
+`get_wiki_context_pack` when a project, MOC, question, or decision needs a
+reusable bounded shelf: start at its root, follow the returned `readOrder`,
+inspect supporting and counterpoint entries, and verify every returned
+revision before editing or relying on it. Use `get_wiki_exception_board` for
+one compact 5S-style repair board instead of independently scanning every
+health report. Use `get_wiki_quality_check` on the selected note when its
+note-kind-specific minimums are unclear; the result is advisory and never a
+publication gate. Use `resurface_wiki_archives` to find archived or
+superseded notes that current visible notes still reference; do not restore,
+move, or delete them automatically.
 `get_wiki_knowledge_gaps` for a bounded active-recall queue of unresolved
 questions, hypotheses, assumptions, disputes, and negative knowledge; read the
 selected note and evidence before changing its epistemic state.
