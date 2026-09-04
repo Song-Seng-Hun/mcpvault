@@ -3370,27 +3370,75 @@ function compactOverflowValue(value: unknown, maxChars: number): Record<string, 
   }
   const source = value as Record<string, unknown>;
   const compact: Record<string, unknown> = { truncated: true, maxChars };
-  const compactArguments = (input: unknown) => {
-    if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
-    return Object.fromEntries(Object.entries(input as Record<string, unknown>)
-      .filter(([key, item]) => !/(?:token|password|secret|credential)/i.test(key) && (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean'))
-      .slice(0, 8)
-      .map(([key, item]) => [key, typeof item === 'string' ? item.slice(0, 160) : item]));
+  const executableStringLimit = 1024;
+  const compactArguments = (input: unknown): { valid: true; value?: Record<string, unknown> } | { valid: false } => {
+    if (input === undefined) return { valid: true };
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return { valid: false };
+    const entries = Object.entries(input as Record<string, unknown>);
+    if (entries.length > 8) return { valid: false };
+    const result: Record<string, unknown> = {};
+    for (const [key, item] of entries) {
+      if (key.length > 80 || /(?:token|password|secret|credential)/i.test(key)) return { valid: false };
+      if (typeof item === 'string') {
+        if (item.length > executableStringLimit) return { valid: false };
+        result[key] = item;
+      } else if (typeof item === 'number' && Number.isFinite(item)) result[key] = item;
+      else if (typeof item === 'boolean' || item === null) result[key] = item;
+      else return { valid: false };
+    }
+    return Object.keys(result).length > 0 ? { valid: true, value: result } : { valid: true };
   };
-  const compactAction = (input: unknown) => {
+  const compactAction = (input: unknown, depth = 0): Record<string, unknown> | undefined => {
     if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
     const action = input as Record<string, unknown>;
-    const result = Object.fromEntries(['endpointId', 'tool', 'target', 'followUpTool', 'followUpEndpointId', 'reason'].filter(key => action[key] !== undefined).map(key => [key, typeof action[key] === 'string' ? String(action[key]).slice(0, 160) : action[key]]));
+    const result: Record<string, unknown> = {};
+    for (const key of ['endpointId', 'tool', 'target', 'followUpTool', 'followUpEndpointId', 'selectedRevision']) {
+      if (action[key] === undefined) continue;
+      if (typeof action[key] !== 'string' || String(action[key]).length > executableStringLimit) return undefined;
+      result[key] = action[key];
+    }
+    if (typeof action.reason === 'string') result.reason = action.reason.slice(0, 160);
     const args = compactArguments(action.arguments);
-    if (args && Object.keys(args).length) result.arguments = args;
+    if (!args.valid) return undefined;
+    if (args.value) result.arguments = args.value;
     if (Array.isArray(action.requiredArguments)) result.requiredArguments = action.requiredArguments.slice(0, 8).map(item => String(item).slice(0, 80));
-    return result;
+    if (action.followUpPlan !== undefined) {
+      if (depth >= 1) return undefined;
+      const followUpPlan = compactAction(action.followUpPlan, depth + 1);
+      if (followUpPlan) result.followUpPlan = followUpPlan;
+      else result.followUpPlanOmitted = true;
+    }
+    if (JSON.stringify(result).length <= maxChars) return result;
+    // Human explanation and missing-field hints are dispensable in the tiny
+    // envelope; executable identifiers and arguments are not.
+    delete result.reason;
+    delete result.requiredArguments;
+    if (JSON.stringify(result).length <= maxChars) return result;
+    if (result.followUpPlan) {
+      delete result.followUpPlan;
+      result.followUpPlanOmitted = true;
+    }
+    return JSON.stringify(result).length <= maxChars ? result : undefined;
   };
   const compactLocator = (input: unknown) => {
     if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
     const item = input as Record<string, unknown>;
-    return Object.fromEntries(['path', 'revision', 'stableId', 'title', 'sourceType'].filter(key => item[key] !== undefined).map(key => [key, typeof item[key] === 'string' ? String(item[key]).slice(0, 200) : item[key]]));
+    const result: Record<string, unknown> = {};
+    for (const key of ['path', 'revision', 'stableId', 'sourceType']) {
+      if (item[key] === undefined) continue;
+      if (typeof item[key] !== 'string' || String(item[key]).length > executableStringLimit) return undefined;
+      result[key] = item[key];
+    }
+    if (typeof item.title === 'string') result.title = item.title.slice(0, 200);
+    return result;
   };
+  const pulseRetryAction = source.protocol === 'mcpvault-agent-pulse/v1'
+    ? {
+        tool: 'get_agent_pulse',
+        arguments: { limit: 1, maxChars: Math.min(12000, Math.max(1600, maxChars * 2)) },
+        reason: 'The exact next action does not fit this response budget. Retry the pulse with the larger bounded budget.',
+      }
+    : undefined;
   for (const key of ['protocol', 'state', 'scope', 'path', 'revision', 'roomId', 'messageId', 'commentId', 'slug', 'total', 'totalMessages', 'nextCursor', 'contextBefore', 'contractFingerprint', 'counterpartFingerprint', 'compatible', 'complete']) {
     const candidate = source[key];
     if (typeof candidate === 'string' || typeof candidate === 'number' || typeof candidate === 'boolean') compact[key] = candidate;
@@ -3401,7 +3449,7 @@ function compactOverflowValue(value: unknown, maxChars: number): Record<string, 
   }
   if (source.signals && typeof source.signals === 'object' && !Array.isArray(source.signals)) compact.signals = source.signals;
   if (source.nextAction && typeof source.nextAction === 'object' && !Array.isArray(source.nextAction)) {
-    compact.nextAction = compactAction(source.nextAction);
+    compact.nextAction = compactAction(source.nextAction) || pulseRetryAction;
   }
   if (source.source && typeof source.source === 'object' && !Array.isArray(source.source)) compact.source = compactLocator(source.source);
   if (source.selected && typeof source.selected === 'object' && !Array.isArray(source.selected)) compact.selected = compactLocator(source.selected);
@@ -3487,5 +3535,7 @@ function compactOverflowValue(value: unknown, maxChars: number): Record<string, 
     tiny.status = plan.status;
     tiny.nextAction = plan.nextAction;
   }
-  return JSON.stringify(tiny).length <= maxChars ? tiny : { truncated: true, maxChars };
+  if (JSON.stringify(tiny).length <= maxChars) return tiny;
+  if (pulseRetryAction) return { truncated: true, maxChars, nextAction: pulseRetryAction };
+  return { truncated: true, maxChars };
 }

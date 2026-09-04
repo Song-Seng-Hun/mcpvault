@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { normalizeScopeId } from './scopes.js';
 import { boundItems } from './search-limits.js';
-import { queryWindow } from './paged-query.js';
+import { iterateNotes, queryWindow } from './paged-query.js';
 import { isModerationHidden } from './moderation-policy.js';
 const ROOT = 'Community/Tasks';
 export const AGENT_TASK_STATUSES = ['proposed', 'accepted', 'in_progress', 'blocked', 'completed', 'cancelled'];
 const taskPath = (taskId) => `${ROOT}/${normalizeScopeId(taskId, 'taskId')}.md`;
 const identity = (principal) => principal.agentId || principal.modelId;
 const now = () => new Date().toISOString();
+const ASSIGNED_OPEN_STATUS_ORDER = ['in_progress', 'accepted', 'proposed', 'blocked'];
 function shortText(value, field, maximum, required = false) {
     const text = String(value ?? '').trim();
     if (required && !text)
@@ -123,6 +124,59 @@ export class AgentTaskService {
             revision: undefined,
         })), maxChars);
         return { tasks: bounded.items, total, truncated: window.truncated || total > window.notes.length || bounded.truncated };
+    }
+    async listAssignedOpen(params) {
+        const assignee = normalizeScopeId(params.assignee, 'assignee');
+        const limit = Math.min(Math.max(Number(params.limit ?? 20), 1), 20);
+        const maxChars = Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000);
+        const statusCounts = {
+            in_progress: 0,
+            accepted: 0,
+            proposed: 0,
+            blocked: 0,
+        };
+        const rank = new Map(ASSIGNED_OPEN_STATUS_ORDER.map((status, index) => [status, index]));
+        const compare = (left, right) => {
+            const statusDifference = (rank.get(String(left.status)) ?? rank.size) - (rank.get(String(right.status)) ?? rank.size);
+            if (statusDifference !== 0)
+                return statusDifference;
+            const updatedDifference = right.updatedAt.localeCompare(left.updatedAt);
+            return updatedDifference || left.taskId.localeCompare(right.taskId);
+        };
+        const selected = [];
+        let total = 0;
+        for await (const note of iterateNotes(this.fileSystem, {
+            pathPrefix: ROOT,
+            filters: { mcpvault_type: 'agent_task', assignee },
+            sortBy: 'path',
+            sortOrder: 'asc',
+            includeContent: false,
+        })) {
+            const rawStatus = String(note.frontmatter.status || '').trim().toLowerCase();
+            if (!ASSIGNED_OPEN_STATUS_ORDER.includes(rawStatus))
+                continue;
+            let taskId;
+            try {
+                taskId = normalizeScopeId(String(note.frontmatter.task_id || ''), 'taskId');
+            }
+            catch {
+                continue;
+            }
+            const status = rawStatus;
+            statusCounts[status] += 1;
+            total += 1;
+            selected.push({ taskId, status, updatedAt: String(note.frontmatter.updated_at || '') });
+            selected.sort(compare);
+            if (selected.length > limit)
+                selected.pop();
+        }
+        const bounded = boundItems(selected.map(task => ({ taskId: task.taskId, status: task.status })), maxChars);
+        return {
+            tasks: bounded.items,
+            statusCounts,
+            total,
+            truncated: total > bounded.items.length || bounded.truncated,
+        };
     }
     async update(params) {
         const principal = requireLogin(params.principal);

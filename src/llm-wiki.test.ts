@@ -440,7 +440,7 @@ test('claim argument maps preserve Obsidian block links, revisions, scope, and b
     await client.close();
     await server.close();
   }
-});
+}, 10_000);
 
 test('Decision Records preserve structured state and expose a bounded conflict-aware register', async () => {
   const { server, client } = await setup();

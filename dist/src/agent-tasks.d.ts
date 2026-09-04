@@ -57,6 +57,19 @@ export declare class AgentTaskService {
         total: number;
         truncated: boolean;
     }>;
+    listAssignedOpen(params: {
+        assignee: string;
+        limit?: number;
+        maxChars?: number;
+    }): Promise<{
+        tasks: {
+            taskId: string;
+            status: "accepted" | "blocked" | "in_progress" | "proposed";
+        }[];
+        statusCounts: Record<"accepted" | "blocked" | "in_progress" | "proposed", number>;
+        total: number;
+        truncated: boolean;
+    }>;
     update(params: {
         principal?: ScopePrincipal;
         taskId: string;

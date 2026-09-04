@@ -5,6 +5,14 @@ import { tmpdir } from 'node:os';
 import { gunzipSync } from 'node:zlib';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createServer } from './createServer.js';
+import { AgentPulseService } from './agent-pulse.js';
+import { AgentTaskService } from './agent-tasks.js';
+import { FileSystemService } from './filesystem.js';
+import { FrontmatterHandler } from './frontmatter.js';
+import { PathFilter } from './pathfilter.js';
+import { ReferenceService } from './references.js';
+import { ScopeAccessPolicy } from './scope-access.js';
+import { ScopeAuthService } from './scope-auth.js';
 
 let vault: string;
 
@@ -27,6 +35,35 @@ async function setup() {
 async function json(client: Client, name: string, arguments_: Record<string, unknown>) {
   const result = await client.callTool({ name, arguments: arguments_ });
   return { result, value: JSON.parse((result.content as any)[0].text) };
+}
+
+function unitPulseService(options: {
+  workState?: Record<string, unknown>;
+  activePosts?: Array<Record<string, unknown>>;
+  notifications?: Array<Record<string, unknown>>;
+  notificationNextCursor?: string;
+  onNotificationList?: (params: Record<string, unknown>) => void;
+  reviewPacket: () => Promise<Record<string, unknown>>;
+}) {
+  const activePosts = options.activePosts || [];
+  const notifications = options.notifications || [];
+  return new AgentPulseService(
+    { list: async (params: Record<string, unknown>) => {
+      options.onNotificationList?.(params);
+      const requestedLimit = Number(params.limit) || notifications.length;
+      return { notifications: notifications.slice(0, requestedLimit), unreadCount: notifications.length, nextCursor: options.notificationNextCursor };
+    } } as any,
+    { pulsePosts: async () => ({ ownPublishedPosts: 1, activePosts, activeTotal: activePosts.length, feedbackPosts: [], feedbackTotal: 0, forumPosts: [], forumTotal: 0 }) } as any,
+    { listRooms: async () => ({ rooms: [], total: 0 }) } as any,
+    { listAssignedOpen: async () => ({ tasks: [], total: 0, statusCounts: { in_progress: 0, accepted: 0, proposed: 0, blocked: 0 } }) } as any,
+    { read: async () => options.workState || { exists: false } } as any,
+    { getForPrincipal: async () => ({ level: 0, xp: 0, label: 'Newcomer' }) } as any,
+    {
+      reviewQueue: async () => ({ items: [], total: 0, truncated: false }),
+      inbox: async () => ({ items: [], total: 0, truncated: false }),
+      reviewPacket: options.reviewPacket,
+    } as any,
+  );
 }
 
 test('anonymous pulse explains self-registration before public participation', async () => {
@@ -124,6 +161,139 @@ test('a first-time session-agent can register without a parent token and use the
   }
 });
 
+test('assigned open task outranks onboarding and excludes completed work', async () => {
+  const { server, client } = await setup();
+  try {
+    const ownerId = 'assigned-task-owner'.padEnd(64, 'o');
+    const workerId = 'assigned-task-worker'.padEnd(64, 'w');
+    const proposedTaskId = 'assigned-proposed'.padEnd(64, 'p');
+    const owner = await json(client, 'register_scope_account', {
+      accountId: 'assigned-task-owner', modelId: 'codex', agentId: ownerId, password: 'assigned-task-owner-password',
+    });
+    const worker = await json(client, 'register_scope_account', {
+      accountId: 'assigned-task-worker', modelId: 'claude', agentId: workerId, password: 'assigned-task-worker-password',
+    });
+    const task = await json(client, 'create_agent_task', {
+      taskId: proposedTaskId, title: 'Review the proposal'.padEnd(180, 'x'), description: 'Inspect the proposed task before onboarding.',
+      assignee: workerId, expectedRevision: 'missing', accessToken: owner.value.accessToken,
+    });
+
+    const smallestPulseResult = await client.callTool({
+      name: 'get_agent_pulse',
+      arguments: { accessToken: worker.value.accessToken, maxChars: 512, limit: 1 },
+    });
+    const smallestPulseText = (smallestPulseResult.content as any)[0].text as string;
+    expect(smallestPulseText.length).toBeLessThanOrEqual(512);
+    expect(JSON.parse(smallestPulseText)).toMatchObject({
+      nextAction: { tool: 'mcp.read_agent_task', target: task.value.taskId },
+    });
+
+    const proposedPulse = await json(client, 'get_agent_pulse', { accessToken: worker.value.accessToken });
+    expect(proposedPulse.value).toMatchObject({
+      nextAction: { tool: 'mcp.read_agent_task', target: task.value.taskId },
+      signals: { assignedOpenTasks: 1, assignedTaskStatuses: { proposed: 1 } },
+    });
+    expect(proposedPulse.value.nextAction).not.toHaveProperty('endpointId');
+
+    const fileSystem = new FileSystemService(vault, new PathFilter(), new FrontmatterHandler());
+    const scopeAccess = new ScopeAccessPolicy();
+    const taskService = new AgentTaskService(
+      fileSystem,
+      new ReferenceService(fileSystem, scopeAccess),
+      new ScopeAuthService(vault),
+    );
+    const smallestProjection = await taskService.listAssignedOpen({ assignee: workerId, limit: 20, maxChars: 512 });
+    expect(smallestProjection).toMatchObject({
+      total: 1,
+      tasks: [expect.objectContaining({ taskId: task.value.taskId, status: 'proposed' })],
+    });
+    expect(JSON.stringify(smallestProjection.tasks).length).toBeLessThanOrEqual(512);
+
+    const createWithStatus = async (taskId: string, status: 'accepted' | 'in_progress' | 'blocked' | 'completed' | 'cancelled') => {
+      const created = await json(client, 'create_agent_task', {
+        taskId, title: `Assigned ${status}`, description: `Exercise ${status} pulse priority.`,
+        assignee: workerId, expectedRevision: 'missing', accessToken: owner.value.accessToken,
+      });
+      return json(client, 'update_agent_task', {
+        taskId, status, reason: `Move fixture to ${status}.`,
+        ...(status === 'completed' && { retrospective: 'The completed fixture must not appear as open work.' }),
+        expectedRevision: created.value.revision, accessToken: owner.value.accessToken,
+      });
+    };
+    const complete = (taskId: string, expectedRevision: string) => json(client, 'update_agent_task', {
+      taskId,
+      status: 'completed',
+      reason: 'Complete the priority fixture.',
+      retrospective: 'The fixture verified assigned task priority without producing additional reusable knowledge.',
+      expectedRevision,
+      accessToken: owner.value.accessToken,
+    });
+
+    const accepted = await createWithStatus('assigned-accepted', 'accepted');
+    const inProgress = await createWithStatus('assigned-in-progress', 'in_progress');
+    const blocked = await createWithStatus('assigned-blocked', 'blocked');
+    await createWithStatus('assigned-completed', 'completed');
+    await createWithStatus('assigned-cancelled', 'cancelled');
+
+    const rankedPulse = await json(client, 'get_agent_pulse', { accessToken: worker.value.accessToken });
+    expect(rankedPulse.value).toMatchObject({
+      nextAction: { tool: 'mcp.read_agent_task', target: inProgress.value.taskId },
+      signals: { assignedOpenTasks: 4 },
+    });
+    expect(rankedPulse.value.signals.assignedTaskStatuses).toEqual({
+      in_progress: 1,
+      accepted: 1,
+      proposed: 1,
+      blocked: 1,
+    });
+
+    await complete(inProgress.value.taskId, inProgress.value.revision);
+    const acceptedPulse = await json(client, 'get_agent_pulse', { accessToken: worker.value.accessToken });
+    expect(acceptedPulse.value).toMatchObject({
+      nextAction: { tool: 'mcp.read_agent_task', target: accepted.value.taskId },
+      signals: { assignedOpenTasks: 3 },
+    });
+
+    await complete(accepted.value.taskId, accepted.value.revision);
+    const proposedAfterAccepted = await json(client, 'get_agent_pulse', { accessToken: worker.value.accessToken });
+    expect(proposedAfterAccepted.value).toMatchObject({
+      nextAction: { tool: 'mcp.read_agent_task', target: task.value.taskId },
+      signals: { assignedOpenTasks: 2 },
+    });
+
+    await complete(task.value.taskId, task.value.revision);
+    const blockedPulse = await json(client, 'get_agent_pulse', { accessToken: worker.value.accessToken });
+    expect(blockedPulse.value).toMatchObject({
+      nextAction: { tool: 'mcp.read_agent_task', target: blocked.value.taskId },
+      signals: { assignedOpenTasks: 1, assignedTaskStatuses: { blocked: 1 } },
+    });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('assigned open task ordering uses updated_at then taskId', async () => {
+  const fileSystem = new FileSystemService(vault, new PathFilter(), new FrontmatterHandler());
+  const scopeAccess = new ScopeAccessPolicy();
+  const taskService = new AgentTaskService(fileSystem, new ReferenceService(fileSystem, scopeAccess), new ScopeAuthService(vault));
+  const writeTask = (taskId: string, updatedAt: string) => fileSystem.writeNote({
+    path: `Community/Tasks/${taskId}.md`,
+    content: `# ${taskId}\n`,
+    frontmatter: { mcpvault_type: 'agent_task', task_id: taskId, assignee: 'ordering-worker', status: 'in_progress', updated_at: updatedAt },
+    expectedRevision: 'missing',
+  });
+
+  await Promise.all([
+    writeTask('task-older', '2026-01-01T00:00:00.000Z'),
+    writeTask('task-equal-b', '2026-01-02T00:00:00.000Z'),
+    writeTask('task-equal-a', '2026-01-02T00:00:00.000Z'),
+  ]);
+
+  const listed = await taskService.listAssignedOpen({ assignee: 'ordering-worker', limit: 20, maxChars: 512 });
+  expect(listed.tasks.map(task => task.taskId)).toEqual(['task-equal-a', 'task-equal-b', 'task-older']);
+});
+
 test('authenticated pulse recommends a first public introduction', async () => {
   const { server, client } = await setup();
   try {
@@ -168,6 +338,464 @@ test('authenticated pulse surfaces due knowledge review after onboarding', async
     await client.close();
     await server.close();
   }
+});
+
+test('maintenance plan outranks an active post when direct work is empty', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await json(client, 'register_scope_account', {
+      accountId: 'maintenance-pulse', modelId: 'codex', password: 'maintenance-pulse-password-123',
+    });
+    const accessToken = registration.value.accessToken;
+    await json(client, 'publish_blog_post', {
+      slug: 'maintenance-pulse-introduction', title: 'Maintenance pulse introduction',
+      content: 'This identity is onboarded and has one active community contribution.',
+      expectedRevision: 'missing', accessToken,
+    });
+    const noteWrite = await client.callTool({ name: 'call_endpoint', arguments: {
+      endpointId: 'notes.write',
+      arguments: {
+        path: 'Knowledge/Broken navigation.md',
+        content: '# Broken navigation\n\n[[Knowledge/Missing destination]]\n',
+        frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen' },
+        expectedRevision: 'missing', accessToken,
+      },
+    } });
+    expect(noteWrite.isError).toBeFalsy();
+
+    const pulse = await json(client, 'get_agent_pulse', { accessToken });
+    const packet = await json(client, 'call_endpoint', {
+      endpointId: 'wiki.review_packet', arguments: { limit: 1, maxChars: 4000 }, accessToken,
+    });
+    const curationPlan = packet.value.curationPlan;
+
+    expect(curationPlan.selected.path).toBe('Knowledge/Broken navigation.md');
+    expect(pulse.value).toMatchObject({
+      signals: { maintenanceAvailable: true },
+      nextAction: {
+        tool: curationPlan.inspect.endpointId,
+        arguments: curationPlan.inspect.arguments,
+        target: 'Knowledge/Broken navigation.md',
+        selectedRevision: curationPlan.selected.revision,
+        followUpPlan: { endpointId: curationPlan.then.endpointId },
+      },
+      context: expect.arrayContaining([expect.objectContaining({ kind: 'wiki_maintenance' })]),
+    });
+    expect(pulse.value.nextAction.selectedRevision).toMatch(/^[a-f0-9]{64}$/);
+    expect(pulse.value.nextAction.target).not.toBe('maintenance-pulse-introduction');
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('maintenance action survives the minimum pulse response budget', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await json(client, 'register_scope_account', {
+      accountId: 'minimum-maintenance-pulse', modelId: 'codex', password: 'minimum-maintenance-password-123',
+    });
+    const accessToken = registration.value.accessToken;
+    await json(client, 'publish_blog_post', {
+      slug: 'minimum-maintenance-introduction', title: 'Minimum maintenance introduction',
+      content: 'This identity is onboarded before requesting a minimum-budget pulse.',
+      expectedRevision: 'missing', accessToken,
+    });
+    const noteWrite = await client.callTool({ name: 'call_endpoint', arguments: {
+      endpointId: 'notes.write',
+      arguments: {
+        path: 'Knowledge/Minimum budget defect.md',
+        content: '# Minimum budget defect\n\n[[Knowledge/Missing minimum target]]\n',
+        frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen' },
+        expectedRevision: 'missing', accessToken,
+      },
+    } });
+    expect(noteWrite.isError).toBeFalsy();
+    const packet = await json(client, 'call_endpoint', {
+      endpointId: 'wiki.review_packet', arguments: { limit: 1, maxChars: 4000 }, accessToken,
+    });
+
+    const pulseResult = await client.callTool({
+      name: 'get_agent_pulse', arguments: { accessToken, limit: 1, maxChars: 512 },
+    });
+    const pulseText = String((pulseResult.content as any)[0].text);
+    const pulse = JSON.parse(pulseText);
+
+    expect(pulseText.length).toBeLessThanOrEqual(512);
+    expect(pulse.nextAction).toMatchObject({
+      tool: packet.value.curationPlan.inspect.endpointId,
+      target: 'Knowledge/Minimum budget defect.md',
+      selectedRevision: packet.value.curationPlan.selected.revision,
+    });
+    expect(Boolean(pulse.nextAction.followUpPlan) || pulse.nextAction.followUpPlanOmitted === true).toBe(true);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('a tiny pulse retries with a larger budget instead of truncating a long maintenance action', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await json(client, 'register_scope_account', {
+      accountId: 'long-maintenance-pulse', modelId: 'codex', password: 'long-maintenance-pulse-password-123',
+    });
+    const accessToken = registration.value.accessToken;
+    await json(client, 'publish_blog_post', {
+      slug: 'long-maintenance-introduction', title: 'Long maintenance introduction',
+      content: 'This identity is onboarded before the maintenance projection is requested.',
+      expectedRevision: 'missing', accessToken,
+    });
+    const path = `Knowledge/${'long-target-'.repeat(16)}note.md`;
+    expect(path.length).toBeGreaterThan(160);
+    const write = await client.callTool({ name: 'call_endpoint', arguments: {
+      endpointId: 'notes.write', accessToken,
+      arguments: {
+        path,
+        content: '# Long maintenance target\n\n[[Knowledge/Missing long destination]]\n',
+        frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen' },
+        expectedRevision: 'missing',
+      },
+    } });
+    expect(write.isError).toBeFalsy();
+
+    const response = await client.callTool({ name: 'get_agent_pulse', arguments: { accessToken, limit: 1, maxChars: 512 } });
+    const text = String((response.content as any)[0].text);
+    const value = JSON.parse(text);
+    expect(text.length).toBeLessThanOrEqual(512);
+    expect(value).toMatchObject({
+      truncated: true,
+      nextAction: { tool: 'get_agent_pulse', arguments: { limit: 1, maxChars: expect.any(Number) } },
+    });
+    expect(value.nextAction.arguments.maxChars).toBeGreaterThan(512);
+    expect(text).not.toContain(path.slice(0, 160));
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('a direct obligation suppresses maintenance projection lookup', async () => {
+  let reviewPacketCalls = 0;
+  const pulse = unitPulseService({
+    workState: { exists: true },
+    reviewPacket: async () => {
+      reviewPacketCalls += 1;
+      return { curationPlan: { selected: { path: 'Knowledge/Should not be selected.md' } } };
+    },
+  });
+
+  await pulse.get({ principal: { accountId: 'direct-obligation', modelId: 'codex', role: 'model' } as any });
+
+  expect(reviewPacketCalls).toBe(0);
+});
+
+test('an unsupported notification does not suppress an available maintenance plan', async () => {
+  let reviewPacketCalls = 0;
+  const revision = 'a'.repeat(64);
+  const path = 'Knowledge/Unsupported notification maintenance.md';
+  const pulse = unitPulseService({
+    notifications: [{ sourceType: 'unsupported_event', sourcePath: 'Community/Unsupported/event.md', sourceId: 'unsupported-event' }],
+    reviewPacket: async () => {
+      reviewPacketCalls += 1;
+      return {
+        curationPlan: {
+          selected: { path, revision, reason: 'broken_link' },
+          inspect: { endpointId: 'notes.read', arguments: { path, maxChars: 4000 } },
+          then: { endpointId: 'notes.patch', arguments: { path, expectedRevision: revision, dryRun: true }, requiredArguments: ['oldString and newString'] },
+        },
+      };
+    },
+  });
+
+  const result = await pulse.get({ principal: { accountId: 'unsupported-notification', modelId: 'codex', role: 'model' } as any });
+
+  expect(reviewPacketCalls).toBe(1);
+  expect(result).toMatchObject({
+    nextAction: { tool: 'notes.read', target: path, selectedRevision: revision },
+    signals: { maintenanceAvailable: true },
+  });
+});
+
+test('the first actionable notification wins after an unsupported notification', async () => {
+  let reviewPacketCalls = 0;
+  const path = 'Knowledge/Notification fallback maintenance.md';
+  const revision = 'b'.repeat(64);
+  const pulse = unitPulseService({
+    notifications: [
+      { sourceType: 'unsupported_event', sourcePath: 'Community/Unsupported/first.md', sourceId: 'unsupported-first' },
+      { kind: 'reply', sourceType: 'blog_comment', sourcePath: 'Community/Posts/actionable-post/Comments/comment-1.md', sourceId: 'comment-1' },
+    ],
+    reviewPacket: async () => {
+      reviewPacketCalls += 1;
+      return {
+        curationPlan: {
+          selected: { path, revision, reason: 'broken_link' },
+          inspect: { endpointId: 'notes.read', arguments: { path } },
+          then: { endpointId: 'notes.patch', arguments: { path, expectedRevision: revision, dryRun: true } },
+        },
+      };
+    },
+  });
+
+  const result = await pulse.get({ principal: { accountId: 'actionable-notification', modelId: 'codex', role: 'model' } as any });
+
+  expect(reviewPacketCalls).toBe(0);
+  expect(result).toMatchObject({
+    nextAction: {
+      tool: 'community.post_read',
+      arguments: { slug: 'actionable-post', includeComments: true, includeThreadContext: true },
+      sourceId: 'comment-1',
+      followUpTool: 'community.comment',
+    },
+  });
+});
+
+test('a blog post notification uses its source id as the post slug', async () => {
+  let reviewPacketCalls = 0;
+  const pulse = unitPulseService({
+    notifications: [{ kind: 'watch', sourceType: 'blog_post', sourcePath: 'Community/Posts/watched-post.md', sourceId: 'watched-post' }],
+    reviewPacket: async () => {
+      reviewPacketCalls += 1;
+      return {};
+    },
+  });
+
+  const result = await pulse.get({ principal: { accountId: 'blog-post-notification', modelId: 'codex', role: 'model' } as any });
+
+  expect(reviewPacketCalls).toBe(0);
+  expect(result).toMatchObject({
+    nextAction: {
+      tool: 'community.post_read',
+      arguments: { slug: 'watched-post', includeComments: true, includeThreadContext: true },
+      sourceId: 'watched-post',
+      followUpTool: 'community.comment',
+    },
+  });
+});
+
+test('caller limit one returns the selected actionable notification and its cursor', async () => {
+  let reviewPacketCalls = 0;
+  let notificationRequest: Record<string, unknown> | undefined;
+  const pulse = unitPulseService({
+    notifications: [
+      { notificationId: 'unsupported-notification', kind: 'activity', sourceType: 'unsupported_event', sourcePath: 'Community/Unsupported/event.md', sourceId: 'unsupported-event' },
+      { notificationId: 'valid-comment-notification', kind: 'reply', sourceType: 'blog_comment', sourcePath: 'Community/Comments/valid-post/comment-2.md', sourceId: 'comment-2' },
+    ],
+    notificationNextCursor: 'full-internal-page-cursor',
+    onNotificationList: params => { notificationRequest = params; },
+    reviewPacket: async () => {
+      reviewPacketCalls += 1;
+      return {};
+    },
+  });
+
+  const result = await pulse.get({
+    principal: { accountId: 'bounded-notification-discovery', modelId: 'codex', role: 'model' } as any,
+    limit: 1,
+  });
+
+  expect(notificationRequest).toMatchObject({ limit: 20, maxChars: 12000 });
+  expect(reviewPacketCalls).toBe(0);
+  expect(result).toMatchObject({
+    nextAction: { tool: 'community.post_read', arguments: { slug: 'valid-post' }, sourceId: 'comment-2' },
+    signals: { unreadNotifications: 2 },
+    cursors: { notification: 'valid-comment-notification' },
+  });
+  const notificationContext = (result.context as Array<Record<string, any>>).filter(item => item.kind === 'notification');
+  expect(notificationContext).toHaveLength(1);
+  expect(notificationContext[0].event).toMatchObject({ notificationId: 'valid-comment-notification', sourceId: 'comment-2' });
+  expect((result.cursors as Record<string, unknown>).notification).not.toBe('full-internal-page-cursor');
+});
+
+test('maintenance projection failure falls back without exposing exception details', async () => {
+  let reviewPacketCalls = 0;
+  const pulse = unitPulseService({
+    activePosts: [{ slug: 'ordinary-fallback', category: 'discussion' }],
+    reviewPacket: async () => {
+      reviewPacketCalls += 1;
+      throw new Error('sensitive maintenance projection failure');
+    },
+  });
+
+  const result = await pulse.get({ principal: { accountId: 'maintenance-failure', modelId: 'codex', role: 'model' } as any });
+
+  expect(reviewPacketCalls).toBe(1);
+  expect(result).toMatchObject({ nextAction: { tool: 'community.post_read', target: 'ordinary-fallback' } });
+  expect(JSON.stringify(result)).not.toContain('sensitive maintenance projection failure');
+});
+
+test('a tiny review packet envelope still yields a maintenance action', async () => {
+  const path = 'Knowledge/Tiny maintenance.md';
+  const revision = 'c'.repeat(64);
+  const pulse = unitPulseService({
+    reviewPacket: async () => ({
+      selected: { path, revision, reason: 'broken_link' },
+      nextAction: { endpointId: 'notes.read', arguments: { path, maxChars: 4000 } },
+      then: { endpointId: 'notes.patch' },
+      truncated: true,
+    }),
+  });
+
+  const result = await pulse.get({ principal: { accountId: 'tiny-maintenance', modelId: 'codex', role: 'model' } as any });
+
+  expect(result).toMatchObject({
+    nextAction: { tool: 'notes.read', target: path, selectedRevision: revision, followUpPlan: { endpointId: 'notes.patch' } },
+    signals: { maintenanceAvailable: true },
+  });
+});
+
+test('sequential idle pulses reuse one cached maintenance plan', async () => {
+  let reviewPacketCalls = 0;
+  const path = 'Knowledge/Cached maintenance.md';
+  const revision = 'd'.repeat(64);
+  const pulse = unitPulseService({
+    reviewPacket: async () => {
+      reviewPacketCalls += 1;
+      return {
+        curationPlan: {
+          selected: { path, revision, reason: 'broken_link' },
+          inspect: { endpointId: 'notes.read', arguments: { path } },
+          then: { endpointId: 'notes.patch', arguments: { path, expectedRevision: revision, dryRun: true } },
+        },
+      };
+    },
+  });
+  const principal = { accountId: 'cached-maintenance', modelId: 'codex', agentId: 'cached-worker', commandCenterId: 'local', role: 'agent' } as any;
+
+  const first = await pulse.get({ principal });
+  const second = await pulse.get({ principal });
+
+  expect(reviewPacketCalls).toBe(1);
+  expect(second.nextAction).toEqual(first.nextAction);
+});
+
+test('maintenance projection rejects an action when any executable argument cannot be preserved exactly', async () => {
+  const path = 'Knowledge/Compact maintenance.md';
+  const revision = 'e'.repeat(64);
+  const pulse = unitPulseService({
+    activePosts: [{ slug: 'safe-argument-fallback', category: 'discussion' }],
+    reviewPacket: async () => ({
+      curationPlan: {
+        selected: { path, revision, reason: 'broken_link', body: 'do not copy this body' },
+        inspect: {
+          endpointId: 'notes.read',
+          arguments: {
+            path,
+            count: 3,
+            enabled: true,
+            query: 'q'.repeat(300),
+            accessToken: 'hidden-token',
+            password: 'hidden-password',
+            nested: { body: 'hidden' },
+            values: ['hidden'],
+            infinite: Number.POSITIVE_INFINITY,
+            alpha: 'a', beta: 'b', gamma: 'g', delta: 'd', epsilon: 'e', zeta: 'z',
+          },
+          body: 'do not copy this inspect body',
+        },
+        then: {
+          endpointId: 'notes.patch',
+          arguments: { path, expectedRevision: revision, dryRun: true, credential: 'hidden', patches: [{ oldString: 'a', newString: 'b' }] },
+          requiredArguments: Array.from({ length: 10 }, (_, index) => `argument-${index}-${'x'.repeat(220)}`),
+          instruction: 'i'.repeat(601),
+          body: 'do not copy this follow-up body',
+        },
+        guard: { autoFix: false },
+        dashboard: { body: 'do not copy this dashboard' },
+      },
+    }),
+  });
+
+  const result = await pulse.get({ principal: { accountId: 'compact-maintenance', modelId: 'codex', role: 'model' } as any });
+  expect(result).toMatchObject({
+    nextAction: { tool: 'community.post_read', target: 'safe-argument-fallback' },
+    signals: { maintenanceAvailable: false },
+  });
+  expect((result.context as Array<Record<string, unknown>>).some(item => item.kind === 'wiki_maintenance')).toBe(false);
+});
+
+test('maintenance projection preserves every bounded primitive argument exactly', async () => {
+  const path = 'Knowledge/Exact primitive arguments.md';
+  const revision = 'a'.repeat(64);
+  const inspectArguments = { path, count: 3, enabled: true, query: 'q'.repeat(300) };
+  const followUpArguments = { path, expectedRevision: revision, dryRun: true };
+  const pulse = unitPulseService({
+    reviewPacket: async () => ({
+      curationPlan: {
+        selected: { path, revision, reason: 'broken_link' },
+        inspect: { endpointId: 'notes.read', arguments: inspectArguments },
+        then: { endpointId: 'notes.patch', arguments: followUpArguments },
+      },
+    }),
+  });
+
+  const result = await pulse.get({ principal: { accountId: 'exact-primitive-arguments', modelId: 'codex', role: 'model' } as any });
+  expect(result).toMatchObject({
+    nextAction: {
+      tool: 'notes.read',
+      arguments: inspectArguments,
+      followUpPlan: { endpointId: 'notes.patch', arguments: followUpArguments },
+    },
+    signals: { maintenanceAvailable: true },
+  });
+});
+
+test('maintenance preserves an inspect path longer than 160 characters exactly', async () => {
+  const path = `Knowledge/${'long-segment-'.repeat(16)}Exact note.md`;
+  const revision = 'f'.repeat(64);
+  expect(path.length).toBeGreaterThan(160);
+  const pulse = unitPulseService({
+    reviewPacket: async () => ({
+      curationPlan: {
+        selected: { path, revision, reason: 'broken_link' },
+        inspect: { endpointId: 'notes.read', arguments: { path, maxChars: 4000 } },
+        then: { endpointId: 'notes.patch', arguments: { path, expectedRevision: revision, dryRun: true } },
+      },
+    }),
+  });
+
+  const result = await pulse.get({ principal: { accountId: 'exact-maintenance-path', modelId: 'codex', role: 'model' } as any });
+
+  expect(result).toMatchObject({
+    nextAction: { tool: 'notes.read', target: path, arguments: { path, maxChars: 4000 } },
+    signals: { maintenanceAvailable: true },
+  });
+  expect((result.nextAction as Record<string, any>).arguments.path).toBe(path);
+});
+
+test('an oversized maintenance plan is omitted instead of returning truncated arguments', async () => {
+  const path = 'Knowledge/Oversized maintenance.md';
+  const revision = '1'.repeat(64);
+  const oversizedValue = 'v'.repeat(900);
+  const pulse = unitPulseService({
+    activePosts: [{ slug: 'safe-fallback', category: 'discussion' }],
+    reviewPacket: async () => ({
+      curationPlan: {
+        selected: { path, revision, reason: 'broken_link' },
+        inspect: {
+          endpointId: 'notes.read',
+          arguments: {
+            path,
+            first: oversizedValue,
+            second: oversizedValue,
+            third: oversizedValue,
+            fourth: oversizedValue,
+            fifth: oversizedValue,
+          },
+        },
+        then: { endpointId: 'notes.patch', arguments: { path, expectedRevision: revision, dryRun: true } },
+      },
+    }),
+  });
+
+  const result = await pulse.get({ principal: { accountId: 'oversized-maintenance', modelId: 'codex', role: 'model' } as any });
+
+  expect(result).toMatchObject({
+    nextAction: { tool: 'community.post_read', target: 'safe-fallback' },
+    signals: { maintenanceAvailable: false },
+  });
+  expect((result.context as Array<Record<string, unknown>>).some(item => item.kind === 'wiki_maintenance')).toBe(false);
 });
 
 test('pulse is exposed alongside both read and mutating tools', async () => {

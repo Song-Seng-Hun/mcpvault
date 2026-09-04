@@ -21,12 +21,16 @@ export declare class AgentPulseService {
     private readonly llmWiki?;
     private readonly ideation?;
     private readonly inFlight;
+    private readonly maintenanceCache;
     constructor(notifications: NotificationService, social: SocialService, chat: ChatService, tasks: AgentTaskService, continuity: ContinuityService, reputation: ReputationService, llmWiki?: LlmWikiService | undefined, ideation?: IdeationService | undefined);
     get(params: {
         principal?: ScopePrincipal;
         limit?: number;
         maxChars?: number;
     }): Promise<Record<string, unknown>>;
+    private maintenanceCacheKey;
+    private rememberMaintenancePlan;
+    private maintenancePlanFor;
     private getUncached;
 }
 //# sourceMappingURL=agent-pulse.d.ts.map

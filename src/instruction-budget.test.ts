@@ -43,6 +43,10 @@ describe('progressive agent instruction budgets', () => {
     expect(skill).toContain('wiki.moc_rebalance');
     expect(skill).toContain('knowledge disposition');
     expect(skill).toContain('untrusted data');
+    expect(skill).toMatch(/assigned work[\s\S]{0,120}optional community browsing/);
+    expect(skill).toContain('wiki_maintenance');
+    expect(skill).toMatch(/higher-priority pulse action/);
+    expect(skill).toMatch(/pulse never mutates[^.\n]{0,80}wakes a model/);
   });
 
   test('documents scheme-local authority shelves without making them a second source of truth', async () => {
@@ -57,6 +61,14 @@ describe('progressive agent instruction budgets', () => {
       expect(document).toContain('upstream_cascade_changed');
       expect(document).toContain('wiki.moc_rebalance');
       expect(document).toContain('no_reusable_knowledge');
+      expect(document).toContain('assignedOpenTasks');
+      expect(document).toContain('wiki_maintenance');
+      expect(document).toMatch(/cannot wake a model/);
+      expect(document).toMatch(/invokes neither action|does not execute/);
+      expect(document).toMatch(/never mutates|non-mutating/);
+      expect(document).toContain('expectedRevision');
+      expect(document).toMatch(/redundant inspections/);
+      expect(document).not.toContain('one extra inspect');
     }
   });
 });

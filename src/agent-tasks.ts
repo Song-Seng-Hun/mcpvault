@@ -4,7 +4,7 @@ import type { ReferenceService } from './references.js';
 import type { ScopeAuthService, ScopePrincipal } from './scope-auth.js';
 import { normalizeScopeId } from './scopes.js';
 import { boundItems } from './search-limits.js';
-import { queryWindow } from './paged-query.js';
+import { iterateNotes, queryWindow } from './paged-query.js';
 import { isModerationHidden } from './moderation-policy.js';
 
 const ROOT = 'Community/Tasks';
@@ -14,6 +14,7 @@ export type AgentTaskStatus = typeof AGENT_TASK_STATUSES[number];
 const taskPath = (taskId: string) => `${ROOT}/${normalizeScopeId(taskId, 'taskId')}.md`;
 const identity = (principal: ScopePrincipal) => principal.agentId || principal.modelId;
 const now = () => new Date().toISOString();
+const ASSIGNED_OPEN_STATUS_ORDER = ['in_progress', 'accepted', 'proposed', 'blocked'] as const;
 
 function shortText(value: unknown, field: string, maximum: number, required = false): string {
   const text = String(value ?? '').trim();
@@ -123,6 +124,56 @@ export class AgentTaskService {
         revision: undefined,
       })), maxChars);
     return { tasks: bounded.items, total, truncated: window.truncated || total > window.notes.length || bounded.truncated };
+  }
+
+  async listAssignedOpen(params: { assignee: string; limit?: number; maxChars?: number }) {
+    const assignee = normalizeScopeId(params.assignee, 'assignee');
+    const limit = Math.min(Math.max(Number(params.limit ?? 20), 1), 20);
+    const maxChars = Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000);
+    const statusCounts: Record<typeof ASSIGNED_OPEN_STATUS_ORDER[number], number> = {
+      in_progress: 0,
+      accepted: 0,
+      proposed: 0,
+      blocked: 0,
+    };
+    const rank = new Map<string, number>(ASSIGNED_OPEN_STATUS_ORDER.map((status, index) => [status, index]));
+    const compare = (left: { taskId: string; status: string; updatedAt: string }, right: { taskId: string; status: string; updatedAt: string }) => {
+      const statusDifference = (rank.get(String(left.status)) ?? rank.size) - (rank.get(String(right.status)) ?? rank.size);
+      if (statusDifference !== 0) return statusDifference;
+      const updatedDifference = right.updatedAt.localeCompare(left.updatedAt);
+      return updatedDifference || left.taskId.localeCompare(right.taskId);
+    };
+    const selected: Array<{ taskId: string; status: typeof ASSIGNED_OPEN_STATUS_ORDER[number]; updatedAt: string }> = [];
+    let total = 0;
+    for await (const note of iterateNotes(this.fileSystem, {
+      pathPrefix: ROOT,
+      filters: { mcpvault_type: 'agent_task', assignee },
+      sortBy: 'path',
+      sortOrder: 'asc',
+      includeContent: false,
+    })) {
+      const rawStatus = String(note.frontmatter.status || '').trim().toLowerCase();
+      if (!(ASSIGNED_OPEN_STATUS_ORDER as readonly string[]).includes(rawStatus)) continue;
+      let taskId: string;
+      try {
+        taskId = normalizeScopeId(String(note.frontmatter.task_id || ''), 'taskId');
+      } catch {
+        continue;
+      }
+      const status = rawStatus as typeof ASSIGNED_OPEN_STATUS_ORDER[number];
+      statusCounts[status] += 1;
+      total += 1;
+      selected.push({ taskId, status, updatedAt: String(note.frontmatter.updated_at || '') });
+      selected.sort(compare);
+      if (selected.length > limit) selected.pop();
+    }
+    const bounded = boundItems(selected.map(task => ({ taskId: task.taskId, status: task.status })), maxChars);
+    return {
+      tasks: bounded.items,
+      statusCounts,
+      total,
+      truncated: total > bounded.items.length || bounded.truncated,
+    };
   }
 
   async update(params: {

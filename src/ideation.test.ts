@@ -64,7 +64,12 @@ test('Idea Lab preserves branches, bounded critiques, evaluations, and revision-
     expect(workshop.value.phase).toBe('diverge');
     await json(client, 'publish_blog_post', { slug: 'idea-lab-introduction', title: 'Introduction', content: 'This identity is ready for an asynchronous workshop.', expectedRevision: 'missing', accessToken });
     const pulse = await json(client, 'get_agent_pulse', { accessToken });
-    expect(pulse.value).toMatchObject({ nextAction: { tool: 'workshop.read' }, signals: { activeWorkshops: 1 } });
+    expect(pulse.value).toMatchObject({
+      nextAction: { selectedRevision: expect.stringMatching(/^[a-f0-9]{64}$/) },
+      signals: { activeWorkshops: 1, maintenanceAvailable: true },
+      context: expect.arrayContaining([expect.objectContaining({ kind: 'wiki_maintenance' })]),
+    });
+    expect(pulse.value.nextAction.tool).not.toBe('workshop.read');
     const workshopRead = await json(client, 'read_workshop', { workshopId: 'projection-workshop', accessToken });
     const workshopContribution = await json(client, 'contribute_workshop', { workshopId: 'projection-workshop', kind: 'idea', content: 'Reserve one response slot for the least-supported but highest-impact objection.', expectedPhase: 'diverge', accessToken });
     expect(workshopContribution.value.phase).toBe('diverge');
