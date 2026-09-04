@@ -4,6 +4,7 @@ import { join, relative, resolve } from 'node:path';
 import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { VaultIoCoordinator } from './vault-io.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
+import { buildNoteReferenceIndex, resolveNoteReference as resolveIndexedNoteReference } from './note-reference.js';
 const FULL_REFRESH_INTERVAL_MS = 60_000;
 const READ_BATCH_SIZE = 32;
 const QUERY_CACHE_TTL_MS = 2_000;
@@ -187,6 +188,7 @@ export class VaultMetadataIndex {
     pathIndex = new Map();
     queryCache = new Map();
     sortedQueryCache = new Map();
+    referenceIndex;
     queryCacheRows = 0;
     sortedQueryCacheRows = 0;
     dirty = new Set();
@@ -246,7 +248,36 @@ export class VaultMetadataIndex {
         this.sortedQueryCache.clear();
         this.queryCacheRows = 0;
         this.sortedQueryCacheRows = 0;
+        this.referenceIndex = undefined;
         derivedCacheBudget.clearOwner(this.cacheOwner);
+    }
+    /** Resolve a visible Obsidian note identity from the disposable metadata
+     * read model. The identity map is rebuilt only after metadata invalidation;
+     * Markdown and current frontmatter entries remain authoritative. */
+    async resolveNoteReference(document, canAccessPath = () => true) {
+        await this.ensureFresh();
+        let referenceIndex = this.referenceIndex;
+        if (!referenceIndex) {
+            const descriptors = [...this.entries.values()].map(entry => ({
+                path: entry.path,
+                title: entry.frontmatter.title,
+                aliases: entry.frontmatter.aliases,
+                preferredTerm: entry.frontmatter.preferred_term,
+                stableId: entry.frontmatter.stable_id,
+            }));
+            referenceIndex = buildNoteReferenceIndex(descriptors);
+            this.referenceIndex = referenceIndex;
+            derivedCacheBudget.register(this.cacheOwner, 'note-references', estimateCacheBytes(descriptors) * 2, () => {
+                if (this.referenceIndex === referenceIndex)
+                    this.referenceIndex = undefined;
+            });
+        }
+        else {
+            derivedCacheBudget.touch(this.cacheOwner, 'note-references');
+        }
+        return resolveIndexedNoteReference(document, referenceIndex, {
+            canReference: (_source, target) => canAccessPath(target),
+        });
     }
     async list(filters, pathPrefix = '') {
         await this.ensureFresh();

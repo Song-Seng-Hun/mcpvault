@@ -8,6 +8,7 @@ import type { PathFilter } from './pathfilter.js';
 import type { VaultCatalogChange, VaultFileCatalog, VaultCatalogChangeKind } from './vault-catalog.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import { RELATION_FIELDS } from './organization.js';
+import { noteReferenceTermKeys } from './note-reference.js';
 
 const GRAPH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
@@ -54,10 +55,6 @@ function withoutExtension(path: string): string {
   return path.replace(/\.[^/.]+$/, '');
 }
 
-function withoutNoteExtension(path: string): string {
-  return path.replace(/\.(?:md|markdown|txt)$/i, '');
-}
-
 function basename(path: string): string {
   return path.slice(path.lastIndexOf('/') + 1);
 }
@@ -68,11 +65,6 @@ function addToMap(map: Map<string, string[]>, key: string, path: string): void {
     if (!paths.includes(path)) paths.push(path);
   }
   else map.set(key, [path]);
-}
-
-function normalizeIdentityTerm(value: string): string {
-  const inner = value.trim().replace(/^!?\[\[/, '').replace(/\]\]$/, '').split(/[|#]/, 1)[0]!.trim();
-  return withoutNoteExtension(normalizedPath(inner));
 }
 
 function buildResolver(paths: string[], entries?: ReadonlyMap<string, GraphEntry>): Resolver {
@@ -92,8 +84,7 @@ function buildResolver(paths: string[], entries?: ReadonlyMap<string, GraphEntry
     addToMap(resolver.basenameWithoutExtension, basename(noExtension), path);
     const entry = entries?.get(path);
     for (const term of entry?.identityTerms || []) {
-      const normalizedTerm = normalizeIdentityTerm(term);
-      if (normalizedTerm) addToMap(resolver.identity, normalizedTerm, path);
+      for (const normalizedTerm of noteReferenceTermKeys(term)) addToMap(resolver.identity, normalizedTerm, path);
     }
   }
   return resolver;
@@ -126,7 +117,11 @@ function resolveTargets(target: string, resolver: Resolver, sourcePath?: string)
       : resolver.basenameWithoutExtension.get(normalizedTarget) || [];
   }
   if (pathMatches.length > 0) return pathMatches;
-  return resolver.identity.get(withoutNoteExtension(normalizedTarget)) || [];
+  for (const identityKey of noteReferenceTermKeys(normalizedTarget)) {
+    const identityMatches = resolver.identity.get(identityKey);
+    if (identityMatches?.length) return identityMatches;
+  }
+  return [];
 }
 
 function addTopMatch<T>(items: T[], item: T, limit: number, compare: (a: T, b: T) => number): void {

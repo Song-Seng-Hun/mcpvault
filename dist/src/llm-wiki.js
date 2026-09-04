@@ -5,10 +5,11 @@ import { normalizeScopeId } from './scopes.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
 import { getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeLifecycle, normalizeNavOrder, normalizeNoteKind, normalizeRecallQuality, normalizeRetentionPolicy, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeServiceClass, normalizeTaskStatus, organizationLintIssues, organizationNoteTemplate, temporalValidity, BASES_VIEW_IDS, DECISION_STATUSES, KNOWLEDGE_ROLES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES } from './organization.js';
-import { extractObsidianLinkOccurrences, resolveWikiLinkTargets } from './backlinks.js';
+import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
+import { buildNoteReferenceIndex, normalizeNoteReferenceTerm, resolveNoteReference } from './note-reference.js';
 const KNOWLEDGE_STATUSES = new Set(['draft', 'verified', 'disputed', 'superseded']);
 const CONFIDENCE_LEVELS = new Set(['low', 'medium', 'high']);
 const ISSUE_KINDS = new Set(['contradiction', 'unsupported_claim', 'stale', 'broken_link', 'missing_context', 'authority_change', 'other']);
@@ -528,7 +529,7 @@ function normalizedWords(value) {
     return new Set(value.toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}_-]{1,}/gu) || []);
 }
 function normalizedAuthorityTerm(value) {
-    return String(value ?? '').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+    return normalizeNoteReferenceTerm(value);
 }
 function facetStrings(...values) {
     const result = [];
@@ -991,51 +992,23 @@ export class LlmWikiService {
                 || note.frontmatter.next_actions !== undefined;
         };
         const workNotes = notes.filter(isWorkNote);
-        const visiblePaths = notes.map(note => note.path);
         const visibleByPath = new Map(notes.map(note => [normalizePath(note.path).toLowerCase(), note]));
         const workByPath = new Map(workNotes.map(note => [normalizePath(note.path).toLowerCase(), note]));
-        const qualified = new Map();
-        const terms = new Map();
-        const addReference = (index, key, path) => {
-            if (!key)
-                return;
-            const matches = index.get(key) || new Set();
-            matches.add(path);
-            index.set(key, matches);
-        };
-        for (const note of notes) {
-            const path = normalizePath(note.path);
-            const withoutExtension = path.replace(/\.md$/i, '');
-            addReference(qualified, path.toLowerCase(), note.path);
-            addReference(qualified, withoutExtension.toLowerCase(), note.path);
-            const aliases = Array.isArray(note.frontmatter.aliases) ? note.frontmatter.aliases : [];
-            for (const term of [withoutExtension.split('/').at(-1), note.frontmatter.title, note.frontmatter.preferred_term, note.frontmatter.stable_id, ...aliases]) {
-                if (typeof term === 'string' && term.trim())
-                    addReference(terms, normalizedAuthorityTerm(term.replace(/\.md$/i, '')), note.path);
-            }
-        }
+        const referenceIndex = buildNoteReferenceIndex(notes.map(note => ({
+            path: note.path,
+            title: note.frontmatter.title,
+            aliases: note.frontmatter.aliases,
+            preferredTerm: note.frontmatter.preferred_term,
+            stableId: note.frontmatter.stable_id,
+        })));
         const values = (value) => Array.isArray(value)
             ? value.filter((item) => typeof item === 'string' && Boolean(item.trim())).slice(0, 40)
             : typeof value === 'string' && value.trim() ? [value.trim()] : [];
         const resolve = (sourcePath, raw) => {
-            const document = relationDocument(raw);
-            let matches = [];
-            if (document.startsWith('../') || document.startsWith('./')) {
-                const relative = posix.normalize(posix.join(posix.dirname(normalizePath(sourcePath)), document));
-                const direct = visibleByPath.get(relative.toLowerCase()) || visibleByPath.get(`${relative}.md`.toLowerCase());
-                if (direct)
-                    matches = [direct.path];
-            }
-            if (!matches.length) {
-                const normalizedDocument = normalizePath(document);
-                const indexed = document.includes('/')
-                    ? qualified.get(normalizedDocument.toLowerCase()) || qualified.get(normalizedDocument.replace(/\.md$/i, '').toLowerCase())
-                    : terms.get(normalizedAuthorityTerm(normalizedDocument.replace(/\.md$/i, '')));
-                matches = [...(indexed || [])];
-            }
-            if (!matches.length)
-                matches = resolveWikiLinkTargets(document, visiblePaths);
-            return [...new Set(matches.filter(target => this.access.canReferenceFrom(sourcePath, target)))];
+            return resolveNoteReference(relationDocument(raw), referenceIndex, {
+                sourcePath,
+                canReference: (source, target) => this.access.canReferenceFrom(source, target),
+            });
         };
         const taskStatus = (note) => String(note.frontmatter.task_status || 'open').trim().toLowerCase() || 'open';
         const lifecycle = (note) => String(note.frontmatter.lifecycle || '').trim().toLowerCase();
@@ -1275,42 +1248,24 @@ export class LlmWikiService {
      * second persistent index: callers doing a full review scan share it once,
      * while a single publish/review builds it once for all relation fields. */
     async buildKnowledgeReferenceIndex(principal) {
-        const index = { qualified: new Map(), terms: new Map() };
         const canAccess = (candidate) => this.access.canAccessPhysicalPath(candidate, principal);
-        const add = (map, key, path) => {
-            if (!key)
-                return;
-            const values = map.get(key) || new Set();
-            values.add(path);
-            map.set(key, values);
-        };
+        const notes = [];
         for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
             if (note.frontmatter.llm_wiki_type !== 'knowledge' || isModerationHidden(note.frontmatter))
                 continue;
-            const path = normalizePath(note.path);
-            const pathWithoutExtension = path.replace(/\.md$/i, '');
-            add(index.qualified, path.toLocaleLowerCase(), path);
-            add(index.qualified, pathWithoutExtension.toLocaleLowerCase(), path);
-            add(index.terms, normalizedAuthorityTerm(pathWithoutExtension.split('/').at(-1)), path);
-            const title = String(note.frontmatter.title || path.split('/').at(-1) || '').replace(/\.md$/i, '');
-            const aliases = Array.isArray(note.frontmatter.aliases) ? note.frontmatter.aliases : [];
-            for (const term of [title, note.frontmatter.preferred_term, note.frontmatter.stable_id, ...aliases]) {
-                if (typeof term === 'string' && term.trim())
-                    add(index.terms, normalizedAuthorityTerm(term), path);
-            }
+            notes.push({
+                path: normalizePath(note.path),
+                title: note.frontmatter.title,
+                aliases: note.frontmatter.aliases,
+                preferredTerm: note.frontmatter.preferred_term,
+                stableId: note.frontmatter.stable_id,
+            });
         }
-        return index;
+        return buildNoteReferenceIndex(notes);
     }
     /** Resolve exact qualified paths or exact visible title/alias/stable-ID terms. */
-    resolveKnowledgeReference(value, index) {
-        const target = relationDocument(value).trim();
-        if (!target)
-            return [];
-        const normalized = normalizePath(target);
-        const matches = target.includes('/')
-            ? index.qualified.get(normalized.toLocaleLowerCase()) || index.qualified.get(normalized.replace(/\.md$/i, '').toLocaleLowerCase())
-            : index.terms.get(normalizedAuthorityTerm(normalized.replace(/\.md$/i, '')));
-        return [...(matches || [])].sort((left, right) => left.localeCompare(right));
+    resolveKnowledgeReference(value, index, sourcePath) {
+        return resolveNoteReference(relationDocument(value), index, sourcePath ? { sourcePath } : {});
     }
     /**
      * Snapshot the typed notes whose state can invalidate this note. Outgoing
@@ -1335,7 +1290,7 @@ export class LlmWikiService {
                 if (typeof raw !== 'string' || !raw.trim())
                     continue;
                 const target = relationDocument(raw);
-                const matches = this.resolveKnowledgeReference(target, referenceIndex)
+                const matches = this.resolveKnowledgeReference(target, referenceIndex, path)
                     .filter(candidate => this.access.canReferenceFrom(path, candidate));
                 if (matches.length === 1)
                     add({ relation, direction: 'dependency', target, path: matches[0] });
@@ -1367,7 +1322,7 @@ export class LlmWikiService {
                         continue;
                     if (!referenceIndex)
                         referenceIndex = await this.buildKnowledgeReferenceIndex(principal);
-                    const matches = this.resolveKnowledgeReference(parsed.document, referenceIndex)
+                    const matches = this.resolveKnowledgeReference(parsed.document, referenceIndex, path)
                         .filter(candidate => this.access.canReferenceFrom(path, candidate));
                     if (matches.length === 1)
                         add({ relation: `claim_${definition.relation}`, direction: 'dependency', target: raw, path: matches[0], claimId: parsed.blockId, localClaimId });
@@ -1510,7 +1465,7 @@ export class LlmWikiService {
         for (const raw of supports) {
             if (typeof raw !== 'string' || !raw.trim())
                 continue;
-            const matches = this.resolveKnowledgeReference(raw, referenceIndex);
+            const matches = this.resolveKnowledgeReference(raw, referenceIndex, path);
             if (matches.length === 1)
                 paths.add(normalizePath(matches[0]));
         }
@@ -1562,7 +1517,7 @@ export class LlmWikiService {
             }
             const matches = !parsed.document
                 ? [normalizePath(path)]
-                : this.resolveKnowledgeReference(parsed.document, referenceIndex);
+                : this.resolveKnowledgeReference(parsed.document, referenceIndex, path);
             if (matches.length !== 1 || !this.access.canReferenceFrom(path, matches[0]))
                 continue;
             paths.add(normalizePath(matches[0]));
@@ -6240,7 +6195,16 @@ export class LlmWikiService {
             if (note.frontmatter.note_kind === 'moc') {
                 mocTotal += 1;
                 const navOrder = navigationOrder(note.frontmatter.nav_order);
-                mocNodes.push({ ...item, path: note.path, title: String(item.title), ...(typeof note.frontmatter.moc_parent === 'string' && { parent: note.frontmatter.moc_parent }), ...(navOrder !== Number.MAX_SAFE_INTEGER && { navOrder }) });
+                mocNodes.push({
+                    ...item,
+                    path: note.path,
+                    title: String(item.title),
+                    aliases: note.frontmatter.aliases,
+                    preferredTerm: note.frontmatter.preferred_term,
+                    stableId: note.frontmatter.stable_id,
+                    ...(typeof note.frontmatter.moc_parent === 'string' && { parent: note.frontmatter.moc_parent }),
+                    ...(navOrder !== Number.MAX_SAFE_INTEGER && { navOrder }),
+                });
             }
             if (note.frontmatter.note_kind === 'project' || note.frontmatter.note_kind === 'task') {
                 projectTotal += 1;
@@ -6387,7 +6351,20 @@ export class LlmWikiService {
                 : [];
             const order = navigationOrder(note.frontmatter.nav_order);
             const navOrder = order === Number.MAX_SAFE_INTEGER ? undefined : order;
-            mocDrafts.push({ path: note.path, title: note.frontmatter.title || note.path.split('/').at(-1) || note.path, ...(note.revision && { revision: note.revision }), occurrences, questions, content: note.content || '', outline: mocOutlineFromOccurrences(occurrences, Math.min(24, boundedLimit * 2)), ...(navOrder !== undefined && { navOrder }), ...(typeof note.frontmatter.moc_parent === 'string' && { parent: note.frontmatter.moc_parent }) });
+            mocDrafts.push({
+                path: note.path,
+                title: note.frontmatter.title || note.path.split('/').at(-1) || note.path,
+                aliases: note.frontmatter.aliases,
+                preferredTerm: note.frontmatter.preferred_term,
+                stableId: note.frontmatter.stable_id,
+                ...(note.revision && { revision: note.revision }),
+                occurrences,
+                questions,
+                content: note.content || '',
+                outline: mocOutlineFromOccurrences(occurrences, Math.min(24, boundedLimit * 2)),
+                ...(navOrder !== undefined && { navOrder }),
+                ...(typeof note.frontmatter.moc_parent === 'string' && { parent: note.frontmatter.moc_parent }),
+            });
             if (links.length === 0) {
                 emptyMocTotal += 1;
                 if (emptyMocs.length < boundedLimit) {
@@ -6396,44 +6373,19 @@ export class LlmWikiService {
             }
         }
         const graphByPath = new Map(graphNotes.map(note => [normalizePath(note.path).toLowerCase(), note]));
-        const graphQualified = new Map();
-        const graphTerms = new Map();
-        const addGraphReference = (index, key, path) => {
-            if (!key)
-                return;
-            const matches = index.get(key) || new Set();
-            matches.add(path);
-            index.set(key, matches);
-        };
-        for (const note of graphNotes) {
-            const path = normalizePath(note.path);
-            const withoutExtension = path.replace(/\.md$/i, '');
-            addGraphReference(graphQualified, path.toLowerCase(), note.path);
-            addGraphReference(graphQualified, withoutExtension.toLowerCase(), note.path);
-            for (const term of [withoutExtension.split('/').at(-1), note.title, note.preferredTerm, note.stableId, ...note.aliases]) {
-                if (typeof term === 'string' && term.trim())
-                    addGraphReference(graphTerms, normalizedAuthorityTerm(term.replace(/\.md$/i, '')), note.path);
-            }
-        }
+        const graphReferenceIndex = buildNoteReferenceIndex(graphNotes.map(note => ({
+            path: note.path,
+            title: note.title,
+            aliases: note.aliases,
+            preferredTerm: note.preferredTerm,
+            stableId: note.stableId,
+        })));
         const resolveGraphDocument = (sourcePath, document, preferRelative = false) => {
-            const target = relationDocument(document);
-            let matches = [];
-            if (preferRelative || target.startsWith('../') || target.startsWith('./')) {
-                const relative = posix.normalize(posix.join(posix.dirname(normalizePath(sourcePath)), target));
-                const direct = graphByPath.get(relative.toLowerCase()) || graphByPath.get(`${relative}.md`.toLowerCase());
-                if (direct)
-                    matches = [direct.path];
-            }
-            if (!matches.length) {
-                const normalized = normalizePath(target);
-                const indexed = target.includes('/')
-                    ? graphQualified.get(normalized.toLowerCase()) || graphQualified.get(normalized.replace(/\.md$/i, '').toLowerCase())
-                    : graphTerms.get(normalizedAuthorityTerm(normalized.replace(/\.md$/i, '')));
-                matches = [...(indexed || [])];
-            }
-            if (!matches.length)
-                matches = resolveWikiLinkTargets(target, visibleNotePaths);
-            return [...new Set(matches.filter(candidate => this.access.canReferenceFrom(sourcePath, candidate)))].sort();
+            return resolveNoteReference(relationDocument(document), graphReferenceIndex, {
+                sourcePath,
+                preferRelative,
+                canReference: (source, target) => this.access.canReferenceFrom(source, target),
+            });
         };
         const resolveMocOccurrence = (sourcePath, occurrence) => {
             return resolveGraphDocument(sourcePath, occurrence.target, !occurrence.link.startsWith('[[') && !occurrence.link.startsWith('![['));
@@ -7119,7 +7071,7 @@ export class LlmWikiService {
             || mocSequenceHealth.externalPrerequisites > 0
             || mocSequenceHealth.unresolved > 0
             || mocSequenceHealth.ambiguous > 0;
-        const navigation = buildMocNavigation(mocDrafts.map(({ path, title, navOrder, parent }) => ({ path, title, navOrder, parent })));
+        const navigation = buildMocNavigation(mocDrafts.map(({ path, title, aliases, preferredTerm, stableId, navOrder, parent }) => ({ path, title, aliases, preferredTerm, stableId, navOrder, parent })));
         const mocHierarchyItems = navigation.items.map(item => ({
             ...item,
             path: this.access.toPublicPath(item.path),
@@ -8043,7 +7995,7 @@ export class LlmWikiService {
             throw new Error('get_wiki_argument_map requires an LLM Wiki knowledge note');
         const normalizeKeyPath = (value) => normalizePath(value).toLocaleLowerCase();
         const claimKey = (notePath, id) => `${normalizeKeyPath(notePath)}#^${id.toLocaleLowerCase()}`;
-        const visiblePaths = [];
+        const visibleReferenceNotes = [];
         const nodes = [];
         const byKey = new Map();
         const byPath = new Map();
@@ -8054,7 +8006,13 @@ export class LlmWikiService {
         scan: for await (const note of iterateNotes(this.fileSystem, {}, candidate => this.access.canAccessPhysicalPath(candidate, principal))) {
             if (note.frontmatter.llm_wiki_type !== 'knowledge' || isModerationHidden(note.frontmatter))
                 continue;
-            visiblePaths.push(note.path);
+            visibleReferenceNotes.push({
+                path: note.path,
+                title: note.frontmatter.title,
+                aliases: note.frontmatter.aliases,
+                preferredTerm: note.frontmatter.preferred_term,
+                stableId: note.frontmatter.stable_id,
+            });
             scannedNotes += 1;
             const rawClaims = Array.isArray(note.frontmatter.claims) ? note.frontmatter.claims : [];
             for (let index = 0; index < rawClaims.length; index += 1) {
@@ -8113,36 +8071,14 @@ export class LlmWikiService {
             if (duplicateNodes.length > 1)
                 addIssue(key, { code: 'duplicate_claim_id', detail: `Claim id '${duplicateNodes[0].claimId}' is duplicated in one note.` });
         }
-        const pathSet = new Set(visiblePaths.map(item => normalizeKeyPath(item)));
-        const exactPathIndex = new Map();
-        const basenamePathIndex = new Map();
-        const addPathIndex = (index, key, value) => {
-            const rows = index.get(key) || [];
-            rows.push(value);
-            index.set(key, rows);
-        };
-        for (const visiblePath of visiblePaths) {
-            const normalized = normalizeKeyPath(visiblePath);
-            const withoutExtension = normalized.replace(/\.md$/i, '');
-            addPathIndex(exactPathIndex, normalized, visiblePath);
-            addPathIndex(exactPathIndex, withoutExtension, visiblePath);
-            addPathIndex(basenamePathIndex, withoutExtension.split('/').at(-1) || withoutExtension, visiblePath);
-        }
+        const claimReferenceIndex = buildNoteReferenceIndex(visibleReferenceNotes);
         const resolveDocument = (source, document) => {
             if (!document)
                 return [source.internalPath];
-            if (document.startsWith('../') || document.startsWith('./')) {
-                const relative = posix.normalize(posix.join(posix.dirname(source.internalPath), document));
-                const candidates = [relative, relative.replace(/\.md$/i, ''), `${relative}.md`].map(normalizeKeyPath);
-                const direct = candidates.find(candidate => pathSet.has(candidate) || exactPathIndex.has(candidate));
-                if (direct)
-                    return exactPathIndex.get(direct) || [];
-            }
-            const normalized = normalizeKeyPath(document);
-            const withoutExtension = normalized.replace(/\.md$/i, '');
-            return normalized.includes('/')
-                ? (exactPathIndex.get(normalized) || exactPathIndex.get(withoutExtension) || [])
-                : (basenamePathIndex.get(withoutExtension) || []);
+            return resolveNoteReference(document, claimReferenceIndex, {
+                sourcePath: source.internalPath,
+                canReference: (sourcePath, targetPath) => this.access.canReferenceFrom(sourcePath, targetPath),
+            });
         };
         const edges = [];
         for (const source of nodes) {
@@ -8588,43 +8524,37 @@ export class LlmWikiService {
             throw new Error('path must point to a visible MOC note');
         const canAccess = (candidate) => this.access.canAccessPhysicalPath(candidate, principal);
         const visibleByPath = new Map();
-        const visiblePaths = [];
         for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
             if (isModerationHidden(note.frontmatter))
                 continue;
             const normalized = normalizePath(note.path).toLowerCase();
-            visiblePaths.push(note.path);
             visibleByPath.set(normalized, { path: note.path, frontmatter: note.frontmatter, ...(note.revision && { revision: note.revision }) });
         }
         const rootKey = normalizePath(path).toLowerCase();
         visibleByPath.set(rootKey, { path, frontmatter: rootNote.frontmatter, revision: rootNote.revision });
-        if (!visiblePaths.some(candidate => normalizePath(candidate).toLowerCase() === rootKey))
-            visiblePaths.push(path);
+        const learningReferenceIndex = buildNoteReferenceIndex([...visibleByPath.values()].map(note => ({
+            path: note.path,
+            title: note.frontmatter.title,
+            aliases: note.frontmatter.aliases,
+            preferredTerm: note.frontmatter.preferred_term,
+            stableId: note.frontmatter.stable_id,
+        })));
         const resolveBodyLink = (sourcePath, link) => {
-            if (!link.link.startsWith('[[') && !link.link.startsWith('![[')) {
-                const relative = posix.normalize(posix.join(posix.dirname(normalizePath(sourcePath)), link.target));
-                const direct = visibleByPath.get(relative.toLowerCase())
-                    || visibleByPath.get(`${relative}.md`.toLowerCase());
-                if (direct)
-                    return [direct.path];
-            }
-            return resolveWikiLinkTargets(link.target, visiblePaths);
+            return resolveNoteReference(link.target, learningReferenceIndex, {
+                sourcePath,
+                preferRelative: !link.link.startsWith('[[') && !link.link.startsWith('![['),
+                canReference: (source, target) => this.access.canReferenceFrom(source, target),
+            });
         };
         const resolveClaimDependency = (sourcePath, reference) => {
             if (reference.error || reference.document === undefined)
                 return [];
             if (!reference.document)
                 return [sourcePath];
-            let matches = [];
-            if (reference.document.startsWith('../') || reference.document.startsWith('./')) {
-                const relative = posix.normalize(posix.join(posix.dirname(normalizePath(sourcePath)), reference.document));
-                const direct = visibleByPath.get(relative.toLowerCase()) || visibleByPath.get(`${relative}.md`.toLowerCase());
-                if (direct)
-                    matches = [direct.path];
-            }
-            if (!matches.length)
-                matches = resolveWikiLinkTargets(reference.document, visiblePaths);
-            return matches.filter(target => this.access.canReferenceFrom(sourcePath, target));
+            return resolveNoteReference(reference.document, learningReferenceIndex, {
+                sourcePath,
+                canReference: (source, target) => this.access.canReferenceFrom(source, target),
+            });
         };
         const entries = [];
         const entryByKey = new Map();
@@ -8741,7 +8671,10 @@ export class LlmWikiService {
                 }
                 const matches = prerequisite.dependencyType === 'claim'
                     ? resolveClaimDependency(entry.internalPath, prerequisite.reference)
-                    : resolveWikiLinkTargets(prerequisite.document, visiblePaths).filter(target => this.access.canReferenceFrom(entry.internalPath, target));
+                    : resolveNoteReference(prerequisite.document, learningReferenceIndex, {
+                        sourcePath: entry.internalPath,
+                        canReference: (source, target) => this.access.canReferenceFrom(source, target),
+                    });
                 if (matches.length === 0) {
                     orderIssues.push({ type: 'unresolved_or_inaccessible_prerequisite', path: entry.path, prerequisite: boundedText(rawDependency, 200), dependencyType: prerequisite.dependencyType, ...(prerequisite.dependencyType === 'claim' && { sourceClaimId: prerequisite.reference.sourceClaimId, targetClaimId: prerequisite.reference.targetClaimId }) });
                     continue;
@@ -9955,14 +9888,7 @@ export class LlmWikiService {
         const validStatuses = new Set(DECISION_STATUSES);
         const records = [];
         const byPath = new Map();
-        const decisionReferenceIndex = { qualified: new Map(), terms: new Map() };
-        const addReference = (map, key, path) => {
-            if (!key)
-                return;
-            const values = map.get(key) || new Set();
-            values.add(path);
-            map.set(key, values);
-        };
+        const decisionReferenceNotes = [];
         const statusCounts = { proposed: 0, accepted: 0, rejected: 0, superseded: 0, unknown: 0 };
         const statusSourceCounts = {};
         for await (const note of iterateNotes(this.fileSystem, { filters: { llm_wiki_type: 'knowledge', note_kind: 'decision' } }, canAccess)) {
@@ -10052,25 +9978,24 @@ export class LlmWikiService {
             records.push(record);
             byPath.set(physicalPath.toLowerCase(), record);
             const publicPath = this.access.toPublicPath(physicalPath);
-            for (const qualified of [physicalPath, physicalPath.replace(/\.md$/i, ''), publicPath, publicPath.replace(/\.md$/i, '')]) {
-                addReference(decisionReferenceIndex.qualified, normalizePath(qualified).toLocaleLowerCase(), physicalPath);
-            }
-            const title = String(note.frontmatter.title || physicalPath.split('/').at(-1) || '').replace(/\.md$/i, '');
-            const aliases = Array.isArray(note.frontmatter.aliases) ? note.frontmatter.aliases : [];
-            for (const term of [title, note.frontmatter.preferred_term, note.frontmatter.stable_id, ...aliases]) {
-                if (typeof term === 'string' && term.trim())
-                    addReference(decisionReferenceIndex.terms, normalizedAuthorityTerm(term), physicalPath);
-            }
+            decisionReferenceNotes.push({
+                path: physicalPath,
+                qualifiedPaths: [publicPath],
+                title: note.frontmatter.title,
+                aliases: note.frontmatter.aliases,
+                preferredTerm: note.frontmatter.preferred_term,
+                stableId: note.frontmatter.stable_id,
+            });
             statusCounts[decisionStatus || 'unknown'] = (statusCounts[decisionStatus || 'unknown'] || 0) + 1;
             statusSourceCounts[statusSource] = (statusSourceCounts[statusSource] || 0) + 1;
         }
         const byPublicPath = new Map(records.map(record => [normalizePath(String(record.path)).toLowerCase(), record]));
-        const referenceIndex = records.length ? decisionReferenceIndex : undefined;
+        const referenceIndex = records.length ? buildNoteReferenceIndex(decisionReferenceNotes) : undefined;
         const edges = new Map();
         for (const record of records) {
             const sourceKey = String(record.physicalPath).toLowerCase();
             for (const rawTarget of record.rawSupersedes) {
-                const matches = this.resolveKnowledgeReference(rawTarget, referenceIndex).filter(path => byPath.has(normalizePath(path).toLowerCase()));
+                const matches = this.resolveKnowledgeReference(rawTarget, referenceIndex, record.physicalPath).filter(path => byPath.has(normalizePath(path).toLowerCase()));
                 if (matches.length === 1) {
                     const target = byPath.get(normalizePath(matches[0]).toLowerCase());
                     const targetKey = String(target.physicalPath).toLowerCase();
@@ -10096,7 +10021,7 @@ export class LlmWikiService {
         }
         for (const record of records) {
             if (record.replacedBy) {
-                const matches = this.resolveKnowledgeReference(record.replacedBy, referenceIndex).filter(path => byPath.has(normalizePath(path).toLowerCase()));
+                const matches = this.resolveKnowledgeReference(record.replacedBy, referenceIndex, record.physicalPath).filter(path => byPath.has(normalizePath(path).toLowerCase()));
                 if (matches.length === 1) {
                     const replacement = byPath.get(normalizePath(matches[0]).toLowerCase());
                     record.resolvedReplacement = replacement.path;
@@ -10691,6 +10616,9 @@ export class LlmWikiService {
                 physicalPath: note.path,
                 path: this.access.toPublicPath(note.path),
                 title: boundedText(frontmatter.title || note.path.split('/').at(-1)?.replace(/\.md$/i, '') || note.path, 180),
+                aliases: facetStrings(frontmatter.aliases).slice(0, 30),
+                ...(typeof frontmatter.preferred_term === 'string' && frontmatter.preferred_term.trim() && { preferredTerm: frontmatter.preferred_term.trim() }),
+                ...(typeof frontmatter.stable_id === 'string' && frontmatter.stable_id.trim() && { stableId: frontmatter.stable_id.trim() }),
                 ...(note.revision && { revision: note.revision }),
                 noteKind,
                 ...(knowledgeRole && { knowledgeRole }),
@@ -10714,12 +10642,21 @@ export class LlmWikiService {
         const ranked = [...groups.values()].flatMap(group => {
             if (group.inputTotal < 2 || group.inputs.length < 2)
                 return [];
-            const inputFiles = group.inputs.map(item => item.physicalPath);
             const inputByPhysical = new Map(group.inputs.map(item => [normalizePath(item.physicalPath).toLocaleLowerCase(), item]));
+            const inputReferenceIndex = buildNoteReferenceIndex(group.inputs.map(item => ({
+                path: item.physicalPath,
+                title: item.title,
+                aliases: item.aliases,
+                preferredTerm: item.preferredTerm,
+                stableId: item.stableId,
+            })));
             const coverageFor = (output) => {
                 const covered = new Set();
                 for (const rawTarget of output.inputLinks) {
-                    for (const target of resolveWikiLinkTargets(relationDocument(rawTarget), inputFiles))
+                    for (const target of resolveNoteReference(relationDocument(rawTarget), inputReferenceIndex, {
+                        sourcePath: output.physicalPath,
+                        canReference: (source, candidate) => this.access.canReferenceFrom(source, candidate),
+                    }))
                         covered.add(normalizePath(target).toLocaleLowerCase());
                 }
                 return covered;
@@ -10733,7 +10670,10 @@ export class LlmWikiService {
             const tensionPairs = new Set();
             for (const input of group.inputs) {
                 for (const rawTarget of input.contradicts) {
-                    for (const target of resolveWikiLinkTargets(relationDocument(rawTarget), inputFiles)) {
+                    for (const target of resolveNoteReference(relationDocument(rawTarget), inputReferenceIndex, {
+                        sourcePath: input.physicalPath,
+                        canReference: (source, candidate) => this.access.canReferenceFrom(source, candidate),
+                    })) {
                         const targetMember = inputByPhysical.get(normalizePath(target).toLocaleLowerCase());
                         if (!targetMember || targetMember.path === input.path)
                             continue;
@@ -11687,52 +11627,25 @@ export class LlmWikiService {
         const claimPathKey = (value) => normalizePath(value).toLocaleLowerCase();
         const claimKey = (path, id) => `${claimPathKey(path)}#^${id.toLocaleLowerCase()}`;
         const claimsByKey = new Map();
-        const claimsByPath = new Map();
         for (const claim of claimRecords) {
             const key = claimKey(claim.path, claim.claimId);
             const keyed = claimsByKey.get(key) || [];
             keyed.push(claim);
             claimsByKey.set(key, keyed);
-            const pathKey = claimPathKey(claim.path);
-            const inPath = claimsByPath.get(pathKey) || [];
-            inPath.push(claim);
-            claimsByPath.set(pathKey, inPath);
         }
-        const exactClaimPaths = new Map();
-        const basenameClaimPaths = new Map();
-        const addClaimPath = (index, key, value) => {
-            const existing = index.get(key) || [];
-            if (!existing.some(candidate => claimPathKey(candidate) === claimPathKey(value)))
-                existing.push(value);
-            index.set(key, existing);
-        };
-        for (const claims of claimsByPath.values()) {
-            const path = claims[0].path;
-            const normalized = claimPathKey(path);
-            const withoutExtension = normalized.replace(/\.md$/i, '');
-            addClaimPath(exactClaimPaths, normalized, path);
-            addClaimPath(exactClaimPaths, withoutExtension, path);
-            addClaimPath(basenameClaimPaths, withoutExtension.split('/').at(-1) || withoutExtension, path);
-        }
+        const claimReferenceIndex = buildNoteReferenceIndex(classificationNotes
+            .filter(note => note.frontmatter.llm_wiki_type === 'knowledge')
+            .map(note => ({
+            path: note.path,
+            title: note.frontmatter.title,
+            aliases: note.frontmatter.aliases,
+            preferredTerm: note.frontmatter.preferred_term,
+            stableId: note.frontmatter.stable_id,
+        })));
         const resolveClaimDocument = (source, document) => {
             if (!document)
                 return { allowed: [source.path], blocked: false };
-            let candidates = [];
-            if (document.startsWith('../') || document.startsWith('./')) {
-                const relative = posix.normalize(posix.join(posix.dirname(source.path), document));
-                const relativeKey = claimPathKey(relative);
-                candidates = exactClaimPaths.get(relativeKey)
-                    || exactClaimPaths.get(relativeKey.replace(/\.md$/i, ''))
-                    || exactClaimPaths.get(`${relativeKey}.md`)
-                    || [];
-            }
-            else {
-                const normalized = claimPathKey(document);
-                const withoutExtension = normalized.replace(/\.md$/i, '');
-                candidates = normalized.includes('/')
-                    ? (exactClaimPaths.get(normalized) || exactClaimPaths.get(withoutExtension) || [])
-                    : (basenameClaimPaths.get(withoutExtension) || []);
-            }
+            const candidates = resolveNoteReference(document, claimReferenceIndex, { sourcePath: source.path });
             const allowed = candidates.filter(target => this.access.canReferenceFrom(source.path, target));
             return { allowed, blocked: candidates.length > allowed.length };
         };

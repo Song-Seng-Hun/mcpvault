@@ -1,3 +1,4 @@
+import { buildNoteReferenceIndex, resolveNoteReference } from './note-reference.js';
 export function navigationOrder(value) {
     if (typeof value !== 'number' && (typeof value !== 'string' || !value.trim()))
         return Number.MAX_SAFE_INTEGER;
@@ -10,20 +11,10 @@ export function compareMocNavigation(left, right) {
         || left.path.localeCompare(right.path);
 }
 const key = (path) => path.replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase();
-const stem = (path) => key(path).replace(/\.(?:md|markdown|txt)$/, '');
-const parentTarget = (value) => value.trim().replace(/^!?\[\[/, '').replace(/\]\]$/, '').split(/[|#]/)[0].trim();
 /** Iterative preorder traversal keeps each branch together, even in deep vaults. */
 export function buildMocNavigation(nodes) {
     const byPath = new Map(nodes.map(node => [key(node.path), node]));
-    const targets = new Map();
-    for (const node of nodes) {
-        const pathKey = key(node.path);
-        for (const name of new Set([pathKey, stem(node.path), pathKey.split('/').at(-1), stem(node.path).split('/').at(-1)])) {
-            const paths = targets.get(name) || new Set();
-            paths.add(pathKey);
-            targets.set(name, paths);
-        }
-    }
+    const referenceIndex = buildNoteReferenceIndex(nodes);
     const parents = new Map();
     const children = new Map();
     const problems = new Map();
@@ -33,7 +24,7 @@ export function buildMocNavigation(nodes) {
         if (!node.parent?.trim())
             continue;
         const path = key(node.path);
-        const matches = [...(targets.get(key(parentTarget(node.parent))) || [])];
+        const matches = resolveNoteReference(node.parent, referenceIndex, { sourcePath: node.path }).map(key);
         if (!matches.length || (matches.length === 1 && matches[0] === path)) {
             problems.set(path, 'unresolved_parent');
             missingParents.push({ path: node.path, parent: node.parent, reason: matches.length ? 'moc_parent_points_to_itself' : 'moc_parent_does_not_resolve_to_an_moc' });

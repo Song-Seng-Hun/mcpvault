@@ -177,6 +177,10 @@ link's line and heading context. `moc_parent` defines the tree edge, while
 ordinary body links may cross branches. Home and graph hierarchy use preorder:
 read a parent, then its whole branch, before visiting the next sibling.
 Unresolved, ambiguous, and cyclic branches are marked; they are not valid roots.
+Parent and entry references use the same visible identity rules as the rest of
+the Wiki: exact path, filename, title, `aliases`, `preferred_term`, `stable_id`,
+and explicit relative path. A collision remains ambiguous instead of choosing
+whichever note happened to be scanned first.
 Catalog `orderBy=hierarchy` is a metadata grouping by preferred MOC/project,
 not the tree traversal. Code-fenced examples never become reading-order links.
 For a MOC that is also a curriculum, onboarding route, or procedure,
@@ -222,9 +226,13 @@ separate negative-knowledge note only when the lesson generalizes.
 
 For durable notes, `aliases` provide alternate Obsidian names and optional
 `stable_id` provides an identity that can survive a title change. The server
-graph resolves titles, aliases, preferred terms, stable IDs, and explicit
-relative links for backlinks, orphan detection, and broken-link checks. An
-ambiguous identity remains a review signal; it is never silently rewritten.
+uses one visible identity contract for backlinks, orphan/broken-link checks,
+MOC parents and reading order, learning prerequisites, review baselines,
+Decision Record lineage, claim argument maps/lint, and synthesis coverage.
+It resolves titles, aliases, preferred terms, stable IDs, and explicit relative
+links; an ambiguous identity remains a review signal and is never silently
+rewritten. The production metadata index caches only this disposable derived
+map, invalidates it on note changes, and never replaces Markdown or scope checks.
 Keep the full Markdown body authoritative while using `summary`, `key_points`, and
 `open_questions` as progressive-read projections. Optional `summary_layer`
 (0 = original, 1 = capture, 2 = bold, 3 = highlight, 4 = executive
@@ -516,6 +524,9 @@ for evidence review. The same cross-note checks feed `lint_wiki`,
 so broken arguments become bounded repair work even when an agent did not open
 the argument map first. Reserved private/service path segments are rejected in
 claim links, and a scope boundary violation is a blocking lint error.
+Claim note names may use a visible title, alias, preferred term, stable ID, or
+relative path; the map, lint, review baseline, and downstream-impact projection
+share that resolver so one spelling cannot be valid in only half the workflow.
 Status consistency is advisory but visible: a supported claim depending on an
 unsettled claim, a disputed/superseded claim still supporting a supported one,
 or two supported claims contradicting each other enters the same repair flow.

@@ -2,6 +2,9 @@
 export interface MocNode {
     path: string;
     title?: unknown;
+    aliases?: unknown;
+    preferredTerm?: unknown;
+    stableId?: unknown;
     navOrder?: unknown;
     parent?: string | undefined;
 }

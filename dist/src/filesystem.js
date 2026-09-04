@@ -10,6 +10,7 @@ import { generateObsidianUri } from './uri.js';
 import { extractObsidianLinkOccurrences, findBacklinkMatches, findUnresolvedLinkMatches, resolveWikiLinkTargets } from './backlinks.js';
 import { buildDailyNotePath, resolveDailyDate } from './daily.js';
 import { VaultIoCoordinator } from './vault-io.js';
+import { buildNoteReferenceIndex, resolveNoteReference } from './note-reference.js';
 /** Hard per-note write limit so stdio callers cannot exhaust the vault disk. */
 export const MAX_NOTE_CONTENT_BYTES = 8 * 1024 * 1024;
 function assertNoteContentSize(content, path) {
@@ -1571,7 +1572,8 @@ export class FileSystemService {
     }
     /**
      * Resolve an Obsidian wiki link name to its vault-relative paths.
-     * Scans the vault for exact filename matches (name + .md).
+     * Recognizes exact paths, filenames, titles, aliases, preferred terms, and
+     * stable IDs from notes already visible to the caller.
      *
      * A name containing `/` is path-qualified (Obsidian emits these when a
      * basename is ambiguous, e.g. [[folder/Note]]): it must match the full
@@ -1588,34 +1590,42 @@ export class FileSystemService {
         if (!wikiLinkName.trim()) {
             throw new Error('Empty wiki link — provide a document name inside [[ ]].');
         }
-        const normalizedName = `${wikiLinkName}.md`;
-        const isPathQualified = wikiLinkName.includes('/');
-        const matches = [];
-        const scan = async (dirPath, relativePath = '') => {
-            const entries = await readdir(dirPath, { withFileTypes: true });
-            for (const entry of entries) {
-                const entryRelativePath = relativePath
-                    ? `${relativePath}/${entry.name}`
-                    : entry.name;
-                if (!this.pathFilter.isAllowed(entryRelativePath)) {
-                    continue;
+        if (this.metadataIndex) {
+            const indexedMatches = await this.metadataIndex.resolveNoteReference(wikiLinkName, canAccessPath);
+            return indexedMatches.sort((a, b) => {
+                const da = a.split('/').length;
+                const db = b.split('/').length;
+                return da !== db ? da - db : a.localeCompare(b);
+            });
+        }
+        const notePaths = (await this.collectVaultFiles())
+            .filter(path => this.pathFilter.isAllowed(path) && canAccessPath(path))
+            .filter(path => /\.(?:md|markdown|txt)$/i.test(path));
+        const descriptors = [];
+        const readBatchSize = 32;
+        for (let offset = 0; offset < notePaths.length; offset += readBatchSize) {
+            const batch = await Promise.all(notePaths.slice(offset, offset + readBatchSize).map(async (path) => {
+                try {
+                    const raw = await readFile(this.resolvePath(path), 'utf-8');
+                    const frontmatter = this.frontmatterHandler.parse(raw).frontmatter || {};
+                    return {
+                        path,
+                        title: frontmatter.title,
+                        aliases: frontmatter.aliases,
+                        preferredTerm: frontmatter.preferred_term,
+                        stableId: frontmatter.stable_id,
+                    };
                 }
-                if (entry.isDirectory()) {
-                    if (!this.pathFilter.isAllowed(`${entryRelativePath}/test.md`)) {
-                        continue;
-                    }
-                    await scan(join(dirPath, entry.name), entryRelativePath);
+                catch {
+                    // A concurrently removed or unreadable note is not a match.
+                    return undefined;
                 }
-                else if (entry.isFile() &&
-                    (isPathQualified
-                        ? entryRelativePath === normalizedName
-                        : entry.name === normalizedName)) {
-                    if (canAccessPath(entryRelativePath))
-                        matches.push(entryRelativePath);
-                }
-            }
-        };
-        await scan(this.vaultPath);
+            }));
+            for (const entry of batch)
+                if (entry)
+                    descriptors.push(entry);
+        }
+        const matches = resolveNoteReference(wikiLinkName, buildNoteReferenceIndex(descriptors));
         // Depth-ascending (root-first), alphabetical tiebreak at equal depth.
         // No current-folder context exists for a standalone MCP tool.
         matches.sort((a, b) => {

@@ -7,6 +7,7 @@ import type { PathFilter } from './pathfilter.js';
 import type { VaultCatalogChange, VaultCatalogFileStat, VaultFileCatalog } from './vault-catalog.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
+import { buildNoteReferenceIndex, resolveNoteReference as resolveIndexedNoteReference, type NoteReferenceIndex } from './note-reference.js';
 
 const FULL_REFRESH_INTERVAL_MS = 60_000;
 const READ_BATCH_SIZE = 32;
@@ -190,6 +191,7 @@ export class VaultMetadataIndex {
   private readonly pathIndex = new Map<string, Set<string>>();
   private readonly queryCache = new Map<string, { expiresAt: number; paths: string[] }>();
   private readonly sortedQueryCache = new Map<string, VaultIndexEntry[]>();
+  private referenceIndex: NoteReferenceIndex | undefined;
   private queryCacheRows = 0;
   private sortedQueryCacheRows = 0;
   private readonly dirty = new Set<string>();
@@ -251,7 +253,35 @@ export class VaultMetadataIndex {
     this.sortedQueryCache.clear();
     this.queryCacheRows = 0;
     this.sortedQueryCacheRows = 0;
+    this.referenceIndex = undefined;
     derivedCacheBudget.clearOwner(this.cacheOwner);
+  }
+
+  /** Resolve a visible Obsidian note identity from the disposable metadata
+   * read model. The identity map is rebuilt only after metadata invalidation;
+   * Markdown and current frontmatter entries remain authoritative. */
+  async resolveNoteReference(document: string, canAccessPath: (path: string) => boolean = () => true): Promise<string[]> {
+    await this.ensureFresh();
+    let referenceIndex = this.referenceIndex;
+    if (!referenceIndex) {
+      const descriptors = [...this.entries.values()].map(entry => ({
+        path: entry.path,
+        title: entry.frontmatter.title,
+        aliases: entry.frontmatter.aliases,
+        preferredTerm: entry.frontmatter.preferred_term,
+        stableId: entry.frontmatter.stable_id,
+      }));
+      referenceIndex = buildNoteReferenceIndex(descriptors);
+      this.referenceIndex = referenceIndex;
+      derivedCacheBudget.register(this.cacheOwner, 'note-references', estimateCacheBytes(descriptors) * 2, () => {
+        if (this.referenceIndex === referenceIndex) this.referenceIndex = undefined;
+      });
+    } else {
+      derivedCacheBudget.touch(this.cacheOwner, 'note-references');
+    }
+    return resolveIndexedNoteReference(document, referenceIndex, {
+      canReference: (_source, target) => canAccessPath(target),
+    });
   }
 
   async list(filters?: Record<string, unknown>, pathPrefix = ''): Promise<VaultIndexEntry[]> {

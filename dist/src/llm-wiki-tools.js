@@ -232,7 +232,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_argument_map',
-            description: 'Return a bounded, scope-aware claim-to-claim argument map rooted at one knowledge note or claim. It follows supportsClaims, contradictsClaims, and dependsOnClaims authored as Obsidian [[Note#^claim-id]] block links; verifies structured target ids and Markdown block anchors; and reports ambiguity, missing targets, role mismatches, self-links, and support/dependency cycles. It is a navigation and consistency projection, never a truth judgment or an automatic rewrite.',
+            description: 'Return a bounded, scope-aware claim-to-claim argument map rooted at one knowledge note or claim. It follows supportsClaims, contradictsClaims, and dependsOnClaims authored as Obsidian [[Note#^claim-id]] block links; the document may be a uniquely visible path, title, alias, preferred term, stable ID, or relative path. It verifies structured target ids and Markdown block anchors and reports ambiguity, missing targets, role mismatches, self-links, and support/dependency cycles. It is a navigation and consistency projection, never a truth judgment or an automatic rewrite.',
             inputSchema: { type: 'object', properties: {
                     path: { type: 'string', description: 'Existing visible LLM Wiki knowledge-note path' },
                     claimId: { type: 'string', maxLength: 80, description: 'Optional claim id within path; omit to start from every structured claim in the note' },
@@ -244,7 +244,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_context_pack',
-            description: 'Build a reusable bounded shelf around one visible Wiki note, project, MOC, question, or decision. It provides a stable root, ordered entrypoints, supporting context, counterpoints, gaps, and revisions in one response without creating a second index. Re-read returned notes before editing or relying on them; this is navigation, not a truth score.',
+            description: 'Build a reusable bounded shelf around one visible Wiki note, project, MOC, question, or decision. It provides a stable root, ordered entrypoints, supporting context, counterpoints, gaps, and revisions in one response. Entry links resolve visible paths, titles, aliases, preferred terms, stable IDs, and explicit relative paths without creating a second authoritative index. Re-read returned notes before editing or relying on them; this is navigation, not a truth score.',
             inputSchema: { type: 'object', properties: {
                     path: { type: 'string', description: 'Visible Markdown note to use as the context root' },
                     intent: { type: 'string', enum: ['capture', 'explore', 'decide', 'execute', 'review'], default: 'decide' },
@@ -255,7 +255,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_learning_path',
-            description: 'Analyze one visible MOC as a bounded dependency-aware reading path. It preserves authored Obsidian link order, expands nested MOCs to a limited depth, checks depends_on prerequisites, and returns a separate stable recommended order plus unresolved, ambiguous, external, late-prerequisite, and cycle findings. It never rewrites or reorders Markdown; every readable item carries its current revision.',
+            description: 'Analyze one visible MOC as a bounded dependency-aware reading path. It preserves authored Obsidian link order, resolves entries and prerequisites by visible path/title/alias/preferred term/stable ID/relative path, expands nested MOCs to a limited depth, and returns a separate stable recommended order plus unresolved, ambiguous, external, late-prerequisite, and cycle findings. It never guesses an ambiguous target, rewrites, or reorders Markdown; every readable item carries its current revision.',
             inputSchema: { type: 'object', properties: {
                     path: { type: 'string', description: 'Existing visible MOC Markdown note path' },
                     maxDepth: { type: 'integer', minimum: 0, maximum: 6, default: 2, description: 'Maximum nested-MOC expansion depth; 0 reads only the root MOC body' },
@@ -606,7 +606,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_synthesis_candidates',
-            description: 'Find bounded authored clusters of durable notes that may merit a model, argument, or decision synthesis. It groups by one explicit primary MOC/moc, project, domain, or subject term; returns current input revisions, counterpoints, existing-synthesis coverage, and a revision-safe non-mutating plan. It never clusters by folder/vector similarity, merges originals, or treats synthesis as truth.',
+            description: 'Find bounded authored clusters of durable notes that may merit a model, argument, or decision synthesis. It groups by one explicit primary MOC/moc, project, domain, or subject term; returns current input revisions, counterpoints, existing-synthesis coverage, and a revision-safe non-mutating plan. Coverage and contradiction links use the same visible path/title/alias/preferred-term/stable-ID/relative-path resolver as the graph. It never clusters by folder/vector similarity, merges originals, guesses ambiguity, or treats synthesis as truth.',
             inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 30, default: 10 }, maxChars: { type: 'integer', minimum: 768, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
         },
         {

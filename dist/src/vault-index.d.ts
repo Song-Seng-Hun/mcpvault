@@ -26,6 +26,7 @@ export declare class VaultMetadataIndex {
     private readonly pathIndex;
     private readonly queryCache;
     private readonly sortedQueryCache;
+    private referenceIndex;
     private queryCacheRows;
     private sortedQueryCacheRows;
     private readonly dirty;
@@ -45,6 +46,10 @@ export declare class VaultMetadataIndex {
     invalidate(path: string, kind: 'upsert' | 'delete'): void;
     invalidateMany(changes: readonly VaultCatalogChange[]): void;
     private clearQueryCaches;
+    /** Resolve a visible Obsidian note identity from the disposable metadata
+     * read model. The identity map is rebuilt only after metadata invalidation;
+     * Markdown and current frontmatter entries remain authoritative. */
+    resolveNoteReference(document: string, canAccessPath?: (path: string) => boolean): Promise<string[]>;
     list(filters?: Record<string, unknown>, pathPrefix?: string): Promise<VaultIndexEntry[]>;
     /** Count metadata candidates without sorting or reading note bodies. */
     count(filters?: Record<string, unknown>, pathPrefix?: string, canAccessPath?: (path: string) => boolean, predicate?: (entry: VaultIndexEntry) => boolean): Promise<number>;

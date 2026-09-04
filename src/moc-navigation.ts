@@ -1,7 +1,12 @@
+import { buildNoteReferenceIndex, resolveNoteReference } from './note-reference.js';
+
 /** Derived MOC navigation. Callers must supply only visible, non-hidden notes. */
 export interface MocNode {
   path: string;
   title?: unknown;
+  aliases?: unknown;
+  preferredTerm?: unknown;
+  stableId?: unknown;
   navOrder?: unknown;
   parent?: string | undefined;
 }
@@ -19,21 +24,11 @@ export function compareMocNavigation(left: MocNode, right: MocNode): number {
 }
 
 const key = (path: string) => path.replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase();
-const stem = (path: string) => key(path).replace(/\.(?:md|markdown|txt)$/, '');
-const parentTarget = (value: string) => value.trim().replace(/^!?\[\[/, '').replace(/\]\]$/, '').split(/[|#]/)[0]!.trim();
 
 /** Iterative preorder traversal keeps each branch together, even in deep vaults. */
 export function buildMocNavigation<T extends MocNode>(nodes: T[]) {
   const byPath = new Map(nodes.map(node => [key(node.path), node]));
-  const targets = new Map<string, Set<string>>();
-  for (const node of nodes) {
-    const pathKey = key(node.path);
-    for (const name of new Set([pathKey, stem(node.path), pathKey.split('/').at(-1)!, stem(node.path).split('/').at(-1)!])) {
-      const paths = targets.get(name) || new Set<string>();
-      paths.add(pathKey);
-      targets.set(name, paths);
-    }
-  }
+  const referenceIndex = buildNoteReferenceIndex(nodes);
   const parents = new Map<string, string>();
   const children = new Map<string, string[]>();
   const problems = new Map<string, 'unresolved_parent' | 'ambiguous_parent'>();
@@ -42,7 +37,7 @@ export function buildMocNavigation<T extends MocNode>(nodes: T[]) {
   for (const node of nodes) {
     if (!node.parent?.trim()) continue;
     const path = key(node.path);
-    const matches = [...(targets.get(key(parentTarget(node.parent))) || [])];
+    const matches = resolveNoteReference(node.parent, referenceIndex, { sourcePath: node.path }).map(key);
     if (!matches.length || (matches.length === 1 && matches[0] === path)) {
       problems.set(path, 'unresolved_parent');
       missingParents.push({ path: node.path, parent: node.parent, reason: matches.length ? 'moc_parent_points_to_itself' : 'moc_parent_does_not_resolve_to_an_moc' });

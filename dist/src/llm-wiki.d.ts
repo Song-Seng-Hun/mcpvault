@@ -877,6 +877,9 @@ export declare class LlmWikiService {
                         depth: number;
                         state: string;
                         title: string;
+                        aliases: unknown;
+                        preferredTerm: unknown;
+                        stableId: unknown;
                         navOrder: number | undefined;
                         parent: string | undefined;
                         path: string;
@@ -1211,6 +1214,9 @@ export declare class LlmWikiService {
                         depth: number;
                         state: string;
                         title: string;
+                        aliases: unknown;
+                        preferredTerm: unknown;
+                        stableId: unknown;
                         navOrder: number | undefined;
                         parent: string | undefined;
                         path: string;
@@ -2868,6 +2874,9 @@ export declare class LlmWikiService {
             state: string;
             title: string;
             revision?: string;
+            aliases?: unknown;
+            preferredTerm?: unknown;
+            stableId?: unknown;
             parent?: string;
             navOrder?: number;
             path: string;
@@ -3036,6 +3045,9 @@ export declare class LlmWikiService {
                 depth: number;
                 state: string;
                 title: string;
+                aliases: unknown;
+                preferredTerm: unknown;
+                stableId: unknown;
                 navOrder: number | undefined;
                 parent: string | undefined;
                 path: string;

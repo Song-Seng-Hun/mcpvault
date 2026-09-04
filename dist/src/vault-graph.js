@@ -4,6 +4,7 @@ import { readdir, stat } from 'node:fs/promises';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import { RELATION_FIELDS } from './organization.js';
+import { noteReferenceTermKeys } from './note-reference.js';
 const GRAPH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
 const NOTE_PATTERN = /\.(?:md|markdown|txt)$/i;
@@ -20,9 +21,6 @@ function isNote(path) {
 function withoutExtension(path) {
     return path.replace(/\.[^/.]+$/, '');
 }
-function withoutNoteExtension(path) {
-    return path.replace(/\.(?:md|markdown|txt)$/i, '');
-}
 function basename(path) {
     return path.slice(path.lastIndexOf('/') + 1);
 }
@@ -34,10 +32,6 @@ function addToMap(map, key, path) {
     }
     else
         map.set(key, [path]);
-}
-function normalizeIdentityTerm(value) {
-    const inner = value.trim().replace(/^!?\[\[/, '').replace(/\]\]$/, '').split(/[|#]/, 1)[0].trim();
-    return withoutNoteExtension(normalizedPath(inner));
 }
 function buildResolver(paths, entries) {
     const resolver = {
@@ -56,8 +50,7 @@ function buildResolver(paths, entries) {
         addToMap(resolver.basenameWithoutExtension, basename(noExtension), path);
         const entry = entries?.get(path);
         for (const term of entry?.identityTerms || []) {
-            const normalizedTerm = normalizeIdentityTerm(term);
-            if (normalizedTerm)
+            for (const normalizedTerm of noteReferenceTermKeys(term))
                 addToMap(resolver.identity, normalizedTerm, path);
         }
     }
@@ -94,7 +87,12 @@ function resolveTargets(target, resolver, sourcePath) {
     }
     if (pathMatches.length > 0)
         return pathMatches;
-    return resolver.identity.get(withoutNoteExtension(normalizedTarget)) || [];
+    for (const identityKey of noteReferenceTermKeys(normalizedTarget)) {
+        const identityMatches = resolver.identity.get(identityKey);
+        if (identityMatches?.length)
+            return identityMatches;
+    }
+    return [];
 }
 function addTopMatch(items, item, limit, compare) {
     if (items.length < limit) {

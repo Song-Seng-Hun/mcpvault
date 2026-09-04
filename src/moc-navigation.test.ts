@@ -36,3 +36,22 @@ test('deep MOC chains use iterative traversal instead of overflowing the call st
   expect(result.items[0]?.path).toBe('MOCs/0.md');
   expect(result.items.at(-1)).toMatchObject({ path: 'MOCs/14999.md', depth: 14999 });
 });
+
+test('MOC parents resolve aliases, preferred terms, stable IDs, and relative paths without hiding ambiguity', () => {
+  const result = buildMocNavigation([
+    { path: 'Maps/Root.md', aliases: ['Root alias'], preferredTerm: 'Root preferred', stableId: 'root-id' },
+    { path: 'Maps/Alias child.md', parent: '[[Root alias]]' },
+    { path: 'Maps/Preferred child.md', parent: '[[Root preferred]]' },
+    { path: 'Maps/Stable child.md', parent: '[[root-id]]' },
+    { path: 'Maps/Nested/Relative child.md', parent: '[[../Root]]' },
+    { path: 'Maps/Other.md', aliases: ['Shared parent'] },
+    { path: 'Maps/Another.md', aliases: ['Shared parent'] },
+    { path: 'Maps/Ambiguous child.md', parent: '[[Shared parent]]' },
+  ]);
+
+  for (const child of ['Maps/Alias child.md', 'Maps/Preferred child.md', 'Maps/Stable child.md', 'Maps/Nested/Relative child.md']) {
+    expect(result.items.find(item => item.path === child)).toMatchObject({ resolvedParent: 'Maps/Root.md', state: 'nested' });
+  }
+  expect(result.items.find(item => item.path === 'Maps/Ambiguous child.md')?.state).toBe('ambiguous_parent');
+  expect(result.ambiguousParents).toEqual([expect.objectContaining({ path: 'Maps/Ambiguous child.md', matches: ['Maps/Another.md', 'Maps/Other.md'] })]);
+});

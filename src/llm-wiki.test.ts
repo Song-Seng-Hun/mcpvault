@@ -166,7 +166,7 @@ test('claim argument maps preserve Obsidian block links, revisions, scope, and b
     });
     const conclusion = await callJson(client, 'publish_knowledge', {
       path: 'Knowledge/Conclusion.md', content: '# Conclusion\n\nThe proposed policy should be adopted. ^c1\n', evidencePaths: [source.value.path],
-      claims: [{ id: 'c1', text: 'The proposed policy should be adopted.', evidencePaths: [source.value.path], claimRole: 'conclusion', dependsOnClaims: ['[[Knowledge/Premises#^p1]]'] }],
+      claims: [{ id: 'c1', text: 'The proposed policy should be adopted.', evidencePaths: [source.value.path], claimRole: 'conclusion', dependsOnClaims: ['[[premises-stable#^p1]]'] }],
       reviewPolicy: 'on_upstream_change', author: 'codex', expectedRevision: 'missing', accessToken,
     });
     const premises = await callJson(client, 'publish_knowledge', {
@@ -176,11 +176,11 @@ test('claim argument maps preserve Obsidian block links, revisions, scope, and b
         { id: 'w1', text: 'The measured workflow explains that reduction.', evidencePaths: [source.value.path], claimRole: 'warrant', supportsClaims: ['[[#^p1]]'] },
         { id: 'o1', text: 'The policy may hide minority concerns.', evidencePaths: [source.value.path], claimRole: 'objection', contradictsClaims: ['[[Knowledge/Conclusion#^c1]]'] },
       ],
-      author: 'codex', expectedRevision: 'missing', accessToken,
+      aliases: ['Core premises'], stableId: 'premises-stable', author: 'codex', expectedRevision: 'missing', accessToken,
     });
     await callJson(client, 'publish_knowledge', {
       path: 'Knowledge/Dependent.md', content: '# Dependent\n\nA separate conclusion depends on the premise. ^d1\n', evidencePaths: [source.value.path],
-      claims: [{ id: 'd1', text: 'A separate conclusion depends on the premise.', evidencePaths: [source.value.path], claimRole: 'conclusion', dependsOnClaims: ['[[Knowledge/Premises#^p1]]'] }],
+      claims: [{ id: 'd1', text: 'A separate conclusion depends on the premise.', evidencePaths: [source.value.path], claimRole: 'conclusion', dependsOnClaims: ['[[Core premises#^p1]]'] }],
       author: 'codex', expectedRevision: 'missing', accessToken,
     });
 
@@ -211,7 +211,7 @@ test('claim argument maps preserve Obsidian block links, revisions, scope, and b
       path: 'Knowledge/Conclusion.md', claimId: 'c1', status: 'supported', confidence: 'high', reviewedBy: 'codex', expectedRevision: conclusion.value.revision, accessToken,
     });
     const projection = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Conclusion.md', view: 'summary', accessToken });
-    expect(projection.value.claims).toEqual([expect.objectContaining({ id: 'c1', role: 'conclusion', dependsOnClaims: ['[[Knowledge/Premises#^p1]]'], status: 'supported' })]);
+    expect(projection.value.claims).toEqual([expect.objectContaining({ id: 'c1', role: 'conclusion', dependsOnClaims: ['[[premises-stable#^p1]]'], status: 'supported' })]);
     expect(reviewed.value.success).toBe(true);
 
     const baseline = await callJson(client, 'review_wiki_note', {
@@ -401,8 +401,8 @@ test('drillable facets and synthesis candidates close the authored Distill to Ex
       expect(result.isError).toBeFalsy();
     };
     const shared = { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', project: '[[Projects/Search]]', methods: ['Benchmark'], audience: ['Agents'], tags: ['Retrieval'] };
-    await write('Knowledge/Latency evidence.md', '# Latency evidence\n', { ...shared, primary_moc: '[[Knowledge/MOCs/Retrieval]]', knowledge_role: 'observation', evidence_paths: ['_sources/latency.md'], nav_order: 10 });
-    await write('Knowledge/Recall caveat.md', '# Recall caveat\n', { ...shared, mocs: ['[[Knowledge/MOCs/Retrieval]]'], knowledge_role: 'counterargument', contradicts: ['[[Knowledge/Latency evidence]]'], evidence_paths: ['_sources/recall.md'], open_questions: ['When does the tradeoff reverse?'], nav_order: 20 });
+    await write('Knowledge/Latency evidence.md', '# Latency evidence\n', { ...shared, primary_moc: '[[Knowledge/MOCs/Retrieval]]', knowledge_role: 'observation', aliases: ['Latency fact'], stable_id: 'latency-fact', evidence_paths: ['_sources/latency.md'], nav_order: 10 });
+    await write('Knowledge/Recall caveat.md', '# Recall caveat\n', { ...shared, mocs: ['[[Knowledge/MOCs/Retrieval]]'], knowledge_role: 'counterargument', aliases: ['Recall warning'], contradicts: ['[[Latency fact]]'], evidence_paths: ['_sources/recall.md'], open_questions: ['When does the tradeoff reverse?'], nav_order: 20 });
 
     const catalog = await callJson(client, 'get_wiki_catalog', { moc: '[[knowledge/mocs/retrieval]]', project: '[[projects/search]]', method: 'benchmark', audience: 'agents', tag: 'retrieval', includeFacets: true, limit: 10, maxChars: 8000, accessToken });
     expect(catalog.value).toMatchObject({ total: 2, facets: { moc: { '[[Knowledge/MOCs/Retrieval]]': 2 }, project: { '[[Projects/Search]]': 2 }, method: { Benchmark: 2 }, audience: { Agents: 2 }, tag: { Retrieval: 2 } } });
@@ -430,7 +430,7 @@ test('drillable facets and synthesis candidates close the authored Distill to Ex
     expect(JSON.stringify(tiny.value).length).toBeLessThanOrEqual(768);
     expect(tiny.value).toMatchObject({ total: 1, items: [], truncated: true });
 
-    await write('Knowledge/Retrieval synthesis.md', '# Retrieval synthesis\n', { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'review', interpretation_status: 'synthesized', primary_moc: '[[Knowledge/MOCs/Retrieval]]', derived_from: ['[[Knowledge/Latency evidence]]', '[[Knowledge/Recall caveat]]'] });
+    await write('Knowledge/Retrieval synthesis.md', '# Retrieval synthesis\n', { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'review', interpretation_status: 'synthesized', primary_moc: '[[Knowledge/MOCs/Retrieval]]', derived_from: ['[[latency-fact]]', '[[Recall warning]]'] });
     const covered = await callJson(client, 'call_endpoint', { endpointId: 'wiki.synthesis_candidates', arguments: { limit: 5, maxChars: 12000, accessToken } });
     expect(covered.value).toMatchObject({ total: 0, items: [] });
 
@@ -458,7 +458,7 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
     await write('Knowledge/MOCs/Curriculum.md', [
       '# Curriculum', '', '## Authored route',
       '[[Knowledge/Advanced]]',
-      '[[Knowledge/Basics]]',
+      '[[Basics concept]]',
       '[[Knowledge/MOCs/Nested]]',
       '[[Knowledge/Independent]]',
       '[Relative note](../Relative.md)',
@@ -472,8 +472,8 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
       '[[Knowledge/Cycle Follower]]',
     ].join('\n'), { note_kind: 'moc', lifecycle: 'evergreen', moc_purpose: 'Teach a bounded topic.' });
     await write('Knowledge/MOCs/Nested.md', '# Nested\n\n[[Knowledge/Nested Topic]]\n', { note_kind: 'moc', lifecycle: 'evergreen' });
-    await write('Knowledge/Advanced.md', '# Advanced\n', { note_kind: 'atomic', lifecycle: 'evergreen', depends_on: ['[[Knowledge/Basics]]', '[[Knowledge/Unavailable prerequisite]]'] });
-    await write('Knowledge/Basics.md', '# Basics\n', { note_kind: 'atomic', lifecycle: 'evergreen', depends_on: ['[[Knowledge/External Primer]]'] });
+    await write('Knowledge/Advanced.md', '# Advanced\n', { note_kind: 'atomic', lifecycle: 'evergreen', depends_on: ['[[basics-stable]]', '[[Knowledge/Unavailable prerequisite]]'] });
+    await write('Knowledge/Basics.md', '# Basics\n', { note_kind: 'atomic', lifecycle: 'evergreen', aliases: ['Basics concept'], stable_id: 'basics-stable', depends_on: ['[[Knowledge/External Primer]]'] });
     await write('Knowledge/Nested Topic.md', '# Nested Topic\n', { note_kind: 'atomic', lifecycle: 'evergreen', depends_on: ['[[Knowledge/Independent]]'] });
     await write('Knowledge/Independent.md', '# Independent\n', { note_kind: 'atomic', lifecycle: 'evergreen' });
     await write('Knowledge/Relative.md', '# Relative\n', { note_kind: 'atomic', lifecycle: 'evergreen' });

@@ -238,6 +238,11 @@ MOC hierarchy is explicit only when a child declares one resolvable
 edges. Optional numeric `nav_order` controls sibling order (lower first,
 then unnumbered title/path order). The MOC body remains an ordered Markdown
 outline; graph coverage exposes `orderedEntries` with line and heading context.
+MOC parents, authored entries, learning prerequisites, review baselines,
+Decision Record lineage, claim maps/lint, and synthesis coverage all resolve
+the same visible identity forms: exact paths, filenames, titles, `aliases`,
+`preferred_term`, `stable_id`, and explicit relative paths. Ambiguity is a
+repair signal; never guess one target from scan order.
 Home and graph hierarchy visit a parent and its complete branch before the
 next sibling. `get_wiki_context_pack` follows a MOC's authored link order,
 ignores fenced examples, and includes target heading/block locators when the
@@ -485,6 +490,10 @@ When claims reason about other claims, add an optional `claimRole` and put the
 claim's id on its actual Markdown block as `^claim-id`. Use only Obsidian block
 links in `supportsClaims`, `contradictsClaims`, and `dependsOnClaims`, for
 example `[[Knowledge/Target#^target-claim]]` or local `[[#^target-claim]]`.
+The document portion may be a uniquely visible title, alias, preferred term,
+stable ID, or relative path; use a vault-relative path when identity terms are
+ambiguous. The argument map, lint, review baseline, and downstream-impact view
+share this resolution rule.
 Call dynamic endpoint `wiki.argument_map` to inspect bounded incoming/outgoing
 relations, target ambiguity, missing anchors, role mismatches, and cycles.
 Graph shape is not evidence or truth; re-read the returned note revisions and
@@ -701,7 +710,7 @@ Search ranking keeps only bounded Top-K candidates before creating excerpts and 
 
 The shared catalog also coalesces concurrent `stat` requests from search, metadata, and semantic readers. Bounded guestbook reads use a count plus a small keyset window instead of materializing the entire guestbook; Git and Markdown remain the source of truth.
 
-**FileSystemService** (`src/filesystem.ts`) — Orchestrates file ops with security. Path resolution and traversal prevention. Implements: read, write, patch, delete, move, list, batch read, outline and line-range reads, frontmatter update, tag management, vault stats. Uses native `fs/promises`. Production `queryNotes` uses the disposable `VaultMetadataIndex` read model when available, narrows exact scalar/array frontmatter filters and path prefixes through in-memory postings, briefly caches shared candidate paths under a total-row budget, reuses cached sorted metadata rows with binary-seek keyset cursors under a total-row budget (while retaining offset compatibility), can skip exact totals for page-only internal reads, selects only a bounded top-K page from the metadata index without a full candidate sort, and page/count paths iterate the index directly instead of cloning the full candidate array. Query and sorted metadata caches participate in the process-wide disposable-cache LRU budget and are evicted independently. The index persists only derived metadata in a bounded atomic `.mcpvault/metadata-index.snapshot.bin` cache that is stat-validated on restart. Fallback sorted pages also use bounded top-K selection, candidates are filtered through the caller's access predicate, and note bodies are read only for the bounded selected page. Obsidian backlinks, unresolved links, orphan detection, and aggregate tags use the shared incremental `VaultGraphIndex` when the production server is running.
+**FileSystemService** (`src/filesystem.ts`) — Orchestrates file ops with security. Path resolution and traversal prevention. Implements: read, write, patch, delete, move, list, batch read, outline and line-range reads, frontmatter update, tag management, vault stats. Uses native `fs/promises`. Production `queryNotes` uses the disposable `VaultMetadataIndex` read model when available, narrows exact scalar/array frontmatter filters and path prefixes through in-memory postings, briefly caches shared candidate paths under a total-row budget, reuses cached sorted metadata rows with binary-seek keyset cursors under a total-row budget (while retaining offset compatibility), can skip exact totals for page-only internal reads, selects only a bounded top-K page from the metadata index without a full candidate sort, and page/count paths iterate the index directly instead of cloning the full candidate array. Query and sorted metadata caches participate in the process-wide disposable-cache LRU budget and are evicted independently. The same budget holds a disposable title/alias/preferred-term/stable-ID map used by link resolution; metadata invalidation drops it immediately, and access filtering still runs on every lookup. The index persists only derived metadata in a bounded atomic `.mcpvault/metadata-index.snapshot.bin` cache that is stat-validated on restart. Fallback sorted pages also use bounded top-K selection, candidates are filtered through the caller's access predicate, and note bodies are read only for the bounded selected page. Obsidian backlinks, unresolved links, orphan detection, and aggregate tags use the shared incremental `VaultGraphIndex` when the production server is running.
 
 **FrontmatterHandler** (`src/frontmatter.ts`) — Parses/stringifies YAML frontmatter via `gray-matter`. Validates structure (blocks functions, symbols, invalid types). Preserves original content.
 

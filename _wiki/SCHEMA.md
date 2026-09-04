@@ -66,11 +66,14 @@ Source mode and keep the explanation in Markdown.
 ### Organization contract
 
 Use `aliases` for alternate Obsidian names and optional `stable_id` for a
-durable note identity. The server graph resolves visible titles, aliases,
-`preferred_term`, stable IDs,
-and explicit relative links consistently across backlinks, orphan detection,
-and broken-link checks. Ambiguous identity terms remain review findings rather
-than silent redirects. When an old or duplicate note must remain addressable,
+durable note identity. The server resolves visible titles, aliases,
+`preferred_term`, stable IDs, and explicit relative links through one identity
+contract across backlinks, orphan/broken-link checks, MOC hierarchy and order,
+learning prerequisites, review baselines, Decision Record lineage, structured
+claim maps/lint, and synthesis coverage. Ambiguous identity terms remain review
+findings rather than silent redirects. Its metadata identity map is disposable,
+scope-filtered at every read, and invalidated on note changes; Markdown remains
+authoritative. When an old or duplicate note must remain addressable,
 set `canonical_path` to the visible canonical note; use `same_as`, `version_of`,
 and `refines` for explicit lineage/navigation rather than silently merging
 notes. Keep progressive-read material in `summary`,
@@ -419,7 +422,10 @@ visible target note to incoming typed relation groups and their meanings. This
 is derived navigation only and never broadens scope access. MOC hierarchy is
 based on explicit resolvable `moc_parent` Properties; body wikilinks remain
 free cross-links. Missing, ambiguous, and cyclic parent signals are reported
-for repair. A retired note's `read_wiki_projection` includes a bounded
+for repair. Parent names and MOC body entries may use exact paths, filenames,
+titles, aliases, preferred terms, stable IDs, or explicit relative paths; no
+ambiguous match is selected automatically. A retired note's
+`read_wiki_projection` includes a bounded
 `redirect` hint when `lifecycle` is `superseded`/`archived` or
 `retention_policy` is `tombstone`; the original note and Git history remain
 authoritative.

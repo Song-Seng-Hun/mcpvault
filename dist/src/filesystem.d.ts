@@ -90,7 +90,8 @@ export declare class FileSystemService {
     getVaultPath(): string;
     /**
      * Resolve an Obsidian wiki link name to its vault-relative paths.
-     * Scans the vault for exact filename matches (name + .md).
+     * Recognizes exact paths, filenames, titles, aliases, preferred terms, and
+     * stable IDs from notes already visible to the caller.
      *
      * A name containing `/` is path-qualified (Obsidian emits these when a
      * basename is ambiguous, e.g. [[folder/Note]]): it must match the full

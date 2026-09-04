@@ -2472,4 +2472,52 @@ describe("findPathForWikiLink (#101)", () => {
     const matches = await fileSystem.findPathForWikiLink("a/b/Note");
     expect(matches).toEqual(["a/b/Note.md"]);
   });
+
+  test("findPathForWikiLink resolves visible titles, aliases, preferred terms, and stable IDs", async () => {
+    await writeFile(join(testVaultPath, "Canonical.md"), `---
+title: Canonical title
+aliases:
+  - Friendly name
+  - Node.js
+preferred_term: Preferred term
+stable_id: note-stable-1
+---
+# Canonical
+`);
+    await expect(fileSystem.findPathForWikiLink("Canonical title")).resolves.toEqual(["Canonical.md"]);
+    await expect(fileSystem.findPathForWikiLink("Friendly name")).resolves.toEqual(["Canonical.md"]);
+    await expect(fileSystem.findPathForWikiLink("Node.js")).resolves.toEqual(["Canonical.md"]);
+    await expect(fileSystem.findPathForWikiLink("Preferred term")).resolves.toEqual(["Canonical.md"]);
+    await expect(fileSystem.findPathForWikiLink("note-stable-1")).resolves.toEqual(["Canonical.md"]);
+  });
+
+  test("findPathForWikiLink preserves identity ambiguity and root-first ordering", async () => {
+    await mkdir(join(testVaultPath, "nested"), { recursive: true });
+    await writeFile(join(testVaultPath, "Root.md"), "---\naliases: Shared identity\n---\n# Root\n");
+    await writeFile(join(testVaultPath, "nested/Other.md"), "---\naliases: [Shared identity]\n---\n# Other\n");
+    await expect(fileSystem.findPathForWikiLink("Shared identity")).resolves.toEqual(["Root.md", "nested/Other.md"]);
+  });
+
+  test("findPathForWikiLink never resolves an inaccessible identity", async () => {
+    await writeFile(join(testVaultPath, "Visible.md"), "---\naliases: Shared identity\n---\n# Visible\n");
+    await writeFile(join(testVaultPath, "Hidden.md"), "---\naliases: [Shared identity, Hidden only]\n---\n# Hidden\n");
+    const canAccess = (path: string) => path !== "Hidden.md";
+    await expect(fileSystem.findPathForWikiLink("Shared identity", canAccess)).resolves.toEqual(["Visible.md"]);
+    await expect(fileSystem.findPathForWikiLink("Hidden only", canAccess)).resolves.toEqual([]);
+  });
+
+  test("indexed identity resolution invalidates immediately after frontmatter changes", async () => {
+    await writeFile(join(testVaultPath, "Canonical.md"), "---\naliases: Old identity\n---\n# Canonical\n");
+    const metadataIndex = new VaultMetadataIndex(testVaultPath, new PathFilter(), new FrontmatterHandler());
+    const indexedFileSystem = new FileSystemService(testVaultPath, new PathFilter(), new FrontmatterHandler(), undefined, metadataIndex);
+    try {
+      await expect(indexedFileSystem.findPathForWikiLink("Old identity")).resolves.toEqual(["Canonical.md"]);
+      await writeFile(join(testVaultPath, "Canonical.md"), "---\naliases: New identity\n---\n# Canonical\n");
+      metadataIndex.invalidate("Canonical.md", "upsert");
+      await expect(indexedFileSystem.findPathForWikiLink("Old identity")).resolves.toEqual([]);
+      await expect(indexedFileSystem.findPathForWikiLink("New identity")).resolves.toEqual(["Canonical.md"]);
+    } finally {
+      metadataIndex.close();
+    }
+  });
 });
