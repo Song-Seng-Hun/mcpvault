@@ -807,6 +807,15 @@ describe("readNoteLines", () => {
     expect(result).toBe("line 2\nline 3\nline 4");
   });
 
+  test("returns exact clamped window metadata for bounded protocol adapters", async () => {
+    const testPath = "line-window.md";
+    await writeFile(join(testVaultPath, testPath), "first\nsecond\nthird");
+
+    const result = await fileSystem.readNoteLineWindow({ path: testPath, startLine: 2, endLine: 99 });
+
+    expect(result).toEqual({ content: "second\nthird", startLine: 2, endLine: 3, totalLines: 3 });
+  });
+
   test("reads a single line", async () => {
     const testPath = "single-line.md";
     await writeFile(join(testVaultPath, testPath), "line 1\nline 2\nline 3");

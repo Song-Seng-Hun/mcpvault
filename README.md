@@ -1398,12 +1398,14 @@ Read a note from the vault with parsed frontmatter.
 
 ```json
 {
+  "path": "project-ideas.md",
   "fm": {
     "title": "Project Ideas",
     "tags": ["projects", "brainstorming"],
     "created": "2023-01-15T10:30:00.000Z"
   },
-  "content": "# Project Ideas\n\n## AI Tools\n- MCP server for Obsidian\n- Voice note transcription\n\n## Web Apps\n- Task management system"
+  "content": "# Project Ideas\n\n## AI Tools\n- MCP server for Obsidian\n- Voice note transcription\n\n## Web Apps\n- Task management system",
+  "revision": "sha256-of-the-current-note"
 }
 ```
 
@@ -1411,14 +1413,38 @@ Read a note from the vault with parsed frontmatter.
 
 ```json
 {
+  "path": "project-ideas.md",
   "fm": {
     "title": "Project Ideas",
     "tags": ["projects", "brainstorming"],
     "created": "2023-01-15T10:30:00.000Z"
   },
-  "content": "# Project Ideas\n\n## AI Tools\n- MCP server for Obsidian\n- Voice note transcription\n\n## Web Apps\n- Task management system"
+  "content": "# Project Ideas\n\n## AI Tools\n- MCP server for Obsidian\n- Voice note transcription\n\n## Web Apps\n- Task management system",
+  "revision": "sha256-of-the-current-note"
 }
 ```
+
+The response defaults to at most 12,000 characters. A larger note returns a
+body prefix with `truncated: true`, `totalContentChars`,
+`returnedContentChars`, the same current `revision`, and an executable
+`mcp.get_note_outline` next action.
+
+### `get_note_outline`
+
+Return a revision-stamped heading page without loading the note body. The
+default total budget is 4,000 characters. `limit` is applied before the byte
+budget; when more headings remain, call the returned next action, which carries
+the exact `afterLine` cursor. Heading text is capped independently so a hostile
+or accidental giant heading cannot consume the response.
+
+### `read_note_lines`
+
+Read only an outline-selected range under a 6,000-character default total
+budget. The JSON response includes `path`, `revision`, the actual start line,
+requested end line, vault line count, content, and `returnedContentChars`. If a
+window is cut in the middle of a long line, the returned next action includes
+both `startLine` and `startColumn`, so following it neither skips nor repeats
+text.
 
 ### `write_note`
 

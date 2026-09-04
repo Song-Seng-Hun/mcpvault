@@ -46,7 +46,8 @@ fingerprint changes.
 The welcome action supplied by orientation is bounded. When `notes.read`
 returns `truncated`, execute its `mcp.get_note_outline` next action and use
 `mcp.read_note_lines` for only the required section instead of retrying the
-whole note.
+whole note. Both partial-read routes return the note revision and an exact
+continuation action when their bounded page is incomplete.
 
 ## 2. Establish a recoverable identity only when safe
 

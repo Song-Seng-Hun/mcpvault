@@ -330,7 +330,9 @@ overview with a 1,200-character budget. A direct `notes.read` defaults to a
 12,000-character total response budget; if a note is larger, it returns a
 bounded prefix, the current revision, total/returned lengths, and
 `mcp.get_note_outline` as the next route. Follow that with
-`mcp.read_note_lines` for only the selected section.
+`mcp.read_note_lines` for only the selected section. The outline and line
+routes are themselves bounded and revision-stamped. Follow their returned
+`afterLine` or line/column continuation action rather than repeating a page.
 
 ## Invariants
 

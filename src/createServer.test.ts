@@ -224,6 +224,46 @@ test("server can read and write notes via tools", async () => {
   expect(tinyBoundedValue).toMatchObject({ path: "large.md", truncated: true, totalContentChars: largeBody.length });
   expect(tinyBoundedValue.content.length).toBe(tinyBoundedValue.returnedContentChars);
 
+  const lineWindow = await client.callTool({
+    name: "read_note_lines",
+    arguments: { path: "large.md", startLine: 1, endLine: 1802 },
+  });
+  const lineWindowText = (lineWindow.content as any)[0].text as string;
+  const lineWindowValue = JSON.parse(lineWindowText);
+  expect(lineWindowText.length).toBeLessThanOrEqual(6000);
+  expect(lineWindowValue).toMatchObject({
+    path: "large.md",
+    revision: defaultBoundedValue.revision,
+    startLine: 1,
+    totalLines: expect.any(Number),
+    truncated: true,
+    nextAction: { endpointId: "mcp.read_note_lines", arguments: { path: "large.md" } },
+  });
+  const continuedLines = await client.callTool({ name: "read_note_lines", arguments: lineWindowValue.nextAction.arguments });
+  const continuedValue = JSON.parse((continuedLines.content as any)[0].text);
+  expect(lineWindowValue.content + continuedValue.content).toBe(largeBody.slice(0, lineWindowValue.content.length + continuedValue.content.length));
+
+  const manyHeadings = Array.from({ length: 300 }, (_, index) => `## ${index.toString().padStart(3, "0")} ${"descriptive heading ".repeat(8)}`).join("\n");
+  await client.callTool({
+    name: "write_note",
+    arguments: { path: "outline-heavy.md", content: manyHeadings, expectedRevision: "missing", accessToken },
+  });
+  const outline = await client.callTool({ name: "get_note_outline", arguments: { path: "outline-heavy.md" } });
+  const outlineText = (outline.content as any)[0].text as string;
+  const outlineValue = JSON.parse(outlineText);
+  expect(outlineText.length).toBeLessThanOrEqual(4000);
+  expect(outlineValue).toMatchObject({
+    path: "outline-heavy.md",
+    totalHeadings: 300,
+    returnedHeadings: expect.any(Number),
+    truncated: true,
+    nextAction: { endpointId: "mcp.get_note_outline", arguments: { path: "outline-heavy.md" } },
+  });
+  expect(outlineValue.returnedHeadings).toBeGreaterThan(0);
+  const nextOutline = await client.callTool({ name: "get_note_outline", arguments: outlineValue.nextAction.arguments });
+  const nextOutlineValue = JSON.parse((nextOutline.content as any)[0].text);
+  expect(nextOutlineValue.headings[0].line).toBeGreaterThan(outlineValue.headings.at(-1).line);
+
   await client.close();
   await server.close();
 });

@@ -931,11 +931,14 @@ export function createServer(vaultPath, options = {}) {
         },
         {
             name: "get_note_outline",
-            description: "Get the heading structure of a note without reading its full content. Returns headings with level, text, and line number. Use this first to navigate large notes efficiently, then call read_note_lines to read only the section you need.",
+            description: "Get a bounded, revision-stamped heading page without reading the full note. Continue with the returned cursor or read only the selected line range.",
             inputSchema: {
                 type: "object",
                 properties: {
                     path: { type: "string", description: "Path to the note relative to vault root" },
+                    afterLine: { type: "integer", minimum: 0, description: "Return headings after this 1-based line (default: 0)", default: 0 },
+                    limit: { type: "integer", minimum: 1, maximum: 500, description: "Maximum headings before the character budget is applied (default: 100)", default: 100 },
+                    maxChars: { type: "integer", minimum: 512, maximum: 12000, description: "Hard total response budget (default: 4000)", default: 4000 },
                     prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
                 },
                 required: ["path"]
@@ -943,13 +946,15 @@ export function createServer(vaultPath, options = {}) {
         },
         {
             name: "read_note_lines",
-            description: "Read a specific line range from a note. Use after get_note_outline to read only the section you need instead of the full file.",
+            description: "Read a bounded, revision-stamped line window. If the response is truncated, continue from the returned line/column cursor instead of retrying the whole range.",
             inputSchema: {
                 type: "object",
                 properties: {
                     path: { type: "string", description: "Path to the note relative to vault root" },
-                    startLine: { type: "number", description: "First line to read (1-indexed, inclusive)" },
-                    endLine: { type: "number", description: "Last line to read (1-indexed, inclusive)" },
+                    startLine: { type: "integer", minimum: 1, description: "First line to read (1-indexed, inclusive)" },
+                    endLine: { type: "integer", minimum: 1, description: "Last line to read (1-indexed, inclusive)" },
+                    startColumn: { type: "integer", minimum: 1, description: "Optional 1-based character offset within the first returned line, used only for a continuation (default: 1)", default: 1 },
+                    maxChars: { type: "integer", minimum: 512, maximum: 12000, description: "Hard total response budget (default: 6000)", default: 6000 },
                     prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
                 },
                 required: ["path", "startLine", "endLine"]
@@ -2474,22 +2479,17 @@ export function createServer(vaultPath, options = {}) {
                         const note = await fileSystem.readNote(trimmedArgs.path);
                         assertReadableCommunityNote(note.frontmatter, trimmedArgs.path);
                         const headings = await fileSystem.getNoteOutline(trimmedArgs.path);
-                        const indent = trimmedArgs.prettyPrint ? 2 : undefined;
-                        return {
-                            content: [{ type: "text", text: JSON.stringify(headings, null, indent) }]
-                        };
+                        return boundedOutlineResult(trimmedArgs.path, note.revision, headings, trimmedArgs);
                     }
                     case "read_note_lines": {
                         const note = await fileSystem.readNote(trimmedArgs.path);
                         assertReadableCommunityNote(note.frontmatter, trimmedArgs.path);
-                        const text = await fileSystem.readNoteLines({
+                        const window = await fileSystem.readNoteLineWindow({
                             path: trimmedArgs.path,
                             startLine: trimmedArgs.startLine,
                             endLine: trimmedArgs.endLine
                         });
-                        return {
-                            content: [{ type: "text", text }]
-                        };
+                        return boundedLineWindowResult(trimmedArgs.path, note.revision, window, trimmedArgs);
                     }
                     default:
                         throw new Error(`Unknown tool: ${toolName}`);
@@ -2725,6 +2725,122 @@ function boundedNoteReadResult(path, note, requestedMaxChars, prettyPrint) {
         }
     }
     return { content: [{ type: 'text', text: JSON.stringify(selected) }] };
+}
+function boundedOutlineResult(path, revision, headings, args) {
+    const afterLine = args.afterLine === undefined ? 0 : Number(args.afterLine);
+    const limit = args.limit === undefined ? 100 : Number(args.limit);
+    const maxChars = args.maxChars === undefined ? 4000 : Number(args.maxChars);
+    if (!Number.isInteger(afterLine) || afterLine < 0)
+        throw new Error('afterLine must be a non-negative integer');
+    if (!Number.isInteger(limit) || limit < 1 || limit > 500)
+        throw new Error('limit must be an integer between 1 and 500');
+    if (!Number.isInteger(maxChars) || maxChars < 512 || maxChars > 12000)
+        throw new Error('maxChars must be an integer between 512 and 12000');
+    const eligible = headings
+        .filter(heading => heading.line > afterLine)
+        .map(heading => ({
+        ...heading,
+        text: heading.text.slice(0, 240),
+        ...(heading.text.length > 240 && { textTruncated: true }),
+    }));
+    let count = Math.min(limit, eligible.length);
+    const serialize = (selectedCount) => {
+        const selected = eligible.slice(0, selectedCount);
+        const remaining = eligible.length - selected.length;
+        const value = {
+            path,
+            revision,
+            totalHeadings: headings.length,
+            returnedHeadings: selected.length,
+            headings: selected,
+            truncated: remaining > 0,
+        };
+        if (remaining > 0) {
+            value.remainingHeadings = remaining;
+            value.nextAction = {
+                endpointId: endpointIdForTool('get_note_outline'),
+                arguments: { path, afterLine: selected.at(-1)?.line ?? afterLine, limit, maxChars },
+            };
+        }
+        return JSON.stringify(value, null, args.prettyPrint ? 2 : undefined);
+    };
+    let text = serialize(count);
+    while (text.length > maxChars && count > 0)
+        text = serialize(--count);
+    if (text.length > maxChars) {
+        text = JSON.stringify({ path: path.slice(0, 120), revision, totalHeadings: headings.length, returnedHeadings: 0, headings: [], truncated: eligible.length > 0 });
+    }
+    return { content: [{ type: 'text', text }] };
+}
+function boundedLineWindowResult(path, revision, window, args) {
+    const startColumn = args.startColumn === undefined ? 1 : Number(args.startColumn);
+    const maxChars = args.maxChars === undefined ? 6000 : Number(args.maxChars);
+    if (!Number.isInteger(startColumn) || startColumn < 1)
+        throw new Error('startColumn must be a positive integer');
+    if (!Number.isInteger(maxChars) || maxChars < 512 || maxChars > 12000)
+        throw new Error('maxChars must be an integer between 512 and 12000');
+    const firstBreak = window.content.indexOf('\n');
+    const firstLineLength = firstBreak === -1 ? window.content.length : firstBreak;
+    const offset = Math.min(startColumn - 1, firstLineLength);
+    const effectiveStartColumn = offset + 1;
+    const source = window.content.slice(offset);
+    const newlinePositions = [];
+    for (let index = source.indexOf('\n'); index !== -1; index = source.indexOf('\n', index + 1))
+        newlinePositions.push(index);
+    const positionAfter = (consumed) => {
+        let low = 0;
+        let high = newlinePositions.length;
+        while (low < high) {
+            const middle = Math.floor((low + high) / 2);
+            if (newlinePositions[middle] < consumed)
+                low = middle + 1;
+            else
+                high = middle;
+        }
+        const completedLines = low;
+        if (completedLines === 0)
+            return { line: window.startLine, column: effectiveStartColumn + consumed };
+        return { line: window.startLine + completedLines, column: consumed - newlinePositions[completedLines - 1] };
+    };
+    const serialize = (consumed) => {
+        const truncated = consumed < source.length;
+        const next = truncated ? positionAfter(consumed) : undefined;
+        const value = {
+            path,
+            revision,
+            startLine: window.startLine,
+            startColumn: effectiveStartColumn,
+            requestedEndLine: window.endLine,
+            totalLines: window.totalLines,
+            content: source.slice(0, consumed),
+            returnedContentChars: consumed,
+            truncated,
+        };
+        if (next)
+            value.nextAction = {
+                endpointId: endpointIdForTool('read_note_lines'),
+                arguments: { path, startLine: next.line, endLine: window.endLine, startColumn: next.column, maxChars },
+            };
+        return JSON.stringify(value, null, args.prettyPrint ? 2 : undefined);
+    };
+    let low = 0;
+    let high = source.length;
+    let selected = serialize(0);
+    while (low <= high) {
+        const middle = Math.floor((low + high) / 2);
+        const candidate = serialize(middle);
+        if (candidate.length <= maxChars) {
+            selected = candidate;
+            low = middle + 1;
+        }
+        else {
+            high = middle - 1;
+        }
+    }
+    if (selected.length > maxChars) {
+        selected = JSON.stringify({ path: path.slice(0, 120), revision, startLine: window.startLine, content: '', returnedContentChars: 0, truncated: source.length > 0 });
+    }
+    return { content: [{ type: 'text', text: selected }] };
 }
 function enforceResponseBudget(response, requestedMaxChars) {
     const maxChars = Number(requestedMaxChars);

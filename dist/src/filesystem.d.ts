@@ -120,6 +120,12 @@ export declare class FileSystemService {
     }): Promise<DailyNoteResult>;
     private collectVaultFiles;
     getNoteOutline(path: string): Promise<NoteHeading[]>;
+    readNoteLineWindow(params: ReadNoteLinesParams): Promise<{
+        content: string;
+        startLine: number;
+        endLine: number;
+        totalLines: number;
+    }>;
     readNoteLines(params: ReadNoteLinesParams): Promise<string>;
     getVaultStats(recentCount?: number, canAccessPath?: (path: string) => boolean): Promise<VaultStats>;
     listAllTags(canAccessPath?: (path: string) => boolean): Promise<Array<{

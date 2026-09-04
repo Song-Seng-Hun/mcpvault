@@ -2024,7 +2024,7 @@ export class FileSystemService {
     return headings;
   }
 
-  async readNoteLines(params: ReadNoteLinesParams): Promise<string> {
+  async readNoteLineWindow(params: ReadNoteLinesParams): Promise<{ content: string; startLine: number; endLine: number; totalLines: number }> {
     const path = this.normalizePath(params.path);
     if (!this.pathFilter.isAllowed(path)) {
       throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
@@ -2038,7 +2038,16 @@ export class FileSystemService {
     // Array.slice's negative-index behavior instead of clamping like end did.
     const clampedStart = Math.min(Math.max(params.startLine, 1), lines.length);
     const clampedEnd = Math.min(Math.max(params.endLine, clampedStart), lines.length);
-    return lines.slice(clampedStart - 1, clampedEnd).join('\n');
+    return {
+      content: lines.slice(clampedStart - 1, clampedEnd).join('\n'),
+      startLine: clampedStart,
+      endLine: clampedEnd,
+      totalLines: lines.length,
+    };
+  }
+
+  async readNoteLines(params: ReadNoteLinesParams): Promise<string> {
+    return (await this.readNoteLineWindow(params)).content;
   }
 
   async getVaultStats(recentCount: number = 5, canAccessPath: (path: string) => boolean = () => true): Promise<VaultStats> {

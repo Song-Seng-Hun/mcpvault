@@ -46,6 +46,8 @@ passive file browser:
 The orientation welcome read is already bounded. If any note read reports
 `truncated`, follow its `mcp.get_note_outline` next action and then read only
 the required range with `mcp.read_note_lines`; do not retry the full body.
+Both routes are revision-stamped and return an exact continuation action when
+their own bounded page is incomplete.
 
 Only five MCP tools are stable: `orient_wiki`, `get_agent_pulse`,
 `list_active_capabilities`, `search_capabilities`, and `call_endpoint`. All
