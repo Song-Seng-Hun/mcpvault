@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest';
+import { getLlmWikiTools } from './llm-wiki-tools.js';
 import { getWikiPolicyTopic, MCPVAULT_SERVER_INSTRUCTIONS, WIKI_POLICY_FINGERPRINT, WIKI_POLICY_TOPICS, WIKI_POLICY_VERSION } from './wiki-policy.js';
 
 describe('progressive Wiki policy', () => {
@@ -27,6 +28,24 @@ describe('progressive Wiki policy', () => {
     });
     expect(WIKI_POLICY_FINGERPRINT).toMatch(/^[a-f0-9]{64}$/);
     expect(() => getWikiPolicyTopic('everything', 1200)).toThrow(/Unknown policy topic/);
+  });
+
+  test('exposes bounded memory, maintenance, and ideation guidance without duplicating workflows', () => {
+    expect(getWikiPolicyTopic('memory', 1600)).toMatchObject({
+      routes: expect.arrayContaining(['wiki.recall_queue', 'continuity.save']),
+    });
+    expect(getWikiPolicyTopic('maintenance', 1600)).toMatchObject({
+      routes: expect.arrayContaining(['wiki.review_packet', 'wiki.exception_board']),
+    });
+    expect(getWikiPolicyTopic('ideation', 1600)).toMatchObject({
+      routes: expect.arrayContaining(['idea.create', 'workshop.create', 'wiki.synthesis_candidates']),
+    });
+    for (const topic of WIKI_POLICY_TOPICS) {
+      expect(JSON.stringify(getWikiPolicyTopic(topic, 512)).length, topic).toBeLessThanOrEqual(512);
+      expect(JSON.stringify(getWikiPolicyTopic(topic, 1600)).length, topic).toBeLessThanOrEqual(1600);
+    }
+    const policyTool = getLlmWikiTools().find(tool => tool.name === 'get_wiki_policy')!;
+    expect((policyTool.inputSchema as any).properties.topic.enum).toEqual([...WIKI_POLICY_TOPICS]);
   });
 
 });

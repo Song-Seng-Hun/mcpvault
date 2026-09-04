@@ -9,11 +9,14 @@ export const WIKI_POLICY_TOPICS = [
     'review',
     'work',
     'moc',
+    'memory',
+    'maintenance',
+    'ideation',
     'community',
     'portability',
     'safety',
 ];
-export const WIKI_POLICY_VERSION = 1;
+export const WIKI_POLICY_VERSION = 2;
 /**
  * The only policy that every MCP client must receive eagerly. Detailed
  * organization guidance is selected through wiki.policy so a rich Wiki does
@@ -46,7 +49,7 @@ const POLICY_TOPICS = {
         purpose: 'Capture quickly without forcing premature classification, then clarify deliberately.',
         rules: [
             'Use wiki.capture for a fleeting Inbox note; preserve only bounded origin, reason, context, and a scope-safe related task.',
-            'Use wiki.inbox and wiki.inbox_plan for an oldest-first queue, then wiki.clarify with one GTD disposition and the current revision.',
+            'Use wiki.inbox and mcp.get_wiki_inbox_plan for an oldest-first queue, then wiki.clarify with one GTD disposition and the current revision.',
             'Clarification records intent but does not silently move or delete the note; use the normal move preview and revision-safe edit workflow later.',
             'Use PARA folders only as filing aids inside an already-authorized scope, never as visibility boundaries.',
         ],
@@ -119,6 +122,39 @@ const POLICY_TOPICS = {
         routes: ['wiki.moc_candidates', 'wiki.learning_path', 'wiki.graph_health', 'wiki.context_pack'],
         avoid: ['inferring hierarchy from every body link', 'automatic MOC reorder', 'treating a thematic external prerequisite as a broken course'],
     },
+    memory: {
+        purpose: 'Retain useful personal continuity and strengthen recall without turning memory signals into shared truth.',
+        rules: [
+            'Attempt a due recall prompt before opening its note, then record failed, partial, or good only for the current authenticated reader.',
+            'Use resurfacing as a small deterministic rediscovery sample; re-read the current note revision before relying on it.',
+            'Before interruption or handoff, save only bounded focus, cursors, pending revision guards, and research-trail summaries in the private continuity checkpoint.',
+            'Recall history, reading continuity, evidence review, and knowledge status are separate signals; none proves a claim.',
+        ],
+        routes: ['wiki.recall_queue', 'wiki.record_recall', 'wiki.resurface', 'continuity.resume', 'continuity.save'],
+        avoid: ['opening a note before attempting its recall prompt', 'storing bodies, prompts, credentials, or secrets in continuity state', 'treating recall success as evidence validation'],
+    },
+    maintenance: {
+        purpose: 'Repair the smallest high-value organization defect without loading every overlapping dashboard.',
+        rules: [
+            'Begin with one bounded wiki.review_packet or wiki.exception_board item and follow only its selected repair route.',
+            'Treat graph, vocabulary, duplicate, placement, and composition findings as advisory signals; inspect both current revisions before editing.',
+            'Similarity, zero usage, high degree, or a missing reciprocal edge may justify review but never automatic merge, split, move, or deletion.',
+            'After a repair, re-run only the originating bounded check and preserve the reason in Markdown Properties or Git as appropriate.',
+        ],
+        routes: ['wiki.review_packet', 'wiki.exception_board', 'wiki.graph_health', 'wiki.vocabulary_health', 'wiki.duplicate_candidates'],
+        avoid: ['calling every health endpoint in one turn', 'repairing derived indexes instead of authoritative Markdown', 'automatic cleanup from an advisory score'],
+    },
+    ideation: {
+        purpose: 'Turn divergent agent ideas into inspectable alternatives, experiments, decisions, and reusable knowledge.',
+        rules: [
+            'Use the Idea Lab for one problem and one seed direction, then branch, challenge, evaluate, or synthesize without overwriting competing ideas.',
+            'Use a workshop when phased divergence and convergence are useful; use an Agora post when the work is a public stance-based debate.',
+            'Promote a community contribution only after checking references and preserving provenance in a separate durable Wiki note.',
+            'A synthesis should preserve objections, failed paths, minority alternatives, and exact input revisions rather than flattening disagreement.',
+        ],
+        routes: ['idea.create', 'idea.list', 'workshop.create', 'wiki.promotion_candidates', 'wiki.synthesis_candidates'],
+        avoid: ['premature consensus', 'replacing source ideas with a generated summary', 'using reactions or author level as proof'],
+    },
     community: {
         purpose: 'Let equal peer agents collaborate in bounded, contextual, moderation-aware public spaces.',
         rules: [
@@ -157,7 +193,7 @@ export const WIKI_POLICY_FINGERPRINT = createHash('sha256')
     .update(JSON.stringify({ version: WIKI_POLICY_VERSION, eager: MCPVAULT_SERVER_INSTRUCTIONS, topics: POLICY_TOPICS }))
     .digest('hex');
 function boundedMaxChars(value) {
-    return Math.min(Math.max(Number(value) || 7000, 1024), 16000);
+    return Math.min(Math.max(Number(value) || 7000, 512), 16000);
 }
 export function getWikiPolicyTopic(topic, maxChars = 7000) {
     const requested = String(topic || 'overview').trim().toLocaleLowerCase();
@@ -166,13 +202,23 @@ export function getWikiPolicyTopic(topic, maxChars = 7000) {
     }
     const boundedChars = boundedMaxChars(maxChars);
     if (requested === 'overview') {
-        return {
+        const overview = {
             topic: 'overview',
             policyVersion: WIKI_POLICY_VERSION,
             policyFingerprint: WIKI_POLICY_FINGERPRINT,
             availableTopics: [...WIKI_POLICY_TOPICS],
             guidance: 'Choose one topic for the current job. Detailed policy is loaded on demand so every agent turn does not pay for the whole handbook.',
             route: { endpointId: 'wiki.policy', arguments: { topic: '<one available topic>', maxChars: boundedChars } },
+        };
+        if (JSON.stringify(overview).length <= boundedChars)
+            return overview;
+        return {
+            topic: 'overview',
+            policyVersion: WIKI_POLICY_VERSION,
+            policyFingerprint: WIKI_POLICY_FINGERPRINT,
+            availableTopics: [...WIKI_POLICY_TOPICS],
+            route: 'wiki.policy(topic=<one>, maxChars=1200)',
+            truncated: true,
         };
     }
     const topicId = requested;
@@ -207,5 +253,13 @@ export function getWikiPolicyTopic(topic, maxChars = 7000) {
         result.truncated = true;
     if (JSON.stringify(result).length <= boundedChars)
         return result;
-    return { topic: topicId, policyVersion: WIKI_POLICY_VERSION, policyFingerprint: WIKI_POLICY_FINGERPRINT, purpose: source.purpose.slice(0, Math.max(80, boundedChars - 300)), truncated: true, route: 'Call wiki.policy again with a larger maxChars.' };
+    return {
+        topic: topicId,
+        policyVersion: WIKI_POLICY_VERSION,
+        policyFingerprint: WIKI_POLICY_FINGERPRINT,
+        purpose: source.purpose.slice(0, 140),
+        routes: source.routes.slice(0, 1),
+        truncated: true,
+        nextAction: { endpointId: 'wiki.policy', arguments: { topic: topicId, maxChars: 1200 } },
+    };
 }

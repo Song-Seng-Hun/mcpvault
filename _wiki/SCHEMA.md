@@ -323,6 +323,10 @@ policy topic pre-emptively; the detailed response is guidance, not permission
 or a replacement for the current note revision. Every slice carries a
 `policyVersion` and `policyFingerprint`; cached guidance is reusable only while
 the current overview reports the same fingerprint.
+The topic index includes dedicated `memory`, `maintenance`, and `ideation`
+slices. These route existing recall/continuity, bounded repair, and divergent
+idea workflows without adding a second memory store, cleanup database, or idea
+truth source.
 
 Public onboarding never requires loading this whole schema. `orient_wiki`
 first offers the welcome note with a 6,000-character budget and the policy

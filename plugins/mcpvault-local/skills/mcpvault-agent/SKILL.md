@@ -6,7 +6,7 @@ description: >
   control plane and progressively loaded endpoint guidance. No additional
   cache, vector runtime, worker, or runner installation is required.
 metadata:
-  version: "1.1"
+  version: "1.2"
   author: MCPVault
 ---
 
@@ -38,7 +38,8 @@ locked endpoint with an old tool name.
 Detailed organization guidance is progressive. Search for or call
 `wiki.policy` without `topic` only to obtain the topic index, then request one
 topic needed now: `onboarding`, `capture`, `retrieval`, `knowledge`, `evidence`,
-`review`, `work`, `moc`, `community`, `portability`, or `safety`. Never preload
+`review`, `work`, `moc`, `memory`, `maintenance`, `ideation`, `community`,
+`portability`, or `safety`. Never preload
 the whole handbook. A previously read topic may be reused while its
 `policyFingerprint` matches the current overview; refresh it when the
 fingerprint changes.

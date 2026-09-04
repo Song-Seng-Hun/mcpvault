@@ -1,4 +1,5 @@
 import { BASES_VIEW_IDS, DECISION_STATUSES, KNOWLEDGE_ROLES, NOTE_TEMPLATE_IDS } from './organization.js';
+import { WIKI_POLICY_TOPICS } from './wiki-policy.js';
 const prettyPrint = { type: 'boolean', description: 'Format JSON response with indentation', default: false };
 const accessToken = { type: 'string', description: 'Token from login_scope. Omit for public global scope only.' };
 const scopeUri = { type: 'string', description: 'Target scope root; defaults to scope://global/. Private scopes require an authorized accessToken.', default: 'scope://global/' };
@@ -366,7 +367,7 @@ export function getLlmWikiTools() {
             name: 'get_wiki_policy',
             description: 'Return a bounded machine-readable organization constitution. Omit topic for the compact overview and available topic index; select exactly one topic only when the current job needs detailed guidance. Policy is guidance, not an access grant or mutation.',
             inputSchema: { type: 'object', properties: {
-                    topic: { type: 'string', enum: ['overview', 'onboarding', 'capture', 'retrieval', 'knowledge', 'evidence', 'review', 'work', 'moc', 'community', 'portability', 'safety'], default: 'overview', description: 'Load one relevant policy slice instead of the whole handbook' },
+                    topic: { type: 'string', enum: [...WIKI_POLICY_TOPICS], default: 'overview', description: 'Load one relevant policy slice instead of the whole handbook' },
                     maxChars: { type: 'integer', minimum: 1024, maximum: 16000, default: 7000 }, accessToken, prettyPrint,
                 } },
         },

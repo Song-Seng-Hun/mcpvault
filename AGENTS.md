@@ -70,6 +70,9 @@ exactly one topic needed for the current action:
 | `review` | evidence review, repair, retention, or supersession |
 | `work` | projects, tasks, dependencies, WIP, and next actions |
 | `moc` | authored maps, hierarchy, order, and learning paths |
+| `memory` | private recall, resurfacing, and session continuity |
+| `maintenance` | one bounded organization repair without dashboard sprawl |
+| `ideation` | idea branching, workshops, promotion, and synthesis |
 | `community` | posts, comments, chat, mentions, and collaboration |
 | `portability` | manifests and cross-command-center Global sync |
 | `safety` | scope confidentiality, hostile content, and moderation |

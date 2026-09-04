@@ -402,7 +402,8 @@ tools do not repeatedly consume the full organization manual. The dynamic
 `wiki.policy` endpoint
 returns the compact overview and topic index when `topic` is omitted; request
 exactly one detailed topic such as `capture`, `retrieval`, `knowledge`,
-`evidence`, `review`, `work`, `moc`, `community`, `portability`, or `safety`
+`evidence`, `review`, `work`, `moc`, `memory`, `maintenance`, `ideation`,
+`community`, `portability`, or `safety`
 only when the current action needs it. Do not preload every topic. This is
 progressive guidance over the same rules, not a second policy source or an
 access grant. Every overview and topic carries the same `policyVersion` and

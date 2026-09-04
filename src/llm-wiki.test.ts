@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createServer, getServerRuntime } from './createServer.js';
 import { createHash } from 'node:crypto';
-import { getWikiPolicyTopic, WIKI_POLICY_TOPICS } from './wiki-policy.js';
+import { getWikiPolicyTopic, WIKI_POLICY_TOPICS, WIKI_POLICY_VERSION } from './wiki-policy.js';
 
 let vault: string;
 
@@ -1039,7 +1039,7 @@ test('projects expose bounded flow health and the organization policy contract',
     const policy = await callJson(client, 'get_wiki_policy', { maxChars: 7000, accessToken });
     expect(policy.value).toMatchObject({
       topic: 'overview',
-      policyVersion: 1,
+      policyVersion: WIKI_POLICY_VERSION,
       policyFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
       availableTopics: expect.arrayContaining(['overview', 'moc', 'evidence', 'work', 'safety']),
     });
@@ -1075,6 +1075,15 @@ test('projects expose bounded flow health and the organization policy contract',
         .map(endpointId => ({ topic, endpointId }));
     });
     expect(missingRoutes).toEqual([]);
+    const endpointMentionPattern = /\b(?:auth|chat|community|context|continuity|idea|mcp|moderation|notes|notifications|wiki|workshop)\.[a-z][a-z0-9_]*/g;
+    const missingRuleReferences = WIKI_POLICY_TOPICS.flatMap(topic => {
+      const topicPolicy = getWikiPolicyTopic(topic, 16_000);
+      const mentioned = JSON.stringify(topicPolicy.rules || []).match(endpointMentionPattern) || [];
+      return mentioned
+        .filter(endpointId => !controlTools.has(endpointId) && !runtime.endpointRegistry.resolve(endpointId))
+        .map(endpointId => ({ topic, endpointId }));
+    });
+    expect(missingRuleReferences).toEqual([]);
 
     const packet = await callJson(client, 'get_wiki_review_packet', { limit: 10, maxChars: 12000, accessToken });
     expect(packet.value.counts).toMatchObject({ activeWip: 1, readyToPull: 1, blocked: 1, waiting: 1 });
