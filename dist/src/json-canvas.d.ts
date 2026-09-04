@@ -42,6 +42,15 @@ export interface JsonCanvasDocument {
     nodes: JsonCanvasNode[];
     edges: JsonCanvasEdge[];
 }
+export interface WikiCanvasSnapshotMetadata {
+    kind: 'mcpvault-derived-canvas';
+    version: 1;
+    mode: WikiCanvasMode;
+    rootNodeId: string;
+    snapshotFingerprint: string;
+    revisions: Record<string, string>;
+}
+export declare function canvasFileNodeId(path: string): string;
 /**
  * Build a deterministic JSON Canvas projection. Positions and IDs derive only
  * from the selected paths/order so exporting an unchanged snapshot does not
@@ -55,6 +64,8 @@ export declare function buildJsonCanvasProjection(input: {
     canvas: JsonCanvasDocument;
     snapshotFingerprint: string;
 };
+/** Read MCPVault snapshot metadata from an otherwise standard text node. */
+export declare function readJsonCanvasMetadata(value: unknown): WikiCanvasSnapshotMetadata | undefined;
 /** Validate the bounded subset of JSON Canvas 1.0 that MCPVault emits. */
 export declare function validateJsonCanvasDocument(value: unknown): asserts value is JsonCanvasDocument;
 //# sourceMappingURL=json-canvas.d.ts.map

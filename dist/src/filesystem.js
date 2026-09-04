@@ -14,6 +14,8 @@ import { buildNoteReferenceIndex, resolveNoteReference } from './note-reference.
 import { validateJsonCanvasDocument } from './json-canvas.js';
 /** Hard per-note write limit so stdio callers cannot exhaust the vault disk. */
 export const MAX_NOTE_CONTENT_BYTES = 8 * 1024 * 1024;
+/** Health scans never load arbitrarily large derived views into memory. */
+export const MAX_DERIVED_VIEW_READ_BYTES = 512 * 1024;
 function assertNoteContentSize(content, path) {
     const byteLength = Buffer.byteLength(content, 'utf8');
     if (byteLength > MAX_NOTE_CONTENT_BYTES) {
@@ -608,6 +610,29 @@ export class FileSystemService {
         }
         validateJsonCanvasDocument(parsed);
         return this.writeDerivedViewFile(params, 'canvas');
+    }
+    /** Read one scope-local Canvas for bounded derived-view maintenance. */
+    async readCanvasFile(pathInput, maxBytes = MAX_DERIVED_VIEW_READ_BYTES) {
+        const path = this.normalizePath(pathInput);
+        const allowed = /^(?:Community\/|_scopes\/(?:models|agents)\/[A-Za-z0-9._-]+\/)?Views\/[^/]+\.canvas$/i;
+        if (!allowed.test(path) || !this.pathFilter.isAllowed(path))
+            throw new Error('Canvas health reads are limited to one scope-local Views/*.canvas file');
+        const fullPath = this.resolvePath(path);
+        const info = await stat(fullPath);
+        if (!info.isFile())
+            throw new Error(`Canvas path is not a file: ${path}`);
+        const boundedBytes = Math.min(Math.max(Number(maxBytes) || MAX_DERIVED_VIEW_READ_BYTES, 1024), MAX_DERIVED_VIEW_READ_BYTES);
+        if (info.size > boundedBytes)
+            throw new Error(`Canvas exceeds the ${boundedBytes}-byte health-read limit: ${path}`);
+        const content = await readFile(fullPath, 'utf8');
+        let document;
+        try {
+            document = JSON.parse(content);
+        }
+        catch {
+            throw new Error(`Canvas is not valid JSON: ${path}`);
+        }
+        return { path, revision: this.revision(content), document };
     }
     async writeNoteUnlocked(params) {
         const { content, frontmatter, mode = 'overwrite', expectedRevision } = params;

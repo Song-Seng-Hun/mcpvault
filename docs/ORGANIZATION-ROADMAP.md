@@ -117,7 +117,11 @@ tools; new behaviors belong in the endpoint catalog.
   bounded, carry source revisions and a snapshot fingerprint, exclude illegal
   cross-scope nodes, never copy note bodies, and write only a revision-checked
   scope-local `Views/*.canvas` derived file. No client helper or extra plugin is
-  required.
+  required. Managed exports now embed deterministic file-node revision guards
+  in a standard text node; a bounded scope-aware health pass detects stale,
+  missing, malformed, oversized, or scope-invalid maps and feeds actionable
+  defects into the existing exception board without rewriting ordinary
+  user-authored Canvases.
 
 Evidence: `moc-navigation.test.ts`, `backlinks.test.ts`, `organization.test.ts`,
 `filesystem.test.ts`, `json-canvas.test.ts`, `continuity.test.ts`,

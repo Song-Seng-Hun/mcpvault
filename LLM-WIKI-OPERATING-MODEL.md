@@ -50,6 +50,11 @@ not copied note bodies. Its positions, colors, and proximity are derived
 navigation aids; the linked Markdown, current revisions, evidence, and Git
 history remain authoritative. Export rechecks the included revisions, and a
 Global-rooted map cannot pull Community or private notes into the view.
+Exported maps carry deterministic per-file revision guards in a standard text
+node. `wiki.canvas_health` can therefore detect a stale, missing-source,
+malformed, oversized, or scope-invalid managed map without trusting its visual
+layout. It leaves ordinary user-authored Canvases unmanaged and unchanged; the
+normal exception board surfaces only managed defects.
 
 ## Organization model: PARA without losing the Wiki graph
 

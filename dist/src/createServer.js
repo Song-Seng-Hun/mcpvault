@@ -1574,6 +1574,9 @@ export function createServer(vaultPath, options = {}) {
                             expectedRevision: trimmedArgs.expectedRevision,
                         }), trimmedArgs.prettyPrint);
                     }
+                    case "get_wiki_canvas_health": {
+                        return jsonResult(await llmWiki.canvasHealth(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+                    }
                     case "get_wiki_home": {
                         return jsonResult(await llmWiki.home(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
                     }

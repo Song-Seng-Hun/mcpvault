@@ -613,6 +613,15 @@ export function getLlmWikiTools() {
                 }, required: ['path', 'expectedRevision'] },
         },
         {
+            name: 'get_wiki_canvas_health',
+            description: 'Inspect scope-visible Views/*.canvas files for bounded MCPVault snapshot metadata, current source revisions, missing sources, malformed managed graphs, and scope violations. User-authored Canvases without MCPVault metadata remain valid unmanaged artifacts. This advisory view never rewrites a Canvas or its source notes.',
+            inputSchema: { type: 'object', properties: {
+                    limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 },
+                    maxChars: { type: 'integer', minimum: 1024, maximum: 16000, default: 7000 },
+                    accessToken, prettyPrint,
+                } },
+        },
+        {
             name: 'get_wiki_home',
             description: 'Return a bounded live launchpad and intent router for the current scope: one recommended next action, exact existing endpoint routes for find/capture/organize/decide/execute/review/repair/migrate, and revision-stamped MOCs, Projects/Tasks, all/current actionable-work counts, Inbox, review items, and stable IDs. Choose one route; do not call every dashboard. This is a derived Home/JDex-style view, never a second index or an access boundary.',
             inputSchema: { type: 'object', properties: {

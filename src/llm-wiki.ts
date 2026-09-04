@@ -16,7 +16,7 @@ import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
 import { buildNoteReferenceIndex, normalizeNoteReferenceTerm, resolveNoteReference, type NoteReferenceIndex } from './note-reference.js';
 import type { QueryNote } from './types.js';
-import { buildJsonCanvasProjection, type JsonCanvasDocument, type WikiCanvasEdge, type WikiCanvasMode, type WikiCanvasNote } from './json-canvas.js';
+import { buildJsonCanvasProjection, canvasFileNodeId, readJsonCanvasMetadata, validateJsonCanvasDocument, type JsonCanvasDocument, type WikiCanvasEdge, type WikiCanvasMode, type WikiCanvasNote } from './json-canvas.js';
 
 export { SOURCE_TRUST_LEVELS } from './organization.js';
 const knowledgeStatuses = new Set<string>(KNOWLEDGE_STATUSES);
@@ -778,6 +778,23 @@ function canvasSuggestedPath(sourcePath: string): string {
   const rawName = posix.basename(normalizePath(sourcePath)).replace(/\.(?:md|markdown|txt)$/i, '');
   const safeName = Array.from(rawName.replace(/[<>:"/\\|?*\u0000-\u001f]+/g, '-').replace(/[. ]+$/g, '').trim()).slice(0, 80).join('') || 'Knowledge';
   return `${scopeRoot ? `${scopeRoot}/` : ''}Views/${safeName} Spatial.canvas`;
+}
+
+function isSafeCanvasNotePath(path: string): boolean {
+  const normalized = normalizePath(path);
+  return Boolean(normalized)
+    && !/^(?:[A-Za-z]:|\/\/)/.test(normalized)
+    && !normalized.split('/').some(segment => segment === '.' || segment === '..')
+    && /\.(?:md|markdown|txt)$/i.test(normalized);
+}
+
+function canvasMayInclude(access: ScopeAccessPolicy, principal: ScopePrincipal | undefined, rootPath: string, candidatePath: string): boolean {
+  if (!access.canAccessPhysicalPath(candidatePath, principal)) return false;
+  const rootScope = canvasScopeRoot(rootPath);
+  const candidateScope = canvasScopeRoot(candidatePath);
+  if (!rootScope) return !candidateScope;
+  if (rootScope === 'Community') return !candidateScope || candidateScope === 'Community';
+  return access.canReferenceFrom(rootPath, candidatePath);
 }
 
 type OrganizationManifestShape = {
@@ -6412,14 +6429,7 @@ export class LlmWikiService {
     const sourceKind = String(source.frontmatter.note_kind || '').trim().toLowerCase();
     const mode: WikiCanvasMode = requested === 'auto' ? (sourceKind === 'moc' ? 'moc' : 'neighborhood') : requested as WikiCanvasMode;
     if (mode === 'moc' && sourceKind !== 'moc') throw new Error("mode='moc' requires a visible note_kind: moc root");
-    const rootScope = canvasScopeRoot(sourcePath);
-    const mayInclude = (candidatePath: string): boolean => {
-      if (!this.access.canAccessPhysicalPath(candidatePath, principal)) return false;
-      const candidateScope = canvasScopeRoot(candidatePath);
-      if (!rootScope) return !candidateScope;
-      if (rootScope === 'Community') return !candidateScope || candidateScope === 'Community';
-      return this.access.canReferenceFrom(sourcePath, candidatePath);
-    };
+    const mayInclude = (candidatePath: string): boolean => canvasMayInclude(this.access, principal, sourcePath, candidatePath);
     const root: WikiCanvasNote = {
       path: sourcePath,
       publicPath: this.access.toPublicPath(sourcePath),
@@ -6555,7 +6565,22 @@ export class LlmWikiService {
       // Fit against the larger pretty-printed representation so maxChars is a
       // hard response bound even when a caller requests prettyPrint.
       if (JSON.stringify(response, null, 2).length <= boundedChars) return { response, canvas: rendered.canvas, notes };
-      if (notes.length <= 1) throw new Error('maxChars is too small to preserve the Canvas root, fingerprint, and revision guard');
+      if (notes.length <= 1) {
+        const minimal = {
+          mode: response.mode,
+          standard: response.standard,
+          root: response.root,
+          canvas: publicCanvas,
+          snapshotFingerprint: rendered.snapshotFingerprint,
+          counts: response.counts,
+          suggestedPath: response.suggestedPath,
+          outputRevision,
+          exportAction: response.exportAction,
+          truncated: true,
+        };
+        if (JSON.stringify(minimal, null, 2).length <= boundedChars) return { response: minimal, canvas: rendered.canvas, notes };
+        throw new Error('maxChars is too small to preserve the Canvas root, fingerprint, and revision guard');
+      }
       notes.pop();
     }
   }
@@ -6610,6 +6635,132 @@ export class LlmWikiService {
       truncated: fitted.response.truncated,
       note: 'Saved as a validated, derived JSON Canvas view. Regenerate it when source revisions change; it never replaces Markdown, evidence, MOCs, or Git history.',
     };
+  }
+
+  /** Inspect scope-visible derived Canvases for stale or missing source guards. */
+  async canvasHealth(principal?: ScopePrincipal, limit = 20, maxChars = 7000) {
+    const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
+    const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 1024), 16000);
+    const paths: string[] = [];
+    for (const scope of this.access.scopeRoots(principal)) {
+      const directory = `${scope.root ? `${scope.root}/` : ''}Views`;
+      try {
+        const listing = await this.fileSystem.listDirectory(directory);
+        for (const file of listing.files) {
+          const path = `${directory}/${file}`;
+          if (/\.canvas$/i.test(file) && this.access.canAccessPhysicalPath(path, principal)) paths.push(path);
+        }
+      } catch (error) {
+        if (!(error instanceof Error && error.message.startsWith('Directory not found:'))) throw error;
+      }
+    }
+    const uniquePaths = [...new Set(paths.map(normalizePath))].sort((left, right) => left.localeCompare(right));
+    const scanLimit = Math.min(uniquePaths.length, Math.max(20, boundedLimit * 4), 100);
+    const sourceCheckLimit = 1000;
+    let sourceChecks = 0;
+    const sourceStates = new Map<string, { state: 'present'; revision: string } | { state: 'missing' } | { state: 'error' }>();
+    const inspected: Array<Record<string, any>> = [];
+    for (const canvasPath of uniquePaths.slice(0, scanLimit)) {
+      const publicCanvasPath = this.access.toPublicPath(canvasPath);
+      try {
+        const opened = await this.fileSystem.readCanvasFile(canvasPath);
+        const metadata = readJsonCanvasMetadata(opened.document);
+        if (!metadata) {
+          inspected.push({ path: publicCanvasPath, canvasRevision: opened.revision, state: 'unmanaged', detail: 'Valid JSON without MCPVault snapshot metadata; no freshness claim is made.' });
+          continue;
+        }
+        validateJsonCanvasDocument(opened.document);
+        const document = opened.document as JsonCanvasDocument;
+        const fileNodes = new Map(document.nodes.filter(node => node.type === 'file' && node.file).map(node => [node.id, node]));
+        const rootNode = fileNodes.get(metadata.rootNodeId);
+        if (!rootNode?.file || !isSafeCanvasNotePath(rootNode.file)) throw new Error('Managed Canvas root is not a safe Markdown/text file node');
+        const rootPath = normalizePath(rootNode.file);
+        if (canvasScopeRoot(canvasPath).toLowerCase() !== canvasScopeRoot(rootPath).toLowerCase()) throw new Error('Managed Canvas root and output belong to different scopes');
+        const changed: Array<Record<string, string>> = [];
+        const missing: Array<Record<string, string>> = [];
+        const blocked: Array<Record<string, string>> = [];
+        let checksTruncated = false;
+        for (const [nodeId, expectedRevision] of Object.entries(metadata.revisions)) {
+          const node = fileNodes.get(nodeId);
+          if (!node?.file || !isSafeCanvasNotePath(node.file)) {
+            blocked.push({ nodeId, reason: 'unsafe_or_non_note_file' });
+            continue;
+          }
+          const sourcePath = normalizePath(node.file);
+          if (canvasFileNodeId(sourcePath) !== nodeId) throw new Error('Managed Canvas file node identity does not match its path');
+          if (!canvasMayInclude(this.access, principal, rootPath, sourcePath)) {
+            blocked.push({ nodeId, reason: 'scope_or_reference_violation' });
+            continue;
+          }
+          const sourceKey = sourcePath.toLowerCase();
+          let sourceState = sourceStates.get(sourceKey);
+          if (!sourceState) {
+            if (sourceChecks >= sourceCheckLimit) { checksTruncated = true; break; }
+            sourceChecks += 1;
+            try {
+              sourceState = await this.fileSystem.noteExists(sourcePath)
+                ? { state: 'present', revision: (await this.fileSystem.readNote(sourcePath)).revision }
+                : { state: 'missing' };
+            } catch {
+              sourceState = { state: 'error' };
+            }
+            sourceStates.set(sourceKey, sourceState);
+          }
+          if (sourceState.state === 'error') {
+            blocked.push({ nodeId, reason: 'unreadable_source' });
+          } else if (sourceState.state === 'missing') {
+            missing.push({ path: this.access.toPublicPath(sourcePath), expectedRevision });
+          } else if (sourceState.revision !== expectedRevision) {
+            changed.push({ path: this.access.toPublicPath(sourcePath), expectedRevision, currentRevision: sourceState.revision });
+          }
+        }
+        const state = blocked.length > 0 ? 'scope_violation'
+          : missing.length > 0 ? 'missing_source'
+            : changed.length > 0 ? 'stale'
+              : checksTruncated ? 'partially_checked'
+                : 'fresh';
+        inspected.push({
+          path: publicCanvasPath,
+          canvasRevision: opened.revision,
+          state,
+          mode: metadata.mode,
+          root: { path: this.access.toPublicPath(rootPath), expectedRevision: metadata.revisions[metadata.rootNodeId] },
+          snapshotFingerprint: metadata.snapshotFingerprint,
+          sourceCount: Object.keys(metadata.revisions).length,
+          changed: changed.slice(0, 5),
+          missing: missing.slice(0, 5),
+          blocked: blocked.slice(0, 5),
+          checksTruncated,
+          ...(state !== 'fresh' && state !== 'partially_checked' && {
+            nextAction: { endpointId: endpointIdForTool('get_wiki_canvas_view'), arguments: { path: this.access.toPublicPath(rootPath), mode: metadata.mode, limit: Math.min(Object.keys(metadata.revisions).length, 50), maxChars: 12000 } },
+          }),
+        });
+      } catch (error) {
+        inspected.push({ path: publicCanvasPath, state: 'invalid', detail: boundedText(error instanceof Error ? error.message : 'Canvas could not be inspected', 500), nextAction: { endpointId: endpointIdForTool('read_note'), arguments: { path: publicCanvasPath, maxChars: 4000 } } });
+      }
+    }
+    const stateOrder: Record<string, number> = { invalid: 0, scope_violation: 1, missing_source: 2, stale: 3, partially_checked: 4, unmanaged: 5, fresh: 6 };
+    inspected.sort((left, right) => (stateOrder[String(left.state)] ?? 99) - (stateOrder[String(right.state)] ?? 99) || String(left.path).localeCompare(String(right.path)));
+    const counts: Record<string, number> = {};
+    for (const item of inspected) counts[String(item.state)] = (counts[String(item.state)] || 0) + 1;
+    const base = {
+      purpose: 'Bounded freshness and integrity checks for scope-visible MCPVault-derived Obsidian Canvas files. Ordinary user-authored Canvases remain unmanaged and are never rewritten.',
+      counts: { total: uniquePaths.length, inspected: inspected.length, ...counts, sourceChecks },
+      items: inspected.slice(0, boundedLimit),
+      recommendations: [
+        ...(counts.stale || counts.missing_source ? ['Regenerate one stale or missing-source Canvas from its returned root action; do not repair source notes merely to make a derived view green.'] : []),
+        ...(counts.invalid || counts.scope_violation ? ['Inspect or regenerate invalid managed Canvases; never follow a file node that violates the root scope.'] : []),
+        ...(counts.unmanaged ? ['Unmanaged Canvases are valid user artifacts but make no MCPVault freshness claim. Export again through wiki.canvas_export only when managed revision tracking is wanted.'] : []),
+      ],
+      advisory: true,
+      truncated: uniquePaths.length > inspected.length || inspected.length > boundedLimit || inspected.some(item => item.checksTruncated === true),
+      generatedAt: now(),
+    };
+    const items = [...base.items];
+    while (JSON.stringify({ ...base, items }, null, 2).length > boundedChars && items.length > 0) items.pop();
+    const result = { ...base, items, truncated: base.truncated || items.length < base.items.length };
+    if (JSON.stringify(result, null, 2).length <= boundedChars) return result;
+    return { purpose: base.purpose, counts: base.counts, items: [] as Array<Record<string, any>>, recommendations: [] as string[], advisory: true, truncated: true, generatedAt: base.generatedAt };
   }
 
   /**
@@ -9513,11 +9664,25 @@ export class LlmWikiService {
     const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 60);
     const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
     const health = await this.organizationHealth(principal, Math.min(100, Math.max(boundedLimit, 20)), Math.min(16000, Math.max(boundedChars, 7000)));
+    const canvasHealth = await this.canvasHealth(principal, Math.min(50, Math.max(boundedLimit, 20)), Math.min(16000, Math.max(boundedChars, 7000)));
     const categoryFor = (code: string) => CLAIM_ARGUMENT_LINT_CODES.has(code) ? 'argument_integrity' : code.startsWith('invalid_') || code.startsWith('unsafe_') ? 'validation' : code.includes('stale') || code.includes('review') || code.includes('fresh') ? 'freshness' : code.includes('moc') || code.includes('relation') || code.includes('link') || code.includes('orphan') ? 'navigation' : code.includes('project') || code.includes('task') || code.includes('waiting') ? 'execution' : code.includes('term') || code.includes('alias') || code.includes('vocabulary') ? 'vocabulary' : code.includes('retention') || code.includes('archive') ? 'preservation' : 'knowledge_quality';
     const repairActionFor = (code: string) => CLAIM_ARGUMENT_LINT_CODES.has(code) ? 'call_wiki_argument_map_then_edit_with_current_revision' : 'inspect_before_editing';
     const rawIssues = Array.isArray(health.issues) ? health.issues as Array<Record<string, any>> : [];
     const rawQuarantine = health.quarantine && Array.isArray(health.quarantine.items) ? health.quarantine.items as Array<Record<string, any>> : [];
     const rawMocSequences = health.mocSequenceHealth && Array.isArray(health.mocSequenceHealth.items) ? health.mocSequenceHealth.items as Array<Record<string, any>> : [];
+    const rawCanvasIssues = Array.isArray(canvasHealth.items)
+      ? (canvasHealth.items as Array<Record<string, any>>).filter(item => !['fresh', 'unmanaged'].includes(String(item.state || ''))).map(item => ({
+        path: item.path,
+        code: `canvas_${String(item.state || 'invalid')}`,
+        detail: item.detail || `Derived Canvas state is ${String(item.state || 'invalid')}; inspect its guarded sources before reuse.`,
+        category: ['invalid', 'scope_violation'].includes(String(item.state || '')) ? 'validation' : 'freshness',
+        severity: ['invalid', 'scope_violation'].includes(String(item.state || '')) ? 'error' : 'warning',
+        state: 'open',
+        suggestedAction: item.nextAction ? 'call_returned_canvas_action' : 'inspect_canvas_before_reuse',
+        ...(item.canvasRevision && { revision: item.canvasRevision }),
+        ...(item.nextAction && { nextAction: item.nextAction }),
+      }))
+      : [];
     const mocSequenceIssues = rawMocSequences.map(item => {
       const state = String(item.state || 'incomplete_prerequisite_path');
       const code = state === 'cyclic_or_cycle_blocked' ? 'moc_dependency_cycle'
@@ -9543,6 +9708,7 @@ export class LlmWikiService {
     });
     const items = [
       ...rawQuarantine.map(item => ({ ...item, category: 'validation', severity: 'error', state: 'quarantined', suggestedAction: 'inspect_and_repair_with_revision' })),
+      ...rawCanvasIssues,
       ...mocSequenceIssues,
       ...rawIssues.filter(issue => !rawQuarantine.some(item => item.path === issue.path && item.code === issue.code)).map(issue => ({
         path: issue.path,
@@ -9556,8 +9722,8 @@ export class LlmWikiService {
       })),
     ].slice(0, boundedLimit);
     const counts: Record<string, number> = {};
-    for (const item of [...rawQuarantine, ...mocSequenceIssues, ...rawIssues]) {
-      const category = item.state === 'quarantined' ? 'validation' : categoryFor(String(item.code || ''));
+    for (const item of [...rawQuarantine, ...rawCanvasIssues, ...mocSequenceIssues, ...rawIssues]) {
+      const category = String(item.category || (item.state === 'quarantined' ? 'validation' : categoryFor(String(item.code || ''))));
       counts[category] = (counts[category] || 0) + 1;
     }
     const result = {
@@ -9566,9 +9732,9 @@ export class LlmWikiService {
       total: Object.values(counts).reduce((sum, value) => sum + value, 0),
       items,
       recommendations: Array.isArray(health.recommendations) ? health.recommendations.slice(0, boundedLimit) : [],
-      sourceViews: ['wiki.organization_health', 'wiki.graph_health', 'wiki.review_packet'],
+      sourceViews: ['wiki.organization_health', 'wiki.graph_health', 'wiki.canvas_health', 'wiki.review_packet'],
       advisory: true,
-      truncated: rawIssues.length + rawQuarantine.length + mocSequenceIssues.length > items.length || Boolean(health.truncated),
+      truncated: rawIssues.length + rawQuarantine.length + rawCanvasIssues.length + mocSequenceIssues.length > items.length || Boolean(health.truncated) || Boolean(canvasHealth.truncated),
       generatedAt: now(),
     };
     if (JSON.stringify(result).length <= boundedChars) return result;

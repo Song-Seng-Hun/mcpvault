@@ -7,6 +7,8 @@ import type { VaultGraphIndex } from './vault-graph.js';
 import { VaultIoCoordinator } from './vault-io.js';
 /** Hard per-note write limit so stdio callers cannot exhaust the vault disk. */
 export declare const MAX_NOTE_CONTENT_BYTES: number;
+/** Health scans never load arbitrarily large derived views into memory. */
+export declare const MAX_DERIVED_VIEW_READ_BYTES: number;
 /**
  * Map a filesystem write failure to a clear, accurate Error.
  *
@@ -72,6 +74,12 @@ export declare class FileSystemService {
         path: string;
         previousRevision: string;
         revision: string;
+    }>;
+    /** Read one scope-local Canvas for bounded derived-view maintenance. */
+    readCanvasFile(pathInput: string, maxBytes?: number): Promise<{
+        path: string;
+        revision: string;
+        document: unknown;
     }>;
     private writeNoteUnlocked;
     patchNote(params: PatchNoteParams): Promise<PatchNoteResult>;

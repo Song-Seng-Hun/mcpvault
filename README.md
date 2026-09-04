@@ -611,9 +611,14 @@ private nodes so a derived view cannot weaken synchronization boundaries.
 `export_wiki_canvas` writes the preview only beneath the root scope's
 `Views/*.canvas`, validates node/edge integrity, checks the root revision and
 the destination revision, then rechecks every included source immediately
-before writing. The embedded fingerprint makes an old layout recognizable,
-but position, color, and proximity remain disposable navigation hints rather
-than evidence, canonical hierarchy, or permissions. No Obsidian plugin or
+before writing. A standard hidden text-node marker records the snapshot
+fingerprint and each file-node revision without adding a proprietary top-level
+Canvas shape. `get_wiki_canvas_health` reads only bounded scope-local views,
+distinguishes fresh, stale, missing-source, invalid, partially checked, and
+ordinary unmanaged Canvases, and returns the root preview action needed to
+regenerate one stale map. The exception board includes managed Canvas defects.
+Position, color, and proximity remain disposable navigation hints rather than
+evidence, canonical hierarchy, or permissions. No Obsidian plugin or
 client-side helper is required.
 `get_wiki_exception_board` combines organization, graph,
 quarantine, freshness, vocabulary, and execution findings into one 5S-style

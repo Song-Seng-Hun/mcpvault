@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto';
+const METADATA_PREFIX = '<!-- mcpvault-canvas:';
+const METADATA_SUFFIX = ' -->';
 function digest(value) {
     return createHash('sha256').update(value).digest('hex');
 }
-function noteId(path) {
-    return `note-${digest(path.toLowerCase()).slice(0, 16)}`;
+export function canvasFileNodeId(path) {
+    return `note-${digest(path.toLowerCase()).slice(0, 32)}`;
 }
 function boundedLabel(value) {
     return Array.from(String(value || '').replace(/[\r\n]+/g, ' ').trim()).slice(0, 64).join('') || 'related';
@@ -45,7 +47,7 @@ export function buildJsonCanvasProjection(input) {
         seenPaths.add(key);
         notes.push(note);
     }
-    const nodeIds = new Map(notes.map(note => [note.path.toLowerCase(), noteId(note.path)]));
+    const nodeIds = new Map(notes.map(note => [note.path.toLowerCase(), canvasFileNodeId(note.path)]));
     const acceptedEdges = [];
     const seenEdges = new Set();
     for (const edge of input.edges) {
@@ -64,6 +66,14 @@ export function buildJsonCanvasProjection(input) {
         notes: notes.map(note => ({ path: note.path, revision: note.revision, role: note.role, depth: note.depth, authoredPosition: note.authoredPosition, stage: note.stage, reasons: note.reasons })),
         edges: acceptedEdges,
     }));
+    const snapshotMetadata = {
+        kind: 'mcpvault-derived-canvas',
+        version: 1,
+        mode: input.mode,
+        rootNodeId: nodeIds.get(notes[0].path.toLowerCase()),
+        snapshotFingerprint,
+        revisions: Object.fromEntries(notes.map(note => [nodeIds.get(note.path.toLowerCase()), note.revision])),
+    };
     const rowsByTier = new Map();
     const fileNodes = notes.map((note, index) => {
         if (note.role === 'root') {
@@ -89,6 +99,7 @@ export function buildJsonCanvasProjection(input) {
         height: 220,
         color: '5',
         text: [
+            `${METADATA_PREFIX}${JSON.stringify(snapshotMetadata)}${METADATA_SUFFIX}`,
             '# MCPVault spatial view',
             '',
             `- mode: ${input.mode}`,
@@ -124,6 +135,69 @@ export function buildJsonCanvasProjection(input) {
 function isRecord(value) {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
+/** Read MCPVault snapshot metadata from an otherwise standard text node. */
+export function readJsonCanvasMetadata(value) {
+    if (!isRecord(value) || !Array.isArray(value.nodes))
+        return undefined;
+    let encoded;
+    for (const raw of value.nodes) {
+        if (!isRecord(raw) || raw.type !== 'text' || typeof raw.text !== 'string')
+            continue;
+        const start = raw.text.indexOf(METADATA_PREFIX);
+        if (start < 0)
+            continue;
+        const payloadStart = start + METADATA_PREFIX.length;
+        const end = raw.text.indexOf(METADATA_SUFFIX, payloadStart);
+        if (end < 0)
+            throw new Error('MCPVault Canvas metadata marker is incomplete');
+        if (raw.text.indexOf(METADATA_PREFIX, end + METADATA_SUFFIX.length) >= 0)
+            throw new Error('MCPVault Canvas metadata marker must be unique');
+        if (encoded !== undefined)
+            throw new Error('MCPVault Canvas metadata marker must be unique');
+        encoded = raw.text.slice(payloadStart, end);
+    }
+    if (encoded === undefined)
+        return undefined;
+    let parsed;
+    try {
+        parsed = JSON.parse(encoded);
+    }
+    catch {
+        throw new Error('MCPVault Canvas metadata must contain valid JSON');
+    }
+    if (!isRecord(parsed) || parsed.kind !== 'mcpvault-derived-canvas' || parsed.version !== 1)
+        throw new Error('Unsupported MCPVault Canvas metadata');
+    if (!['moc', 'neighborhood'].includes(String(parsed.mode || '')))
+        throw new Error('MCPVault Canvas metadata has an invalid mode');
+    if (typeof parsed.rootNodeId !== 'string' || !parsed.rootNodeId || parsed.rootNodeId.length > 128)
+        throw new Error('MCPVault Canvas metadata has an invalid root node');
+    if (typeof parsed.snapshotFingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(parsed.snapshotFingerprint))
+        throw new Error('MCPVault Canvas metadata has an invalid fingerprint');
+    if (!isRecord(parsed.revisions))
+        throw new Error('MCPVault Canvas metadata must contain revision guards');
+    const revisions = Object.entries(parsed.revisions);
+    if (revisions.length < 1 || revisions.length > 100)
+        throw new Error('MCPVault Canvas metadata has an invalid revision count');
+    const fileIds = new Set(value.nodes.filter(isRecord).filter(node => node.type === 'file').map(node => String(node.id || '')));
+    const normalizedRevisions = {};
+    for (const [nodeId, revision] of revisions) {
+        if (!nodeId || nodeId.length > 128 || !fileIds.has(nodeId))
+            throw new Error('MCPVault Canvas metadata references a missing file node');
+        if (typeof revision !== 'string' || !/^[a-f0-9]{64}$/.test(revision))
+            throw new Error('MCPVault Canvas metadata has an invalid source revision');
+        normalizedRevisions[nodeId] = revision;
+    }
+    if (!normalizedRevisions[parsed.rootNodeId])
+        throw new Error('MCPVault Canvas metadata root has no revision guard');
+    return {
+        kind: 'mcpvault-derived-canvas',
+        version: 1,
+        mode: parsed.mode,
+        rootNodeId: parsed.rootNodeId,
+        snapshotFingerprint: parsed.snapshotFingerprint,
+        revisions: normalizedRevisions,
+    };
+}
 /** Validate the bounded subset of JSON Canvas 1.0 that MCPVault emits. */
 export function validateJsonCanvasDocument(value) {
     if (!isRecord(value) || !Array.isArray(value.nodes) || !Array.isArray(value.edges))
@@ -148,7 +222,7 @@ export function validateJsonCanvasDocument(value) {
             throw new Error('Canvas node dimensions must be positive');
         if (type === 'file' && (typeof raw.file !== 'string' || !raw.file.trim() || raw.file.length > 1000))
             throw new Error('Canvas file nodes require a bounded file path');
-        if (type === 'text' && (typeof raw.text !== 'string' || raw.text.length > 4000))
+        if (type === 'text' && (typeof raw.text !== 'string' || raw.text.length > 12000))
             throw new Error('Canvas text nodes require bounded text');
     }
     const edgeIds = new Set();

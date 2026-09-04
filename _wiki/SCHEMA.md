@@ -487,6 +487,14 @@ its root. It requires the output revision, may guard the root revision, and
 rechecks every included source revision immediately before writing. Global
 maps exclude Community and private notes. Regenerate a Canvas after its source
 revisions change; Markdown, Properties, wikilinks, and Git remain authoritative.
+The export stores a deterministic MCPVault marker inside a standard text node,
+containing file-node revision guards and the snapshot fingerprint but no note
+bodies. `get_wiki_canvas_health` performs bounded, scope-aware checks for stale
+or missing source revisions, malformed managed graphs, oversized files, and
+scope violations. It does not rewrite anything. Canvases without that marker
+are reported as `unmanaged`, not defective, because ordinary Obsidian Canvas
+authoring remains valid. Managed Canvas defects also appear in the existing
+exception board so agents do not need to poll another dashboard routinely.
 Catalog browsing also accepts `orderBy: location`, `alphabet`, `time`,
 `category`, or `hierarchy`, corresponding to different LATCH-style retrieval
 needs. Neighborhood entries include a bounded `pathTrace` so an agent can see

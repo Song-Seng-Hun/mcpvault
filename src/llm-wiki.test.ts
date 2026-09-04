@@ -76,6 +76,8 @@ test('Obsidian Canvas projections preserve spatial order, scope boundaries, and 
       expect.objectContaining({ endpointId: 'wiki.canvas_view', available: true }),
       expect.objectContaining({ endpointId: 'wiki.canvas_export', available: true, method: 'POST' }),
     ]));
+    const healthDiscovery = await callJson(client, 'search_capabilities', { query: 'stale Canvas health repair', limit: 3, maxChars: 6000, accessToken });
+    expect(healthDiscovery.value.endpoints).toEqual(expect.arrayContaining([expect.objectContaining({ endpointId: 'wiki.canvas_health', available: true })]));
 
     const preview = await callJson(client, 'get_wiki_canvas_view', { path: 'Knowledge/Spatial map.md', mode: 'auto', maxDepth: 2, limit: 20, maxChars: 16000, accessToken });
     expect(preview.value).toMatchObject({
@@ -116,10 +118,39 @@ test('Obsidian Canvas projections preserve spatial order, scope boundaries, and 
     const persisted = JSON.parse(await readFile(join(vault, 'Views', 'Spatial map Spatial.canvas'), 'utf8'));
     expect(persisted).toMatchObject({ nodes: expect.any(Array), edges: expect.any(Array) });
     expect(JSON.stringify(persisted)).not.toContain('A body that must not be copied');
+    expect(JSON.stringify(persisted)).toContain('mcpvault-canvas:');
+    await callJson(client, 'export_wiki_canvas', {
+      path: 'Knowledge/Spatial map.md', mode: 'moc', outputPath: 'Views/Spatial map Copy.canvas',
+      maxDepth: 2, limit: 20, maxChars: 16000, expectedSourceRevision: preview.value.root.revision, expectedRevision: 'missing', accessToken,
+    });
+    const sharedSourceHealth = await callJson(client, 'get_wiki_canvas_health', { limit: 10, maxChars: 12000, accessToken });
+    expect(sharedSourceHealth.value.counts).toMatchObject({ total: 2, fresh: 2, sourceChecks: 3 });
+    await rm(join(vault, 'Views', 'Spatial map Copy.canvas'));
+    const freshHealth = await callJson(client, 'get_wiki_canvas_health', { limit: 10, maxChars: 8000, accessToken });
+    expect(freshHealth.value.counts).toMatchObject({ total: 1, fresh: 1 });
+    expect(freshHealth.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Views/Spatial map Spatial.canvas', state: 'fresh', root: expect.objectContaining({ path: 'Knowledge/Spatial map.md' }) })]));
+    const compactHealth = await callJson(client, 'get_wiki_canvas_health', { limit: 10, maxChars: 1024, prettyPrint: true, accessToken });
+    expect(String((compactHealth.result.content as any)[0]?.text).length).toBeLessThanOrEqual(1024);
+    expect(compactHealth.value.counts.total).toBe(1);
+
+    const tampered = structuredClone(persisted);
+    const hiddenTarget = tampered.nodes.find((node: any) => node.type === 'file' && node.file === 'Knowledge/Advanced.md');
+    hiddenTarget.file = '_scopes/models/other/Secret.md';
+    await writeFile(join(vault, 'Views', 'Spatial map Spatial.canvas'), JSON.stringify(tampered));
+    const guardedHealth = await callJson(client, 'get_wiki_canvas_health', { limit: 10, maxChars: 8000, accessToken });
+    expect(guardedHealth.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ state: 'invalid', detail: expect.stringContaining('identity does not match') })]));
+    expect(JSON.stringify(guardedHealth.value)).not.toContain('_scopes/models/other/Secret.md');
+    await writeFile(join(vault, 'Views', 'Spatial map Spatial.canvas'), `${JSON.stringify(persisted, null, 2)}\n`);
 
     const root = await callJson(client, 'read_note', { path: 'Knowledge/Spatial map.md', accessToken });
     const changed = await client.callTool({ name: 'patch_note', arguments: { path: 'Knowledge/Spatial map.md', oldString: '# Spatial map', newString: '# Spatial map updated', expectedRevision: root.value.revision, accessToken } });
     expect(changed.isError).toBeFalsy();
+    const staleHealth = await callJson(client, 'get_wiki_canvas_health', { limit: 10, maxChars: 8000, accessToken });
+    expect(staleHealth.value.counts).toMatchObject({ stale: 1 });
+    expect(staleHealth.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ state: 'stale', nextAction: expect.objectContaining({ endpointId: 'wiki.canvas_view' }) })]));
+    expect(staleHealth.value.items[0].changed).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Spatial map.md', expectedRevision: preview.value.root.revision })]));
+    const repairBoard = await callJson(client, 'get_wiki_exception_board', { limit: 30, maxChars: 16000, accessToken });
+    expect(repairBoard.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Views/Spatial map Spatial.canvas', code: 'canvas_stale', category: 'freshness' })]));
     const stale = await client.callTool({ name: 'export_wiki_canvas', arguments: {
       path: 'Knowledge/Spatial map.md', mode: 'moc', maxChars: 16000,
       expectedSourceRevision: preview.value.root.revision, expectedRevision: saved.value.revision, accessToken,

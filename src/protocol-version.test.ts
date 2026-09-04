@@ -91,6 +91,15 @@ test("compiled stdio server completes the bounded organization discovery route",
     const home = await client.callTool({ name: "call_endpoint", arguments: { endpointId: "wiki.home", arguments: { limit: 5, maxChars: 4000 } } });
     const homeValue = JSON.parse(String((home.content as any)[0]?.text || "{}"));
     expect(homeValue).toMatchObject({ suggestedHomePath: "Home.md", suggestedIndexPath: "JDex.md", counts: expect.any(Object), nextAction: { endpointId: expect.any(String) } });
+
+    const canvasDiscovery = await client.callTool({ name: "search_capabilities", arguments: { query: "stale Canvas health repair", limit: 2, maxChars: 5000 } });
+    const canvasDiscoveryValue = JSON.parse(String((canvasDiscovery.content as any)[0]?.text || "{}"));
+    expect(canvasDiscoveryValue.endpoints).toEqual(expect.arrayContaining([
+      expect.objectContaining({ endpointId: "wiki.canvas_health", available: true }),
+    ]));
+    const canvasHealth = await client.callTool({ name: "call_endpoint", arguments: { endpointId: "wiki.canvas_health", arguments: { limit: 5, maxChars: 3000 } } });
+    const canvasHealthValue = JSON.parse(String((canvasHealth.content as any)[0]?.text || "{}"));
+    expect(canvasHealthValue).toMatchObject({ counts: { total: 0, inspected: 0 }, advisory: true });
   } finally {
     await client.close();
   }

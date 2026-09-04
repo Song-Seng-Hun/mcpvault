@@ -2751,6 +2751,20 @@ export declare class LlmWikiService {
         truncated: any;
         note: string;
     }>;
+    /** Inspect scope-visible derived Canvases for stale or missing source guards. */
+    canvasHealth(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        purpose: string;
+        counts: {
+            total: number;
+            inspected: number;
+            sourceChecks: number;
+        };
+        recommendations: string[];
+        advisory: boolean;
+        generatedAt: string;
+        items: Record<string, any>[];
+        truncated: boolean;
+    }>;
     /**
      * Return a derived launchpad for an authorized scope. This is the
      * scope-local equivalent of an Obsidian Home note/JDex: it points at live

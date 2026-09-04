@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { buildJsonCanvasProjection, validateJsonCanvasDocument, type WikiCanvasNote } from './json-canvas.js';
+import { buildJsonCanvasProjection, readJsonCanvasMetadata, validateJsonCanvasDocument, type WikiCanvasNote } from './json-canvas.js';
 
 const notes: WikiCanvasNote[] = [
   { path: 'Knowledge/MOCs/Home.md', publicPath: 'Knowledge/MOCs/Home.md', revision: 'a'.repeat(64), title: 'Home', role: 'root' },
@@ -26,6 +26,11 @@ describe('JSON Canvas knowledge projections', () => {
     expect(first.canvas.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: 'depends_on', color: '2', toEnd: 'arrow' }),
     ]));
+    expect(readJsonCanvasMetadata(first.canvas)).toMatchObject({
+      kind: 'mcpvault-derived-canvas', version: 1, mode: 'moc',
+      rootNodeId: expect.any(String), snapshotFingerprint: first.snapshotFingerprint,
+      revisions: expect.objectContaining({ [first.canvas.nodes.at(-1)!.id]: 'a'.repeat(64) }),
+    });
     expect(() => validateJsonCanvasDocument(first.canvas)).not.toThrow();
   });
 
@@ -41,5 +46,9 @@ describe('JSON Canvas knowledge projections', () => {
       nodes: [{ id: 'a', type: 'file', x: 0, y: 0, width: 100, height: 100, file: 'A.md' }],
       edges: [{ id: 'edge', fromNode: 'a', toNode: 'missing' }],
     })).toThrow(/existing nodes/);
+
+    const generated = buildJsonCanvasProjection({ mode: 'moc', notes, edges: [] }).canvas;
+    const withoutRoot = { ...generated, nodes: generated.nodes.filter(node => node.id !== generated.nodes.at(-1)!.id) };
+    expect(() => readJsonCanvasMetadata(withoutRoot)).toThrow(/missing file node/);
   });
 });

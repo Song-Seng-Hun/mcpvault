@@ -129,6 +129,7 @@ describe('LLM Wiki organization vocabulary contracts', () => {
 
     expectEnum(properties('get_wiki_canvas_view'), 'mode', ['auto', 'moc', 'neighborhood']);
     expectEnum(properties('export_wiki_canvas'), 'mode', ['auto', 'moc', 'neighborhood']);
+    expect(properties('get_wiki_canvas_health').maxChars?.type).toBe('integer');
     const canvasExport = tools.get('export_wiki_canvas')!.inputSchema as { required?: string[] };
     expect(canvasExport.required).toEqual(expect.arrayContaining(['path', 'expectedRevision']));
   });

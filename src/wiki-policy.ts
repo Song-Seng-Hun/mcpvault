@@ -19,7 +19,7 @@ export const WIKI_POLICY_TOPICS = [
 ] as const;
 
 export type WikiPolicyTopicId = typeof WIKI_POLICY_TOPICS[number];
-export const WIKI_POLICY_VERSION = 3;
+export const WIKI_POLICY_VERSION = 4;
 
 type WikiPolicyTopic = {
   purpose: string;
@@ -76,8 +76,9 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
       'Visible note identities resolve exact paths, filenames, titles, aliases, preferred terms, stable IDs, and explicit relative paths; ambiguity is repair debt, not permission to guess.',
       'Use wiki.home for one intent route, wiki.neighborhood for nearby context, and wiki.context_pack only when a reusable bounded shelf is warranted.',
       'Use wiki.canvas_view only when spatial arrangement materially helps; export through wiki.canvas_export so source and output revisions remain checked and the derived Canvas stays in the root scope.',
+      'Before relying on an older managed map, use wiki.canvas_health or its exception-board entry; an unmanaged user Canvas is valid but makes no source-freshness claim.',
     ],
-    routes: ['wiki.search', 'wiki.home', 'wiki.read_projection', 'wiki.neighborhood', 'wiki.context_pack', 'wiki.canvas_view'],
+    routes: ['wiki.search', 'wiki.home', 'wiki.read_projection', 'wiki.neighborhood', 'wiki.context_pack', 'wiki.canvas_view', 'wiki.canvas_health'],
     avoid: ['loading whole documents for a single section', 'treating vector similarity or Canvas proximity as evidence', 'following an ambiguous identity'],
   },
   knowledge: {
@@ -131,9 +132,9 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
       'The Markdown outline is authored order, nav_order controls sibling MOC order, and only moc_parent defines hierarchy.',
       'Use wiki.learning_path to compare authored order with note and claim prerequisites, inspect cycles and late edges, and preserve intentional pedagogical redundancy.',
       'Use one primary_moc as a launch point and bounded additional mocs for legitimate multiple contexts; do not duplicate the note.',
-      'Use wiki.canvas_view for an optional spatial projection of the authored MOC and dependency edges; regenerate the derived Canvas after source revisions change.',
+      'Use wiki.canvas_view for an optional spatial projection of the authored MOC and dependency edges; use wiki.canvas_health before reusing an old managed export and regenerate it after source revisions change.',
     ],
-    routes: ['wiki.moc_candidates', 'wiki.learning_path', 'wiki.graph_health', 'wiki.context_pack', 'wiki.canvas_view', 'wiki.canvas_export'],
+    routes: ['wiki.moc_candidates', 'wiki.learning_path', 'wiki.graph_health', 'wiki.context_pack', 'wiki.canvas_view', 'wiki.canvas_export', 'wiki.canvas_health'],
     avoid: ['inferring hierarchy from every body link', 'automatic MOC reorder', 'treating a thematic external prerequisite as a broken course', 'treating a Canvas position as canonical structure'],
   },
   memory: {
@@ -154,8 +155,9 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
       'Treat graph, vocabulary, duplicate, placement, and composition findings as advisory signals; inspect both current revisions before editing.',
       'Similarity, zero usage, high degree, or a missing reciprocal edge may justify review but never automatic merge, split, move, or deletion.',
       'After a repair, re-run only the originating bounded check and preserve the reason in Markdown Properties or Git as appropriate.',
+      'Managed Canvas freshness belongs to wiki.canvas_health and the exception board; do not treat an unmanaged user Canvas as broken or rewrite it automatically.',
     ],
-    routes: ['wiki.review_packet', 'wiki.exception_board', 'wiki.graph_health', 'wiki.vocabulary_health', 'wiki.duplicate_candidates'],
+    routes: ['wiki.review_packet', 'wiki.exception_board', 'wiki.graph_health', 'wiki.canvas_health', 'wiki.vocabulary_health', 'wiki.duplicate_candidates'],
     avoid: ['calling every health endpoint in one turn', 'repairing derived indexes instead of authoritative Markdown', 'automatic cleanup from an advisory score'],
   },
   ideation: {

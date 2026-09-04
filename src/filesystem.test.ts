@@ -1,5 +1,5 @@
 import { test, expect, beforeEach, afterEach, describe } from "vitest";
-import { FileSystemService, classifyWriteError, MAX_NOTE_CONTENT_BYTES } from "./filesystem.js";
+import { FileSystemService, classifyWriteError, MAX_DERIVED_VIEW_READ_BYTES, MAX_NOTE_CONTENT_BYTES } from "./filesystem.js";
 import { PathFilter } from "./pathfilter.js";
 import { FrontmatterHandler } from "./frontmatter.js";
 import { VaultMetadataIndex } from "./vault-index.js";
@@ -41,6 +41,7 @@ test("writes only validated revision-checked JSON Canvas views", async () => {
   expect(created.previousRevision).toBe("missing");
   expect(created.revision).toMatch(/^[a-f0-9]{64}$/);
   expect(JSON.parse(await readFile(join(testVaultPath, "Views/Knowledge.canvas"), "utf8"))).toMatchObject({ nodes: expect.any(Array), edges: expect.any(Array) });
+  expect(await fileSystem.readCanvasFile("Views/Knowledge.canvas")).toMatchObject({ path: "Views/Knowledge.canvas", revision: created.revision, document: { nodes: expect.any(Array), edges: expect.any(Array) } });
 
   await expect(fileSystem.writeCanvasFile({ path: "Other/Knowledge.canvas", content, expectedRevision: "missing" })).rejects.toThrow(/Views/);
   await expect(fileSystem.writeCanvasFile({
@@ -49,6 +50,9 @@ test("writes only validated revision-checked JSON Canvas views", async () => {
     expectedRevision: "missing",
   })).rejects.toThrow(/existing nodes/);
   await expect(fileSystem.writeCanvasFile({ path: "Views/Knowledge.canvas", content, expectedRevision: "missing" })).rejects.toThrow(/Revision conflict/);
+
+  await writeFile(join(testVaultPath, "Views", "Huge.canvas"), " ".repeat(MAX_DERIVED_VIEW_READ_BYTES + 1));
+  await expect(fileSystem.readCanvasFile("Views/Huge.canvas")).rejects.toThrow(/health-read limit/);
 });
 
 // ============================================================================

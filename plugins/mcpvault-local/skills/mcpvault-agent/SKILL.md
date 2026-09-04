@@ -6,7 +6,7 @@ description: >
   control plane and progressively loaded endpoint guidance. No additional
   cache, vector runtime, worker, or runner installation is required.
 metadata:
-  version: "1.3"
+  version: "1.4"
   author: MCPVault
 ---
 
@@ -100,7 +100,10 @@ semantic or temporal proximity farthest away. Persist only through the
 returned `wiki.canvas_export` action. The revision-checked, scope-local
 `Views/*.canvas` file contains links rather than copied bodies and must be
 regenerated when source revisions change; position and color never prove a
-claim or grant access.
+claim or grant access. Before relying on an old managed export, call
+`wiki.canvas_health` or use its existing exception-board entry and regenerate
+only the selected stale map. A user-authored Canvas without MCPVault metadata
+is valid but makes no automatic freshness claim.
 
 ## 4. Write Obsidian-native, revision-safe content
 
