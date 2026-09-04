@@ -111,6 +111,8 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'related_task', type: 'text', description: 'Scope-safe task or project reference associated with a fleeting capture', appliesTo: ['fleeting'] },
     { name: 'primary_moc', type: 'text', description: 'Preferred Obsidian MOC entry point for this note; navigation metadata only' },
     { name: 'mocs', type: 'list', description: 'Additional Obsidian MOC entry points for multi-context discovery; navigation metadata only' },
+    { name: 'moc', type: 'text', description: 'Legacy single-MOC membership retained for compatible Obsidian navigation; prefer primary_moc plus mocs for new notes' },
+    { name: 'project', type: 'text', description: 'Optional project membership link used for bounded project-context retrieval' },
     { name: 'aliases', type: 'list', description: 'Alternate Obsidian names' },
     { name: 'tags', type: 'list', description: 'Native Obsidian tags used for lightweight faceted discovery' },
     { name: 'nav_order', type: 'number', description: 'Optional sibling order inside an MOC tree; lower numbers appear first, unnumbered items follow', appliesTo: ['moc'] },
@@ -196,12 +198,27 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'last_reviewed_by', type: 'text', description: 'Reviewer identity' },
     { name: 'last_reviewed_at', type: 'text', description: 'Review completion time' },
     { name: 'last_reviewed_revision', type: 'text', description: 'Revision inspected by the reviewer' },
+    { name: 'last_review_trigger', type: 'text', description: 'Bounded event or reason that caused the latest evidence review to reopen' },
     { name: 'review_count', type: 'number', description: 'Number of completed reviews' },
     { name: 'review_reopen_count', type: 'number', description: 'Number of reviews reopened' },
     { name: 'interpretation_status', type: 'text', description: 'Source-to-knowledge processing stage', allowed: INTERPRETATION_STATUSES },
     { name: 'epistemic_status', type: 'text', description: 'Question, hypothesis, experiment, or assumption state' },
     { name: 'knowledge_polarity', type: 'text', description: 'Positive or preserved negative-knowledge orientation; never a truth score', allowed: KNOWLEDGE_POLARITIES },
     { name: 'negative_type', type: 'text', description: 'Reusable kind of failed, rejected, contradicted, or superseded knowledge', allowed: NEGATIVE_KINDS },
+    { name: 'negative_attempted', type: 'text', description: 'Bounded account of the approach that was attempted' },
+    { name: 'negative_observed', type: 'text', description: 'Bounded observation of what actually happened' },
+    { name: 'negative_failure_condition', type: 'text', description: 'Condition under which the preserved approach failed' },
+    { name: 'negative_affected_scope', type: 'text', description: 'Bounded scope in which the negative result is known to apply' },
+    { name: 'negative_reproduction', type: 'text', description: 'Bounded reproduction steps or conditions for the negative result' },
+    { name: 'negative_why_rejected', type: 'text', description: 'Why the attempted approach was rejected' },
+    { name: 'negative_reusable_lesson', type: 'text', description: 'Reusable lesson distilled from the failed or rejected path' },
+    { name: 'negative_replacement_path', type: 'text', description: 'Scope-safe replacement note or preferred approach for the negative result' },
+    { name: 'clarified_by', type: 'text', description: 'Agent that completed the GTD Clarify decision', appliesTo: ['fleeting'] },
+    { name: 'clarified_at', type: 'text', description: 'ISO date/time when the GTD Clarify decision was recorded', appliesTo: ['fleeting'] },
+    { name: 'clarify_note', type: 'text', description: 'Bounded rationale for the GTD Clarify disposition', appliesTo: ['fleeting'] },
+    { name: 'triage_target', type: 'text', description: 'Suggested scope-safe destination recorded by Clarify without moving the note', appliesTo: ['fleeting'] },
+    { name: 'moc_purpose', type: 'text', description: 'What navigation need or question this Map of Content serves', appliesTo: ['moc'] },
+    { name: 'moc_scope', type: 'text', description: 'Boundary of the concepts intentionally covered by this Map of Content', appliesTo: ['moc'] },
     { name: 'moc_questions', type: 'list', description: 'Questions a MOC should help answer', appliesTo: ['moc'] },
     { name: 'moc_parent', type: 'text', description: 'Parent MOC link', appliesTo: ['moc'] },
     { name: 'focus_horizon', type: 'text', description: 'GTD horizon from ground to purpose', allowed: FOCUS_HORIZONS },
@@ -218,6 +235,14 @@ const DEDICATED_APPLICABILITY_LINT_FIELDS = new Set([
     'archive_collection_id', 'archive_series', 'archive_sequence', 'accession_id',
     'custodial_history', 'original_order_note',
 ]);
+const ORGANIZATION_PROPERTY_NAMES = new Set(ORGANIZATION_PROPERTY_CONTRACT.map(entry => entry.name));
+function assertOrganizationPropertiesDeclared(properties) {
+    const undeclared = Object.keys(properties).filter(name => !ORGANIZATION_PROPERTY_NAMES.has(name));
+    if (undeclared.length) {
+        throw new Error(`MCPVault organization writer emitted undeclared Properties: ${undeclared.sort().join(', ')}`);
+    }
+    return properties;
+}
 export function getOrganizationPropertyContract() {
     return ORGANIZATION_PROPERTY_CONTRACT.map(entry => ({ ...entry, ...(entry.allowed && { allowed: [...entry.allowed] }), ...(entry.appliesTo && { appliesTo: [...entry.appliesTo] }) }));
 }
@@ -846,7 +871,7 @@ export function knowledgeOrganization(input) {
     const summaryDigest = summaryFieldsPresent && projectionRewritten && inheritedProjectionChecked && input.contentDigest !== undefined
         ? optionalText(input.contentDigest, 'summary_of_content_sha256', 128)
         : optionalText(existing.summary_of_content_sha256, 'summary_of_content_sha256', 128);
-    return {
+    return assertOrganizationPropertiesDeclared({
         note_kind: kind,
         lifecycle,
         ...(decisionStatus && { decision_status: decisionStatus }),
@@ -953,7 +978,7 @@ export function knowledgeOrganization(input) {
         ...(relations || {}),
         ...(relationNotes && { relation_notes: relationNotes }),
         ...(relationEvidence && { relation_evidence: relationEvidence }),
-    };
+    });
 }
 function markdownSectionHasContent(content, names) {
     const wanted = new Set(names.map(name => name.trim().toLowerCase()));
@@ -1018,6 +1043,8 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
             return 'object';
         if (typeof value === 'number')
             return 'number';
+        if (typeof value === 'boolean')
+            return 'boolean';
         return 'text';
     };
     for (const contract of ORGANIZATION_PROPERTY_CONTRACT) {

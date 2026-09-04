@@ -151,6 +151,9 @@ describe('knowledge organization focus and summary metadata', () => {
       expect.objectContaining({ name: 'knowledge_polarity', type: 'text' }),
       expect.objectContaining({ name: 'negative_type', type: 'text' }),
       expect.objectContaining({ name: 'triage_disposition', type: 'text', appliesTo: ['fleeting'] }),
+      expect.objectContaining({ name: 'moc_purpose', type: 'text', appliesTo: ['moc'] }),
+      expect.objectContaining({ name: 'negative_reusable_lesson', type: 'text' }),
+      expect.objectContaining({ name: 'last_review_trigger', type: 'text' }),
     ]));
     expect(knowledgeOrganization({ status: 'draft', noteKind: 'atomic', reviewIntervalDays: 30 })).toMatchObject({ review_interval_days: 30 });
     expect(organizationLintIssues('Knowledge/Drift.md', {
@@ -162,6 +165,44 @@ describe('knowledge organization focus and summary metadata', () => {
     expect(organizationLintIssues('Knowledge/InvalidNegative.md', {
       llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'review', knowledge_polarity: 'uncertain', negative_type: 'mistake',
     }, '# Invalid negative\n').filter(issue => issue.code === 'property_contract_violation')).toHaveLength(2);
+  });
+
+  test('keeps organization writer output inside one unique public Property contract', () => {
+    const contract = getOrganizationPropertyContract();
+    const names = contract.map(entry => entry.name);
+    expect(new Set(names).size).toBe(names.length);
+
+    const common = {
+      status: 'draft', primaryMoc: '[[MOCs/Home]]', mocs: ['[[MOCs/Topic]]'], moc: '[[MOCs/Legacy]]', project: '[[Projects/Test]]',
+      reviewAt: '2030-01-01', reviewIntervalDays: 30, reviewSnoozedUntil: '2030-01-02', reviewSnoozeReason: 'Awaiting source',
+      recallPrompt: 'What is the claim?', recallIntervalDays: 14, lastRecalledAt: '2030-01-01', recallQuality: 'good',
+      retentionPolicy: 'review', retentionEvent: 'manual', retentionAt: '2030-06-01', preserveUntil: '2030-05-01', legalHold: true,
+      retentionReason: 'Preserve the audit trail', replacedBy: '[[Knowledge/New]]', aliases: ['Alternate'], summary: 'Summary',
+      keyPoints: ['Point'], openQuestions: ['Question?'], summaryLayer: 2, summaryHighlights: [{ text: 'Highlight' }],
+      stableId: 'note-1', canonicalPath: 'Knowledge/Canonical.md', termStatus: 'deprecated', termReplacedBy: '[[Preferred]]',
+      termScopeNote: 'Narrow usage', preferredTerm: 'Preferred', termLanguage: 'en', authorityScheme: 'local', authorityId: 'term-1',
+      disambiguation: 'Concept', broaderTerms: ['[[Broader]]'], relatedTerms: ['[[Related]]'], subjectTerms: ['retrieval'],
+      domain: 'knowledge-management', methods: ['review'], audience: ['agents'], retrievalCues: ['When searching'], useWhen: 'During retrieval',
+      validFrom: '2029-01-01', validUntil: '2031-01-01', observedAt: '2030-01-01', temporalScope: '2030 policy',
+      knowledgeRole: 'concept', seeAlso: ['[[Adjacent]]'], reviewPolicy: 'manual', reviewOutcome: 'revised', reviewedBy: 'reviewer',
+      reviewedAt: '2030-01-01', reviewNote: 'Checked evidence', reviewChecks: ['evidence'], reviewOpenItems: ['Recheck source'],
+      interpretationStatus: 'interpreted', focusHorizon: 'area', focusParent: '[[Areas/Knowledge]]', focusSupports: ['[[Goals/Useful Wiki]]'],
+      relations: { supports: ['[[Knowledge/Target]]'] }, relationNotes: { supports: 'Supports target' }, relationEvidence: { supports: ['_sources/source.md'] },
+      contentDigest: 'a'.repeat(64),
+    } as const;
+    const outputs = [
+      knowledgeOrganization({ ...common, noteKind: 'project', lifecycle: 'active', tags: ['work'], timeEstimateMinutes: 30, energy: 'medium', effort: 'high', nextActions: ['Test'], nextAction: 'Run test', waitingFor: 'peer', desiredOutcome: 'Verified result', projectPurpose: 'Improve retrieval', projectSupport: ['[[Resources/Guide]]'], taskContext: '@computer', dueAt: '2030-02-01', scheduledAt: '2030-01-15', deferUntil: '2030-01-10', serviceClass: 'research', completionCriteria: ['Tests pass'], startedAt: '2030-01-01', blockedSince: '2030-01-02', waitingSince: '2030-01-03', completedAt: '2030-01-04', taskStatus: 'completed' }),
+      knowledgeOrganization({ ...common, noteKind: 'moc', lifecycle: 'evergreen', navOrder: 1, mocPurpose: 'Navigate a topic', mocScope: 'One domain', mocQuestions: ['What matters?'], mocParent: '[[MOCs/Home]]' }),
+      knowledgeOrganization({ ...common, noteKind: 'decision', lifecycle: 'review', decisionStatus: 'proposed' }),
+      knowledgeOrganization({ ...common, noteKind: 'experiment', lifecycle: 'review', epistemicStatus: 'failed' }),
+      knowledgeOrganization({ ...common, noteKind: 'atomic', lifecycle: 'review', polarity: 'negative', negativeType: 'failure', attempted: 'Attempt', observed: 'Observation', failureCondition: 'Condition', affectedScope: 'Scope', reproduction: 'Steps', whyRejected: 'Reason', reusableLesson: 'Lesson', replacementPath: 'Knowledge/Replacement.md' }),
+      knowledgeOrganization({ ...common, noteKind: 'fleeting', lifecycle: 'inbox', clarifyDisposition: 'knowledge', clarifiedBy: 'agent', clarifiedAt: '2030-01-01', clarifyNote: 'Worth distilling', triageTarget: 'Knowledge/Target.md' }),
+    ];
+    const declared = new Set(names);
+    expect([...new Set(outputs.flatMap(output => Object.keys(output)))].filter(name => !declared.has(name))).toEqual([]);
+    expect(organizationLintIssues('Knowledge/Held.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'review', legal_hold: true,
+    }, '# Held\n').filter(issue => issue.code === 'property_contract_violation')).toEqual([]);
   });
 
   test('reports managed Properties filed on the wrong kind of note', () => {
