@@ -3164,6 +3164,37 @@ export class FileSystemService {
     return this.metadataIndex.queryAuthorityShelf(params, canAccessPath);
   }
 
+  /** Read bounded frontmatter and revisions for exact physical note paths. */
+  async readNoteMetadata(paths: readonly string[], canAccessPath: (path: string) => boolean = () => true): Promise<QueryNote[]> {
+    if (paths.length > 500) throw new Error('note metadata lookup supports at most 500 paths');
+    const normalizedPaths: string[] = [];
+    const seen = new Set<string>();
+    for (const rawPath of paths) {
+      const path = this.normalizePath(rawPath);
+      const key = path.toLocaleLowerCase('en-US');
+      if (!path || seen.has(key)) continue;
+      seen.add(key);
+      if (!this.pathFilter.isAllowed(path) || !canAccessPath(path)) continue;
+      normalizedPaths.push(path);
+    }
+    if (this.metadataIndex) {
+      return (await this.metadataIndex.getMany(normalizedPaths, canAccessPath))
+        .map(entry => ({ path: entry.path, frontmatter: entry.frontmatter, revision: entry.revision }));
+    }
+    const notes: QueryNote[] = [];
+    for (const path of normalizedPaths) {
+      try {
+        const raw = await this.vaultIo.readUtf8(this.resolvePath(path));
+        const parsed = this.frontmatterHandler.parse(raw);
+        notes.push({ path, frontmatter: parsed.frontmatter, revision: this.revision(raw) });
+      } catch {
+        // A projected candidate may be deleted between the source scan and
+        // this metadata read. Omit it rather than returning stale authority.
+      }
+    }
+    return notes;
+  }
+
   /** Count metadata rows without reading note bodies; used by bounded windows. */
   async countNotes(
     params: QueryNotesParams = {},

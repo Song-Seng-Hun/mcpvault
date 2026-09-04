@@ -362,6 +362,29 @@ export class VaultMetadataIndex {
     return count;
   }
 
+  /**
+   * Read a bounded exact-path metadata set without reopening note bodies.
+   * Request order is preserved, duplicate paths are collapsed, and caller
+   * visibility is applied before any entry leaves the disposable index.
+   */
+  async getMany(paths: readonly string[], canAccessPath: (path: string) => boolean = () => true): Promise<VaultIndexEntry[]> {
+    if (paths.length > 500) throw new Error('metadata lookup supports at most 500 paths');
+    await this.ensureFresh();
+    const selected: VaultIndexEntry[] = [];
+    const seen = new Set<string>();
+    for (const rawPath of paths) {
+      const path = normalizePath(rawPath);
+      const key = path.toLocaleLowerCase('en-US');
+      if (!path || seen.has(key)) continue;
+      seen.add(key);
+      if (!isNote(path) || !this.pathFilter.isAllowed(path) || !canAccessPath(path)) continue;
+      const entry = this.entries.get(path);
+      if (!entry) continue;
+      selected.push({ ...entry, frontmatter: { ...entry.frontmatter } });
+    }
+    return selected;
+  }
+
   async listSorted(filters: Record<string, unknown> = {}, pathPrefix = '', sortBy = 'path', sortOrder: 'asc' | 'desc' = 'asc'): Promise<VaultIndexEntry[]> {
     await this.ensureFresh();
     const cacheKey = JSON.stringify([pathPrefix, filters, sortBy, sortOrder]);

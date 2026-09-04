@@ -120,10 +120,11 @@ the exact fingerprint, and re-read targets. Obsidian visibility needs no commit.
 
 Never use triage/review/publish for retirement or reactivation.
 
-For maintenance, `volatility_class` chooses a default review cadence and
-upstream cascades stay advisory. Use `wiki.moc_rebalance` only for an overloaded
-MOC. A completed task needs a knowledge disposition: linked durable/negative
-knowledge, a retrospective, or an exclusive explained no-reuse declaration.
+For maintenance, `volatility_class` sets default cadence; cascades stay
+advisory. Use `wiki.moc_rebalance` only for an overloaded MOC. Completed tasks
+need a knowledge disposition: link durable/negative knowledge, retrospective,
+or explain no reuse. Future `review_snoozed_until` defers packet attention;
+health and exception evidence remain.
 
 Scope is independent of PARA folders:
 

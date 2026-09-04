@@ -1694,16 +1694,17 @@ export declare class LlmWikiService {
      */
     reviewPacket(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<Record<string, any> | {
         purpose: string;
-        priorities: {
-            [x: string]: unknown;
+        priorities: Omit<Record<string, unknown> & {
             priority: number;
             path: string;
             reason: string;
             reasons: string[];
             suggestedTool: string;
             suggestedTools: string[];
-        }[];
+            sourceOrder: number;
+        }, "sourceOrder">[];
         counts: {
+            snoozedPriorities: number;
             inbox: number;
             knowledgeReview: number;
             due: number;
@@ -1733,6 +1734,8 @@ export declare class LlmWikiService {
             lowSelectivityFacetValues: number;
             lintIssues: number;
         };
+        nextSnoozedReviewAt?: string;
+        priorityScanTruncated: boolean;
         supportingViews: {
             inbox: any;
             knowledge: any;
@@ -2037,6 +2040,8 @@ export declare class LlmWikiService {
         then: {
             endpointId: unknown;
         } | undefined;
+        nextSnoozedReviewAt?: string;
+        priorityScanTruncated: boolean;
         truncated: boolean;
     }>;
     /**

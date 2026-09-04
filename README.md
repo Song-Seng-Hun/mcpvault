@@ -349,7 +349,12 @@ and its source revision before performing a normal revision-checked split.
 coverage, Inbox, lifecycle, atomic-note, Evergreen discoverability, summary
 freshness, and alias/ID collision guidance. `get_wiki_review_packet` is a
 smaller priority-ordered maintenance projection for agents that should take
-one bounded next step. `get_wiki_bases_view` emits an optional Obsidian Bases YAML
+one bounded next step. A future `review_snoozed_until` suppresses that note only
+from this action routing; graph, lint, health, and exception reports still show
+the unresolved evidence. The packet reports the visible bounded scan as
+`counts.snoozedPriorities`, `nextSnoozedReviewAt`, and
+`priorityScanTruncated`, so an idle agent can choose another repair without
+mistaking a deferral for resolution. `get_wiki_bases_view` emits an optional Obsidian Bases YAML
 view; it is a local presentation file, never a security boundary.
 
 Properties should keep one native shape per property name across the vault

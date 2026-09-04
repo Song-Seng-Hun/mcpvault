@@ -57,6 +57,12 @@ export declare class VaultMetadataIndex {
     list(filters?: Record<string, unknown>, pathPrefix?: string): Promise<VaultIndexEntry[]>;
     /** Count metadata candidates without sorting or reading note bodies. */
     count(filters?: Record<string, unknown>, pathPrefix?: string, canAccessPath?: (path: string) => boolean, predicate?: (entry: VaultIndexEntry) => boolean): Promise<number>;
+    /**
+     * Read a bounded exact-path metadata set without reopening note bodies.
+     * Request order is preserved, duplicate paths are collapsed, and caller
+     * visibility is applied before any entry leaves the disposable index.
+     */
+    getMany(paths: readonly string[], canAccessPath?: (path: string) => boolean): Promise<VaultIndexEntry[]>;
     listSorted(filters?: Record<string, unknown>, pathPrefix?: string, sortBy?: string, sortOrder?: 'asc' | 'desc'): Promise<VaultIndexEntry[]>;
     /**
      * Select a bounded page without materializing a fully sorted candidate list.

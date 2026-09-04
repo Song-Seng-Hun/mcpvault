@@ -68,4 +68,28 @@ describe('VaultMetadataIndex', () => {
     expect(page.truncated).toBe(true);
     expect(await index.count({ status: 'published' }, 'Community')).toBe(2);
   });
+
+  test('reads exact metadata in request order without leaking inaccessible paths', async () => {
+    vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-index-'));
+    await writeNote('Visible A.md', '---\nstatus: active\n---\nA body');
+    await writeNote('Visible B.md', '---\nstatus: review\n---\nB body');
+    await writeNote('Hidden.md', '---\nstatus: secret\n---\nHidden body');
+    const index = new VaultMetadataIndex(vaultPath, new PathFilter(), new FrontmatterHandler());
+    try {
+      const entries = await index.getMany(
+        ['Visible B.md', 'Hidden.md', 'Visible A.md', 'Visible B.md'],
+        path => path !== 'Hidden.md',
+      );
+      expect(entries.map(entry => entry.path)).toEqual(['Visible B.md', 'Visible A.md']);
+      expect(entries.map(entry => entry.frontmatter.status)).toEqual(['review', 'active']);
+      entries[0]!.frontmatter.status = 'mutated projection';
+      await expect(index.getMany(['Visible B.md'])).resolves.toEqual([
+        expect.objectContaining({ path: 'Visible B.md', frontmatter: { status: 'review' } }),
+      ]);
+      await expect(index.getMany(Array.from({ length: 501 }, (_, index) => `N${index}.md`)))
+        .rejects.toThrow(/at most 500 paths/);
+    } finally {
+      await index.close();
+    }
+  });
 });

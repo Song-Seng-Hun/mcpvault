@@ -4784,7 +4784,11 @@ export class LlmWikiService {
     async reviewPacket(principal, limit = 8, maxChars = 7000) {
         const boundedLimit = Math.min(Math.max(Number(limit) || 8, 1), 30);
         const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
-        const dashboard = await this.reviewDashboard(principal, boundedLimit, Math.min(boundedChars, 14000));
+        // Internal discovery must be wider than the returned page. Otherwise one
+        // deliberately snoozed first item can hide every actionable item behind
+        // it when pulse asks for limit=1.
+        const priorityScanLimit = Math.min(500, Math.max(boundedLimit * 8, 32));
+        const dashboard = await this.reviewDashboard(principal, priorityScanLimit, Math.min(boundedChars, 14000));
         const sections = dashboard.sections;
         let graph = sections.graph;
         // The weekly dashboard deliberately gives each section a small share of
@@ -4818,17 +4822,17 @@ export class LlmWikiService {
             graph.orphanNotes,
         ].some(section => Number(section?.total || section?.needsAttention || 0) > 0 && Array.isArray(section?.items) && section.items.length === 0);
         if (graphNeedsDetail) {
-            const detailedGraph = await this.graphHealth(principal, Math.min(50, Math.max(boundedLimit * 2, 10)), Math.min(16000, Math.max(boundedChars, 12000)));
+            const detailedGraph = await this.graphHealth(principal, Math.min(500, Math.max(priorityScanLimit, 10)), Math.min(16000, Math.max(boundedChars, 12000)));
             if ('mocCoverage' in detailedGraph)
                 graph = detailedGraph;
         }
         const lint = await this.lint(principal, Math.max(200, boundedLimit * 4));
         const [recall, vocabulary, executionFlow] = await Promise.all([
-            this.recallQueue(principal, Math.min(boundedLimit, 8), Math.min(3200, boundedChars)),
-            this.vocabularyHealth(principal, Math.min(boundedLimit, 8), Math.min(3200, boundedChars)),
+            this.recallQueue(principal, Math.min(priorityScanLimit, 32), Math.min(3200, boundedChars)),
+            this.vocabularyHealth(principal, Math.min(priorityScanLimit, 32), Math.min(3200, boundedChars)),
             // Keep a rich internal flow projection so blocked/waiting lanes remain
             // available for prioritization even when the outer packet is compact.
-            this.flowHealth(principal, 3, 7, 14, Math.min(boundedLimit, 8), Math.min(16000, Math.max(12000, boundedChars))),
+            this.flowHealth(principal, 3, 7, 14, Math.min(priorityScanLimit, 32), Math.min(16000, Math.max(12000, boundedChars))),
         ]);
         const vocabularyFacetHealth = vocabulary.facetHealth || {};
         const vocabularyIssueCounts = vocabulary.issueCounts || {};
@@ -4956,10 +4960,44 @@ export class LlmWikiService {
         add(vocabulary.termCollisions.map((item) => ({ path: item.paths?.[0], title: item.term })), 'authority_term_collision', 'wiki.vocabulary_health', 8);
         add([...claimLintByPath.entries()].map(([path, codes]) => ({ path, title: path.split('/').at(-1), issueCodes: codes })), 'claim_argument_needs_repair', 'wiki.argument_map', 2);
         add([...lintByPath.entries()].map(([path, codes]) => ({ path, title: path.split('/').at(-1), issueCodes: codes })), 'lint_quality_issue', 'wiki.organization_health', 8);
-        const priorities = [...priorityByPath.values()]
-            .sort((left, right) => left.priority - right.priority || left.sourceOrder - right.sourceOrder || left.path.localeCompare(right.path))
-            .slice(0, boundedLimit)
-            .map(({ sourceOrder: _sourceOrder, ...item }) => item);
+        const sortedPriorities = [...priorityByPath.values()]
+            .sort((left, right) => left.priority - right.priority || left.sourceOrder - right.sourceOrder || left.path.localeCompare(right.path));
+        const scannedPriorities = sortedPriorities.slice(0, priorityScanLimit);
+        const physicalPathByPublicPath = new Map();
+        for (const priority of scannedPriorities) {
+            try {
+                const physicalPath = this.access.resolveExternalPath(priority.path, principal);
+                if (this.access.canAccessPhysicalPath(physicalPath, principal))
+                    physicalPathByPublicPath.set(priority.path, physicalPath);
+            }
+            catch {
+                // Scope may change between source projections and metadata lookup.
+            }
+        }
+        const candidateMetadata = await this.fileSystem.readNoteMetadata([...physicalPathByPublicPath.values()], path => this.access.canAccessPhysicalPath(path, principal));
+        const metadataByPath = new Map(candidateMetadata.map(note => [normalizePath(note.path).toLocaleLowerCase('en-US'), note]));
+        const nowMs = Date.now();
+        let snoozedPriorities = 0;
+        let nextSnoozedReviewAtMs;
+        const priorities = [];
+        for (const priority of scannedPriorities) {
+            const physicalPath = physicalPathByPublicPath.get(priority.path);
+            const metadata = physicalPath ? metadataByPath.get(normalizePath(physicalPath).toLocaleLowerCase('en-US')) : undefined;
+            if (!metadata)
+                continue;
+            const snoozedUntil = Date.parse(String(metadata.frontmatter.review_snoozed_until || ''));
+            if (Number.isFinite(snoozedUntil) && snoozedUntil > nowMs) {
+                snoozedPriorities += 1;
+                nextSnoozedReviewAtMs = nextSnoozedReviewAtMs === undefined ? snoozedUntil : Math.min(nextSnoozedReviewAtMs, snoozedUntil);
+                continue;
+            }
+            if (priorities.length < boundedLimit) {
+                const { sourceOrder: _sourceOrder, ...item } = priority;
+                priorities.push(item);
+            }
+        }
+        const priorityScanTruncated = sortedPriorities.length > scannedPriorities.length;
+        const nextSnoozedReviewAt = nextSnoozedReviewAtMs === undefined ? undefined : new Date(nextSnoozedReviewAtMs).toISOString();
         let curationPlan;
         const selectedPriority = priorities[0];
         if (selectedPriority && typeof selectedPriority.path === 'string') {
@@ -5097,6 +5135,7 @@ export class LlmWikiService {
             purpose: 'One bounded action packet for the next knowledge-organization step. It is advisory; inspect the selected note and use expectedRevision before changing it.',
             priorities,
             counts: {
+                snoozedPriorities,
                 inbox: Number(sections.inbox?.total || 0),
                 knowledgeReview: Number(sections.knowledge?.total || 0),
                 due: Number(sections.due?.total || 0),
@@ -5126,6 +5165,8 @@ export class LlmWikiService {
                 lowSelectivityFacetValues: lowSelectivityFacetCount,
                 lintIssues: lint.errors + lint.warnings,
             },
+            ...(nextSnoozedReviewAt && { nextSnoozedReviewAt }),
+            priorityScanTruncated,
             supportingViews: {
                 inbox: sections.inbox,
                 knowledge: sections.knowledge,
@@ -5169,6 +5210,8 @@ export class LlmWikiService {
         const minimal = {
             purpose: result.purpose,
             counts: result.counts,
+            ...(nextSnoozedReviewAt && { nextSnoozedReviewAt }),
+            priorityScanTruncated,
             ...(curationPlan && { curationPlan }),
             ...(crossVaultActions.length > 0 && { crossVaultActions: crossVaultActions.slice(0, 1) }),
             sourceTruncated: true,
@@ -5184,6 +5227,8 @@ export class LlmWikiService {
                 selected: selected ? { path: selected.path, revision: selected.revision, reason: selected.reason } : undefined,
                 nextAction: inspect ? { endpointId: inspect.endpointId, arguments: inspect.arguments } : undefined,
                 then: then ? { endpointId: then.endpointId } : undefined,
+                ...(nextSnoozedReviewAt && { nextSnoozedReviewAt }),
+                priorityScanTruncated,
                 truncated: true,
             };
             if (JSON.stringify(tiny).length <= boundedChars)

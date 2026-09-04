@@ -111,7 +111,11 @@ detected later. The baseline never replaces Markdown or Git. Use
 property, MOC coverage, atomic-note, Evergreen discoverability, summary
 freshness, typed evidence, alias/ID collision, and typed-link problems.
 `get_wiki_review_packet` returns a smaller priority-ordered maintenance view
-for the next agent. `get_wiki_bases_view` returns an
+for the next agent. `review_snoozed_until` defers only that action routing; it
+does not hide the finding from graph, lint, health, or exception views. The
+packet exposes `counts.snoozedPriorities`, the earliest
+`nextSnoozedReviewAt`, and `priorityScanTruncated` for its bounded visible
+candidate scan. `get_wiki_bases_view` returns an
 optional local Obsidian Bases YAML view; a `.base` view is not a security
 boundary. `get_wiki_property_contract` returns a compact complete overview;
 use its `names` or `query` input for paged full descriptions, allowed values,

@@ -3439,9 +3439,13 @@ function compactOverflowValue(value: unknown, maxChars: number): Record<string, 
         reason: 'The exact next action does not fit this response budget. Retry the pulse with the larger bounded budget.',
       }
     : undefined;
-  for (const key of ['protocol', 'state', 'scope', 'path', 'revision', 'roomId', 'messageId', 'commentId', 'slug', 'total', 'totalMessages', 'nextCursor', 'contextBefore', 'contractFingerprint', 'counterpartFingerprint', 'compatible', 'complete']) {
+  for (const key of ['protocol', 'state', 'scope', 'path', 'revision', 'roomId', 'messageId', 'commentId', 'slug', 'total', 'totalMessages', 'nextCursor', 'contextBefore', 'contractFingerprint', 'counterpartFingerprint', 'compatible', 'complete', 'nextSnoozedReviewAt', 'priorityScanTruncated']) {
     const candidate = source[key];
     if (typeof candidate === 'string' || typeof candidate === 'number' || typeof candidate === 'boolean') compact[key] = candidate;
+  }
+  if (source.counts && typeof source.counts === 'object' && !Array.isArray(source.counts)
+    && typeof (source.counts as Record<string, unknown>).snoozedPriorities === 'number') {
+    compact.counts = { snoozedPriorities: (source.counts as Record<string, unknown>).snoozedPriorities };
   }
   if (source.identity && typeof source.identity === 'object' && !Array.isArray(source.identity)) {
     const identity = source.identity as Record<string, unknown>;

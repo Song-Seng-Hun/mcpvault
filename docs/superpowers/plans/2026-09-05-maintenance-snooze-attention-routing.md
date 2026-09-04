@@ -24,7 +24,7 @@
 **Files:**
 - Modify: `src/llm-wiki.test.ts`
 
-- [ ] **Step 1: Write the failing routing test**
+- [x] **Step 1: Write the failing routing test**
 
 Create two visible notes with deterministic actionable defects. Set the first
 note's `review_snoozed_until` to `2099-01-01`, request a one-item review packet,
@@ -32,7 +32,7 @@ and assert that the second note owns `curationPlan`, the first remains in the
 explicit graph report, and the packet reports one skipped priority plus the
 next reappearance date.
 
-- [ ] **Step 2: Run test to verify RED**
+- [x] **Step 2: Run test to verify RED**
 
 ```bash
 npm test -- src/llm-wiki.test.ts -t "review packet skips future-snoozed priorities"
@@ -47,20 +47,20 @@ Expected: the current packet selects or returns the snoozed note and has no
 - Modify: `src/vault-index.ts`
 - Modify: `src/filesystem.ts`
 
-- [ ] **Step 1: Add `VaultMetadataIndex.getMany`**
+- [x] **Step 1: Add `VaultMetadataIndex.getMany`**
 
 Normalize and deduplicate at most 500 requested paths, call `ensureFresh`, and
 return only note entries that pass `PathFilter` and `canAccessPath`. Preserve
 request order and return defensive frontmatter objects.
 
-- [ ] **Step 2: Add `FileSystemService.readNoteMetadata`**
+- [x] **Step 2: Add `FileSystemService.readNoteMetadata`**
 
 Delegate to the index when present. In the fallback, normalize each bounded
 path, apply access checks, parse only the required files, and return
 `QueryNote[]` without body content. Missing or concurrently deleted files are
 omitted.
 
-- [ ] **Step 3: Run TypeScript build**
+- [x] **Step 3: Run TypeScript build**
 
 ```bash
 npm run build
@@ -74,7 +74,7 @@ Expected: the new API compiles without changing public MCP tools.
 - Modify: `src/llm-wiki.ts`
 - Modify: `src/llm-wiki.test.ts`
 
-- [ ] **Step 1: Implement bounded candidate filtering**
+- [x] **Step 1: Implement bounded candidate filtering**
 
 Sort coalesced priorities as before, inspect no more than
 `min(500, max(limit * 8, 32))` candidates, batch-read their metadata, and skip
@@ -82,18 +82,18 @@ valid future snoozes. Collect at most `limit` actionable items, count only
 visible skipped candidates, compute the earliest future date, and set
 `priorityScanTruncated` if sorted candidates remain outside the scan.
 
-- [ ] **Step 2: Preserve revision-safe selection**
+- [x] **Step 2: Preserve revision-safe selection**
 
 Build `curationPlan` only from the first unsnoozed returned priority. Keep the
 existing current-body reread and `expectedRevision` behavior unchanged.
 
-- [ ] **Step 3: Add edge and security assertions**
+- [x] **Step 3: Add edge and security assertions**
 
 Cover all-visible-candidates-snoozed, expired snooze, hidden model-scope note,
 and a small `maxChars` response. Assert hidden notes do not alter public snooze
 counts/dates and explicit health output still reports visible snoozed defects.
 
-- [ ] **Step 4: Run focused tests and verify GREEN**
+- [x] **Step 4: Run focused tests and verify GREEN**
 
 ```bash
 npm test -- src/llm-wiki.test.ts -t "snoozed priorities"
@@ -108,13 +108,13 @@ Expected: all matching tests pass.
 - Modify: `_wiki/SCHEMA.md`
 - Regenerate: `dist/`
 
-- [ ] **Step 1: Add concise progressive guidance**
+- [x] **Step 1: Add concise progressive guidance**
 
 Document that snooze suppresses only bounded action routing, never health or
 exception evidence, and describe `snoozedPriorities`,
 `nextSnoozedReviewAt`, and `priorityScanTruncated`.
 
-- [ ] **Step 2: Run complete verification**
+- [x] **Step 2: Run complete verification**
 
 ```bash
 npm test -- src/llm-wiki.test.ts -t "snoozed priorities"
@@ -126,7 +126,7 @@ git diff --check
 Expected: build succeeds, all tests pass with only the existing intentional
 skip, and no whitespace errors are reported.
 
-- [ ] **Step 3: Commit and push the fork only**
+- [x] **Step 3: Commit and push the fork only**
 
 Stage tracked source, tests, docs, and generated `dist/` only. Exclude
 `.agents/` and `.mcpvault/`. Commit with:

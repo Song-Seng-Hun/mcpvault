@@ -352,6 +352,32 @@ export class VaultMetadataIndex {
         }
         return count;
     }
+    /**
+     * Read a bounded exact-path metadata set without reopening note bodies.
+     * Request order is preserved, duplicate paths are collapsed, and caller
+     * visibility is applied before any entry leaves the disposable index.
+     */
+    async getMany(paths, canAccessPath = () => true) {
+        if (paths.length > 500)
+            throw new Error('metadata lookup supports at most 500 paths');
+        await this.ensureFresh();
+        const selected = [];
+        const seen = new Set();
+        for (const rawPath of paths) {
+            const path = normalizePath(rawPath);
+            const key = path.toLocaleLowerCase('en-US');
+            if (!path || seen.has(key))
+                continue;
+            seen.add(key);
+            if (!isNote(path) || !this.pathFilter.isAllowed(path) || !canAccessPath(path))
+                continue;
+            const entry = this.entries.get(path);
+            if (!entry)
+                continue;
+            selected.push({ ...entry, frontmatter: { ...entry.frontmatter } });
+        }
+        return selected;
+    }
     async listSorted(filters = {}, pathPrefix = '', sortBy = 'path', sortOrder = 'asc') {
         await this.ensureFresh();
         const cacheKey = JSON.stringify([pathPrefix, filters, sortBy, sortOrder]);

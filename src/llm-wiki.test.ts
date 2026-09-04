@@ -851,6 +851,125 @@ test('review packet promotes every actionable graph repair class without duplica
   }
 });
 
+test('review packet skips future-snoozed priorities without hiding health evidence', async () => {
+  await mkdir(join(vault, 'Knowledge'), { recursive: true });
+  await mkdir(join(vault, '_scopes', 'models', 'gemini', 'Knowledge'), { recursive: true });
+  await writeFile(join(vault, 'Knowledge', 'A snoozed.md'), [
+    '---',
+    'review_snoozed_until: 2099-01-01',
+    'review_snooze_reason: Waiting for an external source.',
+    '---',
+    '# A snoozed',
+    '',
+    '[[Missing snoozed target]]',
+  ].join('\n'));
+  await writeFile(join(vault, 'Knowledge', 'B actionable.md'), '# B actionable\n\n[[Missing actionable target]]\n');
+  await writeFile(join(vault, 'Knowledge', 'C expired.md'), [
+    '---',
+    'review_snoozed_until: 2000-01-01',
+    'review_snooze_reason: This deferral has expired.',
+    '---',
+    '# C expired',
+    '',
+    '[[Missing expired target]]',
+  ].join('\n'));
+  await writeFile(join(vault, '_scopes', 'models', 'gemini', 'Knowledge', 'Hidden snoozed.md'), [
+    '---',
+    'review_snoozed_until: 2098-01-01',
+    '---',
+    '# Hidden snoozed',
+    '',
+    '[[Missing hidden target]]',
+  ].join('\n'));
+
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', {
+      accountId: 'snooze-routing-owner', modelId: 'codex', password: 'snooze-routing-password',
+    });
+    const accessToken = registration.value.accessToken;
+
+    const graph = await callJson(client, 'get_wiki_graph_health', { limit: 10, maxChars: 12000, accessToken });
+    expect(graph.value.unresolvedLinks.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/A snoozed.md' }),
+    ]));
+
+    const packet = await callJson(client, 'get_wiki_review_packet', { limit: 2, maxChars: 12000, accessToken });
+    expect(packet.value.priorities).toEqual([
+      expect.objectContaining({ path: 'Knowledge/B actionable.md', reason: 'broken_link' }),
+      expect.objectContaining({ path: 'Knowledge/C expired.md', reason: 'broken_link' }),
+    ]);
+    expect(JSON.stringify(packet.value)).not.toContain('Hidden snoozed');
+    expect(packet.value).toMatchObject({
+      counts: { snoozedPriorities: 1 },
+      nextSnoozedReviewAt: '2099-01-01T00:00:00.000Z',
+      priorityScanTruncated: false,
+      curationPlan: {
+        selected: { path: 'Knowledge/B actionable.md', reason: 'broken_link', revision: expect.stringMatching(/^[a-f0-9]{64}$/) },
+      },
+    });
+
+    const tiny = await callJson(client, 'get_wiki_review_packet', { limit: 1, maxChars: 512, prettyPrint: true, accessToken });
+    expect(String((tiny.result.content as any)[0].text).length).toBeLessThanOrEqual(512);
+    expect(JSON.stringify(tiny.value)).not.toContain('A snoozed');
+    expect(JSON.stringify(tiny.value)).not.toContain('Hidden snoozed');
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('review packet reports a bounded wake time when every visible priority is snoozed', async () => {
+  await mkdir(join(vault, 'Knowledge'), { recursive: true });
+  await writeFile(join(vault, 'Knowledge', 'A later.md'), [
+    '---', 'review_snoozed_until: 2099-02-01', '---', '# A later', '', '[[Missing later target]]',
+  ].join('\n'));
+  await writeFile(join(vault, 'Knowledge', 'B sooner.md'), [
+    '---', 'review_snoozed_until: 2099-01-15', '---', '# B sooner', '', '[[Missing sooner target]]',
+  ].join('\n'));
+
+  const { server, client } = await setup();
+  try {
+    const packet = await callJson(client, 'get_wiki_review_packet', { limit: 1, maxChars: 12000 });
+    expect(packet.value).toMatchObject({
+      priorities: [],
+      counts: { snoozedPriorities: 2 },
+      nextSnoozedReviewAt: '2099-01-15T00:00:00.000Z',
+      priorityScanTruncated: false,
+    });
+    expect(packet.value).not.toHaveProperty('curationPlan');
+
+    const graph = await callJson(client, 'get_wiki_graph_health', { limit: 10, maxChars: 12000 });
+    expect(graph.value.unresolvedLinks.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/A later.md' }),
+      expect.objectContaining({ path: 'Knowledge/B sooner.md' }),
+    ]));
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('review packet marks a snoozed priority scan incomplete when source projections have more candidates', async () => {
+  await mkdir(join(vault, 'Knowledge'), { recursive: true });
+  await Promise.all(Array.from({ length: 40 }, (_, index) => writeFile(
+    join(vault, 'Knowledge', `Snoozed ${String(index).padStart(2, '0')}.md`),
+    ['---', 'review_snoozed_until: 2099-01-01', '---', `# Snoozed ${index}`, '', `[[Missing target ${index}]]`].join('\n'),
+  )));
+
+  const { server, client } = await setup();
+  try {
+    const packet = await callJson(client, 'get_wiki_review_packet', { limit: 1, maxChars: 16000 });
+    expect(packet.value.priorities).toEqual([]);
+    expect(packet.value.counts.snoozedPriorities).toBeGreaterThan(0);
+    expect(packet.value.counts.snoozedPriorities).toBeLessThanOrEqual(32);
+    expect(packet.value.priorityScanTruncated).toBe(true);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('weekly review separates schedule from deadline and exposes reverse focus context', async () => {
   const { server, client } = await setup();
   try {
