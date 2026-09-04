@@ -70,9 +70,9 @@ export type AnswerPacketIntent = typeof ANSWER_PACKET_INTENTS[number];
 export type WikiProjectionView = typeof WIKI_PROJECTION_VIEWS[number];
 export type TemporalValidityState = typeof TEMPORAL_VALIDITY_STATES[number];
 /** Typed relationships are navigation metadata, never an access grant. */
-export declare const RELATION_FIELDS: readonly ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'answers_questions', 'tests', 'related', 'same_as', 'version_of', 'refines'];
+export declare const RELATION_FIELDS: readonly ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'answers_questions', 'tests', 'related', 'same_as', 'close_match', 'version_of', 'refines'];
 /** These relations have a meaning that is incomplete when the reverse edge is absent. */
-export declare const RECIPROCAL_RELATIONS: readonly ['related', 'same_as'];
+export declare const RECIPROCAL_RELATIONS: readonly ['related', 'same_as', 'close_match'];
 /** A compact ontology so agents can choose a relation by meaning, not by name. */
 export declare const RELATION_SEMANTICS: readonly [{
     readonly field: 'supports';
@@ -128,6 +128,11 @@ export declare const RELATION_SEMANTICS: readonly [{
     readonly field: 'same_as';
     readonly direction: 'mutual';
     readonly target: 'The same concept represented by another note or alias.';
+    readonly reciprocal: true;
+}, {
+    readonly field: 'close_match';
+    readonly direction: 'mutual';
+    readonly target: 'A near-equivalent concept useful for discovery but not safe to merge or treat as exact identity.';
     readonly reciprocal: true;
 }, {
     readonly field: 'version_of';
@@ -196,6 +201,11 @@ export declare function getOrganizationRelationContract(): ({
     target: 'The same concept represented by another note or alias.';
     reciprocal: true;
 } | {
+    field: 'close_match';
+    direction: 'mutual';
+    target: 'A near-equivalent concept useful for discovery but not safe to merge or treat as exact identity.';
+    reciprocal: true;
+} | {
     field: 'version_of';
     direction: 'directional';
     target: 'The conceptual note this version belongs to.';
@@ -206,7 +216,7 @@ export declare function getOrganizationRelationContract(): ({
     target: 'A note made more precise or useful by this note.';
     reciprocal: false;
 })[];
-export declare const ORGANIZATION_LIST_FIELDS: readonly ["aliases", "tags", "mocs", "key_points", "open_questions", "next_actions", "project_support", "subject_terms", "methods", "audience", "see_also", "supports", "contradicts", "supersedes", "derived_from", "depends_on", "implements", "blocked_by", "answers_questions", "tests", "related", "same_as", "version_of", "refines"];
+export declare const ORGANIZATION_LIST_FIELDS: readonly ["aliases", "tags", "mocs", "key_points", "open_questions", "next_actions", "project_support", "subject_terms", "methods", "audience", "see_also", "supports", "contradicts", "supersedes", "derived_from", "depends_on", "implements", "blocked_by", "answers_questions", "tests", "related", "same_as", "close_match", "version_of", "refines"];
 /** Fields that make an ordinary knowledge note participate in the work
  * system without changing its epistemic/content role. Project and task kinds
  * participate even before one of these fields is filled in. */

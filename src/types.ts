@@ -528,6 +528,29 @@ export interface QueryNotesResult {
   totalKnown?: boolean;
 }
 
+export interface AuthorityShelfEntry {
+  path: string;
+  frontmatter: Record<string, any>;
+  revision: string;
+  authorityScheme: string;
+  authorityId: string | undefined;
+}
+
+export interface AuthorityShelfResult {
+  entries: AuthorityShelfEntry[];
+  totalVisible: number;
+  truncated: boolean;
+  anchor: {
+    requested?: string;
+    matched: boolean;
+    insertionIndex: number;
+  };
+  collisions: Array<{
+    authorityId: string;
+    paths: string[];
+  }>;
+}
+
 // Git-backed revision history types
 export interface RevisionChange {
   status: string;

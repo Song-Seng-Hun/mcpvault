@@ -1017,6 +1017,65 @@ describe("structured frontmatter queries", () => {
     await expect(fileSystem.queryNotes({ after: {} as any })).rejects.toThrow(/cursor path/);
   });
 
+  test("authority shelf sorts naturally, hides inaccessible collisions, and invalidates CRUD", async () => {
+    const authorityNote = (scheme: string, id: string | undefined, preferred: string) => `---\nauthority_scheme: ${scheme}\n${id ? `authority_id: ${id}\n` : ''}preferred_term: ${preferred}\n---\n# ${preferred}\n`;
+    await writeFile(join(testVaultPath, "A.md"), authorityNote("local-topics", "AI.2", "Alpha"));
+    await writeFile(join(testVaultPath, "B.md"), authorityNote("local-topics", "AI.10", "Beta"));
+    await writeFile(join(testVaultPath, "C.md"), authorityNote("local-topics", "AI.3", "Gamma"));
+    await writeFile(join(testVaultPath, "Duplicate.md"), authorityNote("local-topics", "AI.3", "Hidden duplicate"));
+    await writeFile(join(testVaultPath, "Other.md"), authorityNote("other-topics", "AI.3", "Other scheme"));
+    await writeFile(join(testVaultPath, "Unclassified.md"), authorityNote("local-topics", undefined, "Unclassified"));
+
+    const metadataIndex = new VaultMetadataIndex(testVaultPath, new PathFilter(), new FrontmatterHandler());
+    const indexedFileSystem = new FileSystemService(
+      testVaultPath,
+      new PathFilter(),
+      new FrontmatterHandler(),
+      (path, kind) => metadataIndex.invalidate(path, kind),
+      metadataIndex,
+    );
+    const canAccess = (path: string) => path !== "Duplicate.md";
+    try {
+      const shelf = await indexedFileSystem.queryAuthorityShelf({ scheme: "LOCAL-TOPICS", limit: 10 }, canAccess);
+      expect(shelf.entries.map(entry => entry.authorityId)).toEqual(["AI.2", "AI.3", "AI.10"]);
+      expect(shelf.totalVisible).toBe(3);
+      expect(shelf.collisions).toEqual([]);
+
+      const centered = await indexedFileSystem.queryAuthorityShelf({ scheme: "local-topics", aroundAuthorityId: "AI.3", limit: 3 }, canAccess);
+      expect(centered.entries.map(entry => entry.authorityId)).toEqual(["AI.2", "AI.3", "AI.10"]);
+      expect(centered.anchor).toMatchObject({ requested: "AI.3", matched: true, insertionIndex: 1 });
+
+      const insertion = await indexedFileSystem.queryAuthorityShelf({ scheme: "local-topics", aroundAuthorityId: "AI.4", limit: 2 }, canAccess);
+      expect(insertion.entries.map(entry => entry.authorityId)).toEqual(["AI.3", "AI.10"]);
+      expect(insertion.anchor).toMatchObject({ requested: "AI.4", matched: false, insertionIndex: 2 });
+
+      const withUnclassified = await indexedFileSystem.queryAuthorityShelf({ scheme: "local-topics", includeUnclassified: true, limit: 10 }, canAccess);
+      expect(withUnclassified.entries.at(-1)).toMatchObject({ path: "Unclassified.md", authorityId: undefined });
+
+      const duplicateVisible = await indexedFileSystem.queryAuthorityShelf({ scheme: "local-topics", limit: 10 });
+      expect(duplicateVisible.collisions).toEqual([
+        { authorityId: "AI.3", paths: ["C.md", "Duplicate.md"] },
+      ]);
+
+      const beforeC = await indexedFileSystem.readNote("C.md");
+      await indexedFileSystem.updateFrontmatter({ path: "C.md", frontmatter: { authority_id: "AI.11" }, expectedRevision: beforeC.revision });
+      const updated = await indexedFileSystem.queryAuthorityShelf({ scheme: "local-topics", limit: 10 }, canAccess);
+      expect(updated.entries.map(entry => entry.authorityId)).toEqual(["AI.2", "AI.10", "AI.11"]);
+
+      const beforeB = await indexedFileSystem.readNote("B.md");
+      await indexedFileSystem.moveNote({ oldPath: "B.md", newPath: "Moved-B.md", expectedRevision: beforeB.revision });
+      const moved = await indexedFileSystem.queryAuthorityShelf({ scheme: "local-topics", limit: 10 }, canAccess);
+      expect(moved.entries.filter(entry => entry.authorityId === "AI.10").map(entry => entry.path)).toEqual(["Moved-B.md"]);
+
+      const movedNote = await indexedFileSystem.readNote("Moved-B.md");
+      await indexedFileSystem.deleteNote({ path: "Moved-B.md", confirmPath: "Moved-B.md", expectedRevision: movedNote.revision });
+      const deleted = await indexedFileSystem.queryAuthorityShelf({ scheme: "local-topics", limit: 10 }, canAccess);
+      expect(deleted.entries.some(entry => entry.path === "Moved-B.md")).toBe(false);
+    } finally {
+      metadataIndex.close();
+    }
+  });
+
   test("persists and restores the metadata index as a derived binary snapshot", async () => {
     await writeFile(join(testVaultPath, "Snapshot.md"), "---\nstatus: active\n---\nSnapshot body");
     const metadataIndex = new VaultMetadataIndex(testVaultPath, new PathFilter(), new FrontmatterHandler());

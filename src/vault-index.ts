@@ -8,6 +8,7 @@ import type { VaultCatalogChange, VaultCatalogFileStat, VaultFileCatalog } from 
 import { VaultIoCoordinator } from './vault-io.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 import { buildNoteReferenceIndex, resolveNoteReference as resolveIndexedNoteReference, type NoteReferenceIndex } from './note-reference.js';
+import type { AuthorityShelfResult } from './types.js';
 
 const FULL_REFRESH_INTERVAL_MS = 60_000;
 const READ_BATCH_SIZE = 32;
@@ -34,6 +35,20 @@ export interface VaultIndexEntry {
 
 function normalizePath(value: string): string {
   return value.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+}
+
+function normalizeAuthorityComponent(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim().normalize('NFKC').toLocaleLowerCase('en-US');
+  return normalized || undefined;
+}
+
+function authorityPairKey(scheme: string, authorityId: string): string {
+  return `${scheme}\u0000${authorityId}`;
+}
+
+function naturalAuthorityCompare(left: string, right: string): number {
+  return left.localeCompare(right, 'en-US', { numeric: true, sensitivity: 'base' });
 }
 
 function isNote(path: string): boolean {
@@ -189,6 +204,8 @@ export class VaultMetadataIndex {
   private readonly entries = new Map<string, VaultIndexEntry>();
   private readonly filterIndex = new Map<string, Map<string, Set<string>>>();
   private readonly pathIndex = new Map<string, Set<string>>();
+  private readonly authoritySchemeIndex = new Map<string, Set<string>>();
+  private readonly authorityPairIndex = new Map<string, Set<string>>();
   private readonly queryCache = new Map<string, { expiresAt: number; paths: string[] }>();
   private readonly sortedQueryCache = new Map<string, VaultIndexEntry[]>();
   private referenceIndex: NoteReferenceIndex | undefined;
@@ -242,6 +259,7 @@ export class VaultMetadataIndex {
         const existing = this.entries.get(normalized);
         if (existing) this.removeFilterEntry(existing);
         if (existing) this.removePathEntry(existing);
+        if (existing) this.removeAuthorityEntry(existing);
         this.entries.delete(normalized);
       }
       this.dirty.add(normalized);
@@ -469,12 +487,108 @@ export class VaultMetadataIndex {
     }
   }
 
+  /**
+   * Return one visibility-filtered authority shelf. Authority metadata is an
+   * acceleration index only; current Markdown/frontmatter entries remain the
+   * source of truth. Filtering happens before totals and collision detection
+   * so hidden notes cannot leak through aggregate metadata.
+   */
+  async queryAuthorityShelf(params: {
+    scheme: string;
+    aroundAuthorityId?: string;
+    includeUnclassified?: boolean;
+    limit?: number;
+  }, canAccessPath: (path: string) => boolean = () => true): Promise<AuthorityShelfResult> {
+    await this.ensureFresh();
+    const scheme = normalizeAuthorityComponent(params.scheme);
+    if (!scheme) throw new Error('scheme cannot be empty');
+    const requestedLimit = params.limit ?? 25;
+    if (!Number.isInteger(requestedLimit) || requestedLimit < 1) throw new Error('limit must be a positive integer');
+    const limit = Math.min(requestedLimit, 100);
+    const requestedAnchor = params.aroundAuthorityId?.trim();
+    if (params.aroundAuthorityId !== undefined && !requestedAnchor) throw new Error('aroundAuthorityId cannot be empty');
+    const normalizedAnchor = normalizeAuthorityComponent(requestedAnchor);
+
+    const visible = [...(this.authoritySchemeIndex.get(scheme) || [])]
+      .map(path => this.entries.get(path))
+      .filter((entry): entry is VaultIndexEntry => Boolean(entry) && this.pathFilter.isAllowed(entry!.path) && canAccessPath(entry!.path));
+    const classified = visible.filter(entry => normalizeAuthorityComponent(entry.frontmatter.authority_id));
+    classified.sort((left, right) => {
+      const leftId = String(left.frontmatter.authority_id).trim();
+      const rightId = String(right.frontmatter.authority_id).trim();
+      return naturalAuthorityCompare(leftId, rightId) || left.path.localeCompare(right.path, 'en-US', { sensitivity: 'base' });
+    });
+    const unclassified = params.includeUnclassified
+      ? visible.filter(entry => !normalizeAuthorityComponent(entry.frontmatter.authority_id)).sort((left, right) => {
+        const leftLabel = String(left.frontmatter.preferred_term || left.frontmatter.title || left.path);
+        const rightLabel = String(right.frontmatter.preferred_term || right.frontmatter.title || right.path);
+        return naturalAuthorityCompare(leftLabel, rightLabel) || left.path.localeCompare(right.path, 'en-US', { sensitivity: 'base' });
+      })
+      : [];
+    const ordered = [...classified, ...unclassified];
+
+    let matched = false;
+    let insertionIndex = 0;
+    if (normalizedAnchor) {
+      const exactIndex = classified.findIndex(entry => normalizeAuthorityComponent(entry.frontmatter.authority_id) === normalizedAnchor);
+      if (exactIndex >= 0) {
+        matched = true;
+        insertionIndex = exactIndex;
+      } else {
+        const nextIndex = classified.findIndex(entry => naturalAuthorityCompare(String(entry.frontmatter.authority_id).trim(), requestedAnchor!) >= 0);
+        insertionIndex = nextIndex < 0 ? classified.length : nextIndex;
+      }
+    }
+    const maxStart = Math.max(0, ordered.length - limit);
+    const start = normalizedAnchor
+      ? Math.max(0, Math.min(insertionIndex - Math.floor(limit / 2), maxStart))
+      : 0;
+    const selected = ordered.slice(start, start + limit);
+
+    const collisions: AuthorityShelfResult['collisions'] = [];
+    const seenPairs = new Set<string>();
+    for (const entry of classified) {
+      const authorityId = String(entry.frontmatter.authority_id).trim();
+      const normalizedId = normalizeAuthorityComponent(authorityId)!;
+      const pair = authorityPairKey(scheme, normalizedId);
+      if (seenPairs.has(pair)) continue;
+      seenPairs.add(pair);
+      const paths = [...(this.authorityPairIndex.get(pair) || [])]
+        .filter(path => this.pathFilter.isAllowed(path) && canAccessPath(path) && this.entries.has(path))
+        .sort((left, right) => left.localeCompare(right, 'en-US', { sensitivity: 'base' }));
+      if (paths.length > 1) collisions.push({ authorityId, paths });
+    }
+    collisions.sort((left, right) => naturalAuthorityCompare(left.authorityId, right.authorityId));
+
+    return {
+      entries: selected.map(entry => ({
+        path: entry.path,
+        frontmatter: entry.frontmatter,
+        revision: entry.revision,
+        authorityScheme: String(entry.frontmatter.authority_scheme).trim(),
+        authorityId: normalizeAuthorityComponent(entry.frontmatter.authority_id)
+          ? String(entry.frontmatter.authority_id).trim()
+          : undefined,
+      })),
+      totalVisible: ordered.length,
+      truncated: selected.length < ordered.length,
+      anchor: {
+        ...(requestedAnchor ? { requested: requestedAnchor } : {}),
+        matched,
+        insertionIndex,
+      },
+      collisions,
+    };
+  }
+
   close(): void {
     this.catalogUnsubscribe?.();
     this.watcher?.close();
     this.watcher = undefined;
     if (this.snapshotTimer) clearTimeout(this.snapshotTimer);
     this.snapshotTimer = undefined;
+    this.authoritySchemeIndex.clear();
+    this.authorityPairIndex.clear();
     derivedCacheBudget.clearOwner(this.cacheOwner);
   }
 
@@ -562,6 +676,7 @@ export class VaultMetadataIndex {
       for (const [path, entry] of next) this.entries.set(path, entry);
       this.rebuildFilterIndex();
       this.rebuildPathIndex();
+      this.rebuildAuthorityIndex();
       this.clearQueryCaches();
       this.lastFullRefreshAt = Date.now();
       this.scheduleSnapshotSave();
@@ -586,10 +701,12 @@ export class VaultMetadataIndex {
         const previous = this.entries.get(path);
         if (previous) this.removeFilterEntry(previous);
         if (previous) this.removePathEntry(previous);
+        if (previous) this.removeAuthorityEntry(previous);
         if (entry) this.entries.set(path, entry);
         else this.entries.delete(path);
         if (entry) this.addFilterEntry(entry);
         if (entry) this.addPathEntry(entry);
+        if (entry) this.addAuthorityEntry(entry);
       }
       this.scheduleSnapshotSave();
     })();
@@ -699,6 +816,46 @@ export class VaultMetadataIndex {
   private rebuildPathIndex(): void {
     this.pathIndex.clear();
     for (const entry of this.entries.values()) this.addPathEntry(entry);
+  }
+
+  private rebuildAuthorityIndex(): void {
+    this.authoritySchemeIndex.clear();
+    this.authorityPairIndex.clear();
+    for (const entry of this.entries.values()) this.addAuthorityEntry(entry);
+  }
+
+  private addAuthorityEntry(entry: VaultIndexEntry): void {
+    const scheme = normalizeAuthorityComponent(entry.frontmatter.authority_scheme);
+    if (!scheme) return;
+    let schemePaths = this.authoritySchemeIndex.get(scheme);
+    if (!schemePaths) {
+      schemePaths = new Set<string>();
+      this.authoritySchemeIndex.set(scheme, schemePaths);
+    }
+    schemePaths.add(entry.path);
+    const authorityId = normalizeAuthorityComponent(entry.frontmatter.authority_id);
+    if (!authorityId) return;
+    const pair = authorityPairKey(scheme, authorityId);
+    let pairPaths = this.authorityPairIndex.get(pair);
+    if (!pairPaths) {
+      pairPaths = new Set<string>();
+      this.authorityPairIndex.set(pair, pairPaths);
+    }
+    pairPaths.add(entry.path);
+  }
+
+  private removeAuthorityEntry(entry: VaultIndexEntry): void {
+    const scheme = normalizeAuthorityComponent(entry.frontmatter.authority_scheme);
+    if (!scheme) return;
+    const schemePaths = this.authoritySchemeIndex.get(scheme);
+    schemePaths?.delete(entry.path);
+    if (schemePaths?.size === 0) this.authoritySchemeIndex.delete(scheme);
+    const authorityId = normalizeAuthorityComponent(entry.frontmatter.authority_id);
+    if (!authorityId) return;
+    const pair = authorityPairKey(scheme, authorityId);
+    const pairPaths = this.authorityPairIndex.get(pair);
+    pairPaths?.delete(entry.path);
+    if (pairPaths?.size === 0) this.authorityPairIndex.delete(pair);
   }
 
   private addPathEntry(entry: VaultIndexEntry): void {

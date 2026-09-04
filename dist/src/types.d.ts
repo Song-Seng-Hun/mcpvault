@@ -505,6 +505,27 @@ export interface QueryNotesResult {
     /** False only when includeTotal=false; total is then -1. */
     totalKnown?: boolean;
 }
+export interface AuthorityShelfEntry {
+    path: string;
+    frontmatter: Record<string, any>;
+    revision: string;
+    authorityScheme: string;
+    authorityId: string | undefined;
+}
+export interface AuthorityShelfResult {
+    entries: AuthorityShelfEntry[];
+    totalVisible: number;
+    truncated: boolean;
+    anchor: {
+        requested?: string;
+        matched: boolean;
+        insertionIndex: number;
+    };
+    collisions: Array<{
+        authorityId: string;
+        paths: string[];
+    }>;
+}
 export interface RevisionChange {
     status: string;
     path: string;

@@ -69,9 +69,9 @@ export const TEMPORAL_VALIDITY_STATES = ['unspecified', 'current', 'not_yet_vali
 /** Titles are an agent-facing API: generic names are hard to rediscover. */
 const GENERIC_NOTE_TITLE = /^(?:untitled|new note|new document|note|knowledge|draft|todo|copy)(?:\s*[-_ ]?\d+)?$/i;
 /** Typed relationships are navigation metadata, never an access grant. */
-export const RELATION_FIELDS = ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'answers_questions', 'tests', 'related', 'same_as', 'version_of', 'refines'];
+export const RELATION_FIELDS = ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'answers_questions', 'tests', 'related', 'same_as', 'close_match', 'version_of', 'refines'];
 /** These relations have a meaning that is incomplete when the reverse edge is absent. */
-export const RECIPROCAL_RELATIONS = ['related', 'same_as'];
+export const RECIPROCAL_RELATIONS = ['related', 'same_as', 'close_match'];
 /** A compact ontology so agents can choose a relation by meaning, not by name. */
 export const RELATION_SEMANTICS = [
     { field: 'supports', direction: 'directional', target: 'A claim, decision, or note supported by this note.', reciprocal: false },
@@ -85,6 +85,7 @@ export const RELATION_SEMANTICS = [
     { field: 'tests', direction: 'directional', target: 'A question, hypothesis, or assumption tested by this experiment.', reciprocal: false },
     { field: 'related', direction: 'mutual', target: 'A materially related note without a stronger claim.', reciprocal: true },
     { field: 'same_as', direction: 'mutual', target: 'The same concept represented by another note or alias.', reciprocal: true },
+    { field: 'close_match', direction: 'mutual', target: 'A near-equivalent concept useful for discovery but not safe to merge or treat as exact identity.', reciprocal: true },
     { field: 'version_of', direction: 'directional', target: 'The conceptual note this version belongs to.', reciprocal: false },
     { field: 'refines', direction: 'directional', target: 'A note made more precise or useful by this note.', reciprocal: false },
 ];

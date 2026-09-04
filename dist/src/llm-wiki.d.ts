@@ -2115,6 +2115,11 @@ export declare class LlmWikiService {
             target: 'The same concept represented by another note or alias.';
             reciprocal: true;
         } | {
+            field: 'close_match';
+            direction: 'mutual';
+            target: 'A near-equivalent concept useful for discovery but not safe to merge or treat as exact identity.';
+            reciprocal: true;
+        } | {
             field: 'version_of';
             direction: 'directional';
             target: 'The conceptual note this version belongs to.';
@@ -2148,7 +2153,7 @@ export declare class LlmWikiService {
             appliesTo?: readonly string[];
         }[];
         relations: {
-            field: "answers_questions" | "blocked_by" | "contradicts" | "depends_on" | "derived_from" | "implements" | "refines" | "related" | "same_as" | "supersedes" | "supports" | "tests" | "version_of";
+            field: "answers_questions" | "blocked_by" | "close_match" | "contradicts" | "depends_on" | "derived_from" | "implements" | "refines" | "related" | "same_as" | "supersedes" | "supports" | "tests" | "version_of";
             direction: "directional" | "mutual";
         }[];
         conventions: {
@@ -2197,7 +2202,7 @@ export declare class LlmWikiService {
         contractFingerprint: string;
         fields: string[];
         relations: {
-            field: "answers_questions" | "blocked_by" | "contradicts" | "depends_on" | "derived_from" | "implements" | "refines" | "related" | "same_as" | "supersedes" | "supports" | "tests" | "version_of";
+            field: "answers_questions" | "blocked_by" | "close_match" | "contradicts" | "depends_on" | "derived_from" | "implements" | "refines" | "related" | "same_as" | "supersedes" | "supports" | "tests" | "version_of";
             direction: "directional" | "mutual";
         }[];
         conventions: {

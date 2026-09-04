@@ -22,6 +22,18 @@ const METADATA_SNAPSHOT_MAGIC = Buffer.from('MCPVMETA', 'ascii');
 function normalizePath(value) {
     return value.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
 }
+function normalizeAuthorityComponent(value) {
+    if (typeof value !== 'string')
+        return undefined;
+    const normalized = value.trim().normalize('NFKC').toLocaleLowerCase('en-US');
+    return normalized || undefined;
+}
+function authorityPairKey(scheme, authorityId) {
+    return `${scheme}\u0000${authorityId}`;
+}
+function naturalAuthorityCompare(left, right) {
+    return left.localeCompare(right, 'en-US', { numeric: true, sensitivity: 'base' });
+}
 function isNote(path) {
     return /\.(?:md|markdown|txt)$/i.test(path);
 }
@@ -186,6 +198,8 @@ export class VaultMetadataIndex {
     entries = new Map();
     filterIndex = new Map();
     pathIndex = new Map();
+    authoritySchemeIndex = new Map();
+    authorityPairIndex = new Map();
     queryCache = new Map();
     sortedQueryCache = new Map();
     referenceIndex;
@@ -238,6 +252,8 @@ export class VaultMetadataIndex {
                     this.removeFilterEntry(existing);
                 if (existing)
                     this.removePathEntry(existing);
+                if (existing)
+                    this.removeAuthorityEntry(existing);
                 this.entries.delete(normalized);
             }
             this.dirty.add(normalized);
@@ -460,6 +476,96 @@ export class VaultMetadataIndex {
             return false;
         }
     }
+    /**
+     * Return one visibility-filtered authority shelf. Authority metadata is an
+     * acceleration index only; current Markdown/frontmatter entries remain the
+     * source of truth. Filtering happens before totals and collision detection
+     * so hidden notes cannot leak through aggregate metadata.
+     */
+    async queryAuthorityShelf(params, canAccessPath = () => true) {
+        await this.ensureFresh();
+        const scheme = normalizeAuthorityComponent(params.scheme);
+        if (!scheme)
+            throw new Error('scheme cannot be empty');
+        const requestedLimit = params.limit ?? 25;
+        if (!Number.isInteger(requestedLimit) || requestedLimit < 1)
+            throw new Error('limit must be a positive integer');
+        const limit = Math.min(requestedLimit, 100);
+        const requestedAnchor = params.aroundAuthorityId?.trim();
+        if (params.aroundAuthorityId !== undefined && !requestedAnchor)
+            throw new Error('aroundAuthorityId cannot be empty');
+        const normalizedAnchor = normalizeAuthorityComponent(requestedAnchor);
+        const visible = [...(this.authoritySchemeIndex.get(scheme) || [])]
+            .map(path => this.entries.get(path))
+            .filter((entry) => Boolean(entry) && this.pathFilter.isAllowed(entry.path) && canAccessPath(entry.path));
+        const classified = visible.filter(entry => normalizeAuthorityComponent(entry.frontmatter.authority_id));
+        classified.sort((left, right) => {
+            const leftId = String(left.frontmatter.authority_id).trim();
+            const rightId = String(right.frontmatter.authority_id).trim();
+            return naturalAuthorityCompare(leftId, rightId) || left.path.localeCompare(right.path, 'en-US', { sensitivity: 'base' });
+        });
+        const unclassified = params.includeUnclassified
+            ? visible.filter(entry => !normalizeAuthorityComponent(entry.frontmatter.authority_id)).sort((left, right) => {
+                const leftLabel = String(left.frontmatter.preferred_term || left.frontmatter.title || left.path);
+                const rightLabel = String(right.frontmatter.preferred_term || right.frontmatter.title || right.path);
+                return naturalAuthorityCompare(leftLabel, rightLabel) || left.path.localeCompare(right.path, 'en-US', { sensitivity: 'base' });
+            })
+            : [];
+        const ordered = [...classified, ...unclassified];
+        let matched = false;
+        let insertionIndex = 0;
+        if (normalizedAnchor) {
+            const exactIndex = classified.findIndex(entry => normalizeAuthorityComponent(entry.frontmatter.authority_id) === normalizedAnchor);
+            if (exactIndex >= 0) {
+                matched = true;
+                insertionIndex = exactIndex;
+            }
+            else {
+                const nextIndex = classified.findIndex(entry => naturalAuthorityCompare(String(entry.frontmatter.authority_id).trim(), requestedAnchor) >= 0);
+                insertionIndex = nextIndex < 0 ? classified.length : nextIndex;
+            }
+        }
+        const maxStart = Math.max(0, ordered.length - limit);
+        const start = normalizedAnchor
+            ? Math.max(0, Math.min(insertionIndex - Math.floor(limit / 2), maxStart))
+            : 0;
+        const selected = ordered.slice(start, start + limit);
+        const collisions = [];
+        const seenPairs = new Set();
+        for (const entry of classified) {
+            const authorityId = String(entry.frontmatter.authority_id).trim();
+            const normalizedId = normalizeAuthorityComponent(authorityId);
+            const pair = authorityPairKey(scheme, normalizedId);
+            if (seenPairs.has(pair))
+                continue;
+            seenPairs.add(pair);
+            const paths = [...(this.authorityPairIndex.get(pair) || [])]
+                .filter(path => this.pathFilter.isAllowed(path) && canAccessPath(path) && this.entries.has(path))
+                .sort((left, right) => left.localeCompare(right, 'en-US', { sensitivity: 'base' }));
+            if (paths.length > 1)
+                collisions.push({ authorityId, paths });
+        }
+        collisions.sort((left, right) => naturalAuthorityCompare(left.authorityId, right.authorityId));
+        return {
+            entries: selected.map(entry => ({
+                path: entry.path,
+                frontmatter: entry.frontmatter,
+                revision: entry.revision,
+                authorityScheme: String(entry.frontmatter.authority_scheme).trim(),
+                authorityId: normalizeAuthorityComponent(entry.frontmatter.authority_id)
+                    ? String(entry.frontmatter.authority_id).trim()
+                    : undefined,
+            })),
+            totalVisible: ordered.length,
+            truncated: selected.length < ordered.length,
+            anchor: {
+                ...(requestedAnchor ? { requested: requestedAnchor } : {}),
+                matched,
+                insertionIndex,
+            },
+            collisions,
+        };
+    }
     close() {
         this.catalogUnsubscribe?.();
         this.watcher?.close();
@@ -467,6 +573,8 @@ export class VaultMetadataIndex {
         if (this.snapshotTimer)
             clearTimeout(this.snapshotTimer);
         this.snapshotTimer = undefined;
+        this.authoritySchemeIndex.clear();
+        this.authorityPairIndex.clear();
         derivedCacheBudget.clearOwner(this.cacheOwner);
     }
     async ensureFresh() {
@@ -563,6 +671,7 @@ export class VaultMetadataIndex {
                 this.entries.set(path, entry);
             this.rebuildFilterIndex();
             this.rebuildPathIndex();
+            this.rebuildAuthorityIndex();
             this.clearQueryCaches();
             this.lastFullRefreshAt = Date.now();
             this.scheduleSnapshotSave();
@@ -590,6 +699,8 @@ export class VaultMetadataIndex {
                     this.removeFilterEntry(previous);
                 if (previous)
                     this.removePathEntry(previous);
+                if (previous)
+                    this.removeAuthorityEntry(previous);
                 if (entry)
                     this.entries.set(path, entry);
                 else
@@ -598,6 +709,8 @@ export class VaultMetadataIndex {
                     this.addFilterEntry(entry);
                 if (entry)
                     this.addPathEntry(entry);
+                if (entry)
+                    this.addAuthorityEntry(entry);
             }
             this.scheduleSnapshotSave();
         })();
@@ -717,6 +830,50 @@ export class VaultMetadataIndex {
         this.pathIndex.clear();
         for (const entry of this.entries.values())
             this.addPathEntry(entry);
+    }
+    rebuildAuthorityIndex() {
+        this.authoritySchemeIndex.clear();
+        this.authorityPairIndex.clear();
+        for (const entry of this.entries.values())
+            this.addAuthorityEntry(entry);
+    }
+    addAuthorityEntry(entry) {
+        const scheme = normalizeAuthorityComponent(entry.frontmatter.authority_scheme);
+        if (!scheme)
+            return;
+        let schemePaths = this.authoritySchemeIndex.get(scheme);
+        if (!schemePaths) {
+            schemePaths = new Set();
+            this.authoritySchemeIndex.set(scheme, schemePaths);
+        }
+        schemePaths.add(entry.path);
+        const authorityId = normalizeAuthorityComponent(entry.frontmatter.authority_id);
+        if (!authorityId)
+            return;
+        const pair = authorityPairKey(scheme, authorityId);
+        let pairPaths = this.authorityPairIndex.get(pair);
+        if (!pairPaths) {
+            pairPaths = new Set();
+            this.authorityPairIndex.set(pair, pairPaths);
+        }
+        pairPaths.add(entry.path);
+    }
+    removeAuthorityEntry(entry) {
+        const scheme = normalizeAuthorityComponent(entry.frontmatter.authority_scheme);
+        if (!scheme)
+            return;
+        const schemePaths = this.authoritySchemeIndex.get(scheme);
+        schemePaths?.delete(entry.path);
+        if (schemePaths?.size === 0)
+            this.authoritySchemeIndex.delete(scheme);
+        const authorityId = normalizeAuthorityComponent(entry.frontmatter.authority_id);
+        if (!authorityId)
+            return;
+        const pair = authorityPairKey(scheme, authorityId);
+        const pairPaths = this.authorityPairIndex.get(pair);
+        pairPaths?.delete(entry.path);
+        if (pairPaths?.size === 0)
+            this.authorityPairIndex.delete(pair);
     }
     addPathEntry(entry) {
         for (const key of pathKeys(entry.path)) {

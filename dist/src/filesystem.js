@@ -3044,6 +3044,11 @@ export class FileSystemService {
             ...(nextCursor ? { nextCursor } : {}),
         };
     }
+    async queryAuthorityShelf(params, canAccessPath = () => true) {
+        if (!this.metadataIndex)
+            throw new Error('Authority shelf queries require the metadata index');
+        return this.metadataIndex.queryAuthorityShelf(params, canAccessPath);
+    }
     /** Count metadata rows without reading note bodies; used by bounded windows. */
     async countNotes(params = {}, canAccessPath = () => true, predicate = () => true) {
         const pathPrefix = this.resolvePathPrefix(params.pathPrefix);

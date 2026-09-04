@@ -2,6 +2,7 @@ import type { FrontmatterHandler } from './frontmatter.js';
 import type { PathFilter } from './pathfilter.js';
 import type { VaultCatalogChange, VaultFileCatalog } from './vault-catalog.js';
 import { VaultIoCoordinator } from './vault-io.js';
+import type { AuthorityShelfResult } from './types.js';
 export interface VaultIndexEntry {
     path: string;
     frontmatter: Record<string, any>;
@@ -24,6 +25,8 @@ export declare class VaultMetadataIndex {
     private readonly entries;
     private readonly filterIndex;
     private readonly pathIndex;
+    private readonly authoritySchemeIndex;
+    private readonly authorityPairIndex;
     private readonly queryCache;
     private readonly sortedQueryCache;
     private referenceIndex;
@@ -82,6 +85,18 @@ export declare class VaultMetadataIndex {
      * unavailable; a later full refresh repairs metadata and hash state.
      */
     matchesRevision(path: string, expectedRevision: string): Promise<boolean>;
+    /**
+     * Return one visibility-filtered authority shelf. Authority metadata is an
+     * acceleration index only; current Markdown/frontmatter entries remain the
+     * source of truth. Filtering happens before totals and collision detection
+     * so hidden notes cannot leak through aggregate metadata.
+     */
+    queryAuthorityShelf(params: {
+        scheme: string;
+        aroundAuthorityId?: string;
+        includeUnclassified?: boolean;
+        limit?: number;
+    }, canAccessPath?: (path: string) => boolean): Promise<AuthorityShelfResult>;
     close(): void;
     private ensureFresh;
     private candidatePaths;
@@ -96,6 +111,9 @@ export declare class VaultMetadataIndex {
     private flushSnapshot;
     private rebuildFilterIndex;
     private rebuildPathIndex;
+    private rebuildAuthorityIndex;
+    private addAuthorityEntry;
+    private removeAuthorityEntry;
     private addPathEntry;
     private removePathEntry;
     private addFilterEntry;
