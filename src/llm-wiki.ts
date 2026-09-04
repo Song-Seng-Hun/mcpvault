@@ -9,7 +9,7 @@ import type { ReferenceService } from './references.js';
 import type { SemanticSearchService } from './semantic-search.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
-import { getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeLifecycle, normalizeNavOrder, normalizeNoteKind, normalizeRecallQuality, normalizeRetentionPolicy, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeServiceClass, normalizeTaskStatus, organizationLintIssues, organizationNoteTemplate, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, CONFIDENCE_LEVELS, DECISION_STATUSES, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS, type AnswerPacketIntent, type CatalogOrder, type TemporalValidityState, type WikiProjectionView } from './organization.js';
+import { getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, organizationLintIssues, organizationNoteTemplate, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, CONFIDENCE_LEVELS, DECISION_STATUSES, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS, type AnswerPacketIntent, type CatalogOrder, type TemporalValidityState, type WikiProjectionView } from './organization.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
@@ -5511,34 +5511,7 @@ export class LlmWikiService {
     const hasOrganizationInput = [params.noteKind, params.lifecycle, params.decisionStatus, params.primaryMoc, params.mocs, params.moc, params.navOrder, params.project, params.reviewAt, params.reviewIntervalDays, params.reviewSnoozedUntil, params.reviewSnoozeReason, params.nextAction, params.waitingFor, params.desiredOutcome, params.projectPurpose, params.projectSupport, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.serviceClass, params.completionCriteria, params.startedAt, params.blockedSince, params.waitingSince, params.completedAt, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.canonicalPath, params.recallPrompt, params.recallIntervalDays, params.lastRecalledAt, params.recallQuality, params.retentionPolicy, params.retentionEvent, params.retentionAt, params.preserveUntil, params.legalHold, params.retentionReason, params.replacedBy, params.knowledgeRole, params.termStatus, params.termReplacedBy, params.termScopeNote, params.preferredTerm, params.termLanguage, params.authorityScheme, params.authorityId, params.disambiguation, params.broaderTerms, params.relatedTerms, params.subjectTerms, params.domain, params.methods, params.audience, params.retrievalCues, params.useWhen, params.validFrom, params.validUntil, params.observedAt, params.temporalScope, params.seeAlso, params.relations, params.relationNotes, params.relationEvidence, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.reviewChecks, params.reviewOpenItems, params.interpretationStatus, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
       .some(value => value !== undefined);
     if (!hasOrganizationInput && [params.tags, params.timeEstimateMinutes, params.energy, params.effort].every(value => value === undefined)) throw new Error('At least one organization field is required');
-    const patch: Record<string, unknown> = {};
-    if (params.noteKind !== undefined) patch.note_kind = normalizeNoteKind(params.noteKind);
-    if (params.lifecycle !== undefined) patch.lifecycle = normalizeLifecycle(params.lifecycle);
-    if (params.decisionStatus !== undefined) patch.decision_status = normalizeDecisionStatus(params.decisionStatus);
-    if (params.primaryMoc !== undefined) patch.primary_moc = boundedText(params.primaryMoc, 500);
-    if (params.navOrder !== undefined) patch.nav_order = normalizeNavOrder(params.navOrder);
-    if (params.moc !== undefined) patch.moc = String(params.moc).trim().slice(0, 500);
-    if (params.project !== undefined) patch.project = String(params.project).trim().slice(0, 500);
-    if (params.reviewAt !== undefined) patch.review_at = normalizeReviewAt(params.reviewAt);
-    if (params.reviewIntervalDays !== undefined) patch.review_interval_days = normalizeReviewIntervalDays(params.reviewIntervalDays);
-    if (params.retentionPolicy !== undefined) patch.retention_policy = normalizeRetentionPolicy(params.retentionPolicy);
-    if (params.retentionEvent !== undefined) patch.retention_event = String(params.retentionEvent).trim().toLowerCase();
-    if (params.retentionAt !== undefined) patch.retention_at = normalizeIsoDate(params.retentionAt, 'retentionAt');
-    if (params.preserveUntil !== undefined) patch.preserve_until = normalizeIsoDate(params.preserveUntil, 'preserveUntil');
-    if (params.legalHold !== undefined) patch.legal_hold = params.legalHold;
-    if (params.retentionReason !== undefined) patch.retention_reason = boundedText(params.retentionReason, 1000);
-    if (params.replacedBy !== undefined) patch.replaced_by = boundedText(params.replacedBy, 500);
-    if (params.nextAction !== undefined) patch.next_action = String(params.nextAction).trim().slice(0, 500);
-    if (params.waitingFor !== undefined) patch.waiting_for = String(params.waitingFor).trim().slice(0, 500);
-    if (params.projectPurpose !== undefined) patch.project_purpose = String(params.projectPurpose).trim().slice(0, 1000);
-    if (params.taskStatus !== undefined) patch.task_status = normalizeTaskStatus(params.taskStatus);
-    if (params.serviceClass !== undefined) patch.service_class = normalizeServiceClass(params.serviceClass);
-    if (params.clarifyDisposition !== undefined) patch.triage_disposition = normalizeClarifyDisposition(params.clarifyDisposition);
-    if (params.clarifiedBy !== undefined) patch.clarified_by = boundedText(params.clarifiedBy, 200);
-    if (params.clarifiedAt !== undefined) patch.clarified_at = normalizeReviewAt(params.clarifiedAt);
-    if (params.clarifyNote !== undefined) patch.clarify_note = boundedText(params.clarifyNote, 1000);
-    if (params.triageTarget !== undefined) patch.triage_target = boundedText(params.triageTarget, 500);
-    const organization = knowledgeOrganization({
+    const patch = knowledgeOrganization({
       existing: note.frontmatter,
       ...(params.tags !== undefined && { tags: params.tags }),
       ...(params.timeEstimateMinutes !== undefined && { timeEstimateMinutes: params.timeEstimateMinutes }),
@@ -5563,6 +5536,7 @@ export class LlmWikiService {
       ...(params.summaryLayer !== undefined && { summaryLayer: params.summaryLayer }),
       ...(params.summaryHighlights !== undefined && { summaryHighlights: params.summaryHighlights }),
       ...(params.nextActions !== undefined && { nextActions: params.nextActions }),
+      ...(params.nextAction !== undefined && { nextAction: params.nextAction }),
       ...(params.waitingFor !== undefined && { waitingFor: params.waitingFor }),
       ...(params.desiredOutcome !== undefined && { desiredOutcome: params.desiredOutcome }),
       ...(params.projectPurpose !== undefined && { projectPurpose: params.projectPurpose }),
@@ -5650,7 +5624,6 @@ export class LlmWikiService {
       contentDigest: hash(note.content),
       status: String(note.frontmatter.knowledge_status || note.frontmatter.status || 'draft'),
     });
-    Object.assign(patch, organization);
     await this.fileSystem.updateFrontmatter({ path: params.path, frontmatter: patch, merge: true, expectedRevision: params.expectedRevision });
     const updated = await this.fileSystem.readNote(params.path);
     return {

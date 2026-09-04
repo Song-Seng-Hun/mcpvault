@@ -1771,10 +1771,32 @@ test('organization metadata, catalog facets, review queue, and lint warnings sta
     expect(inbox.value).toMatchObject({ total: 1, ageBands: { stale: 1 }, oldestAgeDays: expect.any(Number), items: [expect.objectContaining({ path: 'Inbox/Rough capture.md', agingBand: 'stale', suggestedAction: 'clarify_or_archive_this_old_capture' })] });
     const rough = await callJson(client, 'read_note', { path: 'Inbox/Rough capture.md', accessToken });
     const triaged = await callJson(client, 'triage_wiki_note', {
-      path: 'Inbox/Rough capture.md', noteKind: 'literature', lifecycle: 'active', project: '[[Projects/MCPVault]]',
+      path: 'Inbox/Rough capture.md', noteKind: 'project', lifecycle: 'active', project: '[[Projects/MCPVault]]',
+      desiredOutcome: 'The captured work is organized.', nextAction: 'Review the captured source.', completionCriteria: ['The source has a durable destination.'],
+      summary: 'A captured organization project.', summaryLayer: 2, summaryHighlights: [{ text: 'Sort this later.' }],
+      serviceClass: 'research', startedAt: '2030-01-01', blockedSince: '2030-01-02', waitingSince: '2030-01-03', completedAt: '2030-01-04',
+      retrievalCues: ['When an Inbox capture becomes actionable'], useWhen: 'During Inbox clarification', interpretationStatus: 'interpreted',
       expectedRevision: rough.value.revision, accessToken,
     });
-    expect(triaged.value).toMatchObject({ success: true, frontmatter: { noteKind: 'literature', lifecycle: 'active' } });
+    expect(triaged.value).toMatchObject({
+      success: true,
+      frontmatter: {
+        noteKind: 'project', lifecycle: 'active', desiredOutcome: 'The captured work is organized.', nextAction: 'Review the captured source.',
+        completionCriteria: ['The source has a durable destination.'], serviceClass: 'research', startedAt: '2030-01-01', blockedSince: '2030-01-02',
+        waitingSince: '2030-01-03', completedAt: '2030-01-04', retrievalCues: ['When an Inbox capture becomes actionable'],
+        useWhen: 'During Inbox clarification', interpretationStatus: 'interpreted',
+      },
+    });
+    const triagedRead = await callJson(client, 'read_note', { path: 'Inbox/Rough capture.md', accessToken });
+    expect(triagedRead.value.fm).toMatchObject({
+      summary_layer: 2, summary_highlights: [{ text: 'Sort this later.' }], completion_criteria: ['The source has a durable destination.'],
+      service_class: 'research', started_at: '2030-01-01', blocked_since: '2030-01-02', waiting_since: '2030-01-03', completed_at: '2030-01-04',
+      retrieval_cues: ['When an Inbox capture becomes actionable'], use_when: 'During Inbox clarification', interpretation_status: 'interpreted',
+    });
+    const invalidTriage = await client.callTool({ name: 'triage_wiki_note', arguments: {
+      path: 'Inbox/Rough capture.md', nextAction: 'x'.repeat(501), expectedRevision: triaged.value.revision, accessToken,
+    } });
+    expect(invalidTriage.isError).toBe(true);
     const inboxAfterTriage = await callJson(client, 'get_wiki_inbox', { limit: 2, maxChars: 1600, accessToken });
     expect(inboxAfterTriage.value).toMatchObject({ total: 0, items: [] });
     const stalledWrite = await client.callTool({ name: 'write_note', arguments: {
