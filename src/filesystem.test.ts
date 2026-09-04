@@ -1011,7 +1011,7 @@ describe("structured frontmatter queries", () => {
       expect(fastSecond.notes.map(note => note.path)).toEqual(["Two.md"]);
       expect(fastSecond.truncated).toBe(true);
     } finally {
-      metadataIndex.close();
+      await metadataIndex.close();
     }
 
     await expect(fileSystem.queryNotes({ after: {} as any })).rejects.toThrow(/cursor path/);
@@ -1072,7 +1072,7 @@ describe("structured frontmatter queries", () => {
       const deleted = await indexedFileSystem.queryAuthorityShelf({ scheme: "local-topics", limit: 10 }, canAccess);
       expect(deleted.entries.some(entry => entry.path === "Moved-B.md")).toBe(false);
     } finally {
-      metadataIndex.close();
+      await metadataIndex.close();
     }
   });
 
@@ -1089,7 +1089,7 @@ describe("structured frontmatter queries", () => {
       }
     }
     expect(snapshot?.subarray(0, 8).toString("ascii")).toBe("MCPVMETA");
-    metadataIndex.close();
+    await metadataIndex.close();
 
     const restoredIndex = new VaultMetadataIndex(testVaultPath, new PathFilter(), new FrontmatterHandler());
     try {
@@ -1097,8 +1097,26 @@ describe("structured frontmatter queries", () => {
         expect.objectContaining({ path: "Snapshot.md", frontmatter: { status: "active" } }),
       ]);
     } finally {
-      restoredIndex.close();
+      await restoredIndex.close();
     }
+  });
+
+  test("metadata index close waits for an in-flight snapshot and suppresses rescheduling", async () => {
+    const metadataIndex = new VaultMetadataIndex(testVaultPath, new PathFilter(), new FrontmatterHandler());
+    let releaseSnapshot!: () => void;
+    const pendingSnapshot = new Promise<void>(resolve => { releaseSnapshot = resolve; });
+    (metadataIndex as any).snapshotWrite = pendingSnapshot;
+    (metadataIndex as any).snapshotPending = true;
+
+    let closed = false;
+    const closing = Promise.resolve(metadataIndex.close()).then(() => { closed = true; });
+    await Promise.resolve();
+    expect(closed).toBe(false);
+
+    releaseSnapshot();
+    await closing;
+    expect((metadataIndex as any).snapshotTimer).toBeUndefined();
+    expect((metadataIndex as any).snapshotPending).toBe(false);
   });
 });
 
@@ -2927,7 +2945,7 @@ stable_id: note-stable-1
       await expect(indexedFileSystem.findPathForWikiLink("Old identity")).resolves.toEqual([]);
       await expect(indexedFileSystem.findPathForWikiLink("New identity")).resolves.toEqual(["Canonical.md"]);
     } finally {
-      metadataIndex.close();
+      await metadataIndex.close();
     }
   });
 });

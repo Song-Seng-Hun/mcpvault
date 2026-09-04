@@ -218,6 +218,7 @@ export class VaultMetadataIndex {
   private snapshotWrite: Promise<void> | undefined;
   private snapshotTimer: ReturnType<typeof setTimeout> | undefined;
   private snapshotPending = false;
+  private closed = false;
   private watcher: FSWatcher | undefined;
   private watcherStarted = false;
   private readonly catalogUnsubscribe: (() => void) | undefined;
@@ -581,12 +582,15 @@ export class VaultMetadataIndex {
     };
   }
 
-  close(): void {
+  async close(): Promise<void> {
+    this.closed = true;
     this.catalogUnsubscribe?.();
     this.watcher?.close();
     this.watcher = undefined;
     if (this.snapshotTimer) clearTimeout(this.snapshotTimer);
     this.snapshotTimer = undefined;
+    this.snapshotPending = false;
+    if (this.snapshotWrite) await this.snapshotWrite.catch(() => undefined);
     this.authoritySchemeIndex.clear();
     this.authorityPairIndex.clear();
     derivedCacheBudget.clearOwner(this.cacheOwner);
@@ -773,6 +777,7 @@ export class VaultMetadataIndex {
   }
 
   private scheduleSnapshotSave(): void {
+    if (this.closed) return;
     this.snapshotPending = true;
     if (this.snapshotTimer) return;
     this.snapshotTimer = setTimeout(() => {
@@ -783,7 +788,7 @@ export class VaultMetadataIndex {
   }
 
   private async flushSnapshot(): Promise<void> {
-    if (this.snapshotWrite || !this.snapshotPending) return;
+    if (this.closed || this.snapshotWrite || !this.snapshotPending) return;
     this.snapshotPending = false;
     let encoded: Buffer;
     try {
@@ -804,7 +809,7 @@ export class VaultMetadataIndex {
       await this.snapshotWrite;
     } finally {
       this.snapshotWrite = undefined;
-      if (this.snapshotPending) this.scheduleSnapshotSave();
+      if (!this.closed && this.snapshotPending) this.scheduleSnapshotSave();
     }
   }
 

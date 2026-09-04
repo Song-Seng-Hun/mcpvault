@@ -2880,7 +2880,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const closeServer = server.close.bind(server);
   server.close = async () => {
     readModelCatalogUnsubscribe();
-    metadataIndex.close();
+    await metadataIndex.close();
     await searchService.close();
     await semanticSearch.close();
     graphIndex.close();
