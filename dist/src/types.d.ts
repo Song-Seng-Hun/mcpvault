@@ -65,6 +65,65 @@ export interface PatchNoteResult {
         };
     };
 }
+export interface NoteChangeSetItem {
+    path: string;
+    /** Every target must already exist and match this SHA-256 revision. */
+    expectedRevision: string;
+    /** Ordered exact hunks applied to the complete Markdown file before frontmatter changes. */
+    patches?: Array<{
+        oldString: string;
+        newString: string;
+        replaceAll?: boolean;
+        startLine?: number;
+        endLine?: number;
+    }>;
+    /** Top-level Obsidian Properties to set or remove after body patches. */
+    frontmatter?: {
+        set?: Record<string, any>;
+        remove?: string[];
+    };
+}
+export interface PatchMultipleNotesParams {
+    changes: NoteChangeSetItem[];
+    /** Defaults to true. Applying requires the exact fingerprint returned by a dry run. */
+    dryRun?: boolean;
+    confirmPlanFingerprint?: string;
+    previewMaxChars?: number;
+    maxChars?: number;
+}
+export interface NoteChangeSetResultItem {
+    path: string;
+    previousRevision: string;
+    revision: string;
+    wouldChange: boolean;
+    patchCount: number;
+    matchCount: number;
+    frontmatterSet: string[];
+    frontmatterRemoved: string[];
+    preview?: {
+        before: {
+            startLine: number;
+            endLine: number;
+            text: string;
+        };
+        after: {
+            startLine: number;
+            endLine: number;
+            text: string;
+        };
+    };
+}
+export interface PatchMultipleNotesResult {
+    success: boolean;
+    dryRun: boolean;
+    applied: boolean;
+    planFingerprint: string;
+    changeCount: number;
+    changedCount: number;
+    changes: NoteChangeSetResultItem[];
+    message: string;
+    truncated?: boolean;
+}
 export interface DeleteNoteParams {
     path: string;
     confirmPath: string;

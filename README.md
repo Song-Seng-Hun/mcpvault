@@ -324,6 +324,15 @@ unrelated custom Properties. When a note declares `review_interval_days`,
 `review_wiki_note` calculates the next `review_at` after a completed review
 unless the caller supplies an explicit date.
 
+When the contract itself evolves, call `wiki.property_migration` with one
+top-level `fromProperty`, optional `toProperty`, and optional scalar
+`valueMap`. It scans metadata only, reports role/type/allowed-value and target
+collisions, and returns at most ten revision-stamped changes without writing.
+Dry-run those changes through `notes.change_set`, inspect every compact
+before/after preview, then apply the identical array with its plan fingerprint.
+Repeat to process the next bounded batch; immutable sources and managed
+Community records remain outside this generic migration path.
+
 For a redirect or duplicate that must remain addressable, set
 `canonical_path` to the visible canonical note. For high-value knowledge,
 optionally add `recall_prompt` and `recall_interval_days`; attempt the prompt
@@ -869,7 +878,7 @@ authenticated edge in front of it.
 - AST-aware frontmatter updates preserve formatting for unchanged YAML fields.
 - Path checks block traversal, symlink escapes, dotfiles, `.obsidian`, `.git`, and `node_modules`.
 - The dynamic endpoint catalog covers note, collaboration, private scope, LLM Wiki, social journaling, public community, chat, references, agent coordination, and private coordination operations:
-  - File operations: `read_note`, `write_note`, `patch_note`, `delete_note`, `move_note`, `preview_move_note`, `move_file`. A rename is review-first: `preview_move_note` reports bounded inbound links; `move_note` leaves them unchanged by default, while explicit `updateLinks: true` plus the source `expectedRevision` applies a checked Markdown/wikilink rewrite and rolls link edits back if the move fails.
+  - File operations: `read_note`, `write_note`, `patch_note`, `patch_multiple_notes` (`notes.change_set`), `delete_note`, `move_note`, `preview_move_note`, `move_file`. `notes.change_set` coordinates up to ten existing notes under one dry-run fingerprint, revision preflight, stable lock order, and rollback-backed apply; use it only when reciprocal links, ordered MOCs, or a Property migration must remain coherent. A rename is review-first: `preview_move_note` reports bounded inbound links; `move_note` leaves them unchanged by default, while explicit `updateLinks: true` plus the source `expectedRevision` applies a checked Markdown/wikilink rewrite and rolls link edits back if the move fails.
   - Partial reads: `get_note_outline`, `read_note_lines`. Both are revision-stamped, character-bounded, and resumable. Directory listing, backlinks, outlinks, unresolved links, and orphan-note diagnostics likewise default to bounded pages and return an executable offset continuation when more records remain.
   - Directory and batch reads: `list_directory`, `read_multiple_notes`
   - Search: `search_notes` with multi-word matching, LLM Wiki-first ranking, one compact excerpt per document, bounded result count/characters, match reasons (`why`) and freshness (`fresh`), Obsidian-style `path:`, `tag:`, `property:`, `[property:value]`, `section:(...)`, `block:(...)`, `task:`, `task-todo:`, `task-done:`, quoted exact phrases, `OR`, and `-excluded` terms, plus automatic server-side incremental document indexing. Scoped filters match within one section/block/task, and `property:null` finds missing or empty values. Set `expandAuthority: true` when browsing by classification: bounded `broader_terms`/`related_terms` matches are returned with explicit lower-confidence reasons rather than being confused with body or alias matches. Semantic search is skipped when lexical filters/exclusions are present so the requested filter cannot be bypassed.
@@ -909,7 +918,7 @@ authenticated edge in front of it.
   - Community discovery and participation: `list_blog_series`, author activity, categories, related/duplicate post metadata, one-per-target likes, derived reaction counts, accepted answers, public profile guestbooks, private watches, and private saves keep community navigation useful without a second index database
   - Security diagnostics: `list_audit_events` returns the caller's metadata-only MCP attempts/errors; it excludes note bodies, passwords, and bearer tokens, and does not replace Git history
   - Community safety: authenticated agents can use `report_content` for factual reports of prompt injection, malware, harassment, spam, privacy abuse, or impersonation. Configured moderators can use `list_moderation_reports` and `moderate_content` to warn, hide, quarantine, soft-remove, restore, ban, or unban. Hidden/quarantined/removed community content is excluded from normal reads, search, mentions, and context packets; bans preserve public reading but disable mutations. Reports and moderation reasons are bounded metadata, and all community text remains untrusted data rather than instructions.
-- `read_note` returns a SHA-256 `revision`; pass it as `knownRevision` on a later read to receive a small `notModified` response when the note is unchanged, or pass it as the required `expectedRevision` to `write_note`, `patch_note`, or `update_frontmatter` when changing an existing note to reject stale concurrent edits. Use `"missing"` when creating a note that must not already exist. A write against an existing note without a revision is rejected instead of silently overwriting another agent. Reads default to a 12,000-character total response budget even when the caller omits `maxChars`; an oversized note returns a useful body prefix, current revision, total/returned lengths, and `mcp.get_note_outline` as the next action.
+- `read_note` returns a SHA-256 `revision`; pass it as `knownRevision` on a later read to receive a small `notModified` response when the note is unchanged, or pass it as the required `expectedRevision` to `write_note`, `patch_note`, `update_frontmatter`, or every item in `notes.change_set` to reject stale concurrent edits. Use `"missing"` when creating a note that must not already exist. A write against an existing note without a revision is rejected instead of silently overwriting another agent. Reads default to a 12,000-character total response budget even when the caller omits `maxChars`; an oversized note returns a useful body prefix, current revision, total/returned lengths, and `mcp.get_note_outline` as the next action.
 - Search result `why` explains whether a hit came from Wiki priority, title, frontmatter, content, or semantic matching. `fresh` is `current` for a result reconciled against the current Markdown index and `verified` for a semantic row whose source hash was checked; request `includeRevisions: true` for the exact `rv` hash when a client needs to validate a later read.
 - Idea Lab stores seeds and branches as ordinary Markdown under `Community/Ideas/`; contributions and per-agent evaluations are separate notes, so concurrent agents do not overwrite each other. Workshop agendas and phase state live under `Community/Workshops/`, while contributions remain separate notes. These are public current-command-center collaboration records, not private journals or global-sync content.
 - `sync_note_revisions` accepts up to 200 caller-supplied `{path: revision}` entries and returns only `unchanged`, `changed`, or `missing` states from the metadata index; callers can then fetch bodies only for changed/new notes.
@@ -1597,6 +1606,17 @@ partial write. `expectedRevision` is required when changing an existing note;
 read the note first and pass its returned revision. Use `"missing"` for a
 create-only write. This prevents a stale agent from silently overwriting a
 newer edit, while `dryRun` never writes.
+
+For one logically coupled edit spanning several notes, discover
+`notes.change_set`. Supply up to ten existing note paths, each current
+`expectedRevision`, and exact `patches` and/or top-level Property `set`/`remove`
+operations. The first request defaults to `dryRun: true` and returns one
+`planFingerprint`; applying requires the identical change list with
+`dryRun: false` and that fingerprint. Every item is planned before the first
+write. If a later filesystem write fails, MCPVault restores attempted earlier
+writes and explicitly reports any rollback uncertainty. This is a guarded
+filesystem transaction rather than a claim of OS-wide atomicity; Git remains
+the durable audit and recovery layer.
 
 **Response (multiple matches with replaceAll=false):**
 

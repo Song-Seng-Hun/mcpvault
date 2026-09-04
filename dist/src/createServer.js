@@ -181,6 +181,7 @@ function requestFairnessKey(args) {
 const MUTATING_TOOLS = new Set([
     "write_note",
     "patch_note",
+    "patch_multiple_notes",
     "delete_note",
     "move_note",
     "move_file",
@@ -211,6 +212,7 @@ const MUTATING_TOOLS = new Set([
 const CAPABILITY_FOR_TOOL = {
     write_note: "write",
     patch_note: "write",
+    patch_multiple_notes: "write",
     delete_note: "write",
     move_note: "write",
     update_task: "write",
@@ -517,6 +519,32 @@ export function createServer(vaultPath, options = {}) {
                     prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
                 },
                 required: ["query"]
+            }
+        },
+        {
+            name: "patch_multiple_notes",
+            description: "Preflight and apply one bounded revision-checked change set across up to 10 existing notes. Dry-run is the default and returns a plan fingerprint; applying requires that exact fingerprint. Supports exact body hunks and root Obsidian Property set/remove operations, holds all note locks in stable order, and restores attempted writes if a later write fails.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    changes: { type: "array", minItems: 1, maxItems: 10, items: { type: "object", properties: {
+                                path: { type: "string", description: "Existing note path relative to the authorized scope" },
+                                expectedRevision: { type: "string", pattern: "^[a-fA-F0-9]{64}$", description: "Current revision returned by a read; new files are intentionally unsupported" },
+                                patches: { type: "array", minItems: 1, maxItems: 50, items: { type: "object", properties: {
+                                            oldString: { type: "string" }, newString: { type: "string" }, replaceAll: { type: "boolean", default: false },
+                                            startLine: { type: "integer", minimum: 1 }, endLine: { type: "integer", minimum: 1 },
+                                        }, required: ["oldString", "newString"] } },
+                                frontmatter: { type: "object", properties: {
+                                        set: { type: "object", description: "Top-level Obsidian Properties to set" },
+                                        remove: { type: "array", maxItems: 100, items: { type: "string", minLength: 1, maxLength: 100 }, description: "Top-level Obsidian Property names to remove" },
+                                    } },
+                            }, required: ["path", "expectedRevision"] } },
+                    dryRun: { type: "boolean", default: true, description: "Preflight only unless explicitly false" },
+                    confirmPlanFingerprint: { type: "string", pattern: "^[a-fA-F0-9]{64}$", description: "Exact fingerprint returned by a dry run; required when dryRun=false" },
+                    previewMaxChars: { type: "integer", minimum: 200, maximum: 1000, default: 400 },
+                    maxChars: { type: "integer", minimum: 4096, maximum: 20000, default: 12000 },
+                },
+                required: ["changes"]
             }
         },
         {
@@ -1540,6 +1568,17 @@ export function createServer(vaultPath, options = {}) {
                             ...(trimmedArgs.limit !== undefined && { limit: trimmedArgs.limit }),
                         }), trimmedArgs.prettyPrint);
                     }
+                    case "get_wiki_property_migration_preview": {
+                        return jsonResult(await llmWiki.propertyMigrationPreview(principal, {
+                            fromProperty: trimmedArgs.fromProperty,
+                            ...(trimmedArgs.toProperty !== undefined && { toProperty: trimmedArgs.toProperty }),
+                            ...(trimmedArgs.valueMap !== undefined && { valueMap: trimmedArgs.valueMap }),
+                            ...(typeof trimmedArgs.pathPrefix === 'string' && { pathPrefix: trimmedArgs.pathPrefix }),
+                            ...(trimmedArgs.limit !== undefined && { limit: trimmedArgs.limit }),
+                            ...(trimmedArgs.scanLimit !== undefined && { scanLimit: trimmedArgs.scanLimit }),
+                            ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
+                        }), trimmedArgs.prettyPrint);
+                    }
                     case "get_wiki_note_template": {
                         return jsonResult(llmWiki.noteTemplate(trimmedArgs.noteKind, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
                     }
@@ -2027,6 +2066,16 @@ export function createServer(vaultPath, options = {}) {
                             content: [{ type: "text", text: JSON.stringify(results, null, indent) }]
                         };
                     }
+                    case "patch_multiple_notes": {
+                        const result = await fileSystem.patchMultipleNotes({
+                            changes: trimmedArgs.changes,
+                            ...(trimmedArgs.dryRun !== undefined && { dryRun: trimmedArgs.dryRun }),
+                            ...(trimmedArgs.confirmPlanFingerprint !== undefined && { confirmPlanFingerprint: trimmedArgs.confirmPlanFingerprint }),
+                            ...(trimmedArgs.previewMaxChars !== undefined && { previewMaxChars: trimmedArgs.previewMaxChars }),
+                            ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
+                        });
+                        return jsonResult({ ...result, changes: result.changes.map(change => ({ ...change, path: scopeAccess.toPublicPath(change.path) })) }, trimmedArgs.prettyPrint);
+                    }
                     case "semantic_search_status": {
                         return jsonResult(semanticSearch.status(), trimmedArgs.prettyPrint);
                     }
@@ -2490,6 +2539,11 @@ function trimPaths(args, access, principal) {
     if (trimmed.paths && Array.isArray(trimmed.paths)) {
         trimmed.paths = trimmed.paths.map((p) => typeof p === 'string' ? access.resolveExternalPath(p, principal) : p);
     }
+    if (trimmed.changes && Array.isArray(trimmed.changes)) {
+        trimmed.changes = trimmed.changes.map((change) => change && typeof change === 'object' && typeof change.path === 'string'
+            ? { ...change, path: access.resolveExternalPath(change.path, principal) }
+            : change);
+    }
     if (trimmed.excludePaths && Array.isArray(trimmed.excludePaths)) {
         trimmed.excludePaths = trimmed.excludePaths.map((p) => typeof p === 'string' ? access.resolveExternalPath(p, principal) : p);
     }
@@ -2533,6 +2587,11 @@ function assertImmutableSourceBoundary(toolName, args, access) {
     }
     if (toolName === 'daily_note' && typeof args.folder === 'string')
         paths.push(args.folder);
+    if (toolName === 'patch_multiple_notes' && Array.isArray(args.changes)) {
+        for (const change of args.changes)
+            if (change && typeof change.path === 'string')
+                paths.push(change.path);
+    }
     for (const path of paths)
         access.assertMutationAllowed(path, toolName);
 }
@@ -2548,6 +2607,11 @@ function assertManagedCommunityBoundary(toolName, args) {
     }
     if (toolName === 'manage_tags' && args.operation !== 'list' && typeof args.path === 'string')
         paths.push(args.path);
+    if (toolName === 'patch_multiple_notes' && Array.isArray(args.changes)) {
+        for (const change of args.changes)
+            if (change && typeof change.path === 'string')
+                paths.push(change.path);
+    }
     for (const path of paths) {
         const normalized = String(path).replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').toLowerCase();
         if (normalized === 'community/posts' || normalized.startsWith('community/posts/')

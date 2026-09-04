@@ -1313,6 +1313,72 @@ test('work dependency gates keep flow, project planning, and next actions consis
   }
 });
 
+test('Property migrations produce executable bounded change sets and preserve scope boundaries', async () => {
+  await mkdir(join(vault, 'Knowledge'), { recursive: true });
+  await mkdir(join(vault, '_sources'), { recursive: true });
+  await writeFile(join(vault, 'Knowledge', 'A.md'), '---\nnote_kind: project\nlegacy_state: todo\n---\n# A\n');
+  await writeFile(join(vault, 'Knowledge', 'B.md'), '---\nnote_kind: project\nlegacy_state: done\ntask_status: open\n---\n# B\n');
+  await writeFile(join(vault, '_sources', 'Immutable.md'), '---\nlegacy_state: todo\n---\n# Source\n');
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'migration-owner', modelId: 'codex', password: 'migration-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const discovery = await callJson(client, 'search_capabilities', { query: 'Obsidian Property schema migration change set', limit: 5, maxChars: 8000, accessToken });
+    expect(discovery.value.endpoints).toEqual(expect.arrayContaining([
+      expect.objectContaining({ endpointId: 'wiki.property_migration' }),
+    ]));
+    const changeSetDiscovery = await callJson(client, 'search_capabilities', { query: 'multiple notes atomic rollback transaction', limit: 5, maxChars: 8000, accessToken });
+    expect(changeSetDiscovery.value.endpoints).toEqual(expect.arrayContaining([
+      expect.objectContaining({ endpointId: 'notes.change_set', mutating: true }),
+    ]));
+    const privateWrite = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'notes.write', arguments: {
+      path: 'scope://model/codex/Private.md', content: '# Private\n\nOld private text.\n', expectedRevision: 'missing', accessToken,
+    } } });
+    expect(privateWrite.isError).toBeFalsy();
+    const privateNote = await callJson(client, 'call_endpoint', { endpointId: 'notes.read', arguments: { path: 'scope://model/codex/Private.md', accessToken } });
+    const privatePreview = await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: {
+      changes: [{ path: 'scope://model/codex/Private.md', expectedRevision: privateNote.value.revision, patches: [{ oldString: 'Old private text.', newString: 'New private text.' }] }],
+      dryRun: true, accessToken,
+    } });
+    expect(privatePreview.value.changes[0].path).toBe('scope://model/codex/Private.md');
+
+    const migration = await callJson(client, 'call_endpoint', { endpointId: 'wiki.property_migration', arguments: {
+      fromProperty: 'legacy_state', toProperty: 'task_status', valueMap: { todo: 'open', done: 'completed' }, pathPrefix: 'Knowledge', limit: 10, maxChars: 12000, accessToken,
+    } });
+    expect(migration.result.isError).toBeFalsy();
+    expect(migration.value.changes).toEqual([
+      expect.objectContaining({ path: 'Knowledge/A.md', expectedRevision: expect.stringMatching(/^[a-f0-9]{64}$/), frontmatter: { set: { task_status: 'open' }, remove: ['legacy_state'] } }),
+    ]);
+    expect(migration.value.blocked).toEqual([
+      expect.objectContaining({ path: 'Knowledge/B.md', reason: expect.stringContaining('different value') }),
+    ]);
+    expect(migration.value.nextAction.endpointId).toBe('notes.change_set');
+
+    const preview = await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: { changes: migration.value.changes, dryRun: true, accessToken } });
+    expect(preview.value).toMatchObject({ success: true, dryRun: true, applied: false, changeCount: 1 });
+    const applied = await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: {
+      changes: migration.value.changes, dryRun: false, confirmPlanFingerprint: preview.value.planFingerprint, accessToken,
+    } });
+    expect(applied.value).toMatchObject({ success: true, applied: true, planFingerprint: preview.value.planFingerprint });
+    const a = await callJson(client, 'read_note', { path: 'Knowledge/A.md', accessToken });
+    expect(a.value.fm).toMatchObject({ note_kind: 'project', task_status: 'open' });
+    expect(a.value.fm).not.toHaveProperty('legacy_state');
+
+    const immutablePlan = await callJson(client, 'call_endpoint', { endpointId: 'wiki.property_migration', arguments: {
+      fromProperty: 'legacy_state', toProperty: 'task_status', valueMap: { todo: 'open' }, pathPrefix: '_sources', limit: 10, maxChars: 8000, accessToken,
+    } });
+    expect(immutablePlan.value.changes).toEqual([]);
+    expect(immutablePlan.value.blocked).toEqual([expect.objectContaining({ path: '_sources/Immutable.md', reason: expect.stringContaining('cannot mutate immutable') })]);
+
+    const source = await callJson(client, 'read_note', { path: '_sources/Immutable.md', accessToken });
+    const rejected = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'notes.change_set', arguments: {
+      changes: [{ path: '_sources/Immutable.md', expectedRevision: source.value.revision, frontmatter: { set: { legacy_state: 'done' } } }], accessToken,
+    } } });
+    expect(rejected.isError).toBe(true);
+    expect((rejected.content as any)[0].text).toContain('cannot mutate immutable LLM Wiki sources');
+  } finally { await client.close(); await server.close(); }
+});
+
 async function setup() {
   const server = createServer(vault, { version: '1.0.0' });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();

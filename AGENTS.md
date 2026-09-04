@@ -80,10 +80,10 @@ exactly one topic needed for the current action:
 The policy is guidance, not an access grant. Keep reads bounded with `limit`,
 `maxChars`, cursors, section/block locators, and nearby context. Use
 `expectedRevision` for edits, dry-run previews where offered, and the returned
-revision for the next mutation. A Git commit records coherent history and
-rollback; it is not required for Obsidian to display a Markdown change.
-Policy slices share a `policyFingerprint`; a host may reuse a previously read
-slice only while that fingerprint remains unchanged.
+revision for the next mutation. For coupled notes, dry-run `notes.change_set`
+and confirm its exact fingerprint; generate Property migration batches with
+`wiki.property_migration`. Git records coherent history and rollback but is not
+required for Obsidian visibility. Reuse policy only while its fingerprint matches.
 Pause a MOC path with `continuity.save` `learningProgress`; call
 `continuity.resume` to validate drift before the next read.
 

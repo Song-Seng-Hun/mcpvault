@@ -122,11 +122,24 @@ tools; new behaviors belong in the endpoint catalog.
   missing, malformed, oversized, or scope-invalid maps and feeds actionable
   defects into the existing exception board without rewriting ordinary
   user-authored Canvases.
+- Coupled knowledge edits now use a bounded `notes.change_set` protocol rather
+  than independent best-effort writes. Up to ten existing notes and fifty exact
+  hunks are preflighted under stable locks; every revision and resulting hash
+  contributes to a dry-run fingerprint. Apply requires that fingerprint, and a
+  later write failure restores attempted files while making rollback uncertainty
+  explicit. Immutable sources, managed Community records, and private scope
+  boundaries are checked for every nested path.
+- Property-contract evolution now has a read-only `wiki.property_migration`
+  planner. It maps one top-level Property rename/value change into bounded,
+  revision-stamped change-set inputs, while surfacing destination collisions,
+  role applicability, canonical type, allowed-value, oversized-value, source,
+  and managed-record blockers. Migration remains inspect -> dry-run -> confirm,
+  never an unbounded automatic rewrite.
 
 Evidence: `moc-navigation.test.ts`, `backlinks.test.ts`, `organization.test.ts`,
 `filesystem.test.ts`, `json-canvas.test.ts`, `continuity.test.ts`,
 `global-sync.test.ts`, and the
-onboarding/context-pack/capacity/retrieval/migration integration cases in
+onboarding/context-pack/capacity/retrieval/Property-migration integration cases in
 `llm-wiki.test.ts`.
 The compiled `dist/server.js` is also exercised over a real stdio MCP client on
 an isolated temporary Vault through orientation, capability discovery, and

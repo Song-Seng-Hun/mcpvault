@@ -567,6 +567,19 @@ export function getLlmWikiTools(): Tool[] {
       } },
     },
     {
+      name: 'get_wiki_property_migration_preview',
+      description: 'Preview a bounded Obsidian Property rename and/or scalar value mapping across visible notes. Returns exact revision-stamped notes.change_set inputs plus collisions and contract violations, but never writes. Apply in batches by dry-running the returned change set, confirming its plan fingerprint, then requesting the next batch.',
+      inputSchema: { type: 'object', properties: {
+        fromProperty: { type: 'string', pattern: '^[A-Za-z_][A-Za-z0-9_-]{0,99}$', description: 'Existing top-level Property name' },
+        toProperty: { type: 'string', pattern: '^[A-Za-z_][A-Za-z0-9_-]{0,99}$', description: 'Destination name; omit for value-only migration' },
+        valueMap: { type: 'object', description: 'Optional exact scalar mapping. List values are mapped element by element; unmapped values remain unchanged.' },
+        pathPrefix: { type: 'string', description: 'Optional authorized subtree to scan' },
+        limit: { type: 'integer', minimum: 1, maximum: 10, default: 10, description: 'Maximum executable changes and blocked examples returned' },
+        scanLimit: { type: 'integer', minimum: 1, maximum: 20000, default: 5000, description: 'Maximum metadata rows inspected in one bounded pass' },
+        maxChars: { type: 'integer', minimum: 4096, maximum: 20000, default: 12000 }, accessToken, prettyPrint,
+      }, required: ['fromProperty'] },
+    },
+    {
       name: 'get_wiki_note_template',
       description: 'Return a small optional Obsidian Markdown/Properties scaffold for a common note kind or a concept, argument, model, observation, or counterargument knowledge role. It never creates a file and never makes templates mandatory.',
       inputSchema: { type: 'object', properties: {

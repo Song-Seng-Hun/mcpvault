@@ -1,6 +1,6 @@
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
-import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, MoveNoteParams, MoveNotePreviewParams, MoveNotePreviewResult, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult, DailyNoteResult, ListTasksParams, ListTasksResult, UpdateTaskParams, UpdateTaskResult, QueryNotesParams, QueryNotesResult, QueryNote } from './types.js';
+import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, MoveNoteParams, MoveNotePreviewParams, MoveNotePreviewResult, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, PatchMultipleNotesParams, PatchMultipleNotesResult, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult, DailyNoteResult, ListTasksParams, ListTasksResult, UpdateTaskParams, UpdateTaskResult, QueryNotesParams, QueryNotesResult, QueryNote } from './types.js';
 import { type DailyDateInput } from './daily.js';
 import type { VaultMetadataIndex } from './vault-index.js';
 import type { VaultGraphIndex } from './vault-graph.js';
@@ -31,6 +31,8 @@ export declare class FileSystemService {
     private notifyNoteChanged;
     private revision;
     private withMutationLock;
+    /** Acquire several note locks in one stable order so reciprocal edits cannot deadlock. */
+    private withMutationLocks;
     constructor(vaultPath: string, pathFilter?: PathFilter, frontmatterHandler?: FrontmatterHandler, onNoteChanged?: ((path: string, kind: 'upsert' | 'delete') => void | Promise<void>) | undefined, metadataIndex?: VaultMetadataIndex | undefined, graphIndex?: VaultGraphIndex | undefined, vaultIo?: VaultIoCoordinator);
     /**
      * Normalize an incoming path to be vault-relative. Strips leading slashes
@@ -84,8 +86,17 @@ export declare class FileSystemService {
     private writeNoteUnlocked;
     patchNote(params: PatchNoteParams): Promise<PatchNoteResult>;
     private patchNoteUnlocked;
+    /** Compute exact hunks without writing so single-note and change-set edits share semantics. */
+    private planImprovedPatch;
     /** Apply line-scoped or multi-hunk patches as one all-or-nothing operation. */
     private patchNoteImproved;
+    private planFrontmatterMutation;
+    /**
+     * Preflight and apply a small revision-checked, rollback-backed multi-note
+     * transaction. Filesystem writes are not globally atomic, so a failed write
+     * is restored from the in-memory originals and reported explicitly.
+     */
+    patchMultipleNotes(params: PatchMultipleNotesParams): Promise<PatchMultipleNotesResult>;
     listDirectory(path?: string): Promise<DirectoryListing>;
     exists(path: string): Promise<boolean>;
     isDirectory(path: string): Promise<boolean>;

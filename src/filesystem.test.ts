@@ -131,6 +131,89 @@ test("patch note applies multiple hunks atomically", async () => {
   expect((await fileSystem.readNote(testPath)).content).toBe("A\nBeta\nG\n");
 });
 
+test("multi-note change sets require a stable dry-run fingerprint and apply body plus Property edits", async () => {
+  await writeFile(join(testVaultPath, "A.md"), "---\nstatus: draft\nlegacy: yes\n---\n# A\n\nOld A\n");
+  await writeFile(join(testVaultPath, "B.md"), "# B\n\nOld B\n");
+  const a = await fileSystem.readNote("A.md");
+  const b = await fileSystem.readNote("B.md");
+  const changes = [
+    {
+      path: "A.md", expectedRevision: a.revision,
+      patches: [{ oldString: "Old A", newString: "New A" }],
+      frontmatter: { set: { status: "published" }, remove: ["legacy"] },
+    },
+    { path: "B.md", expectedRevision: b.revision, patches: [{ oldString: "Old B", newString: "New B" }] },
+  ];
+
+  const preview = await fileSystem.patchMultipleNotes({ changes, dryRun: true });
+  const secondPreview = await fileSystem.patchMultipleNotes({ changes });
+  expect(preview).toMatchObject({ success: true, dryRun: true, applied: false, changeCount: 2, changedCount: 2 });
+  expect(preview.planFingerprint).toBe(secondPreview.planFingerprint);
+  expect((await fileSystem.readNote("A.md")).revision).toBe(a.revision);
+  await expect(fileSystem.patchMultipleNotes({ changes, dryRun: false, confirmPlanFingerprint: "0".repeat(64) })).rejects.toThrow("confirmation mismatch");
+
+  const applied = await fileSystem.patchMultipleNotes({ changes, dryRun: false, confirmPlanFingerprint: preview.planFingerprint });
+  expect(applied).toMatchObject({ success: true, dryRun: false, applied: true, planFingerprint: preview.planFingerprint });
+  const updatedA = await fileSystem.readNote("A.md");
+  const updatedB = await fileSystem.readNote("B.md");
+  expect(updatedA.content).toContain("New A");
+  expect(updatedA.frontmatter).toMatchObject({ status: "published" });
+  expect(updatedA.frontmatter).not.toHaveProperty("legacy");
+  expect(updatedB.content).toContain("New B");
+});
+
+test("multi-note change sets preflight every revision before writing any note", async () => {
+  await writeFile(join(testVaultPath, "A.md"), "Alpha\n");
+  await writeFile(join(testVaultPath, "B.md"), "Beta\n");
+  const a = await fileSystem.readNote("A.md");
+  const b = await fileSystem.readNote("B.md");
+  const changes = [
+    { path: "A.md", expectedRevision: a.revision, patches: [{ oldString: "Alpha", newString: "Changed Alpha" }] },
+    { path: "B.md", expectedRevision: b.revision, patches: [{ oldString: "Beta", newString: "Changed Beta" }] },
+  ];
+  const preview = await fileSystem.patchMultipleNotes({ changes });
+  await writeFile(join(testVaultPath, "B.md"), "External edit\n");
+
+  await expect(fileSystem.patchMultipleNotes({ changes, dryRun: false, confirmPlanFingerprint: preview.planFingerprint })).rejects.toThrow("Revision conflict for B.md");
+  expect((await fileSystem.readNote("A.md")).content).toBe("Alpha\n");
+  expect((await fileSystem.readNote("B.md")).content).toBe("External edit\n");
+});
+
+test("multi-note change sets restore earlier writes when a later filesystem write fails", async () => {
+  await writeFile(join(testVaultPath, "A.md"), "Alpha\n");
+  await writeFile(join(testVaultPath, "B.md"), "Beta\n");
+  const a = await fileSystem.readNote("A.md");
+  const b = await fileSystem.readNote("B.md");
+  const changes = [
+    { path: "A.md", expectedRevision: a.revision, patches: [{ oldString: "Alpha", newString: "Changed Alpha" }] },
+    { path: "B.md", expectedRevision: b.revision, patches: [{ oldString: "Beta", newString: "Changed Beta" }] },
+  ];
+  const preview = await fileSystem.patchMultipleNotes({ changes });
+  const service = fileSystem as any;
+  const resolveWritablePath = service.resolveWritablePath.bind(fileSystem);
+  let bWrites = 0;
+  service.resolveWritablePath = (path: string) => path === "B.md" && bWrites++ === 0
+    ? join(testVaultPath, "missing-parent", "B.md")
+    : resolveWritablePath(path);
+
+  await expect(fileSystem.patchMultipleNotes({ changes, dryRun: false, confirmPlanFingerprint: preview.planFingerprint })).rejects.toThrow("All attempted writes were restored");
+  expect((await fileSystem.readNote("A.md")).content).toBe("Alpha\n");
+  expect((await fileSystem.readNote("B.md")).content).toBe("Beta\n");
+});
+
+test("multi-note change sets reject duplicate paths and excessive aggregate hunks", async () => {
+  await writeFile(join(testVaultPath, "A.md"), "Alpha\n");
+  const a = await fileSystem.readNote("A.md");
+  await expect(fileSystem.patchMultipleNotes({ changes: [
+    { path: "A.md", expectedRevision: a.revision, patches: [{ oldString: "Alpha", newString: "A" }] },
+    { path: "a.md", expectedRevision: a.revision, patches: [{ oldString: "Alpha", newString: "B" }] },
+  ] })).rejects.toThrow("only once");
+  await expect(fileSystem.patchMultipleNotes({ changes: [{
+    path: "A.md", expectedRevision: a.revision,
+    patches: Array.from({ length: 51 }, () => ({ oldString: "Alpha", newString: "A" })),
+  }] })).rejects.toThrow("50 total patch hunks");
+});
+
 test("patch note rejects a stale revision without changing the note", async () => {
   const testPath = "stale-patch.md";
   await writeFile(join(testVaultPath, testPath), "Original\n");

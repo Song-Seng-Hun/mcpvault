@@ -2214,6 +2214,51 @@ export declare class LlmWikiService {
             };
         };
     };
+    /**
+     * Turn a top-level Property rename/value-map into exact, revision-stamped
+     * notes.change_set inputs. This is a read-only planner: callers must dry-run
+     * and explicitly confirm the returned change set before anything is written.
+     */
+    propertyMigrationPreview(principal: ScopePrincipal | undefined, options: {
+        fromProperty: unknown;
+        toProperty?: unknown;
+        valueMap?: unknown;
+        pathPrefix?: string;
+        limit?: number;
+        scanLimit?: number;
+        maxChars?: number;
+    }): Promise<{
+        purpose: string;
+        contractFingerprint: string;
+        fromProperty: string;
+        toProperty: string;
+        valueMapEntries: number;
+        scanned: number;
+        scanLimit: number;
+        scanComplete: boolean;
+        matchesObserved: number;
+        executableObserved: number;
+        blockedObserved: number;
+        changes: {
+            path: string;
+            expectedRevision: string;
+            frontmatter: {
+                set?: Record<string, unknown>;
+                remove?: string[];
+            };
+        }[];
+        blocked: {
+            path: string;
+            revision?: string;
+            reason: string;
+        }[];
+        truncated: boolean;
+        nextAction: {
+            endpointId: string;
+            instruction: string;
+        } | undefined;
+        generatedAt: string;
+    }>;
     noteTemplate(noteKind?: string, maxChars?: number): {
         templateId: string;
         noteKind: import("./organization.js").NoteKind;

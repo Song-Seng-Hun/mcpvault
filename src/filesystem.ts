@@ -7,7 +7,7 @@ import trash from 'trash';
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
 import { generateObsidianUri } from './uri.js';
-import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, MoveNoteParams, MoveNotePreviewParams, MoveNotePreviewResult, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult, DailyNoteResult, ListTasksParams, ListTasksResult, TaskItem, UpdateTaskParams, UpdateTaskResult, QueryNotesParams, QueryNotesResult, QueryNote, QueryNotesCursor } from './types.js';
+import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, MoveNoteParams, MoveNotePreviewParams, MoveNotePreviewResult, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, PatchMultipleNotesParams, PatchMultipleNotesResult, NoteChangeSetResultItem, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult, DailyNoteResult, ListTasksParams, ListTasksResult, TaskItem, UpdateTaskParams, UpdateTaskResult, QueryNotesParams, QueryNotesResult, QueryNote, QueryNotesCursor } from './types.js';
 import { extractObsidianLinkOccurrences, findBacklinkMatches, findUnresolvedLinkMatches, resolveWikiLinkTargets } from './backlinks.js';
 import { buildDailyNotePath, resolveDailyDate, type DailyDateInput } from './daily.js';
 import type { VaultMetadataIndex } from './vault-index.js';
@@ -358,6 +358,15 @@ export class FileSystemService {
       release();
       if (this.mutationTails.get(path) === current) this.mutationTails.delete(path);
     }
+  }
+
+  /** Acquire several note locks in one stable order so reciprocal edits cannot deadlock. */
+  private async withMutationLocks<T>(paths: string[], operation: () => Promise<T>): Promise<T> {
+    const ordered = [...new Set(paths)].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
+    const acquire = async (index: number): Promise<T> => index >= ordered.length
+      ? operation()
+      : this.withMutationLock(ordered[index]!, () => acquire(index + 1));
+    return acquire(0);
   }
 
   constructor(
@@ -798,62 +807,58 @@ export class FileSystemService {
     }
   }
 
-  /** Apply line-scoped or multi-hunk patches as one all-or-nothing operation. */
-  private async patchNoteImproved(params: PatchNoteParams): Promise<PatchNoteResult> {
-    const path = this.normalizePath(params.path);
-    if (!this.pathFilter.isAllowed(path)) return { success: false, path, message: `Access denied: ${path}` };
-    try {
-      await this.assertExpectedRevision(path, params.expectedRevision);
-      const note = await this.readNote(path);
-      const hunks = params.patches || [{
-        oldString: params.oldString || '',
-        newString: params.newString ?? '',
-        replaceAll: params.replaceAll,
-        startLine: params.startLine,
-        endLine: params.endLine,
-      }];
-      if (!hunks.length) throw new Error('patches must contain at least one hunk');
-      if (hunks.length > 50) throw new Error('A single patch request may contain at most 50 hunks');
-      let content = note.originalContent;
-      let totalMatches = 0;
-      let firstOffset = 0;
-      const patchResults: Array<{ matchCount: number; startLine?: number; endLine?: number }> = [];
+  /** Compute exact hunks without writing so single-note and change-set edits share semantics. */
+  private planImprovedPatch(path: string, note: ParsedNote, params: PatchNoteParams): { content: string; result: PatchNoteResult; focusOffset: number } {
+    const hunks = params.patches || [{
+      oldString: params.oldString || '',
+      newString: params.newString ?? '',
+      replaceAll: params.replaceAll,
+      startLine: params.startLine,
+      endLine: params.endLine,
+    }];
+    if (!hunks.length) throw new Error('patches must contain at least one hunk');
+    if (hunks.length > 50) throw new Error('A single patch request may contain at most 50 hunks');
+    let content = note.originalContent;
+    let totalMatches = 0;
+    let firstOffset = 0;
+    const patchResults: Array<{ matchCount: number; startLine?: number; endLine?: number }> = [];
 
-      for (const hunk of hunks) {
-        const oldString = String(hunk.oldString ?? '');
-        const newString = String(hunk.newString ?? '');
-        if (!oldString || oldString.trim() === '') throw new Error('oldString cannot be empty');
-        if (oldString === newString) throw new Error('oldString and newString must be different');
-        const starts = lineStarts(content);
-        const lineCount = content.split(/\r\n|\n|\r/).length;
-        const hasRange = hunk.startLine !== undefined || hunk.endLine !== undefined;
-        if (hasRange && (hunk.startLine === undefined || hunk.endLine === undefined)) throw new Error('startLine and endLine must be supplied together');
-        let regionStart = 0;
-        let regionEnd = content.length;
-        if (hasRange) {
-          const startLine = Number(hunk.startLine);
-          const endLine = Number(hunk.endLine);
-          if (!Number.isInteger(startLine) || !Number.isInteger(endLine) || startLine < 1 || endLine < startLine || endLine > lineCount) throw new Error(`line range must be between 1 and ${lineCount}, with startLine <= endLine`);
-          regionStart = starts[startLine - 1]!;
-          regionEnd = endLine < lineCount ? starts[endLine]! : content.length;
-        }
-        const region = content.slice(regionStart, regionEnd);
-        const matchCount = region.split(oldString).length - 1;
-        if (!matchCount) throw new Error(`String not found${hasRange ? ` within lines ${hunk.startLine}-${hunk.endLine}` : ''}: "${oldString.slice(0, 50)}${oldString.length > 50 ? '...' : ''}"`);
-        if (!hunk.replaceAll && matchCount > 1) throw new Error(`Found ${matchCount} occurrences; use replaceAll=true or a more specific hunk`);
-        const matchOffset = region.indexOf(oldString);
-        const replaced = hunk.replaceAll ? region.split(oldString).join(newString) : region.replace(oldString, () => newString);
-        content = content.slice(0, regionStart) + replaced + content.slice(regionEnd);
-        totalMatches += matchCount;
-        patchResults.push({ matchCount, ...(hasRange && { startLine: Number(hunk.startLine), endLine: Number(hunk.endLine) }) });
-        if (patchResults.length === 1) {
-          firstOffset = regionStart + matchOffset;
-        }
+    for (const hunk of hunks) {
+      const oldString = String(hunk.oldString ?? '');
+      const newString = String(hunk.newString ?? '');
+      if (!oldString || oldString.trim() === '') throw new Error('oldString cannot be empty');
+      if (oldString === newString) throw new Error('oldString and newString must be different');
+      const starts = lineStarts(content);
+      const lineCount = content.split(/\r\n|\n|\r/).length;
+      const hasRange = hunk.startLine !== undefined || hunk.endLine !== undefined;
+      if (hasRange && (hunk.startLine === undefined || hunk.endLine === undefined)) throw new Error('startLine and endLine must be supplied together');
+      let regionStart = 0;
+      let regionEnd = content.length;
+      if (hasRange) {
+        const startLine = Number(hunk.startLine);
+        const endLine = Number(hunk.endLine);
+        if (!Number.isInteger(startLine) || !Number.isInteger(endLine) || startLine < 1 || endLine < startLine || endLine > lineCount) throw new Error(`line range must be between 1 and ${lineCount}, with startLine <= endLine`);
+        regionStart = starts[startLine - 1]!;
+        regionEnd = endLine < lineCount ? starts[endLine]! : content.length;
       }
-      const previewMaxChars = Math.min(Math.max(Number(params.previewMaxChars ?? 1200), 200), 5000);
-      assertNoteContentSize(content, path);
-      const revision = createHash('sha256').update(content, 'utf8').digest('hex');
-      const result: PatchNoteResult = {
+      const region = content.slice(regionStart, regionEnd);
+      const matchCount = region.split(oldString).length - 1;
+      if (!matchCount) throw new Error(`String not found${hasRange ? ` within lines ${hunk.startLine}-${hunk.endLine}` : ''}: "${oldString.slice(0, 50)}${oldString.length > 50 ? '...' : ''}"`);
+      if (!hunk.replaceAll && matchCount > 1) throw new Error(`Found ${matchCount} occurrences; use replaceAll=true or a more specific hunk`);
+      const matchOffset = region.indexOf(oldString);
+      const replaced = hunk.replaceAll ? region.split(oldString).join(newString) : region.replace(oldString, () => newString);
+      content = content.slice(0, regionStart) + replaced + content.slice(regionEnd);
+      totalMatches += matchCount;
+      patchResults.push({ matchCount, ...(hasRange && { startLine: Number(hunk.startLine), endLine: Number(hunk.endLine) }) });
+      if (patchResults.length === 1) firstOffset = regionStart + matchOffset;
+    }
+    const previewMaxChars = Math.min(Math.max(Number(params.previewMaxChars ?? 1200), 200), 5000);
+    assertNoteContentSize(content, path);
+    const revision = this.revision(content);
+    return {
+      content,
+      focusOffset: firstOffset,
+      result: {
         success: true,
         path,
         message: params.dryRun ? `Patch preview: ${totalMatches} occurrence${totalMatches === 1 ? '' : 's'} would be replaced` : `Successfully replaced ${totalMatches} occurrence${totalMatches === 1 ? '' : 's'}`,
@@ -867,14 +872,190 @@ export class FileSystemService {
           before: boundedPreview(note.originalContent, firstOffset, 2, previewMaxChars),
           after: boundedPreview(content, firstOffset, 2, previewMaxChars),
         },
-      };
-      if (params.dryRun || content === note.originalContent) return result;
-      await writeFile(this.resolveWritablePath(path), content, 'utf-8');
+      },
+    };
+  }
+
+  /** Apply line-scoped or multi-hunk patches as one all-or-nothing operation. */
+  private async patchNoteImproved(params: PatchNoteParams): Promise<PatchNoteResult> {
+    const path = this.normalizePath(params.path);
+    if (!this.pathFilter.isAllowed(path)) return { success: false, path, message: `Access denied: ${path}` };
+    try {
+      await this.assertExpectedRevision(path, params.expectedRevision);
+      const note = await this.readNote(path);
+      const planned = this.planImprovedPatch(path, note, params);
+      if (params.dryRun || planned.content === note.originalContent) return planned.result;
+      await writeFile(this.resolveWritablePath(path), planned.content, 'utf-8');
       this.notifyNoteChanged(path, 'upsert');
-      return result;
+      return planned.result;
     } catch (error) {
       return { success: false, path, message: `Failed to patch note: ${error instanceof Error ? error.message : 'Unknown error'}` };
     }
+  }
+
+  private planFrontmatterMutation(path: string, originalContent: string, frontmatter: NonNullable<PatchMultipleNotesParams['changes'][number]['frontmatter']>): string {
+    if (!frontmatter || typeof frontmatter !== 'object' || Array.isArray(frontmatter)) throw new Error(`frontmatter must be an object for ${path}`);
+    const set = frontmatter.set ?? {};
+    const remove = frontmatter.remove ?? [];
+    if (!set || typeof set !== 'object' || Array.isArray(set)) throw new Error(`frontmatter.set must be an object for ${path}`);
+    if (!Array.isArray(remove)) throw new Error(`frontmatter.remove must be an array for ${path}`);
+    const setNames = Object.keys(set);
+    if (setNames.length > 100 || remove.length > 100) throw new Error(`A change may set or remove at most 100 Properties: ${path}`);
+    if (setNames.some(name => set[name] === undefined)) throw new Error(`frontmatter.set cannot contain undefined values for ${path}; use remove instead`);
+    const blockedNames = new Set(['__proto__', 'prototype', 'constructor']);
+    const cleanRemove = [...new Set(remove.map(value => String(value || '').trim()))];
+    for (const name of [...setNames, ...cleanRemove]) {
+      if (!name || name.length > 100 || blockedNames.has(name)) throw new Error(`Invalid top-level Property name for ${path}: ${name || '(empty)'}`);
+    }
+    const overlap = setNames.filter(name => cleanRemove.includes(name));
+    if (overlap.length) throw new Error(`A Property cannot be both set and removed for ${path}: ${overlap.join(', ')}`);
+    if (!setNames.length && !cleanRemove.length) throw new Error(`frontmatter must set or remove at least one Property for ${path}`);
+    if (Buffer.byteLength(JSON.stringify(set), 'utf8') > 128 * 1024) throw new Error(`frontmatter.set exceeds the 128 KiB change-set limit for ${path}`);
+
+    const parsed = this.frontmatterHandler.parse(originalContent);
+    const nextFrontmatter = { ...parsed.frontmatter, ...set };
+    for (const name of cleanRemove) delete nextFrontmatter[name];
+    const validation = this.frontmatterHandler.validate(nextFrontmatter);
+    if (!validation.isValid) throw new Error(`Invalid frontmatter for ${path}: ${validation.errors.join(', ')}`);
+    const updates: Record<string, unknown> = { ...set };
+    for (const name of cleanRemove) updates[name] = undefined;
+    const content = parsed.matter && parsed.matter.trim() !== ''
+      ? this.frontmatterHandler.preserveStringify(parsed.matter, updates, parsed.content)
+      : this.frontmatterHandler.stringify(nextFrontmatter, parsed.content);
+    assertNoteContentSize(content, path);
+    return content;
+  }
+
+  /**
+   * Preflight and apply a small revision-checked, rollback-backed multi-note
+   * transaction. Filesystem writes are not globally atomic, so a failed write
+   * is restored from the in-memory originals and reported explicitly.
+   */
+  async patchMultipleNotes(params: PatchMultipleNotesParams): Promise<PatchMultipleNotesResult> {
+    if (!params || !Array.isArray(params.changes)) throw new Error('changes must be an array');
+    if (params.changes.length < 1 || params.changes.length > 10) throw new Error('A note change set must contain between 1 and 10 changes');
+    const previewMaxChars = Math.min(Math.max(Number(params.previewMaxChars ?? 400), 200), 1000);
+    const maxChars = Math.min(Math.max(Number(params.maxChars ?? 12000), 4096), 20000);
+    let totalHunks = 0;
+    let totalPatchBytes = 0;
+    const normalized = params.changes.map(change => {
+      if (!change || typeof change !== 'object') throw new Error('Every change must be an object');
+      const path = this.normalizePath(change.path);
+      if (!path || !this.pathFilter.isAllowed(path)) throw new Error(`Access denied: ${path || '(empty path)'}`);
+      if (!/^[a-f0-9]{64}$/i.test(String(change.expectedRevision || ''))) throw new Error(`Each change requires the current SHA-256 revision of an existing note: ${path}`);
+      const patches = change.patches;
+      const frontmatter = change.frontmatter;
+      if (patches !== undefined && (!Array.isArray(patches) || patches.length < 1)) throw new Error(`patches must be a non-empty array for ${path}`);
+      if (patches === undefined && frontmatter === undefined) throw new Error(`Each change needs patches, frontmatter, or both: ${path}`);
+      totalHunks += patches?.length || 0;
+      for (const hunk of patches || []) totalPatchBytes += Buffer.byteLength(String(hunk?.oldString ?? ''), 'utf8') + Buffer.byteLength(String(hunk?.newString ?? ''), 'utf8');
+      return { ...change, path };
+    });
+    if (totalHunks > 50) throw new Error('A note change set may contain at most 50 total patch hunks');
+    if (totalPatchBytes > 2 * 1024 * 1024) throw new Error('A note change set may contain at most 2 MiB of patch text');
+    const duplicate = normalized.map(change => change.path.toLowerCase()).find((path, index, all) => all.indexOf(path) !== index);
+    if (duplicate) throw new Error(`A note may appear only once in a change set: ${duplicate}`);
+
+    return this.withMutationLocks(normalized.map(change => change.path), async () => {
+      const plans: Array<{ path: string; original: string; content: string; item: NoteChangeSetResultItem }> = [];
+      for (const change of normalized) {
+        const note = await this.readNote(change.path);
+        if (note.revision !== change.expectedRevision) throw new Error(`Revision conflict for ${change.path}: expected ${change.expectedRevision}, current ${note.revision}. Read every note again and rebuild the change set.`);
+        let content = note.originalContent;
+        let focusOffset = 0;
+        let matchCount = 0;
+        if (change.patches) {
+          const patchPlan = this.planImprovedPatch(change.path, note, {
+            path: change.path,
+            patches: change.patches,
+            expectedRevision: change.expectedRevision,
+            dryRun: true,
+            previewMaxChars,
+          });
+          content = patchPlan.content;
+          focusOffset = patchPlan.focusOffset;
+          matchCount = patchPlan.result.matchCount || 0;
+        }
+        if (change.frontmatter) content = this.planFrontmatterMutation(change.path, content, change.frontmatter);
+        assertNoteContentSize(content, change.path);
+        const setNames = Object.keys(change.frontmatter?.set || {}).sort();
+        const removeNames = [...new Set((change.frontmatter?.remove || []).map(value => String(value).trim()))].sort();
+        plans.push({
+          path: change.path,
+          original: note.originalContent,
+          content,
+          item: {
+            path: change.path,
+            previousRevision: note.revision,
+            revision: this.revision(content),
+            wouldChange: content !== note.originalContent,
+            patchCount: change.patches?.length || 0,
+            matchCount,
+            frontmatterSet: setNames,
+            frontmatterRemoved: removeNames,
+            preview: {
+              before: boundedPreview(note.originalContent, focusOffset, 2, previewMaxChars),
+              after: boundedPreview(content, focusOffset, 2, previewMaxChars),
+            },
+          },
+        });
+      }
+      const planFingerprint = this.revision(JSON.stringify({
+        version: 1,
+        changes: plans.map(plan => ({ path: plan.path.toLowerCase(), previousRevision: plan.item.previousRevision, revision: plan.item.revision }))
+          .sort((left, right) => left.path.localeCompare(right.path)),
+      }));
+      const dryRun = params.dryRun !== false;
+      if (!dryRun && params.confirmPlanFingerprint !== planFingerprint) {
+        throw new Error('Change-set confirmation mismatch. Dry-run this exact request, inspect the previews, and pass its returned confirmPlanFingerprint before applying it.');
+      }
+
+      if (!dryRun) {
+        // Recheck all inputs immediately before the first write. This catches
+        // external Obsidian/editor changes that do not participate in our lock.
+        for (const plan of plans) {
+          const current = await readFile(this.resolvePath(plan.path), 'utf8');
+          if (this.revision(current) !== plan.item.previousRevision) throw new Error(`Revision conflict for ${plan.path}: it changed after preflight; no change-set files were written`);
+        }
+        const attempted: typeof plans = [];
+        try {
+          for (const plan of plans.filter(candidate => candidate.item.wouldChange)) {
+            attempted.push(plan);
+            await writeFile(this.resolveWritablePath(plan.path), plan.content, 'utf8');
+          }
+        } catch (error) {
+          const rollbackFailures: string[] = [];
+          for (const plan of attempted.reverse()) {
+            try {
+              await writeFile(this.resolveWritablePath(plan.path), plan.original, 'utf8');
+              this.notifyNoteChanged(plan.path, 'upsert');
+            } catch (rollbackError) {
+              rollbackFailures.push(`${plan.path}: ${rollbackError instanceof Error ? rollbackError.message : 'unknown rollback error'}`);
+            }
+          }
+          const rollback = rollbackFailures.length ? ` Rollback was incomplete: ${rollbackFailures.join('; ')}` : ' All attempted writes were restored.';
+          throw new Error(`Change-set write failed: ${error instanceof Error ? error.message : 'unknown write error'}.${rollback}`);
+        }
+        for (const plan of plans.filter(candidate => candidate.item.wouldChange)) this.notifyNoteChanged(plan.path, 'upsert');
+      }
+
+      const result: PatchMultipleNotesResult = {
+        success: true,
+        dryRun,
+        applied: !dryRun,
+        planFingerprint,
+        changeCount: plans.length,
+        changedCount: plans.filter(plan => plan.item.wouldChange).length,
+        changes: plans.map(plan => plan.item),
+        message: dryRun
+          ? 'Preflight complete. Re-submit the same changes with dryRun=false and confirmPlanFingerprint to apply them.'
+          : 'The complete revision-checked change set was applied.',
+      };
+      if (JSON.stringify(result).length <= maxChars) return result;
+      const compact: PatchMultipleNotesResult = { ...result, changes: result.changes.map(({ preview: _preview, ...item }) => item), truncated: true };
+      if (JSON.stringify(compact).length > maxChars) throw new Error('maxChars is too small to preserve all change paths and revisions; reduce the change count or increase maxChars');
+      return compact;
+    });
   }
 
   async listDirectory(path: string = ''): Promise<DirectoryListing> {

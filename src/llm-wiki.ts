@@ -9,7 +9,7 @@ import type { ReferenceService } from './references.js';
 import type { SemanticSearchService } from './semantic-search.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
-import { getOrganizationPropertyContract, getOrganizationRelationContract, inapplicableOrganizationProperties, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, organizationLintIssues, organizationNoteTemplate, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, CONFIDENCE_LEVELS, DECISION_STATUSES, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS, type AnswerPacketIntent, type CatalogOrder, type TemporalValidityState, type WikiProjectionView } from './organization.js';
+import { getOrganizationPropertyContract, getOrganizationRelationContract, inapplicableOrganizationProperties, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, organizationLintIssues, organizationNoteTemplate, organizationPropertyAppliesTo, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, CONFIDENCE_LEVELS, DECISION_STATUSES, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS, type AnswerPacketIntent, type CatalogOrder, type TemporalValidityState, type WikiProjectionView } from './organization.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
@@ -5063,6 +5063,149 @@ export class LlmWikiService {
       truncated: true,
       nextAction: nextAction || { endpointId: endpointIdForTool('get_wiki_property_contract'), arguments: { maxChars: 4000 } },
     };
+  }
+
+  /**
+   * Turn a top-level Property rename/value-map into exact, revision-stamped
+   * notes.change_set inputs. This is a read-only planner: callers must dry-run
+   * and explicitly confirm the returned change set before anything is written.
+   */
+  async propertyMigrationPreview(principal: ScopePrincipal | undefined, options: {
+    fromProperty: unknown;
+    toProperty?: unknown;
+    valueMap?: unknown;
+    pathPrefix?: string;
+    limit?: number;
+    scanLimit?: number;
+    maxChars?: number;
+  }) {
+    const propertyPattern = /^[A-Za-z_][A-Za-z0-9_-]{0,99}$/;
+    const fromProperty = String(options.fromProperty || '').trim();
+    const toProperty = String(options.toProperty || fromProperty).trim();
+    if (!propertyPattern.test(fromProperty)) throw new Error('fromProperty must be one simple top-level Property name');
+    if (!propertyPattern.test(toProperty)) throw new Error('toProperty must be one simple top-level Property name');
+    if (options.valueMap !== undefined && (!options.valueMap || typeof options.valueMap !== 'object' || Array.isArray(options.valueMap))) throw new Error('valueMap must be an object keyed by exact scalar values');
+    const rawMap = (options.valueMap || {}) as Record<string, unknown>;
+    const mapEntries = Object.entries(rawMap);
+    if (mapEntries.length > 100 || Buffer.byteLength(JSON.stringify(rawMap), 'utf8') > 32 * 1024) throw new Error('valueMap is limited to 100 entries and 32 KiB');
+    if (fromProperty === toProperty && mapEntries.length === 0) throw new Error('A migration must rename the Property or provide valueMap');
+    const valueMap = new Map(mapEntries);
+    const limit = Math.min(Math.max(Number(options.limit) || 10, 1), 10);
+    const scanLimit = Math.min(Math.max(Number(options.scanLimit) || 5000, limit), 20000);
+    const boundedChars = Math.min(Math.max(Number(options.maxChars) || 12000, 4096), 20000);
+    const contracts = getOrganizationPropertyContract();
+    const contractFingerprint = hash(JSON.stringify({ fields: contracts, relations: getOrganizationRelationContract() }));
+    const targetContract = contracts.find(contract => contract.name === toProperty);
+    const changes: Array<{ path: string; expectedRevision: string; frontmatter: { set?: Record<string, unknown>; remove?: string[] } }> = [];
+    const blocked: Array<{ path: string; revision?: string; reason: string }> = [];
+    let scanned = 0;
+    let matchesObserved = 0;
+    let executableObserved = 0;
+    let blockedObserved = 0;
+    let scanComplete = true;
+    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+    const typeMatches = (value: unknown): boolean => {
+      if (!targetContract) return true;
+      if (targetContract.type === 'text') return typeof value === 'string';
+      if (targetContract.type === 'number') return typeof value === 'number' && Number.isFinite(value);
+      if (targetContract.type === 'boolean') return typeof value === 'boolean';
+      if (targetContract.type === 'list') return Array.isArray(value);
+      return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+    };
+    const allowedMatches = (value: unknown): boolean => {
+      if (!targetContract?.allowed) return true;
+      const values = Array.isArray(value) ? value : [value];
+      return values.every(item => typeof item === 'string' && targetContract.allowed!.includes(item));
+    };
+    const mapValue = (value: unknown): { value: unknown; mapped: number } => {
+      if (Array.isArray(value)) {
+        let mapped = 0;
+        const next = value.map(item => {
+          const result = mapValue(item);
+          mapped += result.mapped;
+          return result.value;
+        });
+        return { value: next, mapped };
+      }
+      if (value === null || typeof value === 'object') return { value, mapped: 0 };
+      const key = String(value);
+      return valueMap.has(key) ? { value: valueMap.get(key), mapped: 1 } : { value, mapped: 0 };
+    };
+
+    for await (const note of iterateNotes(this.fileSystem, {
+      ...(options.pathPrefix && { pathPrefix: options.pathPrefix }),
+      sortBy: 'path',
+      includeContent: false,
+    }, canAccess)) {
+      if (scanned >= scanLimit) { scanComplete = false; break; }
+      scanned += 1;
+      if (isModerationHidden(note.frontmatter) || !Object.prototype.hasOwnProperty.call(note.frontmatter, fromProperty)) continue;
+      matchesObserved += 1;
+      const publicPath = this.access.toPublicPath(note.path);
+      const revision = note.revision || (await this.fileSystem.readNote(note.path)).revision;
+      const mapped = mapValue(note.frontmatter[fromProperty]);
+      let reason: string | undefined;
+      try { this.access.assertMutationAllowed(note.path, 'wiki.property_migration'); }
+      catch (error) { reason = error instanceof Error ? error.message : 'This note is immutable.'; }
+      const managedCommunity = /^(?:community\/(?:posts|comments|chatrooms|chatmessages|agents|tasks|ideas|workshops|reactions|guestbooks))(?:\/|$)/i.test(note.path);
+      if (!reason && managedCommunity) reason = 'Managed community records must be changed through their dedicated endpoint, not a Property migration.';
+      if (!reason && fromProperty === toProperty && mapped.mapped === 0) reason = 'No source value matched valueMap; no change would be made.';
+      if (!reason && targetContract && !organizationPropertyAppliesTo(targetContract, String(note.frontmatter.llm_wiki_type || '').trim().toLowerCase(), String(note.frontmatter.note_kind || '').trim().toLowerCase())) {
+        reason = `${toProperty} does not apply to this note role (${note.frontmatter.note_kind || note.frontmatter.llm_wiki_type || 'unspecified'}).`;
+      }
+      if (!reason && !typeMatches(mapped.value)) reason = `${toProperty} requires ${targetContract!.type}, but the migrated value has a different type.`;
+      if (!reason && !allowedMatches(mapped.value)) reason = `${toProperty} contains a value outside its managed allowed set.`;
+      if (!reason && Buffer.byteLength(JSON.stringify(mapped.value), 'utf8') > Math.min(4000, Math.floor(boundedChars / 2))) reason = 'The Property value is too large for a bounded executable preview; migrate this note manually.';
+      const targetExists = fromProperty !== toProperty && Object.prototype.hasOwnProperty.call(note.frontmatter, toProperty);
+      const targetEqual = targetExists && JSON.stringify(note.frontmatter[toProperty]) === JSON.stringify(mapped.value);
+      if (!reason && targetExists && !targetEqual) reason = `${toProperty} already exists with a different value; inspect and merge it manually.`;
+      if (reason) {
+        blockedObserved += 1;
+        if (blocked.length < limit) blocked.push({ path: publicPath, revision, reason });
+        continue;
+      }
+      executableObserved += 1;
+      if (changes.length >= limit) continue;
+      changes.push({
+        path: publicPath,
+        expectedRevision: revision,
+        frontmatter: {
+          ...(!targetEqual && { set: { [toProperty]: mapped.value } }),
+          ...(fromProperty !== toProperty && { remove: [fromProperty] }),
+        },
+      });
+    }
+
+    const buildResult = () => ({
+      purpose: 'Read-only Property migration preflight. The returned changes are exact inputs for notes.change_set; no note was modified.',
+      contractFingerprint,
+      fromProperty,
+      toProperty,
+      valueMapEntries: mapEntries.length,
+      scanned,
+      scanLimit,
+      scanComplete,
+      matchesObserved,
+      executableObserved,
+      blockedObserved,
+      changes,
+      blocked,
+      truncated: !scanComplete || executableObserved > changes.length || blockedObserved > blocked.length,
+      nextAction: changes.length ? {
+        endpointId: endpointIdForTool('patch_multiple_notes'),
+        instruction: 'Pass the changes array above with dryRun=true. Inspect its previews, then re-submit the identical array with dryRun=false and the returned confirmPlanFingerprint.',
+      } : undefined,
+      generatedAt: now(),
+    });
+    let result = buildResult();
+    while (JSON.stringify(result).length > boundedChars && (changes.length > 1 || blocked.length > 1)) {
+      if (blocked.length > changes.length && blocked.length > 1) blocked.pop();
+      else if (changes.length > 1) changes.pop();
+      else blocked.pop();
+      result = buildResult();
+    }
+    if (JSON.stringify(result).length > boundedChars) throw new Error('maxChars is too small to preserve one executable migration item; narrow pathPrefix or increase maxChars');
+    return result;
   }
 
   noteTemplate(noteKind = 'atomic', maxChars = 7000) {

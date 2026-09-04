@@ -54,8 +54,14 @@ function endpointScore(endpoint: EndpointDescriptor, terms: string[]): number {
   if (terms.length === 0) return 0;
   const id = endpoint.endpointId.toLowerCase();
   const tool = endpoint.toolName.toLowerCase();
-  const corpus = `${id} ${tool} ${endpoint.description.toLowerCase()} ${(endpoint.aliases || []).join(' ').toLowerCase()}`;
-  return terms.reduce((score, term) => score + (id === term ? 100 : 0) + (id.includes(term) ? 20 : 0) + (tool.includes(term) ? 10 : 0) + (corpus.includes(term) ? 1 : 0), 0);
+  const aliases = (endpoint.aliases || []).map(alias => alias.toLowerCase());
+  const corpus = `${id} ${tool} ${endpoint.description.toLowerCase()} ${aliases.join(' ')}`;
+  return terms.reduce((score, term) => score
+    + (id === term ? 100 : 0)
+    + (aliases.includes(term) ? 50 : 0)
+    + (id.includes(term) ? 20 : 0)
+    + (tool.includes(term) ? 10 : 0)
+    + (corpus.includes(term) ? 1 : 0), 0);
 }
 
 const EXPLICIT_IDS: Record<string, string> = {
@@ -68,6 +74,7 @@ const EXPLICIT_IDS: Record<string, string> = {
   sync_note_revisions: 'notes.sync_revisions',
   write_note: 'notes.write',
   patch_note: 'notes.patch',
+  patch_multiple_notes: 'notes.change_set',
   delete_note: 'notes.delete',
   move_note: 'notes.move',
   preview_move_note: 'notes.move_preview',
@@ -136,6 +143,7 @@ const EXPLICIT_IDS: Record<string, string> = {
   get_wiki_moc_candidates: 'wiki.moc_candidates',
   get_wiki_organization_health: 'wiki.organization_health',
   get_wiki_property_contract: 'wiki.property_contract',
+  get_wiki_property_migration_preview: 'wiki.property_migration',
   get_wiki_note_template: 'wiki.note_template',
   get_wiki_bases_view: 'wiki.bases_view',
   get_wiki_canvas_view: 'wiki.canvas_view',
@@ -183,6 +191,7 @@ const EXPLICIT_ROUTES: Record<string, { method: 'GET' | 'POST'; url: string }> =
   sync_note_revisions: { method: 'POST', url: '/api/notes/revisions' },
   write_note: { method: 'POST', url: '/api/notes/{path}' },
   patch_note: { method: 'POST', url: '/api/notes/{path}/patch' },
+  patch_multiple_notes: { method: 'POST', url: '/api/notes/change-set' },
   preview_move_note: { method: 'GET', url: '/api/notes/move-preview' },
   update_task: { method: 'POST', url: '/api/notes/tasks' },
   search_notes: { method: 'GET', url: '/api/search' },
@@ -248,6 +257,7 @@ const EXPLICIT_ROUTES: Record<string, { method: 'GET' | 'POST'; url: string }> =
   get_wiki_moc_candidates: { method: 'GET', url: '/api/wiki/moc-candidates' },
   get_wiki_organization_health: { method: 'GET', url: '/api/wiki/organization-health' },
   get_wiki_property_contract: { method: 'GET', url: '/api/wiki/property-contract' },
+  get_wiki_property_migration_preview: { method: 'POST', url: '/api/wiki/property-migration' },
   get_wiki_note_template: { method: 'GET', url: '/api/wiki/note-template' },
   get_wiki_bases_view: { method: 'GET', url: '/api/wiki/bases-view' },
   get_wiki_canvas_view: { method: 'GET', url: '/api/wiki/canvas' },
@@ -297,6 +307,7 @@ const ENDPOINT_ALIASES: Record<string, string[]> = {
   moderate_content: ['moderation', 'warn', 'hide', 'quarantine', 'remove', 'restore', 'ban', 'unban', 'safety'],
   get_reputation: ['reputation', 'level', 'xp', 'experience', 'likes', 'dislikes', 'author level', 'user level'],
   patch_note: ['edit', 'partial', 'harness', 'replace', 'hunk'],
+  patch_multiple_notes: ['edit', 'multiple notes', 'change set', 'transaction', 'atomic', 'rollback', 'reciprocal links', 'bulk properties'],
   sync_note_revisions: ['sync', 'delta', 'revision', 'cache', 'changed notes'],
   read_note_lines: ['read', 'partial', 'section', 'range', 'large note'],
   read_context: ['context', 'mention', 'reply', 'nearby', 'thread', 'reference'],
@@ -347,6 +358,7 @@ const ENDPOINT_ALIASES: Record<string, string[]> = {
   get_wiki_moc_candidates: ['wiki', 'moc', 'map', 'structure', 'uncovered', 'atomic', 'navigation'],
   get_wiki_organization_health: ['wiki', 'organization', 'properties', 'para', 'zettelkasten', 'gtd', 'moc', 'health', 'metadata', 'typed links', 'knowledge role'],
   get_wiki_property_contract: ['wiki', 'properties', 'frontmatter', 'schema', 'contract', 'types', 'obsidian'],
+  get_wiki_property_migration_preview: ['wiki', 'properties', 'frontmatter', 'schema migration', 'rename property', 'map enum', 'bulk change', 'collision', 'obsidian'],
   get_wiki_note_template: ['wiki', 'template', 'note template', 'atomic', 'literature', 'question', 'hypothesis', 'experiment', 'reproducible', 'decision', 'project', 'moc', 'negative', 'concept', 'argument', 'model', 'observation', 'counterargument', 'obsidian'],
   preview_move_note: ['move', 'rename', 'backlinks', 'links', 'impact', 'preview'],
   update_task: ['task', 'checkbox', 'gtd', 'complete', 'reopen', 'toggle'],

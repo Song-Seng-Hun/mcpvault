@@ -92,6 +92,37 @@ test('REST adapter uses the same dynamic endpoint registry and dispatcher', asyn
   });
   expect(routeWrite.status).toBe(200);
   expect(await readFile(join(vault, 'nested', 'route.md'), 'utf8')).toContain('# Route');
+
+  const routeRead = await fetch(`http://127.0.0.1:${api.port}/api/notes/nested/route.md?maxChars=4000`, {
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  const routeNote = await routeRead.json() as any;
+  const changes = [{ path: 'nested/route.md', expectedRevision: routeNote.revision, patches: [{ oldString: '# Route', newString: '# Coordinated route' }] }];
+  const changePreview = await fetch(`http://127.0.0.1:${api.port}/api/notes/change-set`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ changes, dryRun: true, accessToken }),
+  });
+  expect(changePreview.status).toBe(200);
+  const previewValue = await changePreview.json() as any;
+  expect(previewValue).toMatchObject({ dryRun: true, applied: false, changeCount: 1 });
+  const changeApply = await fetch(`http://127.0.0.1:${api.port}/api/notes/change-set`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ changes, dryRun: false, confirmPlanFingerprint: previewValue.planFingerprint, accessToken }),
+  });
+  expect(changeApply.status).toBe(200);
+  expect(await readFile(join(vault, 'nested', 'route.md'), 'utf8')).toContain('# Coordinated route');
+
+  const migrationSeed = await fetch(`http://127.0.0.1:${api.port}/api/notes/nested/migrate.md`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ content: '# Migrate', frontmatter: { note_kind: 'project', legacy_state: 'todo' }, accessToken }),
+  });
+  expect(migrationSeed.status).toBe(200);
+  const migrationPreview = await fetch(`http://127.0.0.1:${api.port}/api/wiki/property-migration`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ fromProperty: 'legacy_state', toProperty: 'task_status', valueMap: { todo: 'open' }, pathPrefix: 'nested', accessToken }),
+  });
+  expect(migrationPreview.status).toBe(200);
+  expect(await migrationPreview.json()).toMatchObject({ changes: [expect.objectContaining({ path: 'nested/migrate.md' })], nextAction: { endpointId: 'notes.change_set' } });
 });
 
 test('REST adapter rate-limits anonymous account registration per client address', async () => {
