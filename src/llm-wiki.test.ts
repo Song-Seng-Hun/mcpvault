@@ -2630,14 +2630,23 @@ test('portable migration preflight excludes non-global content and reports revis
       manifestVersion: 1,
       format: 'mcpvault-organization-manifest',
       reservedPaths: ['Community/'],
-      contracts: { noteKinds: ['atomic'], lifecycles: ['evergreen'], taskStatuses: [], serviceClasses: [], properties: [{ name: 'aliases', type: 'text' }], relations: [] },
+      contracts: {
+        noteKinds: ['atomic'], lifecycles: ['evergreen'], taskStatuses: [], serviceClasses: [],
+        properties: [
+          { name: 'aliases', type: 'text' },
+          { name: 'task_status', type: 'text', allowed: ['open'], appliesTo: ['atomic'] },
+        ],
+        relations: [{ field: 'related', direction: 'mutual', reciprocal: false }],
+      },
     };
     const compared = await callJson(client, 'get_wiki_organization_manifest', { compareManifest: counterpart, expectedCounterpartFingerprint: 'a'.repeat(64), limit: 50, maxChars: 24000, accessToken });
     expect(compared.value.migrationPreview).toMatchObject({ mutatesVault: false, compatible: false, counterpartChanged: true });
     expect(compared.value.migrationPreview.issues).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'counterpart_changed', severity: 'blocking' }),
       expect.objectContaining({ code: 'property_contract_type_conflict', severity: 'blocking' }),
-      expect.objectContaining({ code: 'missing_bases_views', severity: 'warning' }),
+      expect.objectContaining({ code: 'property_contract_vocabulary_conflict', severity: 'blocking' }),
+      expect.objectContaining({ code: 'property_contract_applicability_conflict', severity: 'blocking' }),
+      expect.objectContaining({ code: 'relation_reciprocity_conflict', severity: 'blocking' }),
     ]));
     expect(compared.value.migrationPreview.issueCounts).toMatchObject({ missing_templates: 1, missing_bases_views: 1 });
     expect(compared.value.migrationPreview.issueCounts.missing_relation_contract).toBeGreaterThan(0);

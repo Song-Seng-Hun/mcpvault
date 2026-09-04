@@ -4314,6 +4314,14 @@ export class LlmWikiService {
                     addCompatibility('warning', 'missing_property_contract', `Counterpart does not declare Property '${property.name}'.`);
                 else if (other.type !== property.type)
                     addCompatibility('blocking', 'property_contract_type_conflict', `Property '${property.name}' is ${property.type} here and ${other.type || 'unspecified'} in the counterpart.`);
+                else {
+                    if (JSON.stringify(other.allowed || []) !== JSON.stringify(property.allowed || [])) {
+                        addCompatibility('blocking', 'property_contract_vocabulary_conflict', `Property '${property.name}' has a different allowed-value vocabulary in the counterpart.`);
+                    }
+                    if (JSON.stringify(other.appliesTo || []) !== JSON.stringify(property.appliesTo || [])) {
+                        addCompatibility('blocking', 'property_contract_applicability_conflict', `Property '${property.name}' applies to different note roles in the counterpart.`);
+                    }
+                }
             }
             const otherRelations = new Map((Array.isArray(otherContracts.relations) ? otherContracts.relations : []).map((entry) => [entry.field, entry]));
             for (const relation of Array.isArray(currentContracts.relations) ? currentContracts.relations : []) {
@@ -4322,6 +4330,8 @@ export class LlmWikiService {
                     addCompatibility('warning', 'missing_relation_contract', `Counterpart does not declare typed relation '${relation.field}'.`);
                 else if (other.direction && relation.direction && other.direction !== relation.direction)
                     addCompatibility('blocking', 'relation_direction_conflict', `Relation '${relation.field}' has conflicting direction semantics.`);
+                else if (Boolean(other.reciprocal) !== Boolean(relation.reciprocal))
+                    addCompatibility('blocking', 'relation_reciprocity_conflict', `Relation '${relation.field}' has conflicting reciprocity semantics.`);
             }
             if (typeof counterpart.contractFingerprint === 'string' && counterpart.contractFingerprint !== counterpartFingerprint) {
                 addCompatibility('warning', 'declared_fingerprint_mismatch', 'Counterpart contractFingerprint does not match its normalized contract payload.');
