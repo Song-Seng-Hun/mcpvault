@@ -92,10 +92,12 @@ wikilink, relative Markdown link, or a scope-safe note path; the target must rem
 resolvable. The property contract also explains each relation's direction and
 target meaning: `related` and `same_as` are mutual and normally need reverse
 edges; the other relations are directional and do not require invented inverse
-Properties. Use `next_actions` and `waiting_for` on project/task notes rather
-than on ordinary discussions. Use `task_status` (`open`, `next_action`,
-`waiting`, `blocked`, `someday`, `completed`, or `cancelled`) for task execution state;
-keep it separate from the knowledge `lifecycle`. Use
+Properties. Any ordinary knowledge note may become actionable with
+`next_action`/`next_actions`, `waiting_for`, and `task_status` (`open`,
+`next_action`, `waiting`, `blocked`, `someday`, `completed`, or `cancelled`)
+without changing its epistemic `note_kind`; keep task status separate from the
+knowledge `lifecycle`. Capture and Clarify Properties remain as provenance
+after reclassification. Use
 `evidence` locators can add a source `heading`, `blockId`, and `revision`;
 lint reports stale or invalid locators. Use `review_policy` (`manual`,
 `periodic`, `on_source_change`, `on_link_change`, or `on_any_edit`) to declare
@@ -128,7 +130,7 @@ relative Markdown links and detects a destination collision. The subsequent
 `move_note` is deliberately not an automatic link-rewrite operation.
 
 `get_wiki_next_actions` is the bounded GTD action view. It returns executable
-`next_action`/`next_actions` entries from active project/task notes and can be
+`next_action`/`next_actions` entries from any active actionable note and can be
 filtered by one exact `task_context` such as `@computer` or `@research`, or by
 optional `maxMinutes`, `energy`, and `effort` execution filters. The filters
 read common optional `time_estimate_minutes`/`estimated_minutes`, `energy`, and
@@ -136,7 +138,7 @@ read common optional `time_estimate_minutes`/`estimated_minutes`, `energy`, and
 guessed.
 Waiting and `task_status: blocked` notes are excluded. `blocked_by` is a hard
 execution gate; `depends_on` gates only when it resolves to unfinished
-project/task work. Unresolved, ambiguous, inactive, or cyclic work prerequisites
+actionable work. Unresolved, ambiguous, inactive, or cyclic work prerequisites
 are also excluded and returned as bounded diagnostics with revisions. A
 `depends_on` link to ordinary knowledge is informational. The flow dashboard,
 project packet, Reflect dashboard, and next-action view share this request-local
@@ -179,10 +181,11 @@ ordinary write/patch workflow; the preview itself never changes a file.
 Questions, hypotheses, and assumptions should also carry `epistemic_status`:
 questions use `open`/`answered`/`blocked`/`abandoned`, hypotheses use
 `proposed`/`supported`/`refuted`/`inconclusive`, and assumptions use
-`active`/`verified`/`invalidated`/`replaced`. Project and task notes may use
-GTD-style `desired_outcome`, `next_action`, `task_context`, `due_at`,
-`scheduled_at`, and `defer_until`; `due_at` is a deadline while `scheduled_at`
-is the time to perform the work. These describe execution and do not replace `lifecycle`. Project notes may also use
+`active`/`verified`/`invalidated`/`replaced`. Any ordinary knowledge note may
+also use GTD-style `desired_outcome`, `next_action`, `task_context`, `due_at`,
+`scheduled_at`, and `defer_until` when it represents work; `due_at` is a
+deadline while `scheduled_at` is the time to perform the work. These describe
+execution and do not replace `note_kind` or `lifecycle`. Project notes may also use
 `project_purpose` for the reason/why and `project_support` for bounded Obsidian
 links or paths to planning material. Keep project support separate from the
 executable `next_action` list; `get_wiki_project_packet` gives a bounded

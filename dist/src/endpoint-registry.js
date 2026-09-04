@@ -372,6 +372,61 @@ function compactEndpoint(endpoint) {
         hint: 'Retry with a larger maxChars to receive the input schema.',
     };
 }
+const COMPACT_SCHEMA_KEYS = [
+    'type', 'enum', 'const', 'default', 'format', 'pattern',
+    'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf',
+    'minLength', 'maxLength', 'minItems', 'maxItems', 'uniqueItems',
+];
+/**
+ * Preserve a callable JSON Schema when prose-heavy tool descriptions do not
+ * fit the catalog budget. Field names, types, constraints, nested shape, and
+ * required arguments survive; only explanatory prose is omitted.
+ */
+function compactInputSchema(input, depth = 0) {
+    if (!input || typeof input !== 'object' || Array.isArray(input))
+        return input;
+    if (depth > 8)
+        return {};
+    const source = input;
+    const compact = {};
+    for (const key of COMPACT_SCHEMA_KEYS) {
+        if (source[key] !== undefined)
+            compact[key] = source[key];
+    }
+    if (Array.isArray(source.required))
+        compact.required = source.required;
+    if (source.properties && typeof source.properties === 'object' && !Array.isArray(source.properties)) {
+        compact.properties = Object.fromEntries(Object.entries(source.properties)
+            .map(([name, schema]) => [name, compactInputSchema(schema, depth + 1)]));
+    }
+    if (source.items !== undefined)
+        compact.items = compactInputSchema(source.items, depth + 1);
+    if (source.additionalProperties !== undefined) {
+        compact.additionalProperties = typeof source.additionalProperties === 'boolean'
+            ? source.additionalProperties
+            : compactInputSchema(source.additionalProperties, depth + 1);
+    }
+    for (const key of ['oneOf', 'anyOf', 'allOf']) {
+        if (Array.isArray(source[key]))
+            compact[key] = source[key].map(item => compactInputSchema(item, depth + 1));
+    }
+    return compact;
+}
+function compactEndpointSchema(endpoint) {
+    return {
+        endpointId: endpoint.endpointId,
+        method: endpoint.method,
+        url: endpoint.url,
+        description: endpoint.description,
+        input: compactInputSchema(endpoint.input),
+        available: endpoint.available,
+        state: endpoint.state,
+        ...(endpoint.requires.length > 0 && { requires: endpoint.requires }),
+        ...(endpoint.reason && { reason: endpoint.reason }),
+        schemaCompacted: true,
+        hint: 'Schema prose was omitted to fit maxChars; field names, constraints, and required arguments remain callable.',
+    };
+}
 export class EndpointRegistry {
     descriptors = new Map();
     setTools(tools, requiredCapabilities, mutatingTools) {
@@ -467,9 +522,16 @@ export class EndpointRegistry {
             return { ...item, available, state, ...(reason && { reason }) };
         })
             .filter(item => !activeOnly || item.available);
-        let bounded = boundSearchResults(endpoints, maxChars).slice(0, limit);
+        // Reserve a little room for the surrounding { endpoints, total,
+        // truncated } envelope so the response-level compactor does not have to
+        // discard an otherwise useful input schema.
+        const endpointBudget = Math.max(2, maxChars - 96);
+        let bounded = boundSearchResults(endpoints, endpointBudget).slice(0, limit);
         if (bounded.length === 0 && endpoints.length > 0) {
-            bounded = boundSearchResults(endpoints.map(compactEndpoint), maxChars).slice(0, limit);
+            bounded = boundSearchResults(endpoints.map(compactEndpointSchema), endpointBudget).slice(0, limit);
+        }
+        if (bounded.length === 0 && endpoints.length > 0) {
+            bounded = boundSearchResults(endpoints.map(compactEndpoint), endpointBudget).slice(0, limit);
         }
         return { endpoints: bounded, total: endpoints.length, truncated: bounded.length < endpoints.length };
     }

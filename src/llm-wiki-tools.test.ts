@@ -80,6 +80,11 @@ describe('LLM Wiki organization vocabulary contracts', () => {
       const schema = properties(toolName);
       for (const [field, expected] of common) expectEnum(schema, field, expected);
     }
+
+    const clearInapplicable = properties('triage_wiki_note').clearInapplicable;
+    expect(clearInapplicable?.type).toBe('boolean');
+    expect(clearInapplicable?.description).toContain('MCP-managed Properties');
+    expect(clearInapplicable?.description).toContain('Custom Properties');
   });
 
   test('keeps workflow-specific schemas aligned with canonical vocabularies', () => {

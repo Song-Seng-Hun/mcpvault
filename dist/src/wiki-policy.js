@@ -104,7 +104,7 @@ const POLICY_TOPICS = {
         purpose: 'Pull executable work without confusing references, projects, deadlines, or blocked dependencies.',
         rules: [
             'Use task_status and one concrete next_action for execution while lifecycle describes the note, not the task lane.',
-            'blocked_by is a hard gate; depends_on gates only when it resolves to unfinished project/task work, while non-work knowledge is informational.',
+            'blocked_by is a hard gate; depends_on gates only when it resolves to unfinished actionable work, while non-work knowledge is informational.',
             'Respect WIP limits, distinguish dueAt from scheduledAt, and record waiting/blocked/start/completion timestamps when known.',
             'Use the dependency plan stages and current revisions as advice; repair cycles or prerequisites instead of auto-changing downstream status.',
         ],

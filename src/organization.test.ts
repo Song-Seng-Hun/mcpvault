@@ -154,7 +154,7 @@ describe('knowledge organization focus and summary metadata', () => {
       expect.objectContaining({ name: 'issue_resolution_status', type: 'text', appliesTo: ['issue'] }),
       expect.objectContaining({ name: 'knowledge_polarity', type: 'text' }),
       expect.objectContaining({ name: 'negative_type', type: 'text' }),
-      expect.objectContaining({ name: 'triage_disposition', type: 'text', appliesTo: ['fleeting'] }),
+      expect.objectContaining({ name: 'triage_disposition', type: 'text' }),
       expect.objectContaining({ name: 'moc_purpose', type: 'text', appliesTo: ['moc'] }),
       expect.objectContaining({ name: 'negative_reusable_lesson', type: 'text' }),
       expect.objectContaining({ name: 'last_review_trigger', type: 'text' }),
@@ -188,18 +188,18 @@ describe('knowledge organization focus and summary metadata', () => {
       disambiguation: 'Concept', broaderTerms: ['[[Broader]]'], relatedTerms: ['[[Related]]'], subjectTerms: ['retrieval'],
       domain: 'knowledge-management', methods: ['review'], audience: ['agents'], retrievalCues: ['When searching'], useWhen: 'During retrieval',
       validFrom: '2029-01-01', validUntil: '2031-01-01', observedAt: '2030-01-01', temporalScope: '2030 policy',
-      knowledgeRole: 'concept', seeAlso: ['[[Adjacent]]'], reviewPolicy: 'manual', reviewOutcome: 'revised', reviewedBy: 'reviewer',
+      seeAlso: ['[[Adjacent]]'], reviewPolicy: 'manual', reviewOutcome: 'revised', reviewedBy: 'reviewer',
       reviewedAt: '2030-01-01', reviewNote: 'Checked evidence', reviewChecks: ['evidence'], reviewOpenItems: ['Recheck source'],
-      interpretationStatus: 'interpreted', focusHorizon: 'area', focusParent: '[[Areas/Knowledge]]', focusSupports: ['[[Goals/Useful Wiki]]'],
+      focusHorizon: 'area', focusParent: '[[Areas/Knowledge]]', focusSupports: ['[[Goals/Useful Wiki]]'],
       relations: { supports: ['[[Knowledge/Target]]'] }, relationNotes: { supports: 'Supports target' }, relationEvidence: { supports: ['_sources/source.md'] },
       contentDigest: 'a'.repeat(64),
     } as const;
     const outputs = [
       knowledgeOrganization({ ...common, noteKind: 'project', lifecycle: 'active', tags: ['work'], timeEstimateMinutes: 30, energy: 'medium', effort: 'high', nextActions: ['Test'], nextAction: 'Run test', waitingFor: 'peer', desiredOutcome: 'Verified result', projectPurpose: 'Improve retrieval', projectSupport: ['[[Resources/Guide]]'], taskContext: '@computer', dueAt: '2030-02-01', scheduledAt: '2030-01-15', deferUntil: '2030-01-10', serviceClass: 'research', completionCriteria: ['Tests pass'], startedAt: '2030-01-01', blockedSince: '2030-01-02', waitingSince: '2030-01-03', completedAt: '2030-01-04', taskStatus: 'completed' }),
       knowledgeOrganization({ ...common, noteKind: 'moc', lifecycle: 'evergreen', navOrder: 1, mocPurpose: 'Navigate a topic', mocScope: 'One domain', mocQuestions: ['What matters?'], mocParent: '[[MOCs/Home]]' }),
-      knowledgeOrganization({ ...common, noteKind: 'decision', lifecycle: 'review', decisionStatus: 'proposed' }),
+      knowledgeOrganization({ ...common, noteKind: 'decision', lifecycle: 'review', decisionStatus: 'proposed', knowledgeRole: 'argument' }),
       knowledgeOrganization({ ...common, noteKind: 'experiment', lifecycle: 'review', epistemicStatus: 'failed' }),
-      knowledgeOrganization({ ...common, noteKind: 'atomic', lifecycle: 'review', polarity: 'negative', negativeType: 'failure', attempted: 'Attempt', observed: 'Observation', failureCondition: 'Condition', affectedScope: 'Scope', reproduction: 'Steps', whyRejected: 'Reason', reusableLesson: 'Lesson', replacementPath: 'Knowledge/Replacement.md' }),
+      knowledgeOrganization({ ...common, noteKind: 'atomic', lifecycle: 'review', knowledgeRole: 'concept', interpretationStatus: 'interpreted', polarity: 'negative', negativeType: 'failure', attempted: 'Attempt', observed: 'Observation', failureCondition: 'Condition', affectedScope: 'Scope', reproduction: 'Steps', whyRejected: 'Reason', reusableLesson: 'Lesson', replacementPath: 'Knowledge/Replacement.md' }),
       knowledgeOrganization({ ...common, noteKind: 'fleeting', lifecycle: 'inbox', clarifyDisposition: 'knowledge', clarifiedBy: 'agent', clarifiedAt: '2030-01-01', clarifyNote: 'Worth distilling', triageTarget: 'Knowledge/Target.md' }),
     ];
     const declared = new Set(names);
@@ -212,12 +212,12 @@ describe('knowledge organization focus and summary metadata', () => {
   test('reports managed Properties filed on the wrong kind of note', () => {
     const issues = organizationLintIssues('Knowledge/Misfiled.md', {
       llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'review',
-      trust_level: 'high', next_action: 'Do unrelated work', nav_order: 3,
+      trust_level: 'high', project_purpose: 'Do unrelated work', nav_order: 3,
     }, '# Misfiled\n');
     const applicability = issues.filter(issue => issue.code === 'property_contract_applicability');
     expect(applicability).toEqual(expect.arrayContaining([
       expect.objectContaining({ detail: expect.stringContaining('trust_level applies only to source') }),
-      expect.objectContaining({ detail: expect.stringContaining('next_action applies only to project or task') }),
+      expect.objectContaining({ detail: expect.stringContaining('project_purpose applies only to project') }),
       expect.objectContaining({ detail: expect.stringContaining('nav_order applies only to moc') }),
     ]));
     expect(applicability).toHaveLength(3);
@@ -232,6 +232,12 @@ describe('knowledge organization focus and summary metadata', () => {
   });
 
   test('keeps reasoning, interpretation, epistemic, and issue workflow metadata on their intended note roles', () => {
+    expect(() => knowledgeOrganization({ status: 'draft', noteKind: 'project', knowledgeRole: 'model' })).toThrow(/knowledgeRole is only valid for noteKind atomic, knowledge, or decision/);
+    expect(() => knowledgeOrganization({ status: 'draft', noteKind: 'project', interpretationStatus: 'interpreted' })).toThrow(/interpretationStatus is only valid for noteKind literature, atomic, or knowledge/);
+    expect(() => knowledgeOrganization({ status: 'draft', noteKind: 'atomic', projectPurpose: 'Run a project' })).toThrow(/projectPurpose is only valid for noteKind project/);
+    expect(knowledgeOrganization({ status: 'draft', noteKind: 'question', taskStatus: 'next_action', nextAction: 'Investigate the question' })).toMatchObject({ task_status: 'next_action', next_action: 'Investigate the question' });
+    expect(knowledgeOrganization({ status: 'draft', noteKind: 'task', desiredOutcome: 'One observable result' })).toMatchObject({ desired_outcome: 'One observable result' });
+
     const misplaced = organizationLintIssues('Projects/Misclassified workflow.md', {
       llm_wiki_type: 'knowledge', note_kind: 'project', lifecycle: 'active',
       knowledge_role: 'model', interpretation_status: 'interpreted',

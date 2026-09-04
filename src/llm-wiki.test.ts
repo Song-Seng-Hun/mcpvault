@@ -1278,7 +1278,7 @@ test('knowledge organization contract preserves aliases, projections, and typed 
       path: 'Knowledge/Contract.md', content: '# Contract\n\nA compact, linked knowledge note.\n', evidencePaths: [source.value.path],
       aliases: ['Knowledge contract', 'Metadata contract'], mocs: ['[[MOCs/Research]]', '[[MOCs/Operations]]'], summary: 'Properties describe the note and typed links describe why it is related.',
       keyPoints: ['Keep the full Markdown body.', 'Use typed links for meaningful relations.'], openQuestions: ['Which relation needs review next?'],
-      relations: { related: ['[[Knowledge/Existing]]'] }, claims: [{ id: 'contract-claim', text: 'Typed links explain why notes are related.', status: 'supported', confidence: 'high', evidence_paths: [source.value.path], evidence: [{ path: source.value.path, heading: 'Evidence', blockId: 'contract-evidence', revision: source.value.revision }] }], stableId: 'knowledge-contract', lifecycle: 'evergreen', taskStatus: 'next_action', noteKind: 'question', epistemicStatus: 'open', reviewPolicy: 'periodic', evidence: [{ path: source.value.path, heading: 'Evidence', blockId: 'contract-evidence', revision: source.value.revision }], author: 'codex', expectedRevision: 'missing', accessToken,
+      relations: { related: ['[[Knowledge/Existing]]'] }, claims: [{ id: 'contract-claim', text: 'Typed links explain why notes are related.', status: 'supported', confidence: 'high', evidence_paths: [source.value.path], evidence: [{ path: source.value.path, heading: 'Evidence', blockId: 'contract-evidence', revision: source.value.revision }] }], stableId: 'knowledge-contract', lifecycle: 'evergreen', taskStatus: 'next_action', startedAt: '2030-01-01', noteKind: 'question', epistemicStatus: 'open', reviewPolicy: 'periodic', evidence: [{ path: source.value.path, heading: 'Evidence', blockId: 'contract-evidence', revision: source.value.revision }], author: 'codex', expectedRevision: 'missing', accessToken,
     });
     expect(published.value.success).toBe(true);
     const projection = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Contract.md', view: 'summary', accessToken });
@@ -1367,6 +1367,21 @@ test('questions, negative knowledge, locators, event review, MOC coverage, and B
     });
     const questionProjection = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Open question.md', accessToken });
     expect(questionProjection.value).toMatchObject({ epistemicStatus: 'open', desiredOutcome: 'Obtain one independent reproduction.', nextAction: 'Ask another agent to rerun the test.', taskContext: '@research', reviewOutcome: 'confirmed', reviewedBy: 'codex' });
+    const questionActions = await callJson(client, 'get_wiki_next_actions', { context: '@research', limit: 10, accessToken });
+    expect(questionActions.value.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/Open question.md', action: 'Ask another agent to rerun the test.', context: '@research' }),
+    ]));
+    const actionableDashboard = await callJson(client, 'get_wiki_review_dashboard', { limit: 20, maxChars: 12000, accessToken });
+    expect(actionableDashboard.value.sections.projectReadiness).toMatchObject({ scope: 'any_actionable_note' });
+    expect(actionableDashboard.value.sections.projectReadiness.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/Open question.md', kind: 'question', readiness: 'ready' }),
+    ]));
+    const actionableQuality = await callJson(client, 'get_wiki_quality_check', { path: 'Knowledge/Open question.md', accessToken });
+    expect(actionableQuality.value.checks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'desired_outcome', passed: true }),
+      expect.objectContaining({ id: 'next_action_or_waiting', passed: true }),
+      expect.objectContaining({ id: 'execution_state', passed: false }),
+    ]));
     const question = await callJson(client, 'read_note', { path: 'Knowledge/Open question.md', accessToken });
     const editedQuestion = await client.callTool({ name: 'patch_note', arguments: {
       path: 'Knowledge/Open question.md', oldString: 'Should this result be reproduced independently?', newString: 'Should this result be reproduced independently by another agent?', expectedRevision: question.value.revision, accessToken,
@@ -1775,7 +1790,7 @@ test('organization metadata, catalog facets, review queue, and lint warnings sta
       desiredOutcome: 'The captured work is organized.', nextAction: 'Review the captured source.', completionCriteria: ['The source has a durable destination.'],
       summary: 'A captured organization project.', summaryLayer: 2, summaryHighlights: [{ text: 'Sort this later.' }],
       serviceClass: 'research', startedAt: '2030-01-01', blockedSince: '2030-01-02', waitingSince: '2030-01-03', completedAt: '2030-01-04',
-      retrievalCues: ['When an Inbox capture becomes actionable'], useWhen: 'During Inbox clarification', interpretationStatus: 'interpreted',
+      retrievalCues: ['When an Inbox capture becomes actionable'], useWhen: 'During Inbox clarification',
       expectedRevision: rough.value.revision, accessToken,
     });
     expect(triaged.value).toMatchObject({
@@ -1784,15 +1799,48 @@ test('organization metadata, catalog facets, review queue, and lint warnings sta
         noteKind: 'project', lifecycle: 'active', desiredOutcome: 'The captured work is organized.', nextAction: 'Review the captured source.',
         completionCriteria: ['The source has a durable destination.'], serviceClass: 'research', startedAt: '2030-01-01', blockedSince: '2030-01-02',
         waitingSince: '2030-01-03', completedAt: '2030-01-04', retrievalCues: ['When an Inbox capture becomes actionable'],
-        useWhen: 'During Inbox clarification', interpretationStatus: 'interpreted',
+        useWhen: 'During Inbox clarification',
       },
     });
     const triagedRead = await callJson(client, 'read_note', { path: 'Inbox/Rough capture.md', accessToken });
     expect(triagedRead.value.fm).toMatchObject({
       summary_layer: 2, summary_highlights: [{ text: 'Sort this later.' }], completion_criteria: ['The source has a durable destination.'],
       service_class: 'research', started_at: '2030-01-01', blocked_since: '2030-01-02', waiting_since: '2030-01-03', completed_at: '2030-01-04',
-      retrieval_cues: ['When an Inbox capture becomes actionable'], use_when: 'During Inbox clarification', interpretation_status: 'interpreted',
+      retrieval_cues: ['When an Inbox capture becomes actionable'], use_when: 'During Inbox clarification',
     });
+    await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/Interpreted literature.md', content: '# Interpreted literature\n', frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'literature', lifecycle: 'active' }, expectedRevision: 'missing', accessToken,
+    } });
+    const literature = await callJson(client, 'read_note', { path: 'Knowledge/Interpreted literature.md', accessToken });
+    const interpreted = await callJson(client, 'triage_wiki_note', {
+      path: 'Knowledge/Interpreted literature.md', interpretationStatus: 'interpreted', expectedRevision: literature.value.revision, accessToken,
+    });
+    expect(interpreted.value.frontmatter).toMatchObject({ noteKind: 'literature', interpretationStatus: 'interpreted' });
+
+    await client.callTool({ name: 'write_note', arguments: {
+      path: 'Projects/Reclassify.md', content: '# Reclassify\n', frontmatter: {
+        llm_wiki_type: 'knowledge', note_kind: 'project', lifecycle: 'active', project_purpose: 'Temporary project role.', project_support: ['[[Resources/Guide]]'],
+        desired_outcome: 'Finish once.', next_action: 'Do the old work.', task_status: 'open', custom_property: 'preserve-me',
+      }, expectedRevision: 'missing', accessToken,
+    } });
+    const reclassify = await callJson(client, 'read_note', { path: 'Projects/Reclassify.md', accessToken });
+    const unsafeReclassify = await client.callTool({ name: 'triage_wiki_note', arguments: {
+      path: 'Projects/Reclassify.md', noteKind: 'resource', lifecycle: 'active', expectedRevision: reclassify.value.revision, accessToken,
+    } });
+    expect(unsafeReclassify.isError).toBe(true);
+    expect(String((unsafeReclassify.content as any)[0]?.text)).toContain('clearInapplicable');
+    const cleaned = await callJson(client, 'triage_wiki_note', {
+      path: 'Projects/Reclassify.md', noteKind: 'resource', lifecycle: 'active', clearInapplicable: true, expectedRevision: reclassify.value.revision, accessToken,
+    });
+    expect(cleaned.value).toMatchObject({
+      success: true,
+      clearedProperties: expect.arrayContaining(['project_purpose', 'project_support']),
+      frontmatter: { noteKind: 'resource', lifecycle: 'active' },
+    });
+    const cleanedRead = await callJson(client, 'read_note', { path: 'Projects/Reclassify.md', accessToken });
+    expect(cleanedRead.value.fm).toMatchObject({ note_kind: 'resource', lifecycle: 'active', custom_property: 'preserve-me', desired_outcome: 'Finish once.', next_action: 'Do the old work.', task_status: 'open' });
+    expect(cleanedRead.value.fm).not.toHaveProperty('project_purpose');
+    expect(cleanedRead.value.fm).not.toHaveProperty('project_support');
     const invalidTriage = await client.callTool({ name: 'triage_wiki_note', arguments: {
       path: 'Inbox/Rough capture.md', nextAction: 'x'.repeat(501), expectedRevision: triaged.value.revision, accessToken,
     } });
@@ -2169,7 +2217,7 @@ test('Property contract is discoverable and review cadence schedules the next re
       totalFields: expect.any(Number),
       selection: { mode: 'names', matches: 2, offset: 0, returned: 2, unknownNames: ['not_a_managed_property'] },
       fields: expect.arrayContaining([
-        expect.objectContaining({ name: 'task_status', allowed: expect.arrayContaining(['open', 'completed']), appliesTo: ['project', 'task'], description: expect.any(String) }),
+        expect.objectContaining({ name: 'task_status', allowed: expect.arrayContaining(['open', 'completed']), description: expect.any(String) }),
         expect.objectContaining({ name: 'moc_purpose', appliesTo: ['moc'], description: expect.any(String) }),
       ]),
     });
@@ -2644,7 +2692,8 @@ test('portable migration preflight excludes non-global content and reports revis
     expect(defaultManifest.value).toMatchObject({ manifestVersion: 5, portable: true, contentFreeByDefault: true, contractFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/), templates: expect.arrayContaining(['concept', 'model']), basesViews: expect.arrayContaining(['concepts', 'authority', 'archives']), contracts: expect.objectContaining({ claimRoles: expect.arrayContaining(['premise', 'conclusion', 'objection']), claimRelations: expect.arrayContaining(['supports_claims', 'contradicts_claims', 'depends_on_claims']) }) });
     expect(defaultManifest.value.truncated).toBeUndefined();
     expect(defaultManifest.value.contracts.properties).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: 'task_status', type: 'text', allowed: expect.arrayContaining(['open', 'completed']), appliesTo: ['project', 'task'] }),
+      expect.objectContaining({ name: 'task_status', type: 'text', allowed: expect.arrayContaining(['open', 'completed']) }),
+      expect.objectContaining({ name: 'project_purpose', type: 'text', appliesTo: ['project'] }),
     ]));
     expect(defaultManifest.value.contracts.properties[0].description).toBeUndefined();
     const selfCompared = await callJson(client, 'get_wiki_organization_manifest', {
@@ -2675,7 +2724,8 @@ test('portable migration preflight excludes non-global content and reports revis
         noteKinds: ['atomic'], lifecycles: ['evergreen'], taskStatuses: [], serviceClasses: [],
         properties: [
           { name: 'aliases', type: 'text' },
-          { name: 'task_status', type: 'text', allowed: ['open'], appliesTo: ['atomic'] },
+          { name: 'task_status', type: 'text', allowed: ['open'] },
+          { name: 'project_purpose', type: 'text', appliesTo: ['atomic'] },
         ],
         relations: [{ field: 'related', direction: 'mutual', reciprocal: false }],
       },

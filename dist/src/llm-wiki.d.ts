@@ -584,6 +584,8 @@ export declare class LlmWikiService {
         success: boolean;
         path: string;
         revision: string;
+        clearedProperties?: string[];
+        inapplicableProperties?: string[];
         frontmatter: any;
     }>;
     /**
@@ -728,6 +730,7 @@ export declare class LlmWikiService {
                 truncated: boolean;
             };
             projectReadiness: {
+                scope: string;
                 items: Record<string, unknown>[];
                 total: number;
                 truncated: boolean;
@@ -1065,6 +1068,7 @@ export declare class LlmWikiService {
                 items: Record<string, unknown>[];
             };
             projectReadiness: {
+                scope: string;
                 total: number;
                 truncated: boolean;
                 items: Record<string, unknown>[];
@@ -1379,7 +1383,7 @@ export declare class LlmWikiService {
         truncated: boolean;
     }>;
     /**
-     * A bounded Kanban-style flow view derived from task/project Properties.
+     * A bounded Kanban-style flow view derived from orthogonal work Properties.
      * `next_action` is treated as executable WIP, while `open` items with a
      * concrete next action are pull-ready.  This is advisory: it never assigns,
      * moves, or changes a note.
@@ -2242,8 +2246,8 @@ export declare class LlmWikiService {
     }>;
     /**
      * Return executable GTD actions by context rather than burying them in
-     * project-support material. The source remains ordinary task/project
-     * frontmatter; this is only a bounded derived view.
+     * project-support material. The source remains ordinary Markdown
+     * frontmatter on any actionable note; this is only a bounded derived view.
      */
     nextActions(principal?: ScopePrincipal, context?: string, limit?: number, maxChars?: number, options?: {
         maxMinutes?: unknown;
@@ -2348,6 +2352,8 @@ export declare class LlmWikiService {
         success: boolean;
         path: string;
         revision: string;
+        clearedProperties?: string[];
+        inapplicableProperties?: string[];
         frontmatter: any;
     }>;
     triage(params: {
@@ -2461,11 +2467,23 @@ export declare class LlmWikiService {
         focusHorizon?: unknown;
         focusParent?: string;
         focusSupports?: unknown;
+        clearInapplicable?: boolean;
         expectedRevision: string;
     }): Promise<{
         success: boolean;
         path: string;
         revision: string;
+        clearedProperties?: string[];
+        inapplicableProperties?: string[];
+        nextAction?: {
+            endpointId: string;
+            arguments: {
+                path: string;
+                expectedRevision: string;
+                clearInapplicable: boolean;
+            };
+            instruction: string;
+        };
         frontmatter: any;
     }>;
     readProjection(params: {

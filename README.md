@@ -249,10 +249,12 @@ properties (`supports`, `contradicts`, `supersedes`, `derived_from`,
 `depends_on`, `implements`, `blocked_by`, `answers_questions`, `tests`,
 `related`, `same_as`, `version_of`, and `refines`) explain the meaning
 of a `[[wikilink]]`; they do not grant access and their targets are checked by
-Wiki lint. Use `next_actions` and `waiting_for` for project/task notes, and
-`task_status` (`open`, `next_action`, `waiting`, `blocked`, `someday`,
-`completed`, or `cancelled`) for their operational state. Keep task status separate from the
-knowledge `lifecycle`. Evidence can carry `heading`, `blockId`, and source
+Wiki lint. Any ordinary knowledge note may become actionable by adding
+`next_action`/`next_actions`, `waiting_for`, and `task_status` (`open`,
+`next_action`, `waiting`, `blocked`, `someday`, `completed`, or `cancelled`)
+without changing its epistemic `note_kind`. Keep task status separate from the
+knowledge `lifecycle`; capture and Clarify Properties remain as provenance
+after reclassification. Evidence can carry `heading`, `blockId`, and source
 `revision` locators; the server validates them and reports stale references.
 Lint also warns when MCP-managed fields such as `summary_highlights`, `claims`,
 or structured `evidence` contain nested objects. They remain valid Markdown
@@ -306,8 +308,8 @@ a complete compact overview; pass `names` for exact fields or `query` to page
 through full descriptions, allowed values, and `appliesTo` guidance without
 loading the entire contract. It is a read-only guide; custom Properties remain
 valid. `appliesTo` is meaningful: `lint_wiki` reports
-MCP-managed fields placed on the wrong note role (for example source trust on
-an atomic note or execution state on a literature note) without forbidding
+MCP-managed fields placed on the wrong note role (for example source trust or
+MOC hierarchy on an atomic note) without forbidding
 unrelated custom Properties. When a note declares `review_interval_days`,
 `review_wiki_note` calculates the next `review_at` after a completed review
 unless the caller supplies an explicit date.
@@ -344,7 +346,7 @@ returns only active executable actions, optionally filtered by one exact
 unknown values are excluded and reported rather than guessed. Project purpose, support
 references, and waiting information remain separate fields. Waiting or explicitly
 blocked work is never returned as executable. `blocked_by` is a hard gate;
-`depends_on` gates execution only when it resolves to an unfinished project/task.
+`depends_on` gates execution only when it resolves to an unfinished actionable note.
 Unresolved, ambiguous, inactive, and cyclic work prerequisites are excluded and
 reported with bounded target context and current revisions. A `depends_on` link to
 ordinary knowledge remains informational rather than becoming a false task gate.
@@ -394,10 +396,11 @@ Questions, hypotheses, experiments, and assumptions carry `epistemic_status` so 
 state is explicit: questions are open/answered/blocked/abandoned, hypotheses
 are proposed/supported/refuted/inconclusive, experiments are
 planned/running/completed/failed/inconclusive/reproduced, and assumptions are
-active/verified/invalidated/replaced. Project/task notes may add GTD-style
-`desired_outcome`, `next_action`, `task_context`, `due_at`, `scheduled_at`, and
-`defer_until`. `due_at` means a deadline; `scheduled_at` means when the work is
-intended to happen. Optional `time_estimate_minutes`, `energy` (`low`,
+active/verified/invalidated/replaced. Any of these notes may independently add
+GTD-style `desired_outcome`, `next_action`, `task_context`, `due_at`,
+`scheduled_at`, and `defer_until` when it also represents work; this does not
+change its epistemic role. `due_at` means a deadline; `scheduled_at` means when
+the work is intended to happen. Optional `time_estimate_minutes`, `energy` (`low`,
 `medium`, `high`), and `effort` (`low`, `medium`, `high`) help select a
 feasible next action without replacing `next_action` or changing evidence
 requirements.
@@ -426,7 +429,7 @@ is pull-ready only when no dependency blocks it, and blocked/waiting work is
 reported with bounded aging. Its WIP limit is advisory and configurable; it
 does not assign work or create a second task database. Optional
 `service_class` (`expedite`, `fixed_date`, `standard`, `research`) explains
-ordering, while `completion_criteria` gives projects observable stop
+ordering, while `completion_criteria` gives any actionable note observable stop
 conditions. Optional `started_at`, `blocked_since`, `waiting_since`, and
 `completed_at` timestamps improve flow measurement without replacing Git
 history.

@@ -120,8 +120,11 @@ test("dynamic control plane preserves compact onboarding and organization schema
     expect(compact.nextActions[0]).toMatchObject({ tool: 'notes.read', arguments: { path: '환영합니다!.md' } });
 
     const found = await client.callTool({ name: 'search_capabilities', arguments: { query: 'triage wiki note', limit: 3 } });
-    const catalog = JSON.parse(String((found.content as any)[0].text));
+    const catalogText = String((found.content as any)[0].text);
+    const catalog = JSON.parse(catalogText);
+    expect(catalogText.length).toBeLessThanOrEqual(12000);
     const triage = catalog.endpoints.find((endpoint: any) => endpoint.endpointId === 'wiki.triage');
+    expect(triage.schemaOmitted).not.toBe(true);
     expect(triage.input.properties).toEqual(expect.objectContaining({
       tags: expect.objectContaining({ type: 'array' }),
       timeEstimateMinutes: expect.objectContaining({ type: 'integer' }),

@@ -105,10 +105,10 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'accession_id', type: 'text', description: 'Optional ingestion or transfer batch identifier for chain-of-custody review', appliesTo: ['source'] },
     { name: 'custodial_history', type: 'text', description: 'Bounded custody/provenance note for an immutable source snapshot', appliesTo: ['source'] },
     { name: 'original_order_note', type: 'text', description: 'Bounded explanation of how the source order was preserved or reconstructed', appliesTo: ['source'] },
-    { name: 'captured_from', type: 'text', description: 'Bounded origin label for a fleeting Inbox capture', allowed: CAPTURE_SOURCES, appliesTo: ['fleeting'] },
-    { name: 'capture_reason', type: 'text', description: 'Why a fleeting observation was preserved; never a secret or raw prompt', appliesTo: ['fleeting'] },
-    { name: 'capture_context', type: 'text', description: 'Short interpretation context for a fleeting observation', appliesTo: ['fleeting'] },
-    { name: 'related_task', type: 'text', description: 'Scope-safe task or project reference associated with a fleeting capture', appliesTo: ['fleeting'] },
+    { name: 'captured_from', type: 'text', description: 'Bounded origin label retained from an Inbox capture', allowed: CAPTURE_SOURCES },
+    { name: 'capture_reason', type: 'text', description: 'Why an observation was first preserved; never a secret or raw prompt' },
+    { name: 'capture_context', type: 'text', description: 'Short interpretation context retained from capture' },
+    { name: 'related_task', type: 'text', description: 'Scope-safe task or project reference retained from capture' },
     { name: 'primary_moc', type: 'text', description: 'Preferred Obsidian MOC entry point for this note; navigation metadata only' },
     { name: 'mocs', type: 'list', description: 'Additional Obsidian MOC entry points for multi-context discovery; navigation metadata only' },
     { name: 'moc', type: 'text', description: 'Legacy single-MOC membership retained for compatible Obsidian navigation; prefer primary_moc plus mocs for new notes' },
@@ -146,26 +146,26 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'summary_layer', type: 'number', description: 'Progressive Summarization layer from 0 to 4' },
     { name: 'summary_highlights', type: 'list', description: 'Bounded highlighted passages; nested objects are MCP-managed' },
     { name: 'summary_of_content_sha256', type: 'text', description: 'Body digest for projection freshness' },
-    { name: 'next_action', type: 'text', description: 'One concrete GTD action', appliesTo: ['project', 'task'] },
-    { name: 'next_actions', type: 'list', description: 'Bounded GTD action list', appliesTo: ['project', 'task'] },
-    { name: 'time_estimate_minutes', type: 'number', description: 'Optional rough effort estimate for one execution step', appliesTo: ['project', 'task'] },
-    { name: 'energy', type: 'text', description: 'Optional energy needed for execution: low, medium, or high', allowed: EXECUTION_LEVELS, appliesTo: ['project', 'task'] },
-    { name: 'effort', type: 'text', description: 'Optional coarse effort class: low, medium, or high', allowed: EXECUTION_LEVELS, appliesTo: ['project', 'task'] },
-    { name: 'waiting_for', type: 'text', description: 'External dependency or owner', appliesTo: ['project', 'task'] },
-    { name: 'desired_outcome', type: 'text', description: 'Observable project outcome', appliesTo: ['project'] },
+    { name: 'next_action', type: 'text', description: 'One concrete GTD action on any actionable note' },
+    { name: 'next_actions', type: 'list', description: 'Bounded GTD action list on any actionable note' },
+    { name: 'time_estimate_minutes', type: 'number', description: 'Optional rough effort estimate for one execution step' },
+    { name: 'energy', type: 'text', description: 'Optional energy needed for execution: low, medium, or high', allowed: EXECUTION_LEVELS },
+    { name: 'effort', type: 'text', description: 'Optional coarse effort class: low, medium, or high', allowed: EXECUTION_LEVELS },
+    { name: 'waiting_for', type: 'text', description: 'External dependency or owner for an actionable note' },
+    { name: 'desired_outcome', type: 'text', description: 'Observable outcome for an actionable note' },
     { name: 'project_purpose', type: 'text', description: 'Why the project exists', appliesTo: ['project'] },
     { name: 'project_support', type: 'list', description: 'Project reference material, not another task list', appliesTo: ['project'] },
-    { name: 'task_context', type: 'text', description: 'Execution context such as @research or @computer', appliesTo: ['project', 'task'] },
-    { name: 'task_status', type: 'text', description: 'Operational task state, separate from lifecycle', allowed: TASK_STATUSES, appliesTo: ['project', 'task'] },
-    { name: 'service_class', type: 'text', description: 'Optional Kanban priority class; does not bypass evidence or scope rules', allowed: SERVICE_CLASSES, appliesTo: ['project', 'task'] },
-    { name: 'completion_criteria', type: 'list', description: 'Bounded observable conditions for considering project/task work complete', appliesTo: ['project', 'task'] },
-    { name: 'started_at', type: 'text', description: 'Optional ISO time when executable work entered progress', appliesTo: ['project', 'task'] },
-    { name: 'blocked_since', type: 'text', description: 'Optional ISO time when work became blocked', appliesTo: ['project', 'task'] },
-    { name: 'waiting_since', type: 'text', description: 'Optional ISO time when work began waiting on an external dependency', appliesTo: ['project', 'task'] },
-    { name: 'completed_at', type: 'text', description: 'Optional ISO time when work reached completion', appliesTo: ['project', 'task'] },
-    { name: 'due_at', type: 'text', description: 'Latest acceptable completion time', appliesTo: ['project', 'task'] },
-    { name: 'scheduled_at', type: 'text', description: 'Intended execution/calendar time', appliesTo: ['project', 'task'] },
-    { name: 'defer_until', type: 'text', description: 'Do not reconsider before this time', appliesTo: ['project', 'task'] },
+    { name: 'task_context', type: 'text', description: 'Execution context such as @research or @computer' },
+    { name: 'task_status', type: 'text', description: 'Operational state for any actionable note, separate from lifecycle and epistemic status', allowed: TASK_STATUSES },
+    { name: 'service_class', type: 'text', description: 'Optional Kanban priority class; does not bypass evidence or scope rules', allowed: SERVICE_CLASSES },
+    { name: 'completion_criteria', type: 'list', description: 'Bounded observable conditions for considering the actionable work complete' },
+    { name: 'started_at', type: 'text', description: 'Optional ISO time when executable work entered progress' },
+    { name: 'blocked_since', type: 'text', description: 'Optional ISO time when work became blocked' },
+    { name: 'waiting_since', type: 'text', description: 'Optional ISO time when work began waiting on an external dependency' },
+    { name: 'completed_at', type: 'text', description: 'Optional ISO time when work reached completion' },
+    { name: 'due_at', type: 'text', description: 'Latest acceptable completion time' },
+    { name: 'scheduled_at', type: 'text', description: 'Intended execution/calendar time' },
+    { name: 'defer_until', type: 'text', description: 'Do not reconsider before this time' },
     { name: 'review_at', type: 'text', description: 'Next evidence review time' },
     { name: 'review_interval_days', type: 'number', description: 'Days after a completed review before the next review' },
     { name: 'review_snoozed_until', type: 'text', description: 'Do not surface in review queues before this ISO date/time' },
@@ -177,7 +177,7 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'recall_confusion', type: 'text', description: 'Bounded description of what was not recalled or was confused; private for agent recall state' },
     { name: 'recall_repair_status', type: 'text', description: 'Whether a failed or partial recall needs a repair note', allowed: RECALL_REPAIR_STATUSES },
     { name: 'recall_repair_path', type: 'text', description: 'Scope-safe note or task linked to repairing a recall failure' },
-    { name: 'triage_disposition', type: 'text', description: 'GTD Clarify disposition recorded without moving or deleting the note', allowed: CLARIFY_DISPOSITIONS, appliesTo: ['fleeting'] },
+    { name: 'triage_disposition', type: 'text', description: 'GTD Clarify disposition retained after capture without moving or deleting the note', allowed: CLARIFY_DISPOSITIONS },
     { name: 'issue_resolution_status', type: 'text', description: 'Error Book resolution state, separate from retrospective learning', allowed: ISSUE_RESOLUTION_STATUSES, appliesTo: ['issue'] },
     { name: 'issue_retrospective_status', type: 'text', description: 'Error Book retrospective state after resolution', allowed: ISSUE_RETROSPECTIVE_STATUSES, appliesTo: ['issue'] },
     { name: 'issue_retrospective', type: 'text', description: 'Bounded reusable lesson from an exception review', appliesTo: ['issue'] },
@@ -213,10 +213,10 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'negative_why_rejected', type: 'text', description: 'Why the attempted approach was rejected' },
     { name: 'negative_reusable_lesson', type: 'text', description: 'Reusable lesson distilled from the failed or rejected path' },
     { name: 'negative_replacement_path', type: 'text', description: 'Scope-safe replacement note or preferred approach for the negative result' },
-    { name: 'clarified_by', type: 'text', description: 'Agent that completed the GTD Clarify decision', appliesTo: ['fleeting'] },
-    { name: 'clarified_at', type: 'text', description: 'ISO date/time when the GTD Clarify decision was recorded', appliesTo: ['fleeting'] },
-    { name: 'clarify_note', type: 'text', description: 'Bounded rationale for the GTD Clarify disposition', appliesTo: ['fleeting'] },
-    { name: 'triage_target', type: 'text', description: 'Suggested scope-safe destination recorded by Clarify without moving the note', appliesTo: ['fleeting'] },
+    { name: 'clarified_by', type: 'text', description: 'Agent that completed the GTD Clarify decision' },
+    { name: 'clarified_at', type: 'text', description: 'ISO date/time when the GTD Clarify decision was recorded' },
+    { name: 'clarify_note', type: 'text', description: 'Bounded rationale for the retained GTD Clarify disposition' },
+    { name: 'triage_target', type: 'text', description: 'Suggested scope-safe destination retained after Clarify without moving the note' },
     { name: 'moc_purpose', type: 'text', description: 'What navigation need or question this Map of Content serves', appliesTo: ['moc'] },
     { name: 'moc_scope', type: 'text', description: 'Boundary of the concepts intentionally covered by this Map of Content', appliesTo: ['moc'] },
     { name: 'moc_questions', type: 'list', description: 'Questions a MOC should help answer', appliesTo: ['moc'] },
@@ -237,6 +237,26 @@ const DEDICATED_APPLICABILITY_LINT_FIELDS = new Set([
     'epistemic_status',
 ]);
 const ORGANIZATION_PROPERTY_NAMES = new Set(ORGANIZATION_PROPERTY_CONTRACT.map(entry => entry.name));
+/**
+ * Match an appliesTo contract without confusing llm_wiki_type: knowledge with
+ * note_kind: knowledge. NOTE_KINDS always constrain note_kind; record-only
+ * identities such as source and issue constrain llm_wiki_type.
+ */
+export function organizationPropertyAppliesTo(contract, type, kind) {
+    if (!contract.appliesTo?.length)
+        return true;
+    return contract.appliesTo.some(target => (NOTE_KINDS.includes(target)
+        ? target === kind
+        : target === type));
+}
+/** Return only MCP-managed fields that conflict with the selected note role. */
+export function inapplicableOrganizationProperties(frontmatter, type, kind) {
+    const normalizedType = type?.trim().toLowerCase();
+    const normalizedKind = kind?.trim().toLowerCase();
+    return ORGANIZATION_PROPERTY_CONTRACT
+        .filter(contract => frontmatter[contract.name] !== undefined && !organizationPropertyAppliesTo(contract, normalizedType, normalizedKind))
+        .map(contract => contract.name);
+}
 function assertOrganizationPropertiesDeclared(properties) {
     const undeclared = Object.keys(properties).filter(name => !ORGANIZATION_PROPERTY_NAMES.has(name));
     if (undeclared.length) {
@@ -705,6 +725,57 @@ export function temporalValidity(frontmatter, asOfMs = Date.now()) {
         return { state: 'current', ...card };
     return { state: 'unspecified', ...card };
 }
+const KNOWLEDGE_INPUT_PROPERTY_CONTRACT = {
+    timeEstimateMinutes: 'time_estimate_minutes',
+    energy: 'energy',
+    effort: 'effort',
+    decisionStatus: 'decision_status',
+    navOrder: 'nav_order',
+    nextAction: 'next_action',
+    nextActions: 'next_actions',
+    waitingFor: 'waiting_for',
+    desiredOutcome: 'desired_outcome',
+    projectPurpose: 'project_purpose',
+    projectSupport: 'project_support',
+    taskContext: 'task_context',
+    taskStatus: 'task_status',
+    serviceClass: 'service_class',
+    completionCriteria: 'completion_criteria',
+    startedAt: 'started_at',
+    blockedSince: 'blocked_since',
+    waitingSince: 'waiting_since',
+    completedAt: 'completed_at',
+    dueAt: 'due_at',
+    scheduledAt: 'scheduled_at',
+    deferUntil: 'defer_until',
+    knowledgeRole: 'knowledge_role',
+    interpretationStatus: 'interpretation_status',
+    epistemicStatus: 'epistemic_status',
+    clarifyDisposition: 'triage_disposition',
+    clarifiedBy: 'clarified_by',
+    clarifiedAt: 'clarified_at',
+    clarifyNote: 'clarify_note',
+    triageTarget: 'triage_target',
+    mocPurpose: 'moc_purpose',
+    mocScope: 'moc_scope',
+    mocQuestions: 'moc_questions',
+    mocParent: 'moc_parent',
+};
+function assertKnowledgeInputApplicability(input, kind) {
+    const contracts = new Map(ORGANIZATION_PROPERTY_CONTRACT.map(contract => [contract.name, contract]));
+    for (const [inputName, propertyName] of Object.entries(KNOWLEDGE_INPUT_PROPERTY_CONTRACT)) {
+        if (input[inputName] === undefined)
+            continue;
+        const contract = contracts.get(propertyName);
+        if (!contract || organizationPropertyAppliesTo(contract, 'knowledge', kind))
+            continue;
+        const targets = contract.appliesTo || [];
+        const readableTargets = targets.length <= 1
+            ? targets.join('')
+            : `${targets.slice(0, -1).join(', ')}, or ${targets.at(-1)}`;
+        throw new Error(`${inputName} is only valid for noteKind ${readableTargets}`);
+    }
+}
 export function knowledgeOrganization(input) {
     const existing = input.existing || {};
     const executionHints = {};
@@ -727,8 +798,7 @@ export function knowledgeOrganization(input) {
     const existingLifecycle = normalizeLifecycle(existing.lifecycle);
     const kind = normalizeNoteKind(input.noteKind, existingKind || 'knowledge') || 'knowledge';
     const lifecycle = normalizeLifecycle(input.lifecycle, existingLifecycle || lifecycleForKnowledgeStatus(input.status)) || lifecycleForKnowledgeStatus(input.status);
-    if (input.decisionStatus !== undefined && kind !== 'decision')
-        throw new Error('decisionStatus is only valid for noteKind decision');
+    assertKnowledgeInputApplicability(input, kind);
     const decisionStatus = kind === 'decision'
         ? normalizeDecisionStatus(input.decisionStatus, normalizeDecisionStatus(existing.decision_status))
         : undefined;
@@ -1060,15 +1130,7 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
             issues.push({ code: 'property_contract_violation', detail: `${contract.name} must be one of: ${contract.allowed.join(', ')}.` });
         }
         if (contract.appliesTo?.length && !DEDICATED_APPLICABILITY_LINT_FIELDS.has(contract.name)) {
-            // `knowledge` is both an llm_wiki_type and a note_kind.  Treat contract
-            // targets that are real note kinds as kind constraints; otherwise they
-            // constrain the record type (for example source or issue).  A project
-            // must not satisfy appliesTo: knowledge merely because all durable notes
-            // use llm_wiki_type: knowledge.
-            const applies = contract.appliesTo.some(target => (NOTE_KINDS.includes(target)
-                ? target === kind
-                : target === type));
-            if (!applies) {
+            if (!organizationPropertyAppliesTo(contract, type, kind)) {
                 issues.push({
                     code: 'property_contract_applicability',
                     detail: `${contract.name} applies only to ${contract.appliesTo.join(' or ')} notes; this note is ${kind || type || 'unclassified'}.`,
@@ -1493,7 +1555,12 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
         if (criteria.length === 0 && !hasCriteriaHeading)
             issues.push({ code: 'active_project_without_completion_criteria', detail: 'An active project should state bounded observable completion_criteria or a completion-criteria heading so agents know when to stop.' });
     }
-    if (kind && ['project', 'task'].includes(kind)) {
+    const actionable = type === 'knowledge' && (Boolean(kind && ['project', 'task'].includes(kind))
+        || frontmatter.task_status !== undefined
+        || frontmatter.next_action !== undefined
+        || frontmatter.next_actions !== undefined
+        || frontmatter.waiting_for !== undefined);
+    if (actionable) {
         const taskStatus = String(frontmatter.task_status || '').trim().toLowerCase();
         const waiting = taskStatus === 'waiting' || Boolean(String(frontmatter.waiting_for || '').trim());
         if (taskStatus === 'next_action' && !frontmatter.started_at)

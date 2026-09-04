@@ -220,6 +220,14 @@ export interface OrganizationPropertyContractEntry {
     appliesTo?: readonly string[];
 }
 export declare const ORGANIZATION_PROPERTY_CONTRACT: readonly OrganizationPropertyContractEntry[];
+/**
+ * Match an appliesTo contract without confusing llm_wiki_type: knowledge with
+ * note_kind: knowledge. NOTE_KINDS always constrain note_kind; record-only
+ * identities such as source and issue constrain llm_wiki_type.
+ */
+export declare function organizationPropertyAppliesTo(contract: OrganizationPropertyContractEntry, type?: string, kind?: string): boolean;
+/** Return only MCP-managed fields that conflict with the selected note role. */
+export declare function inapplicableOrganizationProperties(frontmatter: Record<string, unknown>, type?: string, kind?: string): string[];
 export declare function getOrganizationPropertyContract(): OrganizationPropertyContractEntry[];
 export interface OrganizationNoteTemplate {
     templateId: string;

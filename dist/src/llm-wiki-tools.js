@@ -131,7 +131,7 @@ export function getLlmWikiTools() {
                     keyPoints: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
                     openQuestions: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
                     nextActions: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
-                    nextAction: { type: 'string', maxLength: 500, description: 'One concrete next action for a project/task note' },
+                    nextAction: { type: 'string', maxLength: 500, description: 'One concrete next action; adding it makes any knowledge note actionable without changing noteKind' },
                     waitingFor: { type: 'string', maxLength: 500 },
                     desiredOutcome: { type: 'string', maxLength: 1000, description: 'GTD-style observable outcome' },
                     projectPurpose: { type: 'string', maxLength: 1000, description: 'Optional project purpose/why; keep this separate from the desired outcome' },
@@ -141,7 +141,7 @@ export function getLlmWikiTools() {
                     scheduledAt: { type: 'string', description: 'Optional ISO date/time when the work should be performed' },
                     deferUntil: { type: 'string', description: 'Optional ISO date/time before which this action should not be revisited' },
                     serviceClass: organizationPropertySchema('service_class'),
-                    completionCriteria: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'Observable conditions that define done for project/task work' },
+                    completionCriteria: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'Observable conditions that define done for the actionable work' },
                     startedAt: { type: 'string', description: 'Optional ISO time when work entered progress' }, blockedSince: { type: 'string', description: 'Optional ISO time when work became blocked' }, waitingSince: { type: 'string', description: 'Optional ISO time when work began waiting' }, completedAt: { type: 'string', description: 'Optional ISO time when work completed' },
                     taskStatus: organizationPropertySchema('task_status', { description: 'Separate from knowledge lifecycle' }),
                     reviewPolicy: organizationPropertySchema('review_policy', { description: 'Upstream compares typed dependency/support revisions and states with the last publish/review baseline, not nearby links' }),
@@ -380,7 +380,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_flow_health',
-            description: 'Return a bounded Kanban-style flow view and request-local dependency plan for project/task notes. It reports stage-0 executable WIP, future dependency stages, immediate unlock points, one deepest chain, actual cycles versus downstream blockage, incomplete/workflow-held prerequisites, a configurable WIP limit, aging, overdue work, service classes, and revisions without assigning or mutating anything. Use it before starting another task.',
+            description: 'Return a bounded Kanban-style flow view and request-local dependency plan for any note carrying work Properties, including actionable questions or experiments as well as project/task notes. It reports stage-0 executable WIP, future dependency stages, immediate unlock points, one deepest chain, actual cycles versus downstream blockage, incomplete/workflow-held prerequisites, a configurable WIP limit, aging, overdue work, service classes, and revisions without assigning or mutating anything. Use it before starting another task.',
             inputSchema: { type: 'object', properties: {
                     wipLimit: { type: 'integer', minimum: 1, maximum: 50, default: 3, description: 'Advisory maximum of task_status=next_action items' },
                     blockedAfterDays: { type: 'integer', minimum: 1, maximum: 3650, default: 7 },
@@ -466,7 +466,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'triage_wiki_note',
-            description: 'Classify one ordinary Markdown note with PARA/Zettelkasten-style metadata without changing its body or moving it. Use expectedRevision to avoid overwriting another agent.',
+            description: 'Classify one ordinary Markdown note with PARA/Zettelkasten-style metadata without changing its body or moving it. New managed fields are rejected when they do not apply to the selected note role. A noteKind change that would strand old role-specific fields requires an explicit retry with clearInapplicable after reviewing the reported list. Use expectedRevision to avoid overwriting another agent.',
             inputSchema: { type: 'object', properties: {
                     ...executionProperties,
                     ...temporalProperties,
@@ -481,7 +481,7 @@ export function getLlmWikiTools() {
                     keyPoints: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
                     openQuestions: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
                     nextActions: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
-                    desiredOutcome: { type: 'string', maxLength: 1000 }, projectPurpose: { type: 'string', maxLength: 1000 }, projectSupport: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 30 }, taskContext: { type: 'string', maxLength: 300 }, dueAt: { type: 'string', description: 'ISO deadline, distinct from scheduledAt' }, scheduledAt: { type: 'string', description: 'ISO execution/calendar time' }, deferUntil: { type: 'string' }, serviceClass: organizationPropertySchema('service_class'), completionCriteria: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'Observable conditions for considering project/task work complete' }, startedAt: { type: 'string', description: 'Optional ISO time when work entered progress' }, blockedSince: { type: 'string', description: 'Optional ISO time when work became blocked' }, waitingSince: { type: 'string', description: 'Optional ISO time when work began waiting' }, completedAt: { type: 'string', description: 'Optional ISO time when work completed' },
+                    desiredOutcome: { type: 'string', maxLength: 1000, description: 'Observable outcome for any actionable note' }, projectPurpose: { type: 'string', maxLength: 1000, description: 'Project-only purpose; use desiredOutcome for actionable non-project notes' }, projectSupport: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 30, description: 'Project-only planning support' }, taskContext: { type: 'string', maxLength: 300 }, dueAt: { type: 'string', description: 'ISO deadline, distinct from scheduledAt' }, scheduledAt: { type: 'string', description: 'ISO execution/calendar time' }, deferUntil: { type: 'string' }, serviceClass: organizationPropertySchema('service_class'), completionCriteria: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'Observable conditions for considering the actionable work complete' }, startedAt: { type: 'string', description: 'Optional ISO time when work entered progress' }, blockedSince: { type: 'string', description: 'Optional ISO time when work became blocked' }, waitingSince: { type: 'string', description: 'Optional ISO time when work began waiting' }, completedAt: { type: 'string', description: 'Optional ISO time when work completed' },
                     stableId: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', maxLength: 80 }, canonicalPath: { type: 'string', maxLength: 500 }, recallPrompt: { type: 'string', maxLength: 1000 }, recallIntervalDays: { type: 'integer', minimum: 1, maximum: 3650 }, lastRecalledAt: { type: 'string' }, recallQuality: organizationPropertySchema('recall_quality'),
                     retentionPolicy: organizationPropertySchema('retention_policy'), retentionEvent: organizationPropertySchema('retention_event'), retentionAt: { type: 'string' }, preserveUntil: { type: 'string' }, legalHold: { type: 'boolean' }, retentionReason: { type: 'string', maxLength: 1000 }, replacedBy: { type: 'string', maxLength: 500 },
                     termStatus: organizationPropertySchema('term_status'), termReplacedBy: { type: 'string', maxLength: 500 }, preferredTerm: { type: 'string', maxLength: 300 }, disambiguation: { type: 'string', maxLength: 300 }, broaderTerms: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 }, relatedTerms: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 }, subjectTerms: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 20 }, domain: { type: 'string', maxLength: 200 }, methods: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 20 }, audience: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 12 }, retrievalCues: { type: 'array', items: { type: 'string', maxLength: 300 }, maxItems: 8 }, useWhen: { type: 'string', maxLength: 1000 },
@@ -496,6 +496,7 @@ export function getLlmWikiTools() {
                     mocPurpose: { type: 'string', maxLength: 1000 }, mocScope: { type: 'string', maxLength: 500 }, mocQuestions: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12 }, mocParent: { type: 'string', maxLength: 500 },
                     focusHorizon: organizationPropertySchema('focus_horizon'), focusParent: { type: 'string', maxLength: 500 }, focusSupports: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 },
                     waitingFor: { type: 'string', description: 'Optional person/event/resource this project is waiting for' },
+                    clearInapplicable: { type: 'boolean', default: false, description: 'After reviewing the reported list, remove only MCP-managed Properties whose appliesTo contract conflicts with the selected/current noteKind. Custom Properties, body text, evidence, stable identity, and retention metadata are preserved.' },
                     expectedRevision: { type: 'string' }, accessToken, prettyPrint,
                 }, required: ['path', 'expectedRevision'] },
         },

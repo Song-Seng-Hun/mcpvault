@@ -9,7 +9,7 @@ import type { ReferenceService } from './references.js';
 import type { SemanticSearchService } from './semantic-search.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
-import { getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, organizationLintIssues, organizationNoteTemplate, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, CONFIDENCE_LEVELS, DECISION_STATUSES, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS, type AnswerPacketIntent, type CatalogOrder, type TemporalValidityState, type WikiProjectionView } from './organization.js';
+import { getOrganizationPropertyContract, getOrganizationRelationContract, inapplicableOrganizationProperties, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, organizationLintIssues, organizationNoteTemplate, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, CONFIDENCE_LEVELS, DECISION_STATUSES, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS, type AnswerPacketIntent, type CatalogOrder, type TemporalValidityState, type WikiProjectionView } from './organization.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
@@ -922,8 +922,8 @@ the objection. \`wiki.note_template\` provides optional ordinary-Markdown
 scaffolds, \`wiki.quality_check\` gives advisory role checks, and role-specific
 catalog/Bases views never become truth scores or access rules.
 
-Use \`aliases\` for stable Obsidian navigation, optional \`stable_id\` for a durable note identity, and compact \`summary\`, \`key_points\`, and \`open_questions\` properties for progressive reads; never replace the full Markdown body with a summary. When any progressive field is present, store \`summary_of_content_sha256\` for the exact Markdown body; a body edit makes the projection stale until it is regenerated. Use \`task_status\` for the operational state of project/task notes (\`open\`, \`next_action\`, \`waiting\`, \`blocked\`, \`someday\`, \`completed\`, or \`cancelled\`); keep it separate from the knowledge \`lifecycle\`. Use \`desired_outcome\`, \`next_action\`, \`task_context\`, \`due_at\`, and \`defer_until\` for GTD-style execution details. Questions, hypotheses, experiments, and assumptions should carry \`epistemic_status\` only for their kind-specific state. Use \`interpretation_status\` only on literature or directly distilled atomic/knowledge notes. Error Book resolution and retrospective Properties belong only on \`llm_wiki_type: issue\` records. Use \`knowledge_polarity: negative\` with \`negative_type\` plus attempted/observed/failure condition/reproduction/reusable lesson metadata to preserve failed paths instead of deleting them. Typed link arrays such as \`supports\`, \`contradicts\`, \`supersedes\`, \`derived_from\`, \`depends_on\`, \`implements\`, \`blocked_by\`, and \`related\` explain the relationship while ordinary \`[[wikilinks]]\` remain the navigational source. Optional faceted access points use bounded \`subject_terms\`, \`domain\`, \`methods\`, and \`audience\`; keep them consistent but do not treat them as a rigid taxonomy. Use \`next_actions\` and \`waiting_for\` on project/task notes only. Evidence can include \`heading\`, \`blockId\`, source \`revision\`, 1-based line ranges, and a \`quoteHash\`; stale locators are reported by lint. Use \`review_policy\` (\`manual\`, \`periodic\`, \`on_source_change\`, \`on_link_change\`, \`on_any_edit\`, or \`on_upstream_change\`) to declare when a note should re-enter review, and record the review outcome after checking evidence; typed upstream revision/state changes are compared with the last publish/review baseline. Call \`wiki.home\` for a bounded Home/JDex launchpad, \`wiki.review_packet\` for a compact prioritized next-action packet, \`wiki.knowledge_gaps\` for active-recall questions and disputes, and \`wiki.organization_health\` to review property, MOC coverage, atomicity, Evergreen discoverability, summary freshness, typed evidence, and link problems.
-For work notes, \`blocked_by\` is a hard execution gate. A \`depends_on\` link gates execution only when it resolves to unfinished project/task work; a link to ordinary knowledge is informational. \`wiki.next_actions\`, \`wiki.flow_health\`, \`wiki.project_packet\`, and the Reflect dashboard exclude or flag waiting, future-deferred, unresolved, ambiguous, inactive, and cyclic work prerequisites rather than recommending unsafe work. Flow health also returns request-local execution stages, immediate unlock points, one deepest dependency chain, and separate actual-cycle/downstream-blocked lists. Treat these as revision-stamped forecasts, never assignments or automatic status changes.
+Use \`aliases\` for stable Obsidian navigation, optional \`stable_id\` for a durable note identity, and compact \`summary\`, \`key_points\`, and \`open_questions\` properties for progressive reads; never replace the full Markdown body with a summary. When any progressive field is present, store \`summary_of_content_sha256\` for the exact Markdown body; a body edit makes the projection stale until it is regenerated. Any ordinary knowledge note can become actionable with \`task_status\`, \`next_action\`/\`next_actions\`, or \`waiting_for\` without changing its \`note_kind\`; keep operational state separate from knowledge \`lifecycle\` and epistemic status. Capture and Clarify Properties remain provenance after reclassification. Use \`desired_outcome\`, \`task_context\`, \`due_at\`, and \`defer_until\` for GTD-style execution details. Questions, hypotheses, experiments, and assumptions should carry \`epistemic_status\` only for their kind-specific state. Use \`interpretation_status\` only on literature or directly distilled atomic/knowledge notes. Error Book resolution and retrospective Properties belong only on \`llm_wiki_type: issue\` records. Use \`knowledge_polarity: negative\` with \`negative_type\` plus attempted/observed/failure condition/reproduction/reusable lesson metadata to preserve failed paths instead of deleting them. Typed link arrays such as \`supports\`, \`contradicts\`, \`supersedes\`, \`derived_from\`, \`depends_on\`, \`implements\`, \`blocked_by\`, and \`related\` explain the relationship while ordinary \`[[wikilinks]]\` remain the navigational source. Optional faceted access points use bounded \`subject_terms\`, \`domain\`, \`methods\`, and \`audience\`; keep them consistent but do not treat them as a rigid taxonomy. Evidence can include \`heading\`, \`blockId\`, source \`revision\`, 1-based line ranges, and a \`quoteHash\`; stale locators are reported by lint. Use \`review_policy\` (\`manual\`, \`periodic\`, \`on_source_change\`, \`on_link_change\`, \`on_any_edit\`, or \`on_upstream_change\`) to declare when a note should re-enter review, and record the review outcome after checking evidence; typed upstream revision/state changes are compared with the last publish/review baseline. Call \`wiki.home\` for a bounded Home/JDex launchpad, \`wiki.review_packet\` for a compact prioritized next-action packet, \`wiki.knowledge_gaps\` for active-recall questions and disputes, and \`wiki.organization_health\` to review property, MOC coverage, atomicity, Evergreen discoverability, summary freshness, typed evidence, and link problems.
+For work notes, \`blocked_by\` is a hard execution gate. A \`depends_on\` link gates execution only when it resolves to unfinished actionable work; a non-work knowledge target is informational. \`wiki.next_actions\`, \`wiki.flow_health\`, \`wiki.project_packet\`, and the Reflect dashboard exclude or flag waiting, future-deferred, unresolved, ambiguous, inactive, and cyclic work prerequisites rather than recommending unsafe work. Flow health also returns request-local execution stages, immediate unlock points, one deepest dependency chain, and separate actual-cycle/downstream-blocked lists. Treat these as revision-stamped forecasts, never assignments or automatic status changes.
 Use \`wiki.note_template\` for an optional small scaffold for common note roles; it never creates a file or makes fields mandatory. Prefer reciprocal \`related\`/\`same_as\` edges when the relationship is mutual; graph health reports missing reciprocity but does not rewrite it. Use \`primary_moc\` as the preferred launch point and \`read_wiki_projection\` with \`view=section\` plus a heading or \`blockId\` when bounded nearby context is enough. Use \`retention_policy\` (\`preserve\`, \`review\`, \`archive\`, or \`tombstone\`) with \`retention_reason\`, \`retention_at\`, and \`replaced_by\`; \`retention_event\`, \`preserve_until\`, and \`legal_hold\` add auditable preservation constraints, but never authorize automatic deletion.
 
 Use \`capture_wiki_note\` to create a fleeting Inbox note first. When known,
@@ -3771,7 +3771,7 @@ export class LlmWikiService {
     let totalActionItems = 0;
     let totalDue = 0;
     let totalScheduled = 0;
-    let totalProjectsAndTasks = 0;
+    let totalWorkNotes = 0;
     let totalWaiting = 0;
     let totalDependencyBlocked = 0;
     let totalSomeday = 0;
@@ -3789,7 +3789,12 @@ export class LlmWikiService {
       const taskStatus = String(note.frontmatter.task_status || '').toLowerCase();
       const title = note.frontmatter.title || note.path.split('/').at(-1);
       const item = { path: this.access.toPublicPath(note.path), title, kind, ...(note.revision && { revision: note.revision }), ...(note.frontmatter.task_status && { taskStatus }) };
-      if (kind === 'project' || kind === 'task') {
+      const actionable = ['project', 'task'].includes(kind)
+        || note.frontmatter.task_status !== undefined
+        || note.frontmatter.next_action !== undefined
+        || note.frontmatter.next_actions !== undefined
+        || note.frontmatter.waiting_for !== undefined;
+      if (actionable) {
         if (taskStatus === 'someday') {
           totalSomeday += 1;
           pushBounded(somedayItems, item);
@@ -3808,7 +3813,7 @@ export class LlmWikiService {
           const missingNextAction = lifecycle === 'active' && !hasNextAction && !waiting && !blocked && !dependencyBlocked && !deferred;
           const readiness = blocked ? 'blocked' : waiting ? 'waiting' : dependencyBlocked ? 'dependency_blocked' : deferred ? 'deferred' : hasNextAction ? 'ready' : 'needs_next_action';
           const workItem = { ...item, ...(dueAt && { dueAt }), ...(scheduledAt && { scheduledAt }), ...(deferUntil && { deferUntil }), readiness, ...(dependencyBlocked && { dependencies: this.workDependencyProjection(dependencyState) }) };
-          totalProjectsAndTasks += 1;
+          totalWorkNotes += 1;
           pushBounded(projectReadinessItems, workItem);
           if (overdue) {
             totalDue += 1;
@@ -3892,7 +3897,7 @@ export class LlmWikiService {
     const graphSignals = graphView as Record<string, any>;
     const nextActions = [
       'Process one Inbox capture.',
-      'Give one active project a concrete next action or waiting_for.',
+      'Give one active actionable note a concrete next action or waiting_for.',
       'Separate a deadline (dueAt) from a calendar commitment (scheduledAt).',
       'Review one due/stale knowledge note with review_wiki_note.',
       'Resolve one waiting/someday item or open question.',
@@ -3909,7 +3914,7 @@ export class LlmWikiService {
       sections: {
         inbox,
         projectsAndTasks: { items: actionItems, total: totalActionItems, truncated: totalActionItems > actionItems.length },
-        projectReadiness: { items: projectReadinessItems, total: totalProjectsAndTasks, truncated: totalProjectsAndTasks > projectReadinessItems.length },
+        projectReadiness: { scope: 'any_actionable_note', items: projectReadinessItems, total: totalWorkNotes, truncated: totalWorkNotes > projectReadinessItems.length },
         due: { items: dueItems, total: totalDue, truncated: totalDue > dueItems.length },
         scheduled: { items: scheduledItems, total: totalScheduled, truncated: totalScheduled > scheduledItems.length },
         waiting: { items: waitingItems, total: totalWaiting, truncated: totalWaiting > waitingItems.length },
@@ -3953,7 +3958,7 @@ export class LlmWikiService {
   }
 
   /**
-   * A bounded Kanban-style flow view derived from task/project Properties.
+   * A bounded Kanban-style flow view derived from orthogonal work Properties.
    * `next_action` is treated as executable WIP, while `open` items with a
    * concrete next action are pull-ready.  This is advisory: it never assigns,
    * moves, or changes a note.
@@ -4112,7 +4117,7 @@ export class LlmWikiService {
     const workflowHeldRoots = [...plan.workflowHeldNodes].sort();
     const workflowHeldDownstream = [...plan.blockedByWorkflowHolds].sort();
     const dependencyPlan = {
-      purpose: 'A request-local dependency forecast derived from visible task/project Properties. Stage 0 is executable now; later stages assume earlier work completes without metadata changes.',
+      purpose: 'A request-local dependency forecast derived from visible work Properties on any actionable note. Stage 0 is executable now; later stages assume earlier work completes without metadata changes.',
       stats: {
         edges: plan.edgeCount,
         stageable: plan.stageByPath.size,
@@ -5138,8 +5143,8 @@ export class LlmWikiService {
 
   /**
    * Return executable GTD actions by context rather than burying them in
-   * project-support material. The source remains ordinary task/project
-   * frontmatter; this is only a bounded derived view.
+   * project-support material. The source remains ordinary Markdown
+   * frontmatter on any actionable note; this is only a bounded derived view.
    */
   async nextActions(principal?: ScopePrincipal, context?: string, limit = 20, maxChars = 7000, options: { maxMinutes?: unknown; energy?: unknown; effort?: unknown } = {}) {
     const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
@@ -5577,6 +5582,7 @@ export class LlmWikiService {
     focusHorizon?: unknown;
     focusParent?: string;
     focusSupports?: unknown;
+    clearInapplicable?: boolean;
     expectedRevision: string;
   }) {
     if (!params.expectedRevision) throw new Error("expectedRevision is required; use the revision from read_note");
@@ -5591,7 +5597,7 @@ export class LlmWikiService {
     }
     const hasOrganizationInput = [params.noteKind, params.lifecycle, params.decisionStatus, params.primaryMoc, params.mocs, params.moc, params.navOrder, params.project, params.reviewAt, params.reviewIntervalDays, params.reviewSnoozedUntil, params.reviewSnoozeReason, params.nextAction, params.waitingFor, params.desiredOutcome, params.projectPurpose, params.projectSupport, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.serviceClass, params.completionCriteria, params.startedAt, params.blockedSince, params.waitingSince, params.completedAt, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.canonicalPath, params.recallPrompt, params.recallIntervalDays, params.lastRecalledAt, params.recallQuality, params.retentionPolicy, params.retentionEvent, params.retentionAt, params.preserveUntil, params.legalHold, params.retentionReason, params.replacedBy, params.knowledgeRole, params.termStatus, params.termReplacedBy, params.termScopeNote, params.preferredTerm, params.termLanguage, params.authorityScheme, params.authorityId, params.disambiguation, params.broaderTerms, params.relatedTerms, params.subjectTerms, params.domain, params.methods, params.audience, params.retrievalCues, params.useWhen, params.validFrom, params.validUntil, params.observedAt, params.temporalScope, params.seeAlso, params.relations, params.relationNotes, params.relationEvidence, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.reviewChecks, params.reviewOpenItems, params.interpretationStatus, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
       .some(value => value !== undefined);
-    if (!hasOrganizationInput && [params.tags, params.timeEstimateMinutes, params.energy, params.effort].every(value => value === undefined)) throw new Error('At least one organization field is required');
+    if (!hasOrganizationInput && !params.clearInapplicable && [params.tags, params.timeEstimateMinutes, params.energy, params.effort].every(value => value === undefined)) throw new Error('At least one organization field is required');
     const patch = knowledgeOrganization({
       existing: note.frontmatter,
       ...(params.tags !== undefined && { tags: params.tags }),
@@ -5705,12 +5711,32 @@ export class LlmWikiService {
       contentDigest: hash(note.content),
       status: String(note.frontmatter.knowledge_status || note.frontmatter.status || 'draft'),
     });
-    await this.fileSystem.updateFrontmatter({ path: params.path, frontmatter: patch, merge: true, expectedRevision: params.expectedRevision });
+    const targetKind = String(patch.note_kind || note.frontmatter.note_kind || 'knowledge').trim().toLowerCase();
+    const projectedFrontmatter = { ...note.frontmatter, ...patch, llm_wiki_type: 'knowledge', note_kind: targetKind };
+    const inapplicableBefore = inapplicableOrganizationProperties(projectedFrontmatter, 'knowledge', targetKind);
+    const changingKind = params.noteKind !== undefined && targetKind !== String(note.frontmatter.note_kind || '').trim().toLowerCase();
+    if (changingKind && inapplicableBefore.length > 0 && !params.clearInapplicable) {
+      throw new Error(`Changing noteKind to ${targetKind} leaves inapplicable managed Properties: ${inapplicableBefore.join(', ')}. Review them, then retry with clearInapplicable: true to remove only those managed fields.`);
+    }
+    const removals = params.clearInapplicable
+      ? Object.fromEntries(inapplicableBefore.map(property => [property, undefined]))
+      : {};
+    await this.fileSystem.updateFrontmatter({ path: params.path, frontmatter: { ...patch, ...removals }, merge: true, expectedRevision: params.expectedRevision });
     const updated = await this.fileSystem.readNote(params.path);
+    const inapplicableAfter = inapplicableOrganizationProperties(updated.frontmatter, 'knowledge', targetKind);
     return {
       success: true,
       path: this.access.toPublicPath(params.path),
       revision: updated.revision,
+      ...(params.clearInapplicable && inapplicableBefore.length > 0 && { clearedProperties: inapplicableBefore }),
+      ...(inapplicableAfter.length > 0 && {
+        inapplicableProperties: inapplicableAfter,
+        nextAction: {
+          endpointId: endpointIdForTool('triage_wiki_note'),
+          arguments: { path: this.access.toPublicPath(params.path), expectedRevision: updated.revision, clearInapplicable: true },
+          instruction: 'Review the listed managed Properties, then remove only those that do not apply to this note role.',
+        },
+      }),
       frontmatter: {
         noteKind: updated.frontmatter.note_kind,
         lifecycle: updated.frontmatter.lifecycle,
@@ -9339,8 +9365,13 @@ export class LlmWikiService {
     if (['knowledge', 'atomic', 'decision'].includes(kind)) add('evidence_or_explicit_uncertainty', evidence > 0 || ['draft', 'disputed'].includes(String(fm.knowledge_status || fm.status || '').toLowerCase()), 'Ground load-bearing knowledge in immutable evidence or mark its uncertainty explicitly.');
     if (['atomic', 'knowledge', 'decision', 'moc'].includes(kind)) add('navigation', links > 0 || (Array.isArray(fm.references) && fm.references.length > 0), 'Connect the note to an existing concept, MOC, decision, or source with an Obsidian link.');
     if (kind === 'literature') add('interpretation', String(fm.interpretation_status || '').toLowerCase() !== 'unprocessed' || links > 0, 'Interpret the source or link it to a reusable derived note.');
-    if (['project', 'task'].includes(kind)) {
-      add('desired_outcome', Boolean(String(fm.desired_outcome || '').trim()), 'State an observable outcome so the project is distinguishable from an Area.');
+    const actionable = ['project', 'task'].includes(kind)
+      || fm.task_status !== undefined
+      || fm.next_action !== undefined
+      || fm.next_actions !== undefined
+      || fm.waiting_for !== undefined;
+    if (actionable) {
+      add('desired_outcome', Boolean(String(fm.desired_outcome || '').trim()), 'State an observable outcome so the actionable work has a clear stopping condition.');
       add('next_action_or_waiting', Boolean(String(fm.next_action || '').trim() || String(fm.waiting_for || '').trim() || (Array.isArray(fm.next_actions) && fm.next_actions.length > 0)), 'Keep one concrete next action or an explicit waiting dependency.');
       add('execution_state', Boolean(String(fm.task_status || '').trim()), 'Record operational task state separately from knowledge lifecycle.');
     }

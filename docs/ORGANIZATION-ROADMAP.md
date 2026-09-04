@@ -87,6 +87,22 @@ tools; new behaviors belong in the endpoint catalog.
   stable, attention priority is separate, snapshots are grouped by source
   work, and missing/unavailable/altered/stale/single-work evidence routes to an
   existing revision-checked review action without changing the note.
+- Knowledge role and execution state are now orthogonal facets. A question,
+  hypothesis, experiment, atomic note, or other ordinary knowledge note can
+  carry bounded GTD/Kanban work Properties without being reclassified as a
+  project or task; next-action, flow, dashboard, lint, and quality projections
+  use the same actionable-note rule.
+- Role-exclusive managed Properties now use one explicit `appliesTo` contract
+  in authoring, lint, schema discovery, and reclassification. Changing
+  `note_kind` reports incompatible fields before writing; an explicit
+  revision-checked `clearInapplicable` retry removes only those managed fields
+  while preserving Markdown, custom Properties, identity, evidence, retention,
+  and cross-cutting capture/Clarify provenance.
+- Dynamic capability search now degrades oversized endpoint schemas in two
+  stages: it first removes schema prose while preserving field names, types,
+  constraints, nested shape, and required arguments, and only then falls back
+  to an identifier-only retry hint. This keeps large organization endpoints
+  directly callable without violating the response budget.
 
 Evidence: `moc-navigation.test.ts`, `backlinks.test.ts`, `organization.test.ts`,
 `filesystem.test.ts`, `continuity.test.ts`, `global-sync.test.ts`, and the
