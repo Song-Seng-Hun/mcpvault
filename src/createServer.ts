@@ -53,6 +53,7 @@ import { resolve } from "path";
 import { VaultMetadataIndex } from "./vault-index.js";
 import { VaultFileCatalog, type VaultCatalogChange } from "./vault-catalog.js";
 import { VaultGraphIndex } from "./vault-graph.js";
+import type { CatalogOrder, TemporalValidityState } from "./organization.js";
 import { VaultIoCoordinator } from "./vault-io.js";
 import { IdeationService } from "./ideation.js";
 import { IDEATION_MUTATING_TOOLS, getIdeationTools } from "./ideation-tools.js";
@@ -1345,11 +1346,11 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             ...(typeof trimmedArgs.method === 'string' && { method: trimmedArgs.method }),
             ...(typeof trimmedArgs.audience === 'string' && { audience: trimmedArgs.audience }),
             ...(typeof trimmedArgs.tag === 'string' && { tag: trimmedArgs.tag }),
-            ...(typeof trimmedArgs.validity === 'string' && { validity: trimmedArgs.validity as 'unspecified' | 'current' | 'not_yet_valid' | 'expired' | 'invalid' }),
+            ...(typeof trimmedArgs.validity === 'string' && { validity: trimmedArgs.validity as TemporalValidityState }),
             ...(typeof trimmedArgs.validAt === 'string' && { validAt: trimmedArgs.validAt }),
             ...(trimmedArgs.includeFacets === true && { includeFacets: true }),
             ...(trimmedArgs.facetLimit !== undefined && { facetLimit: trimmedArgs.facetLimit }),
-            ...(typeof trimmedArgs.orderBy === 'string' && { orderBy: trimmedArgs.orderBy as 'location' | 'alphabet' | 'time' | 'category' | 'hierarchy' }),
+            ...(typeof trimmedArgs.orderBy === 'string' && { orderBy: trimmedArgs.orderBy as CatalogOrder }),
             ...(trimmedArgs.limit !== undefined && { limit: trimmedArgs.limit }),
             ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
           }), trimmedArgs.prettyPrint);

@@ -51,6 +51,27 @@ export const RETENTION_EVENTS = ['manual', 'created', 'last_modified', 'review_c
 export const FOCUS_HORIZONS = ['ground', 'project', 'area', 'goal', 'vision', 'purpose'] as const;
 /** GTD clarification outcomes. These are workflow metadata, not deletion commands. */
 export const CLARIFY_DISPOSITIONS = ['knowledge', 'reference', 'project', 'someday', 'discard', 'delegate'] as const;
+/** Shared scalar vocabularies used by schemas, runtime validation, lint, and
+ * progressive read projections. Keeping them here prevents an agent-facing
+ * schema from accepting values that the write path later rejects. */
+export const CONFIDENCE_LEVELS = ['low', 'medium', 'high'] as const;
+export const EXECUTION_LEVELS = ['low', 'medium', 'high'] as const;
+export const KNOWLEDGE_STATUSES = ['draft', 'verified', 'disputed', 'superseded'] as const;
+export const SOURCE_TRUST_LEVELS = ['unrated', 'low', 'medium', 'high', 'verified'] as const;
+export const CLAIM_STATUSES = ['supported', 'disputed', 'unverified', 'superseded'] as const;
+export const CLAIM_ROLES = ['premise', 'warrant', 'conclusion', 'objection', 'rebuttal', 'observation'] as const;
+export const ISSUE_KINDS = ['contradiction', 'unsupported_claim', 'stale', 'broken_link', 'missing_context', 'authority_change', 'other'] as const;
+export const CAPTURE_SOURCES = ['manual', 'chat', 'community', 'issue', 'experiment', 'external_source', 'other'] as const;
+export const RECALL_REPAIR_STATUSES = ['none', 'needed', 'in_progress', 'resolved'] as const;
+export const CATALOG_ORDERS = ['location', 'alphabet', 'time', 'category', 'hierarchy'] as const;
+export const ANSWER_PACKET_INTENTS = ['capture', 'explore', 'decide', 'execute', 'review'] as const;
+export const WIKI_PROJECTION_VIEWS = ['summary', 'progressive', 'key_points', 'outline', 'section', 'full'] as const;
+export const TEMPORAL_VALIDITY_STATES = ['unspecified', 'current', 'not_yet_valid', 'expired', 'invalid'] as const;
+
+export type CatalogOrder = typeof CATALOG_ORDERS[number];
+export type AnswerPacketIntent = typeof ANSWER_PACKET_INTENTS[number];
+export type WikiProjectionView = typeof WIKI_PROJECTION_VIEWS[number];
+export type TemporalValidityState = typeof TEMPORAL_VALIDITY_STATES[number];
 
 /** Titles are an agent-facing API: generic names are hard to rediscover. */
 const GENERIC_NOTE_TITLE = /^(?:untitled|new note|new document|note|knowledge|draft|todo|copy)(?:\s*[-_ ]?\d+)?$/i;
@@ -96,6 +117,9 @@ export interface OrganizationPropertyContractEntry {
 export const ORGANIZATION_PROPERTY_CONTRACT: readonly OrganizationPropertyContractEntry[] = [
   { name: 'note_kind', type: 'text', description: 'What the note is for', allowed: NOTE_KINDS },
   { name: 'lifecycle', type: 'text', description: 'What should happen to the knowledge next', allowed: LIFECYCLES },
+  { name: 'knowledge_status', type: 'text', description: 'Reviewable publication state for durable knowledge', allowed: KNOWLEDGE_STATUSES },
+  { name: 'confidence', type: 'text', description: 'Declared confidence in the knowledge note; not a substitute for evidence', allowed: CONFIDENCE_LEVELS },
+  { name: 'trust_level', type: 'text', description: 'Declared source trust used for review prioritization; not an access rule or truth score', allowed: SOURCE_TRUST_LEVELS, appliesTo: ['source'] },
   { name: 'decision_status', type: 'text', description: 'Structured Decision Record state, distinct from knowledge_status', allowed: DECISION_STATUSES, appliesTo: ['decision'] },
   { name: 'archive_collection_id', type: 'text', description: 'Stable provenance-group identifier for an immutable source collection', appliesTo: ['source'] },
   { name: 'archive_series', type: 'list', description: 'Broad-to-narrow archival series path preserving creator context without replacing folders or MOCs', appliesTo: ['source'] },
@@ -103,7 +127,7 @@ export const ORGANIZATION_PROPERTY_CONTRACT: readonly OrganizationPropertyContra
   { name: 'accession_id', type: 'text', description: 'Optional ingestion or transfer batch identifier for chain-of-custody review', appliesTo: ['source'] },
   { name: 'custodial_history', type: 'text', description: 'Bounded custody/provenance note for an immutable source snapshot', appliesTo: ['source'] },
   { name: 'original_order_note', type: 'text', description: 'Bounded explanation of how the source order was preserved or reconstructed', appliesTo: ['source'] },
-  { name: 'captured_from', type: 'text', description: 'Bounded origin label for a fleeting Inbox capture', allowed: ['manual', 'chat', 'community', 'issue', 'experiment', 'external_source', 'other'], appliesTo: ['fleeting'] },
+  { name: 'captured_from', type: 'text', description: 'Bounded origin label for a fleeting Inbox capture', allowed: CAPTURE_SOURCES, appliesTo: ['fleeting'] },
   { name: 'capture_reason', type: 'text', description: 'Why a fleeting observation was preserved; never a secret or raw prompt', appliesTo: ['fleeting'] },
   { name: 'capture_context', type: 'text', description: 'Short interpretation context for a fleeting observation', appliesTo: ['fleeting'] },
   { name: 'related_task', type: 'text', description: 'Scope-safe task or project reference associated with a fleeting capture', appliesTo: ['fleeting'] },
@@ -145,8 +169,8 @@ export const ORGANIZATION_PROPERTY_CONTRACT: readonly OrganizationPropertyContra
   { name: 'next_action', type: 'text', description: 'One concrete GTD action', appliesTo: ['project', 'task'] },
   { name: 'next_actions', type: 'list', description: 'Bounded GTD action list', appliesTo: ['project', 'task'] },
   { name: 'time_estimate_minutes', type: 'number', description: 'Optional rough effort estimate for one execution step', appliesTo: ['project', 'task'] },
-  { name: 'energy', type: 'text', description: 'Optional energy needed for execution: low, medium, or high', allowed: ['low', 'medium', 'high'], appliesTo: ['project', 'task'] },
-  { name: 'effort', type: 'text', description: 'Optional coarse effort class: low, medium, or high', allowed: ['low', 'medium', 'high'], appliesTo: ['project', 'task'] },
+  { name: 'energy', type: 'text', description: 'Optional energy needed for execution: low, medium, or high', allowed: EXECUTION_LEVELS, appliesTo: ['project', 'task'] },
+  { name: 'effort', type: 'text', description: 'Optional coarse effort class: low, medium, or high', allowed: EXECUTION_LEVELS, appliesTo: ['project', 'task'] },
   { name: 'waiting_for', type: 'text', description: 'External dependency or owner', appliesTo: ['project', 'task'] },
   { name: 'desired_outcome', type: 'text', description: 'Observable project outcome', appliesTo: ['project'] },
   { name: 'project_purpose', type: 'text', description: 'Why the project exists', appliesTo: ['project'] },
@@ -171,7 +195,7 @@ export const ORGANIZATION_PROPERTY_CONTRACT: readonly OrganizationPropertyContra
   { name: 'last_recalled_at', type: 'text', description: 'Last time this note was actively recalled' },
   { name: 'recall_quality', type: 'text', description: 'Result of the latest active-recall attempt', allowed: RECALL_QUALITIES },
   { name: 'recall_confusion', type: 'text', description: 'Bounded description of what was not recalled or was confused; private for agent recall state' },
-  { name: 'recall_repair_status', type: 'text', description: 'Whether a failed or partial recall needs a repair note', allowed: ['none', 'needed', 'in_progress', 'resolved'] },
+  { name: 'recall_repair_status', type: 'text', description: 'Whether a failed or partial recall needs a repair note', allowed: RECALL_REPAIR_STATUSES },
   { name: 'recall_repair_path', type: 'text', description: 'Scope-safe note or task linked to repairing a recall failure' },
   { name: 'issue_resolution_status', type: 'text', description: 'Error Book resolution state, separate from retrospective learning', allowed: ISSUE_RESOLUTION_STATUSES },
   { name: 'issue_retrospective_status', type: 'text', description: 'Error Book retrospective state after resolution', allowed: ISSUE_RETROSPECTIVE_STATUSES },
@@ -612,8 +636,6 @@ export function normalizeIsoDate(value: unknown, field: string): string | undefi
   return date;
 }
 
-export type TemporalValidityState = 'unspecified' | 'current' | 'not_yet_valid' | 'expired' | 'invalid';
-
 /**
  * Derive a claim-validity card without confusing it with file, source, task,
  * or review dates. valid_from is inclusive and valid_until is exclusive.
@@ -780,7 +802,7 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
   for (const field of ['energy', 'effort'] as const) {
     if (input[field] === undefined) continue;
     const value = String(input[field]).trim().toLowerCase();
-    if (!['low', 'medium', 'high'].includes(value)) throw new Error(`${field} must be low, medium, or high`);
+    if (!(EXECUTION_LEVELS as readonly string[]).includes(value)) throw new Error(`${field} must be low, medium, or high`);
     executionHints[field] = value;
   }
   const existingKind = normalizeNoteKind(existing.note_kind);

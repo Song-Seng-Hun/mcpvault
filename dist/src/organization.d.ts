@@ -49,6 +49,26 @@ export declare const RETENTION_EVENTS: readonly ['manual', 'created', 'last_modi
 export declare const FOCUS_HORIZONS: readonly ['ground', 'project', 'area', 'goal', 'vision', 'purpose'];
 /** GTD clarification outcomes. These are workflow metadata, not deletion commands. */
 export declare const CLARIFY_DISPOSITIONS: readonly ['knowledge', 'reference', 'project', 'someday', 'discard', 'delegate'];
+/** Shared scalar vocabularies used by schemas, runtime validation, lint, and
+ * progressive read projections. Keeping them here prevents an agent-facing
+ * schema from accepting values that the write path later rejects. */
+export declare const CONFIDENCE_LEVELS: readonly ['low', 'medium', 'high'];
+export declare const EXECUTION_LEVELS: readonly ['low', 'medium', 'high'];
+export declare const KNOWLEDGE_STATUSES: readonly ['draft', 'verified', 'disputed', 'superseded'];
+export declare const SOURCE_TRUST_LEVELS: readonly ['unrated', 'low', 'medium', 'high', 'verified'];
+export declare const CLAIM_STATUSES: readonly ['supported', 'disputed', 'unverified', 'superseded'];
+export declare const CLAIM_ROLES: readonly ['premise', 'warrant', 'conclusion', 'objection', 'rebuttal', 'observation'];
+export declare const ISSUE_KINDS: readonly ['contradiction', 'unsupported_claim', 'stale', 'broken_link', 'missing_context', 'authority_change', 'other'];
+export declare const CAPTURE_SOURCES: readonly ['manual', 'chat', 'community', 'issue', 'experiment', 'external_source', 'other'];
+export declare const RECALL_REPAIR_STATUSES: readonly ['none', 'needed', 'in_progress', 'resolved'];
+export declare const CATALOG_ORDERS: readonly ['location', 'alphabet', 'time', 'category', 'hierarchy'];
+export declare const ANSWER_PACKET_INTENTS: readonly ['capture', 'explore', 'decide', 'execute', 'review'];
+export declare const WIKI_PROJECTION_VIEWS: readonly ['summary', 'progressive', 'key_points', 'outline', 'section', 'full'];
+export declare const TEMPORAL_VALIDITY_STATES: readonly ['unspecified', 'current', 'not_yet_valid', 'expired', 'invalid'];
+export type CatalogOrder = typeof CATALOG_ORDERS[number];
+export type AnswerPacketIntent = typeof ANSWER_PACKET_INTENTS[number];
+export type WikiProjectionView = typeof WIKI_PROJECTION_VIEWS[number];
+export type TemporalValidityState = typeof TEMPORAL_VALIDITY_STATES[number];
 /** Typed relationships are navigation metadata, never an access grant. */
 export declare const RELATION_FIELDS: readonly ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'answers_questions', 'tests', 'related', 'same_as', 'version_of', 'refines'];
 /** These relations have a meaning that is incomplete when the reverse edge is absent. */
@@ -241,7 +261,6 @@ export declare function normalizeReviewAt(value: unknown): string | undefined;
 export declare function normalizeReviewIntervalDays(value: unknown, fallback?: number): number | undefined;
 export declare function normalizeNavOrder(value: unknown, fallback?: number): number | undefined;
 export declare function normalizeIsoDate(value: unknown, field: string): string | undefined;
-export type TemporalValidityState = 'unspecified' | 'current' | 'not_yet_valid' | 'expired' | 'invalid';
 /**
  * Derive a claim-validity card without confusing it with file, source, task,
  * or review dates. valid_from is inclusive and valid_until is exclusive.

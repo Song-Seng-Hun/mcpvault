@@ -1,4 +1,4 @@
-import { BASES_VIEW_IDS, CLARIFY_DISPOSITIONS, DECISION_STATUSES, FOCUS_HORIZONS, INTERPRETATION_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, KNOWLEDGE_POLARITIES, KNOWLEDGE_ROLES, LIFECYCLES, NEGATIVE_KINDS, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_QUALITIES, RETENTION_EVENTS, RETENTION_POLICIES, REVIEW_CHECKS, REVIEW_OUTCOMES, REVIEW_POLICIES, SERVICE_CLASSES, TASK_STATUSES, TERM_STATUSES, } from './organization.js';
+import { ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, CLARIFY_DISPOSITIONS, CONFIDENCE_LEVELS, DECISION_STATUSES, EXECUTION_LEVELS, FOCUS_HORIZONS, INTERPRETATION_STATUSES, ISSUE_KINDS, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, KNOWLEDGE_POLARITIES, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, LIFECYCLES, NEGATIVE_KINDS, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_QUALITIES, RECALL_REPAIR_STATUSES, RETENTION_EVENTS, RETENTION_POLICIES, REVIEW_CHECKS, REVIEW_OUTCOMES, REVIEW_POLICIES, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TASK_STATUSES, TEMPORAL_VALIDITY_STATES, TERM_STATUSES, WIKI_PROJECTION_VIEWS, } from './organization.js';
 import { WIKI_POLICY_TOPICS } from './wiki-policy.js';
 const prettyPrint = { type: 'boolean', description: 'Format JSON response with indentation', default: false };
 const accessToken = { type: 'string', description: 'Token from login_scope. Omit for public global scope only.' };
@@ -6,8 +6,8 @@ const scopeUri = { type: 'string', description: 'Target scope root; defaults to 
 const executionProperties = {
     tags: { type: 'array', items: { type: 'string', maxLength: 100 }, maxItems: 30, description: 'Native Obsidian tag list; [] clears tags without changing the body' },
     timeEstimateMinutes: { type: 'integer', minimum: 1, maximum: 1440, description: 'Estimated minutes for one next action; used by wiki.next_actions maxMinutes' },
-    energy: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Execution energy needed by the next action' },
-    effort: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Execution effort needed by the next action' },
+    energy: { type: 'string', enum: [...EXECUTION_LEVELS], description: 'Execution energy needed by the next action' },
+    effort: { type: 'string', enum: [...EXECUTION_LEVELS], description: 'Execution effort needed by the next action' },
 };
 const temporalProperties = {
     validFrom: { type: 'string', description: 'Inclusive ISO date/time from which this knowledge applies; distinct from file/source/task dates' },
@@ -37,14 +37,14 @@ export function getLlmWikiTools() {
                     scopeUri, sourceId: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' },
                     sourceUrl: { type: 'string' }, capturedBy: { type: 'string' }, capturedAt: { type: 'string' }, mediaType: { type: 'string' }, sourceType: { type: 'string', maxLength: 80, description: 'Optional source kind such as paper, web, book, dataset, or code' }, citationKey: { type: 'string', maxLength: 120, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]*$' }, author: { type: 'string', maxLength: 300 }, publishedAt: { type: 'string' }, retrievedAt: { type: 'string' }, sourceFamily: { type: 'string', maxLength: 160, description: 'Legacy-compatible stable family key connecting immutable versions of the same source' }, sourceVersion: { type: 'string', maxLength: 120, description: 'Legacy-compatible version, edition, or retrieval label' }, sourceWorkId: { type: 'string', maxLength: 160, description: 'Stable work identifier; defaults to sourceFamily' }, sourceEditionId: { type: 'string', maxLength: 160, description: 'Stable edition identifier; defaults to sourceVersion' }, supersedesSource: { type: 'string', maxLength: 500, description: 'Previous source ID or scope-safe source path' },
                     archiveCollectionId: { type: 'string', maxLength: 160, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]*$', description: 'Stable provenance-group identifier for an archival source collection' }, archiveSeries: { type: 'array', minItems: 1, maxItems: 8, items: { type: 'string', minLength: 1, maxLength: 160 }, description: 'Broad-to-narrow archival series path; does not replace folders or MOCs' }, archiveSequence: { type: 'integer', minimum: 0, maximum: 1000000000, description: 'Original-order position within one exact archival series' }, accessionId: { type: 'string', maxLength: 160, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]*$', description: 'Optional ingestion or transfer batch identifier' }, custodialHistory: { type: 'string', maxLength: 1000, description: 'Bounded custody/provenance note' }, originalOrderNote: { type: 'string', maxLength: 1000, description: 'How original order was preserved or reconstructed' },
-                    trustLevel: { type: 'string', enum: ['unrated', 'low', 'medium', 'high', 'verified'], default: 'unrated' }, trustReason: { type: 'string', maxLength: 500 }, accessToken, prettyPrint,
+                    trustLevel: { type: 'string', enum: [...SOURCE_TRUST_LEVELS], default: 'unrated' }, trustReason: { type: 'string', maxLength: 500 }, accessToken, prettyPrint,
                 }, required: ['title', 'content'] },
         },
         {
             name: 'capture_wiki_note',
             description: 'Capture a rough observation in Inbox with one call. It defaults to note_kind=fleeting and lifecycle=inbox and returns its revision plus an executable wiki.clarify next action. Optionally preserve bounded origin, reason, context, and one related task so a later agent can understand why the capture exists; never put raw prompts, credentials, or secrets in these fields.',
             inputSchema: { type: 'object', properties: {
-                    path: { type: 'string', description: 'Optional path inside Inbox/. Omit to generate a unique Inbox path.' }, title: { type: 'string', maxLength: 300 }, content: { type: 'string' }, references: { type: 'array', items: { type: 'string' }, maxItems: 20 }, capturedBy: { type: 'string' }, capturedFrom: { type: 'string', enum: ['manual', 'chat', 'community', 'issue', 'experiment', 'external_source', 'other'], description: 'Bounded origin label for the observation' }, captureReason: { type: 'string', maxLength: 500, description: 'Why this observation was captured; do not include secrets or raw prompt text' }, captureContext: { type: 'string', maxLength: 1000, description: 'Short surrounding context another agent needs to interpret the capture' }, relatedTask: { type: 'string', maxLength: 500, description: 'One existing task/project path or Obsidian wikilink related to this capture' }, expectedRevision: { type: 'string', description: "Optional; use 'missing' for a new capture" }, accessToken, prettyPrint,
+                    path: { type: 'string', description: 'Optional path inside Inbox/. Omit to generate a unique Inbox path.' }, title: { type: 'string', maxLength: 300 }, content: { type: 'string' }, references: { type: 'array', items: { type: 'string' }, maxItems: 20 }, capturedBy: { type: 'string' }, capturedFrom: { type: 'string', enum: [...CAPTURE_SOURCES], description: 'Bounded origin label for the observation' }, captureReason: { type: 'string', maxLength: 500, description: 'Why this observation was captured; do not include secrets or raw prompt text' }, captureContext: { type: 'string', maxLength: 1000, description: 'Short surrounding context another agent needs to interpret the capture' }, relatedTask: { type: 'string', maxLength: 500, description: 'One existing task/project path or Obsidian wikilink related to this capture' }, expectedRevision: { type: 'string', description: "Optional; use 'missing' for a new capture" }, accessToken, prettyPrint,
                 }, required: ['content'] },
         },
         {
@@ -86,8 +86,8 @@ export function getLlmWikiTools() {
                     ...executionProperties,
                     ...temporalProperties,
                     path: { type: 'string' }, content: { type: 'string', description: 'Obsidian Markdown; resolvable [[Note]] links are automatically recorded as references' }, evidencePaths: { type: 'array', items: { type: 'string' } }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths or Obsidian [[Note]] references' },
-                    author: { type: 'string' }, confidence: { type: 'string', enum: ['low', 'medium', 'high'], default: 'medium' },
-                    status: { type: 'string', enum: ['draft', 'verified', 'disputed', 'superseded'], default: 'draft' },
+                    author: { type: 'string' }, confidence: { type: 'string', enum: [...CONFIDENCE_LEVELS], default: 'medium' },
+                    status: { type: 'string', enum: [...KNOWLEDGE_STATUSES], default: 'draft' },
                     noteKind: { type: 'string', enum: [...NOTE_KINDS], default: 'knowledge' },
                     lifecycle: { type: 'string', enum: [...LIFECYCLES] },
                     decisionStatus: { type: 'string', enum: [...DECISION_STATUSES], description: 'Structured state for noteKind=decision. Prefer wiki.decision_record for creation and state transitions.' },
@@ -135,8 +135,8 @@ export function getLlmWikiTools() {
                     focusHorizon: { type: 'string', enum: [...FOCUS_HORIZONS], description: 'Optional GTD horizon: concrete action, project, area, goal, vision, or purpose/principles' }, focusParent: { type: 'string', maxLength: 500, description: 'Optional Obsidian link/path to the higher-level outcome this note serves' }, focusSupports: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20, description: 'Optional bounded links/paths to outcomes supported by this note; navigation metadata only' },
                     claims: { type: 'array', maxItems: 100, description: 'Optional claim-level provenance and argument structure. Every claim needs text and at least one intact immutable evidence path. Put ^claim-id on the corresponding Markdown block; claim relations use [[Note#^claim-id]] or local [[#^claim-id]] links.', items: { type: 'object', properties: {
                                 id: { type: 'string' }, text: { type: 'string' }, evidencePaths: { type: 'array', items: { type: 'string' }, maxItems: 20 }, evidence: { type: 'array', maxItems: 30, items: { type: 'object', properties: { path: { type: 'string' }, heading: { type: 'string', maxLength: 300 }, blockId: { type: 'string', maxLength: 100 }, revision: { type: 'string', maxLength: 160 }, startLine: { type: 'integer', minimum: 1 }, endLine: { type: 'integer', minimum: 1 }, quoteHash: { type: 'string', pattern: '^[a-fA-F0-9]{64}$' } }, required: ['path'] } },
-                                confidence: { type: 'string', enum: ['low', 'medium', 'high'] }, status: { type: 'string', enum: ['supported', 'disputed', 'unverified', 'superseded'] },
-                                claimRole: { type: 'string', enum: ['premise', 'warrant', 'conclusion', 'objection', 'rebuttal', 'observation'], description: 'Optional argumentative job of this claim' },
+                                confidence: { type: 'string', enum: [...CONFIDENCE_LEVELS] }, status: { type: 'string', enum: [...CLAIM_STATUSES] },
+                                claimRole: { type: 'string', enum: [...CLAIM_ROLES], description: 'Optional argumentative job of this claim' },
                                 supportsClaims: { type: 'array', items: { type: 'string', pattern: '^\\[\\[.*#\\^[A-Za-z0-9_-]+(?:\\|[^\\]]+)?\\]\\]$' }, maxItems: 20, description: 'Claims supported by this claim, as Obsidian block links' },
                                 contradictsClaims: { type: 'array', items: { type: 'string', pattern: '^\\[\\[.*#\\^[A-Za-z0-9_-]+(?:\\|[^\\]]+)?\\]\\]$' }, maxItems: 20, description: 'Claims challenged by this claim, as Obsidian block links' },
                                 dependsOnClaims: { type: 'array', items: { type: 'string', pattern: '^\\[\\[.*#\\^[A-Za-z0-9_-]+(?:\\|[^\\]]+)?\\]\\]$' }, maxItems: 20, description: 'Claims required by this claim, as Obsidian block links' },
@@ -163,11 +163,11 @@ export function getLlmWikiTools() {
                     method: { type: 'string', maxLength: 200, description: 'Case-insensitive exact match against one methods value' },
                     audience: { type: 'string', maxLength: 200, description: 'Case-insensitive exact match against one audience value' },
                     tag: { type: 'string', maxLength: 200, description: 'Case-insensitive exact match against one native Obsidian tag' },
-                    validity: { type: 'string', enum: ['unspecified', 'current', 'not_yet_valid', 'expired', 'invalid'], description: 'Filter by claim-validity state at validAt (or the current server time)' },
+                    validity: { type: 'string', enum: [...TEMPORAL_VALIDITY_STATES], description: 'Filter by claim-validity state at validAt (or the current server time)' },
                     validAt: { type: 'string', description: 'ISO date/time used to evaluate valid_from/valid_until; defaults to now' },
                     includeFacets: { type: 'boolean', description: 'Include bounded metadata-only facet counts for exploratory browsing (default: false)' },
                     facetLimit: { type: 'integer', minimum: 1, maximum: 50, default: 20, description: 'Maximum values returned per facet' },
-                    orderBy: { type: 'string', enum: ['location', 'alphabet', 'time', 'category', 'hierarchy'], default: 'location', description: 'LATCH-style browse order: path, title/alias, recent time, category, or MOC/project hierarchy' },
+                    orderBy: { type: 'string', enum: [...CATALOG_ORDERS], default: 'location', description: 'LATCH-style browse order: path, title/alias, recent time, category, or MOC/project hierarchy' },
                     limit: { type: 'integer', minimum: 1, maximum: 500, default: 100 },
                     maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 12000 },
                     accessToken, prettyPrint,
@@ -217,7 +217,7 @@ export function getLlmWikiTools() {
                     path: { type: 'string', description: 'Existing visible Markdown note path' },
                     maxChars: { type: 'integer', minimum: 1024, maximum: 16000, default: 7000 },
                     includeSemantic: { type: 'boolean', description: 'Add optional bounded semantic candidates to neighbor discovery (default: true)' },
-                    intent: { type: 'string', enum: ['capture', 'explore', 'decide', 'execute', 'review'], default: 'decide', description: 'Order and interpret the compact packet for the current job: capture rough input, explore connections, decide with evidence, execute a next action, or review freshness/quality.' },
+                    intent: { type: 'string', enum: [...ANSWER_PACKET_INTENTS], default: 'decide', description: 'Order and interpret the compact packet for the current job: capture rough input, explore connections, decide with evidence, execute a next action, or review freshness/quality.' },
                     accessToken, prettyPrint,
                 }, required: ['path'] },
         },
@@ -248,7 +248,7 @@ export function getLlmWikiTools() {
             description: 'Build a reusable bounded shelf around one visible Wiki note, project, MOC, question, or decision. It provides a stable root, ordered entrypoints, supporting context, counterpoints, gaps, and revisions in one response. Entry links resolve visible paths, titles, aliases, preferred terms, stable IDs, and explicit relative paths without creating a second authoritative index. Re-read returned notes before editing or relying on them; this is navigation, not a truth score.',
             inputSchema: { type: 'object', properties: {
                     path: { type: 'string', description: 'Visible Markdown note to use as the context root' },
-                    intent: { type: 'string', enum: ['capture', 'explore', 'decide', 'execute', 'review'], default: 'decide' },
+                    intent: { type: 'string', enum: [...ANSWER_PACKET_INTENTS], default: 'decide' },
                     includeSemantic: { type: 'boolean', description: 'Include optional bounded semantic discovery candidates (default: false)' },
                     maxChars: { type: 'integer', minimum: 1024, maximum: 16000, default: 7000 },
                     accessToken, prettyPrint,
@@ -343,7 +343,7 @@ export function getLlmWikiTools() {
             name: 'review_wiki_claim',
             description: 'Review one persisted claim inside a knowledge note without rewriting the Markdown body. Updates only that claim status/confidence and records a bounded reviewer note with the expected revision; evidence remains unchanged and must still be verified separately. Disputed or superseded claims return bounded downstream notes found through claim dependencies/support/contradiction so their conclusions can be re-read rather than silently changed.',
             inputSchema: { type: 'object', properties: {
-                    path: { type: 'string' }, claimId: { type: 'string', maxLength: 80 }, status: { type: 'string', enum: ['supported', 'disputed', 'unverified', 'superseded'] }, confidence: { type: 'string', enum: ['low', 'medium', 'high'] }, reviewedBy: { type: 'string', maxLength: 200 }, reviewNote: { type: 'string', maxLength: 1000 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
+                    path: { type: 'string' }, claimId: { type: 'string', maxLength: 80 }, status: { type: 'string', enum: [...CLAIM_STATUSES] }, confidence: { type: 'string', enum: [...CONFIDENCE_LEVELS] }, reviewedBy: { type: 'string', maxLength: 200 }, reviewNote: { type: 'string', maxLength: 1000 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
                 }, required: ['path', 'claimId', 'status', 'reviewedBy', 'expectedRevision'] },
         },
         {
@@ -375,7 +375,7 @@ export function getLlmWikiTools() {
             name: 'record_wiki_recall',
             description: 'Record an optional active-recall attempt for a high-value Wiki note without rewriting its Markdown body. Attempt the recallPrompt before opening the note, then record failed, partial, or good; this is separate from evidence review and never changes truth status.',
             inputSchema: { type: 'object', properties: {
-                    path: { type: 'string' }, recallQuality: { type: 'string', enum: [...RECALL_QUALITIES] }, recallPrompt: { type: 'string', maxLength: 1000, description: 'Optional replacement prompt; otherwise use the note property' }, recallIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: 'Optional next-recall cadence; otherwise a bounded quality-based cadence is chosen' }, confusion: { type: 'string', maxLength: 600, description: 'What was forgotten or confused; do not include secrets' }, repairPath: { type: 'string', maxLength: 500, description: 'Optional note/task created to repair the recall failure' }, repairStatus: { type: 'string', enum: ['none', 'needed', 'in_progress', 'resolved'] }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
+                    path: { type: 'string' }, recallQuality: { type: 'string', enum: [...RECALL_QUALITIES] }, recallPrompt: { type: 'string', maxLength: 1000, description: 'Optional replacement prompt; otherwise use the note property' }, recallIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: 'Optional next-recall cadence; otherwise a bounded quality-based cadence is chosen' }, confusion: { type: 'string', maxLength: 600, description: 'What was forgotten or confused; do not include secrets' }, repairPath: { type: 'string', maxLength: 500, description: 'Optional note/task created to repair the recall failure' }, repairStatus: { type: 'string', enum: [...RECALL_REPAIR_STATUSES] }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
                 }, required: ['path', 'recallQuality', 'expectedRevision'] },
         },
         {
@@ -404,8 +404,8 @@ export function getLlmWikiTools() {
             inputSchema: { type: 'object', properties: {
                     context: { type: 'string', description: 'Optional exact task_context filter' },
                     maxMinutes: { type: 'integer', minimum: 1, maximum: 1440, description: 'Optional maximum estimated duration in minutes. Reads time_estimate_minutes, estimated_minutes, duration_minutes, or time_minutes.' },
-                    energy: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Optional exact energy filter; reads energy or energy_level.' },
-                    effort: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Optional exact effort filter; reads effort or effort_level.' },
+                    energy: { type: 'string', enum: [...EXECUTION_LEVELS], description: 'Optional exact energy filter; reads energy or energy_level.' },
+                    effort: { type: 'string', enum: [...EXECUTION_LEVELS], description: 'Optional exact effort filter; reads effort or effort_level.' },
                     limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 },
                     maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 },
                     accessToken, prettyPrint,
@@ -476,7 +476,7 @@ export function getLlmWikiTools() {
             name: 'read_wiki_projection',
             description: 'Read one Wiki note progressively. Start with summary or key_points, then request outline or one section/block with bounded nearby line context; full content is explicit and bounded. Returns the current revision so edits can use optimistic concurrency.',
             inputSchema: { type: 'object', properties: {
-                    path: { type: 'string' }, view: { type: 'string', enum: ['summary', 'progressive', 'key_points', 'outline', 'section', 'full'], default: 'summary', description: 'Use progressive for one bounded packet containing summary, selected passages, claims, and open questions.' },
+                    path: { type: 'string' }, view: { type: 'string', enum: [...WIKI_PROJECTION_VIEWS], default: 'summary', description: 'Use progressive for one bounded packet containing summary, selected passages, claims, and open questions.' },
                     section: { type: 'string', description: 'Heading text when view=section' }, blockId: { type: 'string', maxLength: 100, description: 'Obsidian block ID (without the leading ^) when view=section' }, contextBefore: { type: 'integer', minimum: 0, maximum: 3, default: 1, description: 'Nearby lines before the selected heading/block' }, contextAfter: { type: 'integer', minimum: 0, maximum: 3, default: 1, description: 'Nearby lines after the selected heading/block' }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, accessToken, prettyPrint,
                 }, required: ['path'] },
         },
@@ -654,7 +654,7 @@ export function getLlmWikiTools() {
             name: 'report_wiki_issue',
             description: 'Add a durable Error Book entry for a contradiction, unsupported claim, stale knowledge, broken link, or missing context.',
             inputSchema: { type: 'object', properties: {
-                    scopeUri, issueId: { type: 'string' }, kind: { type: 'string', enum: ['contradiction', 'unsupported_claim', 'stale', 'broken_link', 'missing_context', 'authority_change', 'other'] },
+                    scopeUri, issueId: { type: 'string' }, kind: { type: 'string', enum: [...ISSUE_KINDS] },
                     title: { type: 'string' }, description: { type: 'string' }, subjectPath: { type: 'string' }, evidencePaths: { type: 'array', items: { type: 'string' } },
                     reportedBy: { type: 'string' }, accessToken, prettyPrint,
                 }, required: ['kind', 'title', 'description'] },

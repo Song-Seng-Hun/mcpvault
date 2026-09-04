@@ -9,7 +9,7 @@ import type { ReferenceService } from './references.js';
 import type { SemanticSearchService } from './semantic-search.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
-import { getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeLifecycle, normalizeNavOrder, normalizeNoteKind, normalizeRecallQuality, normalizeRetentionPolicy, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeServiceClass, normalizeTaskStatus, organizationLintIssues, organizationNoteTemplate, temporalValidity, BASES_VIEW_IDS, DECISION_STATUSES, KNOWLEDGE_ROLES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, type TemporalValidityState } from './organization.js';
+import { getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeLifecycle, normalizeNavOrder, normalizeNoteKind, normalizeRecallQuality, normalizeRetentionPolicy, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeServiceClass, normalizeTaskStatus, organizationLintIssues, organizationNoteTemplate, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, CONFIDENCE_LEVELS, DECISION_STATUSES, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS, type AnswerPacketIntent, type CatalogOrder, type TemporalValidityState, type WikiProjectionView } from './organization.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
@@ -17,10 +17,10 @@ import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
 import { buildNoteReferenceIndex, normalizeNoteReferenceTerm, resolveNoteReference, type NoteReferenceIndex } from './note-reference.js';
 import type { QueryNote } from './types.js';
 
-const KNOWLEDGE_STATUSES = new Set(['draft', 'verified', 'disputed', 'superseded']);
-const CONFIDENCE_LEVELS = new Set(['low', 'medium', 'high']);
-const ISSUE_KINDS = new Set(['contradiction', 'unsupported_claim', 'stale', 'broken_link', 'missing_context', 'authority_change', 'other']);
-export const SOURCE_TRUST_LEVELS = ['unrated', 'low', 'medium', 'high', 'verified'] as const;
+export { SOURCE_TRUST_LEVELS } from './organization.js';
+const knowledgeStatuses = new Set<string>(KNOWLEDGE_STATUSES);
+const confidenceLevels = new Set<string>(CONFIDENCE_LEVELS);
+const issueKinds = new Set<string>(ISSUE_KINDS);
 const sourceTrustLevels = new Set<string>(SOURCE_TRUST_LEVELS);
 const PROMOTION_CATEGORIES = new Map([['research', 5], ['proposal', 4], ['agora', 3], ['discussion', 2], ['feedback', 2]]);
 const WELCOME_NOTE_PATH = '환영합니다!.md';
@@ -52,7 +52,7 @@ export interface WikiCatalogOptions {
   /** Maximum number of values returned for each facet. */
   facetLimit?: number;
   /** LATCH-style derived browse order; location remains the default. */
-  orderBy?: 'location' | 'alphabet' | 'time' | 'category' | 'hierarchy';
+  orderBy?: CatalogOrder;
 }
 
 export interface WikiClaimInput {
@@ -121,10 +121,8 @@ type WorkDependencySnapshot = {
   };
 };
 
-type WikiProjectionView = 'summary' | 'progressive' | 'key_points' | 'outline' | 'section' | 'full';
-
-const CLAIM_STATUSES = new Set(['supported', 'disputed', 'unverified', 'superseded']);
-const CLAIM_ROLES = new Set(['premise', 'warrant', 'conclusion', 'objection', 'rebuttal', 'observation']);
+const claimStatuses = new Set<string>(CLAIM_STATUSES);
+const claimRoles = new Set<string>(CLAIM_ROLES);
 const CLAIM_RELATION_FIELDS = [
   { input: 'supportsClaims', property: 'supports_claims', relation: 'supports' },
   { input: 'contradictsClaims', property: 'contradicts_claims', relation: 'contradicts' },
@@ -215,7 +213,7 @@ function optionalBoundedInteger(value: unknown, field: string, maximum: number):
 function optionalWorkLabel(value: unknown, field: string): string | undefined {
   if (value === undefined || value === null || value === '') return undefined;
   const normalized = String(value).trim().toLowerCase();
-  if (!['low', 'medium', 'high'].includes(normalized)) throw new Error(`${field} must be low, medium, or high`);
+  if (!(CONFIDENCE_LEVELS as readonly string[]).includes(normalized)) throw new Error(`${field} must be low, medium, or high`);
   return normalized;
 }
 
@@ -470,11 +468,11 @@ function normalizeClaims(claims: WikiClaimInput[] | undefined, existing: unknown
     seen.add(id);
     const confidence = claim.confidence || 'medium';
     const status = claim.status || 'unverified';
-    if (!CONFIDENCE_LEVELS.has(confidence)) throw new Error(`claims[${index}].confidence must be low, medium, or high`);
-    if (!CLAIM_STATUSES.has(status)) throw new Error(`claims[${index}].status must be supported, disputed, unverified, or superseded`);
+    if (!confidenceLevels.has(confidence)) throw new Error(`claims[${index}].confidence must be low, medium, or high`);
+    if (!claimStatuses.has(status)) throw new Error(`claims[${index}].status must be supported, disputed, unverified, or superseded`);
     const roleValue = (claim.claimRole ?? (claim as any).claim_role ?? (claim as any).role);
     const role = roleValue === undefined || roleValue === null || roleValue === '' ? undefined : String(roleValue).trim().toLowerCase();
-    if (role && !CLAIM_ROLES.has(role)) throw new Error(`claims[${index}].claimRole must be premise, warrant, conclusion, objection, rebuttal, or observation`);
+    if (role && !claimRoles.has(role)) throw new Error(`claims[${index}].claimRole must be premise, warrant, conclusion, objection, rebuttal, or observation`);
     const evidencePaths = Array.from(new Set(((claim.evidencePaths || (claim as any).evidence_paths || []) as unknown[]).map(String).map(path => path.trim()).filter(Boolean))).slice(0, 20);
     const evidence = normalizeEvidenceEntries((claim as any).evidence, evidencePaths);
     const claimRelations = Object.fromEntries(CLAIM_RELATION_FIELDS.flatMap(definition => {
@@ -703,7 +701,8 @@ function catalogEntryCompare(left: Record<string, any>, right: Record<string, an
 }
 
 function normalizeCatalogOrder(value: unknown): NonNullable<WikiCatalogOptions['orderBy']> {
-  return value === 'alphabet' || value === 'time' || value === 'category' || value === 'hierarchy' ? value : 'location';
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return (CATALOG_ORDERS as readonly string[]).includes(normalized) ? normalized as CatalogOrder : 'location';
 }
 
 function adaptiveReviewIntervalDays(frontmatter: Record<string, any>, outcome: string): number {
@@ -1989,8 +1988,8 @@ export class LlmWikiService {
     if (!params.expectedRevision) throw new Error("expectedRevision is required; use 'missing' for a new knowledge note");
     const confidence = params.confidence || 'medium';
     const status = params.status || 'draft';
-    if (!CONFIDENCE_LEVELS.has(confidence)) throw new Error('confidence must be low, medium, or high');
-    if (!KNOWLEDGE_STATUSES.has(status)) throw new Error('status must be draft, verified, disputed, or superseded');
+    if (!confidenceLevels.has(confidence)) throw new Error('confidence must be low, medium, or high');
+    if (!knowledgeStatuses.has(status)) throw new Error('status must be draft, verified, disputed, or superseded');
 
     const exists = await this.fileSystem.noteExists(params.path);
     const existing = exists ? await this.fileSystem.readNote(params.path) : undefined;
@@ -2249,7 +2248,7 @@ export class LlmWikiService {
     const boundedLimit = Math.min(Math.max(Number(options.limit) || 100, 1), 500);
     const boundedChars = Math.min(Math.max(Number(options.maxChars) || 12000, 512), 20000);
     const orderBy = normalizeCatalogOrder(options.orderBy);
-    const validityStates = new Set<TemporalValidityState>(['unspecified', 'current', 'not_yet_valid', 'expired', 'invalid']);
+    const validityStates = new Set<TemporalValidityState>(TEMPORAL_VALIDITY_STATES);
     if (options.validity && !validityStates.has(options.validity)) throw new Error('validity must be unspecified, current, not_yet_valid, expired, or invalid');
     const validAt = options.validAt ? normalizeIsoDate(options.validAt, 'validAt')! : new Date().toISOString();
     const validAtMs = Date.parse(validAt);
@@ -3143,7 +3142,7 @@ export class LlmWikiService {
       : await this.references.validateAndNormalize([params.relatedTask], path, params.principal, content);
     const mergedReferences = [...new Set([...references, ...relatedTaskReferences])].slice(0, 50);
     const capturedFrom = params.capturedFrom === undefined ? undefined : boundedText(params.capturedFrom, 80).toLowerCase();
-    if (capturedFrom && !['manual', 'chat', 'community', 'issue', 'experiment', 'external_source', 'other'].includes(capturedFrom)) {
+    if (capturedFrom && !(CAPTURE_SOURCES as readonly string[]).includes(capturedFrom)) {
       throw new Error('capturedFrom must be one of: manual, chat, community, issue, experiment, external_source, other');
     }
     const captureReason = params.captureReason === undefined ? undefined : boundedText(params.captureReason, 500);
@@ -3372,7 +3371,7 @@ export class LlmWikiService {
     const repairStatus = params.repairStatus === undefined
       ? (quality === 'failed' || quality === 'partial' ? (params.repairPath ? 'in_progress' : 'needed') : 'none')
       : String(params.repairStatus).trim().toLowerCase();
-    if (!['none', 'needed', 'in_progress', 'resolved'].includes(repairStatus)) throw new Error('repairStatus must be none, needed, in_progress, or resolved');
+    if (!(RECALL_REPAIR_STATUSES as readonly string[]).includes(repairStatus)) throw new Error('repairStatus must be none, needed, in_progress, or resolved');
     if (repairStatus !== 'none' && !confusion && !params.repairPath && quality !== 'good') throw new Error('failed or partial recall needs confusion or repairPath context');
     if (params.repairPath && !this.access.canAccessPhysicalPath(params.repairPath, params.principal)) throw new Error(`Access denied: ${this.access.toPublicPath(params.repairPath)}`);
     const suppliedInterval = params.recallIntervalDays === undefined ? undefined : normalizeReviewIntervalDays(params.recallIntervalDays);
@@ -3696,8 +3695,8 @@ export class LlmWikiService {
     if (!params.expectedRevision) throw new Error('expectedRevision is required; use the current note revision');
     if (!this.access.canAccessPhysicalPath(params.path, params.principal)) throw new Error(`Access denied: ${this.access.toPublicPath(params.path)}`);
     this.access.assertMutationAllowed(params.path, 'review_wiki_claim');
-    if (!CLAIM_STATUSES.has(params.status)) throw new Error('status must be supported, disputed, unverified, or superseded');
-    if (params.confidence !== undefined && !CONFIDENCE_LEVELS.has(params.confidence)) throw new Error('confidence must be low, medium, or high');
+    if (!claimStatuses.has(params.status)) throw new Error('status must be supported, disputed, unverified, or superseded');
+    if (params.confidence !== undefined && !confidenceLevels.has(params.confidence)) throw new Error('confidence must be low, medium, or high');
     if (!params.reviewedBy?.trim()) throw new Error('reviewedBy is required');
     const note = await this.fileSystem.readNote(params.path);
     if (note.frontmatter.llm_wiki_type !== 'knowledge') throw new Error('review_wiki_claim requires an LLM Wiki knowledge note');
@@ -5757,7 +5756,7 @@ export class LlmWikiService {
   }) {
     if (!this.access.canAccessPhysicalPath(params.path, params.principal)) throw new Error(`Access denied: ${this.access.toPublicPath(params.path)}`);
     const view = params.view || 'summary';
-    if (!['summary', 'progressive', 'key_points', 'outline', 'section', 'full'].includes(view)) throw new Error('view must be summary, progressive, key_points, outline, section, or full');
+    if (!(WIKI_PROJECTION_VIEWS as readonly string[]).includes(view)) throw new Error('view must be summary, progressive, key_points, outline, section, or full');
     if (view === 'section' && !params.section?.trim() && !params.blockId?.trim()) throw new Error('section or blockId is required when view=section');
     if (view !== 'section' && params.blockId?.trim()) throw new Error('blockId is only supported when view=section');
     if (params.section?.trim() && params.blockId?.trim()) throw new Error('Provide either section or blockId, not both');
@@ -5913,7 +5912,7 @@ export class LlmWikiService {
             text: boundedText(claim.text, 700),
             status: typeof claim.status === 'string' ? claim.status : 'unverified',
             ...(typeof claim.confidence === 'string' && { confidence: claim.confidence }),
-            ...(typeof claim.claim_role === 'string' && CLAIM_ROLES.has(claim.claim_role.toLowerCase()) && { role: claim.claim_role.toLowerCase() }),
+            ...(typeof claim.claim_role === 'string' && claimRoles.has(claim.claim_role.toLowerCase()) && { role: claim.claim_role.toLowerCase() }),
             ...(claimRelationValues(claim, 'supports_claims').length > 0 && { supportsClaims: claimRelationValues(claim, 'supports_claims') }),
             ...(claimRelationValues(claim, 'contradicts_claims').length > 0 && { contradictsClaims: claimRelationValues(claim, 'contradicts_claims') }),
             ...(claimRelationValues(claim, 'depends_on_claims').length > 0 && { dependsOnClaims: claimRelationValues(claim, 'depends_on_claims') }),
@@ -7956,7 +7955,7 @@ export class LlmWikiService {
         text: boundedText(claim.text, 360),
         status: typeof claim.status === 'string' ? claim.status : 'unverified',
         confidence: typeof claim.confidence === 'string' ? claim.confidence : 'medium',
-        ...(typeof claim.claim_role === 'string' && CLAIM_ROLES.has(claim.claim_role.toLowerCase()) && { role: claim.claim_role.toLowerCase() }),
+        ...(typeof claim.claim_role === 'string' && claimRoles.has(claim.claim_role.toLowerCase()) && { role: claim.claim_role.toLowerCase() }),
         argumentRelations: Object.fromEntries(CLAIM_RELATION_FIELDS.flatMap(definition => {
           const values = claimRelationValues(claim, definition.property);
           return values.length > 0 ? [[definition.relation, values]] : [];
@@ -8111,7 +8110,7 @@ export class LlmWikiService {
           text: boundedText(claim.text, 500),
           status: typeof claim.status === 'string' ? claim.status.trim().toLocaleLowerCase() : 'unverified',
           confidence: typeof claim.confidence === 'string' ? claim.confidence.trim().toLocaleLowerCase() : 'medium',
-          ...(typeof claim.claim_role === 'string' && CLAIM_ROLES.has(claim.claim_role.toLowerCase()) && { role: claim.claim_role.toLowerCase() }),
+          ...(typeof claim.claim_role === 'string' && claimRoles.has(claim.claim_role.toLowerCase()) && { role: claim.claim_role.toLowerCase() }),
           relations: {
             supports_claims: claimRelationValues(claim, 'supports_claims'),
             contradicts_claims: claimRelationValues(claim, 'contradicts_claims'),
@@ -8389,9 +8388,9 @@ export class LlmWikiService {
     };
   }
 
-  async answerPacket(principal: ScopePrincipal | undefined, path: string, maxChars = 7000, includeSemantic = true, intent: 'capture' | 'explore' | 'decide' | 'execute' | 'review' = 'decide') {
+  async answerPacket(principal: ScopePrincipal | undefined, path: string, maxChars = 7000, includeSemantic = true, intent: AnswerPacketIntent = 'decide') {
     const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 1024), 16000);
-    const selectedIntent = ['capture', 'explore', 'decide', 'execute', 'review'].includes(intent) ? intent : 'decide';
+    const selectedIntent: AnswerPacketIntent = (ANSWER_PACKET_INTENTS as readonly string[]).includes(intent) ? intent : 'decide';
     const source = await this.readProjection({ ...(principal && { principal }), path, view: 'progressive', maxChars: Math.min(2400, Math.max(1200, Math.floor(boundedChars * 0.34))) });
     const sourcePacket = {
       path: source.path,
@@ -9084,7 +9083,7 @@ export class LlmWikiService {
    * second index.  The selected note remains the entry point; the existing
    * answer packet supplies the bounded supporting and counterpoint context.
    */
-  async contextPack(principal: ScopePrincipal | undefined, path: string, maxChars = 7000, includeSemantic = false, intent: 'capture' | 'explore' | 'decide' | 'execute' | 'review' = 'decide') {
+  async contextPack(principal: ScopePrincipal | undefined, path: string, maxChars = 7000, includeSemantic = false, intent: AnswerPacketIntent = 'decide') {
     const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 1024), 16000);
     if (!this.access.canAccessPhysicalPath(path, principal)) throw new Error('Access denied');
     const rootNote = await this.fileSystem.readNote(path);
@@ -11389,7 +11388,7 @@ export class LlmWikiService {
               addIssue({ severity: 'error', code: 'invalid_claim', path: this.access.toPublicPath(note.path), detail: `Claim ${claimIndex + 1} has no usable text.` });
               continue;
             }
-            if (!CLAIM_STATUSES.has(String(claim.status || 'unverified'))) {
+            if (!claimStatuses.has(String(claim.status || 'unverified'))) {
               addIssue({ severity: 'error', code: 'invalid_claim_status', path: this.access.toPublicPath(note.path), detail: `Claim ${String(claim.id || claimIndex + 1)} has an unsupported status.` });
             }
             const structuredClaimId = claimId(typeof claim.id === 'string' ? claim.id : undefined, claimIndex);
@@ -11398,7 +11397,7 @@ export class LlmWikiService {
             }
             claimIdsInNote.add(structuredClaimId);
             const claimRole = typeof claim.claim_role === 'string' ? claim.claim_role.trim().toLowerCase() : '';
-            if (claimRole && !CLAIM_ROLES.has(claimRole)) {
+            if (claimRole && !claimRoles.has(claimRole)) {
               addIssue({ severity: 'warning', code: 'invalid_claim_role', path: publicPath, detail: `Claim ${structuredClaimId} has unsupported claim_role '${claim.claim_role}'.` });
             }
             let hasArgumentMetadata = Boolean(claimRole);
@@ -11424,7 +11423,7 @@ export class LlmWikiService {
                   publicPath,
                   claimId: structuredClaimId,
                   status: String(claim.status || 'unverified').trim().toLocaleLowerCase(),
-                  ...(claimRole && CLAIM_ROLES.has(claimRole) && { role: claimRole }),
+                  ...(claimRole && claimRoles.has(claimRole) && { role: claimRole }),
                   hasArgumentMetadata,
                   anchorLines: structuredClaimAnchors,
                   relations: {
@@ -12012,7 +12011,7 @@ export class LlmWikiService {
     reportedBy: string;
     extraFrontmatter?: Record<string, unknown>;
   }) {
-    if (!ISSUE_KINDS.has(params.kind)) throw new Error(`Unsupported issue kind: ${params.kind}`);
+    if (!issueKinds.has(params.kind)) throw new Error(`Unsupported issue kind: ${params.kind}`);
     if (!params.title?.trim() || !params.description?.trim()) throw new Error('title and description are required');
     const id = normalizeScopeId(params.issueId || `issue-${randomUUID().slice(0, 12)}`, 'issueId');
     const path = joinRoot(params.scopeRoot, `_wiki/issues/${id}.md`);

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { BASES_VIEW_IDS, NOTE_TEMPLATE_IDS, getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, organizationLintIssues, organizationNoteTemplate, temporalValidity } from './organization.js';
+import { BASES_VIEW_IDS, CONFIDENCE_LEVELS, KNOWLEDGE_STATUSES, NOTE_TEMPLATE_IDS, SOURCE_TRUST_LEVELS, getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, organizationLintIssues, organizationNoteTemplate, temporalValidity } from './organization.js';
 
 describe('knowledge organization focus and summary metadata', () => {
   test('filing edits and partial stale projection edits cannot certify inherited summaries', () => {
@@ -145,11 +145,17 @@ describe('knowledge organization focus and summary metadata', () => {
       expect.objectContaining({ name: 'note_kind', type: 'text' }),
       expect.objectContaining({ name: 'aliases', type: 'list' }),
       expect.objectContaining({ name: 'review_interval_days', type: 'number' }),
+      expect.objectContaining({ name: 'knowledge_status', type: 'text', allowed: [...KNOWLEDGE_STATUSES] }),
+      expect.objectContaining({ name: 'confidence', type: 'text', allowed: [...CONFIDENCE_LEVELS] }),
+      expect.objectContaining({ name: 'trust_level', type: 'text', allowed: [...SOURCE_TRUST_LEVELS], appliesTo: ['source'] }),
     ]));
     expect(knowledgeOrganization({ status: 'draft', noteKind: 'atomic', reviewIntervalDays: 30 })).toMatchObject({ review_interval_days: 30 });
     expect(organizationLintIssues('Knowledge/Drift.md', {
       llm_wiki_type: 'knowledge', note_kind: ['atomic'], lifecycle: 'evergreen', review_interval_days: 0,
     }, '# Drift\n').map(issue => issue.code)).toEqual(expect.arrayContaining(['property_contract_violation', 'invalid_review_interval_days']));
+    expect(organizationLintIssues('Knowledge/InvalidState.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', knowledge_status: 'accepted', confidence: 'absolute',
+    }, '# Invalid state\n').filter(issue => issue.code === 'property_contract_violation')).toHaveLength(2);
   });
 
   test('keeps archival arrangement on immutable source records only', () => {

@@ -3,8 +3,8 @@ import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ReferenceService } from './references.js';
 import type { SemanticSearchService } from './semantic-search.js';
-import { type TemporalValidityState } from './organization.js';
-export declare const SOURCE_TRUST_LEVELS: readonly ['unrated', 'low', 'medium', 'high', 'verified'];
+import { type AnswerPacketIntent, type CatalogOrder, type TemporalValidityState, type WikiProjectionView } from './organization.js';
+export { SOURCE_TRUST_LEVELS } from './organization.js';
 export interface WikiCatalogOptions {
     summaryOnly?: boolean;
     noteKind?: string;
@@ -31,7 +31,7 @@ export interface WikiCatalogOptions {
     /** Maximum number of values returned for each facet. */
     facetLimit?: number;
     /** LATCH-style derived browse order; location remains the default. */
-    orderBy?: 'location' | 'alphabet' | 'time' | 'category' | 'hierarchy';
+    orderBy?: CatalogOrder;
 }
 export interface WikiClaimInput {
     id?: string;
@@ -59,7 +59,6 @@ export interface WikiEvidenceInput {
     quoteHash?: string;
 }
 type WorkDependencyFindingState = 'active' | 'satisfied' | 'cancelled' | 'inactive' | 'unresolved_or_inaccessible' | 'ambiguous' | 'non_work_target' | 'informational';
-type WikiProjectionView = 'summary' | 'progressive' | 'key_points' | 'outline' | 'section' | 'full';
 interface WikiLintIssue {
     severity: 'error' | 'warning';
     code: string;
@@ -2341,7 +2340,7 @@ export declare class LlmWikiService {
     }): Promise<{
         path: string;
         title: string;
-        view: WikiProjectionView;
+        view: "full" | "key_points" | "outline" | "progressive" | "section" | "summary";
         revision: string;
         noteKind: any;
         lifecycle: any;
@@ -3334,7 +3333,7 @@ export declare class LlmWikiService {
         truncated: boolean;
         note: string;
     }>;
-    answerPacket(principal: ScopePrincipal | undefined, path: string, maxChars?: number, includeSemantic?: boolean, intent?: 'capture' | 'explore' | 'decide' | 'execute' | 'review'): Promise<Record<string, unknown>>;
+    answerPacket(principal: ScopePrincipal | undefined, path: string, maxChars?: number, includeSemantic?: boolean, intent?: AnswerPacketIntent): Promise<Record<string, unknown>>;
     /**
      * Turn an authored MOC outline into a bounded, dependency-aware reading
      * path. The Markdown order remains authoritative; the topological order is
@@ -3379,7 +3378,7 @@ export declare class LlmWikiService {
      * second index.  The selected note remains the entry point; the existing
      * answer packet supplies the bounded supporting and counterpoint context.
      */
-    contextPack(principal: ScopePrincipal | undefined, path: string, maxChars?: number, includeSemantic?: boolean, intent?: 'capture' | 'explore' | 'decide' | 'execute' | 'review'): Promise<{
+    contextPack(principal: ScopePrincipal | undefined, path: string, maxChars?: number, includeSemantic?: boolean, intent?: AnswerPacketIntent): Promise<{
         mode: string;
         root: {
             path: any;
@@ -3982,5 +3981,4 @@ export declare class LlmWikiService {
         revision: string;
     }>;
 }
-export {};
 //# sourceMappingURL=llm-wiki.d.ts.map
