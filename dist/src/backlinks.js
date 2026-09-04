@@ -9,7 +9,8 @@ const BLOCK_QUOTE_PATTERN = /^ {0,3}>/;
 const INTERRUPTING_LIST_PATTERN = /^ {0,3}(?:[*+-][ \t]+\S|1[.)][ \t]+\S)/;
 const THEMATIC_BREAK_PATTERN = /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}|(?:-[ \t]*){3,})$/;
 const SETEXT_UNDERLINE_PATTERN = /^ {0,3}(?:=+|-+)[ \t]*$/;
-const HTML_BLOCK_START_PATTERN = /^ {0,3}(?:<(?:script|pre|style|textarea)(?:[ \t>]|$)|<!--|<\?|<!\[CDATA\[|<![A-Z]|<\/?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:[ \t/>]|$))/i;
+const HTML_BLOCK_TAG_START_PATTERN = /^ {0,3}(?:<(?:script|pre|style|textarea)(?:[ \t>]|$)|<\/?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:[ \t/>]|$))/i;
+const HTML_BLOCK_LITERAL_START_PATTERN = /^ {0,3}(?:<!--|<\?|<!\[CDATA\[|<![A-Z])/;
 function markRange(mask, start, end) {
     mask.fill(1, start, end);
 }
@@ -19,7 +20,8 @@ function startsParagraphInterruptingBlock(line) {
         || INTERRUPTING_LIST_PATTERN.test(line)
         || THEMATIC_BREAK_PATTERN.test(line)
         || SETEXT_UNDERLINE_PATTERN.test(line)
-        || HTML_BLOCK_START_PATTERN.test(line);
+        || HTML_BLOCK_TAG_START_PATTERN.test(line)
+        || HTML_BLOCK_LITERAL_START_PATTERN.test(line);
 }
 /**
  * Build an offset-preserving mask for Markdown regions that cannot create an

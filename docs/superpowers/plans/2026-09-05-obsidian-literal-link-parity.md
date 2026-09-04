@@ -328,6 +328,9 @@ initial GREEN state. The delivered implementation also:
 - prevents a multiline candidate from crossing ATX/Setext headings, block
   quotes, interrupting list starts, thematic breaks, recognized HTML block
   starts, blank lines, or fences;
+- keeps declaration and CDATA HTML-block openers case-sensitive while matching
+  recognized HTML tag names case-insensitively, so lookalike ordinary text does
+  not break a multiline code span;
 - recognizes a heading on the masked projection but captures its full locator
   text from the original line;
 - verifies CRLF offsets, mismatched fence markers and lengths, dynamic endpoint

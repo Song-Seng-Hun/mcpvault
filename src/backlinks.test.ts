@@ -107,6 +107,14 @@ describe('Obsidian link extraction', () => {
     expect(extractObsidianLinkOccurrences(content).map(match => match.target)).toContain(target);
   });
 
+  test('keeps CommonMark HTML declarations case-sensitive when delimiting multiline code spans', () => {
+    const ordinaryText = '`open\n<!not-html [[ShouldStayHidden]]\nclose`';
+    const declaration = '`open\n<!DOCTYPE html>\n[[DeclarationTarget]]\nclose`';
+
+    expect(extractObsidianLinkOccurrences(ordinaryText)).toEqual([]);
+    expect(extractObsidianLinkOccurrences(declaration).map(match => match.target)).toContain('DeclarationTarget');
+  });
+
   test('preserves original inline markup in source heading locators', () => {
     const content = '## API `v1`\n[[Versioned]]\n## `Only code`\n[[CodeHeading]]';
     expect(extractObsidianLinkOccurrences(content)).toEqual([
