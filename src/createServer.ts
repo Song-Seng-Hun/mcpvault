@@ -1488,7 +1488,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "get_wiki_review_queue": {
-          return jsonResult(await llmWiki.reviewQueue(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+          return jsonResult(await llmWiki.reviewQueue(principal, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.maxCascadeDepth), trimmedArgs.prettyPrint);
         }
 
         case "review_wiki_note": {
@@ -1628,7 +1628,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "get_wiki_impact_report": {
-          return jsonResult(await llmWiki.impactReport(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+          return jsonResult(await llmWiki.impactReport(principal, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.maxCascadeDepth), trimmedArgs.prettyPrint);
         }
 
         case "get_wiki_source_trust": {
@@ -1709,6 +1709,17 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
         case "get_wiki_moc_candidates": {
           return jsonResult(await llmWiki.mocCandidates(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+        }
+
+        case "get_wiki_moc_rebalance": {
+          return jsonResult(await llmWiki.mocRebalance(
+            principal,
+            trimmedArgs.path,
+            trimmedArgs.maxBranches,
+            trimmedArgs.limit,
+            trimmedArgs.maxChars,
+            trimmedArgs.saturationThreshold,
+          ), trimmedArgs.prettyPrint);
         }
 
         case "get_wiki_organization_health": {

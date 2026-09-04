@@ -212,6 +212,7 @@ export class VaultMetadataIndex {
     snapshotWrite;
     snapshotTimer;
     snapshotPending = false;
+    closed = false;
     watcher;
     watcherStarted = false;
     catalogUnsubscribe;
@@ -566,13 +567,17 @@ export class VaultMetadataIndex {
             collisions,
         };
     }
-    close() {
+    async close() {
+        this.closed = true;
         this.catalogUnsubscribe?.();
         this.watcher?.close();
         this.watcher = undefined;
         if (this.snapshotTimer)
             clearTimeout(this.snapshotTimer);
         this.snapshotTimer = undefined;
+        this.snapshotPending = false;
+        if (this.snapshotWrite)
+            await this.snapshotWrite.catch(() => undefined);
         this.authoritySchemeIndex.clear();
         this.authorityPairIndex.clear();
         derivedCacheBudget.clearOwner(this.cacheOwner);
@@ -783,6 +788,8 @@ export class VaultMetadataIndex {
         }
     }
     scheduleSnapshotSave() {
+        if (this.closed)
+            return;
         this.snapshotPending = true;
         if (this.snapshotTimer)
             return;
@@ -793,7 +800,7 @@ export class VaultMetadataIndex {
         this.snapshotTimer.unref?.();
     }
     async flushSnapshot() {
-        if (this.snapshotWrite || !this.snapshotPending)
+        if (this.closed || this.snapshotWrite || !this.snapshotPending)
             return;
         this.snapshotPending = false;
         let encoded;
@@ -817,7 +824,7 @@ export class VaultMetadataIndex {
         }
         finally {
             this.snapshotWrite = undefined;
-            if (this.snapshotPending)
+            if (!this.closed && this.snapshotPending)
                 this.scheduleSnapshotSave();
         }
     }

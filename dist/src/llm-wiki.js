@@ -4,7 +4,7 @@ import { stringify as stringifyYaml } from 'yaml';
 import { normalizeScopeId } from './scopes.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
-import { getOrganizationPropertyContract, getOrganizationRelationContract, inapplicableOrganizationProperties, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, organizationLintIssues, organizationNoteTemplate, organizationPropertyAppliesTo, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, CONFIDENCE_LEVELS, DECISION_STATUSES, FOCUS_HORIZONS, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS } from './organization.js';
+import { getOrganizationPropertyContract, getOrganizationRelationContract, inapplicableOrganizationProperties, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeVolatilityClass, organizationLintIssues, organizationNoteTemplate, organizationPropertyAppliesTo, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, CONFIDENCE_LEVELS, DECISION_STATUSES, FOCUS_HORIZONS, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, VOLATILITY_CLASSES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS } from './organization.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
@@ -608,17 +608,25 @@ function normalizeCatalogOrder(value) {
     const normalized = String(value ?? '').trim().toLowerCase();
     return CATALOG_ORDERS.includes(normalized) ? normalized : 'location';
 }
+const VOLATILITY_REVIEW_CADENCE = {
+    ephemeral: { initial: 7, maximum: 30 },
+    evolving: { initial: 30, maximum: 180 },
+    durable: { initial: 90, maximum: 730 },
+    foundational: { initial: 365, maximum: 3650 },
+};
 function adaptiveReviewIntervalDays(frontmatter, outcome) {
     const previous = Number(frontmatter.review_interval_days);
+    const volatilityClass = normalizeVolatilityClass(frontmatter.volatility_class, 'evolving') || 'evolving';
+    const cadence = VOLATILITY_REVIEW_CADENCE[volatilityClass];
     if (outcome === 'disputed')
         return 7;
     if (outcome === 'revised')
-        return 14;
+        return Math.min(14, cadence.initial);
     if (outcome === 'rescheduled')
-        return Number.isInteger(previous) && previous > 0 ? Math.min(previous, 30) : 14;
+        return Number.isInteger(previous) && previous > 0 ? Math.min(previous, cadence.initial) : cadence.initial;
     if (outcome === 'confirmed')
-        return Number.isInteger(previous) && previous > 0 ? Math.min(previous * 2, 365) : 30;
-    return 30;
+        return Number.isInteger(previous) && previous > 0 ? Math.min(previous * 2, cadence.maximum) : cadence.initial;
+    return cadence.initial;
 }
 function jaccard(left, right) {
     if (left.size === 0 || right.size === 0)
@@ -736,6 +744,9 @@ function comparableOrganizationManifest(value) {
     const authority = value.authority && typeof value.authority === 'object' && !Array.isArray(value.authority)
         ? value.authority
         : {};
+    const reviewCadence = value.reviewCadence && typeof value.reviewCadence === 'object' && !Array.isArray(value.reviewCadence)
+        ? value.reviewCadence
+        : {};
     return {
         format: String(value.format || ''),
         manifestVersion: Number(value.manifestVersion || 0),
@@ -744,6 +755,12 @@ function comparableOrganizationManifest(value) {
             identityScope: String(authority.identityScope || '').trim(),
             shelfOrder: String(authority.shelfOrder || '').trim(),
             relationStrength: manifestOrderedStringList(authority.relationStrength, 10),
+        },
+        reviewCadence: {
+            volatilityProperty: String(reviewCadence.volatilityProperty || '').trim(),
+            classes: manifestOrderedStringList(reviewCadence.classes, 10),
+            explicitDatesPrecedeDefaults: reviewCadence.explicitDatesPrecedeDefaults === true,
+            cascade: String(reviewCadence.cascade || '').trim(),
         },
         reservedPaths: manifestStringList(value.reservedPaths, 100),
         templates: manifestStringList(value.templates, 100),
@@ -1686,6 +1703,158 @@ export class LlmWikiService {
         }
         return { policy, bodyChanged, linkChanged: false, upstreamChanged: false, upstreamChanges: [] };
     }
+    /**
+     * Project direct invalidation through explicit typed note relations. This is
+     * deliberately request-local and read-only: it never mutates lifecycle or
+     * stores another graph. Only visible notes that opted into
+     * on_upstream_change can receive or continue a cascade.
+     */
+    async upstreamCascadeProjection(principal, requestedDepth = 3) {
+        const maxDepth = Math.min(Math.max(Number(requestedDepth) || 3, 1), 6);
+        const maxNodes = 5000;
+        const maxEdges = 20000;
+        const canAccess = (candidate) => this.access.canAccessPhysicalPath(candidate, principal);
+        const records = [];
+        let scanned = 0;
+        let truncated = false;
+        for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+            if (note.frontmatter.llm_wiki_type !== 'knowledge' || isModerationHidden(note.frontmatter))
+                continue;
+            scanned += 1;
+            if (records.length >= maxNodes) {
+                truncated = true;
+                break;
+            }
+            const policy = String(note.frontmatter.review_policy || 'manual').trim().toLowerCase();
+            records.push({
+                path: normalizePath(note.path),
+                frontmatter: note.frontmatter,
+                ...(policy === 'on_link_change' && { content: note.content }),
+                contentDigest: hash(note.content || ''),
+            });
+        }
+        const recordByPath = new Map(records.map(record => [record.path.toLowerCase(), record]));
+        const referenceIndex = buildNoteReferenceIndex(records.map(record => ({
+            path: record.path,
+            title: record.frontmatter.title,
+            aliases: record.frontmatter.aliases,
+            preferredTerm: record.frontmatter.preferred_term,
+            stableId: record.frontmatter.stable_id,
+        })));
+        const downstreamByUpstream = new Map();
+        let edgeCount = 0;
+        const addEdge = (upstream, downstream) => {
+            if (edgeCount >= maxEdges) {
+                truncated = true;
+                return;
+            }
+            const upstreamKey = normalizePath(upstream).toLowerCase();
+            const downstreamKey = normalizePath(downstream).toLowerCase();
+            if (upstreamKey === downstreamKey || !recordByPath.has(upstreamKey) || !recordByPath.has(downstreamKey))
+                return;
+            const targets = downstreamByUpstream.get(upstreamKey) || new Set();
+            if (!targets.has(downstreamKey))
+                edgeCount += 1;
+            targets.add(downstreamKey);
+            downstreamByUpstream.set(upstreamKey, targets);
+        };
+        for (const record of records) {
+            for (const relation of UPSTREAM_DEPENDENCY_RELATIONS) {
+                const values = Array.isArray(record.frontmatter[relation]) ? record.frontmatter[relation].slice(0, 50) : [];
+                for (const raw of values) {
+                    if (typeof raw !== 'string' || !raw.trim())
+                        continue;
+                    const matches = this.resolveKnowledgeReference(relationDocument(raw), referenceIndex, record.path)
+                        .filter(candidate => this.access.canReferenceFrom(record.path, candidate));
+                    if (matches.length === 1)
+                        addEdge(matches[0], record.path);
+                }
+            }
+            const supports = Array.isArray(record.frontmatter.supports) ? record.frontmatter.supports.slice(0, 50) : [];
+            for (const raw of supports) {
+                if (typeof raw !== 'string' || !raw.trim())
+                    continue;
+                const matches = this.resolveKnowledgeReference(relationDocument(raw), referenceIndex, record.path)
+                    .filter(candidate => this.access.canReferenceFrom(candidate, record.path));
+                if (matches.length === 1)
+                    addEdge(record.path, matches[0]);
+            }
+        }
+        const seedReasons = new Map();
+        for (const record of records) {
+            const reasons = [];
+            const policy = String(record.frontmatter.review_policy || 'manual').trim().toLowerCase();
+            const lifecycle = String(record.frontmatter.lifecycle || '').trim().toLowerCase();
+            const knowledgeStatus = String(record.frontmatter.knowledge_status || '').trim().toLowerCase();
+            const reviewOutcome = String(record.frontmatter.last_review_outcome || '').trim().toLowerCase();
+            if (['archived', 'superseded'].includes(lifecycle) || knowledgeStatus === 'superseded' || reviewOutcome === 'superseded')
+                reasons.push('upstream_retired');
+            if (knowledgeStatus === 'disputed' || reviewOutcome === 'disputed')
+                reasons.push('upstream_disputed');
+            if (policy === 'on_any_edit' && typeof record.frontmatter.review_basis_content_sha256 === 'string'
+                && record.frontmatter.review_basis_content_sha256 !== record.contentDigest)
+                reasons.push('note_edited');
+            if (policy === 'on_link_change') {
+                const signals = await this.reviewChangeSignals({ path: record.path, content: record.content || '', frontmatter: record.frontmatter }, principal, referenceIndex);
+                if (signals.linkChanged)
+                    reasons.push('link_changed');
+            }
+            if (policy === 'on_upstream_change') {
+                const signals = await this.reviewChangeSignals({ path: record.path, frontmatter: record.frontmatter }, principal, referenceIndex);
+                if (signals.upstreamChanged)
+                    reasons.push('upstream_changed');
+            }
+            if (policy === 'on_source_change') {
+                for (const sourcePath of Array.isArray(record.frontmatter.evidence_paths) ? record.frontmatter.evidence_paths.slice(0, 30) : []) {
+                    if (typeof sourcePath !== 'string' || !canAccess(sourcePath) || !await this.fileSystem.noteExists(sourcePath)) {
+                        reasons.push('source_changed');
+                        break;
+                    }
+                    const source = await this.fileSystem.readNote(sourcePath);
+                    if (source.frontmatter.llm_wiki_type !== 'source' || source.frontmatter.immutable !== true || source.frontmatter.content_sha256 !== hash(source.content)) {
+                        reasons.push('source_changed');
+                        break;
+                    }
+                }
+            }
+            const temporal = temporalValidity(record.frontmatter);
+            if (temporal.state === 'expired' || temporal.state === 'invalid')
+                reasons.push('temporal_invalid');
+            if (reasons.length > 0)
+                seedReasons.set(record.path.toLowerCase(), [...new Set(reasons)]);
+        }
+        const signals = new Map();
+        const visitedDepth = new Map();
+        const queue = [...seedReasons.keys()].sort().map(path => ({ path, root: path, depth: 0 }));
+        for (const seed of queue)
+            visitedDepth.set(seed.path, 0);
+        for (let index = 0; index < queue.length; index += 1) {
+            const current = queue[index];
+            if (current.depth >= maxDepth)
+                continue;
+            const downstream = [...(downstreamByUpstream.get(current.path) || [])].sort();
+            for (const target of downstream) {
+                const targetRecord = recordByPath.get(target);
+                if (!targetRecord || String(targetRecord.frontmatter.review_policy || '').trim().toLowerCase() !== 'on_upstream_change')
+                    continue;
+                const depth = current.depth + 1;
+                if (seedReasons.has(target))
+                    continue;
+                const previousDepth = visitedDepth.get(target);
+                if (previousDepth !== undefined && previousDepth <= depth)
+                    continue;
+                visitedDepth.set(target, depth);
+                signals.set(target, {
+                    depth,
+                    root: recordByPath.get(current.root)?.path || current.root,
+                    via: recordByPath.get(current.path)?.path || current.path,
+                    rootReasons: seedReasons.get(current.root) || [],
+                });
+                queue.push({ path: target, root: current.root, depth });
+            }
+        }
+        return { signals, maxDepth, scanned, edgeCount, seedCount: seedReasons.size, truncated };
+    }
     async initialize(scopeRoot, actor) {
         const schemaPath = joinRoot(scopeRoot, '_wiki/SCHEMA.md');
         if (await this.fileSystem.noteExists(schemaPath)) {
@@ -1966,6 +2135,7 @@ export class LlmWikiService {
                     ...(params.project !== undefined && { project: params.project }),
                     ...(params.reviewAt !== undefined && { reviewAt: params.reviewAt }),
                     ...(params.reviewIntervalDays !== undefined && { reviewIntervalDays: params.reviewIntervalDays }),
+                    ...(params.volatilityClass !== undefined && { volatilityClass: params.volatilityClass }),
                     ...(params.reviewSnoozedUntil !== undefined && { reviewSnoozedUntil: params.reviewSnoozedUntil }),
                     ...(params.reviewSnoozeReason !== undefined && { reviewSnoozeReason: params.reviewSnoozeReason }),
                     ...(params.aliases !== undefined && { aliases: params.aliases }),
@@ -2787,10 +2957,11 @@ export class LlmWikiService {
             return result;
         return { ...result, paths: result.paths.slice(0, 1), truncated: true };
     }
-    async reviewQueue(principal, limit = 5, maxChars = 4000) {
+    async reviewQueue(principal, limit = 5, maxChars = 4000, maxCascadeDepth = 3) {
         const boundedLimit = Math.min(Math.max(Number(limit) || 5, 1), 20);
         const boundedChars = Math.min(Math.max(Number(maxChars) || 4000, 512), 12000);
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        const cascadeProjection = await this.upstreamCascadeProjection(principal, maxCascadeDepth);
         // Keep only the bounded best candidates while scanning. Review queues are
         // a derived view, so a large vault must not create a second full array.
         const candidates = [];
@@ -2834,6 +3005,7 @@ export class LlmWikiService {
             if (reviewPolicy === 'on_upstream_change' && !referenceIndex)
                 referenceIndex = await this.buildKnowledgeReferenceIndex(principal);
             const reviewSignals = await this.reviewChangeSignals(note, principal, referenceIndex);
+            const cascadeSignal = cascadeProjection.signals.get(normalizePath(note.path).toLowerCase());
             const reviewTriggers = [];
             if (reviewPolicy === 'on_source_change' && sourceChanged)
                 reviewTriggers.push('source_changed');
@@ -2843,6 +3015,8 @@ export class LlmWikiService {
                 reviewTriggers.push('note_edited');
             if (reviewPolicy === 'on_upstream_change' && reviewSignals.upstreamChanged)
                 reviewTriggers.push('upstream_changed');
+            if (cascadeSignal)
+                reviewTriggers.push('upstream_cascade_changed');
             if (summaryStale)
                 reviewTriggers.push('summary_stale');
             if (temporal.state === 'expired')
@@ -2872,6 +3046,7 @@ export class LlmWikiService {
                 + (summaryStale ? 7 : 0)
                 + (sourceChanged ? 8 : 0)
                 + (reviewSignals.upstreamChanged ? 8 : 0)
+                + (cascadeSignal ? Math.max(2, 7 - cascadeSignal.depth) : 0)
                 + (retentionDue ? 6 : 0)
                 + (temporal.state === 'expired' ? 10 : temporal.state === 'invalid' ? 8 : 0)
                 + (String(note.frontmatter.knowledge_polarity || '').toLowerCase() === 'negative' ? 4 : 0)
@@ -2899,6 +3074,12 @@ export class LlmWikiService {
                 reviewPolicy,
                 ...(reviewTriggers.length > 0 && { reviewTriggered: true, reviewTriggers, reviewTrigger: reviewTriggers[0] }),
                 ...(reviewSignals.upstreamChanges.length > 0 && { upstreamChanges: reviewSignals.upstreamChanges }),
+                ...(cascadeSignal && {
+                    cascadeDepth: cascadeSignal.depth,
+                    cascadeRoot: this.access.toPublicPath(cascadeSignal.root),
+                    cascadeVia: this.access.toPublicPath(cascadeSignal.via),
+                    cascadeRootReasons: cascadeSignal.rootReasons,
+                }),
                 ...(Number.isInteger(Number(note.frontmatter.review_count)) && { reviewCount: Number(note.frontmatter.review_count) }),
                 ...(Number.isInteger(Number(note.frontmatter.review_reopen_count)) && { reviewReopenCount: Number(note.frontmatter.review_reopen_count) }),
                 ...(typeof note.frontmatter.last_review_trigger === 'string' && { lastReviewTrigger: note.frontmatter.last_review_trigger }),
@@ -2929,7 +3110,18 @@ export class LlmWikiService {
             items.push(item);
             used += encoded.length + 1;
         }
-        return { items, total, truncated: total > items.length };
+        return {
+            items,
+            total,
+            truncated: total > items.length,
+            cascade: {
+                maxDepth: cascadeProjection.maxDepth,
+                scanned: cascadeProjection.scanned,
+                edgeCount: cascadeProjection.edgeCount,
+                seedCount: cascadeProjection.seedCount,
+                truncated: cascadeProjection.truncated,
+            },
+        };
     }
     async inbox(principal, limit = 10, maxChars = 5000) {
         const boundedLimit = Math.min(Math.max(Number(limit) || 10, 1), 50);
@@ -3567,9 +3759,11 @@ export class LlmWikiService {
         const outcome = normalizeReviewOutcome(params.reviewOutcome);
         if (!outcome)
             throw new Error('reviewOutcome is required');
-        const reviewIntervalDays = params.reviewIntervalDays === undefined
-            ? normalizeReviewIntervalDays(note.frontmatter.review_interval_days)
+        const requestedReviewIntervalDays = params.reviewIntervalDays === undefined
+            ? undefined
             : normalizeReviewIntervalDays(params.reviewIntervalDays);
+        const previousReviewIntervalDays = normalizeReviewIntervalDays(note.frontmatter.review_interval_days);
+        const volatilityClass = normalizeVolatilityClass(note.frontmatter.volatility_class, 'evolving') || 'evolving';
         const explicitReviewAt = params.reviewAt === undefined ? undefined : normalizeReviewAt(params.reviewAt);
         const reviewNote = params.reviewNote === undefined ? undefined : boundedText(params.reviewNote, 1000);
         const reviewReason = params.reviewReason === undefined ? undefined : boundedText(params.reviewReason, 120);
@@ -3585,10 +3779,10 @@ export class LlmWikiService {
         const reviewBasisUpstream = await this.collectReviewBasisUpstream(params.path, note.frontmatter, params.principal);
         const timestamp = now();
         const reviewPolicy = String(note.frontmatter.review_policy || 'manual').toLowerCase();
-        const adaptiveInterval = reviewIntervalDays === undefined && params.reviewIntervalDays === undefined && reviewPolicy !== 'manual' && outcome !== 'superseded'
+        const adaptiveInterval = requestedReviewIntervalDays === undefined && reviewPolicy !== 'manual' && outcome !== 'superseded'
             ? adaptiveReviewIntervalDays(note.frontmatter, outcome)
             : undefined;
-        const effectiveReviewIntervalDays = reviewIntervalDays ?? adaptiveInterval;
+        const effectiveReviewIntervalDays = requestedReviewIntervalDays ?? adaptiveInterval ?? previousReviewIntervalDays;
         const reviewCount = Math.max(0, Number(note.frontmatter.review_count) || 0) + 1;
         const reviewReopenCount = Math.max(0, Number(note.frontmatter.review_reopen_count) || 0)
             + (currentLifecycle === 'review' && note.frontmatter.last_reviewed_at ? 1 : 0);
@@ -3646,6 +3840,7 @@ export class LlmWikiService {
             reviewTrigger,
             reviewCount,
             reviewReopenCount,
+            volatilityClass,
             ...(reviewChecks && { reviewChecks }),
             ...(reviewOpenItems && { reviewOpenItems }),
             ...(reviewAt && { reviewAt }),
@@ -4214,7 +4409,7 @@ export class LlmWikiService {
             relationStrength: ['same_as', 'close_match', 'broader', 'related'],
         };
         const base = {
-            manifestVersion: 6,
+            manifestVersion: 7,
             format: 'mcpvault-organization-manifest',
             portable: true,
             contentFreeByDefault: true,
@@ -4224,6 +4419,12 @@ export class LlmWikiService {
             syntax: { links: ['[[Note]]', '[[folder/Note#Heading]]', '[[Note#^claim-id]]', '[[#^claim-id]]', '[[Note|display text]]', '[Guide](Resources/Guide.md#section)'], tags: '#tag', sourceIntegrity: 'immutable source snapshot + content_sha256 + revision' },
             pipeline: ['capture', 'organize', 'distill', 'express', 'review'],
             authority,
+            reviewCadence: {
+                volatilityProperty: 'volatility_class',
+                classes: [...VOLATILITY_CLASSES],
+                explicitDatesPrecedeDefaults: true,
+                cascade: 'bounded_explicit_upstream_projection',
+            },
             contracts,
             templates: [...NOTE_TEMPLATE_IDS],
             basesViews: [...BASES_VIEW_IDS],
@@ -4437,6 +4638,15 @@ export class LlmWikiService {
             else if (JSON.stringify(otherAuthority) !== JSON.stringify(currentAuthority)) {
                 addCompatibility('blocking', 'authority_contract_conflict', 'Authority identity scope, shelf order, or explicit relation-strength order conflicts with this command center.');
             }
+            const currentReviewCadence = comparableCurrent.reviewCadence;
+            const otherReviewCadence = comparableCounterpart.reviewCadence;
+            const counterpartDeclaresReviewCadence = Boolean(counterpart.reviewCadence && typeof counterpart.reviewCadence === 'object' && !Array.isArray(counterpart.reviewCadence));
+            if (!counterpartDeclaresReviewCadence && counterpartVersion < 7) {
+                addCompatibility('warning', 'missing_review_cadence_contract', 'Counterpart predates volatility-aware review and bounded upstream-cascade semantics; review cadence during migration.');
+            }
+            else if (!counterpartDeclaresReviewCadence || JSON.stringify(otherReviewCadence) !== JSON.stringify(currentReviewCadence)) {
+                addCompatibility('blocking', 'review_cadence_contract_conflict', 'Volatility classes, explicit-date precedence, or bounded upstream-cascade semantics conflict with this command center.');
+            }
             const currentContracts = (comparableCurrent.contracts || {});
             const otherContracts = (comparableCounterpart.contracts || {});
             for (const key of ['noteKinds', 'lifecycles', 'taskStatuses', 'serviceClasses']) {
@@ -4547,6 +4757,7 @@ export class LlmWikiService {
             filing: base.filing,
             reservedPaths: base.reservedPaths,
             authority: base.authority,
+            reviewCadence: base.reviewCadence,
             contracts: { noteKinds: contracts.noteKinds, lifecycles: contracts.lifecycles, taskStatuses: contracts.taskStatuses, serviceClasses: contracts.serviceClasses, properties: contracts.properties.map(entry => ({ name: entry.name, type: entry.type })), relations: contracts.relations.map(entry => entry.field) },
             ...(result.readiness && { readiness: { ...result.readiness, issues: result.readiness.issues.slice(0, 3), inventory: { ...result.readiness.inventory, items: result.readiness.inventory.items.slice(0, 2) } } }),
             ...(result.migrationPreview && { migrationPreview: { ...result.migrationPreview, issues: result.migrationPreview.issues.slice(0, 5) } }),
@@ -4556,7 +4767,7 @@ export class LlmWikiService {
             compact.contracts.properties.pop();
         if (JSON.stringify(compact).length <= boundedChars)
             return compact;
-        return { manifestVersion: base.manifestVersion, format: base.format, portable: true, contractFingerprint, reservedPaths: base.reservedPaths, ...(result.migrationPreview && { migrationPreview: { compatible: result.migrationPreview.compatible, blockingIssues: result.migrationPreview.blockingIssues, counterpartFingerprint: result.migrationPreview.counterpartFingerprint } }), truncated: true };
+        return { manifestVersion: base.manifestVersion, format: base.format, portable: true, contractFingerprint, reservedPaths: base.reservedPaths, reviewCadence: base.reviewCadence, ...(result.migrationPreview && { migrationPreview: { compatible: result.migrationPreview.compatible, blockingIssues: result.migrationPreview.blockingIssues, counterpartFingerprint: result.migrationPreview.counterpartFingerprint } }), truncated: true };
     }
     /**
      * A small action-oriented packet for agents that need to decide what to do
@@ -6832,7 +7043,7 @@ export class LlmWikiService {
             || retirementMetadataRequested) {
             throw new Error('Use wiki.lifecycle_transition to preview lifecycle, retention, reference impact, and replacement lineage before retiring or reactivating knowledge.');
         }
-        const hasOrganizationInput = [params.noteKind, params.lifecycle, params.decisionStatus, params.primaryMoc, params.mocs, params.moc, params.navOrder, params.project, params.reviewAt, params.reviewIntervalDays, params.reviewSnoozedUntil, params.reviewSnoozeReason, params.nextAction, params.waitingFor, params.desiredOutcome, params.projectPurpose, params.projectSupport, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.serviceClass, params.completionCriteria, params.startedAt, params.blockedSince, params.waitingSince, params.completedAt, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.canonicalPath, params.recallPrompt, params.recallIntervalDays, params.lastRecalledAt, params.recallQuality, params.retentionPolicy, params.retentionEvent, params.retentionAt, params.preserveUntil, params.legalHold, params.retentionReason, params.archiveReason, params.replacedBy, params.knowledgeRole, params.termStatus, params.termReplacedBy, params.termScopeNote, params.preferredTerm, params.termLanguage, params.authorityScheme, params.authorityId, params.disambiguation, params.broaderTerms, params.relatedTerms, params.subjectTerms, params.domain, params.methods, params.audience, params.retrievalCues, params.useWhen, params.validFrom, params.validUntil, params.observedAt, params.temporalScope, params.seeAlso, params.relations, params.relationNotes, params.relationEvidence, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.reviewChecks, params.reviewOpenItems, params.interpretationStatus, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
+        const hasOrganizationInput = [params.noteKind, params.lifecycle, params.decisionStatus, params.primaryMoc, params.mocs, params.moc, params.navOrder, params.project, params.reviewAt, params.reviewIntervalDays, params.volatilityClass, params.reviewSnoozedUntil, params.reviewSnoozeReason, params.nextAction, params.waitingFor, params.desiredOutcome, params.projectPurpose, params.projectSupport, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.serviceClass, params.completionCriteria, params.startedAt, params.blockedSince, params.waitingSince, params.completedAt, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.canonicalPath, params.recallPrompt, params.recallIntervalDays, params.lastRecalledAt, params.recallQuality, params.retentionPolicy, params.retentionEvent, params.retentionAt, params.preserveUntil, params.legalHold, params.retentionReason, params.archiveReason, params.replacedBy, params.knowledgeRole, params.termStatus, params.termReplacedBy, params.termScopeNote, params.preferredTerm, params.termLanguage, params.authorityScheme, params.authorityId, params.disambiguation, params.broaderTerms, params.relatedTerms, params.subjectTerms, params.domain, params.methods, params.audience, params.retrievalCues, params.useWhen, params.validFrom, params.validUntil, params.observedAt, params.temporalScope, params.seeAlso, params.relations, params.relationNotes, params.relationEvidence, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.reviewChecks, params.reviewOpenItems, params.interpretationStatus, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
             .some(value => value !== undefined);
         if (!hasOrganizationInput && !params.clearInapplicable && [params.tags, params.timeEstimateMinutes, params.energy, params.effort].every(value => value === undefined))
             throw new Error('At least one organization field is required');
@@ -6852,6 +7063,7 @@ export class LlmWikiService {
             ...(params.project !== undefined && { project: params.project }),
             ...(params.reviewAt !== undefined && { reviewAt: params.reviewAt }),
             ...(params.reviewIntervalDays !== undefined && { reviewIntervalDays: params.reviewIntervalDays }),
+            ...(params.volatilityClass !== undefined && { volatilityClass: params.volatilityClass }),
             ...(params.reviewSnoozedUntil !== undefined && { reviewSnoozedUntil: params.reviewSnoozedUntil }),
             ...(params.reviewSnoozeReason !== undefined && { reviewSnoozeReason: params.reviewSnoozeReason }),
             ...(params.aliases !== undefined && { aliases: params.aliases }),
@@ -7388,10 +7600,11 @@ export class LlmWikiService {
             evidence: evidence.map(item => ({ ...item, path: this.access.toPublicPath(item.path) })),
         };
     }
-    async impactReport(principal, limit = 20, maxChars = 6000) {
+    async impactReport(principal, limit = 20, maxChars = 6000, maxCascadeDepth = 3) {
         const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
         const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 16000);
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        const cascadeProjection = await this.upstreamCascadeProjection(principal, maxCascadeDepth);
         const sourceState = new Map();
         const items = [];
         let total = 0;
@@ -7441,6 +7654,7 @@ export class LlmWikiService {
             if (declaredPolicy === 'on_upstream_change' && !referenceIndex)
                 referenceIndex = await this.buildKnowledgeReferenceIndex(principal);
             const reviewSignals = await this.reviewChangeSignals(note, principal, referenceIndex);
+            const cascadeSignal = cascadeProjection.signals.get(normalizePath(note.path).toLowerCase());
             const reviewPolicy = reviewSignals.policy;
             if (reviewPolicy === 'on_source_change' && reasons.includes('source_changed'))
                 reasons.push('review_source_changed');
@@ -7451,6 +7665,8 @@ export class LlmWikiService {
             if (reviewPolicy === 'on_upstream_change' && reviewSignals.upstreamChanged) {
                 reasons.push('upstream_changed', 'upstream_change_triggered_review');
             }
+            if (cascadeSignal)
+                reasons.push('upstream_cascade_changed');
             if (reasons.length === 0)
                 continue;
             total += 1;
@@ -7473,6 +7689,12 @@ export class LlmWikiService {
                 ...(affectedSources.length > 0 && { affectedSources: [...new Set(affectedSources)].map(path => this.access.toPublicPath(path)).slice(0, 10) }),
                 ...(invalidatedUpstream.length > 0 && { invalidatedUpstream: [...new Set(invalidatedUpstream)].slice(0, 10) }),
                 ...(reviewSignals.upstreamChanges.length > 0 && { upstreamChanges: reviewSignals.upstreamChanges }),
+                ...(cascadeSignal && {
+                    cascadeDepth: cascadeSignal.depth,
+                    cascadeRoot: this.access.toPublicPath(cascadeSignal.root),
+                    cascadeVia: this.access.toPublicPath(cascadeSignal.via),
+                    cascadeRootReasons: cascadeSignal.rootReasons,
+                }),
                 ...(reviewAt && { reviewAt }),
             };
             const score = item.severity === 'high' ? 0 : 1;
@@ -7496,7 +7718,19 @@ export class LlmWikiService {
             boundedItems.push(item);
             used += size;
         }
-        return { items: boundedItems, total, truncated: total > boundedItems.length, generatedAt: now() };
+        return {
+            items: boundedItems,
+            total,
+            truncated: total > boundedItems.length,
+            generatedAt: now(),
+            cascade: {
+                maxDepth: cascadeProjection.maxDepth,
+                scanned: cascadeProjection.scanned,
+                edgeCount: cascadeProjection.edgeCount,
+                seedCount: cascadeProjection.seedCount,
+                truncated: cascadeProjection.truncated,
+            },
+        };
     }
     async exportBasesView(principal, noteKind, lifecycle, limit = 100, maxChars = 12000, requestedView = 'all') {
         const boundedLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
@@ -9242,6 +9476,262 @@ export class LlmWikiService {
         }
         return { candidates: selected, total: groups.size, uncoveredKnowledgeTotal: Number(graph.mocCoverage.uncoveredKnowledge?.total || 0), truncated: groups.size > selected.length || selected.length < candidateGroups.length };
     }
+    /** Explain how an overloaded authored MOC could be split without changing
+     * it. Existing sections remain the first organizing signal, followed by
+     * explicit Obsidian/Properties structure. */
+    async mocRebalance(principal, path, maxBranches = 4, limit = 30, maxChars = 8000, saturationThreshold = 25) {
+        if (!this.access.canAccessPhysicalPath(path, principal))
+            throw new Error(`Access denied: ${this.access.toPublicPath(path)}`);
+        const moc = await this.fileSystem.readNote(path);
+        if (isModerationHidden(moc.frontmatter) || String(moc.frontmatter.note_kind || '').trim().toLowerCase() !== 'moc') {
+            throw new Error('wiki.moc_rebalance requires one visible note_kind: moc note');
+        }
+        const boundedBranches = Math.min(Math.max(Number(maxBranches) || 4, 2), 5);
+        const boundedLimit = Math.min(Math.max(Number(limit) || 30, 1), 50);
+        const boundedChars = Math.min(Math.max(Number(maxChars) || 8000, 700), 16000);
+        const boundedThreshold = Math.min(Math.max(Number(saturationThreshold) || 25, 3), 200);
+        const canAccess = (candidate) => this.access.canAccessPhysicalPath(candidate, principal);
+        const mocTitle = String(moc.frontmatter.title || moc.content.match(/^#\s+(.+?)\s*$/m)?.[1] || path.split('/').at(-1)?.replace(/\.md$/i, '') || 'MOC').trim();
+        const occurrences = extractObsidianLinkOccurrences(moc.content, Math.min(1000, boundedLimit * 4 + 1));
+        const resolvedMembers = [];
+        const seen = new Set();
+        let unresolvedTotal = 0;
+        let ambiguousTotal = 0;
+        let memberTotal = 0;
+        let scanTruncated = occurrences.length > boundedLimit * 4;
+        for (const occurrence of occurrences) {
+            const matches = (await this.fileSystem.findPathForWikiLink(occurrence.target, canAccess))
+                .filter(candidate => this.access.canReferenceFrom(path, candidate));
+            if (matches.length === 0) {
+                unresolvedTotal += 1;
+                continue;
+            }
+            if (matches.length > 1) {
+                ambiguousTotal += 1;
+                continue;
+            }
+            const memberPath = normalizePath(matches[0]);
+            const key = memberPath.toLowerCase();
+            if (key === normalizePath(path).toLowerCase() || seen.has(key))
+                continue;
+            let memberNote;
+            try {
+                memberNote = await this.fileSystem.readNote(memberPath);
+            }
+            catch {
+                unresolvedTotal += 1;
+                continue;
+            }
+            if (isModerationHidden(memberNote.frontmatter))
+                continue;
+            seen.add(key);
+            memberTotal += 1;
+            if (resolvedMembers.length >= boundedLimit) {
+                scanTruncated = true;
+                continue;
+            }
+            const section = typeof occurrence.heading === 'string' && occurrence.heading.trim() && occurrence.heading.trim().toLowerCase() !== mocTitle.toLowerCase()
+                ? boundedText(occurrence.heading.trim(), 160)
+                : undefined;
+            resolvedMembers.push({
+                physicalPath: memberPath,
+                path: this.access.toPublicPath(memberPath),
+                title: boundedText(memberNote.frontmatter.title || memberPath.split('/').at(-1)?.replace(/\.md$/i, '') || memberPath, 160),
+                revision: memberNote.revision,
+                line: occurrence.line,
+                authoredLink: boundedText(occurrence.link, 300),
+                reason: '',
+                ...(section && { section }),
+                frontmatter: memberNote.frontmatter,
+            });
+        }
+        const sectionCounts = new Map();
+        for (const member of resolvedMembers)
+            if (member.section)
+                sectionCounts.set(member.section.toLowerCase(), (sectionCounts.get(member.section.toLowerCase()) || 0) + 1);
+        const groups = new Map();
+        for (const resolved of resolvedMembers) {
+            const memberKind = String(resolved.frontmatter.note_kind || '').trim().toLowerCase();
+            let relationNeighborhood;
+            for (const relation of RELATION_FIELDS) {
+                for (const raw of Array.isArray(resolved.frontmatter[relation]) ? resolved.frontmatter[relation].slice(0, 20) : []) {
+                    if (typeof raw !== 'string')
+                        continue;
+                    const matches = (await this.fileSystem.findPathForWikiLink(relationDocument(raw), canAccess))
+                        .filter(candidate => this.access.canReferenceFrom(resolved.physicalPath, candidate));
+                    if (matches.length !== 1)
+                        continue;
+                    const targetPath = normalizePath(matches[0]);
+                    let targetTitle = targetPath.split('/').at(-1)?.replace(/\.md$/i, '') || targetPath;
+                    try {
+                        const target = await this.fileSystem.readNote(targetPath);
+                        if (isModerationHidden(target.frontmatter))
+                            continue;
+                        targetTitle = String(target.frontmatter.title || targetTitle).trim();
+                    }
+                    catch {
+                        continue;
+                    }
+                    relationNeighborhood = { relation, targetPath: this.access.toPublicPath(targetPath), targetTitle: boundedText(targetTitle, 120) };
+                    break;
+                }
+                if (relationNeighborhood)
+                    break;
+            }
+            const domain = typeof resolved.frontmatter.domain === 'string' ? resolved.frontmatter.domain.trim() : '';
+            const subjectTerm = Array.isArray(resolved.frontmatter.subject_terms)
+                ? resolved.frontmatter.subject_terms.find((item) => typeof item === 'string' && Boolean(item.trim()))?.trim()
+                : undefined;
+            const groupedSection = resolved.section && (sectionCounts.get(resolved.section.toLowerCase()) || 0) >= 2 ? resolved.section : undefined;
+            const basis = groupedSection
+                ? { priority: 0, label: groupedSection, kind: 'authored_heading', value: groupedSection }
+                : memberKind === 'moc'
+                    ? { priority: 1, label: 'Sub-MOCs', kind: 'child_moc', value: 'moc' }
+                    : relationNeighborhood
+                        ? {
+                            priority: 2,
+                            label: `Relation: ${relationNeighborhood.relation} → ${relationNeighborhood.targetTitle}`,
+                            kind: 'typed_relation',
+                            value: `${relationNeighborhood.relation}:${relationNeighborhood.targetPath}`,
+                            relation: relationNeighborhood.relation,
+                            target: relationNeighborhood.targetPath,
+                        }
+                        : domain
+                            ? { priority: 3, label: `Domain: ${domain}`, kind: 'domain', value: domain }
+                            : subjectTerm
+                                ? { priority: 4, label: `Subject: ${subjectTerm}`, kind: 'subject_term', value: subjectTerm }
+                                : { priority: 5, label: 'Unclassified', kind: 'unclassified', value: 'Unclassified' };
+            const groupKey = `${basis.priority}|${basis.value.toLowerCase()}`;
+            const group = groups.get(groupKey) || {
+                priority: basis.priority,
+                label: basis.label,
+                basis: {
+                    kind: basis.kind,
+                    value: basis.value,
+                    ...('relation' in basis && basis.relation ? { relation: basis.relation } : {}),
+                    ...('target' in basis && basis.target ? { target: basis.target } : {}),
+                },
+                members: [],
+                firstLine: resolved.line,
+            };
+            const { frontmatter: _frontmatter, physicalPath: _physicalPath, section: _section, ...member } = resolved;
+            group.members.push({ ...member, reason: `${basis.kind}:${basis.value}` });
+            group.firstLine = Math.min(group.firstLine, resolved.line);
+            groups.set(groupKey, group);
+        }
+        const mocStem = mocTitle.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 80) || 'MOC';
+        const mocDirectory = normalizePath(path).split('/').slice(0, -1).join('/');
+        const orderedGroups = [...groups.values()]
+            .map(group => ({ ...group, members: group.members.sort((left, right) => left.line - right.line || left.path.localeCompare(right.path)) }))
+            .sort((left, right) => left.firstLine - right.firstLine || left.priority - right.priority || left.label.localeCompare(right.label));
+        const selectedGroups = orderedGroups.slice(0, boundedBranches);
+        const selectedKeys = new Set(selectedGroups.map(group => `${group.priority}|${group.basis.value.toLowerCase()}`));
+        const leftovers = orderedGroups.filter(group => !selectedKeys.has(`${group.priority}|${group.basis.value.toLowerCase()}`)).flatMap(group => group.members);
+        const outputBranches = [];
+        for (const group of selectedGroups) {
+            const groupStem = group.label.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Unclassified';
+            const suggestedPhysicalPath = `${mocDirectory ? `${mocDirectory}/` : ''}${mocStem} - ${groupStem}.md`;
+            const suggestedPath = this.access.toPublicPath(suggestedPhysicalPath);
+            const suggestedTitle = `${mocTitle}: ${group.label}`;
+            const memberLinks = group.members.map(member => `- [[${member.path.replace(/\.md$/i, '')}|${member.title}]]`).join('\n');
+            outputBranches.push({
+                label: group.label,
+                basis: group.basis,
+                ...(group.basis.kind === 'authored_heading' && { heading: group.basis.value }),
+                firstLine: group.firstLine,
+                memberCount: group.members.length,
+                entries: group.members,
+                entriesTruncated: false,
+                suggestedSubMoc: {
+                    title: suggestedTitle,
+                    path: suggestedPath,
+                    targetExists: await this.fileSystem.noteExists(suggestedPhysicalPath),
+                    frontmatter: { note_kind: 'moc', lifecycle: 'active', moc_parent: `[[${this.access.toPublicPath(path).replace(/\.md$/i, '')}]]`, moc_purpose: `Navigate ${group.label} within ${mocTitle}`, moc_scope: `${group.basis.kind}:${group.basis.value}` },
+                    draftMarkdown: `# ${suggestedTitle}\n\n## Purpose\n\nNavigate ${group.label} within [[${this.access.toPublicPath(path).replace(/\.md$/i, '')}|${mocTitle}]].\n\n## Reading order\n\n${memberLinks}\n`,
+                },
+            });
+        }
+        const branchByPath = new Map();
+        outputBranches.forEach((branch, branchIndex) => branch.entries.forEach((entry) => branchByPath.set(normalizePath(entry.path).toLowerCase(), branchIndex)));
+        const crossBranchDependencies = [];
+        for (const resolved of resolvedMembers) {
+            const fromBranch = branchByPath.get(normalizePath(resolved.path).toLowerCase());
+            if (fromBranch === undefined)
+                continue;
+            for (const relation of UPSTREAM_DEPENDENCY_RELATIONS) {
+                for (const raw of Array.isArray(resolved.frontmatter[relation]) ? resolved.frontmatter[relation].slice(0, 20) : []) {
+                    if (typeof raw !== 'string')
+                        continue;
+                    const matches = await this.fileSystem.findPathForWikiLink(relationDocument(raw), canAccess);
+                    if (matches.length !== 1)
+                        continue;
+                    const toPath = this.access.toPublicPath(matches[0]);
+                    const toBranch = branchByPath.get(normalizePath(toPath).toLowerCase());
+                    if (toBranch === undefined || toBranch === fromBranch)
+                        continue;
+                    crossBranchDependencies.push({ from: resolved.path, to: toPath, relation, fromBranch: outputBranches[fromBranch].label, toBranch: outputBranches[toBranch].label });
+                    if (crossBranchDependencies.length >= 30)
+                        break;
+                }
+                if (crossBranchDependencies.length >= 30)
+                    break;
+            }
+            if (crossBranchDependencies.length >= 30)
+                break;
+        }
+        const rebalanceRecommended = memberTotal > boundedThreshold;
+        const report = {
+            mode: 'explainable_moc_rebalance_plan',
+            root: { path: this.access.toPublicPath(path), revision: moc.revision },
+            memberTotal,
+            saturationThreshold: boundedThreshold,
+            saturated: memberTotal > boundedThreshold,
+            rebalanceRecommended,
+            mutates: false,
+            strategyPriority: ['authored_heading', 'child_moc', 'typed_relation', 'domain', 'subject_term', 'unclassified'],
+            branches: rebalanceRecommended ? outputBranches : [],
+            branchTotal: orderedGroups.length,
+            leftovers: { total: leftovers.length, items: leftovers.slice(0, 8), truncated: leftovers.length > 8 },
+            crossBranchDependencies,
+            unresolvedTotal,
+            ambiguousTotal,
+            truncated: scanTruncated || orderedGroups.length > selectedGroups.length || crossBranchDependencies.length >= 30,
+            applyWith: ['notes.write', 'wiki.moc_membership', 'wiki.hierarchy_change', 'notes.change_set(dryRun=true)'],
+            nextStep: rebalanceRecommended
+                ? 'Review heading provenance, source-line order, leftovers, and cross-branch dependencies. Create accepted sub-MOCs, then use revision-safe planners and a dry-run notes.change_set; this endpoint never rewrites the parent.'
+                : 'This MOC is below the saturation threshold. Keep the authored map unless another explicit navigation problem justifies restructuring.',
+        };
+        while (JSON.stringify(report).length > boundedChars) {
+            const largest = report.branches
+                .filter((branch) => branch.entries.length > 0)
+                .sort((left, right) => right.entries.length - left.entries.length)[0];
+            if (largest) {
+                largest.entries.pop();
+                largest.entriesTruncated = true;
+                report.truncated = true;
+                continue;
+            }
+            if (report.crossBranchDependencies.length > 0) {
+                report.crossBranchDependencies.pop();
+                report.truncated = true;
+                continue;
+            }
+            if (report.branches.length > 0) {
+                report.branches.pop();
+                report.truncated = true;
+                continue;
+            }
+            const compact = { mode: 'explainable_moc_rebalance_plan', root: { path: this.access.toPublicPath(path), revision: moc.revision }, memberTotal, saturationThreshold: boundedThreshold, rebalanceRecommended, mutates: false, truncated: true };
+            const current = await this.fileSystem.readNote(path);
+            if (current.revision !== moc.revision)
+                throw new Error('MOC changed while the rebalance plan was being built; read the current revision and retry.');
+            return compact;
+        }
+        const current = await this.fileSystem.readNote(path);
+        if (current.revision !== moc.revision)
+            throw new Error('MOC changed while the rebalance plan was being built; read the current revision and retry.');
+        return report;
+    }
     /**
      * One-pass organization quality projection. It reuses lint's authoritative
      * scan instead of running separate folder/property scans, and never mutates
@@ -9323,7 +9813,7 @@ export class LlmWikiService {
         const lint = await this.lint(principal, Math.max(200, boundedLimit * 4));
         const organizationCodes = new Set([
             'invalid_note_kind', 'invalid_lifecycle', 'generic_concept_title', 'active_project_without_next_action', 'active_project_without_outcome',
-            'knowledge_note_kind_missing', 'knowledge_lifecycle_missing', 'invalid_review_at', 'invalid_review_interval_days',
+            'knowledge_note_kind_missing', 'knowledge_lifecycle_missing', 'invalid_review_at', 'invalid_review_interval_days', 'invalid_volatility_class',
             'knowledge_review_due', 'review_date_missing', 'moc_without_links',
             'inbox_lifecycle_mismatch', 'invalid_aliases', 'duplicate_aliases',
             'invalid_mocs', 'duplicate_mocs',
@@ -9378,7 +9868,7 @@ export class LlmWikiService {
             ...(byCode.generic_concept_title ? ['Rename generic durable notes with concept-oriented titles so agents can rediscover them from the title alone.'] : []),
             ...(Object.keys(byCode).some(code => code.startsWith('invalid_') || code.startsWith('unsafe_')) ? ['Repair property shapes before relying on catalog filters or projections.'] : []),
             ...(byCode.property_type_drift ? ['Keep the same YAML property name in one native shape across notes (for example, always use a list for tags/aliases); repair drift before relying on Obsidian Properties or Bases views.'] : []),
-            ...(byCode.property_contract_violation || byCode.invalid_review_interval_days ? ['Read wiki.property_contract, then repair MCP-managed Properties with the normal revision-checked triage flow.'] : []),
+            ...(byCode.property_contract_violation || byCode.invalid_review_interval_days || byCode.invalid_volatility_class ? ['Read wiki.property_contract, then repair MCP-managed Properties with the normal revision-checked triage flow.'] : []),
             ...(byCode.broader_term_cycle ? ['Break broader_terms cycles; use one-way broader-to-narrower navigation so authority browsing terminates predictably.'] : []),
             ...(byCode.unresolved_broader_terms || byCode.ambiguous_broader_terms || byCode.unresolved_related_terms || byCode.ambiguous_related_terms ? ['Repair unresolved or ambiguous library terms, preferably with an exact Obsidian wikilink or an existing preferred title.'] : []),
             ...(byCode.deprecated_term_used ? ['Replace deprecated classification facets with their preferred term while retaining the deprecated note as a redirect.'] : []),

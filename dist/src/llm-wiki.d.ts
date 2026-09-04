@@ -125,6 +125,13 @@ export declare class LlmWikiService {
      * support/contradiction links are navigation signals, not automatic edits. */
     private collectClaimDownstreamKnowledgePaths;
     private reviewChangeSignals;
+    /**
+     * Project direct invalidation through explicit typed note relations. This is
+     * deliberately request-local and read-only: it never mutates lifecycle or
+     * stores another graph. Only visible notes that opted into
+     * on_upstream_change can receive or continue a cascade.
+     */
+    private upstreamCascadeProjection;
     initialize(scopeRoot: string, actor: string): Promise<{
         success: boolean;
         created: boolean;
@@ -233,6 +240,7 @@ export declare class LlmWikiService {
         project?: string;
         reviewAt?: string;
         reviewIntervalDays?: unknown;
+        volatilityClass?: unknown;
         aliases?: unknown;
         summary?: string;
         keyPoints?: unknown;
@@ -445,10 +453,17 @@ export declare class LlmWikiService {
         exploredEdges: number;
         truncated: boolean;
     }>;
-    reviewQueue(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+    reviewQueue(principal?: ScopePrincipal, limit?: number, maxChars?: number, maxCascadeDepth?: number): Promise<{
         items: Record<string, unknown>[];
         total: number;
         truncated: boolean;
+        cascade: {
+            maxDepth: number;
+            scanned: number;
+            edgeCount: number;
+            seedCount: number;
+            truncated: boolean;
+        };
     }>;
     inbox(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
         purpose: string;
@@ -679,6 +694,7 @@ export declare class LlmWikiService {
         reviewTrigger: string;
         reviewCount: number;
         reviewReopenCount: number;
+        volatilityClass: "durable" | "ephemeral" | "evolving" | "foundational";
         reviewChecks?: string[];
         reviewOpenItems?: string[];
         reviewAt?: string;
@@ -794,6 +810,13 @@ export declare class LlmWikiService {
                 items: Record<string, unknown>[];
                 total: number;
                 truncated: boolean;
+                cascade: {
+                    maxDepth: number;
+                    scanned: number;
+                    edgeCount: number;
+                    seedCount: number;
+                    truncated: boolean;
+                };
             };
             graph: {
                 mocCoverage: {
@@ -1163,6 +1186,13 @@ export declare class LlmWikiService {
             knowledge: {
                 total: number;
                 truncated: boolean;
+                cascade: {
+                    maxDepth: number;
+                    scanned: number;
+                    edgeCount: number;
+                    seedCount: number;
+                    truncated: boolean;
+                };
                 items: Record<string, unknown>[];
             };
             graph: {
@@ -2806,6 +2836,7 @@ export declare class LlmWikiService {
         project?: string;
         reviewAt?: string;
         reviewIntervalDays?: unknown;
+        volatilityClass?: unknown;
         nextAction?: string;
         waitingFor?: string;
         aliases?: unknown;
@@ -3088,11 +3119,18 @@ export declare class LlmWikiService {
             path: string;
         }[];
     }>;
-    impactReport(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+    impactReport(principal?: ScopePrincipal, limit?: number, maxChars?: number, maxCascadeDepth?: number): Promise<{
         items: Record<string, unknown>[];
         total: number;
         truncated: boolean;
         generatedAt: string;
+        cascade: {
+            maxDepth: number;
+            scanned: number;
+            edgeCount: number;
+            seedCount: number;
+            truncated: boolean;
+        };
     }>;
     exportBasesView(principal?: ScopePrincipal, noteKind?: string, lifecycle?: string, limit?: number, maxChars?: number, requestedView?: string): Promise<{
         format: string;
@@ -3831,6 +3869,21 @@ export declare class LlmWikiService {
         candidates: Record<string, unknown>[];
         total: number;
         uncoveredKnowledgeTotal: number;
+        truncated: boolean;
+    }>;
+    /** Explain how an overloaded authored MOC could be split without changing
+     * it. Existing sections remain the first organizing signal, followed by
+     * explicit Obsidian/Properties structure. */
+    mocRebalance(principal: ScopePrincipal | undefined, path: string, maxBranches?: number, limit?: number, maxChars?: number, saturationThreshold?: number): Promise<Record<string, any> | {
+        mode: string;
+        root: {
+            path: string;
+            revision: string;
+        };
+        memberTotal: number;
+        saturationThreshold: number;
+        rebalanceRecommended: boolean;
+        mutates: boolean;
         truncated: boolean;
     }>;
     /**

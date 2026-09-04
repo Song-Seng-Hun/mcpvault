@@ -11,6 +11,9 @@ export declare const TASK_STATUSES: readonly ['open', 'next_action', 'waiting', 
 /** Optional Kanban-style class of service for executable work. */
 export declare const SERVICE_CLASSES: readonly ['expedite', 'fixed_date', 'standard', 'research'];
 export declare const REVIEW_POLICIES: readonly ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit', 'on_upstream_change'];
+/** Expected rate of factual decay. This chooses bounded review defaults; an
+ * explicit review date or interval remains authoritative. */
+export declare const VOLATILITY_CLASSES: readonly ['ephemeral', 'evolving', 'durable', 'foundational'];
 export declare const REVIEW_OUTCOMES: readonly ['confirmed', 'revised', 'disputed', 'superseded', 'rescheduled'];
 /** Small, repeatable quality checklist for an evidence review. */
 export declare const REVIEW_CHECKS: readonly ['evidence', 'links', 'summary', 'moc', 'counterexamples', 'scope', 'freshness'];
@@ -267,6 +270,7 @@ export declare function normalizeReviewChecks(value: unknown): string[] | undefi
 export declare function normalizeTaskStatus(value: unknown, fallback?: typeof TASK_STATUSES[number]): typeof TASK_STATUSES[number] | undefined;
 export declare function normalizeServiceClass(value: unknown, fallback?: typeof SERVICE_CLASSES[number]): typeof SERVICE_CLASSES[number] | undefined;
 export declare function normalizeReviewPolicy(value: unknown, fallback?: typeof REVIEW_POLICIES[number]): typeof REVIEW_POLICIES[number] | undefined;
+export declare function normalizeVolatilityClass(value: unknown, fallback?: typeof VOLATILITY_CLASSES[number]): typeof VOLATILITY_CLASSES[number] | undefined;
 export declare function normalizeReviewOutcome(value: unknown, fallback?: typeof REVIEW_OUTCOMES[number]): typeof REVIEW_OUTCOMES[number] | undefined;
 export declare function normalizeInterpretationStatus(value: unknown, fallback?: typeof INTERPRETATION_STATUSES[number]): typeof INTERPRETATION_STATUSES[number] | undefined;
 export declare function normalizeEpistemicStatus(value: unknown, noteKind: NoteKind, fallback?: string): string | undefined;
@@ -318,6 +322,7 @@ export interface KnowledgeOrganizationInput {
     project?: unknown;
     reviewAt?: unknown;
     reviewIntervalDays?: unknown;
+    volatilityClass?: unknown;
     recallPrompt?: unknown;
     recallIntervalDays?: unknown;
     lastRecalledAt?: unknown;

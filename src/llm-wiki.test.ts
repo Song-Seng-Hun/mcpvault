@@ -2419,6 +2419,65 @@ test('clarify, source distillation, and MOC candidates complete the organization
   }
 });
 
+test('MOC rebalance produces an explainable bounded plan without rewriting notes', async () => {
+  await mkdir(join(vault, 'Knowledge', 'MOCs'), { recursive: true });
+  await mkdir(join(vault, 'Knowledge'), { recursive: true });
+  await writeFile(join(vault, 'Knowledge', 'MOCs', 'Large.md'), [
+    '---', 'llm_wiki_type: knowledge', 'note_kind: moc', 'lifecycle: evergreen', '---',
+    '# Large map', '',
+    '[[Knowledge/MOCs/Submap]]',
+    '[[Knowledge/Domain note]]',
+    '[[Knowledge/Relation note]]',
+    '[[Knowledge/Unclassified]]',
+    '', '## Foundations', '',
+    '[[Knowledge/Foundation A]]',
+    '[[Knowledge/Foundation B]]',
+    '[[Knowledge/Hidden]]',
+  ].join('\n'));
+  await writeFile(join(vault, 'Knowledge', 'MOCs', 'Submap.md'), '---\nllm_wiki_type: knowledge\nnote_kind: moc\nlifecycle: evergreen\n---\n# Submap\n');
+  await writeFile(join(vault, 'Knowledge', 'Domain note.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\ndomain: Retrieval\n---\n# Domain note\n\nBody must not be returned.\n');
+  await writeFile(join(vault, 'Knowledge', 'Relation note.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\ndepends_on:\n  - "[[Knowledge/Domain note]]"\n---\n# Relation note\n');
+  await writeFile(join(vault, 'Knowledge', 'Unclassified.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\n---\n# Unclassified\n');
+  await writeFile(join(vault, 'Knowledge', 'Foundation A.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\n---\n# Foundation A\n');
+  await writeFile(join(vault, 'Knowledge', 'Foundation B.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\n---\n# Foundation B\n');
+  await writeFile(join(vault, 'Knowledge', 'Hidden.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\nmoderation_status: quarantined\n---\n# Hidden\n');
+
+  const { server, client } = await setup();
+  try {
+    const discovery = await callJson(client, 'search_capabilities', { query: 'MOC rebalance split saturated map', limit: 5, maxChars: 6000 });
+    expect(discovery.value.endpoints).toEqual(expect.arrayContaining([expect.objectContaining({ endpointId: 'wiki.moc_rebalance', available: true })]));
+    const plan = await callJson(client, 'get_wiki_moc_rebalance', { path: 'Knowledge/MOCs/Large.md', saturationThreshold: 3, maxBranches: 5, limit: 30, maxChars: 12000 });
+    expect(plan.value).toMatchObject({
+      mode: 'explainable_moc_rebalance_plan',
+      root: { path: 'Knowledge/MOCs/Large.md', revision: expect.stringMatching(/^[a-f0-9]{64}$/) },
+      memberTotal: 6,
+      saturationThreshold: 3,
+      saturated: true,
+      rebalanceRecommended: true,
+      mutates: false,
+      strategyPriority: ['authored_heading', 'child_moc', 'typed_relation', 'domain', 'subject_term', 'unclassified'],
+    });
+    expect(plan.value.branches).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'Foundations', basis: { kind: 'authored_heading', value: 'Foundations' }, memberCount: 2 }),
+      expect.objectContaining({ label: 'Sub-MOCs', basis: { kind: 'child_moc', value: 'moc' }, memberCount: 1 }),
+      expect.objectContaining({ label: 'Relation: depends_on → Domain note', basis: expect.objectContaining({ kind: 'typed_relation', relation: 'depends_on', target: 'Knowledge/Domain note.md' }), memberCount: 1 }),
+      expect.objectContaining({ label: 'Domain: Retrieval', basis: { kind: 'domain', value: 'Retrieval' }, memberCount: 1 }),
+      expect.objectContaining({ label: 'Unclassified', basis: { kind: 'unclassified', value: 'Unclassified' }, memberCount: 1 }),
+    ]));
+    expect(plan.value.crossBranchDependencies).toEqual(expect.arrayContaining([expect.objectContaining({ from: 'Knowledge/Relation note.md', to: 'Knowledge/Domain note.md', relation: 'depends_on' })]));
+    expect(JSON.stringify(plan.value)).not.toContain('Body must not be returned');
+    expect(JSON.stringify(plan.value)).not.toContain('Hidden.md');
+    expect(JSON.stringify(plan.value).length).toBeLessThanOrEqual(12000);
+    const unchanged = await callJson(client, 'read_note', { path: 'Knowledge/MOCs/Large.md' });
+    expect(unchanged.value.revision).toBe(plan.value.root.revision);
+    const healthy = await callJson(client, 'get_wiki_moc_rebalance', { path: 'Knowledge/MOCs/Large.md', maxChars: 3000 });
+    expect(healthy.value).toMatchObject({ rebalanceRecommended: false, saturated: false, branches: [], mutates: false });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('upstream review baselines resolve aliases, respect relation direction, and stop reopening after review', async () => {
   const { server, client } = await setup();
   try {
@@ -2455,6 +2514,49 @@ test('upstream review baselines resolve aliases, respect relation direction, and
     await callJson(client, 'review_wiki_note', { path: supporter.value.path, reviewOutcome: 'disputed', nextLifecycle: 'review', expectedRevision: supporter.value.revision, accessToken });
     queue = await callJson(client, 'get_wiki_review_queue', { limit: 20, maxChars: 10000, accessToken });
     expect(queue.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Downstream.md', upstreamChanges: expect.arrayContaining([expect.stringContaining('supports')]) })]));
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('bounded upstream invalidation cascades through opted-in typed dependencies', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'cascade-owner', modelId: 'codex', password: 'cascade-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const source = await callJson(client, 'ingest_source', { sourceId: 'cascade-source', title: 'Cascade source', content: 'A source for a dependency chain.', capturedBy: 'codex', accessToken });
+    const root = await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Cascade root.md', content: '# Cascade root\n\nInitial premise.\n', evidencePaths: [source.value.path], noteKind: 'atomic', lifecycle: 'evergreen', author: 'codex', expectedRevision: 'missing', accessToken,
+    });
+    await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Cascade direct.md', content: '# Cascade direct\n\nDirect conclusion.\n', evidencePaths: [source.value.path], relations: { depends_on: ['[[Knowledge/Cascade root]]'] }, reviewPolicy: 'on_upstream_change', lifecycle: 'evergreen', author: 'codex', expectedRevision: 'missing', accessToken,
+    });
+    await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Cascade second.md', content: '# Cascade second\n\nSecond-order conclusion.\n', evidencePaths: [source.value.path], relations: { depends_on: ['[[Knowledge/Cascade direct]]'] }, reviewPolicy: 'on_upstream_change', lifecycle: 'evergreen', author: 'codex', expectedRevision: 'missing', accessToken,
+    });
+    await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Cascade third.md', content: '# Cascade third\n\nThird-order conclusion.\n', evidencePaths: [source.value.path], relations: { depends_on: ['[[Knowledge/Cascade second]]'] }, reviewPolicy: 'on_upstream_change', lifecycle: 'evergreen', author: 'codex', expectedRevision: 'missing', accessToken,
+    });
+
+    const changed = await client.callTool({ name: 'patch_note', arguments: { path: root.value.path, oldString: 'Initial premise.', newString: 'Revised premise.', expectedRevision: root.value.revision, accessToken } });
+    expect(changed.isError).toBeFalsy();
+
+    const shallow = await callJson(client, 'get_wiki_review_queue', { limit: 20, maxChars: 12000, maxCascadeDepth: 1, accessToken });
+    expect(shallow.value).toMatchObject({ cascade: { maxDepth: 1, truncated: false } });
+    expect(shallow.value.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/Cascade direct.md', reviewReasons: expect.arrayContaining(['upstream_changed']) }),
+      expect.objectContaining({ path: 'Knowledge/Cascade second.md', reviewReasons: expect.arrayContaining(['upstream_cascade_changed']), cascadeDepth: 1, cascadeRoot: 'Knowledge/Cascade direct.md', cascadeVia: 'Knowledge/Cascade direct.md' }),
+    ]));
+    expect(shallow.value.items.find((item: any) => item.path === 'Knowledge/Cascade third.md')).toBeUndefined();
+
+    const deep = await callJson(client, 'get_wiki_impact_report', { limit: 20, maxChars: 12000, maxCascadeDepth: 2, accessToken });
+    expect(deep.value).toMatchObject({ cascade: { maxDepth: 2, truncated: false } });
+    expect(deep.value.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/Cascade second.md', reasons: expect.arrayContaining(['upstream_cascade_changed']), cascadeDepth: 1 }),
+      expect.objectContaining({ path: 'Knowledge/Cascade third.md', reasons: expect.arrayContaining(['upstream_cascade_changed']), cascadeDepth: 2, cascadeRoot: 'Knowledge/Cascade direct.md', cascadeVia: 'Knowledge/Cascade second.md' }),
+    ]));
+    expect(JSON.stringify(deep.value).length).toBeLessThanOrEqual(12000);
   } finally {
     await client.close();
     await server.close();
@@ -3732,10 +3834,16 @@ test('portable migration preflight excludes non-global content and reports revis
 
     const defaultManifest = await callJson(client, 'get_wiki_organization_manifest', { accessToken });
     expect(defaultManifest.value).toMatchObject({
-      manifestVersion: 6,
+      manifestVersion: 7,
       portable: true,
       contentFreeByDefault: true,
       contractFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
+      reviewCadence: {
+        volatilityProperty: 'volatility_class',
+        classes: ['ephemeral', 'evolving', 'durable', 'foundational'],
+        explicitDatesPrecedeDefaults: true,
+        cascade: 'bounded_explicit_upstream_projection',
+      },
       authority: {
         identity: ['authority_scheme', 'authority_id'],
         identityScope: 'scheme_local',
@@ -3783,6 +3891,24 @@ test('portable migration preflight excludes non-global content and reports revis
     expect(legacyCompared.value.migrationPreview.issues).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'older_manifest_version', severity: 'warning', detail: expect.stringContaining('reviewed migration') }),
       expect.objectContaining({ code: 'missing_authority_contract', severity: 'warning' }),
+    ]));
+
+    const legacyVersionSix = structuredClone(defaultManifest.value);
+    legacyVersionSix.manifestVersion = 6;
+    delete legacyVersionSix.reviewCadence;
+    delete legacyVersionSix.contractFingerprint;
+    const cadenceMigration = await callJson(client, 'get_wiki_organization_manifest', { compareManifest: legacyVersionSix, limit: 50, maxChars: 24000, accessToken });
+    expect(cadenceMigration.value.migrationPreview.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'older_manifest_version', severity: 'warning' }),
+      expect.objectContaining({ code: 'missing_review_cadence_contract', severity: 'warning' }),
+    ]));
+
+    const conflictingCadence = structuredClone(defaultManifest.value);
+    conflictingCadence.reviewCadence.classes = ['foundational', 'durable', 'evolving', 'ephemeral'];
+    const cadenceConflict = await callJson(client, 'get_wiki_organization_manifest', { compareManifest: conflictingCadence, limit: 50, maxChars: 24000, accessToken });
+    expect(cadenceConflict.value.migrationPreview).toMatchObject({ compatible: false, blockingIssues: expect.any(Number) });
+    expect(cadenceConflict.value.migrationPreview.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'review_cadence_contract_conflict', severity: 'blocking' }),
     ]));
 
     const conflictingVersionSix = structuredClone(defaultManifest.value);

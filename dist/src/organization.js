@@ -12,6 +12,9 @@ export const TASK_STATUSES = ['open', 'next_action', 'waiting', 'blocked', 'some
 /** Optional Kanban-style class of service for executable work. */
 export const SERVICE_CLASSES = ['expedite', 'fixed_date', 'standard', 'research'];
 export const REVIEW_POLICIES = ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit', 'on_upstream_change'];
+/** Expected rate of factual decay. This chooses bounded review defaults; an
+ * explicit review date or interval remains authoritative. */
+export const VOLATILITY_CLASSES = ['ephemeral', 'evolving', 'durable', 'foundational'];
 export const REVIEW_OUTCOMES = ['confirmed', 'revised', 'disputed', 'superseded', 'rescheduled'];
 /** Small, repeatable quality checklist for an evidence review. */
 export const REVIEW_CHECKS = ['evidence', 'links', 'summary', 'moc', 'counterexamples', 'scope', 'freshness'];
@@ -192,6 +195,7 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'defer_until', type: 'text', description: 'Do not reconsider before this time' },
     { name: 'review_at', type: 'text', description: 'Next evidence review time' },
     { name: 'review_interval_days', type: 'number', description: 'Days after a completed review before the next review' },
+    { name: 'volatility_class', type: 'text', description: 'Expected factual decay used for bounded adaptive review defaults', allowed: VOLATILITY_CLASSES },
     { name: 'review_snoozed_until', type: 'text', description: 'Do not surface in review queues before this ISO date/time' },
     { name: 'review_snooze_reason', type: 'text', description: 'Why this review was deferred' },
     { name: 'recall_prompt', type: 'text', description: 'Optional active-recall question for high-value knowledge' },
@@ -393,6 +397,7 @@ const lifecycleSet = new Set(LIFECYCLES);
 const taskStatusSet = new Set(TASK_STATUSES);
 const serviceClassSet = new Set(SERVICE_CLASSES);
 const reviewPolicySet = new Set(REVIEW_POLICIES);
+const volatilityClassSet = new Set(VOLATILITY_CLASSES);
 const reviewOutcomeSet = new Set(REVIEW_OUTCOMES);
 const reviewCheckSet = new Set(REVIEW_CHECKS);
 const interpretationStatusSet = new Set(INTERPRETATION_STATUSES);
@@ -502,6 +507,14 @@ export function normalizeReviewPolicy(value, fallback) {
     const normalized = String(value).trim().toLowerCase();
     if (!reviewPolicySet.has(normalized))
         throw new Error(`reviewPolicy must be one of: ${REVIEW_POLICIES.join(', ')}`);
+    return normalized;
+}
+export function normalizeVolatilityClass(value, fallback) {
+    if (value === undefined || value === null || String(value).trim() === '')
+        return fallback;
+    const normalized = String(value).trim().toLowerCase();
+    if (!volatilityClassSet.has(normalized))
+        throw new Error(`volatilityClass must be one of: ${VOLATILITY_CLASSES.join(', ')}`);
     return normalized;
 }
 export function normalizeReviewOutcome(value, fallback) {
@@ -834,6 +847,7 @@ export function knowledgeOrganization(input) {
     const project = input.project === undefined ? optionalText(existing.project, 'project', 500) : optionalText(input.project, 'project', 500);
     const reviewAt = input.reviewAt === undefined ? normalizeReviewAt(existing.review_at) : normalizeReviewAt(input.reviewAt);
     const reviewIntervalDays = input.reviewIntervalDays === undefined ? normalizeReviewIntervalDays(existing.review_interval_days) : normalizeReviewIntervalDays(input.reviewIntervalDays);
+    const volatilityClass = input.volatilityClass === undefined ? normalizeVolatilityClass(existing.volatility_class) : normalizeVolatilityClass(input.volatilityClass);
     const reviewSnoozedUntil = input.reviewSnoozedUntil === undefined ? normalizeIsoDate(existing.review_snoozed_until, 'reviewSnoozedUntil') : normalizeIsoDate(input.reviewSnoozedUntil, 'reviewSnoozedUntil');
     const reviewSnoozeReason = input.reviewSnoozeReason === undefined ? optionalText(existing.review_snooze_reason, 'reviewSnoozeReason', 500) : optionalText(input.reviewSnoozeReason, 'reviewSnoozeReason', 500);
     const recallPrompt = input.recallPrompt === undefined ? optionalText(existing.recall_prompt, 'recallPrompt', 1000) : optionalText(input.recallPrompt, 'recallPrompt', 1000);
@@ -980,6 +994,7 @@ export function knowledgeOrganization(input) {
         ...(project && { project }),
         ...(reviewAt && { review_at: reviewAt }),
         ...(reviewIntervalDays !== undefined && { review_interval_days: reviewIntervalDays }),
+        ...(volatilityClass && { volatility_class: volatilityClass }),
         ...(reviewSnoozedUntil && { review_snoozed_until: reviewSnoozedUntil }),
         ...(reviewSnoozeReason && { review_snooze_reason: reviewSnoozeReason }),
         ...(recallPrompt && { recall_prompt: recallPrompt }),
@@ -1187,6 +1202,9 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
         catch (error) {
             issues.push({ code: 'invalid_review_interval_days', detail: error instanceof Error ? error.message : 'review_interval_days must be an integer from 1 to 3650.' });
         }
+    }
+    if (frontmatter.volatility_class !== undefined && !volatilityClassSet.has(String(frontmatter.volatility_class).trim().toLowerCase())) {
+        issues.push({ code: 'invalid_volatility_class', detail: `volatility_class must be one of: ${VOLATILITY_CLASSES.join(', ')}` });
     }
     if (frontmatter.recall_interval_days !== undefined) {
         try {

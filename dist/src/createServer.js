@@ -1389,7 +1389,7 @@ export function createServer(vaultPath, options = {}) {
                         return jsonResult(await llmWiki.qualityCheck(principal, trimmedArgs.path, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_review_queue": {
-                        return jsonResult(await llmWiki.reviewQueue(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+                        return jsonResult(await llmWiki.reviewQueue(principal, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.maxCascadeDepth), trimmedArgs.prettyPrint);
                     }
                     case "review_wiki_note": {
                         await requireExpectedRevisionForExisting(fileSystem, trimmedArgs.path, trimmedArgs.expectedRevision, 'review_wiki_note');
@@ -1512,7 +1512,7 @@ export function createServer(vaultPath, options = {}) {
                         }), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_impact_report": {
-                        return jsonResult(await llmWiki.impactReport(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+                        return jsonResult(await llmWiki.impactReport(principal, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.maxCascadeDepth), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_source_trust": {
                         return jsonResult(await llmWiki.sourceTrust(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
@@ -1577,6 +1577,9 @@ export function createServer(vaultPath, options = {}) {
                     }
                     case "get_wiki_moc_candidates": {
                         return jsonResult(await llmWiki.mocCandidates(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+                    }
+                    case "get_wiki_moc_rebalance": {
+                        return jsonResult(await llmWiki.mocRebalance(principal, trimmedArgs.path, trimmedArgs.maxBranches, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.saturationThreshold), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_organization_health": {
                         return jsonResult(await llmWiki.organizationHealth(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
@@ -1939,6 +1942,9 @@ export function createServer(vaultPath, options = {}) {
                             reason: trimmedArgs.reason,
                             retrospective: trimmedArgs.retrospective,
                             knowledgeNotes: trimmedArgs.knowledgeNotes,
+                            negativeKnowledgeNotes: trimmedArgs.negativeKnowledgeNotes,
+                            noReusableKnowledge: trimmedArgs.noReusableKnowledge,
+                            knowledgeDispositionReason: trimmedArgs.knowledgeDispositionReason,
                             expectedRevision: trimmedArgs.expectedRevision,
                         }), trimmedArgs.prettyPrint);
                     }
@@ -2614,7 +2620,7 @@ export function createServer(vaultPath, options = {}) {
     const closeServer = server.close.bind(server);
     server.close = async () => {
         readModelCatalogUnsubscribe();
-        metadataIndex.close();
+        await metadataIndex.close();
         await searchService.close();
         await semanticSearch.close();
         graphIndex.close();

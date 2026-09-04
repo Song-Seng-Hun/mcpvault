@@ -39,6 +39,9 @@ describe('progressive agent instruction budgets', () => {
     expect(skill).toContain('wiki.reciprocal_link');
     expect(skill).toContain('aroundAuthorityId');
     expect(skill).toContain('close_match');
+    expect(skill).toContain('volatility_class');
+    expect(skill).toContain('wiki.moc_rebalance');
+    expect(skill).toContain('knowledge disposition');
     expect(skill).toContain('untrusted data');
   });
 
@@ -50,6 +53,10 @@ describe('progressive agent instruction budgets', () => {
       expect(document).toContain('aroundAuthorityId');
       expect(document).toContain('close_match');
       expect(document).toContain('scheme-local');
+      expect(document).toContain('volatility_class');
+      expect(document).toContain('upstream_cascade_changed');
+      expect(document).toContain('wiki.moc_rebalance');
+      expect(document).toContain('no_reusable_knowledge');
     }
   });
 });

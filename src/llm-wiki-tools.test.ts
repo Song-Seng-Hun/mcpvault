@@ -32,6 +32,7 @@ import {
   TASK_STATUSES,
   TEMPORAL_VALIDITY_STATES,
   TERM_STATUSES,
+  VOLATILITY_CLASSES,
   WIKI_PROJECTION_VIEWS,
   getOrganizationPropertyContract,
 } from './organization.js';
@@ -44,6 +45,7 @@ interface SchemaProperty {
   enum?: unknown[];
   default?: unknown;
   maxLength?: number;
+  maximum?: number;
   items?: SchemaProperty;
   properties?: SchemaProperties;
 }
@@ -77,6 +79,7 @@ describe('LLM Wiki organization vocabulary contracts', () => {
       ['negativeType', NEGATIVE_KINDS],
       ['termStatus', TERM_STATUSES],
       ['focusHorizon', FOCUS_HORIZONS],
+      ['volatilityClass', VOLATILITY_CLASSES],
     ] as const;
 
     for (const toolName of ['publish_knowledge', 'triage_wiki_note']) {
@@ -113,6 +116,15 @@ describe('LLM Wiki organization vocabulary contracts', () => {
     const issue = properties('resolve_wiki_issue');
     expectEnum(issue, 'resolutionStatus', ISSUE_RESOLUTION_STATUSES);
     expectEnum(issue, 'retrospectiveStatus', ISSUE_RETROSPECTIVE_STATUSES);
+
+    for (const toolName of ['get_wiki_review_queue', 'get_wiki_impact_report']) {
+      expect(properties(toolName).maxCascadeDepth).toMatchObject({ type: 'integer', maximum: 6 });
+    }
+    const rebalance = properties('get_wiki_moc_rebalance');
+    expect(rebalance.maxBranches).toMatchObject({ type: 'integer', maximum: 5 });
+    expect(rebalance.saturationThreshold).toMatchObject({ type: 'integer', maximum: 200 });
+    expect(endpointIdForTool('get_wiki_moc_rebalance')).toBe('wiki.moc_rebalance');
+    expect(LLM_WIKI_MUTATING_TOOLS).not.toContain('get_wiki_moc_rebalance');
   });
 
   test('keeps retrieval, provenance, and epistemic schemas aligned with runtime vocabularies', () => {

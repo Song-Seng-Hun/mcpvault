@@ -20,7 +20,7 @@ describe('progressive Wiki policy', () => {
   });
 
   test('teaches bounded authority shelves and distinct relation strengths progressively', () => {
-    expect(WIKI_POLICY_VERSION).toBe(9);
+    expect(WIKI_POLICY_VERSION).toBe(10);
     const retrieval = getWikiPolicyTopic('retrieval', 2000);
     const knowledge = getWikiPolicyTopic('knowledge', 2000);
     expect(retrieval.routes).toEqual(expect.arrayContaining(['wiki.authority_map']));
@@ -69,6 +69,24 @@ describe('progressive Wiki policy', () => {
     expect(review.rules.join(' ')).toContain('archive');
     expect(review.rules.join(' ')).toContain('reactivate');
     expect(review.avoid.join(' ')).toContain('triage');
+  });
+
+  test('closes task knowledge, volatility review, cascade, and MOC rebalance loops', () => {
+    const work = getWikiPolicyTopic('work', 2400);
+    const review = getWikiPolicyTopic('review', 2400);
+    const moc = getWikiPolicyTopic('moc', 2400);
+    const workText = work.rules.join(' ');
+    expect(workText).toContain('knowledge_notes');
+    expect(workText).toContain('negative_knowledge_notes');
+    expect(workText).toContain('retrospective');
+    expect(workText).toContain('no_reusable_knowledge');
+    expect(workText).toContain('exclusive');
+    expect(review.rules.join(' ')).toContain('volatility_class');
+    expect(review.rules.join(' ')).toContain('upstream_cascade_changed');
+    expect(review.rules.join(' ')).toContain('advisory');
+    expect(moc.routes).toContain('wiki.moc_rebalance');
+    expect(moc.rules.join(' ')).toContain('authored heading');
+    for (const policy of [work, review, moc]) expect(JSON.stringify(policy).length).toBeLessThanOrEqual(2400);
   });
 
 });

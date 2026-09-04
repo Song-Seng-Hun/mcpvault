@@ -374,8 +374,8 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_review_queue',
-      description: 'Return a bounded review queue of knowledge notes that are disputed, in review, due for evidence review, or past their explicit valid_until. Read the selected note before revising it; temporal expiry is advisory and this is a derived view, not a second database.',
-      inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 20, default: 5 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, accessToken, prettyPrint } },
+      description: 'Return a bounded review queue of knowledge notes that are disputed, in review, due for evidence review, past valid_until, or transitively affected through explicit typed upstream relations. Cascades are read-only, cycle-safe, and include only visible notes that opted into on_upstream_change.',
+      inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 20, default: 5 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, maxCascadeDepth: { type: 'integer', minimum: 1, maximum: 6, default: 3, description: 'Maximum typed-relation cascade depth; no files are changed' }, accessToken, prettyPrint } },
     },
     {
       name: 'review_wiki_note',
@@ -528,9 +528,9 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_impact_report',
-      description: 'Find knowledge notes affected by missing or altered evidence, overdue review, or typed upstream revision/state changes since their publish/review baseline. Aliases and qualified paths are resolved conservatively, and a completed review refreshes the baseline so unchanged retired or disputed inputs do not reopen forever. This bounded report never rewrites or deletes notes.',
+      description: 'Find knowledge notes affected by missing or altered evidence, overdue review, direct typed upstream changes, or bounded transitive invalidation through explicit typed relations. Only visible on_upstream_change notes receive cascades. This cycle-safe report never rewrites or deletes notes.',
       inputSchema: { type: 'object', properties: {
-        limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint,
+        limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, maxCascadeDepth: { type: 'integer', minimum: 1, maximum: 6, default: 3, description: 'Maximum typed-relation cascade depth; no files are changed' }, accessToken, prettyPrint,
       } },
     },
     {
@@ -551,6 +551,17 @@ export function getLlmWikiTools(): Tool[] {
       name: 'get_wiki_moc_candidates',
       description: 'Suggest bounded MOC structure notes for knowledge that is not currently covered by a MOC. Suggestions include revision-stamped authored order, an Obsidian Markdown draft, destination collision state, and an optional notes.write plan, but never create or rewrite notes.',
       inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 30, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint } },
+    },
+    {
+      name: 'get_wiki_moc_rebalance',
+      description: 'Produce a revision-stamped, explainable split plan for one saturated MOC. It preserves authored sections first, then uses child MOCs, typed relations, domain, subject terms, and a deterministic Unclassified group. The plan returns metadata and links only, respects visibility, is bounded, and never rewrites any note.',
+      inputSchema: { type: 'object', properties: {
+        path: { type: 'string', description: 'Visible note_kind:moc path' },
+        maxBranches: { type: 'integer', minimum: 2, maximum: 5, default: 4, description: 'Maximum proposed sub-MOC branches' },
+        saturationThreshold: { type: 'integer', minimum: 3, maximum: 200, default: 25, description: 'Direct member count above which the MOC is reported saturated' },
+        limit: { type: 'integer', minimum: 1, maximum: 50, default: 30, description: 'Maximum visible direct entries inspected and returned across branch plans' },
+        maxChars: { type: 'integer', minimum: 700, maximum: 16000, default: 8000 }, accessToken, prettyPrint,
+      }, required: ['path'] },
     },
     {
       name: 'get_wiki_organization_health',

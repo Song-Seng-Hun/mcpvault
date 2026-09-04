@@ -39,6 +39,7 @@ export declare class VaultMetadataIndex {
     private snapshotWrite;
     private snapshotTimer;
     private snapshotPending;
+    private closed;
     private watcher;
     private watcherStarted;
     private readonly catalogUnsubscribe;
@@ -97,7 +98,7 @@ export declare class VaultMetadataIndex {
         includeUnclassified?: boolean;
         limit?: number;
     }, canAccessPath?: (path: string) => boolean): Promise<AuthorityShelfResult>;
-    close(): void;
+    close(): Promise<void>;
     private ensureFresh;
     private candidatePaths;
     private iterateCandidateEntries;

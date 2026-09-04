@@ -19,7 +19,7 @@ export const WIKI_POLICY_TOPICS = [
 ] as const;
 
 export type WikiPolicyTopicId = typeof WIKI_POLICY_TOPICS[number];
-export const WIKI_POLICY_VERSION = 9;
+export const WIKI_POLICY_VERSION = 10;
 
 type WikiPolicyTopic = {
   purpose: string;
@@ -113,6 +113,7 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
       'Use wiki.review_packet for one prioritized repair cart rather than opening every health dashboard.',
       'Review the current revision and evidence, record outcome, reviewer, checked dimensions, open items, and an active lifecycle when appropriate.',
       'Adaptive cadence and upstream/source/link triggers schedule inspection; they do not validate truth or wake a model.',
+      'Explicit review_at/review_interval_days and event triggers take precedence over volatility_class defaults. upstream_cascade_changed is an advisory current-revision review prompt, never an automatic truth, lifecycle, or body change.',
       'Use wiki.lifecycle_transition for archive, supersede, tombstone, or reactivate; inspect its reference impact and lineage, then dry-run and confirm the exact returned notes.change_set.',
       'Retention transitions preserve reasons and replacements; legal_hold and preserve_until always win, bodies remain ordinary Markdown, and deletion is never automatic.',
       'Before deleting a Markdown note, use notes.delete_preview; notes.delete blocks visible or hidden-scope inbound references by default, and a deliberate visible-reference override requires the current revision.',
@@ -127,6 +128,7 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
       'blocked_by is a hard gate; depends_on gates only when it resolves to unfinished actionable work, while non-work knowledge is informational.',
       'Respect WIP limits, distinguish dueAt from scheduledAt, and record waiting/blocked/start/completion timestamps when known.',
       'Use the dependency plan stages and current revisions as advice; repair cycles or prerequisites instead of auto-changing downstream status.',
+      'Before completing an agent task, record an auditable knowledge disposition: knowledge_notes, negative_knowledge_notes, retrospective, or no_reusable_knowledge with a reason. Useful artifacts may be combined; no_reusable_knowledge is exclusive.',
       'focus_parent must point strictly upward from ground/project/area/goal/vision toward a higher horizon; use wiki.hierarchy_change to simulate set or clear before editing.',
       'focus_supports is also strictly upward; replace its complete verified target list through wiki.relation_set rather than editing one raw link in isolation.',
     ],
@@ -143,8 +145,9 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
       'Use wiki.learning_path to compare authored order with note and claim prerequisites, inspect cycles and late edges, and preserve intentional pedagogical redundancy.',
       'Use one primary_moc as a launch point and bounded additional mocs for legitimate multiple contexts; do not duplicate the note.',
       'Use wiki.canvas_view for an optional spatial projection of the authored MOC and dependency edges; use wiki.canvas_health before reusing an old managed export and regenerate it after source revisions change.',
+      'Use wiki.moc_rebalance only after an overload signal. Inspect its authored heading and source-line order, leftovers, and cross-branch dependencies before applying existing revision-safe planners.',
     ],
-    routes: ['wiki.learning_path', 'wiki.moc_order', 'wiki.hierarchy_change', 'wiki.moc_membership', 'wiki.moc_candidates', 'wiki.graph_health', 'wiki.context_pack', 'wiki.canvas_view', 'wiki.canvas_export', 'wiki.canvas_health'],
+    routes: ['wiki.learning_path', 'wiki.moc_rebalance', 'wiki.moc_order', 'wiki.hierarchy_change', 'wiki.moc_membership', 'wiki.moc_candidates', 'wiki.graph_health', 'wiki.context_pack', 'wiki.canvas_view', 'wiki.canvas_export', 'wiki.canvas_health'],
     avoid: ['inferring hierarchy from every body link', 'automatic MOC reorder', 'treating a thematic external prerequisite as a broken course', 'treating a Canvas position as canonical structure'],
   },
   memory: {

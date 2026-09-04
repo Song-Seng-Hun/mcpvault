@@ -8,6 +8,7 @@ export declare class AgentTaskService {
     private readonly references;
     private readonly auth;
     constructor(fileSystem: FileSystemService, references: ReferenceService, auth: ScopeAuthService);
+    private validatedKnowledgeNotes;
     private assignee;
     create(params: {
         principal?: ScopePrincipal;
@@ -66,6 +67,9 @@ export declare class AgentTaskService {
         reason?: string;
         retrospective?: string;
         knowledgeNotes?: unknown;
+        negativeKnowledgeNotes?: unknown;
+        noReusableKnowledge?: boolean;
+        knowledgeDispositionReason?: string;
         expectedRevision: string;
     }): Promise<any>;
 }

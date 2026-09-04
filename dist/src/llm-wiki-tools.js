@@ -120,7 +120,7 @@ export function getLlmWikiTools() {
                     lifecycle: organizationPropertySchema('lifecycle', { enum: [...ACTIVE_LIFECYCLES], description: 'Retired states are managed only by wiki.lifecycle_transition' }),
                     decisionStatus: organizationPropertySchema('decision_status', { description: 'For noteKind=decision, prefer wiki.decision_record for creation and state transitions' }),
                     moc: { type: 'string', description: 'Optional legacy single Obsidian [[MOC]] link or path' }, mocs: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'Additional Obsidian [[MOC]] links for multi-context discovery; navigation only' }, primaryMoc: { type: 'string', maxLength: 500, description: 'Preferred Obsidian MOC entry point for this note; navigation only' }, navOrder: { type: 'integer', minimum: 0, maximum: 1000000, description: 'Optional order among sibling MOCs; lower numbers appear first' }, project: { type: 'string', description: 'Optional Obsidian [[Project]] link or path' },
-                    reviewAt: { type: 'string', description: 'Optional ISO date/time for evidence review' }, reviewIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: 'Optional cadence in days; review_wiki_note schedules the next review after completion' }, reviewSnoozedUntil: { type: 'string', description: 'Temporarily omit this note from review queues until an ISO date/time' }, reviewSnoozeReason: { type: 'string', maxLength: 500 },
+                    reviewAt: { type: 'string', description: 'Optional ISO date/time for evidence review' }, reviewIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: 'Optional cadence in days; review_wiki_note schedules the next review after completion' }, volatilityClass: organizationPropertySchema('volatility_class', { description: 'Expected factual decay: ephemeral, evolving, durable, or foundational. Used only for bounded adaptive review defaults; explicit reviewAt/reviewIntervalDays win.' }), reviewSnoozedUntil: { type: 'string', description: 'Temporarily omit this note from review queues until an ISO date/time' }, reviewSnoozeReason: { type: 'string', maxLength: 500 },
                     aliases: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 30, description: 'Optional Obsidian aliases for stable navigation' }, knowledgeRole: organizationPropertySchema('knowledge_role', { description: 'Use counterargument for an explicit rebuttal or limitation' }), seeAlso: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20, description: 'Adjacent Obsidian links, not evidence' },
                     canonicalPath: { type: 'string', maxLength: 500, description: 'Optional visible canonical note path for a redirect or duplicate; never an access boundary' },
                     recallPrompt: { type: 'string', maxLength: 1000, description: 'Optional active-recall question for high-value knowledge; separate from evidence review' },
@@ -360,8 +360,8 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_review_queue',
-            description: 'Return a bounded review queue of knowledge notes that are disputed, in review, due for evidence review, or past their explicit valid_until. Read the selected note before revising it; temporal expiry is advisory and this is a derived view, not a second database.',
-            inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 20, default: 5 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, accessToken, prettyPrint } },
+            description: 'Return a bounded review queue of knowledge notes that are disputed, in review, due for evidence review, past valid_until, or transitively affected through explicit typed upstream relations. Cascades are read-only, cycle-safe, and include only visible notes that opted into on_upstream_change.',
+            inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 20, default: 5 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, maxCascadeDepth: { type: 'integer', minimum: 1, maximum: 6, default: 3, description: 'Maximum typed-relation cascade depth; no files are changed' }, accessToken, prettyPrint } },
         },
         {
             name: 'review_wiki_note',
@@ -478,7 +478,7 @@ export function getLlmWikiTools() {
                     lifecycle: organizationPropertySchema('lifecycle', { enum: [...ACTIVE_LIFECYCLES], description: 'Retired states are managed only by wiki.lifecycle_transition' }),
                     decisionStatus: organizationPropertySchema('decision_status', { description: 'Metadata-only migration/repair for an existing Decision Record; use wiki.decision_record for an actual state transition' }),
                     moc: { type: 'string' }, mocs: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'Additional Obsidian [[MOC]] links for multi-context discovery; navigation only' }, primaryMoc: { type: 'string', maxLength: 500, description: 'Preferred Obsidian MOC entry point for this note; navigation only' }, navOrder: { type: 'integer', minimum: 0, maximum: 1000000, description: 'Optional order among sibling MOCs; lower numbers appear first' }, project: { type: 'string' }, reviewAt: { type: 'string' },
-                    aliases: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 30 }, reviewIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: 'Optional review cadence in days; review_wiki_note advances review_at after a completed review' },
+                    aliases: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 30 }, reviewIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: 'Optional review cadence in days; review_wiki_note advances review_at after a completed review' }, volatilityClass: organizationPropertySchema('volatility_class', { description: 'Expected factual decay used for adaptive review defaults; explicit dates and intervals remain authoritative' }),
                     summary: { type: 'string', maxLength: 2000 },
                     summaryLayer: { type: 'integer', minimum: 0, maximum: 4, description: 'Progressive Summarization layer 0-4' },
                     summaryHighlights: { type: 'array', maxItems: 12, items: { type: 'object', properties: { text: { type: 'string', maxLength: 600 }, startLine: { type: 'integer', minimum: 1 }, endLine: { type: 'integer', minimum: 1 }, quoteHash: { type: 'string', pattern: '^[a-fA-F0-9]{64}$' } }, required: ['text'] } },
@@ -514,9 +514,9 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_impact_report',
-            description: 'Find knowledge notes affected by missing or altered evidence, overdue review, or typed upstream revision/state changes since their publish/review baseline. Aliases and qualified paths are resolved conservatively, and a completed review refreshes the baseline so unchanged retired or disputed inputs do not reopen forever. This bounded report never rewrites or deletes notes.',
+            description: 'Find knowledge notes affected by missing or altered evidence, overdue review, direct typed upstream changes, or bounded transitive invalidation through explicit typed relations. Only visible on_upstream_change notes receive cascades. This cycle-safe report never rewrites or deletes notes.',
             inputSchema: { type: 'object', properties: {
-                    limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint,
+                    limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, maxCascadeDepth: { type: 'integer', minimum: 1, maximum: 6, default: 3, description: 'Maximum typed-relation cascade depth; no files are changed' }, accessToken, prettyPrint,
                 } },
         },
         {
@@ -537,6 +537,17 @@ export function getLlmWikiTools() {
             name: 'get_wiki_moc_candidates',
             description: 'Suggest bounded MOC structure notes for knowledge that is not currently covered by a MOC. Suggestions include revision-stamped authored order, an Obsidian Markdown draft, destination collision state, and an optional notes.write plan, but never create or rewrite notes.',
             inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 30, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint } },
+        },
+        {
+            name: 'get_wiki_moc_rebalance',
+            description: 'Produce a revision-stamped, explainable split plan for one saturated MOC. It preserves authored sections first, then uses child MOCs, typed relations, domain, subject terms, and a deterministic Unclassified group. The plan returns metadata and links only, respects visibility, is bounded, and never rewrites any note.',
+            inputSchema: { type: 'object', properties: {
+                    path: { type: 'string', description: 'Visible note_kind:moc path' },
+                    maxBranches: { type: 'integer', minimum: 2, maximum: 5, default: 4, description: 'Maximum proposed sub-MOC branches' },
+                    saturationThreshold: { type: 'integer', minimum: 3, maximum: 200, default: 25, description: 'Direct member count above which the MOC is reported saturated' },
+                    limit: { type: 'integer', minimum: 1, maximum: 50, default: 30, description: 'Maximum visible direct entries inspected and returned across branch plans' },
+                    maxChars: { type: 'integer', minimum: 700, maximum: 16000, default: 8000 }, accessToken, prettyPrint,
+                }, required: ['path'] },
         },
         {
             name: 'get_wiki_organization_health',
