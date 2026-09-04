@@ -203,12 +203,13 @@ test("legacy discussion operations discover only canonical Community endpoints",
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const runtime = getServerRuntime(server)!;
 
-  for (const legacyEndpointId of [
+  const legacyEndpointIds = [
     "mcp.create_discussion",
     "mcp.get_discussion",
     "mcp.add_discussion_argument",
     "mcp.update_discussion_status",
-  ]) {
+  ] as const;
+  for (const legacyEndpointId of legacyEndpointIds) {
     expect(runtime.endpointRegistry.resolve(legacyEndpointId)).toBeUndefined();
   }
   expect(runtime.endpointRegistry.resolve("community.status")).toMatchObject({
@@ -222,21 +223,34 @@ test("legacy discussion operations discover only canonical Community endpoints",
   const client = new Client({ name: "legacy-discussion-discovery-test", version: "1.0.0" });
   await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
   try {
+    for (const legacyEndpointId of legacyEndpointIds) {
+      const result = await client.callTool({
+        name: "call_endpoint",
+        arguments: { endpointId: legacyEndpointId, arguments: {} },
+      });
+      expect(result.isError).toBe(true);
+      expect(String((result.content as any)[0].text)).toContain(
+        "Unknown endpointId. Call search_capabilities first and use an exact endpointId.",
+      );
+    }
+
     const replacements = [
-      ["create_discussion", "community.post"],
-      ["get_discussion", "community.post_read"],
-      ["add_discussion_argument", "community.comment"],
-      ["update_discussion_status", "community.status"],
+      [["create_discussion", "create discussion"], "community.post"],
+      [["get_discussion", "get discussion"], "community.post_read"],
+      [["add_discussion_argument", "add discussion argument"], "community.comment"],
+      [["update_discussion_status", "update discussion status", "resolve discussion", "close discussion"], "community.status"],
     ] as const;
 
-    for (const [legacyOperation, canonicalEndpointId] of replacements) {
-      const result = await client.callTool({
-        name: "search_capabilities",
-        arguments: { query: legacyOperation, limit: 10, maxChars: 12000 },
-      });
-      const catalog = JSON.parse(String((result.content as any)[0].text));
-      expect(catalog.endpoints.map((endpoint: any) => endpoint.endpointId)).toEqual([canonicalEndpointId]);
-      expect(catalog.endpoints.some((endpoint: any) => endpoint.endpointId === `mcp.${legacyOperation}`)).toBe(false);
+    for (const [legacyAliases, canonicalEndpointId] of replacements) {
+      for (const legacyAlias of legacyAliases) {
+        const result = await client.callTool({
+          name: "search_capabilities",
+          arguments: { query: legacyAlias, limit: 10, maxChars: 12000 },
+        });
+        const catalog = JSON.parse(String((result.content as any)[0].text));
+        expect(catalog.total, legacyAlias).toBe(1);
+        expect(catalog.endpoints.map((endpoint: any) => endpoint.endpointId), legacyAlias).toEqual([canonicalEndpointId]);
+      }
     }
   } finally {
     await client.close();

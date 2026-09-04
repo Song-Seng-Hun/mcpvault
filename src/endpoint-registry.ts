@@ -38,6 +38,10 @@ function endpointQueryTerms(text: string): string[] {
   return meaningful.length > 0 ? meaningful : raw;
 }
 
+function normalizeEndpointAlias(text: string): string {
+  return text.toLowerCase().replace(/[_./-]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 function catalogLimit(value: unknown): number {
   const parsed = value === undefined ? 20 : Number(value);
   if (!Number.isInteger(parsed) || parsed < 1) throw new Error('limit must be a positive integer');
@@ -584,12 +588,16 @@ export class EndpointRegistry {
     const terms = endpointQueryTerms(text);
     const limit = catalogLimit(requestedLimit);
     const maxChars = catalogMaxChars(requestedMaxChars);
-    const endpoints = [...this.descriptors.values()]
-      .filter(item => {
+    const descriptors = [...this.descriptors.values()];
+    const normalizedQuery = normalizeEndpointAlias(text);
+    const exactAliasMatches = normalizedQuery
+      ? descriptors.filter(item => (item.aliases || []).some(alias => normalizeEndpointAlias(alias) === normalizedQuery))
+      : [];
+    const endpoints = (exactAliasMatches.length > 0 ? exactAliasMatches : descriptors.filter(item => {
         if (terms.length === 0) return true;
         const corpus = `${item.endpointId} ${item.toolName} ${item.description} ${(item.aliases || []).join(' ')} ${item.url}`.toLowerCase();
         return terms.every(term => corpus.includes(term) || corpus.replace(/[_./-]+/g, ' ').includes(term));
-      })
+      }))
       .sort((left, right) => endpointScore(right, terms) - endpointScore(left, terms))
       .map(item => {
         const missing = item.requires.filter(required => !context.capabilities.has(required as ScopeCapability));
