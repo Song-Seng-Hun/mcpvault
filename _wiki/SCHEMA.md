@@ -35,7 +35,7 @@ proposition, and `assumption` for a working premise. Keep these note kinds
 separate from accepted facts until evidence supports them.
 
 ```yaml
-note_kind: atomic       # fleeting, literature, atomic, moc, knowledge, question, hypothesis, assumption, decision, project, area, resource, journal, task
+note_kind: atomic       # fleeting, literature, atomic, moc, knowledge, question, hypothesis, experiment, assumption, decision, project, area, resource, journal, task
 lifecycle: review       # inbox, active, review, evergreen, superseded, archived
 moc: "[[Knowledge/MOCs/LLM Wiki]]"
 project: "[[Projects/MCPVault]]"
