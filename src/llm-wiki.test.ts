@@ -3647,8 +3647,8 @@ test('portable migration preflight excludes non-global content and reports revis
     const registration = await callJson(client, 'register_scope_account', { accountId: 'portable-owner', userId: 'portable-family', modelId: 'codex', agentId: 'portable-worker', password: 'portable-owner-password' });
     const accessToken = registration.value.accessToken;
     for (const [path, frontmatter] of [
-      ['Knowledge/Portable One.md', { title: 'Portable One', note_kind: 'atomic', lifecycle: 'evergreen', stable_id: 'portable-shared', aliases: ['공통 용어'], tags: ['portable'], supports: ['[[Missing Portable Target]]'] }],
-      ['Knowledge/Portable Two.md', { title: 'Portable Two', note_kind: 'atomic', lifecycle: 'evergreen', stable_id: 'portable-shared', aliases: ['공통 용어'], tags: 'portable' }],
+      ['Knowledge/Portable One.md', { title: 'Portable One', note_kind: 'atomic', lifecycle: 'evergreen', stable_id: 'portable-shared', aliases: ['공통 용어'], tags: ['portable'], authority_scheme: 'portable-topics', authority_id: 'AI.1', supports: ['[[Missing Portable Target]]'], close_match: ['[[Knowledge/Portable Two]]'] }],
+      ['Knowledge/Portable Two.md', { title: 'Portable Two', note_kind: 'atomic', lifecycle: 'evergreen', stable_id: 'portable-shared', aliases: ['공통 용어'], tags: 'portable', authority_scheme: 'portable-topics', authority_id: 'AI.2', close_match: ['[[Knowledge/Portable One]]'] }],
     ] as const) {
       const written = await client.callTool({ name: 'write_note', arguments: { path, content: `# ${frontmatter.title}\n`, frontmatter, expectedRevision: 'missing', accessToken } });
       expect(written.isError).toBeFalsy();
@@ -3658,7 +3658,21 @@ test('portable migration preflight excludes non-global content and reports revis
     await callJson(client, 'publish_blog_post', { slug: 'portable-community-only', title: 'Community only', content: 'Never enter a global migration inventory.', expectedRevision: 'missing', accessToken });
 
     const defaultManifest = await callJson(client, 'get_wiki_organization_manifest', { accessToken });
-    expect(defaultManifest.value).toMatchObject({ manifestVersion: 5, portable: true, contentFreeByDefault: true, contractFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/), templates: expect.arrayContaining(['concept', 'model']), basesViews: expect.arrayContaining(['concepts', 'authority', 'archives']), contracts: expect.objectContaining({ claimRoles: expect.arrayContaining(['premise', 'conclusion', 'objection']), claimRelations: expect.arrayContaining(['supports_claims', 'contradicts_claims', 'depends_on_claims']) }) });
+    expect(defaultManifest.value).toMatchObject({
+      manifestVersion: 6,
+      portable: true,
+      contentFreeByDefault: true,
+      contractFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
+      authority: {
+        identity: ['authority_scheme', 'authority_id'],
+        identityScope: 'scheme_local',
+        shelfOrder: 'natural_authority_id',
+        relationStrength: ['same_as', 'close_match', 'broader', 'related'],
+      },
+      templates: expect.arrayContaining(['concept', 'model']),
+      basesViews: expect.arrayContaining(['concepts', 'authority', 'archives']),
+      contracts: expect.objectContaining({ claimRoles: expect.arrayContaining(['premise', 'conclusion', 'objection']), claimRelations: expect.arrayContaining(['supports_claims', 'contradicts_claims', 'depends_on_claims']) }),
+    });
     expect(defaultManifest.value.truncated).toBeUndefined();
     expect(defaultManifest.value.contracts.properties).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: 'task_status', type: 'text', allowed: expect.arrayContaining(['open', 'completed']) }),
@@ -3681,9 +3695,30 @@ test('portable migration preflight excludes non-global content and reports revis
     expect(readiness.value.readiness).toMatchObject({ scope: 'global_only', bodyContentIncluded: false, privateOrCommunityContentIncluded: false, safeToMigrate: false, excludedModerated: 1 });
     expect(readiness.value.readiness.issueCounts).toMatchObject({ duplicate_stable_id: 1, vocabulary_collision: 1, property_type_drift: 1, missing_relation_target: 1 });
     expect(readiness.value.readiness.inventory.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Portable One.md', revision: expect.stringMatching(/^[a-f0-9]{64}$/) })]));
+    expect(readiness.value.readiness.inventory.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/Portable One.md', relations: expect.objectContaining({ close_match: ['[[Knowledge/Portable Two]]'] }) }),
+    ]));
     expect(JSON.stringify(readiness.value.readiness)).not.toContain('portable-community-only');
     expect(JSON.stringify(readiness.value.readiness)).not.toContain('Private.md');
     expect(JSON.stringify(readiness.value.readiness)).not.toContain('Quarantined Portable');
+
+    const legacyVersionFive = structuredClone(defaultManifest.value);
+    legacyVersionFive.manifestVersion = 5;
+    delete legacyVersionFive.authority;
+    delete legacyVersionFive.contractFingerprint;
+    const legacyCompared = await callJson(client, 'get_wiki_organization_manifest', { compareManifest: legacyVersionFive, limit: 50, maxChars: 24000, accessToken });
+    expect(legacyCompared.value.migrationPreview.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'older_manifest_version', severity: 'warning', detail: expect.stringContaining('reviewed migration') }),
+      expect.objectContaining({ code: 'missing_authority_contract', severity: 'warning' }),
+    ]));
+
+    const conflictingVersionSix = structuredClone(defaultManifest.value);
+    conflictingVersionSix.authority.shelfOrder = 'lexicographic_path';
+    const authorityConflict = await callJson(client, 'get_wiki_organization_manifest', { compareManifest: conflictingVersionSix, limit: 50, maxChars: 24000, accessToken });
+    expect(authorityConflict.value.migrationPreview).toMatchObject({ compatible: false, blockingIssues: expect.any(Number) });
+    expect(authorityConflict.value.migrationPreview.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'authority_contract_conflict', severity: 'blocking' }),
+    ]));
 
     const counterpart = {
       manifestVersion: 1,

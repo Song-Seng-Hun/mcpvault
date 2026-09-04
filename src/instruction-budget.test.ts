@@ -37,6 +37,19 @@ describe('progressive agent instruction budgets', () => {
     expect(skill).toContain('wiki.moc_membership');
     expect(skill).toContain('wiki.relation_set');
     expect(skill).toContain('wiki.reciprocal_link');
+    expect(skill).toContain('aroundAuthorityId');
+    expect(skill).toContain('close_match');
     expect(skill).toContain('untrusted data');
+  });
+
+  test('documents scheme-local authority shelves without making them a second source of truth', async () => {
+    const [readme, schema] = await Promise.all([rootFile('README.md'), rootFile('_wiki/SCHEMA.md')]);
+    for (const document of [readme, schema]) {
+      expect(document).toContain('authority_scheme');
+      expect(document).toContain('authority_id');
+      expect(document).toContain('aroundAuthorityId');
+      expect(document).toContain('close_match');
+      expect(document).toContain('scheme-local');
+    }
   });
 });

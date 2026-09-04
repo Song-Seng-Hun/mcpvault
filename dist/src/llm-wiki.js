@@ -695,6 +695,14 @@ function manifestStringList(value, maximum = 500) {
         .slice(0, maximum)
         .sort((left, right) => left.localeCompare(right));
 }
+function manifestOrderedStringList(value, maximum = 20) {
+    if (!Array.isArray(value))
+        return [];
+    return [...new Set(value
+            .filter((item) => typeof item === 'string')
+            .map(item => item.trim())
+            .filter(Boolean))].slice(0, maximum);
+}
 /** Keep the portability fingerprint independent from prose, timestamps, and
  * object insertion order. This is a contract revision guard, not a content or
  * security hash. */
@@ -725,9 +733,18 @@ function comparableOrganizationManifest(value) {
             .slice(0, 100)
             .sort((left, right) => left.field.localeCompare(right.field))
         : [];
+    const authority = value.authority && typeof value.authority === 'object' && !Array.isArray(value.authority)
+        ? value.authority
+        : {};
     return {
         format: String(value.format || ''),
         manifestVersion: Number(value.manifestVersion || 0),
+        authority: {
+            identity: manifestOrderedStringList(authority.identity, 4),
+            identityScope: String(authority.identityScope || '').trim(),
+            shelfOrder: String(authority.shelfOrder || '').trim(),
+            relationStrength: manifestOrderedStringList(authority.relationStrength, 10),
+        },
         reservedPaths: manifestStringList(value.reservedPaths, 100),
         templates: manifestStringList(value.templates, 100),
         basesViews: manifestStringList(value.basesViews, 100),
@@ -4190,8 +4207,14 @@ export class LlmWikiService {
             claimRoles: [...CLAIM_ROLES],
             claimRelations: CLAIM_RELATION_FIELDS.map(item => item.property),
         };
+        const authority = {
+            identity: ['authority_scheme', 'authority_id'],
+            identityScope: 'scheme_local',
+            shelfOrder: 'natural_authority_id',
+            relationStrength: ['same_as', 'close_match', 'broader', 'related'],
+        };
         const base = {
-            manifestVersion: 5,
+            manifestVersion: 6,
             format: 'mcpvault-organization-manifest',
             portable: true,
             contentFreeByDefault: true,
@@ -4200,6 +4223,7 @@ export class LlmWikiService {
             reservedPaths: ['_sources/', '_wiki/', 'Community/', '_scopes/', '_whispers/', '.mcpvault/'],
             syntax: { links: ['[[Note]]', '[[folder/Note#Heading]]', '[[Note#^claim-id]]', '[[#^claim-id]]', '[[Note|display text]]', '[Guide](Resources/Guide.md#section)'], tags: '#tag', sourceIntegrity: 'immutable source snapshot + content_sha256 + revision' },
             pipeline: ['capture', 'organize', 'distill', 'express', 'review'],
+            authority,
             contracts,
             templates: [...NOTE_TEMPLATE_IDS],
             basesViews: [...BASES_VIEW_IDS],
@@ -4208,7 +4232,7 @@ export class LlmWikiService {
                 'Treat this manifest as organization guidance, not an access grant.',
                 'Preserve source IDs, content hashes, evidence paths, and revisions when migrating global knowledge.',
                 'Run readiness and counterpart comparison before copying notes; a preview never mutates either Vault.',
-                'Review aliases, stable IDs, citation keys, Properties, and typed links for collisions in the destination Vault.',
+                'Review aliases, stable IDs, scheme-local authority IDs, citation keys, Properties, and typed links for collisions in the destination Vault.',
             ],
         };
         const contractFingerprint = hash(JSON.stringify(comparableOrganizationManifest(base)));
@@ -4401,6 +4425,18 @@ export class LlmWikiService {
                 addCompatibility('blocking', 'newer_manifest_version', `Counterpart version ${counterpartVersion} is newer than supported version ${base.manifestVersion}.`);
             else if (counterpartVersion < base.manifestVersion)
                 addCompatibility('warning', 'older_manifest_version', `Counterpart version ${counterpartVersion} needs a reviewed migration to version ${base.manifestVersion}.`);
+            const currentAuthority = comparableCurrent.authority;
+            const otherAuthority = comparableCounterpart.authority;
+            const counterpartDeclaresAuthority = Boolean(counterpart.authority && typeof counterpart.authority === 'object' && !Array.isArray(counterpart.authority));
+            if (!counterpartDeclaresAuthority && counterpartVersion < 6) {
+                addCompatibility('warning', 'missing_authority_contract', 'Counterpart predates the scheme-local authority contract; review identities and close matches before migration.');
+            }
+            else if (!counterpartDeclaresAuthority) {
+                addCompatibility('blocking', 'authority_contract_conflict', 'A version-6 counterpart must declare the scheme-local authority contract.');
+            }
+            else if (JSON.stringify(otherAuthority) !== JSON.stringify(currentAuthority)) {
+                addCompatibility('blocking', 'authority_contract_conflict', 'Authority identity scope, shelf order, or explicit relation-strength order conflicts with this command center.');
+            }
             const currentContracts = (comparableCurrent.contracts || {});
             const otherContracts = (comparableCounterpart.contracts || {});
             for (const key of ['noteKinds', 'lifecycles', 'taskStatuses', 'serviceClasses']) {
@@ -4510,6 +4546,7 @@ export class LlmWikiService {
             sourceOfTruth: base.sourceOfTruth,
             filing: base.filing,
             reservedPaths: base.reservedPaths,
+            authority: base.authority,
             contracts: { noteKinds: contracts.noteKinds, lifecycles: contracts.lifecycles, taskStatuses: contracts.taskStatuses, serviceClasses: contracts.serviceClasses, properties: contracts.properties.map(entry => ({ name: entry.name, type: entry.type })), relations: contracts.relations.map(entry => entry.field) },
             ...(result.readiness && { readiness: { ...result.readiness, issues: result.readiness.issues.slice(0, 3), inventory: { ...result.readiness.inventory, items: result.readiness.inventory.items.slice(0, 2) } } }),
             ...(result.migrationPreview && { migrationPreview: { ...result.migrationPreview, issues: result.migrationPreview.issues.slice(0, 5) } }),

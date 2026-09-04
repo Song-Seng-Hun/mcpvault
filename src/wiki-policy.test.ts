@@ -19,6 +19,19 @@ describe('progressive Wiki policy', () => {
     expect(JSON.stringify(policy)).not.toContain('auth.register');
   });
 
+  test('teaches bounded authority shelves and distinct relation strengths progressively', () => {
+    expect(WIKI_POLICY_VERSION).toBe(9);
+    const retrieval = getWikiPolicyTopic('retrieval', 2000);
+    const knowledge = getWikiPolicyTopic('knowledge', 2000);
+    expect(retrieval.routes).toEqual(expect.arrayContaining(['wiki.authority_map']));
+    expect(retrieval.rules.join(' ')).toContain('aroundAuthorityId');
+    expect(knowledge.rules.join(' ')).toContain('same_as');
+    expect(knowledge.rules.join(' ')).toContain('close_match');
+    expect(knowledge.rules.join(' ')).toContain('related');
+    expect(JSON.stringify(getWikiPolicyTopic('retrieval', 512)).length).toBeLessThanOrEqual(512);
+    expect(JSON.stringify(getWikiPolicyTopic('knowledge', 512)).length).toBeLessThanOrEqual(512);
+  });
+
   test('advertises topics and rejects guesses', () => {
     expect(getWikiPolicyTopic(undefined, 1200)).toMatchObject({
       topic: 'overview',

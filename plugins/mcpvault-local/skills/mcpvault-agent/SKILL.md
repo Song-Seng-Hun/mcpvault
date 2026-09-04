@@ -88,28 +88,24 @@ Use `context.read` when one response-ready packet should contain the root,
 target, parent chain, nearby items, and accessible references. Use
 `continuity.save` only for bounded resumable state; never store passwords,
 tokens, raw prompts, note bodies, or hidden reasoning there.
-When pausing a `wiki.learning_path`, copy its `checkpointAction.learningProgress`
-into `continuity.save` and add the last fully read path as `completedThrough`.
-On return call `continuity.resume`; follow `next` only when `canResume=true`,
-otherwise regenerate the path because its links, identities, or revisions drifted.
+For a paused `wiki.learning_path`, save its `checkpointAction.learningProgress`
+with the last read path as `completedThrough`. Resume only when
+`continuity.resume` says `canResume=true`; otherwise regenerate the path.
 
-Keep reads bounded with `limit`, `maxChars`, cursors, `contextBefore`, and
-section/block locators. Search returns excerpts, not authority. Select one
-result and read only the necessary projection, section, block, or note.
+Bound reads with `limit`, `maxChars`, cursors, context, and section/block
+locators. Search returns excerpts, not authority; select one focused read.
+For a scheme-local shelf, call `wiki.authority_map` with `scheme` and optional
+`aroundAuthorityId`. Use `same_as` for identity, reciprocal `close_match` for
+near-equivalence, and `related` for general association.
 Semantic results are discovery hints and must never override lexical filters,
 scope checks, identity ambiguity, or evidence inspection.
 
 Use `wiki.canvas_view` only when a spatial map materially improves navigation.
-For a MOC it preserves authored order, nesting, and prerequisite edges; for an
-ordinary note it keeps direct links/backlinks nearest and lower-confidence
-semantic or temporal proximity farthest away. Persist only through the
-returned `wiki.canvas_export` action. The revision-checked, scope-local
-`Views/*.canvas` file contains links rather than copied bodies and must be
-regenerated when source revisions change; position and color never prove a
-claim or grant access. Before relying on an old managed export, call
-`wiki.canvas_health` or use its existing exception-board entry and regenerate
-only the selected stale map. A user-authored Canvas without MCPVault metadata
-is valid but makes no automatic freshness claim.
+It preserves authored order and links while keeping weaker semantic or temporal
+proximity farther away. Persist only through its `wiki.canvas_export` action.
+The scope-local `Views/*.canvas` links files rather than copying bodies;
+position and color never prove a claim or grant access. Check managed exports
+with `wiki.canvas_health`; unmanaged Canvases make no freshness claim.
 
 ## 4. Write Obsidian-native, revision-safe content
 

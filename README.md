@@ -246,6 +246,23 @@ It resolves titles, aliases, preferred terms, stable IDs, and explicit relative
 links; an ambiguous identity remains a review signal and is never silently
 rewritten. The production metadata index caches only this disposable derived
 map, invalidates it on note changes, and never replaces Markdown or scope checks.
+For a controlled shelf, pair `authority_scheme` with a scheme-local
+`authority_id`; the same ID may be reused only in a different scheme. For
+example:
+
+```yaml
+authority_scheme: llm-wiki-topics
+authority_id: AI.12.3
+close_match:
+  - '[[Knowledge/Near-equivalent concept]]'
+```
+
+Call `wiki.authority_map` with `scheme` and optional `aroundAuthorityId` for a
+bounded natural-ID neighborhood. Each result carries its current revision;
+the shelf, collisions, and ordering are advisory projections over Properties,
+not a second database or an access rule. Use `same_as` only for exact identity,
+`close_match` for reciprocal near-equivalence that must not be auto-merged,
+and `related` for a general association.
 Keep the full Markdown body authoritative while using `summary`, `key_points`, and
 `open_questions` as progressive-read projections. Optional `summary_layer`
 (0 = original, 1 = capture, 2 = bold, 3 = highlight, 4 = executive
@@ -260,7 +277,7 @@ only key points cannot certify an inherited old summary. For failed paths, use `
 `non_reproducible`; preserve the note so later agents do not repeat it. Typed relationship
 properties (`supports`, `contradicts`, `supersedes`, `derived_from`,
 `depends_on`, `implements`, `blocked_by`, `answers_questions`, `tests`,
-`related`, `same_as`, `version_of`, and `refines`) explain the meaning
+`related`, `same_as`, `close_match`, `version_of`, and `refines`) explain the meaning
 of a `[[wikilink]]`; they do not grant access and their targets are checked by
 Wiki lint. Any ordinary knowledge note may become actionable by adding
 `next_action`/`next_actions`, `waiting_for`, and `task_status` (`open`,
@@ -382,9 +399,9 @@ and rejects self-links, scope leaks, invalid question/test targets, and
 equal/downward focus horizons. Existing `relation_notes` and
 `relation_evidence` stay visible with a warning so their rationale is reviewed
 rather than silently discarded. Use the reciprocal planner below instead for
-`related` and `same_as`.
+`related`, `close_match`, and `same_as`.
 
-For mutual `related` or `same_as` edges, call `wiki.reciprocal_link` with the
+For mutual `related`, `close_match`, or `same_as` edges, call `wiki.reciprocal_link` with the
 two exact note paths. It resolves all existing values first and refuses a
 malformed, ambiguous, full, hidden, immutable, managed-Community, or
 cross-privacy relation. The returned one- or two-note plan must be dry-run and
@@ -755,7 +772,7 @@ useful Markdown outline. `get_wiki_quality_check` checks the corresponding
 definition/boundary, claim/warrant, model-mechanism, observation/interpretation,
 or rebuttal structure without making it a publication gate. The template
 returns Markdown and suggested Properties without creating files. For
-`related` and `same_as`, graph health
+`related`, `close_match`, and `same_as`, graph health
 also reports missing reverse edges as advisory `reciprocityMissing`; other
 typed relations remain directional. Retention metadata
 (`retention_policy`, `retention_event`, `retention_at`, `preserve_until`,
@@ -1700,7 +1717,7 @@ Prefer a purpose-built read-only planner when the coupled edit represents a
 known organization invariant: `wiki.moc_order` for one complete sibling order,
 `wiki.hierarchy_change` for parent edges, `wiki.moc_membership` for map entry
 points, `wiki.relation_set` for a complete directional relation list,
-`wiki.reciprocal_link` for `related`/`same_as`, and `wiki.property_migration`
+`wiki.reciprocal_link` for `related`/`close_match`/`same_as`, and `wiki.property_migration`
 for one bounded Property migration. Each returns the
 same revision-stamped `notes.change_set` shape; the planner does not write.
 

@@ -86,11 +86,11 @@ edit makes the projection stale until it is regenerated. Use
 `knowledge_polarity: negative` with `negative_type` to preserve failures,
 rejected approaches, counterexamples, and non-reproducible results. Typed relationship properties explain why a link exists:
 `supports`, `contradicts`, `supersedes`, `derived_from`, `depends_on`,
-`implements`, `blocked_by`, `related`, `same_as`, `version_of`, and `refines`.
+`implements`, `blocked_by`, `related`, `same_as`, `close_match`, `version_of`, and `refines`.
 Each value should be an Obsidian
 wikilink, relative Markdown link, or a scope-safe note path; the target must remain accessible and
 resolvable. The property contract also explains each relation's direction and
-target meaning: `related` and `same_as` are mutual and normally need reverse
+target meaning: `related`, `close_match`, and `same_as` are mutual and normally need reverse
 edges; the other relations are directional and do not require invented inverse
 Properties. Any ordinary knowledge note may become actionable with
 `next_action`/`next_actions`, `waiting_for`, and `task_status` (`open`,
@@ -401,8 +401,23 @@ similarity helps discovery only and must not move notes or replace evidence.
 `get_wiki_answer_packet` is the compact follow-up projection: it combines the
 selected note with a few supporting neighbors and counterpoints or negative
 knowledge. `get_wiki_authority_map` is a derived library-style access-term
-view for titles, aliases, and stable IDs; collisions require human/agent
-review and are never redirected automatically. `get_wiki_maintenance_debt`
+view for titles, aliases, stable IDs, and scheme-local authority identities.
+A classification record may use:
+
+```yaml
+authority_scheme: llm-wiki-topics
+authority_id: AI.12.3
+close_match:
+  - '[[Knowledge/Near-equivalent concept]]'
+```
+
+The `authority_id` is unique only inside its `authority_scheme`. Browse one
+natural-ID shelf with `scheme` and optional `aroundAuthorityId`; every bounded
+entry carries a current revision. Collisions require review and are never
+redirected automatically. Shelf position is navigation, not evidence,
+permission, or alternate truth. Use `same_as` only for exact identity,
+reciprocal `close_match` for near-equivalence that must not be merged
+automatically, and `related` for general association. `get_wiki_maintenance_debt`
 is a bounded 5S maintenance ledger, not a second database and not an
 automatic cleanup command.
 Knowledge notes may optionally declare controlled-vocabulary metadata:
@@ -456,7 +471,7 @@ Its `typedRelations` projection additionally reports unresolved, ambiguous,
 self-referential, and `answers_questions` targets that are not question notes.
 Repair them with ordinary revision-checked edits; graph health never rewrites
 relations automatically.
-For `related` and `same_as`, a reverse edge is normally expected because the
+For `related`, `close_match`, and `same_as`, a reverse edge is normally expected because the
 relationship is mutual; graph health reports a missing reverse edge as an
 advisory `reciprocityMissing` item. Directional relations such as `supports`,
 `contradicts`, `depends_on`, and `supersedes` do not need a reverse field.

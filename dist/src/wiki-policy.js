@@ -16,7 +16,7 @@ export const WIKI_POLICY_TOPICS = [
     'portability',
     'safety',
 ];
-export const WIKI_POLICY_VERSION = 8;
+export const WIKI_POLICY_VERSION = 9;
 /**
  * The only policy that every MCP client must receive eagerly. Detailed
  * organization guidance is selected through wiki.policy so a rich Wiki does
@@ -63,10 +63,11 @@ const POLICY_TOPICS = {
             'Use lexical filters as authoritative constraints and semantic matches only as discovery hints.',
             'Visible note identities resolve exact paths, filenames, titles, aliases, preferred terms, stable IDs, and explicit relative paths; ambiguity is repair debt, not permission to guess.',
             'Use wiki.home for one intent route, wiki.neighborhood for nearby context, and wiki.context_pack only when a reusable bounded shelf is warranted.',
+            'Browse one classification with wiki.authority_map scheme plus an optional aroundAuthorityId; shelf order is advisory and every returned revision must be re-read before editing.',
             'Use wiki.canvas_view only when spatial arrangement materially helps; export through wiki.canvas_export so source and output revisions remain checked and the derived Canvas stays in the root scope.',
             'Before relying on an older managed map, use wiki.canvas_health or its exception-board entry; an unmanaged user Canvas is valid but makes no source-freshness claim.',
         ],
-        routes: ['wiki.search', 'wiki.home', 'wiki.read_projection', 'wiki.neighborhood', 'wiki.context_pack', 'wiki.canvas_view', 'wiki.canvas_health'],
+        routes: ['wiki.search', 'wiki.home', 'wiki.read_projection', 'wiki.neighborhood', 'wiki.context_pack', 'wiki.authority_map', 'wiki.canvas_view', 'wiki.canvas_health'],
         avoid: ['loading whole documents for a single section', 'treating vector similarity or Canvas proximity as evidence', 'following an ambiguous identity'],
     },
     knowledge: {
@@ -74,7 +75,8 @@ const POLICY_TOPICS = {
         rules: [
             'Keep one canonical Markdown note and use MOCs, primary_moc, additional mocs, typed relations, aliases, and see_also as navigation.',
             'Before moving that canonical note, use notes.move_preview; apply notes.move with updateLinks only at the returned current revision so body links, link-bearing Properties, self-links, and relative Markdown outlinks stay coherent. Disambiguate same-name targets instead of guessing.',
-            'Use wiki.relation_set to replace one complete directional relation list with exact canonical targets; use wiki.reciprocal_link for related or same_as so both directions remain coherent.',
+            'Use wiki.relation_set to replace one complete directional relation list with exact canonical targets; use wiki.reciprocal_link for related, close_match, or same_as so both directions remain coherent.',
+            'Use same_as only for exact identity, close_match for reciprocal near-equivalence that must not be merged automatically, and related for general association.',
             'Use note_kind and lifecycle for knowledge state; keep actionable-note task_status separate from epistemic or knowledge lifecycle.',
             'Use question, hypothesis, assumption, experiment, decision, and negative knowledge for different epistemic jobs instead of flattening them into generic notes.',
             'Summaries, key points, highlights, and generated syntheses are projections or interpretations; preserve the full body and their source revision/fingerprint.',
