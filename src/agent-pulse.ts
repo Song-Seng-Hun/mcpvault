@@ -177,7 +177,7 @@ export class AgentPulseService {
   private readonly inFlight = new Map<string, Promise<Record<string, unknown>>>();
   // Cached plans are advisory only. A stale entry can cause redundant inspect
   // suggestions or an expectedRevision conflict; the pulse never mutates.
-  private readonly maintenanceCache = new Map<string, { expiresAt: number; plan: CompactMaintenancePlan | undefined }>();
+  private readonly maintenanceCache = new Map<string, { expiresAt: number; generation: number | undefined; plan: CompactMaintenancePlan | undefined }>();
 
   constructor(
     private readonly notifications: NotificationService,
@@ -213,7 +213,7 @@ export class AgentPulseService {
     });
   }
 
-  private rememberMaintenancePlan(key: string, plan: CompactMaintenancePlan | undefined, now: number): void {
+  private rememberMaintenancePlan(key: string, generation: number | undefined, plan: CompactMaintenancePlan | undefined, now: number): void {
     for (const [cachedKey, cached] of this.maintenanceCache) {
       if (cached.expiresAt <= now) this.maintenanceCache.delete(cachedKey);
     }
@@ -223,14 +223,15 @@ export class AgentPulseService {
       if (oldest.done) break;
       this.maintenanceCache.delete(oldest.value);
     }
-    this.maintenanceCache.set(key, { expiresAt: now + MAINTENANCE_CACHE_TTL_MS, plan });
+    this.maintenanceCache.set(key, { expiresAt: now + MAINTENANCE_CACHE_TTL_MS, generation, plan });
   }
 
   private async maintenancePlanFor(principal: ScopePrincipal): Promise<CompactMaintenancePlan | undefined> {
     const key = this.maintenanceCacheKey(principal);
     const now = Date.now();
+    const generation = this.llmWiki?.readModelGeneration();
     const cached = this.maintenanceCache.get(key);
-    if (cached && cached.expiresAt > now) {
+    if (cached && cached.expiresAt > now && cached.generation === generation) {
       this.maintenanceCache.delete(key);
       this.maintenanceCache.set(key, cached);
       return cached.plan;
@@ -238,7 +239,7 @@ export class AgentPulseService {
     if (cached) this.maintenanceCache.delete(key);
     const packet = await this.llmWiki?.reviewPacket(principal, 1, MAINTENANCE_PACKET_MAX_CHARS);
     const plan = compactMaintenancePlan(packet, MAINTENANCE_PACKET_MAX_CHARS);
-    this.rememberMaintenancePlan(key, plan, now);
+    this.rememberMaintenancePlan(key, generation, plan, now);
     return plan;
   }
 

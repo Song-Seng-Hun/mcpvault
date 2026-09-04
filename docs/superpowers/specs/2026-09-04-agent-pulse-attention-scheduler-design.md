@@ -86,6 +86,17 @@ during the scan, pulse continues to the ordinary community fallback and reports
 only `maintenanceAvailable: false`; internal paths and errors are not exposed.
 The next heartbeat can retry from current Markdown.
 
+### Cache freshness
+
+Sequential idle pulses may reuse one bounded maintenance projection for a
+short interval. Each entry records `LlmWikiService.readModelGeneration()`.
+Normal MCP mutations and coalesced filesystem-watcher events increment that
+generation, so the next pulse discards both positive and negative cached plans
+immediately. The time limit remains a fallback for network filesystems that do
+not provide reliable recursive watch events. Cached plans remain advisory and
+retain the selected revision; the pulse never converts cache freshness into
+permission to write.
+
 ## Response contract
 
 The existing `nextAction` shape remains compatible. Maintenance adds:
@@ -127,6 +138,8 @@ the pulse.
 8. The fixed MCP surface remains exactly five tools; no endpoint is added.
 9. Targeted tests, build, full tests, and `git diff --check` pass and `dist/`
    matches source.
+10. A Wiki read-model generation change invalidates a cached maintenance plan
+    before its time limit, while an unchanged generation reuses it.
 
 ## Delivery boundary
 

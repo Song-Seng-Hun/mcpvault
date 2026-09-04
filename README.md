@@ -152,10 +152,13 @@ action plus an optional `followUpPlan`. It is advisory: the pulse cannot wake a
 model, invokes neither action, and never mutates a note. Re-read the selected
 path and revision before following the plan; the current Markdown revision and
 `expectedRevision` remain authoritative. A short bounded process-local cache
-avoids repeating the heavier projection on sequential pulses. A stale positive
-plan may therefore cause redundant inspections during the short cache lifetime,
-but each remains advisory and a later mutation conflicts on `expectedRevision`
-instead of auto-writing stale guidance.
+avoids repeating the heavier projection on sequential pulses. The cache is
+tagged with the Wiki read-model generation, so an MCP write or a watched
+Obsidian/file edit invalidates a cached plan immediately; its short time limit
+remains a fallback for filesystems without reliable recursive watcher events.
+A change racing an in-progress projection can still yield an advisory stale
+inspection, but a later mutation conflicts on `expectedRevision` instead of
+auto-writing stale guidance.
 
 Notification discovery may use an internal scan window larger than the caller's
 display `limit` so unsupported events do not hide a later actionable item. The
@@ -1095,11 +1098,6 @@ the role/capability filter. Reaction snapshot cold starts read post directories
 and stat reaction files in bounded parallel batches, reducing latency without
 turning a large reaction tree into an unbounded I/O burst. Obsidian CLI search
 fallback parsing also splits its text output only once.
-
-Authentication also caches the derived principal list for the same short
-window as the database read and clears it immediately after account or
-capability changes. This reduces repeated identity mapping during directory,
-pulse, moderation, and reputation reads without delaying authorization updates.
 
 Authentication also caches the derived principal list for the same short
 window as the database read and clears it immediately after account or

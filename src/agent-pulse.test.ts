@@ -43,6 +43,7 @@ function unitPulseService(options: {
   notifications?: Array<Record<string, unknown>>;
   notificationNextCursor?: string;
   onNotificationList?: (params: Record<string, unknown>) => void;
+  maintenanceGeneration?: () => number;
   reviewPacket: () => Promise<Record<string, unknown>>;
 }) {
   const activePosts = options.activePosts || [];
@@ -61,6 +62,7 @@ function unitPulseService(options: {
     {
       reviewQueue: async () => ({ items: [], total: 0, truncated: false }),
       inbox: async () => ({ items: [], total: 0, truncated: false }),
+      readModelGeneration: options.maintenanceGeneration || (() => 0),
       reviewPacket: options.reviewPacket,
     } as any,
   );
@@ -668,6 +670,35 @@ test('sequential idle pulses reuse one cached maintenance plan', async () => {
 
   expect(reviewPacketCalls).toBe(1);
   expect(second.nextAction).toEqual(first.nextAction);
+});
+
+test('a Wiki read-model generation change invalidates the cached maintenance plan immediately', async () => {
+  let generation = 3;
+  let reviewPacketCalls = 0;
+  const revision = '9'.repeat(64);
+  const pulse = unitPulseService({
+    maintenanceGeneration: () => generation,
+    reviewPacket: async () => {
+      reviewPacketCalls += 1;
+      const path = `Knowledge/Generation ${generation}.md`;
+      return {
+        curationPlan: {
+          selected: { path, revision, reason: 'broken_link' },
+          inspect: { endpointId: 'notes.read', arguments: { path } },
+          then: { endpointId: 'notes.patch', arguments: { path, expectedRevision: revision, dryRun: true } },
+        },
+      };
+    },
+  });
+  const principal = { accountId: 'generation-aware-maintenance', modelId: 'codex', role: 'model' } as any;
+
+  const first = await pulse.get({ principal });
+  generation += 1;
+  const second = await pulse.get({ principal });
+
+  expect(reviewPacketCalls).toBe(2);
+  expect(first.nextAction).toMatchObject({ target: 'Knowledge/Generation 3.md' });
+  expect(second.nextAction).toMatchObject({ target: 'Knowledge/Generation 4.md' });
 });
 
 test('maintenance projection rejects an action when any executable argument cannot be preserved exactly', async () => {

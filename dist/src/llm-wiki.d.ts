@@ -84,6 +84,11 @@ export declare class LlmWikiService {
     private readonly lintInFlight;
     constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, references: ReferenceService, semanticSearch?: SemanticSearchService | undefined);
     invalidate(): void;
+    /**
+     * Monotonic version for disposable Wiki read projections. Consumers may
+     * reuse advisory results only while this value remains unchanged.
+     */
+    readModelGeneration(): number;
     private principalKey;
     /**
      * Build one request-local work graph so flow, project planning, and next

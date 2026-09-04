@@ -610,10 +610,12 @@ contains only a selected path/revision, an inspect action, and any bounded
 `followUpPlan`. It is advisory and non-mutating: the pulse cannot wake a model
 and does not execute the inspect or follow-up. Re-read the selected revision;
 current Markdown and `expectedRevision` remain authoritative. A short bounded
-process-local cache avoids duplicate sequential heavy projections. A stale
-positive plan may prompt redundant inspections during the short cache lifetime,
-but each remains advisory and a mutation using the old `expectedRevision`
-conflicts instead of auto-writing.
+process-local cache avoids duplicate sequential heavy projections and is keyed
+to the Wiki read-model generation. MCP writes and watched Obsidian/file edits
+therefore invalidate it immediately; the short expiry is retained for
+filesystems where recursive watcher events are unavailable. A change racing a
+projection may still prompt one redundant inspection, but a mutation using the
+old `expectedRevision` conflicts instead of auto-writing.
 
 The internal notification scan window may exceed the display `limit` to find an
 actionable event after unsupported entries. Returned notification context and

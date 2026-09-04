@@ -1240,6 +1240,14 @@ export class LlmWikiService {
     this.lintInFlight.clear();
   }
 
+  /**
+   * Monotonic version for disposable Wiki read projections. Consumers may
+   * reuse advisory results only while this value remains unchanged.
+   */
+  readModelGeneration(): number {
+    return this.generation;
+  }
+
   private principalKey(principal?: ScopePrincipal): string {
     return JSON.stringify(principal ? [principal.accountId, principal.userId || '', principal.modelId, principal.agentId || '', principal.commandCenterId || '', principal.role] : ['anonymous']);
   }

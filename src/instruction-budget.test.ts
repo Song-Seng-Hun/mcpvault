@@ -67,8 +67,11 @@ describe('progressive agent instruction budgets', () => {
       expect(document).toMatch(/invokes neither action|does not execute/);
       expect(document).toMatch(/never mutates|non-mutating/);
       expect(document).toContain('expectedRevision');
-      expect(document).toMatch(/redundant inspections/);
+      expect(document).toContain('read-model generation');
+      expect(document).toMatch(/invalidates? (?:a cached plan|it) immediately/);
+      expect(document).toMatch(/(?:stale|redundant)\s+inspection/);
       expect(document).not.toContain('one extra inspect');
     }
+    expect(readme.match(/Authentication also caches the derived principal list/g)).toHaveLength(1);
   });
 });

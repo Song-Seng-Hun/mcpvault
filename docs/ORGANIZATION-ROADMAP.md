@@ -37,6 +37,11 @@ tools; new behaviors belong in the endpoint catalog.
   packets for decide/review expose a bounded synthesis plan that preserves
   inputs, names missing evidence/counterpoint stages, and routes to an existing
   review or proposed Decision Record rather than inventing a curator API.
+- The pull-based maintenance "janitor" in `get_agent_pulse` now caches only
+  against the current Wiki read-model generation. Sequential idle heartbeats
+  reuse one bounded plan, while MCP writes and watched Obsidian/file edits
+  invalidate positive and negative plans immediately; unreliable watcher
+  filesystems still fall back to the short expiry and revision guard.
 - Community discussions and completed-task retrospectives share one promotion
   queue with revision-safe inspection and publication guidance. Social/task
   records remain provenance context, never immutable factual evidence.
@@ -210,6 +215,39 @@ The compiled `dist/server.js` is also exercised over a real stdio MCP client on
 an isolated temporary Vault through orientation, capability discovery, and
 `wiki.home` execution in `protocol-version.test.ts`.
 These prove the named behaviors, not completion of the whole goal.
+
+## Reconciliation of the earlier six-part maintenance review
+
+The older review that proposed a Janitor daemon, dialectical synthesis,
+knowledge half-lives and cascading invalidation, MOC rebalancing, a task exit
+gate, and visual distillation is now mostly historical:
+
+- Janitor work is pulled through one bounded `get_agent_pulse` maintenance
+  action rather than a separate writer daemon. This preserves stateless server
+  deployment and requires an agent to inspect the current revision before any
+  mutation.
+- `wiki.synthesis_candidates` groups authored MOC/project/domain/subject
+  boundaries, preserves counterpoints and explicit contradictions, and emits a
+  revision-safe create-or-extend plan. Semantic proximity remains a discovery
+  hint through neighborhood/duplicate search, not authority to merge notes.
+- `volatility_class`, explicit review policy/date, immutable source revisions,
+  and bounded `upstream_cascade_changed` projections cover differential decay
+  and transitive dependency review without mass-changing lifecycle state.
+- `wiki.moc_rebalance`, `wiki.moc_order`, `wiki.learning_path`, and staged
+  prerequisite/cycle projections cover overload, authored order, and a
+  topologically safe reading route without rewriting the MOC automatically.
+- Completed agent tasks require linked durable/negative knowledge, a bounded
+  retrospective, or an explicit explained no-reuse disposition.
+- `wiki.canvas_view`, `wiki.canvas_export`, and `wiki.canvas_health` provide
+  bounded Obsidian JSON Canvas navigation with revision freshness. Mermaid is
+  not injected into authoritative note bodies automatically.
+
+Automatic background HTTP checks of arbitrary source URLs are intentionally
+not part of the maintenance loop: they would add outbound privacy leakage,
+SSRF risk, rate-limit/load coupling, and network-dependent truth to an
+otherwise local/stateless server. Captured source hashes, locators, revisions,
+and explicit review remain authoritative; a future opt-in link checker would
+need a strict public-destination policy and bounded manual invocation.
 
 ## Open work with concrete completion evidence
 

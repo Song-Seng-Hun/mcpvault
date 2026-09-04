@@ -208,7 +208,7 @@ export class AgentPulseService {
             agentId: principal.agentId || '',
         });
     }
-    rememberMaintenancePlan(key, plan, now) {
+    rememberMaintenancePlan(key, generation, plan, now) {
         for (const [cachedKey, cached] of this.maintenanceCache) {
             if (cached.expiresAt <= now)
                 this.maintenanceCache.delete(cachedKey);
@@ -220,13 +220,14 @@ export class AgentPulseService {
                 break;
             this.maintenanceCache.delete(oldest.value);
         }
-        this.maintenanceCache.set(key, { expiresAt: now + MAINTENANCE_CACHE_TTL_MS, plan });
+        this.maintenanceCache.set(key, { expiresAt: now + MAINTENANCE_CACHE_TTL_MS, generation, plan });
     }
     async maintenancePlanFor(principal) {
         const key = this.maintenanceCacheKey(principal);
         const now = Date.now();
+        const generation = this.llmWiki?.readModelGeneration();
         const cached = this.maintenanceCache.get(key);
-        if (cached && cached.expiresAt > now) {
+        if (cached && cached.expiresAt > now && cached.generation === generation) {
             this.maintenanceCache.delete(key);
             this.maintenanceCache.set(key, cached);
             return cached.plan;
@@ -235,7 +236,7 @@ export class AgentPulseService {
             this.maintenanceCache.delete(key);
         const packet = await this.llmWiki?.reviewPacket(principal, 1, MAINTENANCE_PACKET_MAX_CHARS);
         const plan = compactMaintenancePlan(packet, MAINTENANCE_PACKET_MAX_CHARS);
-        this.rememberMaintenancePlan(key, plan, now);
+        this.rememberMaintenancePlan(key, generation, plan, now);
         return plan;
     }
     async getUncached(params) {

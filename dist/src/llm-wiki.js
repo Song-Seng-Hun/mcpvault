@@ -1094,6 +1094,13 @@ export class LlmWikiService {
         this.lintCache.clear();
         this.lintInFlight.clear();
     }
+    /**
+     * Monotonic version for disposable Wiki read projections. Consumers may
+     * reuse advisory results only while this value remains unchanged.
+     */
+    readModelGeneration() {
+        return this.generation;
+    }
     principalKey(principal) {
         return JSON.stringify(principal ? [principal.accountId, principal.userId || '', principal.modelId, principal.agentId || '', principal.commandCenterId || '', principal.role] : ['anonymous']);
     }
