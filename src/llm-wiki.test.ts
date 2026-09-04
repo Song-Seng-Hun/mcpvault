@@ -391,6 +391,46 @@ test('review packet promotes direct-edit completion bypasses to one bounded repa
   } finally { await client.close(); await server.close(); }
 });
 
+test('review packet routes completed notes with open Markdown tasks without mutating them', async () => {
+  const { server, client } = await setup();
+  try {
+    const account = await callJson(client, 'register_scope_account', { accountId: 'checkbox-repair-owner', modelId: 'codex', password: 'checkbox-repair-secret' });
+    const accessToken = account.value.accessToken;
+    const path = 'Projects/Completed with open task.md';
+    const write = await client.callTool({ name: 'write_note', arguments: {
+      path,
+      content: '# Completed with open task\n\n- [ ] Verify one remaining item\n',
+      frontmatter: {
+        note_kind: 'task', lifecycle: 'active', task_status: 'completed', completed_at: '2030-01-01T00:00:00.000Z',
+        retrospective: 'The initial result was preserved.', knowledge_dispositions: ['retrospective'],
+      },
+      expectedRevision: 'missing', accessToken,
+    } });
+    expect(write.isError).toBeFalsy();
+    const current = await callJson(client, 'read_note', { path, accessToken });
+    const packet = await callJson(client, 'get_wiki_review_packet', { limit: 10, maxChars: 12000, accessToken });
+    expect(JSON.stringify(packet.value).length).toBeLessThanOrEqual(12000);
+    expect(packet.value.priorities).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path, priority: 2, reason: 'completed_work_with_open_checkboxes', suggestedTool: 'mcp.list_tasks',
+      }),
+    ]));
+    expect(packet.value.curationPlan).toMatchObject({
+      selected: { path, revision: current.value.revision, reason: 'completed_work_with_open_checkboxes' },
+      inspect: { endpointId: 'mcp.list_tasks', arguments: { status: 'open', pathPrefix: path, limit: 20, maxChars: 4000 } },
+      then: {
+        endpointId: 'wiki.triage',
+        arguments: { path, expectedRevision: current.value.revision },
+        requiredArguments: ['taskStatus'],
+      },
+      guard: { oneNotePerPlan: true, expectedRevisionRequired: true, autoFix: false },
+    });
+    const unchanged = await callJson(client, 'read_note', { path, accessToken });
+    expect(unchanged.value.revision).toBe(current.value.revision);
+    expect(unchanged.value.content).toContain('- [ ] Verify one remaining item');
+  } finally { await client.close(); await server.close(); }
+});
+
 test('MOC navigation preserves explicit sibling order, body link order, and multi-MOC neighborhoods', async () => {
   const { server, client } = await setup();
   try {

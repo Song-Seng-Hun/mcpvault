@@ -787,6 +787,46 @@ test("list_tasks returns filtered tasks and ignores frontmatter and code fences"
   }
 });
 
+test("list_tasks keeps pathological task text inside an explicit response budget", async () => {
+  const { server, client } = await connectClient();
+  try {
+    await mkdir(join(testVaultPath, "Projects"), { recursive: true });
+    await writeFile(join(testVaultPath, "Projects/Long task.md"), `- [ ] ${"context ".repeat(2000)}`);
+
+    const capabilities = await client.callTool({
+      name: "search_capabilities",
+      arguments: { query: "list checkbox tasks", limit: 5, maxChars: 12000 },
+    });
+    const descriptor = JSON.parse((capabilities.content as any)[0].text).endpoints
+      .find((endpoint: any) => endpoint.endpointId === "mcp.list_tasks");
+    expect(descriptor.input.properties.maxChars).toMatchObject({ default: 4000, minimum: 512, maximum: 12000 });
+
+    const response = await client.callTool({
+      name: "list_tasks",
+      arguments: { pathPrefix: "Projects/Long task.md", maxChars: 512 },
+    });
+    expect(response.isError).toBeFalsy();
+    const text = String((response.content as any)[0].text);
+    const value = JSON.parse(text);
+    expect(text.length).toBeLessThanOrEqual(512);
+    expect(value).toMatchObject({
+      tasks: [expect.objectContaining({
+        path: "Projects/Long task.md",
+        line: 1,
+        status: "open",
+        taskId: expect.stringMatching(/^task:content:/),
+        textTruncated: true,
+      })],
+      total: 1,
+      returned: 1,
+      truncated: true,
+    });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test("query_notes filters and sorts frontmatter through the MCP tool", async () => {
   const { server, client } = await connectClient();
   try {

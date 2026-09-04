@@ -27,7 +27,8 @@ generic note writes, and Git remain authoritative. The server never checks a
 box, removes text, or reopens a note automatically.
 
 The review packet promotes the signal to priority 2. Its bounded curation plan
-first calls `mcp.list_tasks` for the exact note and then proposes
+first calls `mcp.list_tasks` for the exact note with an explicit character
+budget and then proposes
 `wiki.triage` at the current note revision. The instruction requires the agent
 to choose explicitly among:
 
@@ -48,6 +49,9 @@ inventing a second task database.
 - The check is advisory and visibility-scoped through the existing lint and
   review projections.
 - Output contains a count and line locator, not unbounded task text.
+- `list_tasks` accepts `maxChars`, clips each task preview, and shrinks the
+  returned page as needed so one pathological checkbox cannot consume the
+  caller's context budget. Stable task IDs and exact line locators remain.
 - No new fixed MCP tool, dynamic endpoint, daemon, plugin, or client setup is
   introduced.
 
@@ -58,9 +62,11 @@ inventing a second task database.
    existing task behavior and IDs do not change.
 3. `organizationLintIssues` consumes the same parser for the completed-work
    invariant.
-4. `LlmWikiService.reviewPacket` raises the dedicated lint code before generic
+4. The MCP task-list adapter returns a bounded projection with explicit totals,
+   returned count, and truncation while preserving stable task locators.
+5. `LlmWikiService.reviewPacket` raises the dedicated lint code before generic
    lint debt and emits a revision-bound repair plan.
-5. `wiki.policy(work)`, README, and schema explain that structured completion
+6. `wiki.policy(work)`, README, and schema explain that structured completion
    and body checkboxes should agree while Markdown remains authoritative.
 
 ## Error and concurrency behavior
@@ -80,4 +86,3 @@ action, and mutation action. Fenced examples cannot trigger the issue.
   `mcp.list_tasks` inspection, and revision-safe `wiki.triage` guidance.
 - Run filesystem, organization, Wiki integration, policy, instruction-budget,
   compiled-protocol, build, and full repository tests.
-

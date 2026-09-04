@@ -803,13 +803,14 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "list_tasks",
-          description: "List checkbox tasks across the vault. Defaults to open tasks; returns a stable taskId plus path and line. Use update_task with taskId (preferred), or path and line, after a revision-safe read to complete or reopen one task. Ignores YAML frontmatter and fenced code blocks.",
+          description: "List checkbox tasks across the vault as a bounded projection. Defaults to open tasks; returns a stable taskId plus path and line, clips pathological text previews, and reports total/returned/truncated. Use update_task with taskId (preferred), or path and line, after a revision-safe read to complete or reopen one task. Ignores YAML frontmatter and fenced code blocks.",
           inputSchema: {
             type: "object",
             properties: {
               status: { type: "string", enum: ["open", "completed", "all"], description: "Task status to return (default: open)", default: "open" },
               pathPrefix: { type: "string", description: "Restrict results to a vault subtree, e.g. Projects/2026" },
               limit: { type: "number", description: "Maximum tasks to return (default: 100, max: 500)", default: 100 },
+              maxChars: { type: "integer", minimum: 512, maximum: 12000, description: "Hard total response budget; task text is previewed and the page shrinks before exceeding it (default: 4000)", default: 4000 },
               prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
             }
           }
@@ -2634,10 +2635,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             pathPrefix: trimmedArgs.pathPrefix,
             limit: Math.min(requestedLimit, 500),
           }, canAccessPath);
-          const indent = trimmedArgs.prettyPrint ? 2 : undefined;
-          return {
-            content: [{ type: "text", text: JSON.stringify(tasks, null, indent) }]
-          };
+          return boundedTaskListResult(tasks, trimmedArgs);
         }
 
         case "update_task": {
@@ -3138,6 +3136,35 @@ function compactNavigationItem(item: unknown): unknown {
   }
   if (truncated) compact.fieldsTruncated = true;
   return compact;
+}
+
+function boundedTaskListResult(
+  result: { tasks: Array<{ path: string; line: number; text: string; status: string; taskId: string }>; total: number; truncated: boolean },
+  args: Record<string, any>,
+) {
+  const maxChars = normalizeSearchMaxChars(args.maxChars);
+  const items = result.tasks.map(task => {
+    const text = Array.from(task.text).slice(0, 160).join('');
+    return {
+      ...task,
+      text,
+      ...(text.length < task.text.length && { textTruncated: true }),
+    };
+  });
+  const serialize = (count: number) => {
+    const selected = items.slice(0, count);
+    const value = {
+      tasks: selected,
+      total: result.total,
+      returned: selected.length,
+      truncated: result.truncated || selected.length < result.tasks.length || selected.some(task => task.textTruncated),
+    };
+    return JSON.stringify(value, null, args.prettyPrint ? 2 : undefined);
+  };
+  let count = items.length;
+  let text = serialize(count);
+  while (text.length > maxChars && count > 0) text = serialize(--count);
+  return { content: [{ type: 'text' as const, text }] };
 }
 
 function boundedNavigationResult(

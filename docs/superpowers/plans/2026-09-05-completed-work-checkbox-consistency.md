@@ -15,6 +15,8 @@
 - Create `src/markdown-tasks.ts`: stable task identity and the sole Markdown checkbox parser.
 - Create `src/markdown-tasks.test.ts`: parser characterization across frontmatter, fences, markers, and stable IDs.
 - Modify `src/filesystem.ts`: consume the shared parser without changing list/update behavior.
+- Modify `src/createServer.ts`, `src/createServer.test.ts`: make task-list
+  projections character-bounded while preserving stable locators.
 - Modify `src/organization.ts`: emit the completed/open-checkbox consistency issue.
 - Modify `src/organization.test.ts`: prove the invariant and fence behavior.
 - Modify `src/llm-wiki.ts`: prioritize and route the issue.
@@ -137,7 +139,7 @@ Commit `src/organization.ts` and `src/organization.test.ts` as
 
 ### Task 3: Route one bounded repair
 
-- [ ] **Step 1: Add a failing review-packet integration test**
+- [x] **Step 1: Add a failing review-packet integration test**
 
 In `src/llm-wiki.test.ts`, create one completed actionable note with a valid
 retrospective plus one real open checkbox. Request `get_wiki_review_packet`
@@ -155,7 +157,7 @@ expect(packet.value.priorities).toEqual(expect.arrayContaining([
 expect(packet.value.curationPlan).toMatchObject({
   inspect: {
     endpointId: 'mcp.list_tasks',
-    arguments: { status: 'open', pathPrefix: 'Projects/Completed with open task.md', limit: 20 },
+    arguments: { status: 'open', pathPrefix: 'Projects/Completed with open task.md', limit: 20, maxChars: 4000 },
   },
   then: {
     endpointId: 'wiki.triage',
@@ -168,12 +170,27 @@ expect(packet.value.curationPlan).toMatchObject({
 
 Also reread the note and prove the checkbox and revision are unchanged.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `npm test -- src/llm-wiki.test.ts -t "routes completed notes with open Markdown tasks"`.
 Expected: the issue remains generic lint debt and lacks the dedicated plan.
 
-- [ ] **Step 3: Add priority and curation routing**
+- [x] **Step 3: Add a failing bounded task-list test**
+
+Extend `src/createServer.test.ts` with a task whose text is several thousand
+characters. Call `list_tasks` with `maxChars: 512` and assert that the complete
+JSON response fits, preserves `path`, `line`, and `taskId`, marks the text or
+page truncated, and advertises `maxChars` in the tool schema.
+
+- [x] **Step 4: Implement the bounded task-list projection**
+
+Add `maxChars` to `list_tasks` with the shared 512--12000 range and a 4000
+default. Project task text to a short preview, retain the stable locator, and
+reduce the returned item count until the complete serialized envelope fits.
+Keep `total`, `returned`, and `truncated` explicit. Do not alter task parsing or
+the authoritative Markdown.
+
+- [x] **Step 5: Add priority and curation routing**
 
 In `LlmWikiService.reviewPacket`, add the lint code before generic lint debt:
 
@@ -185,20 +202,21 @@ add(lint.issues
 ```
 
 Add a curation-plan branch that inspects the exact path through
-`endpointIdForTool('list_tasks')`, then proposes
+`endpointIdForTool('list_tasks')` with `maxChars: 4000`, then proposes
 `endpointIdForTool('triage_wiki_note')` with the selected revision and
 `requiredArguments: ['taskStatus']`. The instruction must state that the agent
 may instead complete/remove an obsolete checkbox or move a follow-up, and that
 no action is automatic.
 
-- [ ] **Step 4: Run Wiki integration tests**
+- [x] **Step 6: Run task-list and Wiki integration tests**
 
-Run `npm test -- src/llm-wiki.test.ts -t "routes completed notes with open Markdown tasks"`.
+Run `npm test -- src/createServer.test.ts src/llm-wiki.test.ts -t "task|routes completed notes with open Markdown tasks"`.
 Expected: the dedicated route passes, remains within `maxChars`, and does not mutate the note.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 7: Commit**
 
-Commit `src/llm-wiki.ts` and `src/llm-wiki.test.ts` as
+Commit `src/createServer.ts`, `src/createServer.test.ts`, `src/llm-wiki.ts`,
+`src/llm-wiki.test.ts`, and this amended plan as
 `feat: route completed checkbox inconsistencies`.
 
 ### Task 4: Teach the invariant progressively
