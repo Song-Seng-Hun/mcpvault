@@ -100,6 +100,29 @@ export function getOrganizationRelationContract() {
   return RELATION_SEMANTICS.map(entry => ({ ...entry }));
 }
 export const ORGANIZATION_LIST_FIELDS = ['aliases', 'tags', 'mocs', 'key_points', 'open_questions', 'next_actions', 'project_support', 'subject_terms', 'methods', 'audience', 'see_also', ...RELATION_FIELDS] as const;
+/** Fields that make an ordinary knowledge note participate in the work
+ * system without changing its epistemic/content role. Project and task kinds
+ * participate even before one of these fields is filled in. */
+export const ACTIONABLE_WORK_PROPERTIES = ['task_status', 'next_action', 'next_actions', 'waiting_for'] as const;
+
+export function isActionableKnowledge(frontmatter: Record<string, unknown>): boolean {
+  const type = String(frontmatter.llm_wiki_type || '').trim().toLowerCase();
+  if (type && type !== 'knowledge') return false;
+  const kind = String(frontmatter.note_kind || '').trim().toLowerCase();
+  return ['project', 'task'].includes(kind)
+    || ACTIONABLE_WORK_PROPERTIES.some(property => frontmatter[property] !== undefined);
+}
+
+/** Current executable/reviewable work excludes terminal lanes and retired
+ * knowledge, while `isActionableKnowledge` still identifies their historical
+ * work facet for audits and retrospectives. */
+export function isOpenActionableKnowledge(frontmatter: Record<string, unknown>): boolean {
+  if (!isActionableKnowledge(frontmatter)) return false;
+  const lifecycle = String(frontmatter.lifecycle || '').trim().toLowerCase();
+  const taskStatus = String(frontmatter.task_status || 'open').trim().toLowerCase() || 'open';
+  return !['archived', 'superseded'].includes(lifecycle)
+    && !['completed', 'cancelled', 'someday'].includes(taskStatus);
+}
 
 /**
  * The small, stable subset of frontmatter that MCPVault owns.  Custom
@@ -1577,20 +1600,24 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
     const hasCriteriaHeading = /(^|\n) {0,3}#{1,6}\s+(?:outcome|desired outcome|definition of done|completion criteria|완료 조건)\s*#*\s*(?:\n|$)/i.test(content);
     if (criteria.length === 0 && !hasCriteriaHeading) issues.push({ code: 'active_project_without_completion_criteria', detail: 'An active project should state bounded observable completion_criteria or a completion-criteria heading so agents know when to stop.' });
   }
-  const actionable = type === 'knowledge' && (
-    Boolean(kind && ['project', 'task'].includes(kind))
-    || frontmatter.task_status !== undefined
-    || frontmatter.next_action !== undefined
-    || frontmatter.next_actions !== undefined
-    || frontmatter.waiting_for !== undefined
-  );
+  const actionable = isActionableKnowledge(frontmatter);
   if (actionable) {
     const taskStatus = String(frontmatter.task_status || '').trim().toLowerCase();
     const waiting = taskStatus === 'waiting' || Boolean(String(frontmatter.waiting_for || '').trim());
+    const hasNextAction = Boolean(
+      String(frontmatter.next_action || '').trim()
+      || (Array.isArray(frontmatter.next_actions) && frontmatter.next_actions.some((item: unknown) => typeof item === 'string' && item.trim()))
+    );
+    if (kind !== 'project' && lifecycle === 'active' && !hasNextAction && !waiting && !['blocked', 'someday', 'completed', 'cancelled'].includes(taskStatus)) {
+      issues.push({ code: 'active_work_without_next_action', detail: 'Active actionable work should declare next_action/next_actions or waiting_for so another agent can move it forward.' });
+    }
     if (taskStatus === 'next_action' && !frontmatter.started_at) issues.push({ code: 'active_work_without_started_at', detail: 'Executable work should record started_at when it enters the next_action lane; do not infer it from updated_at.' });
     if (taskStatus === 'blocked' && !frontmatter.blocked_since) issues.push({ code: 'blocked_work_without_blocked_since', detail: 'Blocked work should record blocked_since so aging and escalation remain explainable.' });
     if (waiting && !frontmatter.waiting_since) issues.push({ code: 'waiting_work_without_waiting_since', detail: 'Waiting work should record waiting_since so follow-up aging remains explainable.' });
     if (taskStatus === 'completed' && !frontmatter.completed_at) issues.push({ code: 'completed_work_without_completed_at', detail: 'Completed work should record completed_at so cycle-time history is measurable.' });
+    if (kind !== 'project' && taskStatus === 'waiting' && !String(frontmatter.waiting_for || '').trim()) {
+      issues.push({ code: 'waiting_work_without_owner', detail: 'Waiting work should identify the person, event, or resource it is waiting for.' });
+    }
   }
   if (kind === 'project' && lifecycle === 'active' && String(frontmatter.task_status || '').toLowerCase() === 'waiting' && !frontmatter.waiting_for) {
     issues.push({ code: 'waiting_project_without_owner', detail: 'A waiting project should identify the person, event, or resource it is waiting for.' });

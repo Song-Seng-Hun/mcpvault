@@ -103,11 +103,22 @@ tools; new behaviors belong in the endpoint catalog.
   constraints, nested shape, and required arguments, and only then falls back
   to an identifier-only retry hint. This keeps large organization endpoints
   directly callable without violating the response budget.
+- Actionability is now one shared semantic predicate across dependency
+  resolution, flow health, Reflect, quality checks, lint, Home counts, and the
+  compatibility-named `project_next_actions` Base. Waiting-only epistemic notes
+  remain visible and can block dependents; sources/issues cannot accidentally
+  enter the work graph. Terminal/someday or archived/superseded work is also
+  excluded from current dependency stages through one shared open-work rule.
+  Home reports historical and open work separately and routes only on open
+  work without duplicating every work item into its compact launchpad.
 
 Evidence: `moc-navigation.test.ts`, `backlinks.test.ts`, `organization.test.ts`,
 `filesystem.test.ts`, `continuity.test.ts`, `global-sync.test.ts`, and the
 onboarding/context-pack/capacity/retrieval/migration integration cases in
 `llm-wiki.test.ts`.
+The compiled `dist/server.js` is also exercised over a real stdio MCP client on
+an isolated temporary Vault through orientation, capability discovery, and
+`wiki.home` execution in `protocol-version.test.ts`.
 These prove the named behaviors, not completion of the whole goal.
 
 ## Open work with concrete completion evidence

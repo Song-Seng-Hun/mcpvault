@@ -725,6 +725,7 @@ export declare class LlmWikiService {
                 truncated: boolean;
             };
             projectsAndTasks: {
+                scope: string;
                 items: Record<string, unknown>[];
                 total: number;
                 truncated: boolean;
@@ -1063,6 +1064,7 @@ export declare class LlmWikiService {
                 items: Record<string, unknown>[];
             };
             projectsAndTasks: {
+                scope: string;
                 total: number;
                 truncated: boolean;
                 items: Record<string, unknown>[];
@@ -2668,6 +2670,7 @@ export declare class LlmWikiService {
         matchingNotes: any;
         matchingNotesExact: boolean;
         matchingNotesMeaning: string;
+        actionScope?: string;
         dependencyAware?: boolean;
         recommendedEndpoint?: string;
         dependencyNote?: string;
@@ -2701,6 +2704,7 @@ export declare class LlmWikiService {
         matchingNotes: any;
         matchingNotesExact: boolean;
         matchingNotesMeaning: string;
+        actionScope?: string;
         dependencyAware?: boolean;
         recommendedEndpoint?: string;
         dependencyNote?: string;
@@ -2739,6 +2743,8 @@ export declare class LlmWikiService {
             total: number;
             mocs: number;
             projects: number;
+            actionableWork: number;
+            openWork: number;
             inbox: number;
             review: number;
             decisions: number;
@@ -2937,6 +2943,8 @@ export declare class LlmWikiService {
             total: number;
             mocs: number;
             projects: number;
+            actionableWork: number;
+            openWork: number;
             inbox: number;
             review: number;
             decisions: number;

@@ -562,7 +562,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_bases_view',
-            description: 'Return a bounded, optional Obsidian Bases YAML view for visible Wiki notes, including decisions and focused concept, argument, model, observation, and counterargument shelves. This exports a local view definition only; it is not an MCP permission boundary and does not write a file.',
+            description: 'Return a bounded, optional Obsidian Bases YAML view for visible Wiki notes, including decisions, any-note action candidates, and focused concept, argument, model, observation, and counterargument shelves. This exports a local view definition only; it is not an MCP permission boundary and does not write a file.',
             inputSchema: { type: 'object', properties: {
                     view: { type: 'string', enum: [...BASES_VIEW_IDS], default: 'all', description: 'Optional standard Obsidian Bases projection' },
                     noteKind: { type: 'string', description: 'Optional exact note_kind filter' },
@@ -585,7 +585,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_home',
-            description: 'Return a bounded live launchpad and intent router for the current scope: one recommended next action, exact existing endpoint routes for find/capture/organize/decide/execute/review/repair/migrate, and revision-stamped MOCs, Projects/Tasks, Inbox, review items, and stable IDs. Choose one route; do not call every dashboard. This is a derived Home/JDex-style view, never a second index or an access boundary.',
+            description: 'Return a bounded live launchpad and intent router for the current scope: one recommended next action, exact existing endpoint routes for find/capture/organize/decide/execute/review/repair/migrate, and revision-stamped MOCs, Projects/Tasks, all/current actionable-work counts, Inbox, review items, and stable IDs. Choose one route; do not call every dashboard. This is a derived Home/JDex-style view, never a second index or an access boundary.',
             inputSchema: { type: 'object', properties: {
                     limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint,
                 } },

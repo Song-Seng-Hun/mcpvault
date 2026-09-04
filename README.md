@@ -379,7 +379,7 @@ body/link baseline without requiring the agent to resubmit the whole body.
 Pass `nextLifecycle` when the review changes the knowledge state (for example,
 `evergreen`, `superseded`, or `archived`); otherwise the response explicitly
 asks for a follow-up decision. `get_wiki_review_dashboard` combines Inbox,
-active Projects/Tasks, due work, waiting/someday items, open
+active work on any note kind, due work, waiting/someday items, open
 questions/hypotheses/assumptions, due knowledge, and MOC/graph/focus/
 connectivity health into one bounded Reflect pass. MOC question coverage is
 explicit: put an answer `[[wikilink]]` on the question list item or within the
@@ -736,8 +736,10 @@ revision; it is limited to that presentation file and does not change note
 content or permissions. Markdown and Git remain the source of truth.
 Specialized views may return `matchingNotesExact: false` when
 their final Property expression is intended to be evaluated by Obsidian Bases.
-The `project_next_actions` Base is deliberately labeled an action-candidate
-view: Bases can hide closed/waiting rows and display dependency Properties, but
+The compatibility-named `project_next_actions` Base is deliberately an
+all-note action-candidate view: a question, hypothesis, experiment, or other
+knowledge note with work Properties is included without becoming a project.
+Bases can hide closed/waiting rows and display dependency Properties, but
 it cannot resolve cross-note completion, aliases, access, ambiguity, or cycles.
 Call `wiki.next_actions` before execution for the authoritative bounded
 dependency-aware projection.

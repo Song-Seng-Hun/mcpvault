@@ -288,8 +288,10 @@ and `maintenance`. These are optional local Obsidian `.base` views, not
 another database or permission boundary. Specialized Property expressions
 may return `matchingNotesExact: false` because the final filter is evaluated
 by the local Bases view.
-`project_next_actions` is an Obsidian action-candidate view, not a dependency
-solver. It hides obvious closed/waiting rows and displays `blocked_by` and
+`project_next_actions` keeps its compatibility name but is an all-note
+Obsidian action-candidate view, not a dependency solver. It includes any note
+with `next_action`/`next_actions` without changing its `note_kind`, hides
+obvious closed/waiting rows, and displays `blocked_by` and
 `depends_on`, then returns `dependencyAware: false` and routes execution to
 `wiki.next_actions`, which resolves visible targets, completion, ambiguity,
 access, and cycles.

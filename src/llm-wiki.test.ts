@@ -1131,6 +1131,7 @@ test('work dependency gates keep flow, project planning, and next actions consis
       frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen' }, expectedRevision: 'missing', accessToken,
     } });
     await write('Projects/Knowledge dependent.md', { task_status: 'open', next_action: 'Use the reference while working', task_context: '@computer', depends_on: ['[[Knowledge/Reference]]'] });
+    await write('Projects/Archived historical work.md', { lifecycle: 'archived', task_status: 'open', next_action: 'Do not enter the current dependency plan', task_context: '@computer' });
 
     const next = await callJson(client, 'get_wiki_next_actions', { context: '@computer', limit: 20, maxChars: 12000, accessToken });
     const nextPaths = next.value.items.map((item: any) => item.path);
@@ -1182,7 +1183,7 @@ test('work dependency gates keep flow, project planning, and next actions consis
       expect.objectContaining({ path: 'Projects/Ready dependent.md', target: 'finished-gate' }),
     ]));
     const base = await callJson(client, 'get_wiki_bases_view', { view: 'project_next_actions', limit: 20, maxChars: 12000, accessToken });
-    expect(base.value).toMatchObject({ view: 'project_next_actions', dependencyAware: false, recommendedEndpoint: 'wiki.next_actions', matchingNotesExact: false });
+    expect(base.value).toMatchObject({ view: 'project_next_actions', actionScope: 'any_actionable_note', dependencyAware: false, recommendedEndpoint: 'wiki.next_actions', matchingNotesExact: false });
     expect(base.value.content).toContain('note.blocked_by');
   } finally {
     await client.close();
@@ -1371,6 +1372,15 @@ test('questions, negative knowledge, locators, event review, MOC coverage, and B
     expect(questionActions.value.items).toEqual(expect.arrayContaining([
       expect.objectContaining({ path: 'Knowledge/Open question.md', action: 'Ask another agent to rerun the test.', context: '@research' }),
     ]));
+    await callJson(client, 'publish_knowledge', {
+      path: 'Knowledge/Waiting question.md', content: '# Waiting question\n\nCan a peer provide the missing observation?\n', evidencePaths: [source.value.path],
+      noteKind: 'question', epistemicStatus: 'blocked', lifecycle: 'active', waitingFor: 'An independent peer observation', waitingSince: '2030-01-02',
+      expectedRevision: 'missing', author: 'codex', accessToken,
+    });
+    const actionableFlow = await callJson(client, 'get_wiki_flow_health', { limit: 20, maxChars: 12000, accessToken });
+    expect(actionableFlow.value.lanes.waiting).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/Waiting question.md', kind: 'question', waitingFor: 'An independent peer observation' }),
+    ]));
     const actionableDashboard = await callJson(client, 'get_wiki_review_dashboard', { limit: 20, maxChars: 12000, accessToken });
     expect(actionableDashboard.value.sections.projectReadiness).toMatchObject({ scope: 'any_actionable_note' });
     expect(actionableDashboard.value.sections.projectReadiness.items).toEqual(expect.arrayContaining([
@@ -1382,6 +1392,12 @@ test('questions, negative knowledge, locators, event review, MOC coverage, and B
       expect.objectContaining({ id: 'next_action_or_waiting', passed: true }),
       expect.objectContaining({ id: 'execution_state', passed: false }),
     ]));
+    const actionableHome = await callJson(client, 'get_wiki_home', { limit: 20, maxChars: 12000, accessToken });
+    expect(actionableHome.value.counts.actionableWork).toBeGreaterThanOrEqual(2);
+    const actionableBase = await callJson(client, 'get_wiki_bases_view', { view: 'project_next_actions', limit: 20, maxChars: 12000, accessToken });
+    expect(actionableBase.value).toMatchObject({ actionScope: 'any_actionable_note', matchingNotesExact: false, recommendedEndpoint: 'wiki.next_actions' });
+    expect(actionableBase.value.content).toContain('note.next_action || note.next_actions');
+    expect(actionableBase.value.content).toContain('note.llm_wiki_type == "knowledge"');
     const question = await callJson(client, 'read_note', { path: 'Knowledge/Open question.md', accessToken });
     const editedQuestion = await client.callTool({ name: 'patch_note', arguments: {
       path: 'Knowledge/Open question.md', oldString: 'Should this result be reproduced independently?', newString: 'Should this result be reproduced independently by another agent?', expectedRevision: question.value.revision, accessToken,

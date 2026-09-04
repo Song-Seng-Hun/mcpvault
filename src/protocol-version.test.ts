@@ -71,3 +71,27 @@ test("serves MCP 2026-07-28 clients", async () => {
     await client.close();
   }
 }, 15_000);
+
+test("compiled stdio server completes the bounded organization discovery route", async () => {
+  const client = await connect("modern");
+  try {
+    const orientation = await client.callTool({ name: "orient_wiki", arguments: { maxChars: 4000 } });
+    const orientationValue = JSON.parse(String((orientation.content as any)[0]?.text || "{}"));
+    expect(orientationValue.protocol).toBe("mcpvault-llm-wiki/v1");
+    expect(orientationValue.nextActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ tool: expect.any(String), reason: expect.any(String) }),
+    ]));
+
+    const discovery = await client.callTool({ name: "search_capabilities", arguments: { query: "wiki home", limit: 3, maxChars: 6000 } });
+    const discoveryValue = JSON.parse(String((discovery.content as any)[0]?.text || "{}"));
+    expect(discoveryValue.endpoints).toEqual(expect.arrayContaining([
+      expect.objectContaining({ endpointId: "wiki.home", available: true, input: expect.any(Object) }),
+    ]));
+
+    const home = await client.callTool({ name: "call_endpoint", arguments: { endpointId: "wiki.home", arguments: { limit: 5, maxChars: 4000 } } });
+    const homeValue = JSON.parse(String((home.content as any)[0]?.text || "{}"));
+    expect(homeValue).toMatchObject({ suggestedHomePath: "Home.md", suggestedIndexPath: "JDex.md", counts: expect.any(Object), nextAction: { endpointId: expect.any(String) } });
+  } finally {
+    await client.close();
+  }
+}, 20_000);

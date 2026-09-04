@@ -9,7 +9,7 @@ import type { ReferenceService } from './references.js';
 import type { SemanticSearchService } from './semantic-search.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
-import { getOrganizationPropertyContract, getOrganizationRelationContract, inapplicableOrganizationProperties, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, organizationLintIssues, organizationNoteTemplate, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, CONFIDENCE_LEVELS, DECISION_STATUSES, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS, type AnswerPacketIntent, type CatalogOrder, type TemporalValidityState, type WikiProjectionView } from './organization.js';
+import { getOrganizationPropertyContract, getOrganizationRelationContract, inapplicableOrganizationProperties, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, organizationLintIssues, organizationNoteTemplate, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, CONFIDENCE_LEVELS, DECISION_STATUSES, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS, type AnswerPacketIntent, type CatalogOrder, type TemporalValidityState, type WikiProjectionView } from './organization.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
@@ -1132,13 +1132,7 @@ export class LlmWikiService {
     for await (const note of iterateNotes(this.fileSystem, { includeContent }, canAccess)) {
       if (!isModerationHidden(note.frontmatter)) notes.push(note);
     }
-    const isWorkNote = (note: QueryNote) => {
-      const kind = String(note.frontmatter.note_kind || '').trim().toLowerCase();
-      return ['project', 'task'].includes(kind)
-        || note.frontmatter.task_status !== undefined
-        || note.frontmatter.next_action !== undefined
-        || note.frontmatter.next_actions !== undefined;
-    };
+    const isWorkNote = (note: QueryNote) => isActionableKnowledge(note.frontmatter);
     const workNotes = notes.filter(isWorkNote);
     const visibleByPath = new Map(notes.map(note => [normalizePath(note.path).toLowerCase(), note]));
     const workByPath = new Map(workNotes.map(note => [normalizePath(note.path).toLowerCase(), note]));
@@ -1163,7 +1157,7 @@ export class LlmWikiService {
     const findingsByPath = new Map<string, WorkDependencyFinding[]>();
     const adjacency = new Map<string, Set<string>>();
     const unfinishedKeys = workNotes
-      .filter(note => !['completed', 'cancelled', 'someday'].includes(taskStatus(note)))
+      .filter(note => isOpenActionableKnowledge(note.frontmatter))
       .map(note => normalizePath(note.path).toLowerCase());
     const unfinishedSet = new Set(unfinishedKeys);
 
@@ -3789,17 +3783,13 @@ export class LlmWikiService {
       const taskStatus = String(note.frontmatter.task_status || '').toLowerCase();
       const title = note.frontmatter.title || note.path.split('/').at(-1);
       const item = { path: this.access.toPublicPath(note.path), title, kind, ...(note.revision && { revision: note.revision }), ...(note.frontmatter.task_status && { taskStatus }) };
-      const actionable = ['project', 'task'].includes(kind)
-        || note.frontmatter.task_status !== undefined
-        || note.frontmatter.next_action !== undefined
-        || note.frontmatter.next_actions !== undefined
-        || note.frontmatter.waiting_for !== undefined;
+      const actionable = isActionableKnowledge(note.frontmatter);
       if (actionable) {
         if (taskStatus === 'someday') {
           totalSomeday += 1;
           pushBounded(somedayItems, item);
         }
-        if (lifecycle !== 'archived' && !['completed', 'cancelled', 'someday'].includes(taskStatus)) {
+        if (isOpenActionableKnowledge(note.frontmatter)) {
           const dueAt = typeof note.frontmatter.due_at === 'string' ? note.frontmatter.due_at : undefined;
           const scheduledAt = typeof note.frontmatter.scheduled_at === 'string' ? note.frontmatter.scheduled_at : undefined;
           const deferUntil = typeof note.frontmatter.defer_until === 'string' ? note.frontmatter.defer_until : undefined;
@@ -3913,7 +3903,7 @@ export class LlmWikiService {
       purpose: 'One bounded GTD Reflect/weekly-review projection. It is advisory; inspect each selected note before changing it.',
       sections: {
         inbox,
-        projectsAndTasks: { items: actionItems, total: totalActionItems, truncated: totalActionItems > actionItems.length },
+        projectsAndTasks: { scope: 'any_actionable_note', items: actionItems, total: totalActionItems, truncated: totalActionItems > actionItems.length },
         projectReadiness: { scope: 'any_actionable_note', items: projectReadinessItems, total: totalWorkNotes, truncated: totalWorkNotes > projectReadinessItems.length },
         due: { items: dueItems, total: totalDue, truncated: totalDue > dueItems.length },
         scheduled: { items: scheduledItems, total: totalScheduled, truncated: totalScheduled > scheduledItems.length },
@@ -3999,10 +3989,8 @@ export class LlmWikiService {
     };
     for (const note of dependencySnapshot.workNotes) {
       const kind = String(note.frontmatter.note_kind || '').trim().toLowerCase();
-      const lifecycle = String(note.frontmatter.lifecycle || '').trim().toLowerCase();
       const taskStatus = String(note.frontmatter.task_status || '').trim().toLowerCase() || 'open';
-      if (!['project', 'task'].includes(kind) && note.frontmatter.task_status === undefined && note.frontmatter.next_action === undefined && note.frontmatter.next_actions === undefined) continue;
-      if (['archived', 'superseded'].includes(lifecycle) || ['completed', 'cancelled', 'someday'].includes(taskStatus)) continue;
+      if (!isOpenActionableKnowledge(note.frontmatter)) continue;
       totalWork += 1;
       const title = note.frontmatter.title || note.path.split('/').at(-1) || note.path;
       const hasNextAction = Boolean((typeof note.frontmatter.next_action === 'string' && note.frontmatter.next_action.trim()) || (Array.isArray(note.frontmatter.next_actions) && note.frontmatter.next_actions.some((item: unknown) => typeof item === 'string' && item.trim())));
@@ -5161,11 +5149,8 @@ export class LlmWikiService {
     let total = 0;
     const nowMs = Date.now();
     for (const note of dependencySnapshot.workNotes) {
-      const kind = String(note.frontmatter.note_kind || '').toLowerCase();
-      const lifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
       const taskStatus = String(note.frontmatter.task_status || '').toLowerCase();
-      if (!['project', 'task'].includes(kind) && !note.frontmatter.next_action && !note.frontmatter.next_actions) continue;
-      if (['archived', 'superseded'].includes(lifecycle) || ['completed', 'cancelled', 'someday'].includes(taskStatus)) continue;
+      if (!isOpenActionableKnowledge(note.frontmatter)) continue;
       const actions = [
         ...(typeof note.frontmatter.next_action === 'string' ? [note.frontmatter.next_action] : []),
         ...(Array.isArray(note.frontmatter.next_actions) ? note.frontmatter.next_actions.filter((item: unknown): item is string => typeof item === 'string') : []),
@@ -6242,7 +6227,7 @@ export class LlmWikiService {
       inbox: { name: 'LLM Wiki Inbox', file: 'LLM Wiki Inbox.base', filters: ['note.lifecycle == "inbox"'] },
       inbox_oldest: { name: 'LLM Wiki Inbox (Oldest first)', file: 'LLM Wiki Inbox Oldest.base', filters: ['note.lifecycle == "inbox"'], order: ['note.captured_at', 'file.mtime', 'file.name'] },
       projects: { name: 'LLM Wiki Projects and Tasks', file: 'LLM Wiki Projects.base', filters: ['note.note_kind == "project" || note.note_kind == "task"'] },
-      project_next_actions: { name: 'LLM Wiki Project Action Candidates', file: 'LLM Wiki Project Next Actions.base', filters: ['(note.note_kind == "project" || note.note_kind == "task") && (!note.task_status || note.task_status == "open" || note.task_status == "next_action") && (note.next_action || note.next_actions) && !note.waiting_for'], order: ['note.due_at', 'note.scheduled_at', 'file.mtime', 'file.name'] },
+      project_next_actions: { name: 'LLM Wiki Action Candidates', file: 'LLM Wiki Project Next Actions.base', filters: ['(!note.llm_wiki_type || note.llm_wiki_type == "knowledge") && (!note.task_status || note.task_status == "open" || note.task_status == "next_action") && (note.next_action || note.next_actions) && !note.waiting_for && note.lifecycle != "archived" && note.lifecycle != "superseded"'], order: ['note.due_at', 'note.scheduled_at', 'file.mtime', 'file.name'] },
       review: { name: 'LLM Wiki Review', file: 'LLM Wiki Review.base', filters: ['note.lifecycle == "review"'] },
       epistemic: { name: 'LLM Wiki Epistemic Work', file: 'LLM Wiki Epistemic.base', filters: ['note.note_kind == "question" || note.note_kind == "hypothesis" || note.note_kind == "experiment" || note.note_kind == "assumption"'] },
       experiments: { name: 'LLM Wiki Experiments', file: 'LLM Wiki Experiments.base', filters: ['note.note_kind == "experiment"'], order: ['note.epistemic_status', 'file.mtime', 'file.name'] },
@@ -6288,7 +6273,7 @@ export class LlmWikiService {
         : view === 'experiments'
               ? Number((catalog.organization as any).noteKinds?.experiment || 0)
         : view === 'project_next_actions'
-              ? Number((catalog.organization as any).noteKinds?.project || 0) + Number((catalog.organization as any).noteKinds?.task || 0)
+              ? catalog.total
               : ['unreviewed_evidence', 'open_questions', 'negative_knowledge', 'deprecated_terms', 'authority', 'review_checklist', 'collections'].includes(view)
                 ? catalog.total
               : Number((catalog.organization as any).noteKinds?.question || 0) + Number((catalog.organization as any).noteKinds?.hypothesis || 0) + Number((catalog.organization as any).noteKinds?.experiment || 0) + Number((catalog.organization as any).noteKinds?.assumption || 0);
@@ -6301,7 +6286,8 @@ export class LlmWikiService {
     const base = {
       filters: { and: filters },
       formulas: {
-        planning_ready: 'note.note_kind != "project" || note.project_purpose || note.desired_outcome',
+        actionable: '(!note.llm_wiki_type || note.llm_wiki_type == "knowledge") && (note.note_kind == "project" || note.note_kind == "task" || note.task_status || note.next_action || note.next_actions || note.waiting_for)',
+        planning_ready: '!((!note.llm_wiki_type || note.llm_wiki_type == "knowledge") && (note.note_kind == "project" || note.note_kind == "task" || note.task_status || note.next_action || note.next_actions || note.waiting_for)) || note.project_purpose || note.desired_outcome || note.next_action || note.next_actions || note.waiting_for',
         review_due: 'note.review_at && date(note.review_at) <= now()',
         has_support: 'note.project_support && note.project_support.length > 0',
         dependency_declared: 'note.blocked_by || note.depends_on',
@@ -6327,6 +6313,7 @@ export class LlmWikiService {
         'note.project_support': { displayName: 'Project support' },
         'note.blocked_by': { displayName: 'Blocked by' },
         'note.depends_on': { displayName: 'Depends on' },
+        'formula.actionable': { displayName: 'Actionable' },
         'formula.planning_ready': { displayName: 'Planning ready' },
         'formula.review_due': { displayName: 'Review due' },
         'formula.has_support': { displayName: 'Has support' },
@@ -6342,7 +6329,7 @@ export class LlmWikiService {
         name: selectedView.name,
         limit: boundedLimit,
         order: selectedView.order || ['file.mtime', 'file.name'],
-        columns: ['file.name', 'note.note_kind', 'note.lifecycle', 'note.decision_status', 'note.supersedes', 'note.replaced_by', 'note.archive_collection_id', 'note.archive_series', 'note.archive_sequence', 'note.accession_id', 'note.task_status', 'note.project_purpose', 'note.desired_outcome', 'note.next_action', 'note.blocked_by', 'note.depends_on', 'note.primary_moc', 'note.domain', 'note.preferred_term', 'note.aliases', 'note.review_checks', 'note.review_open_items', 'formula.planning_ready', 'formula.review_due', 'formula.has_support', 'formula.dependency_declared', 'formula.has_summary', 'formula.review_state', 'file.mtime'],
+        columns: ['file.name', 'note.note_kind', 'note.lifecycle', 'note.decision_status', 'note.supersedes', 'note.replaced_by', 'note.archive_collection_id', 'note.archive_series', 'note.archive_sequence', 'note.accession_id', 'note.task_status', 'note.project_purpose', 'note.desired_outcome', 'note.next_action', 'note.blocked_by', 'note.depends_on', 'note.primary_moc', 'note.domain', 'note.preferred_term', 'note.aliases', 'note.review_checks', 'note.review_open_items', 'formula.actionable', 'formula.planning_ready', 'formula.review_due', 'formula.has_support', 'formula.dependency_declared', 'formula.has_summary', 'formula.review_state', 'file.mtime'],
       }],
     };
     const content = stringifyYaml(base);
@@ -6354,7 +6341,7 @@ export class LlmWikiService {
       matchingNotes: resolvedMatchingNotes,
       matchingNotesExact,
       matchingNotesMeaning: matchingNotesExact ? 'exact visible count before Bases renders the view' : 'upper bound before the local Bases Property expression is evaluated',
-      ...(view === 'project_next_actions' && { dependencyAware: false, recommendedEndpoint: endpointIdForTool('get_wiki_next_actions'), dependencyNote: 'Obsidian Bases can prefilter local action candidates but cannot resolve cross-note completion, ambiguity, access, or cycles. Call wiki.next_actions before execution.' }),
+      ...(view === 'project_next_actions' && { actionScope: 'any_actionable_note', dependencyAware: false, recommendedEndpoint: endpointIdForTool('get_wiki_next_actions'), dependencyNote: 'Obsidian Bases can prefilter local action candidates but cannot resolve cross-note completion, ambiguity, access, or cycles. Call wiki.next_actions before execution.' }),
       view,
       availableViews: Object.entries(viewDefinitions).map(([id, definition]) => ({ id, name: definition.name, suggestedPath: `Views/${definition.file}` })),
       filter: { ...(noteKind && { noteKind }), ...(lifecycle && { lifecycle }) },
@@ -6404,6 +6391,8 @@ export class LlmWikiService {
     let total = 0;
     let mocTotal = 0;
     let projectTotal = 0;
+    let actionableWorkTotal = 0;
+    let openWorkTotal = 0;
     let inboxTotal = 0;
     let reviewTotal = 0;
     let decisionTotal = 0;
@@ -6439,6 +6428,8 @@ export class LlmWikiService {
         projectTotal += 1;
         if (projects.length < boundedLimit) projects.push({ ...item, ...(note.frontmatter.task_status && { taskStatus: note.frontmatter.task_status }), ...(note.frontmatter.next_action && { nextAction: note.frontmatter.next_action }) });
       }
+      if (isActionableKnowledge(note.frontmatter)) actionableWorkTotal += 1;
+      if (isOpenActionableKnowledge(note.frontmatter)) openWorkTotal += 1;
       if (note.frontmatter.note_kind === 'decision') decisionTotal += 1;
       if (note.frontmatter.llm_wiki_type === 'source' && typeof note.frontmatter.archive_collection_id === 'string' && note.frontmatter.archive_collection_id.trim()) archivedSourceTotal += 1;
       if (note.frontmatter.lifecycle === 'inbox' || /(^|\/)inbox(?:\/|$)/i.test(note.path)) {
@@ -6479,8 +6470,8 @@ export class LlmWikiService {
       ? { endpointId: endpointIdForTool('get_wiki_review_packet'), arguments: { limit: 1, maxChars: 4000 }, reason: `${reviewTotal} review item(s) are visible; inspect one before broad maintenance.` }
       : inboxTotal > 0
         ? { endpointId: endpointIdForTool('get_wiki_inbox'), arguments: { limit: 5, maxChars: 4000 }, reason: `${inboxTotal} capture(s) await clarification.` }
-        : projectTotal > 0
-          ? { endpointId: endpointIdForTool('get_wiki_review_dashboard'), arguments: { limit: 5, maxChars: 4000 }, reason: `${projectTotal} project/task note(s) are visible; inspect readiness before pulling more work.` }
+        : openWorkTotal > 0
+          ? { endpointId: endpointIdForTool('get_wiki_review_dashboard'), arguments: { limit: 5, maxChars: 4000 }, reason: `${openWorkTotal} open actionable note(s) are visible; inspect readiness before pulling more work.` }
           : { endpointId: endpointIdForTool('search_notes'), arguments: { query: '<terms>', limit: 5, maxChars: 4000 }, requiredArguments: ['query'], reason: 'Search existing knowledge before creating a note.' };
     const result = {
       scope: principal ? (principal.commandCenterId ? `command-center:${principal.commandCenterId}` : 'authorized-scope') : 'global',
@@ -6492,7 +6483,7 @@ export class LlmWikiService {
         { path: this.access.toPublicPath(PUBLIC_SCHEMA_PATH), reason: 'scope rules and writing contract' },
         { path: this.access.toPublicPath(WELCOME_NOTE_PATH), reason: 'first-session orientation' },
       ],
-      counts: { total, mocs: mocTotal, projects: projectTotal, inbox: inboxTotal, review: reviewTotal, decisions: decisionTotal, archivedSources: archivedSourceTotal, stableIds: stableIdTotal },
+      counts: { total, mocs: mocTotal, projects: projectTotal, actionableWork: actionableWorkTotal, openWork: openWorkTotal, inbox: inboxTotal, review: reviewTotal, decisions: decisionTotal, archivedSources: archivedSourceTotal, stableIds: stableIdTotal },
       nextAction,
       workflowRoutes,
       mocs,
@@ -7567,7 +7558,7 @@ export class LlmWikiService {
       'invalid_key_points', 'invalid_open_questions', 'invalid_next_actions',
       'invalid_summary', 'invalid_summary_layer', 'invalid_summary_highlights', 'summary_fingerprint_missing', 'invalid_summary_fingerprint', 'stale_summary', 'stale_summary_highlight', 'summary_highlight_out_of_range', 'invalid_stable_id', 'invalid_task_status',
       'invalid_triage_disposition', 'invalid_clarified_by', 'invalid_clarify_note', 'invalid_triage_target', 'invalid_clarified_at', 'invalid_primary_moc', 'invalid_moc_purpose', 'invalid_moc_scope', 'invalid_moc_questions', 'invalid_moc_parent', 'moc_purpose_missing', 'moc_questions_missing',
-      'duplicate_alias_across_notes', 'duplicate_stable_id', 'invalid_review_policy', 'invalid_review_outcome', 'invalid_interpretation_status', 'invalid_review_count', 'invalid_review_reopen_count', 'invalid_last_review_trigger', 'invalid_due_at', 'invalid_scheduled_at', 'invalid_defer_until', 'invalid_last_reviewed_at', 'invalid_epistemic_status', 'epistemic_status_wrong_kind', 'invalid_knowledge_polarity', 'invalid_negative_type', 'negative_lesson_missing', 'negative_reproduction_missing', 'waiting_project_without_owner', 'literature_interpretation_pending', 'superseded_without_replacement', 'archived_reason_missing', 'review_record_incomplete', 'invalid_term_status', 'term_replacement_missing', 'invalid_broader_terms', 'invalid_related_terms',
+      'duplicate_alias_across_notes', 'duplicate_stable_id', 'invalid_review_policy', 'invalid_review_outcome', 'invalid_interpretation_status', 'invalid_review_count', 'invalid_review_reopen_count', 'invalid_last_review_trigger', 'invalid_due_at', 'invalid_scheduled_at', 'invalid_defer_until', 'invalid_last_reviewed_at', 'invalid_epistemic_status', 'epistemic_status_wrong_kind', 'invalid_knowledge_polarity', 'invalid_negative_type', 'negative_lesson_missing', 'negative_reproduction_missing', 'waiting_project_without_owner', 'waiting_work_without_owner', 'active_work_without_next_action', 'literature_interpretation_pending', 'superseded_without_replacement', 'archived_reason_missing', 'review_record_incomplete', 'invalid_term_status', 'term_replacement_missing', 'invalid_broader_terms', 'invalid_related_terms',
       'negative_type_without_negative_polarity', 'negative_polarity_without_type', 'atomic_note_may_be_too_broad',
       'invalid_retention_policy', 'invalid_retention_event', 'invalid_retention_at', 'invalid_preserve_until', 'invalid_legal_hold', 'legal_hold_blocks_disposition', 'invalid_retention_reason', 'invalid_replaced_by', 'retention_reason_missing', 'tombstone_lifecycle_mismatch',
       'invalid_evidence_locator', 'evidence_path_mismatch', 'stale_evidence_revision', 'invalid_claim_evidence_locator', 'stale_claim_evidence_revision', 'epistemic_status_missing',
@@ -7598,8 +7589,10 @@ export class LlmWikiService {
     };
     const recommendations = [
       ...(byCode.active_project_without_next_action ? ['Add a concrete next_action or waiting_for to each active project.'] : []),
+      ...(byCode.active_work_without_next_action ? ['Add a concrete next_action/next_actions or waiting_for to each active actionable note.'] : []),
       ...(byCode.active_project_without_outcome ? ['State the purpose or desired_outcome of each active project so it remains distinguishable from an Area.'] : []),
       ...(byCode.waiting_project_without_owner ? ['Identify who or what each waiting project is waiting for; keep waiting_for separate from the next action.'] : []),
+      ...(byCode.waiting_work_without_owner ? ['Identify who or what each waiting actionable note is waiting for; keep waiting_for separate from the next action.'] : []),
       ...(byCode.active_project_without_completion_criteria ? ['Give each active project bounded observable completion_criteria so agents know when the work is done.'] : []),
       ...(byCode.active_work_without_started_at || byCode.blocked_work_without_blocked_since || byCode.waiting_work_without_waiting_since || byCode.completed_work_without_completed_at ? ['Record explicit flow timestamps when work enters, leaves, or waits in a lane; do not infer them from updated_at.'] : []),
       ...(byCode.invalid_service_class || byCode.invalid_completion_criteria ? ['Repair service_class and completion_criteria shapes before using the Kanban flow projection.'] : []),
@@ -9365,11 +9358,7 @@ export class LlmWikiService {
     if (['knowledge', 'atomic', 'decision'].includes(kind)) add('evidence_or_explicit_uncertainty', evidence > 0 || ['draft', 'disputed'].includes(String(fm.knowledge_status || fm.status || '').toLowerCase()), 'Ground load-bearing knowledge in immutable evidence or mark its uncertainty explicitly.');
     if (['atomic', 'knowledge', 'decision', 'moc'].includes(kind)) add('navigation', links > 0 || (Array.isArray(fm.references) && fm.references.length > 0), 'Connect the note to an existing concept, MOC, decision, or source with an Obsidian link.');
     if (kind === 'literature') add('interpretation', String(fm.interpretation_status || '').toLowerCase() !== 'unprocessed' || links > 0, 'Interpret the source or link it to a reusable derived note.');
-    const actionable = ['project', 'task'].includes(kind)
-      || fm.task_status !== undefined
-      || fm.next_action !== undefined
-      || fm.next_actions !== undefined
-      || fm.waiting_for !== undefined;
+    const actionable = isActionableKnowledge(fm);
     if (actionable) {
       add('desired_outcome', Boolean(String(fm.desired_outcome || '').trim()), 'State an observable outcome so the actionable work has a clear stopping condition.');
       add('next_action_or_waiting', Boolean(String(fm.next_action || '').trim() || String(fm.waiting_for || '').trim() || (Array.isArray(fm.next_actions) && fm.next_actions.length > 0)), 'Keep one concrete next action or an explicit waiting dependency.');

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { BASES_VIEW_IDS, CONFIDENCE_LEVELS, KNOWLEDGE_STATUSES, NOTE_TEMPLATE_IDS, SOURCE_TRUST_LEVELS, getOrganizationPropertyContract, getOrganizationRelationContract, knowledgeOrganization, organizationLintIssues, organizationNoteTemplate, temporalValidity } from './organization.js';
+import { BASES_VIEW_IDS, CONFIDENCE_LEVELS, KNOWLEDGE_STATUSES, NOTE_TEMPLATE_IDS, SOURCE_TRUST_LEVELS, getOrganizationPropertyContract, getOrganizationRelationContract, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, organizationLintIssues, organizationNoteTemplate, temporalValidity } from './organization.js';
 
 describe('knowledge organization focus and summary metadata', () => {
   test('filing edits and partial stale projection edits cannot certify inherited summaries', () => {
@@ -300,6 +300,26 @@ describe('knowledge organization focus and summary metadata', () => {
       started_at: '2030-01-01T10:00:00.000Z', completed_at: '2030-01-02T10:00:00.000Z',
     });
     expect(() => knowledgeOrganization({ status: 'draft', serviceClass: 'urgent' })).toThrow(/serviceClass/);
+  });
+
+  test('uses one orthogonal actionable-note rule without treating sources as work', () => {
+    expect(isActionableKnowledge({ llm_wiki_type: 'knowledge', note_kind: 'question', waiting_for: 'peer review' })).toBe(true);
+    expect(isActionableKnowledge({ note_kind: 'task' })).toBe(true);
+    expect(isActionableKnowledge({ llm_wiki_type: 'knowledge', note_kind: 'atomic' })).toBe(false);
+    expect(isActionableKnowledge({ llm_wiki_type: 'source', note_kind: 'project', task_status: 'open' })).toBe(false);
+    expect(isOpenActionableKnowledge({ llm_wiki_type: 'knowledge', note_kind: 'question', waiting_for: 'peer review' })).toBe(true);
+    expect(isOpenActionableKnowledge({ llm_wiki_type: 'knowledge', note_kind: 'task', lifecycle: 'archived', task_status: 'open' })).toBe(false);
+    expect(isOpenActionableKnowledge({ llm_wiki_type: 'knowledge', note_kind: 'task', task_status: 'someday' })).toBe(false);
+
+    const openQuestion = organizationLintIssues('Knowledge/Open work.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'question', lifecycle: 'active', epistemic_status: 'open', task_status: 'open',
+    }, '# Open work\n');
+    expect(openQuestion.map(issue => issue.code)).toContain('active_work_without_next_action');
+
+    const ownerlessWait = organizationLintIssues('Knowledge/Waiting work.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'question', lifecycle: 'active', epistemic_status: 'blocked', task_status: 'waiting', waiting_since: '2030-01-01',
+    }, '# Waiting work\n');
+    expect(ownerlessWait.map(issue => issue.code)).toContain('waiting_work_without_owner');
   });
 
   test('warns when active project work has no observable completion condition', () => {

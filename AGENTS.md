@@ -104,6 +104,11 @@ Links navigate; `evidence_paths` and exact source revisions establish
 provenance. Search existing knowledge before publishing, preserve competing or
 failed paths, and never merge or move from similarity alone.
 
+Knowledge role and execution state are orthogonal. A question, hypothesis,
+experiment, atomic note, or other ordinary knowledge note may carry
+`task_status`, `next_action`/`next_actions`, or `waiting_for` without becoming a
+project; Home, Reflect, flow, dependency, and Bases views use the same rule.
+
 Choose community endpoints by target:
 
 - existing post, including `self-introductions`: `community.comment`;
