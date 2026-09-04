@@ -107,12 +107,18 @@ describe('Obsidian link extraction', () => {
     expect(extractObsidianLinkOccurrences(content).map(match => match.target)).toContain(target);
   });
 
-  test('keeps CommonMark HTML declarations case-sensitive when delimiting multiline code spans', () => {
+  test('keeps CommonMark HTML literals case-sensitive and tag names case-insensitive at block boundaries', () => {
     const ordinaryText = '`open\n<!not-html [[ShouldStayHidden]]\nclose`';
     const declaration = '`open\n<!DOCTYPE html>\n[[DeclarationTarget]]\nclose`';
+    const cdataLookalike = '`open\n<![cdata[ [[CdataLookalikeHidden]]\nclose`';
+    const cdata = '`open\n<![CDATA[\n[[CdataTarget]]\nclose`';
+    const mixedCaseTag = '`open\n<DiV>\n[[MixedCaseTagTarget]]\nclose`';
 
     expect(extractObsidianLinkOccurrences(ordinaryText)).toEqual([]);
+    expect(extractObsidianLinkOccurrences(cdataLookalike)).toEqual([]);
     expect(extractObsidianLinkOccurrences(declaration).map(match => match.target)).toContain('DeclarationTarget');
+    expect(extractObsidianLinkOccurrences(cdata).map(match => match.target)).toContain('CdataTarget');
+    expect(extractObsidianLinkOccurrences(mixedCaseTag).map(match => match.target)).toContain('MixedCaseTagTarget');
   });
 
   test('preserves original inline markup in source heading locators', () => {
