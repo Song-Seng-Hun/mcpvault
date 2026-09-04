@@ -46,19 +46,22 @@ to reusable knowledge.
 ## 1. Task completion knowledge-disposition gate
 
 `mcp.update_task` keeps its existing revision and ownership checks. A transition
-from any non-terminal state to `completed` must additionally provide one valid
-knowledge disposition:
+from any non-terminal state to `completed` must additionally provide at least
+one valid knowledge disposition:
 
 1. one or more visible, existing durable `knowledgeNotes`;
 2. a non-empty `retrospective` suitable for later promotion review;
 3. one or more visible, existing negative-knowledge notes; or
 4. `noReusableKnowledge: true` plus a bounded `knowledgeDispositionReason`.
 
-The gate records a normalized `knowledge_disposition` value and, when used,
-`knowledge_disposition_reason`. Existing completed tasks remain readable and
-editable under existing rules; the gate applies only to a new transition into
-`completed`. Repeating an update while already completed does not retroactively
-invalidate history.
+Useful artifacts may be combined: for example, a task can link a durable note
+and retain a short retrospective. The gate records a normalized bounded
+`knowledge_dispositions` list and, when used,
+`knowledge_disposition_reason`. `no_reusable_knowledge` is mutually exclusive
+with actual retrospective or note artifacts. Existing completed tasks remain
+readable and editable under existing rules; the gate applies only to a new
+transition into `completed`. Repeating an update while already completed does
+not retroactively invalidate history.
 
 `knowledgeNotes` and negative-knowledge references are not trusted as path
 strings. Each path must normalize safely, exist, be visible to the principal,
@@ -247,8 +250,9 @@ revision-stamped changes, and confirm them through existing mutation endpoints.
 ## Acceptance criteria
 
 1. A new transition to completed fails atomically without one valid disposition.
-2. Each valid disposition succeeds, persists an explicit normalized state, and
-   preserves the existing revision/ownership checks.
+2. Each valid disposition and useful combination succeeds, persists explicit
+   normalized states, and preserves the existing revision/ownership checks;
+   `no_reusable_knowledge` cannot contradict linked artifacts.
 3. Hidden, missing, wrong-role, traversal, and duplicate knowledge-note inputs
    are handled without scope disclosure or unbounded work.
 4. All four volatility classes produce the documented adaptive defaults/caps;

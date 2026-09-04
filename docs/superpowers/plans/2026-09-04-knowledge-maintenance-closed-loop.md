@@ -68,8 +68,10 @@ noReusableKnowledge: true,
 knowledgeDispositionReason: 'The task only acknowledged an already documented fact and produced no new reusable result.'
 ```
 
-Assert `knowledge_disposition` is respectively `retrospective`,
-`linked_knowledge`, `negative_knowledge`, or `no_reusable_knowledge`. Add a
+Assert `knowledge_dispositions` contains respectively `retrospective`,
+`linked_knowledge`, `negative_knowledge`, or `no_reusable_knowledge`. Preserve
+the existing useful combination of a retrospective plus linked knowledge and
+assert both dispositions are recorded. Add a
 stale-revision test proving the gate never bypasses concurrency. Add fixtures
 for missing, ordinary non-knowledge, and private-scope paths and assert they all
 fail without exposing a private physical path. Finally update an already
@@ -135,25 +137,25 @@ const noReusableKnowledge = params.noReusableKnowledge === true;
 const dispositionReason = params.knowledgeDispositionReason === undefined
   ? undefined
   : shortText(params.knowledgeDispositionReason, 'knowledgeDispositionReason', 1000);
-const choices = [
-  Boolean(knowledgeNotes?.length),
-  Boolean(negativeKnowledgeNotes?.length),
-  Boolean(retrospective),
-  noReusableKnowledge,
-].filter(Boolean).length;
-if (entersCompleted && choices === 0) {
+const knowledgeDispositions = [
+  ...(knowledgeNotes?.length ? ['linked_knowledge'] : []),
+  ...(negativeKnowledgeNotes?.length ? ['negative_knowledge'] : []),
+  ...(retrospective ? ['retrospective'] : []),
+  ...(noReusableKnowledge ? ['no_reusable_knowledge'] : []),
+];
+if (entersCompleted && knowledgeDispositions.length === 0) {
   throw new Error('Completing a task requires a knowledge disposition: provide knowledgeNotes, negativeKnowledgeNotes, retrospective, or noReusableKnowledge=true with knowledgeDispositionReason');
 }
 if (noReusableKnowledge && !dispositionReason) {
   throw new Error('knowledgeDispositionReason is required when noReusableKnowledge=true');
 }
-if (entersCompleted && choices > 1) {
-  throw new Error('Choose one primary knowledge disposition when completing a task');
+if (noReusableKnowledge && knowledgeDispositions.some(value => value !== 'no_reusable_knowledge')) {
+  throw new Error('noReusableKnowledge cannot be combined with retrospective or knowledge note artifacts');
 }
 ```
 
-Persist exactly one normalized `knowledge_disposition`, the bounded reason, and
-the appropriate path list. Do not remove historical values on unrelated
+Persist the bounded normalized `knowledge_dispositions` list, the bounded
+reason, and the appropriate path lists. Do not remove historical values on unrelated
 updates. Return the disposition and resulting revision.
 
 - [ ] **Step 5: Extend the dynamic schema and adapter**
@@ -566,7 +568,8 @@ provenance rules are unchanged.
 
 Increment the policy version. Add only the action-relevant rules:
 
-- `work`: completing a task requires exactly one auditable disposition;
+- `work`: completing a task requires at least one auditable disposition; useful
+  artifacts may be combined while `no_reusable_knowledge` is exclusive;
 - `review`: explicit dates/events win over volatility defaults and cascade is a
   current-revision review prompt, not an automatic truth or lifecycle change;
 - `moc`: use `wiki.moc_rebalance` only after an overload warning and inspect the
