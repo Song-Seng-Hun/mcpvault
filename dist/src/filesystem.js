@@ -14,6 +14,7 @@ import { buildNoteReferenceIndex, resolveNoteReference } from './note-reference.
 import { validateJsonCanvasDocument } from './json-canvas.js';
 import { acceptsPlainReference, collectPlainFrontmatterReferences, isNavigationalFrontmatterReference, propertyPathText } from './property-references.js';
 import { RELATION_FIELDS } from './organization.js';
+import { extractMarkdownTasks } from './markdown-tasks.js';
 /** Hard per-note write limit so stdio callers cannot exhaust the vault disk. */
 export const MAX_NOTE_CONTENT_BYTES = 8 * 1024 * 1024;
 /** Health scans never load arbitrarily large derived views into memory. */
@@ -81,73 +82,6 @@ function compareQueryNotes(a, b, sortBy, sortOrder) {
     if (comparison !== 0)
         return sortOrder === 'asc' ? comparison : -comparison;
     return a.path.localeCompare(b.path);
-}
-function taskIdentity(path, text, occurrence, rawText) {
-    const blockId = /\s+\^([A-Za-z0-9][A-Za-z0-9_-]*)\s*$/.exec(rawText)?.[1];
-    if (blockId)
-        return `task:block:${blockId}`;
-    const normalized = text.replace(/\s+/g, ' ').trim().toLowerCase();
-    const digest = createHash('sha256').update(`${path}\0${normalized}\0${occurrence}`).digest('hex').slice(0, 16);
-    return `task:content:${digest}`;
-}
-function extractTasks(content, path) {
-    const tasks = [];
-    const occurrences = new Map();
-    let inFrontmatter = false;
-    let frontmatterEnded = false;
-    let inFence = false;
-    let fenceChar = '';
-    let fenceLength = 0;
-    const fenceRegex = /^ {0,3}(`{3,}|~{3,})(.*)$/;
-    const lines = content.split('\n');
-    for (let index = 0; index < lines.length; index += 1) {
-        const line = lines[index].replace(/\r$/, '');
-        if (!frontmatterEnded && index === 0 && line === '---') {
-            inFrontmatter = true;
-            continue;
-        }
-        if (inFrontmatter) {
-            if (line === '---') {
-                inFrontmatter = false;
-                frontmatterEnded = true;
-            }
-            continue;
-        }
-        const fenceMatch = fenceRegex.exec(line);
-        if (fenceMatch) {
-            const markers = fenceMatch[1];
-            const trailing = fenceMatch[2];
-            const char = markers.charAt(0);
-            if (!inFence) {
-                inFence = true;
-                fenceChar = char;
-                fenceLength = markers.length;
-            }
-            else if (char === fenceChar && markers.length >= fenceLength && trailing.trim() === '') {
-                inFence = false;
-                fenceChar = '';
-                fenceLength = 0;
-            }
-            continue;
-        }
-        if (inFence)
-            continue;
-        const taskMatch = /^(\s*)[-*+]\s+\[([ xX])\]\s+(.*)$/.exec(line);
-        if (!taskMatch)
-            continue;
-        const text = taskMatch[3].trim();
-        const occurrenceKey = text.replace(/\s+/g, ' ').toLowerCase();
-        const occurrence = occurrences.get(occurrenceKey) || 0;
-        occurrences.set(occurrenceKey, occurrence + 1);
-        tasks.push({
-            path,
-            line: index + 1,
-            text,
-            status: taskMatch[2].toLowerCase() === 'x' ? 'completed' : 'open',
-            taskId: taskIdentity(path, text, occurrence, text),
-        });
-    }
-    return tasks;
 }
 function normalizeNoteTarget(path) {
     return path.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').replace(/\.(?:md|markdown|txt)$/i, '').toLowerCase();
@@ -2753,7 +2687,7 @@ export class FileSystemService {
             catch {
                 continue;
             }
-            for (const task of extractTasks(content, path)) {
+            for (const task of extractMarkdownTasks(content, path)) {
                 if (status === 'all' || status === task.status)
                     tasks.push(task);
             }
@@ -2779,7 +2713,7 @@ export class FileSystemService {
             const note = await this.readNote(path);
             const lines = note.originalContent.split('\n');
             const locatedTask = params.taskId
-                ? extractTasks(note.originalContent, path).find(task => task.taskId === params.taskId)
+                ? extractMarkdownTasks(note.originalContent, path).find(task => task.taskId === params.taskId)
                 : undefined;
             if (params.taskId && !locatedTask)
                 throw new Error(`Task ${params.taskId} was not found in ${path}; refresh list_tasks and retry`);
@@ -2840,7 +2774,7 @@ export class FileSystemService {
                 await this.writeNoteUnlocked({ path, content: lines.join('\n'), expectedRevision: params.expectedRevision });
             }
             const updated = await this.readNote(path);
-            const resultingTaskId = locatedTask?.taskId || extractTasks(note.originalContent, path).find(task => task.line === targetLine)?.taskId;
+            const resultingTaskId = locatedTask?.taskId || extractMarkdownTasks(note.originalContent, path).find(task => task.line === targetLine)?.taskId;
             return {
                 success: true,
                 path,

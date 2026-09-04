@@ -5052,6 +5052,9 @@ export class LlmWikiService {
         add(vocabulary.termCollisions.map((item) => ({ path: item.paths?.[0], title: item.term })), 'authority_term_collision', 'wiki.vocabulary_health', 8);
         add([...claimLintByPath.entries()].map(([path, codes]) => ({ path, title: path.split('/').at(-1), issueCodes: codes })), 'claim_argument_needs_repair', 'wiki.argument_map', 2);
         add(lint.issues
+            .filter(issue => issue.code === 'completed_work_with_open_checkboxes')
+            .map(issue => ({ path: issue.path, title: issue.path.split('/').at(-1), issueCodes: [issue.code] })), 'completed_work_with_open_checkboxes', endpointIdForTool('list_tasks'), 2);
+        add(lint.issues
             .filter(issue => issue.code === 'completed_work_without_knowledge_disposition')
             .map(issue => ({ path: issue.path, title: issue.path.split('/').at(-1), issueCodes: [issue.code] })), 'completed_work_without_knowledge_disposition', 'wiki.triage', 2);
         add([...lintByPath.entries()].map(([path, codes]) => ({ path, title: path.split('/').at(-1), issueCodes: codes })), 'lint_quality_issue', 'wiki.organization_health', 8);
@@ -5129,6 +5132,18 @@ export class LlmWikiService {
                             instruction: 'Use the selected recallPrompt before opening the note body. If a repair is pending, inspect its bounded repairPath only after attempting recall.',
                         };
                         mutation = { endpointId: endpointIdForTool('record_wiki_recall'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['recallQuality'] };
+                    }
+                    else if (reason === 'completed_work_with_open_checkboxes') {
+                        inspect = {
+                            endpointId: endpointIdForTool('list_tasks'),
+                            arguments: { status: 'open', pathPrefix: selectedPriority.path, limit: 20, maxChars: 4000 },
+                        };
+                        mutation = {
+                            endpointId: endpointIdForTool('triage_wiki_note'),
+                            arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision },
+                            requiredArguments: ['taskStatus'],
+                            instruction: 'Decide from the listed task locators: reopen genuinely unfinished work, complete or remove an obsolete checkbox through a revision-safe edit, or move a real follow-up into an explicit actionable note or review_open_items. Nothing is changed automatically.',
+                        };
                     }
                     else if (reason === 'completed_work_without_knowledge_disposition') {
                         inspect = { endpointId: endpointIdForTool('read_wiki_projection'), arguments: { path: selectedPriority.path, view: 'summary', maxChars: 4000 } };

@@ -250,26 +250,26 @@ Commit policy, tests, README, and schema as
 
 ### Task 5: Verify and deliver the fork
 
-- [ ] **Step 1: Run focused suites**
+- [x] **Step 1: Run focused suites**
 
 Run `npm test -- src/markdown-tasks.test.ts src/filesystem.test.ts src/organization.test.ts src/llm-wiki.test.ts src/wiki-policy.test.ts src/instruction-budget.test.ts src/protocol-version.test.ts`.
 Expected: all selected test files pass.
 
-- [ ] **Step 2: Build tracked distribution output**
+- [x] **Step 2: Build tracked distribution output**
 
 Run `npm run build` and stage only tracked `dist/` changes with source changes.
 
-- [ ] **Step 3: Run the full suite**
+- [x] **Step 3: Run the full suite**
 
 Run `npm test`.
 Expected: zero failures; any existing intentional skip remains visible.
 
-- [ ] **Step 4: Check repository hygiene**
+- [x] **Step 4: Check repository hygiene**
 
 Run `git diff --check` and `git status --short --branch`. Confirm `.agents/`
 and `.mcpvault/` remain untracked and unstaged.
 
-- [ ] **Step 5: Commit generated output and completion record**
+- [x] **Step 5: Commit generated output and completion record**
 
 Commit the tracked build output and checked plan without staging local runtime
 directories.
