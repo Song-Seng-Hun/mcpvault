@@ -1,6 +1,6 @@
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
-import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, MoveNoteParams, MoveNotePreviewParams, MoveNotePreviewResult, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, PatchMultipleNotesParams, PatchMultipleNotesResult, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult, DailyNoteResult, ListTasksParams, ListTasksResult, UpdateTaskParams, UpdateTaskResult, QueryNotesParams, QueryNotesResult, QueryNote } from './types.js';
+import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, DeleteNotePreviewParams, DeleteNotePreviewResult, MoveNoteParams, MoveNotePreviewParams, MoveNotePreviewResult, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, PatchMultipleNotesParams, PatchMultipleNotesResult, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult, DailyNoteResult, ListTasksParams, ListTasksResult, UpdateTaskParams, UpdateTaskResult, QueryNotesParams, QueryNotesResult, QueryNote } from './types.js';
 import { type DailyDateInput } from './daily.js';
 import type { VaultMetadataIndex } from './vault-index.js';
 import type { VaultGraphIndex } from './vault-graph.js';
@@ -100,8 +100,16 @@ export declare class FileSystemService {
     listDirectory(path?: string): Promise<DirectoryListing>;
     exists(path: string): Promise<boolean>;
     isDirectory(path: string): Promise<boolean>;
+    /**
+     * Build one visibility-safe move plan. Resolution uses every physical note
+     * so an inaccessible same-name target cannot be mistaken for a unique one.
+     * Details from inaccessible scopes are collapsed to one boolean barrier.
+     */
+    private collectMoveReferencePlans;
+    previewDeleteNote(params: DeleteNotePreviewParams, canAccessPath?: (path: string) => boolean): Promise<DeleteNotePreviewResult>;
     private moveNoteToVaultTrash;
-    deleteNote(params: DeleteNoteParams): Promise<DeleteResult>;
+    deleteNote(params: DeleteNoteParams, canAccessPath?: (path: string) => boolean): Promise<DeleteResult>;
+    private deleteNoteUnlocked;
     moveNote(params: MoveNoteParams, canAccessPath?: (path: string) => boolean): Promise<MoveResult>;
     private moveNoteUnlocked;
     moveFile(params: MoveFileParams): Promise<MoveResult>;

@@ -487,13 +487,15 @@ export function createServer(vaultPath, options = {}) {
         },
         {
             name: "delete_note",
-            description: "Delete a note from the Obsidian vault (requires confirmation). Supports permanent delete, vault trash, or system trash.",
+            description: "Delete a note after exact-path confirmation. Structural inbound body/Property references block deletion by default; preview them first and prefer archive/supersede/tombstone. A deliberate dangling-reference override also requires the current source revision.",
             inputSchema: {
                 type: "object",
                 properties: {
                     path: { type: "string", description: "Path to the note relative to vault root" },
                     confirmPath: { type: "string", description: "Confirmation: must exactly match the path parameter to proceed with deletion" },
-                    trashMode: { type: "string", enum: ["none", "local", "system"], description: "Deletion mode: 'none' = permanent delete (default), 'local' = move to .trash inside vault, 'system' = move to OS trash", default: "none" }
+                    trashMode: { type: "string", enum: ["none", "local", "system"], description: "Deletion mode: 'none' = permanent delete (default), 'local' = move to .trash inside vault, 'system' = move to OS trash", default: "none" },
+                    allowDanglingReferences: { type: "boolean", description: "After preview, explicitly permit visible inbound references to break; never overrides an inaccessible-scope barrier", default: false },
+                    expectedRevision: { type: "string", description: "Required with allowDanglingReferences when inbound references exist; use the revision from a fresh read" }
                 },
                 required: ["path", "confirmPath"]
             }
@@ -519,6 +521,19 @@ export function createServer(vaultPath, options = {}) {
                     prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
                 },
                 required: ["query"]
+            }
+        },
+        {
+            name: "preview_delete_note",
+            description: "Preview deletion without writing. Reports one bounded, Properties-aware inbound-reference impact, visible ambiguity, and a privacy-preserving hidden-scope barrier.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    path: { type: "string", description: "Path of the note that may be deleted" },
+                    limit: { type: "integer", minimum: 1, maximum: 200, description: "Shared maximum ambiguous, body-link, and Property impacts to return (default: 100)", default: 100 },
+                    prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
+                },
+                required: ["path"]
             }
         },
         {
@@ -2011,7 +2026,7 @@ export function createServer(vaultPath, options = {}) {
                             ...(trimmedArgs.expectedRevision !== undefined && { expectedRevision: trimmedArgs.expectedRevision }),
                         });
                         return {
-                            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+                            content: [{ type: "text", text: JSON.stringify({ ...result, path: scopeAccess.toPublicPath(result.path) }, null, 2) }],
                             isError: !result.success
                         };
                     }
@@ -2026,10 +2041,12 @@ export function createServer(vaultPath, options = {}) {
                         const result = await fileSystem.deleteNote({
                             path: trimmedArgs.path,
                             confirmPath: trimmedArgs.confirmPath,
-                            trashMode: trimmedArgs.trashMode
-                        });
+                            trashMode: trimmedArgs.trashMode,
+                            allowDanglingReferences: trimmedArgs.allowDanglingReferences === true,
+                            expectedRevision: trimmedArgs.expectedRevision
+                        }, canAccessPath);
                         return {
-                            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+                            content: [{ type: "text", text: JSON.stringify({ ...result, path: scopeAccess.toPublicPath(result.path) }, null, 2) }],
                             isError: !result.success
                         };
                     }
@@ -2108,6 +2125,19 @@ export function createServer(vaultPath, options = {}) {
                             content: [{ type: "text", text: JSON.stringify(results, null, indent) }]
                         };
                     }
+                    case "preview_delete_note": {
+                        const result = await fileSystem.previewDeleteNote({
+                            path: String(trimmedArgs.path || ''),
+                            ...(trimmedArgs.limit !== undefined && { limit: Number(trimmedArgs.limit) }),
+                        }, canAccessPath);
+                        return jsonResult({
+                            ...result,
+                            path: scopeAccess.toPublicPath(result.path),
+                            affectedLinks: result.affectedLinks.map(item => ({ ...item, path: scopeAccess.toPublicPath(item.path) })),
+                            affectedProperties: result.affectedProperties.map(item => ({ ...item, sourcePath: scopeAccess.toPublicPath(item.sourcePath) })),
+                            ambiguousReferences: result.ambiguousReferences.map(item => ({ ...item, sourcePath: scopeAccess.toPublicPath(item.sourcePath), candidates: item.candidates.map(path => scopeAccess.toPublicPath(path)) })),
+                        }, trimmedArgs.prettyPrint);
+                    }
                     case "patch_multiple_notes": {
                         const result = await fileSystem.patchMultipleNotes({
                             changes: trimmedArgs.changes,
@@ -2138,7 +2168,7 @@ export function createServer(vaultPath, options = {}) {
                             ...(trimmedArgs.updateLinks === true ? { updateLinks: true, expectedRevision: String(trimmedArgs.expectedRevision || '') } : {})
                         }, canAccessPath);
                         return {
-                            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+                            content: [{ type: "text", text: JSON.stringify({ ...result, oldPath: scopeAccess.toPublicPath(result.oldPath), newPath: scopeAccess.toPublicPath(result.newPath) }, null, 2) }],
                             isError: !result.success
                         };
                     }
@@ -2206,7 +2236,14 @@ export function createServer(vaultPath, options = {}) {
                             newPath: String(trimmedArgs.newPath || ''),
                             ...(trimmedArgs.limit !== undefined && { limit: Number(trimmedArgs.limit) }),
                         }, canAccessPath);
-                        return jsonResult(result, trimmedArgs.prettyPrint);
+                        return jsonResult({
+                            ...result,
+                            oldPath: scopeAccess.toPublicPath(result.oldPath),
+                            newPath: scopeAccess.toPublicPath(result.newPath),
+                            affectedLinks: result.affectedLinks.map(item => ({ ...item, sourcePath: scopeAccess.toPublicPath(item.sourcePath) })),
+                            affectedProperties: result.affectedProperties.map(item => ({ ...item, sourcePath: scopeAccess.toPublicPath(item.sourcePath) })),
+                            ambiguousReferences: result.ambiguousReferences.map(item => ({ ...item, sourcePath: scopeAccess.toPublicPath(item.sourcePath), candidates: item.candidates.map(path => scopeAccess.toPublicPath(path)) })),
+                        }, trimmedArgs.prettyPrint);
                     }
                     case "sync_note_revisions": {
                         const knownRevisions = trimmedArgs.knownRevisions;

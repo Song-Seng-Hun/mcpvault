@@ -4,7 +4,8 @@ import { readdir, stat } from 'node:fs/promises';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import { RELATION_FIELDS } from './organization.js';
-import { noteReferenceTermKeys } from './note-reference.js';
+import { noteReferenceDocument, noteReferenceTermKeys } from './note-reference.js';
+import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference } from './property-references.js';
 const GRAPH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
 const NOTE_PATTERN = /\.(?:md|markdown|txt)$/i;
@@ -228,6 +229,7 @@ export class VaultGraphIndex {
                     ...(link.targetBlockId && { targetBlockId: link.targetBlockId }),
                     ...(link.relation && { relation: link.relation }),
                     ...(link.sourceClaimId && { sourceClaimId: link.sourceClaimId }),
+                    ...(link.propertyPath && { propertyPath: link.propertyPath }),
                 };
                 addTopMatch(backlinks, backlink, offset + limit, compare);
             }
@@ -468,15 +470,18 @@ export class VaultGraphIndex {
             const links = extractObsidianLinkOccurrences(raw);
             for (const relation of RELATION_FIELDS) {
                 const values = Array.isArray(parsed.frontmatter[relation]) ? parsed.frontmatter[relation] : [];
-                for (const value of values) {
+                for (let relationIndex = 0; relationIndex < values.length; relationIndex += 1) {
+                    const value = values[relationIndex];
                     if (typeof value !== 'string' || !value.trim())
                         continue;
                     const target = value.trim();
                     const normalizedTarget = target.replace(/^!?\[\[/, '').replace(/\]\]$/, '').split(/[|#]/, 1)[0].trim().replace(/\\/g, '/').toLowerCase();
-                    const existing = links.find(link => link.line === 1 && link.target.replace(/\\/g, '/').toLowerCase() === normalizedTarget && !link.relation);
+                    const propertyPath = `${relation}[${relationIndex}]`;
+                    const existing = links.find(link => link.link === target && !link.relation);
                     if (existing) {
                         existing.relation = relation;
                         existing.context = `${relation}: ${target}`;
+                        existing.propertyPath = propertyPath;
                     }
                     else {
                         links.push({
@@ -485,9 +490,23 @@ export class VaultGraphIndex {
                             link: /^!?\[\[.+\]\]$/.test(target) ? target : `[[${target}]]`,
                             context: `${relation}: ${target}`,
                             relation,
+                            propertyPath,
                         });
                     }
                 }
+            }
+            for (const reference of collectPlainFrontmatterReferences(parsed.frontmatter)) {
+                if (!isNavigationalFrontmatterReference(reference))
+                    continue;
+                if (RELATION_FIELDS.includes(reference.root))
+                    continue;
+                links.push({
+                    target: noteReferenceDocument(reference.value),
+                    line: 1,
+                    link: reference.value.trim(),
+                    context: `${reference.propertyPath}: ${reference.value.trim()}`,
+                    propertyPath: reference.propertyPath,
+                });
             }
             const claims = Array.isArray(parsed.frontmatter.claims) ? parsed.frontmatter.claims : [];
             const claimRelations = [

@@ -102,6 +102,24 @@ test("server exposes only the dynamic control plane", async () => {
   expect(neighborhood.isError).toBeFalsy();
   expect(JSON.parse((neighborhood.content as any)[0].text).source.path).toBe("dynamic.md");
 
+  const deleteCatalogResult = await client.callTool({ name: "search_capabilities", arguments: { query: "notes.delete_preview", limit: 3 } });
+  const deleteCatalog = JSON.parse((deleteCatalogResult.content as any)[0].text);
+  expect(deleteCatalog.endpoints).toEqual(expect.arrayContaining([expect.objectContaining({ endpointId: "notes.delete_preview" })]));
+  await client.callTool({
+    name: "call_endpoint",
+    arguments: { endpointId: "notes.write", arguments: { path: "source.md", content: "# Source\n\n[[dynamic]]", accessToken } },
+  });
+  const deletePreview = await client.callTool({
+    name: "call_endpoint",
+    arguments: { endpointId: "notes.delete_preview", arguments: { path: "dynamic.md", accessToken } },
+  });
+  expect(deletePreview.isError).toBeFalsy();
+  expect(JSON.parse((deletePreview.content as any)[0].text)).toMatchObject({
+    path: "dynamic.md",
+    total: 1,
+    affectedLinks: [expect.objectContaining({ path: "source.md" })],
+  });
+
   await client.close();
   await server.close();
 });
@@ -143,6 +161,8 @@ test("static REST endpoint routes take precedence over notes.read path parameter
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const runtime = getServerRuntime(server);
   expect(runtime?.endpointRegistry.resolveRoute("GET", "/api/notes/move-preview")?.endpoint.endpointId).toBe("notes.move_preview");
+  expect(runtime?.endpointRegistry.resolveRoute("GET", "/api/notes/delete-preview")?.endpoint.endpointId).toBe("notes.delete_preview");
+  expect(runtime?.endpointRegistry.resolveRoute("POST", "/api/notes/example.md/delete")?.endpoint.endpointId).toBe("notes.delete");
   expect(runtime?.endpointRegistry.resolveRoute("POST", "/api/notes/tasks")?.endpoint.endpointId).toBe("notes.task_update");
 });
 

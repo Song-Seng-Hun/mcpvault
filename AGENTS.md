@@ -76,8 +76,8 @@ exactly one topic needed for the current action:
 
 The policy is guidance, not an access grant. Keep reads bounded with `limit`,
 `maxChars`, cursors, section/block locators, and nearby context. Use
-`expectedRevision` for edits, dry-run previews where offered, and the returned
-revision for the next mutation. Use `wiki.relation_set`,
+`expectedRevision` for edits, `notes.delete_preview` before deletion, dry-runs
+where offered, and the returned revision for the next mutation. Use `wiki.relation_set`,
 `wiki.reciprocal_link`, `wiki.moc_order`, `wiki.hierarchy_change`,
 `wiki.moc_membership`, or `wiki.property_migration`; dry-run its
 `notes.change_set` and confirm the fingerprint. Git records it; Obsidian

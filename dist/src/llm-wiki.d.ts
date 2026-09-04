@@ -935,6 +935,7 @@ export declare class LlmWikiService {
                         targetBlockId?: string;
                         relation?: string;
                         sourceClaimId?: string;
+                        propertyPath?: string;
                         path: string;
                     }[];
                     truncated: boolean;
@@ -1304,6 +1305,7 @@ export declare class LlmWikiService {
                         targetBlockId?: string;
                         relation?: string;
                         sourceClaimId?: string;
+                        propertyPath?: string;
                         path: string;
                     }[];
                     truncated: boolean;
@@ -3425,6 +3427,7 @@ export declare class LlmWikiService {
                 targetBlockId?: string;
                 relation?: string;
                 sourceClaimId?: string;
+                propertyPath?: string;
                 path: string;
             }[];
             truncated: boolean;

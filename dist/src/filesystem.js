@@ -12,6 +12,8 @@ import { buildDailyNotePath, resolveDailyDate } from './daily.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import { buildNoteReferenceIndex, resolveNoteReference } from './note-reference.js';
 import { validateJsonCanvasDocument } from './json-canvas.js';
+import { acceptsPlainReference, collectPlainFrontmatterReferences, isNavigationalFrontmatterReference, propertyPathText } from './property-references.js';
+import { RELATION_FIELDS } from './organization.js';
 /** Hard per-note write limit so stdio callers cannot exhaust the vault disk. */
 export const MAX_NOTE_CONTENT_BYTES = 8 * 1024 * 1024;
 /** Health scans never load arbitrarily large derived views into memory. */
@@ -170,19 +172,6 @@ function rewriteLinkText(link, sourcePath, newPath) {
         : /\s/.test(destination) ? `<${destination}${suffix}>` : `${destination}${suffix}`;
     return `${markdown[1]}${wrappedDestination}${markdown[3]}`;
 }
-const PLAIN_REFERENCE_PROPERTIES = new Set([
-    'related_task', 'primary_moc', 'mocs', 'moc', 'project', 'term_replaced_by',
-    'canonical_path', 'broader_terms', 'related_terms', 'see_also', 'project_support',
-    'recall_repair_path', 'issue_follow_up_paths', 'replaced_by', 'replacement_path',
-    'superseded_by', 'negative_replacement_path', 'moc_parent', 'focus_parent',
-    'focus_supports', 'references', 'evidence_paths', 'knowledge_notes', 'focus_notes',
-    'supersedes_source',
-    'supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements',
-    'blocked_by', 'answers_questions', 'tests', 'related', 'same_as', 'version_of', 'refines',
-]);
-const NESTED_REFERENCE_PROPERTIES = new Set([
-    'path', 'target', 'evidence_paths', 'supports_claims', 'contradicts_claims', 'depends_on_claims',
-]);
 function frontmatterEndLine(content) {
     const lines = content.split('\n');
     if (lines[0]?.replace(/\r$/, '') !== '---')
@@ -273,23 +262,6 @@ function rewriteExplicitLinks(content, sourcePath, renderedSourcePath, oldPath, 
         lines[lineNumber - 1] = line;
     }
     return { content: lines.join('\n'), changes, ambiguous };
-}
-function propertyPathText(segments) {
-    return segments.map((segment, index) => typeof segment === 'number' ? `[${segment}]` : `${index > 0 ? '.' : ''}${segment}`).join('');
-}
-function acceptsPlainReference(segments) {
-    const names = segments.filter((segment) => typeof segment === 'string');
-    const root = names[0] || '';
-    const leaf = names.at(-1) || '';
-    if (PLAIN_REFERENCE_PROPERTIES.has(root) && names.length === 1)
-        return true;
-    if (root === 'relation_evidence')
-        return true;
-    if (root === 'claims' && NESTED_REFERENCE_PROPERTIES.has(leaf))
-        return true;
-    if (['evidence', 'review_basis_links', 'review_basis_upstream', 'pending_edits', 'research_trail'].includes(root) && NESTED_REFERENCE_PROPERTIES.has(leaf))
-        return true;
-    return false;
 }
 function rewritePlainReference(value, oldPath, newPath, referenceIndex) {
     const trimmed = value.trim();
@@ -1382,6 +1354,110 @@ export class FileSystemService {
             return false;
         }
     }
+    /**
+     * Build one visibility-safe move plan. Resolution uses every physical note
+     * so an inaccessible same-name target cannot be mistaken for a unique one.
+     * Details from inaccessible scopes are collapsed to one boolean barrier.
+     */
+    async collectMoveReferencePlans(oldPath, newPath, canAccessPath) {
+        const physicalPaths = (await this.collectVaultFiles())
+            .filter(path => this.pathFilter.isAllowed(path) && /\.(?:md|markdown|txt)$/i.test(path))
+            .sort((a, b) => a.localeCompare(b));
+        const documents = [];
+        const readBatchSize = 32;
+        for (let offset = 0; offset < physicalPaths.length; offset += readBatchSize) {
+            const batch = await Promise.all(physicalPaths.slice(offset, offset + readBatchSize).map(async (sourcePath) => {
+                try {
+                    const sourceContent = await this.vaultIo.readUtf8(this.resolvePath(sourcePath));
+                    const frontmatter = this.frontmatterHandler.parse(sourceContent).frontmatter || {};
+                    return {
+                        sourcePath,
+                        sourceContent,
+                        descriptor: {
+                            path: sourcePath,
+                            title: frontmatter.title,
+                            aliases: frontmatter.aliases,
+                            preferredTerm: frontmatter.preferred_term,
+                            stableId: frontmatter.stable_id,
+                        },
+                    };
+                }
+                catch {
+                    // A concurrently removed or unreadable note cannot be rewritten.
+                    return undefined;
+                }
+            }));
+            for (const document of batch)
+                if (document)
+                    documents.push(document);
+        }
+        const referenceIndex = buildNoteReferenceIndex(documents.map(document => document.descriptor));
+        const plans = [];
+        let hiddenReferencesPresent = false;
+        for (const { sourcePath, sourceContent } of documents) {
+            if (sourcePath.toLowerCase() === newPath.toLowerCase() && sourcePath.toLowerCase() !== oldPath.toLowerCase())
+                continue;
+            const plan = planMoveReferenceRewrite(this.frontmatterHandler, sourceContent, sourcePath, oldPath, newPath, referenceIndex);
+            if (!canAccessPath(sourcePath)) {
+                if (plan.linkChanges.length > 0 || plan.propertyChanges.length > 0 || plan.ambiguous.length > 0)
+                    hiddenReferencesPresent = true;
+                continue;
+            }
+            const visibleAmbiguous = [];
+            for (const reference of plan.ambiguous) {
+                if (reference.candidates.every(canAccessPath))
+                    visibleAmbiguous.push(reference);
+                else
+                    hiddenReferencesPresent = true;
+            }
+            plans.push({ sourcePath, sourceContent, plan: { ...plan, ambiguous: visibleAmbiguous } });
+        }
+        return { plans, hiddenReferencesPresent };
+    }
+    async previewDeleteNote(params, canAccessPath = () => true) {
+        const path = this.normalizePath(params.path);
+        if (!this.pathFilter.isAllowed(path) || !canAccessPath(path))
+            throw new Error(`Access denied: ${path}`);
+        const requestedLimit = params.limit ?? 100;
+        if (!Number.isInteger(requestedLimit) || requestedLimit < 1)
+            throw new Error('limit must be a positive integer');
+        const limit = Math.min(requestedLimit, 200);
+        const scan = await this.collectMoveReferencePlans(path, `__mcpvault_deleted__/${path}`, canAccessPath);
+        const affectedLinks = [];
+        const affectedProperties = [];
+        const ambiguousReferences = [];
+        for (const { sourcePath, plan } of scan.plans) {
+            if (normalizeNoteTarget(sourcePath) === normalizeNoteTarget(path))
+                continue;
+            affectedLinks.push(...plan.linkChanges.map(({ replacement: _replacement, direction: _direction, sourcePath: source, ...link }) => ({ ...link, path: source })));
+            affectedProperties.push(...plan.propertyChanges.map(change => ({ sourcePath: change.sourcePath, propertyPath: change.propertyPath, value: change.value })));
+            ambiguousReferences.push(...plan.ambiguous);
+        }
+        const total = affectedLinks.length + affectedProperties.length;
+        const returnedAmbiguous = ambiguousReferences.slice(0, limit);
+        const linkBudget = Math.max(0, limit - returnedAmbiguous.length);
+        const returnedLinks = affectedLinks.slice(0, linkBudget);
+        const propertyBudget = Math.max(0, linkBudget - returnedLinks.length);
+        const returnedProperties = affectedProperties.slice(0, propertyBudget);
+        const returnedCount = returnedAmbiguous.length + returnedLinks.length + returnedProperties.length;
+        const exists = await this.noteExists(path);
+        return {
+            path,
+            exists,
+            affectedLinks: returnedLinks,
+            affectedProperties: returnedProperties,
+            ambiguousReferences: returnedAmbiguous,
+            total,
+            ambiguousTotal: ambiguousReferences.length,
+            hiddenReferencesPresent: scan.hiddenReferencesPresent,
+            truncated: total + ambiguousReferences.length > returnedCount,
+            message: scan.hiddenReferencesPresent
+                ? 'Deletion would affect an inaccessible scope or hidden identity collision. No hidden path is disclosed; preserve or tombstone this note unless an administrator can review every affected scope.'
+                : total + ambiguousReferences.length > 0
+                    ? 'Deletion would leave visible or potentially ambiguous references dangling. Prefer archive/supersede/tombstone with a replacement; otherwise review this impact before an explicit revision-checked override.'
+                    : 'No visible or hidden inbound reference was found. Normal revision, retention, and Git review still apply.',
+        };
+    }
     async moveNoteToVaultTrash(path, fullPath) {
         const trashDir = join(this.vaultPath, '.trash');
         const trashPath = join(trashDir, path);
@@ -1399,10 +1475,15 @@ export class FileSystemService {
         }
         await rename(fullPath, finalTrashPath);
     }
-    async deleteNote(params) {
-        const { trashMode = 'none' } = params;
+    async deleteNote(params, canAccessPath = () => true) {
         const path = this.normalizePath(params.path);
         const confirmPath = this.normalizePath(params.confirmPath);
+        return this.withMutationLock(path, () => this.deleteNoteUnlocked({ ...params, path, confirmPath }, canAccessPath));
+    }
+    async deleteNoteUnlocked(params, canAccessPath) {
+        const { trashMode = 'none' } = params;
+        const path = params.path;
+        const confirmPath = params.confirmPath;
         // Confirmation check - paths must match exactly
         if (path !== confirmPath) {
             return {
@@ -1411,14 +1492,17 @@ export class FileSystemService {
                 message: "Deletion cancelled: confirmation path does not match. For safety, both 'path' and 'confirmPath' must be identical."
             };
         }
-        const fullPath = this.resolveWritablePath(path);
-        if (!this.pathFilter.isAllowed(path)) {
+        if (!this.pathFilter.isAllowed(path) || !canAccessPath(path)) {
             return {
                 success: false,
                 path: path,
                 message: `Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`
             };
         }
+        if (!['none', 'local', 'system'].includes(trashMode)) {
+            return { success: false, path, message: 'Deletion cancelled: trashMode must be none, local, or system.' };
+        }
+        const fullPath = this.resolveWritablePath(path);
         try {
             // Check if it's a directory first (can't delete directories with this method)
             const isDir = await this.isDirectory(path);
@@ -1428,6 +1512,22 @@ export class FileSystemService {
                     path: path,
                     message: `Cannot delete: ${path} is not a file`
                 };
+            }
+            if (/\.(?:md|markdown|txt)$/i.test(path)) {
+                const impact = await this.previewDeleteNote({ path, limit: 1 }, canAccessPath);
+                if (impact.hiddenReferencesPresent) {
+                    return { success: false, path, message: 'Deletion blocked: an inaccessible scope references this note or has a hidden identity collision. Preserve or tombstone the note; only an administrator able to review every affected scope may delete it.' };
+                }
+                if (impact.total + impact.ambiguousTotal > 0) {
+                    if (params.allowDanglingReferences !== true) {
+                        return { success: false, path, message: `Deletion blocked: ${impact.total} resolved and ${impact.ambiguousTotal} ambiguous inbound reference${impact.total + impact.ambiguousTotal === 1 ? '' : 's'} would become dangling. Call preview_delete_note, then archive/supersede/tombstone or explicitly allow dangling references.` };
+                    }
+                    if (!params.expectedRevision || !String(params.expectedRevision).trim()) {
+                        return { success: false, path, message: 'allowDanglingReferences requires expectedRevision from a fresh read of the note.' };
+                    }
+                }
+                if (params.expectedRevision)
+                    await this.assertExpectedRevision(path, params.expectedRevision);
             }
             if (trashMode === 'local') {
                 await this.moveNoteToVaultTrash(path, fullPath);
@@ -1561,22 +1661,9 @@ export class FileSystemService {
                     if (overwrite || !(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT')
                         throw error;
                 }
-                const allPaths = (await this.collectVaultFiles())
-                    .filter(path => this.pathFilter.isAllowed(path) && canAccessPath(path) && /\.(?:md|markdown|txt)$/i.test(path))
-                    .sort((a, b) => a.localeCompare(b));
-                const referenceIndex = buildNoteReferenceIndex(allPaths.map(path => ({ path })));
+                const scan = await this.collectMoveReferencePlans(oldPath, newPath, canAccessPath);
                 const ambiguities = [];
-                for (const sourcePath of allPaths) {
-                    if (sourcePath.toLowerCase() === newPath.toLowerCase() && sourcePath.toLowerCase() !== oldPath.toLowerCase())
-                        continue;
-                    let sourceContent;
-                    try {
-                        sourceContent = await readFile(this.resolvePath(sourcePath), 'utf-8');
-                    }
-                    catch {
-                        continue;
-                    }
-                    const plan = planMoveReferenceRewrite(this.frontmatterHandler, sourceContent, sourcePath, oldPath, newPath, referenceIndex);
+                for (const { sourcePath, sourceContent, plan } of scan.plans) {
                     ambiguities.push(...plan.ambiguous);
                     if (sourcePath.toLowerCase() === oldPath.toLowerCase()) {
                         content = plan.content;
@@ -1584,6 +1671,9 @@ export class FileSystemService {
                     else if (plan.content !== sourceContent) {
                         linkBackups.push({ path: sourcePath, original: sourceContent, rewritten: plan.content, updated: false });
                     }
+                }
+                if (scan.hiddenReferencesPresent) {
+                    return { success: false, oldPath, newPath, message: 'Move blocked: at least one inaccessible scope references this note or makes its identity ambiguous. Preserve the current path or ask an administrator with access to every affected scope to perform the move.' };
                 }
                 if (ambiguities.length > 0) {
                     const first = ambiguities[0];
@@ -1875,25 +1965,12 @@ export class FileSystemService {
         if (!Number.isInteger(requestedLimit) || requestedLimit < 1)
             throw new Error('limit must be a positive integer');
         const limit = Math.min(requestedLimit, 200);
-        const allPaths = (await this.collectVaultFiles())
-            .filter(path => this.pathFilter.isAllowed(path) && canAccessPath(path) && /\.(?:md|markdown|txt)$/i.test(path))
-            .sort((a, b) => a.localeCompare(b));
-        const referenceIndex = buildNoteReferenceIndex(allPaths.map(path => ({ path })));
+        const scan = await this.collectMoveReferencePlans(oldPath, newPath, canAccessPath);
         const [targetExists, collision] = await Promise.all([this.noteExists(oldPath), this.noteExists(newPath)]);
         const affectedLinks = [];
         const affectedProperties = [];
         const ambiguousReferences = [];
-        for (const sourcePath of allPaths) {
-            if (sourcePath.toLowerCase() === newPath.toLowerCase() && sourcePath.toLowerCase() !== oldPath.toLowerCase())
-                continue;
-            let content;
-            try {
-                content = await readFile(this.resolvePath(sourcePath), 'utf-8');
-            }
-            catch {
-                continue;
-            }
-            const plan = planMoveReferenceRewrite(this.frontmatterHandler, content, sourcePath, oldPath, newPath, referenceIndex);
+        for (const { plan } of scan.plans) {
             affectedLinks.push(...plan.linkChanges);
             affectedProperties.push(...plan.propertyChanges);
             ambiguousReferences.push(...plan.ambiguous);
@@ -1914,13 +1991,16 @@ export class FileSystemService {
             affectedProperties: returnedProperties,
             ambiguousReferences: returnedAmbiguous,
             ambiguousTotal: ambiguousReferences.length,
+            hiddenReferencesPresent: scan.hiddenReferencesPresent,
             total,
             truncated: total + ambiguousReferences.length > returnedCount,
-            message: ambiguousReferences.length > 0
-                ? 'Disambiguate every reported reference before using updateLinks=true; the server will refuse to guess which same-name note was intended.'
-                : total > 0
-                    ? 'Review the bounded body and Property rewrite plan, then pass updateLinks=true with the current source revision to apply it transactionally with the move.'
-                    : 'No visible body or Property reference requires rewriting. The move still requires normal revision and Git review.',
+            message: scan.hiddenReferencesPresent
+                ? 'The move affects an inaccessible scope or hidden identity collision. No hidden path is disclosed; an administrator with access to every affected scope must perform this move.'
+                : ambiguousReferences.length > 0
+                    ? 'Disambiguate every reported reference before using updateLinks=true; the server will refuse to guess which same-name note was intended.'
+                    : total > 0
+                        ? 'Review the bounded body and Property rewrite plan, then pass updateLinks=true with the current source revision to apply it transactionally with the move.'
+                        : 'No visible body or Property reference requires rewriting. The move still requires normal revision and Git review.',
         };
     }
     async updateFrontmatterUnlocked(params) {
@@ -2170,6 +2250,9 @@ export class FileSystemService {
         // scanning the vault. This also applies the same symlink boundary checks
         // as read_note.
         await this.readNote(target);
+        const visiblePaths = (await this.collectVaultFiles())
+            .filter(candidate => this.pathFilter.isAllowed(candidate) && canAccessPath(candidate) && /\.(?:md|markdown|txt)$/i.test(candidate));
+        const referenceIndex = buildNoteReferenceIndex(visiblePaths.map(candidate => ({ path: candidate })));
         const backlinks = [];
         let total = 0;
         const scanDirectory = async (dirPath, relativePath = '') => {
@@ -2189,6 +2272,22 @@ export class FileSystemService {
                 try {
                     const content = await readFile(fullEntryPath, 'utf-8');
                     const found = findBacklinkMatches(content, target);
+                    const parsed = this.frontmatterHandler.parse(content);
+                    for (const reference of collectPlainFrontmatterReferences(parsed.frontmatter)) {
+                        if (!isNavigationalFrontmatterReference(reference))
+                            continue;
+                        const targets = resolveNoteReference(reference.value, referenceIndex);
+                        if (targets.length !== 1 || normalizeNoteTarget(targets[0]) !== normalizeNoteTarget(target))
+                            continue;
+                        found.push({
+                            path: '',
+                            line: 1,
+                            link: reference.value,
+                            context: `${reference.propertyPath}: ${reference.value}`,
+                            propertyPath: reference.propertyPath,
+                            ...(RELATION_FIELDS.includes(reference.root) && { relation: reference.root }),
+                        });
+                    }
                     for (const backlink of found) {
                         total += 1;
                         addBoundedSorted(backlinks, { ...backlink, path: entryRelativePath }, offset + limit, (left, right) => left.path.localeCompare(right.path) || left.line - right.line);

@@ -93,6 +93,41 @@ describe('VaultGraphIndex', () => {
     ]));
   });
 
+  test('indexes path-like Obsidian Properties as explainable backlinks', async () => {
+    vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-property-graph-'));
+    await writeNote('Wiki/Target.md', '# Target\n');
+    await writeNote('Wiki/Source.md', [
+      '---',
+      'primary_moc: Wiki/Target',
+      'evidence_paths: [Wiki/Target.md]',
+      'supports: [Wiki/Target.md]',
+      'review_basis_links:',
+      '  - path: Wiki/Target.md',
+      '    revision: old-review-snapshot',
+      '---',
+      '# Source',
+      '',
+    ].join('\n'));
+    graph = new VaultGraphIndex(vaultPath, new PathFilter(), new FrontmatterHandler());
+
+    const backlinks = await graph.getBacklinks('Wiki/Target.md', 10, () => true);
+    expect(backlinks).toMatchObject({ total: 3, truncated: false });
+    expect(backlinks.backlinks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Wiki/Source.md', propertyPath: 'primary_moc', context: 'primary_moc: Wiki/Target' }),
+      expect.objectContaining({ path: 'Wiki/Source.md', propertyPath: 'evidence_paths[0]', context: 'evidence_paths[0]: Wiki/Target.md' }),
+      expect.objectContaining({ path: 'Wiki/Source.md', propertyPath: 'supports[0]', relation: 'supports' }),
+    ]));
+    const outlinks = await graph.getOutlinks('Wiki/Source.md', 10, () => true);
+    expect(outlinks.outlinks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ propertyPath: 'primary_moc' }),
+      expect.objectContaining({ propertyPath: 'evidence_paths[0]' }),
+      expect.objectContaining({ propertyPath: 'supports[0]', relation: 'supports' }),
+    ]));
+    expect(outlinks.outlinks).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ propertyPath: 'review_basis_links[0].path' }),
+    ]));
+  });
+
   test('resolves Obsidian aliases, stable IDs, and explicit relative links without crossing visibility', async () => {
     vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-authority-graph-'));
     await writeNote('Wiki/Canonical.md', [

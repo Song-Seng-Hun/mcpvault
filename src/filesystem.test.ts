@@ -888,6 +888,28 @@ describe("tasks", () => {
     await expect(readFile(join(testVaultPath, "A/Target.md"), "utf-8")).resolves.toContain("# A target");
     await expect(access(join(testVaultPath, "Moved.md"))).rejects.toMatchObject({ code: "ENOENT" });
   });
+
+  test("blocks a move rather than leaking or breaking references from an inaccessible scope", async () => {
+    await mkdir(join(testVaultPath, "Private"), { recursive: true });
+    await writeFile(join(testVaultPath, "Target.md"), "# Target\n");
+    await writeFile(join(testVaultPath, "Private/Source.md"), "# Private\n\n[[Target]]\n");
+    const visible = (path: string) => !path.startsWith("Private/");
+    const source = await fileSystem.readNote("Target.md");
+
+    await expect(fileSystem.previewMoveNote({ oldPath: "Target.md", newPath: "Moved.md" }, visible)).resolves.toMatchObject({
+      affectedLinks: [],
+      affectedProperties: [],
+      hiddenReferencesPresent: true,
+      message: expect.not.stringContaining("Private/Source.md"),
+    });
+    await expect(fileSystem.moveNote({
+      oldPath: "Target.md",
+      newPath: "Moved.md",
+      updateLinks: true,
+      expectedRevision: source.revision,
+    }, visible)).resolves.toMatchObject({ success: false, message: expect.stringContaining("inaccessible scope") });
+    await expect(readFile(join(testVaultPath, "Target.md"), "utf-8")).resolves.toContain("# Target");
+  });
 });
 
 describe("structured frontmatter queries", () => {
@@ -1555,6 +1577,97 @@ test("delete note with correct confirmation", async () => {
   expect(result.path).toBe(testPath);
   expect(result.message).toContain("Successfully deleted");
   expect(result.message).toContain("cannot be undone");
+});
+
+test("previews and blocks body and Property backlinks before deletion unless the current revision explicitly permits dangling links", async () => {
+  await writeFile(join(testVaultPath, "Target.md"), "# Target\n");
+  await writeFile(join(testVaultPath, "Source.md"), [
+    "---",
+    "primary_moc: Target",
+    "evidence_paths: [Target.md]",
+    "---",
+    "# Source",
+    "",
+    "See [[Target]].",
+  ].join("\n"));
+
+  await expect(fileSystem.previewDeleteNote({ path: "Target.md" })).resolves.toMatchObject({
+    exists: true,
+    total: 3,
+    ambiguousTotal: 0,
+    hiddenReferencesPresent: false,
+    affectedLinks: [expect.objectContaining({ path: "Source.md", link: "[[Target]]" })],
+    affectedProperties: expect.arrayContaining([
+      expect.objectContaining({ sourcePath: "Source.md", propertyPath: "primary_moc" }),
+      expect.objectContaining({ sourcePath: "Source.md", propertyPath: "evidence_paths[0]" }),
+    ]),
+  });
+  const boundedPreview = await fileSystem.previewDeleteNote({ path: "Target.md", limit: 1 });
+  expect(boundedPreview).toMatchObject({ total: 3, ambiguousTotal: 0, truncated: true });
+  expect(boundedPreview.affectedLinks.length + boundedPreview.affectedProperties.length + boundedPreview.ambiguousReferences.length).toBe(1);
+  await expect(fileSystem.deleteNote({ path: "Target.md", confirmPath: "Target.md" })).resolves.toMatchObject({
+    success: false,
+    message: expect.stringContaining("would become dangling"),
+  });
+  await expect(fileSystem.deleteNote({ path: "Target.md", confirmPath: "Target.md", allowDanglingReferences: true })).resolves.toMatchObject({
+    success: false,
+    message: expect.stringContaining("expectedRevision"),
+  });
+  const target = await fileSystem.readNote("Target.md");
+  await expect(fileSystem.deleteNote({
+    path: "Target.md",
+    confirmPath: "Target.md",
+    trashMode: "local",
+    allowDanglingReferences: true,
+    expectedRevision: target.revision,
+  })).resolves.toMatchObject({ success: true, message: expect.stringContaining("vault trash") });
+});
+
+test("resolves aliases and stable IDs when previewing deletion impact", async () => {
+  await writeFile(join(testVaultPath, "Target.md"), [
+    "---",
+    "aliases: [Target Alias]",
+    "stable_id: target-stable-id",
+    "---",
+    "# Target",
+  ].join("\n"));
+  await writeFile(join(testVaultPath, "Source.md"), [
+    "---",
+    "primary_moc: target-stable-id",
+    "---",
+    "# Source",
+    "",
+    "See [[Target Alias]].",
+  ].join("\n"));
+
+  await expect(fileSystem.previewDeleteNote({ path: "Target.md" })).resolves.toMatchObject({
+    total: 2,
+    ambiguousTotal: 0,
+    affectedLinks: [expect.objectContaining({ path: "Source.md", link: "[[Target Alias]]" })],
+    affectedProperties: [expect.objectContaining({ sourcePath: "Source.md", propertyPath: "primary_moc", value: "target-stable-id" })],
+  });
+});
+
+test("blocks deletion without disclosing a referencing private scope", async () => {
+  await mkdir(join(testVaultPath, "Private"), { recursive: true });
+  await writeFile(join(testVaultPath, "Target.md"), "# Target\n");
+  await writeFile(join(testVaultPath, "Private/Source.md"), "# Private\n\n[[Target]]\n");
+  const visible = (path: string) => !path.startsWith("Private/");
+  const target = await fileSystem.readNote("Target.md");
+
+  await expect(fileSystem.previewDeleteNote({ path: "Target.md" }, visible)).resolves.toMatchObject({
+    total: 0,
+    affectedLinks: [],
+    hiddenReferencesPresent: true,
+    message: expect.not.stringContaining("Private/Source.md"),
+  });
+  await expect(fileSystem.deleteNote({
+    path: "Target.md",
+    confirmPath: "Target.md",
+    allowDanglingReferences: true,
+    expectedRevision: target.revision,
+  }, visible)).resolves.toMatchObject({ success: false, message: expect.stringContaining("inaccessible scope") });
+  await expect(readFile(join(testVaultPath, "Target.md"), "utf-8")).resolves.toContain("# Target");
 });
 
 test("reject deletion with incorrect confirmation", async () => {

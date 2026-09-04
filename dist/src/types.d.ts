@@ -128,6 +128,10 @@ export interface DeleteNoteParams {
     path: string;
     confirmPath: string;
     trashMode?: 'none' | 'local' | 'system';
+    /** Explicitly allow references to become dangling after a reviewed preview. */
+    allowDanglingReferences?: boolean;
+    /** Current source revision, required when allowing dangling references. */
+    expectedRevision?: string;
 }
 export interface DeleteResult {
     success: boolean;
@@ -167,6 +171,33 @@ export interface SearchParams {
     expandAuthority?: boolean;
     /** Optional client-computed embedding for semantic search; avoids server model loading. */
     queryVector?: number[];
+}
+export interface DeleteNotePreviewParams {
+    path: string;
+    limit?: number;
+}
+export interface DeleteNotePreviewResult {
+    path: string;
+    exists: boolean;
+    affectedLinks: BacklinkMatch[];
+    affectedProperties: Array<{
+        sourcePath: string;
+        propertyPath: string;
+        value: string;
+    }>;
+    ambiguousReferences: Array<{
+        sourcePath: string;
+        value: string;
+        candidates: string[];
+        line?: number;
+        propertyPath?: string;
+    }>;
+    total: number;
+    ambiguousTotal: number;
+    /** True when deletion would break an inaccessible scope; no hidden path is disclosed. */
+    hiddenReferencesPresent: boolean;
+    truncated: boolean;
+    message: string;
 }
 export interface SearchResult {
     p: string;
@@ -251,6 +282,8 @@ export interface MoveNotePreviewResult {
         propertyPath?: string;
     }>;
     ambiguousTotal: number;
+    /** True when applying the move would affect an inaccessible scope; no hidden path is disclosed. */
+    hiddenReferencesPresent: boolean;
     total: number;
     truncated: boolean;
     message: string;
@@ -339,6 +372,8 @@ export interface BacklinkMatch {
     relation?: string;
     /** Structured claim id that authored a claim-level relation. */
     sourceClaimId?: string;
+    /** Exact frontmatter locator when the edge comes from a path-like Property. */
+    propertyPath?: string;
 }
 export interface BacklinksResult {
     target: string;
@@ -361,6 +396,8 @@ export interface OutlinkMatch {
     relation?: string;
     /** Structured claim id that authored a claim-level relation. */
     sourceClaimId?: string;
+    /** Exact frontmatter locator when the edge comes from a path-like Property. */
+    propertyPath?: string;
 }
 export interface OutlinksResult {
     source: string;
