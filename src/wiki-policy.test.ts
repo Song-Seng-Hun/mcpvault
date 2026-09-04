@@ -20,7 +20,7 @@ describe('progressive Wiki policy', () => {
   });
 
   test('teaches bounded authority shelves and distinct relation strengths progressively', () => {
-    expect(WIKI_POLICY_VERSION).toBe(10);
+    expect(WIKI_POLICY_VERSION).toBe(11);
     const retrieval = getWikiPolicyTopic('retrieval', 2000);
     const knowledge = getWikiPolicyTopic('knowledge', 2000);
     expect(retrieval.routes).toEqual(expect.arrayContaining(['wiki.authority_map']));
@@ -81,6 +81,8 @@ describe('progressive Wiki policy', () => {
     expect(workText).toContain('retrospective');
     expect(workText).toContain('no_reusable_knowledge');
     expect(workText).toContain('exclusive');
+    expect(workText).toContain('ordinary actionable');
+    expect(workText).toContain('direct Obsidian');
     expect(review.rules.join(' ')).toContain('volatility_class');
     expect(review.rules.join(' ')).toContain('upstream_cascade_changed');
     expect(review.rules.join(' ')).toContain('advisory');

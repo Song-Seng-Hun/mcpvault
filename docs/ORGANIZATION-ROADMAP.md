@@ -236,8 +236,11 @@ gate, and visual distillation is now mostly historical:
 - `wiki.moc_rebalance`, `wiki.moc_order`, `wiki.learning_path`, and staged
   prerequisite/cycle projections cover overload, authored order, and a
   topologically safe reading route without rewriting the MOC automatically.
-- Completed agent tasks require linked durable/negative knowledge, a bounded
-  retrospective, or an explicit explained no-reuse disposition.
+- Completed agent tasks and ordinary actionable Wiki notes require linked
+  durable/negative knowledge, a bounded retrospective, or an explicit
+  explained no-reuse disposition through their normal mutation workflows.
+  Direct Obsidian/Git exceptions remain authoritative and enter the bounded
+  review-packet repair queue instead of being silently accepted or auto-fixed.
 - `wiki.canvas_view`, `wiki.canvas_export`, and `wiki.canvas_health` provide
   bounded Obsidian JSON Canvas navigation with revision freshness. Mermaid is
   not injected into authoritative note bodies automatically.

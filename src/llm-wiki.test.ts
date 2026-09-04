@@ -318,6 +318,39 @@ test('ordinary work completion requires a scope-safe auditable knowledge disposi
   } finally { await client.close(); await server.close(); }
 });
 
+test('review packet promotes direct-edit completion bypasses to one bounded repair', async () => {
+  const { server, client } = await setup();
+  try {
+    const account = await callJson(client, 'register_scope_account', { accountId: 'completion-repair-owner', modelId: 'codex', password: 'completion-repair-secret' });
+    const accessToken = account.value.accessToken;
+    const write = await client.callTool({ name: 'write_note', arguments: {
+      path: 'Projects/Unreturned lesson.md', content: '# Unreturned lesson\n\nThe work was marked done outside the Wiki workflow.\n',
+      frontmatter: { note_kind: 'task', lifecycle: 'active', task_status: 'completed', completed_at: '2030-01-01T00:00:00.000Z' },
+      expectedRevision: 'missing', accessToken,
+    } });
+    expect(write.isError).toBeFalsy();
+    const current = await callJson(client, 'read_note', { path: 'Projects/Unreturned lesson.md', accessToken });
+    const packet = await callJson(client, 'get_wiki_review_packet', { limit: 10, maxChars: 12000, accessToken });
+    expect(JSON.stringify(packet.value).length).toBeLessThanOrEqual(12000);
+    expect(packet.value.priorities).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path: 'Projects/Unreturned lesson.md', priority: 2,
+        reason: 'completed_work_without_knowledge_disposition', suggestedTool: 'wiki.triage',
+      }),
+    ]));
+    expect(packet.value.curationPlan).toMatchObject({
+      selected: { path: 'Projects/Unreturned lesson.md', revision: current.value.revision, reason: 'completed_work_without_knowledge_disposition' },
+      inspect: { endpointId: 'wiki.read_projection', arguments: { path: 'Projects/Unreturned lesson.md', view: 'summary', maxChars: 4000 } },
+      then: {
+        endpointId: 'wiki.triage',
+        arguments: { path: 'Projects/Unreturned lesson.md', expectedRevision: current.value.revision },
+        requiredArguments: [expect.stringContaining('retrospective')],
+      },
+      guard: { oneNotePerPlan: true, expectedRevisionRequired: true, autoFix: false },
+    });
+  } finally { await client.close(); await server.close(); }
+});
+
 test('MOC navigation preserves explicit sibling order, body link order, and multi-MOC neighborhoods', async () => {
   const { server, client } = await setup();
   try {

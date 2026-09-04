@@ -263,7 +263,7 @@ Split matching lint entries from the generic lint map and add them at priority
 tool `wiki.triage`. Build the curation plan as:
 
 ```ts
-inspect = { endpointId: endpointIdForTool('read_wiki_projection'), arguments: { path, view: 'metadata', maxChars: 4000 } };
+inspect = { endpointId: endpointIdForTool('read_wiki_projection'), arguments: { path, view: 'summary', maxChars: 4000 } };
 mutation = {
   endpointId: endpointIdForTool('triage_wiki_note'),
   arguments: { path, expectedRevision: selectedNote.revision },

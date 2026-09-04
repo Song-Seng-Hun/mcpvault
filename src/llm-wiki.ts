@@ -5194,6 +5194,10 @@ export class LlmWikiService {
     add(vocabulary.unresolvedSubjectTerms.map((item: any) => ({ path: item.paths?.[0], title: item.term })), 'subject_term_needs_authority', 'wiki.vocabulary_health', 8);
     add(vocabulary.termCollisions.map((item: any) => ({ path: item.paths?.[0], title: item.term })), 'authority_term_collision', 'wiki.vocabulary_health', 8);
     add([...claimLintByPath.entries()].map(([path, codes]) => ({ path, title: path.split('/').at(-1), issueCodes: codes })), 'claim_argument_needs_repair', 'wiki.argument_map', 2);
+    add(lint.issues
+      .filter(issue => issue.code === 'completed_work_without_knowledge_disposition')
+      .map(issue => ({ path: issue.path, title: issue.path.split('/').at(-1), issueCodes: [issue.code] })),
+    'completed_work_without_knowledge_disposition', 'wiki.triage', 2);
     add([...lintByPath.entries()].map(([path, codes]) => ({ path, title: path.split('/').at(-1), issueCodes: codes })), 'lint_quality_issue', 'wiki.organization_health', 8);
     const sortedPriorities = [...priorityByPath.values()]
       .sort((left, right) => left.priority - right.priority || left.sourceOrder - right.sourceOrder || left.path.localeCompare(right.path));
@@ -5268,6 +5272,14 @@ export class LlmWikiService {
               instruction: 'Use the selected recallPrompt before opening the note body. If a repair is pending, inspect its bounded repairPath only after attempting recall.',
             };
             mutation = { endpointId: endpointIdForTool('record_wiki_recall'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['recallQuality'] };
+          } else if (reason === 'completed_work_without_knowledge_disposition') {
+            inspect = { endpointId: endpointIdForTool('read_wiki_projection'), arguments: { path: selectedPriority.path, view: 'summary', maxChars: 4000 } };
+            mutation = {
+              endpointId: endpointIdForTool('triage_wiki_note'),
+              arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision },
+              requiredArguments: ['knowledgeNotes, negativeKnowledgeNotes, retrospective, or noReusableKnowledge with knowledgeDispositionReason'],
+              instruction: 'Recover the completed work record with one auditable outcome. A retrospective is experiential context; factual claims still require evidence.',
+            };
           } else if (reason === 'moc_sequence_needs_repair') {
             inspect = { endpointId: endpointIdForTool('get_wiki_learning_path'), arguments: { path: selectedPriority.path, maxDepth: 2, limit: Math.min(30, Math.max(10, boundedLimit)), maxChars: Math.min(7000, boundedChars) } };
             mutation = {
