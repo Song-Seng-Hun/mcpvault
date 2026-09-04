@@ -157,7 +157,7 @@ git diff --check
 Expected: all tests pass with only the intentional skip and generated output is
 current.
 
-- [ ] **Step 3: Commit and push the fork**
+- [x] **Step 3: Commit and push the fork**
 
 ```bash
 git add -u
