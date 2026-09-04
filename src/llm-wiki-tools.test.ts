@@ -42,6 +42,8 @@ interface SchemaProperty {
   type?: string;
   description?: string;
   enum?: unknown[];
+  default?: unknown;
+  maxLength?: number;
   items?: SchemaProperty;
   properties?: SchemaProperties;
 }
@@ -151,6 +153,11 @@ describe('LLM Wiki organization vocabulary contracts', () => {
     const relationSet = tools.get('get_wiki_relation_set_preview')!.inputSchema as { required?: string[] };
     expect(relationSet.required).toEqual(['sourcePath', 'relation', 'targetPaths']);
     expectEnum(properties('get_wiki_reciprocal_link_preview'), 'relation', [...RECIPROCAL_RELATIONS]);
+
+    const authority = properties('get_wiki_authority_map');
+    expect(authority.scheme).toMatchObject({ type: 'string', maxLength: 120 });
+    expect(authority.aroundAuthorityId).toMatchObject({ type: 'string', maxLength: 200 });
+    expect(authority.includeUnclassified).toMatchObject({ type: 'boolean', default: false });
   });
 
   test('derives managed Property schemas from the public contract', () => {

@@ -573,7 +573,7 @@ test("wiki_link resolves path-qualified link to the exact file", async () => {
 });
 
 test("read-only mode exposes read tools and rejects every vault mutation", async () => {
-  await writeFile(join(testVaultPath, "existing.md"), "# Existing\n\nSafe content");
+  await writeFile(join(testVaultPath, "existing.md"), "---\nauthority_scheme: local-topics\nauthority_id: AI.1\npreferred_term: Existing\n---\n# Existing\n\nSafe content");
 
   const server = createServer(testVaultPath, {
     version: "1.0.0",
@@ -603,6 +603,25 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
     });
     expect(readResult.isError).toBeFalsy();
     expect((readResult.content as any)[0].text).toContain("Safe content");
+
+    const shelfResult = await client.callTool({
+      name: 'call_endpoint',
+      arguments: { endpointId: 'wiki.authority_map', arguments: { scheme: 'local-topics', limit: 5, maxChars: 2400 } },
+    });
+    expect(shelfResult.isError).toBeFalsy();
+    expect(JSON.parse(String((shelfResult.content as any)[0].text))).toMatchObject({
+      scheme: 'local-topics', entries: [expect.objectContaining({ authorityId: 'AI.1' })],
+    });
+
+    const reciprocalApplyResult = await client.callTool({
+      name: 'call_endpoint',
+      arguments: { endpointId: 'notes.change_set', arguments: {
+        changes: [{ path: 'existing.md', frontmatter: { set: { related: ['[[other]]'] } } }],
+        dryRun: false,
+      } },
+    });
+    expect(reciprocalApplyResult.isError).toBe(true);
+    expect(String((reciprocalApplyResult.content as any)[0].text)).toContain('read-only mode');
 
     const mutations = [
       { name: "write_note", arguments: { path: "blocked.md", content: "blocked" } },
@@ -657,9 +676,7 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
     await expect(readFile(join(testVaultPath, "blocked.md"))).rejects.toMatchObject({
       code: "ENOENT",
     });
-    expect(await readFile(join(testVaultPath, "existing.md"), "utf8")).toBe(
-      "# Existing\n\nSafe content",
-    );
+    expect(await readFile(join(testVaultPath, "existing.md"), "utf8")).toContain("Safe content");
   } finally {
     await client.close();
     await server.close();

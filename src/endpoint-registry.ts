@@ -340,7 +340,7 @@ const ENDPOINT_ALIASES: Record<string, string[]> = {
   get_wiki_argument_map: ['wiki', 'claim', 'argument', 'argument map', 'supports', 'contradicts', 'depends on', 'premise', 'warrant', 'conclusion', 'objection', 'rebuttal', 'obsidian block link'],
   get_wiki_context_pack: ['wiki', 'context pack', 'shelf', 'bundle', 'entrypoint', 'project context', 'moc context', 'bounded context'],
   get_wiki_learning_path: ['wiki', 'learning path', 'reading order', 'moc order', 'curriculum', 'prerequisite', 'depends on', 'dependency', 'sequence', 'nested moc'],
-  get_wiki_authority_map: ['wiki', 'authority', 'aliases', 'preferred term', 'vocabulary', 'redirect', 'collision', 'library', 'disambiguation', 'broader', 'narrower'],
+  get_wiki_authority_map: ['wiki', 'authority', 'aliases', 'preferred term', 'vocabulary', 'redirect', 'collision', 'library', 'disambiguation', 'broader', 'narrower', 'scheme', 'shelf', 'call number', 'authority id', 'close match'],
   get_wiki_term_change_preview: ['wiki', 'term', 'authority', 'rename', 'impact', 'backlinks', 'aliases', 'collision', 'preview'],
   get_wiki_vocabulary_health: ['wiki', 'vocabulary', 'tag', 'tag health', 'authority', 'controlled vocabulary', 'facet', 'hygiene'],
   resolve_wiki_term: ['wiki', 'resolve', 'canonical', 'preferred term', 'alias', 'redirect', 'vocabulary'],

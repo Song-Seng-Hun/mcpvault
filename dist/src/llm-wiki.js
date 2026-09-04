@@ -11371,11 +11371,89 @@ export class LlmWikiService {
      * aliases, and stable IDs.  It suggests preferred access terms but never
      * renames notes or creates a second taxonomy.
      */
-    async authorityMap(principal, query = '', limit = 30, maxChars = 7000) {
-        const boundedLimit = Math.min(Math.max(Number(limit) || 30, 1), 100);
-        const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
+    async authorityMap(principal, options = {}) {
+        const boundedLimit = Math.min(Math.max(Number(options.limit) || 30, 1), 100);
+        const boundedChars = Math.min(Math.max(Number(options.maxChars) || 7000, 512), 16000);
+        const query = typeof options.query === 'string' ? options.query.trim() : '';
+        const scheme = typeof options.scheme === 'string' ? options.scheme.trim() : '';
+        const aroundAuthorityId = typeof options.aroundAuthorityId === 'string' ? options.aroundAuthorityId.trim() : '';
+        if (options.aroundAuthorityId !== undefined && !scheme) {
+            throw new Error('aroundAuthorityId requires scheme so the authority ID has an unambiguous classification context');
+        }
+        if (options.scheme !== undefined && !scheme)
+            throw new Error('scheme cannot be empty');
+        if (scheme.length > 120)
+            throw new Error('scheme must be at most 120 characters');
+        if (aroundAuthorityId.length > 200)
+            throw new Error('aroundAuthorityId must be at most 200 characters');
         const wanted = normalizedAuthorityTerm(query);
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        if (scheme) {
+            const shelf = await this.fileSystem.queryAuthorityShelf({
+                scheme,
+                ...(aroundAuthorityId && { aroundAuthorityId }),
+                includeUnclassified: options.includeUnclassified === true,
+                // Query filtering is applied only after the visibility-filtered shelf
+                // projection. Probe the bounded index maximum when filtering so a
+                // small requested output limit does not discard nearby candidates.
+                limit: wanted ? 100 : boundedLimit,
+            }, canAccess);
+            const matchesQuery = (entry) => {
+                if (!wanted)
+                    return true;
+                const frontmatter = entry.frontmatter;
+                const values = [
+                    entry.path,
+                    entry.authorityId,
+                    frontmatter.title,
+                    frontmatter.preferred_term,
+                    ...facetStrings(frontmatter.aliases, frontmatter.close_match),
+                ];
+                return values.some(value => normalizedAuthorityTerm(value).includes(wanted));
+            };
+            const matchingEntries = shelf.entries.filter(matchesQuery);
+            let entries = matchingEntries.slice(0, boundedLimit).map(entry => {
+                const title = String(entry.frontmatter.title || entry.path.split('/').at(-1) || '').replace(/\.(?:md|markdown|txt)$/i, '').trim();
+                const aliases = facetStrings(entry.frontmatter.aliases);
+                const closeMatches = facetStrings(entry.frontmatter.close_match);
+                return {
+                    path: this.access.toPublicPath(entry.path),
+                    title,
+                    ...(entry.authorityId && { authorityId: entry.authorityId }),
+                    preferredTerm: typeof entry.frontmatter.preferred_term === 'string' && entry.frontmatter.preferred_term.trim()
+                        ? entry.frontmatter.preferred_term.trim()
+                        : title,
+                    revision: entry.revision,
+                    ...(aliases.length > 0 && { aliases: aliases.slice(0, 8) }),
+                    ...(closeMatches.length > 0 && { closeMatches: closeMatches.slice(0, 8) }),
+                };
+            });
+            let collisions = shelf.collisions.map(collision => ({
+                authorityId: collision.authorityId,
+                paths: collision.paths.slice(0, 8).map(path => this.access.toPublicPath(path)),
+            }));
+            let outputTrimmed = false;
+            const makeResult = () => ({
+                purpose: 'A bounded scheme-local authority shelf. Natural order and collision findings are navigation and repair aids; Markdown Properties remain authoritative.',
+                scheme,
+                order: 'natural_authority_id',
+                ...(wanted && { query: wanted }),
+                anchor: shelf.anchor,
+                entries,
+                collisions,
+                totalVisible: shelf.totalVisible,
+                truncated: outputTrimmed || shelf.truncated || entries.length < matchingEntries.length || (Boolean(wanted) && shelf.totalVisible > shelf.entries.length),
+            });
+            while (JSON.stringify(makeResult()).length > boundedChars && entries.length > 0) {
+                entries = entries.slice(0, -1);
+                outputTrimmed = true;
+            }
+            while (JSON.stringify(makeResult()).length > boundedChars && collisions.length > 0) {
+                collisions = collisions.slice(0, -1);
+                outputTrimmed = true;
+            }
+            return makeResult();
+        }
         const terms = new Map();
         const narrowerByBroader = new Map();
         for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {

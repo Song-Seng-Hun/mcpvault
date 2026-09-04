@@ -1442,7 +1442,14 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "get_wiki_authority_map": {
-          return jsonResult(await llmWiki.authorityMap(principal, trimmedArgs.query, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+          return jsonResult(await llmWiki.authorityMap(principal, {
+            query: trimmedArgs.query,
+            scheme: trimmedArgs.scheme,
+            aroundAuthorityId: trimmedArgs.aroundAuthorityId,
+            includeUnclassified: trimmedArgs.includeUnclassified === true,
+            limit: trimmedArgs.limit,
+            maxChars: trimmedArgs.maxChars,
+          }), trimmedArgs.prettyPrint);
         }
 
         case "get_wiki_term_change_preview": {

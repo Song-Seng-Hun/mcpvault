@@ -309,9 +309,12 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_authority_map',
-      description: 'Return a bounded library-style authority view derived from note titles, Obsidian aliases, and stable IDs. It helps normalize terminology and exposes title/alias collisions without renaming notes or creating a parallel taxonomy.',
+      description: 'Return a bounded library-style authority view derived from note titles, Obsidian aliases, stable IDs, and optional scheme-local authority IDs. Without scheme it preserves term/alias browsing. With scheme it browses one naturally ordered authority shelf around an exact or insertion anchor, with current revisions and visibility-safe collision findings. It never renames, merges, or grants access.',
       inputSchema: { type: 'object', properties: {
         query: { type: 'string', description: 'Optional term or alias prefix to browse' },
+        scheme: { type: 'string', maxLength: 120, description: 'Optional authority scheme. When set, browse one naturally ordered scheme shelf.' },
+        aroundAuthorityId: { type: 'string', maxLength: 200, description: 'Bound the shelf around this authority ID; requires scheme.' },
+        includeUnclassified: { type: 'boolean', default: false, description: 'Append visible notes in the selected scheme that have no authority_id.' },
         limit: { type: 'integer', minimum: 1, maximum: 100, default: 30 },
         maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 },
         accessToken, prettyPrint,

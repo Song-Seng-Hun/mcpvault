@@ -4198,7 +4198,39 @@ export declare class LlmWikiService {
      * aliases, and stable IDs.  It suggests preferred access terms but never
      * renames notes or creates a second taxonomy.
      */
-    authorityMap(principal?: ScopePrincipal, query?: string, limit?: number, maxChars?: number): Promise<{
+    authorityMap(principal?: ScopePrincipal, options?: {
+        query?: unknown;
+        scheme?: unknown;
+        aroundAuthorityId?: unknown;
+        includeUnclassified?: boolean;
+        limit?: unknown;
+        maxChars?: unknown;
+    }): Promise<{
+        purpose: string;
+        scheme: string;
+        order: string;
+        query?: string;
+        anchor: {
+            requested?: string;
+            matched: boolean;
+            insertionIndex: number;
+        };
+        entries: {
+            path: string;
+            title: string;
+            authorityId?: string;
+            preferredTerm: string;
+            revision: string;
+            aliases?: string[];
+            closeMatches?: string[];
+        }[];
+        collisions: {
+            authorityId: string;
+            paths: string[];
+        }[];
+        totalVisible: number;
+        truncated: boolean;
+    } | {
         purpose: string;
         query: string | undefined;
         entries: {

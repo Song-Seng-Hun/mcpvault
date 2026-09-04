@@ -3184,6 +3184,75 @@ test('authority, maintenance debt, answer packets, and adaptive review stay boun
   }
 });
 
+test('authority shelves browse natural scheme order without leaking hidden collisions', async () => {
+  await mkdir(join(vault, 'Knowledge'), { recursive: true });
+  await mkdir(join(vault, '_scopes', 'models', 'claude'), { recursive: true });
+  const authorityNote = (title: string, scheme: string, authorityId?: string, extra = '') => [
+    '---', `title: ${title}`, `preferred_term: ${title}`, `authority_scheme: ${scheme}`,
+    ...(authorityId ? [`authority_id: ${authorityId}`] : []),
+    ...(extra ? extra.split('\n') : []),
+    '---', `# ${title}`, '', `${title} body.`, '',
+  ].join('\n');
+  await writeFile(join(vault, 'Knowledge', 'A.md'), authorityNote('Alpha', 'local-topics', 'AI.2'));
+  await writeFile(join(vault, 'Knowledge', 'B.md'), authorityNote('Beta', 'local-topics', 'AI.10'));
+  await writeFile(join(vault, 'Knowledge', 'C.md'), authorityNote('Gamma', 'local-topics', 'AI.3', 'aliases:\n  - Third topic\nclose_match:\n  - "[[Knowledge/B]]"'));
+  await writeFile(join(vault, 'Knowledge', 'Collision one.md'), authorityNote('Collision one', 'local-topics', 'AI.20'));
+  await writeFile(join(vault, 'Knowledge', 'Collision two.md'), authorityNote('Collision two', 'LOCAL-TOPICS', 'ai.20'));
+  await writeFile(join(vault, 'Knowledge', 'Unclassified.md'), authorityNote('Unclassified', 'local-topics'));
+  await writeFile(join(vault, 'Knowledge', 'Other scheme.md'), authorityNote('Other scheme', 'other-topics', 'AI.3'));
+  await writeFile(join(vault, '_scopes', 'models', 'claude', 'Hidden duplicate.md'), authorityNote('Hidden duplicate', 'local-topics', 'AI.3'));
+
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'authority-shelf-owner', modelId: 'codex', password: 'authority-shelf-password' });
+    const accessToken = registration.value.accessToken;
+    const discovery = await callJson(client, 'search_capabilities', { query: 'call number close match authority shelf', limit: 3, maxChars: 4000, accessToken });
+    expect(discovery.value.endpoints).toEqual(expect.arrayContaining([
+      expect.objectContaining({ endpointId: 'wiki.authority_map', available: true }),
+    ]));
+    const shelf = await callJson(client, 'call_endpoint', { endpointId: 'wiki.authority_map', arguments: {
+      scheme: 'local-topics', aroundAuthorityId: 'AI.3', limit: 3, maxChars: 2400, accessToken,
+    } });
+    expect(shelf.result.isError).toBeFalsy();
+    expect(shelf.value).toMatchObject({
+      scheme: 'local-topics', order: 'natural_authority_id', anchor: { requested: 'AI.3', matched: true },
+    });
+    expect(shelf.value.entries.map((entry: any) => entry.authorityId)).toEqual(['AI.2', 'AI.3', 'AI.10']);
+    expect(JSON.stringify(shelf.value).length).toBeLessThanOrEqual(2400);
+    expect(JSON.stringify(shelf.value)).not.toContain('Hidden duplicate');
+
+    const insertion = await callJson(client, 'call_endpoint', { endpointId: 'wiki.authority_map', arguments: {
+      scheme: 'local-topics', aroundAuthorityId: 'AI.4', limit: 2, maxChars: 2400, accessToken,
+    } });
+    expect(insertion.value.entries.map((entry: any) => entry.authorityId)).toEqual(['AI.3', 'AI.10']);
+    expect(insertion.value.anchor).toMatchObject({ requested: 'AI.4', matched: false, insertionIndex: 2 });
+
+    const all = await callJson(client, 'call_endpoint', { endpointId: 'wiki.authority_map', arguments: {
+      scheme: 'LOCAL-TOPICS', includeUnclassified: true, limit: 10, maxChars: 5000, accessToken,
+    } });
+    expect(all.value.entries.at(-1)).toMatchObject({ path: 'Knowledge/Unclassified.md' });
+    expect(all.value.entries.at(-1)).not.toHaveProperty('authorityId');
+    expect(all.value.collisions).toEqual([
+      { authorityId: 'AI.20', paths: ['Knowledge/Collision one.md', 'Knowledge/Collision two.md'] },
+    ]);
+    expect(JSON.stringify(all.value)).not.toContain('Knowledge/Other scheme.md');
+
+    const filtered = await callJson(client, 'call_endpoint', { endpointId: 'wiki.authority_map', arguments: {
+      scheme: 'local-topics', query: 'Third topic', limit: 10, maxChars: 2400, accessToken,
+    } });
+    expect(filtered.value.entries).toEqual([expect.objectContaining({ path: 'Knowledge/C.md', authorityId: 'AI.3' })]);
+
+    const invalid = await client.callTool({ name: 'call_endpoint', arguments: {
+      endpointId: 'wiki.authority_map', arguments: { aroundAuthorityId: 'AI.3', accessToken },
+    } });
+    expect(invalid.isError).toBe(true);
+    expect(String((invalid.content as any)[0]?.text)).toContain('aroundAuthorityId requires scheme');
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('canonical lineage and optional active recall stay in the Markdown organization model', async () => {
   const { server, client } = await setup();
   try {
