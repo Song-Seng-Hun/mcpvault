@@ -1,7 +1,15 @@
 import { describe, expect, test } from 'vitest';
-import { BASES_VIEW_IDS, CONFIDENCE_LEVELS, KNOWLEDGE_STATUSES, NOTE_TEMPLATE_IDS, RECIPROCAL_RELATIONS, RELATION_FIELDS, SOURCE_TRUST_LEVELS, getOrganizationPropertyContract, getOrganizationRelationContract, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, organizationLintIssues, organizationNoteTemplate, temporalValidity } from './organization.js';
+import { BASES_VIEW_IDS, CONFIDENCE_LEVELS, KNOWLEDGE_STATUSES, NOTE_TEMPLATE_IDS, RECIPROCAL_RELATIONS, RELATION_FIELDS, SOURCE_TRUST_LEVELS, VOLATILITY_CLASSES, getOrganizationPropertyContract, getOrganizationRelationContract, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, organizationLintIssues, organizationNoteTemplate, temporalValidity } from './organization.js';
 
 describe('knowledge organization focus and summary metadata', () => {
+  test('normalizes and validates knowledge volatility classes', () => {
+    expect(VOLATILITY_CLASSES).toEqual(['ephemeral', 'evolving', 'durable', 'foundational']);
+    expect(knowledgeOrganization({ status: 'draft', noteKind: 'atomic', volatilityClass: 'DURABLE' })).toMatchObject({ volatility_class: 'durable' });
+    expect(organizationLintIssues('Knowledge/InvalidVolatility.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'review', volatility_class: 'chaotic',
+    }, '# Invalid volatility\n').map(issue => issue.code)).toEqual(expect.arrayContaining(['property_contract_violation', 'invalid_volatility_class']));
+  });
+
   test('distinguishes reciprocal near-equivalence from exact identity and general association', () => {
     expect(RELATION_FIELDS).toContain('close_match');
     expect(RECIPROCAL_RELATIONS).toContain('close_match');
@@ -163,6 +171,7 @@ describe('knowledge organization focus and summary metadata', () => {
       expect.objectContaining({ name: 'note_kind', type: 'text' }),
       expect.objectContaining({ name: 'aliases', type: 'list' }),
       expect.objectContaining({ name: 'review_interval_days', type: 'number' }),
+      expect.objectContaining({ name: 'volatility_class', type: 'text', allowed: [...VOLATILITY_CLASSES] }),
       expect.objectContaining({ name: 'knowledge_status', type: 'text', allowed: [...KNOWLEDGE_STATUSES] }),
       expect.objectContaining({ name: 'confidence', type: 'text', allowed: [...CONFIDENCE_LEVELS] }),
       expect.objectContaining({ name: 'trust_level', type: 'text', allowed: [...SOURCE_TRUST_LEVELS], appliesTo: ['source'] }),
@@ -177,7 +186,8 @@ describe('knowledge organization focus and summary metadata', () => {
       expect.objectContaining({ name: 'negative_reusable_lesson', type: 'text' }),
       expect.objectContaining({ name: 'last_review_trigger', type: 'text' }),
     ]));
-    expect(knowledgeOrganization({ status: 'draft', noteKind: 'atomic', reviewIntervalDays: 30 })).toMatchObject({ review_interval_days: 30 });
+    expect(VOLATILITY_CLASSES).toEqual(['ephemeral', 'evolving', 'durable', 'foundational']);
+    expect(knowledgeOrganization({ status: 'draft', noteKind: 'atomic', reviewIntervalDays: 30, volatilityClass: 'DURABLE' })).toMatchObject({ review_interval_days: 30, volatility_class: 'durable' });
     expect(organizationLintIssues('Knowledge/Drift.md', {
       llm_wiki_type: 'knowledge', note_kind: ['atomic'], lifecycle: 'evergreen', review_interval_days: 0,
     }, '# Drift\n').map(issue => issue.code)).toEqual(expect.arrayContaining(['property_contract_violation', 'invalid_review_interval_days']));
@@ -187,6 +197,9 @@ describe('knowledge organization focus and summary metadata', () => {
     expect(organizationLintIssues('Knowledge/InvalidNegative.md', {
       llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'review', knowledge_polarity: 'uncertain', negative_type: 'mistake',
     }, '# Invalid negative\n').filter(issue => issue.code === 'property_contract_violation')).toHaveLength(2);
+    expect(organizationLintIssues('Knowledge/InvalidVolatility.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'review', volatility_class: 'chaotic',
+    }, '# Invalid volatility\n').map(issue => issue.code)).toEqual(expect.arrayContaining(['property_contract_violation', 'invalid_volatility_class']));
   });
 
   test('keeps organization writer output inside one unique public Property contract', () => {

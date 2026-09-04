@@ -9,7 +9,7 @@ import type { ReferenceService } from './references.js';
 import type { SemanticSearchService } from './semantic-search.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
-import { getOrganizationPropertyContract, getOrganizationRelationContract, inapplicableOrganizationProperties, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, organizationLintIssues, organizationNoteTemplate, organizationPropertyAppliesTo, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, CONFIDENCE_LEVELS, DECISION_STATUSES, FOCUS_HORIZONS, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS, type AnswerPacketIntent, type CatalogOrder, type TemporalValidityState, type WikiProjectionView } from './organization.js';
+import { getOrganizationPropertyContract, getOrganizationRelationContract, inapplicableOrganizationProperties, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeVolatilityClass, organizationLintIssues, organizationNoteTemplate, organizationPropertyAppliesTo, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, CONFIDENCE_LEVELS, DECISION_STATUSES, FOCUS_HORIZONS, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS, type AnswerPacketIntent, type CatalogOrder, type TemporalValidityState, type WikiProjectionView } from './organization.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
@@ -725,13 +725,22 @@ function normalizeCatalogOrder(value: unknown): NonNullable<WikiCatalogOptions['
   return (CATALOG_ORDERS as readonly string[]).includes(normalized) ? normalized as CatalogOrder : 'location';
 }
 
+const VOLATILITY_REVIEW_CADENCE = {
+  ephemeral: { initial: 7, maximum: 30 },
+  evolving: { initial: 30, maximum: 180 },
+  durable: { initial: 90, maximum: 730 },
+  foundational: { initial: 365, maximum: 3650 },
+} as const;
+
 function adaptiveReviewIntervalDays(frontmatter: Record<string, any>, outcome: string): number {
   const previous = Number(frontmatter.review_interval_days);
+  const volatilityClass = normalizeVolatilityClass(frontmatter.volatility_class, 'evolving') || 'evolving';
+  const cadence = VOLATILITY_REVIEW_CADENCE[volatilityClass];
   if (outcome === 'disputed') return 7;
-  if (outcome === 'revised') return 14;
-  if (outcome === 'rescheduled') return Number.isInteger(previous) && previous > 0 ? Math.min(previous, 30) : 14;
-  if (outcome === 'confirmed') return Number.isInteger(previous) && previous > 0 ? Math.min(previous * 2, 365) : 30;
-  return 30;
+  if (outcome === 'revised') return Math.min(14, cadence.initial);
+  if (outcome === 'rescheduled') return Number.isInteger(previous) && previous > 0 ? Math.min(previous, cadence.initial) : cadence.initial;
+  if (outcome === 'confirmed') return Number.isInteger(previous) && previous > 0 ? Math.min(previous * 2, cadence.maximum) : cadence.initial;
+  return cadence.initial;
 }
 
 function jaccard(left: Set<string>, right: Set<string>): number {
@@ -1995,6 +2004,7 @@ export class LlmWikiService {
     project?: string;
     reviewAt?: string;
     reviewIntervalDays?: unknown;
+    volatilityClass?: unknown;
     aliases?: unknown;
     summary?: string;
     keyPoints?: unknown;
@@ -2211,6 +2221,7 @@ export class LlmWikiService {
           ...(params.project !== undefined && { project: params.project }),
           ...(params.reviewAt !== undefined && { reviewAt: params.reviewAt }),
           ...(params.reviewIntervalDays !== undefined && { reviewIntervalDays: params.reviewIntervalDays }),
+          ...(params.volatilityClass !== undefined && { volatilityClass: params.volatilityClass }),
           ...(params.reviewSnoozedUntil !== undefined && { reviewSnoozedUntil: params.reviewSnoozedUntil }),
           ...(params.reviewSnoozeReason !== undefined && { reviewSnoozeReason: params.reviewSnoozeReason }),
           ...(params.aliases !== undefined && { aliases: params.aliases }),
@@ -3732,9 +3743,11 @@ export class LlmWikiService {
     if (note.frontmatter.llm_wiki_type !== 'knowledge') throw new Error('review_wiki_note requires an LLM Wiki knowledge note');
     const outcome = normalizeReviewOutcome(params.reviewOutcome);
     if (!outcome) throw new Error('reviewOutcome is required');
-    const reviewIntervalDays = params.reviewIntervalDays === undefined
-      ? normalizeReviewIntervalDays(note.frontmatter.review_interval_days)
+    const requestedReviewIntervalDays = params.reviewIntervalDays === undefined
+      ? undefined
       : normalizeReviewIntervalDays(params.reviewIntervalDays);
+    const previousReviewIntervalDays = normalizeReviewIntervalDays(note.frontmatter.review_interval_days);
+    const volatilityClass = normalizeVolatilityClass(note.frontmatter.volatility_class, 'evolving') || 'evolving';
     const explicitReviewAt = params.reviewAt === undefined ? undefined : normalizeReviewAt(params.reviewAt);
     const reviewNote = params.reviewNote === undefined ? undefined : boundedText(params.reviewNote, 1000);
     const reviewReason = params.reviewReason === undefined ? undefined : boundedText(params.reviewReason, 120);
@@ -3750,10 +3763,10 @@ export class LlmWikiService {
     const reviewBasisUpstream = await this.collectReviewBasisUpstream(params.path, note.frontmatter, params.principal);
     const timestamp = now();
     const reviewPolicy = String(note.frontmatter.review_policy || 'manual').toLowerCase();
-    const adaptiveInterval = reviewIntervalDays === undefined && params.reviewIntervalDays === undefined && reviewPolicy !== 'manual' && outcome !== 'superseded'
+    const adaptiveInterval = requestedReviewIntervalDays === undefined && reviewPolicy !== 'manual' && outcome !== 'superseded'
       ? adaptiveReviewIntervalDays(note.frontmatter, outcome)
       : undefined;
-    const effectiveReviewIntervalDays = reviewIntervalDays ?? adaptiveInterval;
+    const effectiveReviewIntervalDays = requestedReviewIntervalDays ?? adaptiveInterval ?? previousReviewIntervalDays;
     const reviewCount = Math.max(0, Number(note.frontmatter.review_count) || 0) + 1;
     const reviewReopenCount = Math.max(0, Number(note.frontmatter.review_reopen_count) || 0)
       + (currentLifecycle === 'review' && note.frontmatter.last_reviewed_at ? 1 : 0);
@@ -3811,6 +3824,7 @@ export class LlmWikiService {
       reviewTrigger,
       reviewCount,
       reviewReopenCount,
+      volatilityClass,
       ...(reviewChecks && { reviewChecks }),
       ...(reviewOpenItems && { reviewOpenItems }),
       ...(reviewAt && { reviewAt }),
@@ -6742,6 +6756,7 @@ export class LlmWikiService {
     project?: string;
     reviewAt?: string;
     reviewIntervalDays?: unknown;
+    volatilityClass?: unknown;
     nextAction?: string;
     waitingFor?: string;
     aliases?: unknown;
@@ -6864,7 +6879,7 @@ export class LlmWikiService {
       || retirementMetadataRequested) {
       throw new Error('Use wiki.lifecycle_transition to preview lifecycle, retention, reference impact, and replacement lineage before retiring or reactivating knowledge.');
     }
-    const hasOrganizationInput = [params.noteKind, params.lifecycle, params.decisionStatus, params.primaryMoc, params.mocs, params.moc, params.navOrder, params.project, params.reviewAt, params.reviewIntervalDays, params.reviewSnoozedUntil, params.reviewSnoozeReason, params.nextAction, params.waitingFor, params.desiredOutcome, params.projectPurpose, params.projectSupport, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.serviceClass, params.completionCriteria, params.startedAt, params.blockedSince, params.waitingSince, params.completedAt, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.canonicalPath, params.recallPrompt, params.recallIntervalDays, params.lastRecalledAt, params.recallQuality, params.retentionPolicy, params.retentionEvent, params.retentionAt, params.preserveUntil, params.legalHold, params.retentionReason, params.archiveReason, params.replacedBy, params.knowledgeRole, params.termStatus, params.termReplacedBy, params.termScopeNote, params.preferredTerm, params.termLanguage, params.authorityScheme, params.authorityId, params.disambiguation, params.broaderTerms, params.relatedTerms, params.subjectTerms, params.domain, params.methods, params.audience, params.retrievalCues, params.useWhen, params.validFrom, params.validUntil, params.observedAt, params.temporalScope, params.seeAlso, params.relations, params.relationNotes, params.relationEvidence, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.reviewChecks, params.reviewOpenItems, params.interpretationStatus, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
+    const hasOrganizationInput = [params.noteKind, params.lifecycle, params.decisionStatus, params.primaryMoc, params.mocs, params.moc, params.navOrder, params.project, params.reviewAt, params.reviewIntervalDays, params.volatilityClass, params.reviewSnoozedUntil, params.reviewSnoozeReason, params.nextAction, params.waitingFor, params.desiredOutcome, params.projectPurpose, params.projectSupport, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.serviceClass, params.completionCriteria, params.startedAt, params.blockedSince, params.waitingSince, params.completedAt, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.canonicalPath, params.recallPrompt, params.recallIntervalDays, params.lastRecalledAt, params.recallQuality, params.retentionPolicy, params.retentionEvent, params.retentionAt, params.preserveUntil, params.legalHold, params.retentionReason, params.archiveReason, params.replacedBy, params.knowledgeRole, params.termStatus, params.termReplacedBy, params.termScopeNote, params.preferredTerm, params.termLanguage, params.authorityScheme, params.authorityId, params.disambiguation, params.broaderTerms, params.relatedTerms, params.subjectTerms, params.domain, params.methods, params.audience, params.retrievalCues, params.useWhen, params.validFrom, params.validUntil, params.observedAt, params.temporalScope, params.seeAlso, params.relations, params.relationNotes, params.relationEvidence, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.reviewChecks, params.reviewOpenItems, params.interpretationStatus, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
       .some(value => value !== undefined);
     if (!hasOrganizationInput && !params.clearInapplicable && [params.tags, params.timeEstimateMinutes, params.energy, params.effort].every(value => value === undefined)) throw new Error('At least one organization field is required');
     const patch = knowledgeOrganization({
@@ -6883,6 +6898,7 @@ export class LlmWikiService {
       ...(params.project !== undefined && { project: params.project }),
       ...(params.reviewAt !== undefined && { reviewAt: params.reviewAt }),
       ...(params.reviewIntervalDays !== undefined && { reviewIntervalDays: params.reviewIntervalDays }),
+      ...(params.volatilityClass !== undefined && { volatilityClass: params.volatilityClass }),
       ...(params.reviewSnoozedUntil !== undefined && { reviewSnoozedUntil: params.reviewSnoozedUntil }),
       ...(params.reviewSnoozeReason !== undefined && { reviewSnoozeReason: params.reviewSnoozeReason }),
       ...(params.aliases !== undefined && { aliases: params.aliases }),

@@ -3213,6 +3213,79 @@ test('authority, maintenance debt, answer packets, and adaptive review stay boun
   }
 });
 
+test('volatility classes control adaptive review defaults and caps without overriding explicit dates', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'volatility-owner', modelId: 'codex', password: 'volatility-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const cases = [
+      { value: 'ephemeral', initial: 7, maximum: 30 },
+      { value: 'evolving', initial: 30, maximum: 180 },
+      { value: 'durable', initial: 90, maximum: 730 },
+      { value: 'foundational', initial: 365, maximum: 3650 },
+    ] as const;
+
+    for (const item of cases) {
+      const path = `Knowledge/Volatility-${item.value}.md`;
+      const createdWrite = await client.callTool({ name: 'write_note', arguments: {
+        path,
+        content: `# ${item.value}\n\nReview cadence fixture.\n`,
+        frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', review_policy: 'periodic', volatility_class: item.value },
+        expectedRevision: 'missing',
+        accessToken,
+      } });
+      expect(createdWrite.isError).toBeFalsy();
+      const created = await callJson(client, 'read_note', { path, includeContent: false, accessToken });
+      let revision = created.value.revision;
+      let reviewed = await callJson(client, 'review_wiki_note', { path, reviewOutcome: 'confirmed', expectedRevision: revision, accessToken });
+      expect(reviewed.value).toMatchObject({ adaptiveReviewInterval: true, reviewIntervalDays: item.initial, volatilityClass: item.value });
+      revision = reviewed.value.revision;
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        reviewed = await callJson(client, 'review_wiki_note', { path, reviewOutcome: 'confirmed', expectedRevision: revision, accessToken });
+        revision = reviewed.value.revision;
+      }
+      expect(reviewed.value.reviewIntervalDays).toBe(item.maximum);
+    }
+
+    const explicitPath = 'Knowledge/Volatility-explicit.md';
+    const explicitWrite = await client.callTool({ name: 'write_note', arguments: {
+      path: explicitPath,
+      content: '# Explicit review date\n',
+      frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', review_policy: 'periodic', volatility_class: 'ephemeral' },
+      expectedRevision: 'missing',
+      accessToken,
+    } });
+    expect(explicitWrite.isError).toBeFalsy();
+    const explicitCreated = await callJson(client, 'read_note', { path: explicitPath, includeContent: false, accessToken });
+    const explicit = await callJson(client, 'review_wiki_note', {
+      path: explicitPath,
+      reviewOutcome: 'confirmed',
+      reviewAt: '2040-01-02T03:04:05.000Z',
+      expectedRevision: explicitCreated.value.revision,
+      accessToken,
+    });
+    expect(explicit.value).toMatchObject({ reviewAt: '2040-01-02T03:04:05.000Z', reviewIntervalDays: 7, volatilityClass: 'ephemeral' });
+
+    const revisedPath = 'Knowledge/Volatility-revised.md';
+    const revisedWrite = await client.callTool({ name: 'write_note', arguments: {
+      path: revisedPath,
+      content: '# Revised cadence\n',
+      frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', review_policy: 'periodic', volatility_class: 'ephemeral' },
+      expectedRevision: 'missing',
+      accessToken,
+    } });
+    expect(revisedWrite.isError).toBeFalsy();
+    const revisedCreated = await callJson(client, 'read_note', { path: revisedPath, includeContent: false, accessToken });
+    const revised = await callJson(client, 'review_wiki_note', { path: revisedPath, reviewOutcome: 'revised', expectedRevision: revisedCreated.value.revision, accessToken });
+    expect(revised.value.reviewIntervalDays).toBe(7);
+    const disputed = await callJson(client, 'review_wiki_note', { path: revisedPath, reviewOutcome: 'disputed', expectedRevision: revised.value.revision, accessToken });
+    expect(disputed.value.reviewIntervalDays).toBe(7);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('authority shelves browse natural scheme order without leaking hidden collisions', async () => {
   await mkdir(join(vault, 'Knowledge'), { recursive: true });
   await mkdir(join(vault, '_scopes', 'models', 'claude'), { recursive: true });
