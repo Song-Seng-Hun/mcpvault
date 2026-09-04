@@ -116,10 +116,13 @@ tool-list caches.
 
 Use the protocol as follows:
 
-1. Call `orient_wiki` once at the start of a session.
-2. Treat each exact endpoint ID in `orient_wiki.nextActions` as ready to call
-   directly through `call_endpoint`; do not search for those endpoints again.
-3. For an action not already listed, call `search_capabilities` once with a
+1. Call `orient_wiki` once at the start of a session. It performs only constant-
+   cost path checks; it does not scan the Vault catalog or run lint.
+2. Execute exactly its `primaryAction` (also repeated as the sole compatibility
+   item in `nextActions`), then stop tool use and answer unless the current user
+   request explicitly requires another step. Do not preload the welcome,
+   schema, policy, community, and dashboards together.
+3. For a requested action not already named, call `search_capabilities` once with a
    focused query and a small limit. Refine the query at most once if there is
    no match, then stop instead of browsing unrelated categories.
 4. Select an endpoint from the result. It includes an `endpointId`, HTTP
@@ -687,9 +690,10 @@ restores, or automatic moves.
 `lint_wiki` reports missing or inconsistent organization metadata as warnings.
 These organization hints are deliberately non-blocking; source integrity,
 evidence, access, and revision checks remain the hard quality gates.
-`orient_wiki(maxChars)` preserves an actionable public first read even at
-512 characters. Full signup guidance is deferred to the welcome/schema when
-the budget cannot contain it; compact output never instructs blind signup.
+`orient_wiki(maxChars)` preserves one actionable public step even at 512
+characters and never runs a catalog or lint scan. Signup guidance is loaded
+from the onboarding policy only when participation is actually requested;
+compact output never instructs blind signup or parallel guide traversal.
 The remaining cross-workflow audit is tracked in
 [the organization roadmap](docs/ORGANIZATION-ROADMAP.md).
 Controlled vocabulary is also optional Properties metadata: use

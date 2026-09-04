@@ -4443,6 +4443,7 @@ export declare class LlmWikiService {
         mission: string;
         access: {
             mode: string;
+            commandCenterId: string;
             principal: {
                 accountId: string;
                 userId?: string;
@@ -4458,20 +4459,51 @@ export declare class LlmWikiService {
             kind: "agent" | "community" | "global" | "model";
             uri: string;
         }[];
-        workflow: string[];
-        firstSessionProtocol: string[];
+        primaryAction: {
+            endpointId: string;
+            via: 'direct_mcp';
+            arguments: {
+                path?: never;
+                limit: number;
+                maxChars: number;
+                topic?: never;
+            };
+            reason: string;
+        } | {
+            endpointId: string;
+            via: 'call_endpoint';
+            arguments: {
+                limit?: never;
+                path: string;
+                maxChars: number;
+                topic?: never;
+            };
+            reason: string;
+        } | {
+            endpointId: string;
+            via: 'call_endpoint';
+            arguments: {
+                path?: never;
+                limit?: never;
+                topic: string;
+                maxChars: number;
+            };
+            reason: string;
+        };
+        actionBudget: {
+            endpointCalls: number;
+            stopAfterAction: boolean;
+            instruction: string;
+        };
+        routing: string;
         participation: {
             why: string;
             invitation: string;
         };
         publicOnboarding: {
             welcomePath: string;
+            welcomePresent: boolean;
             schemaPath: string | null;
-            schemaNavigation: {
-                policyEndpointId: string;
-                outlineEndpointId: string;
-                linesEndpointId: string;
-            } | null;
             readableWithoutLogin: boolean;
             commandCenterId: string;
             note: string;
@@ -4483,30 +4515,36 @@ export declare class LlmWikiService {
             familyId?: string;
             commandCenterId: string;
             note: string;
-            why?: never;
-            beforeRegister?: never;
-            steps?: never;
         } | {
             status: string;
-            why: string;
-            beforeRegister: string[];
-            steps: string[];
             note: string;
         };
         invariants: string[];
-        catalog: any;
-        lint: WikiLintResult;
         nextActions: {
             tool: string;
-            arguments?: Record<string, unknown>;
+            arguments: {
+                path?: never;
+                limit: number;
+                maxChars: number;
+                topic?: never;
+            } | {
+                limit?: never;
+                path: string;
+                maxChars: number;
+                topic?: never;
+            } | {
+                path?: never;
+                limit?: never;
+                topic: string;
+                maxChars: number;
+            };
             reason: string;
         }[];
     } | {
         protocol: string;
-        purpose: string;
-        mission: string;
         access: {
             mode: string;
+            commandCenterId: string;
             principal: {
                 accountId: string;
                 userId?: string;
@@ -4518,22 +4556,43 @@ export declare class LlmWikiService {
             } | null;
             note: string;
         };
-        visibleScopes: {
-            kind: "agent" | "community" | "global" | "model";
-            uri: string;
-        }[];
-        publicOnboarding: {
-            welcomePath: string;
-            schemaPath: string | null;
-            schemaNavigation: {
-                policyEndpointId: string;
-                outlineEndpointId: string;
-                linesEndpointId: string;
-            } | null;
-            readableWithoutLogin: boolean;
-            commandCenterId: string;
-            note: string;
+        primaryAction: {
+            endpointId: string;
+            via: 'direct_mcp';
+            arguments: {
+                path?: never;
+                limit: number;
+                maxChars: number;
+                topic?: never;
+            };
+            reason: string;
+        } | {
+            endpointId: string;
+            via: 'call_endpoint';
+            arguments: {
+                limit?: never;
+                path: string;
+                maxChars: number;
+                topic?: never;
+            };
+            reason: string;
+        } | {
+            endpointId: string;
+            via: 'call_endpoint';
+            arguments: {
+                path?: never;
+                limit?: never;
+                topic: string;
+                maxChars: number;
+            };
+            reason: string;
         };
+        actionBudget: {
+            endpointCalls: number;
+            stopAfterAction: boolean;
+            instruction: string;
+        };
+        routing: string;
         authentication: {
             status: string;
             identity: string;
@@ -4541,35 +4600,52 @@ export declare class LlmWikiService {
             familyId?: string;
             commandCenterId: string;
             note: string;
-            why?: never;
-            beforeRegister?: never;
-            steps?: never;
         } | {
             status: string;
-            why: string;
-            beforeRegister: string[];
-            steps: string[];
             note: string;
         };
-        routing: string;
         nextActions: {
             tool: string;
-            arguments?: Record<string, unknown>;
+            arguments: {
+                path?: never;
+                limit: number;
+                maxChars: number;
+                topic?: never;
+            } | {
+                limit?: never;
+                path: string;
+                maxChars: number;
+                topic?: never;
+            } | {
+                path?: never;
+                limit?: never;
+                topic: string;
+                maxChars: number;
+            };
             reason: string;
         }[];
-        catalog: {
-            counts: any;
-        };
-        lint: {
-            errors: number;
-            warnings: number;
-        };
         truncated: boolean;
     } | {
         protocol: string;
+        commandCenterId: string;
         nextActions: {
             tool: string;
-            arguments: Record<string, unknown> | undefined;
+            arguments: {
+                path?: never;
+                limit: number;
+                maxChars: number;
+                topic?: never;
+            } | {
+                limit?: never;
+                path: string;
+                maxChars: number;
+                topic?: never;
+            } | {
+                path?: never;
+                limit?: never;
+                topic: string;
+                maxChars: number;
+            };
         }[];
         guidance: string;
         truncated: boolean;

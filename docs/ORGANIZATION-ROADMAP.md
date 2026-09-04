@@ -178,6 +178,15 @@ tools; new behaviors belong in the endpoint catalog.
   Under a tight response budget, graph compaction preserves epistemic,
   provenance, focus, and typed-relation defects before low-value inventory
   samples, so adding a repair hint cannot hide a more serious diagnosis.
+- A real Antigravity 1.1.24 first-look run proved that the fixed five-tool
+  surface is callable, but disproved the earlier low-friction assumption: the
+  client followed several advertised alternatives (welcome, policy, schema,
+  and Community) and reported 93,604 input tokens. Orientation is now a
+  constant-cost router: it performs only two path checks, returns one
+  `primaryAction` (with one compatibility `nextActions` item), and carries an
+  explicit one-call stop contract. Authenticated sessions go directly to one
+  bounded pulse instead of rereading onboarding. The public access label now
+  accurately includes command-center Community.
 
 Evidence: `moc-navigation.test.ts`, `backlinks.test.ts`, `organization.test.ts`,
 `filesystem.test.ts`, `json-canvas.test.ts`, `continuity.test.ts`,
@@ -191,11 +200,12 @@ These prove the named behaviors, not completion of the whole goal.
 
 ## Open work with concrete completion evidence
 
-1. **Prove the low-friction route in an external client.** Home now removes the
-   overlapping-dashboard decision from the protocol and the plugin/skill path
-   needs no helper daemon, but exercise one newly installed external client
-   from orientation through one selected workflow route before calling the
-   usability goal complete.
+1. **Re-prove bounded external onboarding after the one-action fix.** Use a
+   genuinely isolated client profile/root with a synthetic Vault and a unique
+   command-center ID. Some clients discover parent or global MCP configuration;
+   verify the returned ID before permitting any note read. The next run must
+   execute only orientation plus its one primary action and report a materially
+   smaller token footprint before the usability goal is complete.
 ## Completion gate
 
 For each open workflow, inspect its actual registered schema, dispatcher,

@@ -113,10 +113,15 @@ test("dynamic control plane preserves compact onboarding and organization schema
   const client = new Client({ name: 'organization-surface-test', version: '1.0.0' });
   await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
   try {
+    const listed = await client.listTools();
+    const orient = listed.tools.find(tool => tool.name === 'orient_wiki')!;
+    expect(orient.description).toContain('exactly one primary action');
+    expect((orient.inputSchema.properties as any).maxChars.default).toBe(3000);
     const orientation = await client.callTool({ name: 'orient_wiki', arguments: { maxChars: 512, prettyPrint: true } });
     const text = String((orientation.content as any)[0].text);
     const compact = JSON.parse(text);
     expect(text.length).toBeLessThanOrEqual(512);
+    expect(compact.commandCenterId).toBe('local');
     expect(compact.nextActions[0]).toMatchObject({ tool: 'notes.read', arguments: { path: '환영합니다!.md' } });
 
     const found = await client.callTool({ name: 'search_capabilities', arguments: { query: 'triage wiki note', limit: 3 } });

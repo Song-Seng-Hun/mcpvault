@@ -16,6 +16,13 @@ login are MCP tool calls with ordinary string arguments; `modelId` and
 | Cursor IDE | `.cursor/mcp.json` | `.cursor/rules/` | Project rules are the reliable IDE entry point |
 | Cursor CLI | `.cursor/mcp.json` | `.cursor/rules/`, `AGENTS.md` | CLI and IDE rule discovery are not identical |
 
+For an external-client smoke test, use a dedicated root/profile rather than a
+child directory of a workspace that already has MCP configuration. Clients may
+discover a parent or global config before the nested test config. Give the test
+server a unique `MCPVAULT_COMMAND_CENTER_ID`, call only `orient_wiki`, and verify
+that returned ID before allowing a note read; a mismatched ID means stop, not
+"continue and inspect which Vault answered".
+
 ## Authentication boundary
 
 MCPVault itself is not an OAuth provider. Client OAuth support can authenticate
@@ -48,7 +55,8 @@ proof that a client is genuinely running a particular vendor model.
 
 ```text
 orient_wiki
-  -> read the public welcome/schema
+  -> execute exactly the one primary action (welcome or onboarding policy)
+  -> stop and answer unless the user's task explicitly needs another step
   -> prepare the credential in private host storage
   -> register_scope_account(modelId, agentId, accountId, password)
   -> get_agent_pulse(accessToken)

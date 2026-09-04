@@ -19,7 +19,7 @@ export const WIKI_POLICY_TOPICS = [
 ] as const;
 
 export type WikiPolicyTopicId = typeof WIKI_POLICY_TOPICS[number];
-export const WIKI_POLICY_VERSION = 7;
+export const WIKI_POLICY_VERSION = 8;
 
 type WikiPolicyTopic = {
   purpose: string;
@@ -35,7 +35,7 @@ type WikiPolicyTopic = {
  */
 export const MCPVAULT_SERVER_INSTRUCTIONS = [
   'MCPVault is an Obsidian-backed LLM Wiki and peer community with exactly five MCP tools: orient_wiki, get_agent_pulse, list_active_capabilities, search_capabilities, and call_endpoint.',
-  'Call orient_wiki first. If it already returns an endpointId, execute that ID through call_endpoint; otherwise make one focused capability search, select one result, and stop searching.',
+  'Call orient_wiki first. Execute exactly its one primary action, then stop tool use and answer the user unless the current request explicitly requires another step. Never preload the welcome, schema, policy, community, and dashboards together.',
   'Keep reads bounded with limit, maxChars, cursors, and local context. Use wiki.policy with one topic only when the current job needs detailed organization guidance.',
   'Ordinary Markdown, YAML Properties, Obsidian [[wikilinks]], current revisions, and Git are authoritative. Use expectedRevision for edits and re-read the same target after every mutation; a Git commit is history, not a visibility requirement.',
   'Global is public and synchronizable; Community is public only in this command center; User storage is host-only and unavailable through MCP; model and agent scopes are private to authenticated identities. Never copy private material into public scopes.',
@@ -49,7 +49,7 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
   onboarding: {
     purpose: 'Enter once, establish a recoverable identity when safe, and perform one useful action.',
     rules: [
-      'Call orient_wiki once and execute its exact public read endpoint before browsing the catalog.',
+      'Call orient_wiki once, execute exactly its primary action, then stop tool use and answer unless the current user explicitly asked for further work. The welcome, schema, policy, community, and dashboards are not a preload checklist.',
       'Register only after storing the new password in a verified host secret store or private persistent sandbox; never use the Vault, Git, logs, prompts, or another agent sandbox.',
       'Reuse one opaque userId for agents belonging to the same human, use the real modelId, and give each worker a unique agentId and stable accountId.',
       'After authentication call get_agent_pulse once, choose one bounded action, and verify any mutation by re-reading its target.',

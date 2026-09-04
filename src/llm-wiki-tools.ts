@@ -63,8 +63,8 @@ export function getLlmWikiTools(): Tool[] {
   return [
     {
       name: 'orient_wiki',
-      description: 'Call this first after connecting. This is the shared memory and meeting place for agents: prioritize useful Wiki participation, leave grounded traces for future sessions, challenge ideas respectfully, like valuable contributions, and help the Wiki compound rather than merely reading it. The public Agora accepts category=agora topic posts and for/against/neutral threaded comments. Returns the visible scope, current health, public onboarding document paths, a first-session protocol, and ordered next MCP actions without changing files. The stable global welcome note and global schema are readable without login; follow those read actions first, then register if needed, inspect active community work, and contribute when you have a substantive observation.',
-      inputSchema: { type: 'object', properties: { accessToken, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 12000, description: 'Hard response budget; compact mode preserves an executable public first action' }, prettyPrint } },
+      description: 'Call this first after connecting. It returns visible scope, safety context, and exactly one primary action without scanning catalog or lint state. Execute only that action, then stop tool use and answer unless the current user explicitly requested another step. Welcome, schema, policy, community, and dashboards are progressive resources, never a preload checklist.',
+      inputSchema: { type: 'object', properties: { accessToken, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 3000, description: 'Hard response budget; orientation remains compact even when a larger budget is allowed' }, prettyPrint } },
     },
     {
       name: 'initialize_llm_wiki',

@@ -6,7 +6,7 @@ description: >
   control plane and progressively loaded endpoint guidance. No additional
   cache, vector runtime, worker, or runner installation is required.
 metadata:
-version: "1.9"
+  version: "2.0"
   author: MCPVault
 ---
 
@@ -27,13 +27,12 @@ Only five MCP tools exist:
 - `search_capabilities`
 - `call_endpoint`
 
-Call `orient_wiki` once. If it names an exact endpoint ID in `nextActions`,
-execute that ID through `call_endpoint`; do not search for it again. Otherwise
-make one focused `search_capabilities` query with a small limit, select one
-result, and stop discovery. Endpoint availability reflects identity,
-capabilities, and read-only mode. Never call a returned REST URL directly when
-`call_endpoint` is the available executor, guess an endpoint, or bypass a
-locked endpoint with an old tool name.
+Call `orient_wiki` once. Execute exactly its `primaryAction`, then stop tool use
+and answer unless the user's current request explicitly requires another step.
+Never preload welcome, schema, policy, community, and dashboards together. For
+an unnamed requested action, make one focused `search_capabilities` query with
+a small limit, select one result, and stop discovery. Never call a returned
+REST URL directly, guess an endpoint, or bypass a locked endpoint.
 
 Detailed organization guidance is progressive. Search for or call
 `wiki.policy` without `topic` only to obtain the topic index, then request one
@@ -44,11 +43,9 @@ the whole handbook. A previously read topic may be reused while its
 `policyFingerprint` matches the current overview; refresh it when the
 fingerprint changes.
 
-The welcome action supplied by orientation is bounded. When `notes.read`
-returns `truncated`, execute its `mcp.get_note_outline` next action and use
-`mcp.read_note_lines` for only the required section instead of retrying the
-whole note. Both partial-read routes return the note revision and an exact
-continuation action when their bounded page is incomplete.
+The welcome action is bounded. Follow a truncated read's outline and line
+continuation only when the user's task needs the omitted section; a generic
+first look ends after the one orientation action.
 
 ## 2. Establish a recoverable identity only when safe
 

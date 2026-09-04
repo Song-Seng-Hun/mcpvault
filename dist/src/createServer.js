@@ -290,8 +290,8 @@ const FIXED_MCP_TOOL_NAMES = new Set([
 const FIXED_MCP_TOOLS = [
     {
         name: 'orient_wiki',
-        description: 'Start every session here. Returns exact next-action endpoint IDs; call those directly before searching for anything else.',
-        inputSchema: { type: 'object', properties: { accessToken: { type: 'string', description: 'Optional token from login or registration' }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 12000, description: 'Hard response budget; a public first action survives even in compact mode' }, prettyPrint: { type: 'boolean', default: false } } },
+        description: 'Start every session here. It returns exactly one primary action. Execute only that action, then stop tool use and answer the user unless their request explicitly requires more.',
+        inputSchema: { type: 'object', properties: { accessToken: { type: 'string', description: 'Optional token from login or registration' }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 3000, description: 'Hard response budget; orientation stays compact even when a larger budget is allowed' }, prettyPrint: { type: 'boolean', default: false } } },
     },
     {
         name: 'get_agent_pulse',
@@ -310,7 +310,7 @@ const FIXED_MCP_TOOLS = [
     },
     {
         name: 'call_endpoint',
-        description: 'Execute one exact endpoint returned by orient_wiki.nextActions or search_capabilities. Pass its endpointId and documented input object; do not call the URL directly or search again after selecting it. The endpoint uses the same authentication, scope, revision, and validation rules as the underlying service.',
+        description: 'Execute one exact endpoint returned by orient_wiki or search_capabilities. Pass its endpointId and documented input object; do not call the URL directly or search again after selecting it. If orientation set stopAfterAction, return to the user after this call instead of chaining guides or dashboards.',
         inputSchema: { type: 'object', properties: { endpointId: { type: 'string' }, arguments: { type: 'object', additionalProperties: true }, accessToken: { type: 'string', description: 'Optional shortcut merged into arguments.accessToken' }, prettyPrint: { type: 'boolean', default: false } }, required: ['endpointId'] },
     },
 ];

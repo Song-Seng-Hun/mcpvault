@@ -13,7 +13,7 @@ beforeEach(async () => {
   vault = await mkdtemp(join(tmpdir(), 'mcpvault-llm-wiki-'));
 });
 
-test('compact onboarding retains a usable first action without duplicate signup or lost privacy guidance', async () => {
+test('compact onboarding retains one usable first action without preloading signup or dashboards', async () => {
   const { server, client } = await setup();
   try {
     await writeFile(join(vault, '환영합니다!.md'), '# Welcome\nRead before registering.');
@@ -21,11 +21,21 @@ test('compact onboarding retains a usable first action without duplicate signup 
       const { result, value } = await callJson(client, 'orient_wiki', { maxChars, prettyPrint: true });
       expect(result.isError).toBeFalsy();
       expect(result.content.filter((item: any) => item.type === 'text').map((item: any) => item.text).join('').length).toBeLessThanOrEqual(maxChars);
-      expect(value.nextActions[0]).toMatchObject({ tool: 'notes.read', arguments: { path: '환영합니다!.md', maxChars: 6000 } });
-      expect(value.nextActions.filter((item: any) => item.tool === 'auth.register').length).toBeLessThanOrEqual(1);
+      expect(value.nextActions).toEqual([expect.objectContaining({ tool: 'notes.read', arguments: { path: '환영합니다!.md', maxChars: 3000 } })]);
+      expect(value.nextActions.some((item: any) => item.tool === 'auth.register')).toBe(false);
       expect(JSON.stringify(value)).toContain('host-only');
-      if (value.nextActions.some((item: any) => item.tool === 'auth.register')) expect(JSON.stringify(value)).toContain('private storage');
+      expect(JSON.stringify(value)).not.toContain('commit_changes');
+      expect(JSON.stringify(value)).not.toContain('review_queue');
+      if (value.primaryAction) expect(value.actionBudget).toMatchObject({ endpointCalls: 1, stopAfterAction: true });
     }
+    const defaultOrientation = await callJson(client, 'orient_wiki', {});
+    const defaultText = defaultOrientation.result.content.filter((item: any) => item.type === 'text').map((item: any) => item.text).join('');
+    expect(defaultText.length).toBeLessThanOrEqual(3000);
+    expect(defaultOrientation.value.nextActions).toHaveLength(1);
+    expect(defaultOrientation.value.access.mode).toBe('public-global-and-community');
+    expect(defaultOrientation.value.access.commandCenterId).toBe('local');
+    expect(defaultOrientation.value).not.toHaveProperty('catalog');
+    expect(defaultOrientation.value).not.toHaveProperty('lint');
   } finally { await client.close(); await server.close(); }
 });
 
@@ -1719,19 +1729,14 @@ test('recognizes a manually maintained public schema without frontmatter', async
     const catalog = await callJson(client, 'get_wiki_catalog', {});
     expect(catalog.value).toMatchObject({ counts: { schema: 1 }, total: 1, schemaPresent: true });
 
-    const orientation = await callJson(client, 'orient_wiki', {});
+    const orientation = await callJson(client, 'orient_wiki', { maxChars: 6000 });
     expect(orientation.value.publicOnboarding).toMatchObject({
       schemaPath: '_wiki/SCHEMA.md',
-      schemaNavigation: {
-        policyEndpointId: 'wiki.policy',
-        outlineEndpointId: 'mcp.get_note_outline',
-        linesEndpointId: 'mcp.read_note_lines',
-      },
       readableWithoutLogin: true,
     });
-    expect(orientation.value.nextActions).toEqual(expect.arrayContaining([
-      expect.objectContaining({ tool: 'wiki.policy', arguments: { topic: 'overview', maxChars: 1200 } }),
-    ]));
+    expect(orientation.value.nextActions).toEqual([
+      expect.objectContaining({ tool: 'wiki.policy', arguments: { topic: 'onboarding', maxChars: 2400 } }),
+    ]);
   } finally {
     await client.close();
     await server.close();
@@ -2237,25 +2242,20 @@ test('ingest, publish, catalog, lint, and immutable source enforcement form one 
     const lint = await callJson(client, 'lint_wiki', {});
     expect(lint.value.errors).toBe(0);
 
-    const orientation = await callJson(client, 'orient_wiki', {});
+    const orientation = await callJson(client, 'orient_wiki', { maxChars: 6000 });
     expect(orientation.value.protocol).toBe('mcpvault-llm-wiki/v1');
     expect(orientation.value.mission).toContain('future agents');
-    expect(orientation.value.firstSessionProtocol).toEqual(expect.arrayContaining([
-      expect.stringContaining('first safe nextAction'),
-      expect.stringContaining('peer correction'),
-      expect.stringContaining('at most one focused capability search'),
-      expect.stringContaining('reuse the result'),
-    ]));
-    expect(orientation.value.workflow).toContain('Use exact endpoint IDs in orient_wiki.nextActions directly with call_endpoint; search only for an action not already listed');
+    expect(orientation.value.primaryAction).toMatchObject({ endpointId: 'wiki.policy', via: 'call_endpoint', arguments: { topic: 'onboarding', maxChars: 2400 } });
+    expect(orientation.value.actionBudget).toMatchObject({ endpointCalls: 1, stopAfterAction: true });
+    expect(orientation.value.routing).toContain('Do not search');
     expect(orientation.value.participation.invitation).toContain('equal participant');
     expect(orientation.value.visibleScopes).toEqual([
       { kind: 'community', uri: 'scope://community/local/' },
       { kind: 'global', uri: 'scope://global/' },
     ]);
-    expect(orientation.value.nextActions).toEqual(expect.arrayContaining([
-      expect.objectContaining({ tool: 'mcp.get_revision_status' }),
-      expect.objectContaining({ tool: 'mcp.commit_changes' }),
-    ]));
+    expect(orientation.value.nextActions).toEqual([
+      expect.objectContaining({ tool: 'wiki.policy' }),
+    ]);
 
     const issue = await callJson(client, 'report_wiki_issue', {
       issueId: 'verify-claim', kind: 'unsupported_claim', title: 'Verify one claim', description: 'The claim needs a second source.', reportedBy: 'reviewer',

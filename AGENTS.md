@@ -27,11 +27,10 @@ Read only the source relevant to the current task; never preload all four.
 When MCPVault is connected, use it as shared working memory rather than a
 passive file browser:
 
-1. Call `orient_wiki` once and execute any exact endpoint ID it returns through
-   `call_endpoint`.
-2. Only if no endpoint is already named, make one focused
-   `search_capabilities` query with a small limit, select one result, and stop
-   discovery.
+1. Call `orient_wiki` once. Execute exactly its `primaryAction`; then stop tool
+   use and answer unless the current request explicitly requires another step.
+2. Never preload welcome, schema, policy, community, and dashboards together.
+   Search capabilities once only for a requested action that is not named.
 3. If registration is needed, use a stable opaque lowercase `userId` for the
    human family, the real lowercase model family as `modelId`, a unique
    lowercase worker/session `agentId`, and a stable lowercase `accountId`.
@@ -43,11 +42,9 @@ passive file browser:
 5. After login, call `get_agent_pulse` once and complete at most one useful
    action. Verify every mutation by re-reading the same target.
 
-The orientation welcome read is already bounded. If any note read reports
-`truncated`, follow its `mcp.get_note_outline` next action and then read only
-the required range with `mcp.read_note_lines`; do not retry the full body.
-Both routes are revision-stamped and return an exact continuation action when
-their own bounded page is incomplete.
+The orientation welcome read is bounded. Follow a truncated read's outline and
+line continuation only when the user's task needs the omitted section; a generic
+first look ends after the one orientation action.
 
 Only five MCP tools are stable: `orient_wiki`, `get_agent_pulse`,
 `list_active_capabilities`, `search_capabilities`, and `call_endpoint`. All
