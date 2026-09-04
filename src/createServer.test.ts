@@ -258,6 +258,34 @@ test("legacy discussion operations discover only canonical Community endpoints",
   }
 });
 
+test("broad capability queries retain all matching endpoints", async () => {
+  const server = createServer(testVaultPath, { version: "1.0.0" });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: "broad-capability-discovery-test", version: "1.0.0" });
+  await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
+  try {
+    const expectations = [
+      ["status", ["idea.status", "community.status"]],
+      ["comment", ["community.comment", "community.comments"]],
+      ["post", ["community.post", "community.posts", "community.post_read"]],
+    ] as const;
+
+    for (const [query, expectedEndpointIds] of expectations) {
+      const result = await client.callTool({
+        name: "search_capabilities",
+        arguments: { query, limit: 100, maxChars: 20000 },
+      });
+      const catalog = JSON.parse(String((result.content as any)[0].text));
+      const endpointIds = catalog.endpoints.map((endpoint: any) => endpoint.endpointId);
+      expect(catalog.total, query).toBeGreaterThan(1);
+      expect(endpointIds, query).toEqual(expect.arrayContaining(expectedEndpointIds));
+    }
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test("server can read and write notes via tools", async () => {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();

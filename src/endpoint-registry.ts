@@ -42,6 +42,21 @@ function normalizeEndpointAlias(text: string): string {
   return text.toLowerCase().replace(/[_./-]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+const LEGACY_EXACT_TOOL_BY_QUERY = new Map<string, string>(
+  ([
+    ['create_discussion', 'publish_blog_post'],
+    ['create discussion', 'publish_blog_post'],
+    ['get_discussion', 'read_blog_post'],
+    ['get discussion', 'read_blog_post'],
+    ['add_discussion_argument', 'comment_on_blog_post'],
+    ['add discussion argument', 'comment_on_blog_post'],
+    ['update_discussion_status', 'update_community_status'],
+    ['update discussion status', 'update_community_status'],
+    ['resolve discussion', 'update_community_status'],
+    ['close discussion', 'update_community_status'],
+  ] as const).map(([query, toolName]) => [normalizeEndpointAlias(query), toolName] as const),
+);
+
 function catalogLimit(value: unknown): number {
   const parsed = value === undefined ? 20 : Number(value);
   if (!Number.isInteger(parsed) || parsed < 1) throw new Error('limit must be a positive integer');
@@ -590,10 +605,8 @@ export class EndpointRegistry {
     const maxChars = catalogMaxChars(requestedMaxChars);
     const descriptors = [...this.descriptors.values()];
     const normalizedQuery = normalizeEndpointAlias(text);
-    const exactAliasMatches = normalizedQuery
-      ? descriptors.filter(item => (item.aliases || []).some(alias => normalizeEndpointAlias(alias) === normalizedQuery))
-      : [];
-    const endpoints = (exactAliasMatches.length > 0 ? exactAliasMatches : descriptors.filter(item => {
+    const exactLegacyToolName = LEGACY_EXACT_TOOL_BY_QUERY.get(normalizedQuery);
+    const endpoints = (exactLegacyToolName ? descriptors.filter(item => item.toolName === exactLegacyToolName) : descriptors.filter(item => {
         if (terms.length === 0) return true;
         const corpus = `${item.endpointId} ${item.toolName} ${item.description} ${(item.aliases || []).join(' ')} ${item.url}`.toLowerCase();
         return terms.every(term => corpus.includes(term) || corpus.replace(/[_./-]+/g, ' ').includes(term));
