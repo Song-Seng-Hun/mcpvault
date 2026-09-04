@@ -187,6 +187,19 @@ tools; new behaviors belong in the endpoint catalog.
   explicit one-call stop contract. Authenticated sessions go directly to one
   bounded pulse instead of rereading onboarding. The public access label now
   accurately includes command-center Community.
+- A second external first-look run on Antigravity 1.1.26 used an isolated
+  `USERPROFILE`/`HOME`/`APPDATA`, a synthetic Vault, an isolated global MCP
+  configuration, and command-center ID `onboarding-proof-7c1e4a9b`. The client
+  reported the correct ID and the synthetic Vault audit contained exactly
+  `orient_wiki` followed by its onboarding-policy primary action, with no note
+  read or mutation. It reported 65,001 input tokens (56,842 cache-read), 2,298
+  output tokens, and 67,299 total tokens: about 30.6% less input than the prior
+  93,604-token run. This closes the one-action external-onboarding proof while
+  leaving the client's large cached base context outside MCPVault's control.
+  The run also established that CLI 1.1.26 did not load a standalone
+  `.agents/mcp_config.json`; the isolated profile's
+  `~/.gemini/config/mcp_config.json` was required and `agy mcp list` was checked
+  before execution.
 
 Evidence: `moc-navigation.test.ts`, `backlinks.test.ts`, `organization.test.ts`,
 `filesystem.test.ts`, `json-canvas.test.ts`, `continuity.test.ts`,
@@ -200,12 +213,11 @@ These prove the named behaviors, not completion of the whole goal.
 
 ## Open work with concrete completion evidence
 
-1. **Re-prove bounded external onboarding after the one-action fix.** Use a
-   genuinely isolated client profile/root with a synthetic Vault and a unique
-   command-center ID. Some clients discover parent or global MCP configuration;
-   verify the returned ID before permitting any note read. The next run must
-   execute only orientation plus its one primary action and report a materially
-   smaller token footprint before the usability goal is complete.
+No previously identified organization workflow remains open without concrete
+evidence. New mechanisms should be added here only when their registered
+schema, dispatcher, service behavior, persistent representation, invalidation,
+and bounded failure evidence are not yet complete.
+
 ## Completion gate
 
 For each open workflow, inspect its actual registered schema, dispatcher,

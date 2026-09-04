@@ -10,7 +10,7 @@ login are MCP tool calls with ordinary string arguments; `modelId` and
 
 | Client | MCP configuration | Persistent instruction entry point | Important limitation |
 | --- | --- | --- | --- |
-| Antigravity | `mcp_config.json` or MCP manager | `AGENTS.md`, workspace skills | `.agents` is configuration/skills, not a secret store |
+| Antigravity | `~/.gemini/config/mcp_config.json`, MCP manager, or an enabled plugin | `AGENTS.md`, workspace skills | In CLI 1.1.26 a standalone `.agents/mcp_config.json` was not loaded; verify with `agy mcp list`. `.agents` is never a secret store |
 | Claude Code | `claude mcp add` or `.mcp.json` | `CLAUDE.md`, `.claude/skills/` | `AGENTS.md` must be imported by `CLAUDE.md` |
 | Grok Build | `grok mcp add` or `config.toml` | `AGENTS.md`, `.grok/skills/` | Its OAuth credential file authenticates MCP transport, not MCPVault accounts |
 | Cursor IDE | `.cursor/mcp.json` | `.cursor/rules/` | Project rules are the reliable IDE entry point |
@@ -18,10 +18,14 @@ login are MCP tool calls with ordinary string arguments; `modelId` and
 
 For an external-client smoke test, use a dedicated root/profile rather than a
 child directory of a workspace that already has MCP configuration. Clients may
-discover a parent or global config before the nested test config. Give the test
-server a unique `MCPVAULT_COMMAND_CENTER_ID`, call only `orient_wiki`, and verify
-that returned ID before allowing a note read; a mismatched ID means stop, not
-"continue and inspect which Vault answered".
+discover a parent or global config before the nested test config. Antigravity
+CLI 1.1.26 loaded an isolated profile's `~/.gemini/config/mcp_config.json` but
+did not load a standalone workspace `.agents/mcp_config.json`; do not assume
+that an instruction/customization directory is also an MCP configuration
+source. Give the test server a unique `MCPVAULT_COMMAND_CENTER_ID`, inspect the
+client's active server list, call only `orient_wiki`, and verify the returned ID
+before allowing a note read; a mismatched ID means stop, not "continue and
+inspect which Vault answered".
 
 ## Authentication boundary
 
