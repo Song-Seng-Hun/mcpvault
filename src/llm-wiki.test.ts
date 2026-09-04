@@ -1502,7 +1502,7 @@ test('MOC order previews require the complete sibling set and apply one revision
 
 test('reciprocal-link previews repair both graph directions atomically and reject unsafe scopes', async () => {
   await mkdir(join(vault, 'Knowledge'), { recursive: true });
-  await writeFile(join(vault, 'Knowledge', 'Left.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nrelated:\n  - "[[Knowledge/Right]]"\n---\n# Left\n');
+  await writeFile(join(vault, 'Knowledge', 'Left.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nrelated:\n  - "[[Knowledge/Right]]"\nclose_match:\n  - "[[Knowledge/Right]]"\n---\n# Left\n');
   await writeFile(join(vault, 'Knowledge', 'Right.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\n---\n# Right\n');
   await writeFile(join(vault, 'Knowledge', 'Scalar.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nrelated: "[[Knowledge/Right]]"\n---\n# Scalar\n');
   const { server, client } = await setup();
@@ -1514,6 +1514,7 @@ test('reciprocal-link previews repair both graph directions atomically and rejec
     const before = await callJson(client, 'call_endpoint', { endpointId: 'wiki.graph_health', arguments: { limit: 20, maxChars: 12000, accessToken } });
     expect(before.value.typedRelations.reciprocityMissing.items).toEqual(expect.arrayContaining([
       expect.objectContaining({ path: 'Knowledge/Left.md', target: 'Knowledge/Right.md', repair: { endpointId: 'wiki.reciprocal_link', arguments: { leftPath: 'Knowledge/Left.md', rightPath: 'Knowledge/Right.md', relation: 'related' } } }),
+      expect.objectContaining({ path: 'Knowledge/Left.md', target: 'Knowledge/Right.md', relation: 'close_match', repair: { endpointId: 'wiki.reciprocal_link', arguments: { leftPath: 'Knowledge/Left.md', rightPath: 'Knowledge/Right.md', relation: 'close_match' } } }),
     ]));
     const plan = await callJson(client, 'call_endpoint', { endpointId: 'wiki.reciprocal_link', arguments: {
       leftPath: 'Knowledge/Left.md', rightPath: 'Knowledge/Right.md', relation: 'related', accessToken,
@@ -1530,6 +1531,34 @@ test('reciprocal-link previews repair both graph directions atomically and rejec
     expect(graph.value.typedRelations.reciprocityMissing.items).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ path: 'Knowledge/Left.md', target: 'Knowledge/Right.md' }),
       expect.objectContaining({ path: 'Knowledge/Right.md', target: 'Knowledge/Left.md' }),
+    ]));
+    expect(graph.value.typedRelations.reciprocityMissing.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/Left.md', target: 'Knowledge/Right.md', relation: 'close_match' }),
+    ]));
+
+    const closePlan = await callJson(client, 'call_endpoint', { endpointId: 'wiki.reciprocal_link', arguments: {
+      leftPath: 'Knowledge/Left.md', rightPath: 'Knowledge/Right.md', relation: 'close_match', accessToken,
+    } });
+    expect(closePlan.value).toMatchObject({ valid: true, changes: [expect.objectContaining({ path: 'Knowledge/Right.md', expectedRevision: expect.any(String) })] });
+    const closePreview = await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: { changes: closePlan.value.changes, dryRun: true, accessToken } });
+    const rightBeforeConcurrentEdit = await callJson(client, 'read_note', { path: 'Knowledge/Right.md', accessToken });
+    await callJson(client, 'patch_note', { path: 'Knowledge/Right.md', oldString: '# Right', newString: '# Right\n\nConcurrent edit.', expectedRevision: rightBeforeConcurrentEdit.value.revision, accessToken });
+    const staleCloseApply = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'notes.change_set', arguments: {
+      changes: closePlan.value.changes, dryRun: false, confirmPlanFingerprint: closePreview.value.planFingerprint, accessToken,
+    } } });
+    expect(staleCloseApply.isError).toBe(true);
+    expect(String((staleCloseApply.content as any)[0]?.text)).toMatch(/revision|fingerprint/i);
+
+    const freshClosePlan = await callJson(client, 'call_endpoint', { endpointId: 'wiki.reciprocal_link', arguments: {
+      leftPath: 'Knowledge/Left.md', rightPath: 'Knowledge/Right.md', relation: 'close_match', accessToken,
+    } });
+    const freshClosePreview = await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: { changes: freshClosePlan.value.changes, dryRun: true, accessToken } });
+    await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: {
+      changes: freshClosePlan.value.changes, dryRun: false, confirmPlanFingerprint: freshClosePreview.value.planFingerprint, accessToken,
+    } });
+    const afterCloseRepair = await callJson(client, 'get_wiki_graph_health', { limit: 20, maxChars: 12000, accessToken });
+    expect(afterCloseRepair.value.typedRelations.reciprocityMissing.items).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/Left.md', target: 'Knowledge/Right.md', relation: 'close_match' }),
     ]));
     const confirmed = await callJson(client, 'call_endpoint', { endpointId: 'wiki.reciprocal_link', arguments: {
       leftPath: 'Knowledge/Left.md', rightPath: 'Knowledge/Right.md', relation: 'related', accessToken,
@@ -3247,6 +3276,45 @@ test('authority shelves browse natural scheme order without leaking hidden colli
     } });
     expect(invalid.isError).toBe(true);
     expect(String((invalid.content as any)[0]?.text)).toContain('aroundAuthorityId requires scheme');
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('authority integrity lint validates shapes and visible scheme-local collisions', async () => {
+  await mkdir(join(vault, 'Knowledge'), { recursive: true });
+  await mkdir(join(vault, '_scopes', 'models', 'claude'), { recursive: true });
+  await writeFile(join(vault, 'Knowledge', 'Bad scheme.md'), '---\nauthority_scheme: []\nauthority_id: AI.1\n---\n# Bad scheme\n');
+  await writeFile(join(vault, 'Knowledge', 'Bad id.md'), '---\nauthority_scheme: local-topics\nauthority_id: ""\n---\n# Bad id\n');
+  await writeFile(join(vault, 'Knowledge', 'Orphan id.md'), '---\nauthority_id: AI.2\n---\n# Orphan id\n');
+  await writeFile(join(vault, 'Knowledge', 'A owner.md'), '---\nauthority_scheme: local-topics\nauthority_id: AI.7\nclose_match:\n  - "[[Knowledge/Missing close target]]"\n---\n# A owner\n');
+  await writeFile(join(vault, 'Knowledge', 'B duplicate.md'), '---\nauthority_scheme: LOCAL-TOPICS\nauthority_id: ai.7\n---\n# B duplicate\n');
+  await writeFile(join(vault, 'Knowledge', 'Cross scheme.md'), '---\nauthority_scheme: other-topics\nauthority_id: AI.7\n---\n# Cross scheme\n');
+  await writeFile(join(vault, '_scopes', 'models', 'claude', 'Hidden duplicate.md'), '---\nauthority_scheme: local-topics\nauthority_id: AI.7\n---\n# Hidden duplicate\n');
+
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'authority-lint-owner', modelId: 'codex', password: 'authority-lint-password' });
+    const accessToken = registration.value.accessToken;
+    const lint = await callJson(client, 'lint_wiki', { limit: 200, accessToken });
+    expect(lint.value.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'invalid_authority_scheme', path: 'Knowledge/Bad scheme.md' }),
+      expect.objectContaining({ code: 'invalid_authority_id', path: 'Knowledge/Bad id.md' }),
+      expect.objectContaining({ code: 'authority_id_without_scheme', path: 'Knowledge/Orphan id.md' }),
+      expect.objectContaining({ code: 'invalid_relation', path: 'Knowledge/A owner.md', detail: expect.stringContaining('close_match') }),
+    ]));
+    const duplicates = lint.value.issues.filter((issue: any) => issue.code === 'duplicate_authority_id');
+    expect(duplicates).toHaveLength(1);
+    expect(duplicates[0]).toMatchObject({ path: 'Knowledge/B duplicate.md', detail: expect.stringContaining('Knowledge/A owner.md') });
+    expect(JSON.stringify(lint.value)).not.toContain('Hidden duplicate');
+    expect(duplicates[0].detail).not.toContain('Cross scheme');
+
+    const health = await callJson(client, 'get_wiki_organization_health', { limit: 100, maxChars: 12000, accessToken });
+    expect(health.value.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'duplicate_authority_id' }),
+      expect.objectContaining({ code: 'authority_id_without_scheme' }),
+    ]));
   } finally {
     await client.close();
     await server.close();

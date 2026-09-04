@@ -9238,6 +9238,7 @@ export class LlmWikiService {
       'invalid_retention_policy', 'invalid_retention_event', 'invalid_retention_at', 'invalid_preserve_until', 'invalid_legal_hold', 'legal_hold_blocks_disposition', 'invalid_retention_reason', 'invalid_archive_reason', 'invalid_replaced_by', 'retention_reason_missing', 'tombstone_lifecycle_mismatch',
       'invalid_evidence_locator', 'evidence_path_mismatch', 'stale_evidence_revision', 'invalid_claim_evidence_locator', 'stale_claim_evidence_revision', 'epistemic_status_missing',
       'invalid_relation', 'relation_self_reference', 'invalid_relation_notes', 'invalid_relation_evidence', 'invalid_review_checks', 'invalid_review_open_items', 'invalid_preferred_term', 'invalid_disambiguation',
+      'invalid_authority_scheme', 'invalid_authority_id', 'authority_id_without_scheme', 'duplicate_authority_id',
       'invalid_service_class', 'invalid_completion_criteria', 'invalid_started_at', 'invalid_blocked_since', 'invalid_waiting_since', 'invalid_completed_at', 'active_project_without_completion_criteria', 'active_work_without_started_at', 'blocked_work_without_blocked_since', 'waiting_work_without_waiting_since', 'completed_work_without_completed_at',
       'property_type_drift',
       'duplicate_citation_key',
@@ -13157,6 +13158,7 @@ export class LlmWikiService {
     const sourceCache = new Map<string, Awaited<ReturnType<FileSystemService['readNote']>>>();
     const aliasOwners = new Map<string, string>();
     const stableIdOwners = new Map<string, string>();
+    const authorityOwners = new Map<string, { path: string; scheme: string; id: string }>();
     const citationKeyOwners = new Map<string, string>();
     const propertyTypes = new Map<string, { type: string; path: string }>();
     const classificationNotes: Array<{ path: string; frontmatter: Record<string, any> }> = [];
@@ -13191,6 +13193,26 @@ export class LlmWikiService {
       }
       for (const organizationIssue of organizationLintIssues(publicPath, note.frontmatter, note.content || '')) {
         addIssue({ severity: 'warning', code: organizationIssue.code, path: publicPath, detail: organizationIssue.detail });
+      }
+      const authorityScheme = typeof note.frontmatter.authority_scheme === 'string'
+        ? note.frontmatter.authority_scheme.trim()
+        : '';
+      const authorityId = typeof note.frontmatter.authority_id === 'string'
+        ? note.frontmatter.authority_id.trim()
+        : '';
+      if (authorityScheme && authorityId && !isModerationHidden(note.frontmatter)) {
+        const key = `${authorityScheme.normalize('NFKC').toLocaleLowerCase('en-US')}\u0000${authorityId.normalize('NFKC').toLocaleLowerCase('en-US')}`;
+        const owner = authorityOwners.get(key);
+        if (owner && owner.path !== note.path) {
+          addIssue({
+            severity: 'warning',
+            code: 'duplicate_authority_id',
+            path: publicPath,
+            detail: `authority_id '${authorityId}' in scheme '${authorityScheme}' is also used by ${this.access.toPublicPath(owner.path)}; scheme-local identity is ambiguous.`,
+          });
+        } else {
+          authorityOwners.set(key, { path: note.path, scheme: authorityScheme, id: authorityId });
+        }
       }
       for (const alias of Array.isArray(note.frontmatter.aliases) ? note.frontmatter.aliases : []) {
         if (typeof alias !== 'string' || !alias.trim()) continue;

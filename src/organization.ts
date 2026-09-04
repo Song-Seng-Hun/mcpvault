@@ -1263,6 +1263,22 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
     }
   }
 
+  const authorityScheme = typeof frontmatter.authority_scheme === 'string'
+    ? frontmatter.authority_scheme.trim()
+    : '';
+  const authorityId = typeof frontmatter.authority_id === 'string'
+    ? frontmatter.authority_id.trim()
+    : '';
+  if (frontmatter.authority_scheme !== undefined && !authorityScheme) {
+    issues.push({ code: 'invalid_authority_scheme', detail: 'authority_scheme must be a non-empty string.' });
+  }
+  if (frontmatter.authority_id !== undefined && !authorityId) {
+    issues.push({ code: 'invalid_authority_id', detail: 'authority_id must be a non-empty string.' });
+  }
+  if (authorityId && !authorityScheme) {
+    issues.push({ code: 'authority_id_without_scheme', detail: 'authority_id requires authority_scheme because IDs are scheme-local.' });
+  }
+
   const shape = (value: unknown): OrganizationPropertyContractEntry['type'] => {
     if (Array.isArray(value)) return 'list';
     if (value !== null && typeof value === 'object') return 'object';

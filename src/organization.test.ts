@@ -371,7 +371,22 @@ describe('knowledge organization focus and summary metadata', () => {
       expect.objectContaining({ field: 'tests', direction: 'directional', reciprocal: false }),
       expect.objectContaining({ field: 'related', direction: 'mutual', reciprocal: true }),
       expect.objectContaining({ field: 'same_as', direction: 'mutual', reciprocal: true }),
+      expect.objectContaining({ field: 'close_match', direction: 'mutual', reciprocal: true }),
     ]));
+  });
+
+  test('requires non-empty scheme-local authority identities', () => {
+    expect(organizationLintIssues('Knowledge/Bad scheme.md', {
+      authority_scheme: [], authority_id: 'AI.1',
+    }, '# Bad scheme\n').map(issue => issue.code)).toEqual(expect.arrayContaining([
+      'invalid_authority_scheme', 'authority_id_without_scheme',
+    ]));
+    expect(organizationLintIssues('Knowledge/Bad id.md', {
+      authority_scheme: 'local-topics', authority_id: '',
+    }, '# Bad id\n').map(issue => issue.code)).toContain('invalid_authority_id');
+    expect(organizationLintIssues('Knowledge/Orphan id.md', {
+      authority_id: 'AI.2',
+    }, '# Orphan id\n').map(issue => issue.code)).toContain('authority_id_without_scheme');
   });
 
   test('keeps retrieval cues optional, bounded, and separate from evidence', () => {
