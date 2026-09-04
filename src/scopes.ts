@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import type { FileSystemService } from './filesystem.js';
 import type { SearchService } from './search.js';
 import { boundSearchResults, normalizeSearchLimit, normalizeSearchMaxChars } from './search-limits.js';
@@ -16,9 +15,6 @@ import { boundSearchResults, normalizeSearchLimit, normalizeSearchMaxChars } fro
 export type ScopeKind = 'global' | 'community' | 'user' | 'model' | 'agent';
 
 const ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/;
-const DISCUSSION_STATUSES = new Set(['open', 'resolved', 'rejected', 'superseded']);
-const DISCUSSION_STANCES = new Set(['support', 'challenge', 'alternative', 'question']);
-
 export function normalizeScopeId(value: string, field: string): string {
   const id = String(value || '').trim().toLowerCase();
   if (!ID_PATTERN.test(id)) {
@@ -79,13 +75,7 @@ export function scopeRoot(kind: ScopeKind, id?: string): string {
 }
 
 const now = () => new Date().toISOString();
-const discussionPath = (id: string) => `_collaboration/discussions/${normalizeScopeId(id, 'discussionId')}.md`;
 const identityPath = (agentId: string) => `${scopeRoot('agent', agentId)}/_identity.md`;
-
-function evidenceLines(evidence?: string[]): string {
-  if (!evidence?.length) return '- Evidence: none supplied';
-  return evidence.map(item => `- Evidence: ${String(item).trim()}`).join('\n');
-}
 
 export class CollaborationService {
   constructor(private fileSystem: FileSystemService, private searchService: SearchService) {}
@@ -227,64 +217,4 @@ export class CollaborationService {
     return boundSearchResults(merged.slice(0, limit).map(item => item.value), maxChars);
   }
 
-  async createDiscussion(params: { discussionId?: string; title: string; createdBy: string; subjectPath?: string; initialPosition: string; evidence?: string[] }) {
-    const title = String(params.title || '').trim();
-    const actor = String(params.createdBy || '').trim();
-    const position = String(params.initialPosition || '').trim();
-    if (!title || !actor || !position) throw new Error('title, createdBy, and initialPosition are required');
-    const generated = `${new Date().toISOString().slice(0, 10)}-${randomUUID().slice(0, 8)}`;
-    const id = normalizeScopeId(params.discussionId || generated, 'discussionId');
-    const path = discussionPath(id);
-    const timestamp = now();
-    const subject = params.subjectPath?.trim();
-    const frontmatter = {
-      mcpvault_type: 'discussion', discussion_id: id, title, status: 'open',
-      created_by: actor, participants: [actor], ...(subject && { subject_path: subject }), created_at: timestamp, updated_at: timestamp,
-    };
-    const content = `# ${title}\n\n${subject ? `Subject: \`${subject}\`\n\n` : ''}## Arguments\n\n### ${timestamp} · ${actor} · proposal\n\n${position}\n\n${evidenceLines(params.evidence)}\n\n## Decision log\n`;
-    await this.fileSystem.writeNote({ path, content, frontmatter, expectedRevision: 'missing' });
-    const note = await this.fileSystem.readNote(path);
-    return { success: true, discussionId: id, path, status: 'open', revision: note.revision };
-  }
-
-  async addDiscussionArgument(params: { discussionId: string; actor: string; stance: string; argument: string; evidence?: string[]; expectedRevision: string }) {
-    const path = discussionPath(params.discussionId);
-    const actor = String(params.actor || '').trim();
-    const stance = String(params.stance || '').trim();
-    const argument = String(params.argument || '').trim();
-    if (!actor || !argument || !DISCUSSION_STANCES.has(stance)) throw new Error('actor, argument, and a valid stance are required');
-    if (!params.expectedRevision) throw new Error('expectedRevision is required; read the discussion before arguing');
-    const note = await this.fileSystem.readNote(path);
-    const timestamp = now();
-    const participants = Array.from(new Set([...(Array.isArray(note.frontmatter.participants) ? note.frontmatter.participants : []), actor]));
-    const entry = `\n### ${timestamp} · ${actor} · ${stance}\n\n${argument}\n\n${evidenceLines(params.evidence)}\n`;
-    const marker = '\n## Decision log';
-    const content = note.content.includes(marker) ? note.content.replace(marker, `${entry}${marker}`) : `${note.content.trimEnd()}${entry}`;
-    await this.fileSystem.writeNote({ path, content, frontmatter: { ...note.frontmatter, participants, updated_at: timestamp }, expectedRevision: params.expectedRevision });
-    const updated = await this.fileSystem.readNote(path);
-    return { success: true, discussionId: params.discussionId, status: updated.frontmatter.status, revision: updated.revision };
-  }
-
-  async updateDiscussionStatus(params: { discussionId: string; actor: string; status: string; reason: string; expectedRevision: string }) {
-    const path = discussionPath(params.discussionId);
-    const actor = String(params.actor || '').trim();
-    const status = String(params.status || '').trim();
-    const reason = String(params.reason || '').trim();
-    if (!actor || !reason || !DISCUSSION_STATUSES.has(status)) throw new Error('actor, reason, and a valid status are required');
-    if (!params.expectedRevision) throw new Error('expectedRevision is required; read the discussion before changing status');
-    const note = await this.fileSystem.readNote(path);
-    const timestamp = now();
-    const participants = Array.from(new Set([...(Array.isArray(note.frontmatter.participants) ? note.frontmatter.participants : []), actor]));
-    const content = `${note.content.trimEnd()}\n\n- ${timestamp} — **${status}** by ${actor}: ${reason}\n`;
-    await this.fileSystem.writeNote({ path, content, frontmatter: { ...note.frontmatter, status, participants, updated_at: timestamp }, expectedRevision: params.expectedRevision });
-    const updated = await this.fileSystem.readNote(path);
-    return { success: true, discussionId: params.discussionId, status, revision: updated.revision };
-  }
-
-  async getDiscussion(discussionId: string) {
-    const id = normalizeScopeId(discussionId, 'discussionId');
-    const path = discussionPath(id);
-    const note = await this.fileSystem.readNote(path);
-    return { discussionId: id, path, fm: note.frontmatter, content: note.content, revision: note.revision };
-  }
 }

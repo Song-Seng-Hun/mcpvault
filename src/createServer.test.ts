@@ -194,10 +194,54 @@ test("endpoint catalog makes every mutation POST and every read response-budgete
       });
     }
   }
-  expect(runtime.endpointRegistry.resolve("mcp.add_discussion_argument")?.method).toBe("POST");
   expect(runtime.endpointRegistry.resolve("auth.change_password")?.method).toBe("POST");
   expect(runtime.endpointRegistry.resolve("mcp.ingest_source")?.method).toBe("POST");
   expect(runtime.endpointRegistry.resolve("mcp.moderate_content")?.method).toBe("POST");
+});
+
+test("legacy discussion operations discover only canonical Community endpoints", async () => {
+  const server = createServer(testVaultPath, { version: "1.0.0" });
+  const runtime = getServerRuntime(server)!;
+
+  for (const legacyEndpointId of [
+    "mcp.create_discussion",
+    "mcp.get_discussion",
+    "mcp.add_discussion_argument",
+    "mcp.update_discussion_status",
+  ]) {
+    expect(runtime.endpointRegistry.resolve(legacyEndpointId)).toBeUndefined();
+  }
+  expect(runtime.endpointRegistry.resolve("community.status")).toMatchObject({
+    endpointId: "community.status",
+    toolName: "update_community_status",
+    method: "POST",
+    url: "/api/community/status",
+  });
+
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: "legacy-discussion-discovery-test", version: "1.0.0" });
+  await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
+  try {
+    const replacements = [
+      ["create_discussion", "community.post"],
+      ["get_discussion", "community.post_read"],
+      ["add_discussion_argument", "community.comment"],
+      ["update_discussion_status", "community.status"],
+    ] as const;
+
+    for (const [legacyOperation, canonicalEndpointId] of replacements) {
+      const result = await client.callTool({
+        name: "search_capabilities",
+        arguments: { query: legacyOperation, limit: 10, maxChars: 12000 },
+      });
+      const catalog = JSON.parse(String((result.content as any)[0].text));
+      expect(catalog.endpoints.map((endpoint: any) => endpoint.endpointId)).toEqual([canonicalEndpointId]);
+      expect(catalog.endpoints.some((endpoint: any) => endpoint.endpointId === `mcp.${legacyOperation}`)).toBe(false);
+    }
+  } finally {
+    await client.close();
+    await server.close();
+  }
 });
 
 test("server can read and write notes via tools", async () => {
@@ -664,9 +708,6 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
       { name: "create_agent_scope", arguments: { agentId: "blocked", modelId: "codex", sessionId: "s1" } },
       { name: "handoff_agent_scope", arguments: { agentId: "blocked", fromSessionId: "s1", toSessionId: "s2", reason: "blocked", expectedGeneration: 1 } },
       { name: "resume_agent_scope", arguments: { agentId: "blocked", newSessionId: "s2", reason: "blocked", expectedGeneration: 1 } },
-      { name: "create_discussion", arguments: { title: "blocked", createdBy: "codex", initialPosition: "blocked" } },
-      { name: "add_discussion_argument", arguments: { discussionId: "blocked", actor: "codex", stance: "support", argument: "blocked", expectedRevision: "missing" } },
-      { name: "update_discussion_status", arguments: { discussionId: "blocked", actor: "codex", status: "resolved", reason: "blocked", expectedRevision: "missing" } },
       { name: "register_scope_account", arguments: { accountId: "blocked", modelId: "blocked", password: "blocked-password" } },
       { name: "change_scope_password", arguments: { accessToken: "blocked", currentPassword: "blocked-password", newPassword: "blocked-password-2" } },
       { name: "initialize_llm_wiki", arguments: { actor: "blocked" } },

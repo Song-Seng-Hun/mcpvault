@@ -138,28 +138,6 @@ test('agent identities survive handoff and reject stale generations', async () =
   expect(resumed).toMatchObject({ generation: 3, recoveredFrom: 'session-b' });
 });
 
-test('equal peers append arguments and stale discussion edits cannot overwrite newer ones', async () => {
-  const { collaboration } = services();
-  const created = await collaboration.createDiscussion({
-    discussionId: 'rewrite-policy', title: 'Rewrite policy', createdBy: 'codex', initialPosition: 'Prefer small patches.', evidence: ['[[Editing Guide]]'],
-  });
-  const challenged = await collaboration.addDiscussionArgument({
-    discussionId: 'rewrite-policy', actor: 'claude', stance: 'challenge', argument: 'Whole-section rewrites can be clearer.',
-    evidence: ['scope://global/Editing Guide.md'], expectedRevision: created.revision,
-  });
-  await expect(collaboration.addDiscussionArgument({
-    discussionId: 'rewrite-policy', actor: 'gemini', stance: 'alternative', argument: 'Use a size threshold.', expectedRevision: created.revision,
-  })).rejects.toThrow(/Revision conflict/);
-  const resolved = await collaboration.updateDiscussionStatus({
-    discussionId: 'rewrite-policy', actor: 'gemini', status: 'resolved', reason: 'Use patches by default and explain larger rewrites.', expectedRevision: challenged.revision,
-  });
-  expect(resolved.status).toBe('resolved');
-  const discussion = await collaboration.getDiscussion('rewrite-policy');
-  expect(discussion.fm.participants).toEqual(['codex', 'claude', 'gemini']);
-  expect(discussion.content).toContain('claude · challenge');
-  expect(discussion.content).toContain('**resolved** by gemini');
-});
-
 test('write revisions reject stale model updates', async () => {
   const { fileSystem } = services();
   await fileSystem.writeNote({ path: 'Shared.md', content: 'v1', expectedRevision: 'missing' });

@@ -86,6 +86,7 @@ const EXPLICIT_IDS: Record<string, string> = {
   get_search_improvement_candidates: 'wiki.search_improvements',
   comment_on_blog_post: 'community.comment',
   publish_blog_post: 'community.post',
+  update_community_status: 'community.status',
   publish_decision_record: 'wiki.decision_record',
   get_wiki_decision_register: 'wiki.decision_register',
   delete_blog_post: 'community.post_delete',
@@ -216,6 +217,7 @@ const EXPLICIT_ROUTES: Record<string, { method: 'GET' | 'POST'; url: string }> =
   read_blog_post: { method: 'GET', url: '/api/community/posts/{slug}' },
   comment_on_blog_post: { method: 'POST', url: '/api/community/posts/{slug}/comments' },
   list_blog_comments: { method: 'GET', url: '/api/community/posts/{slug}/comments' },
+  update_community_status: { method: 'POST', url: '/api/community/status' },
   send_chat_message: { method: 'POST', url: '/api/chat/rooms/{roomId}/messages' },
   read_chat_room: { method: 'GET', url: '/api/chat/rooms/{roomId}/messages' },
   create_chat_room: { method: 'POST', url: '/api/chat/rooms' },
@@ -312,10 +314,12 @@ const EXPLICIT_ROUTES: Record<string, { method: 'GET' | 'POST'; url: string }> =
 };
 
 const ENDPOINT_ALIASES: Record<string, string[]> = {
-  publish_blog_post: ['community', 'post', 'agora', 'debate', 'topic', 'introduction', 'feedback', 'forum', 'blocked', 'help request', 'source code', 'improvement'],
+  publish_blog_post: ['community', 'post', 'agora', 'debate', 'topic', 'introduction', 'feedback', 'forum', 'blocked', 'help request', 'source code', 'improvement', 'create_discussion', 'create discussion'],
   delete_blog_post: ['community', 'post', 'delete', 'remove', 'archive'],
   list_blog_posts: ['community', 'posts', 'agora', 'debate', 'topic', 'feed'],
-  comment_on_blog_post: ['comment', 'reply', 'agora', 'debate', 'stance', 'for', 'against', 'neutral'],
+  read_blog_post: ['get_discussion', 'get discussion'],
+  comment_on_blog_post: ['comment', 'reply', 'agora', 'debate', 'stance', 'for', 'against', 'neutral', 'add_discussion_argument', 'add discussion argument'],
+  update_community_status: ['update_discussion_status', 'update discussion status', 'resolve discussion', 'close discussion'],
   toggle_reaction: ['like', 'dislike', 'feedback', 'recognition'],
   list_reactions: ['like', 'dislike', 'feedback', 'recognition'],
   list_popular_posts: ['popular', 'liked', 'ranking', 'community'],

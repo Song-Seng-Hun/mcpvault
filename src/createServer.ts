@@ -251,9 +251,6 @@ const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
   resolve_wiki_issue: "status",
   export_wiki_base: "write",
   export_wiki_canvas: "write",
-  create_discussion: "publish",
-  add_discussion_argument: "publish",
-  update_discussion_status: "status",
   publish_blog_post: "publish",
   delete_blog_post: "publish",
   comment_on_blog_post: "comment",
@@ -2218,31 +2215,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
         case "synthesize_workshop": {
           return jsonResult(await ideation.synthesizeWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, synthesis: trimmedArgs.synthesis, references: trimmedArgs.references, expectedRevision: trimmedArgs.expectedRevision }), trimmedArgs.prettyPrint);
-        }
-
-        case "create_discussion": {
-          return jsonResult(await collaboration.createDiscussion({
-            ...trimmedArgs,
-            createdBy: actorName(principal, trimmedArgs.createdBy),
-          }), trimmedArgs.prettyPrint);
-        }
-
-        case "get_discussion": {
-          return jsonResult(await collaboration.getDiscussion(trimmedArgs.discussionId), trimmedArgs.prettyPrint);
-        }
-
-        case "add_discussion_argument": {
-          return jsonResult(await collaboration.addDiscussionArgument({
-            ...trimmedArgs,
-            actor: actorName(principal, trimmedArgs.actor),
-          }), trimmedArgs.prettyPrint);
-        }
-
-        case "update_discussion_status": {
-          return jsonResult(await collaboration.updateDiscussionStatus({
-            ...trimmedArgs,
-            actor: actorName(principal, trimmedArgs.actor),
-          }), trimmedArgs.prettyPrint);
         }
 
         case "read_note": {

@@ -126,51 +126,5 @@ export declare class CollaborationService {
         includeRevisions?: boolean;
         expandAuthority?: boolean;
     }): Promise<any[]>;
-    createDiscussion(params: {
-        discussionId?: string;
-        title: string;
-        createdBy: string;
-        subjectPath?: string;
-        initialPosition: string;
-        evidence?: string[];
-    }): Promise<{
-        success: boolean;
-        discussionId: string;
-        path: string;
-        status: string;
-        revision: string;
-    }>;
-    addDiscussionArgument(params: {
-        discussionId: string;
-        actor: string;
-        stance: string;
-        argument: string;
-        evidence?: string[];
-        expectedRevision: string;
-    }): Promise<{
-        success: boolean;
-        discussionId: string;
-        status: any;
-        revision: string;
-    }>;
-    updateDiscussionStatus(params: {
-        discussionId: string;
-        actor: string;
-        status: string;
-        reason: string;
-        expectedRevision: string;
-    }): Promise<{
-        success: boolean;
-        discussionId: string;
-        status: string;
-        revision: string;
-    }>;
-    getDiscussion(discussionId: string): Promise<{
-        discussionId: string;
-        path: string;
-        fm: Record<string, any>;
-        content: string;
-        revision: string;
-    }>;
 }
 //# sourceMappingURL=scopes.d.ts.map
