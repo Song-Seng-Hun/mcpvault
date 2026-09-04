@@ -66,7 +66,11 @@ Source mode and keep the explanation in Markdown.
 ### Organization contract
 
 Use `aliases` for alternate Obsidian names and optional `stable_id` for a
-durable note identity. When an old or duplicate note must remain addressable,
+durable note identity. The server graph resolves visible titles, aliases,
+`preferred_term`, stable IDs,
+and explicit relative links consistently across backlinks, orphan detection,
+and broken-link checks. Ambiguous identity terms remain review findings rather
+than silent redirects. When an old or duplicate note must remain addressable,
 set `canonical_path` to the visible canonical note; use `same_as`, `version_of`,
 and `refines` for explicit lineage/navigation rather than silently merging
 notes. Keep progressive-read material in `summary`,
@@ -129,6 +133,13 @@ are also excluded and returned as bounded diagnostics with revisions. A
 `depends_on` link to ordinary knowledge is informational. The flow dashboard,
 project packet, Reflect dashboard, and next-action view share this request-local
 interpretation and never persist a second task graph.
+`get_wiki_flow_health.dependencyPlan` topologically groups dependency-safe work:
+stage 0 is executable now and later stages assume all earlier prerequisites
+complete. It reports immediate unlock points, one deepest dependency chain,
+actual cycle components, downstream cycle-blocked work, incomplete prerequisite
+roots/downstream effects, and workflow holds such as waiting, blocked, or a
+future `defer_until`. Every sample remains bounded and revision-stamped. This
+is a forecast, not an assignment, lock, or automatic status transition.
 Purpose, project support, and waiting information stay separate from the
 action itself. `resurface_wiki_knowledge` is a small deterministic daily
 rotation of durable notes for Zettelkasten-style rediscovery; it is derived,

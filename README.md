@@ -221,8 +221,11 @@ through `version_of` or `derived_from`; preserve failed runs and distill a
 separate negative-knowledge note only when the lesson generalizes.
 
 For durable notes, `aliases` provide alternate Obsidian names and optional
-`stable_id` provides an identity that can survive a title change. Keep the
-full Markdown body authoritative while using `summary`, `key_points`, and
+`stable_id` provides an identity that can survive a title change. The server
+graph resolves titles, aliases, preferred terms, stable IDs, and explicit
+relative links for backlinks, orphan detection, and broken-link checks. An
+ambiguous identity remains a review signal; it is never silently rewritten.
+Keep the full Markdown body authoritative while using `summary`, `key_points`, and
 `open_questions` as progressive-read projections. Optional `summary_layer`
 (0 = original, 1 = capture, 2 = bold, 3 = highlight, 4 = executive
 summary/remix) and bounded `summary_highlights` make the compression layer
@@ -398,6 +401,16 @@ ordering, while `completion_criteria` gives projects observable stop
 conditions. Optional `started_at`, `blocked_since`, `waiting_since`, and
 `completed_at` timestamps improve flow measurement without replacing Git
 history.
+The flow response also contains a request-local `dependencyPlan`: stage 0 is
+safe to execute now, later stages assume earlier prerequisites complete,
+`unlockPoints` shows work that immediately releases another item, and one
+deepest dependency chain exposes long sequencing. Actual cycle members are
+separated from downstream work blocked by a cycle; unresolved/inactive gates
+and their downstream dependents are separated again from ordinary
+waiting/blocked/future-`defer_until` holds. These are forecasts over current
+revisions, never assignments or a persisted scheduler. When deadlines and
+workflow state are otherwise equal, `wiki.next_actions` uses service class and
+immediate unlock impact as stable tie-breakers.
 The compact `get_wiki_review_packet` also includes this flow projection and
 puts blocked/waiting follow-up into its bounded priorities, so an agent does
 not pull more work while an existing dependency is unattended. Missing flow

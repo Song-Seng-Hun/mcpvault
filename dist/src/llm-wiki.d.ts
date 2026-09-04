@@ -58,6 +58,7 @@ export interface WikiEvidenceInput {
     endLine?: number;
     quoteHash?: string;
 }
+type WorkDependencyFindingState = 'active' | 'satisfied' | 'cancelled' | 'inactive' | 'unresolved_or_inaccessible' | 'ambiguous' | 'non_work_target' | 'informational';
 type WikiProjectionView = 'summary' | 'progressive' | 'key_points' | 'outline' | 'section' | 'full';
 interface WikiLintIssue {
     severity: 'error' | 'warning';
@@ -1378,7 +1379,7 @@ export declare class LlmWikiService {
      * concrete next action are pull-ready.  This is advisory: it never assigns,
      * moves, or changes a note.
      */
-    flowHealth(principal?: ScopePrincipal, wipLimit?: number, blockedAfterDays?: number, waitingAfterDays?: number, limit?: number, maxChars?: number): Promise<{
+    flowHealth(principal?: ScopePrincipal, wipLimit?: number, blockedAfterDays?: number, waitingAfterDays?: number, limit?: number, maxChars?: number): Promise<Record<string, any> | {
         purpose: string;
         policy: {
             wipLimit: number;
@@ -1397,6 +1398,7 @@ export declare class LlmWikiService {
             blocked: number;
             dependencyBlocked: number;
             waiting: number;
+            deferred: number;
             overdue: number;
         };
         lanes: {
@@ -1404,6 +1406,150 @@ export declare class LlmWikiService {
             ready: Record<string, unknown>[];
             blocked: Record<string, unknown>[];
             waiting: Record<string, unknown>[];
+            deferred: Record<string, unknown>[];
+        };
+        dependencyPlan: {
+            purpose: string;
+            stats: {
+                edges: number;
+                stageable: number;
+                stages: number;
+                longestDependencyDepth: number;
+                incompletePrerequisites: number;
+                blockedByIncompletePrerequisites: number;
+                workflowHolds: number;
+                blockedByWorkflowHolds: number;
+                dependencyCycles: number;
+                cyclicItems: number;
+                blockedByCycles: number;
+            };
+            recommendedStages: {
+                stage: number;
+                meaning: string;
+                total: number;
+                items: {
+                    path: string;
+                    title: any;
+                    revision?: string;
+                    taskStatus: string;
+                    directDependents: number;
+                    immediateUnlocks: number;
+                }[];
+                truncated: boolean;
+            }[];
+            unlockPoints: {
+                total: number;
+                items: {
+                    path: string;
+                    title: any;
+                    revision?: string;
+                    taskStatus: string;
+                    directDependents: number;
+                    immediateUnlocks: number;
+                }[];
+                truncated: boolean;
+            };
+            deepestDependencyChain?: {
+                path: string;
+                title: any;
+                revision?: string;
+                taskStatus: string;
+                directDependents: number;
+                immediateUnlocks: number;
+            }[];
+            dependencyCycles: {
+                total: number;
+                items: {
+                    cycle: number;
+                    notes: {
+                        path: string;
+                        title: any;
+                        revision?: string;
+                        taskStatus: string;
+                        directDependents: number;
+                        immediateUnlocks: number;
+                    }[];
+                    truncated: boolean;
+                }[];
+                truncated: boolean;
+            };
+            cycleBlockedDependents: {
+                total: number;
+                items: {
+                    path: string;
+                    title: any;
+                    revision?: string;
+                    taskStatus: string;
+                    directDependents: number;
+                    immediateUnlocks: number;
+                }[];
+                truncated: boolean;
+            };
+            incompletePrerequisites: {
+                total: number;
+                items: {
+                    path: string;
+                    title: any;
+                    revision?: string;
+                    taskStatus: string;
+                    directDependents: number;
+                    immediateUnlocks: number;
+                    dependencies: {
+                        executable: boolean;
+                        blockerCount: number;
+                        blockers: {
+                            relation: "blocked_by" | "depends_on";
+                            target: string;
+                            state: WorkDependencyFindingState;
+                            targetPaths?: string[];
+                            targetStatuses?: string[];
+                            targetRevisions?: string[];
+                        }[];
+                        satisfiedCount: number;
+                        informationalCount: number;
+                        dependencyCycle?: string[];
+                        truncated: boolean;
+                    };
+                }[];
+                truncated: boolean;
+            };
+            incompleteBlockedDependents: {
+                total: number;
+                items: {
+                    path: string;
+                    title: any;
+                    revision?: string;
+                    taskStatus: string;
+                    directDependents: number;
+                    immediateUnlocks: number;
+                }[];
+                truncated: boolean;
+            };
+            workflowHolds: {
+                total: number;
+                items: {
+                    path: string;
+                    title: any;
+                    revision?: string;
+                    taskStatus: string;
+                    directDependents: number;
+                    immediateUnlocks: number;
+                }[];
+                truncated: boolean;
+            };
+            workflowHoldBlockedDependents: {
+                total: number;
+                items: {
+                    path: string;
+                    title: any;
+                    revision?: string;
+                    taskStatus: string;
+                    directDependents: number;
+                    immediateUnlocks: number;
+                }[];
+                truncated: boolean;
+            };
+            guidance: string;
         };
         observability: {
             missingTimestamps: Record<string, unknown>[];
@@ -1412,41 +1558,6 @@ export declare class LlmWikiService {
         };
         nextActions: string[];
         generatedAt: string;
-    } | {
-        purpose: string;
-        policy: {
-            wipLimit: number;
-            blockedAfterDays: number;
-            waitingAfterDays: number;
-            wipDefinition: string;
-            pullDefinition: string;
-            classesOfService: ("expedite" | "fixed_date" | "research" | "standard")[];
-        };
-        flow: {
-            totalWork: number;
-            activeWip: number;
-            wipOverflow: number;
-            pullAllowed: boolean;
-            readyToPull: number;
-            blocked: number;
-            dependencyBlocked: number;
-            waiting: number;
-            overdue: number;
-        };
-        nextActions: string[];
-        generatedAt: string;
-        lanes: {
-            active: Record<string, unknown>[];
-            ready: Record<string, unknown>[];
-            blocked: Record<string, unknown>[];
-            waiting: Record<string, unknown>[];
-        };
-        observability: {
-            cycleTimeAvailable: string;
-            note: string;
-            missingTimestamps: Record<string, unknown>[];
-        };
-        truncated: boolean;
     }>;
     /** Return the machine-readable organization constitution used by agents. */
     policy(maxChars?: number): {
@@ -1566,6 +1677,7 @@ export declare class LlmWikiService {
             blocked: number;
             dependencyBlocked: number;
             waiting: number;
+            deferred: number;
             unlinkedMocQuestions: number;
             mocSequenceNeedsAttention: number;
             mocHierarchyIssues: number;
@@ -1587,7 +1699,7 @@ export declare class LlmWikiService {
         supportingViews: {
             inbox: any;
             knowledge: any;
-            executionFlow: {
+            executionFlow: Record<string, any> | {
                 purpose: string;
                 policy: {
                     wipLimit: number;
@@ -1606,6 +1718,7 @@ export declare class LlmWikiService {
                     blocked: number;
                     dependencyBlocked: number;
                     waiting: number;
+                    deferred: number;
                     overdue: number;
                 };
                 lanes: {
@@ -1613,6 +1726,150 @@ export declare class LlmWikiService {
                     ready: Record<string, unknown>[];
                     blocked: Record<string, unknown>[];
                     waiting: Record<string, unknown>[];
+                    deferred: Record<string, unknown>[];
+                };
+                dependencyPlan: {
+                    purpose: string;
+                    stats: {
+                        edges: number;
+                        stageable: number;
+                        stages: number;
+                        longestDependencyDepth: number;
+                        incompletePrerequisites: number;
+                        blockedByIncompletePrerequisites: number;
+                        workflowHolds: number;
+                        blockedByWorkflowHolds: number;
+                        dependencyCycles: number;
+                        cyclicItems: number;
+                        blockedByCycles: number;
+                    };
+                    recommendedStages: {
+                        stage: number;
+                        meaning: string;
+                        total: number;
+                        items: {
+                            path: string;
+                            title: any;
+                            revision?: string;
+                            taskStatus: string;
+                            directDependents: number;
+                            immediateUnlocks: number;
+                        }[];
+                        truncated: boolean;
+                    }[];
+                    unlockPoints: {
+                        total: number;
+                        items: {
+                            path: string;
+                            title: any;
+                            revision?: string;
+                            taskStatus: string;
+                            directDependents: number;
+                            immediateUnlocks: number;
+                        }[];
+                        truncated: boolean;
+                    };
+                    deepestDependencyChain?: {
+                        path: string;
+                        title: any;
+                        revision?: string;
+                        taskStatus: string;
+                        directDependents: number;
+                        immediateUnlocks: number;
+                    }[];
+                    dependencyCycles: {
+                        total: number;
+                        items: {
+                            cycle: number;
+                            notes: {
+                                path: string;
+                                title: any;
+                                revision?: string;
+                                taskStatus: string;
+                                directDependents: number;
+                                immediateUnlocks: number;
+                            }[];
+                            truncated: boolean;
+                        }[];
+                        truncated: boolean;
+                    };
+                    cycleBlockedDependents: {
+                        total: number;
+                        items: {
+                            path: string;
+                            title: any;
+                            revision?: string;
+                            taskStatus: string;
+                            directDependents: number;
+                            immediateUnlocks: number;
+                        }[];
+                        truncated: boolean;
+                    };
+                    incompletePrerequisites: {
+                        total: number;
+                        items: {
+                            path: string;
+                            title: any;
+                            revision?: string;
+                            taskStatus: string;
+                            directDependents: number;
+                            immediateUnlocks: number;
+                            dependencies: {
+                                executable: boolean;
+                                blockerCount: number;
+                                blockers: {
+                                    relation: "blocked_by" | "depends_on";
+                                    target: string;
+                                    state: WorkDependencyFindingState;
+                                    targetPaths?: string[];
+                                    targetStatuses?: string[];
+                                    targetRevisions?: string[];
+                                }[];
+                                satisfiedCount: number;
+                                informationalCount: number;
+                                dependencyCycle?: string[];
+                                truncated: boolean;
+                            };
+                        }[];
+                        truncated: boolean;
+                    };
+                    incompleteBlockedDependents: {
+                        total: number;
+                        items: {
+                            path: string;
+                            title: any;
+                            revision?: string;
+                            taskStatus: string;
+                            directDependents: number;
+                            immediateUnlocks: number;
+                        }[];
+                        truncated: boolean;
+                    };
+                    workflowHolds: {
+                        total: number;
+                        items: {
+                            path: string;
+                            title: any;
+                            revision?: string;
+                            taskStatus: string;
+                            directDependents: number;
+                            immediateUnlocks: number;
+                        }[];
+                        truncated: boolean;
+                    };
+                    workflowHoldBlockedDependents: {
+                        total: number;
+                        items: {
+                            path: string;
+                            title: any;
+                            revision?: string;
+                            taskStatus: string;
+                            directDependents: number;
+                            immediateUnlocks: number;
+                        }[];
+                        truncated: boolean;
+                    };
+                    guidance: string;
                 };
                 observability: {
                     missingTimestamps: Record<string, unknown>[];
@@ -1621,41 +1878,6 @@ export declare class LlmWikiService {
                 };
                 nextActions: string[];
                 generatedAt: string;
-            } | {
-                purpose: string;
-                policy: {
-                    wipLimit: number;
-                    blockedAfterDays: number;
-                    waitingAfterDays: number;
-                    wipDefinition: string;
-                    pullDefinition: string;
-                    classesOfService: ("expedite" | "fixed_date" | "research" | "standard")[];
-                };
-                flow: {
-                    totalWork: number;
-                    activeWip: number;
-                    wipOverflow: number;
-                    pullAllowed: boolean;
-                    readyToPull: number;
-                    blocked: number;
-                    dependencyBlocked: number;
-                    waiting: number;
-                    overdue: number;
-                };
-                nextActions: string[];
-                generatedAt: string;
-                lanes: {
-                    active: Record<string, unknown>[];
-                    ready: Record<string, unknown>[];
-                    blocked: Record<string, unknown>[];
-                    waiting: Record<string, unknown>[];
-                };
-                observability: {
-                    cycleTimeAvailable: string;
-                    note: string;
-                    missingTimestamps: Record<string, unknown>[];
-                };
-                truncated: boolean;
             };
             mocQuestions: any;
             mocSequences: any;
@@ -2017,6 +2239,7 @@ export declare class LlmWikiService {
         }[];
         exclusions?: {
             workflowBlocked: number;
+            deferred: number;
             dependencyBlocked: number;
             unresolvedDependencies: number;
             dependencyCycles: number;

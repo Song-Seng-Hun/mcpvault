@@ -1,5 +1,5 @@
 import { watch } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { join, posix, relative, resolve } from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { VaultIoCoordinator } from './vault-io.js';
@@ -20,22 +20,32 @@ function isNote(path) {
 function withoutExtension(path) {
     return path.replace(/\.[^/.]+$/, '');
 }
+function withoutNoteExtension(path) {
+    return path.replace(/\.(?:md|markdown|txt)$/i, '');
+}
 function basename(path) {
     return path.slice(path.lastIndexOf('/') + 1);
 }
 function addToMap(map, key, path) {
     const paths = map.get(key);
-    if (paths)
-        paths.push(path);
+    if (paths) {
+        if (!paths.includes(path))
+            paths.push(path);
+    }
     else
         map.set(key, [path]);
 }
-function buildResolver(paths) {
+function normalizeIdentityTerm(value) {
+    const inner = value.trim().replace(/^!?\[\[/, '').replace(/\]\]$/, '').split(/[|#]/, 1)[0].trim();
+    return withoutNoteExtension(normalizedPath(inner));
+}
+function buildResolver(paths, entries) {
     const resolver = {
         exact: new Map(),
         withoutExtension: new Map(),
         basename: new Map(),
         basenameWithoutExtension: new Map(),
+        identity: new Map(),
     };
     for (const path of paths) {
         const exact = normalizedPath(path);
@@ -44,6 +54,12 @@ function buildResolver(paths) {
         addToMap(resolver.withoutExtension, noExtension, path);
         addToMap(resolver.basename, basename(exact), path);
         addToMap(resolver.basenameWithoutExtension, basename(noExtension), path);
+        const entry = entries?.get(path);
+        for (const term of entry?.identityTerms || []) {
+            const normalizedTerm = normalizeIdentityTerm(term);
+            if (normalizedTerm)
+                addToMap(resolver.identity, normalizedTerm, path);
+        }
     }
     return resolver;
 }
@@ -52,28 +68,33 @@ function buildResolver(paths) {
  * maps built once per visibility set instead of scanning every note for every
  * link. This is a derived read model; Markdown remains authoritative.
  */
-function resolveTargets(target, resolver) {
+function resolveTargets(target, resolver, sourcePath) {
     const normalizedTarget = normalizedPath(target);
     if (!normalizedTarget)
         return [];
     const hasExtension = /(^|\/)[^/]+\.[^/]+$/.test(normalizedTarget);
+    if (sourcePath && /^(?:\.\.?\/)/.test(normalizedTarget)) {
+        const relativeTarget = normalizedPath(posix.normalize(posix.join(posix.dirname(normalizePath(sourcePath)), normalizedTarget)));
+        const relativeMatches = hasExtension
+            ? resolver.exact.get(relativeTarget) || []
+            : resolver.withoutExtension.get(withoutExtension(relativeTarget)) || [];
+        if (relativeMatches.length > 0)
+            return relativeMatches;
+    }
+    let pathMatches;
     if (hasExtension) {
-        return normalizedTarget.includes('/')
+        pathMatches = normalizedTarget.includes('/')
             ? resolver.exact.get(normalizedTarget) || []
             : resolver.basename.get(normalizedTarget) || [];
     }
-    return normalizedTarget.includes('/')
-        ? resolver.withoutExtension.get(normalizedTarget) || []
-        : resolver.basenameWithoutExtension.get(normalizedTarget) || [];
-}
-function normalizeBacklinkTarget(path) {
-    return normalizedPath(path).replace(/\.md$/i, '');
-}
-function backlinkMatches(linkTarget, targetPath) {
-    const target = normalizeBacklinkTarget(targetPath);
-    const targetBase = basename(target);
-    const document = normalizeBacklinkTarget(linkTarget);
-    return document.includes('/') ? document === target : document === targetBase;
+    else {
+        pathMatches = normalizedTarget.includes('/')
+            ? resolver.withoutExtension.get(normalizedTarget) || []
+            : resolver.basenameWithoutExtension.get(normalizedTarget) || [];
+    }
+    if (pathMatches.length > 0)
+        return pathMatches;
+    return resolver.identity.get(withoutNoteExtension(normalizedTarget)) || [];
 }
 function addTopMatch(items, item, limit, compare) {
     if (items.length < limit) {
@@ -90,7 +111,7 @@ function addTopMatch(items, item, limit, compare) {
 }
 /**
  * Incremental Obsidian graph read model for backlinks, tags, unresolved links,
- * and orphan notes. It stores only parsed link/tag metadata and refreshes a
+ * and orphan notes. It stores only parsed link/tag/identity metadata and refreshes a
  * changed note, rather than rereading the entire vault for every request.
  */
 export class VaultGraphIndex {
@@ -188,6 +209,7 @@ export class VaultGraphIndex {
             throw new Error(`File not found: ${target}`);
         if (!canAccessPath(targetEntry.path))
             throw new Error(`Access denied: ${target}`);
+        const visible = this.visibilityContext(canAccessPath);
         const backlinks = [];
         let total = 0;
         const compare = (a, b) => a.path.localeCompare(b.path) || a.line - b.line;
@@ -195,7 +217,7 @@ export class VaultGraphIndex {
             if (normalizedPath(entry.path) === normalizedTarget || !canAccessPath(entry.path))
                 continue;
             for (const link of entry.links) {
-                if (!backlinkMatches(link.target, targetEntry.path))
+                if (!resolveTargets(link.target, visible.resolver, entry.path).some(path => normalizedPath(path) === normalizedTarget))
                     continue;
                 total += 1;
                 const backlink = {
@@ -224,14 +246,14 @@ export class VaultGraphIndex {
         if (!canAccessPath(source))
             throw new Error(`Access denied: ${source}`);
         const visible = this.visibilityContext(canAccessPath);
-        const allResolver = buildResolver([...this.allPaths]);
+        const allResolver = buildResolver([...this.allPaths], this.entries);
         const outlinks = entry.links.filter(link => {
             if (/^scope:\/\/(?:model|agent|user)\//i.test(link.target.trim()))
                 return false;
-            const anyMatches = resolveTargets(link.target, allResolver);
+            const anyMatches = resolveTargets(link.target, allResolver, entry.path);
             if (anyMatches.length === 0)
                 return true;
-            return resolveTargets(link.target, visible.resolver).length > 0;
+            return resolveTargets(link.target, visible.resolver, entry.path).length > 0;
         });
         return {
             source,
@@ -252,7 +274,7 @@ export class VaultGraphIndex {
             if (!entry)
                 continue;
             for (const link of entry.links) {
-                if (resolveTargets(link.target, resolver).some(path => visible.has(path)))
+                if (resolveTargets(link.target, resolver, entry.path).some(path => visible.has(path)))
                     continue;
                 total += 1;
                 if (unresolved.length < limit)
@@ -272,7 +294,7 @@ export class VaultGraphIndex {
             if (!entry)
                 continue;
             for (const link of entry.links) {
-                for (const destination of resolveTargets(link.target, resolver)) {
+                for (const destination of resolveTargets(link.target, resolver, entry.path)) {
                     if (normalizedPath(destination) !== normalizedPath(source) && visible.has(destination)) {
                         const key = normalizedPath(destination);
                         incomingCounts.set(key, (incomingCounts.get(key) || 0) + 1);
@@ -317,7 +339,7 @@ export class VaultGraphIndex {
             generation: this.changeGeneration,
             paths,
             pathSet: new Set(paths),
-            resolver: buildResolver(paths),
+            resolver: buildResolver(paths, this.entries),
         };
         this.visibilityCache.set(canAccessPath, context);
         return context;
@@ -418,6 +440,21 @@ export class VaultGraphIndex {
             const raw = await this.vaultIo.readUtf8(fullPath);
             const parsed = this.frontmatter.parse(raw);
             const tags = [];
+            const identityTerms = [];
+            for (const field of ['title', 'preferred_term', 'stable_id']) {
+                const value = parsed.frontmatter[field];
+                if (typeof value === 'string' && value.trim())
+                    identityTerms.push(value.trim());
+            }
+            const aliases = Array.isArray(parsed.frontmatter.aliases)
+                ? parsed.frontmatter.aliases
+                : typeof parsed.frontmatter.aliases === 'string'
+                    ? [parsed.frontmatter.aliases]
+                    : [];
+            for (const alias of aliases) {
+                if (typeof alias === 'string' && alias.trim())
+                    identityTerms.push(alias.trim());
+            }
             if (Array.isArray(parsed.frontmatter.tags)) {
                 for (const tag of parsed.frontmatter.tags) {
                     if (typeof tag === 'string' && tag.trim())
@@ -494,7 +531,7 @@ export class VaultGraphIndex {
                     }
                 }
             }
-            return { path: normalized, size: info.size, mtimeMs: info.mtimeMs, links, tags };
+            return { path: normalized, size: info.size, mtimeMs: info.mtimeMs, links, tags, identityTerms };
         }
         catch {
             return undefined;

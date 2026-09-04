@@ -352,7 +352,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_flow_health',
-            description: 'Return a bounded Kanban-style flow view for project/task notes. It reports dependency-safe executable WIP, a configurable WIP limit, pull-ready work, blocked/waiting aging, unresolved or cyclic prerequisites, overdue work, service classes, and revisions without assigning or mutating anything. Use it before starting another task.',
+            description: 'Return a bounded Kanban-style flow view and request-local dependency plan for project/task notes. It reports stage-0 executable WIP, future dependency stages, immediate unlock points, one deepest chain, actual cycles versus downstream blockage, incomplete/workflow-held prerequisites, a configurable WIP limit, aging, overdue work, service classes, and revisions without assigning or mutating anything. Use it before starting another task.',
             inputSchema: { type: 'object', properties: {
                     wipLimit: { type: 'integer', minimum: 1, maximum: 50, default: 3, description: 'Advisory maximum of task_status=next_action items' },
                     blockedAfterDays: { type: 'integer', minimum: 1, maximum: 3650, default: 7 },
@@ -396,7 +396,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_next_actions',
-            description: 'Return a bounded GTD action list organized by task context (for example @research or @computer), while keeping project-support material separate. Waiting, blocked, unresolved, ambiguous, inactive, and cyclic work prerequisites are excluded and reported with current revisions. Optional maxMinutes, energy, and effort filters select work that fits the current execution capacity; unknown metadata is excluded and reported. It never assigns or mutates work.',
+            description: 'Return a bounded GTD action list organized by task context (for example @research or @computer), while keeping project-support material separate. Waiting, blocked, future-deferred, unresolved, ambiguous, inactive, and cyclic work prerequisites are excluded and reported with current revisions. Optional maxMinutes, energy, and effort filters select work that fits the current execution capacity; unknown metadata is excluded and reported. Deadline, active status, service class, immediate unlock impact, and path provide stable ordering; it never assigns or mutates work.',
             inputSchema: { type: 'object', properties: {
                     context: { type: 'string', description: 'Optional exact task_context filter' },
                     maxMinutes: { type: 'integer', minimum: 1, maximum: 1440, description: 'Optional maximum estimated duration in minutes. Reads time_estimate_minutes, estimated_minutes, duration_minutes, or time_minutes.' },

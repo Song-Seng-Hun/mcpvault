@@ -5,7 +5,7 @@ import type { VaultCatalogChange, VaultFileCatalog, VaultCatalogChangeKind } fro
 import { VaultIoCoordinator } from './vault-io.js';
 /**
  * Incremental Obsidian graph read model for backlinks, tags, unresolved links,
- * and orphan notes. It stores only parsed link/tag metadata and refreshes a
+ * and orphan notes. It stores only parsed link/tag/identity metadata and refreshes a
  * changed note, rather than rereading the entire vault for every request.
  */
 export declare class VaultGraphIndex {

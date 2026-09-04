@@ -92,4 +92,42 @@ describe('VaultGraphIndex', () => {
       expect.objectContaining({ relation: 'claim_supports', sourceClaimId: 'premise', targetBlockId: 'conclusion' }),
     ]));
   });
+
+  test('resolves Obsidian aliases, stable IDs, and explicit relative links without crossing visibility', async () => {
+    vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-authority-graph-'));
+    await writeNote('Wiki/Canonical.md', [
+      '---',
+      'title: Canonical concept',
+      'aliases: [Friendly name, Node.js]',
+      'stable_id: canonical-id',
+      'preferred_term: Preferred concept',
+      '---',
+      '# Canonical',
+      '',
+    ].join('\n'));
+    await writeNote('Wiki/Nested/Relative target.md', '# Relative target\n');
+    await writeNote('Wiki/Nested/Source.md', '[[Friendly name]] [[Node.js]] [[canonical-id]] [[Preferred concept]] [[./Relative target]]\n');
+    await writeNote('Private/Secret.md', '---\naliases: [Hidden alias]\n---\n# Secret\n');
+    await writeNote('Wiki/Public source.md', '[[Hidden alias]]\n');
+    graph = new VaultGraphIndex(vaultPath, new PathFilter(), new FrontmatterHandler());
+
+    const publicOnly = (path: string) => !path.startsWith('Private/');
+    const canonical = await graph.getBacklinks('Wiki/Canonical.md', 10, publicOnly);
+    expect(canonical).toMatchObject({ total: 4, truncated: false });
+    expect(canonical.backlinks).toEqual([
+      expect.objectContaining({ path: 'Wiki/Nested/Source.md' }),
+      expect.objectContaining({ path: 'Wiki/Nested/Source.md' }),
+      expect.objectContaining({ path: 'Wiki/Nested/Source.md' }),
+      expect.objectContaining({ path: 'Wiki/Nested/Source.md' }),
+    ]);
+    await expect(graph.getBacklinks('Wiki/Nested/Relative target.md', 10, publicOnly)).resolves.toMatchObject({ total: 1 });
+
+    const unresolved = await graph.findUnresolvedLinks(10, publicOnly);
+    expect(unresolved.unresolved).toEqual([
+      expect.objectContaining({ path: 'Wiki/Public source.md', target: 'Hidden alias' }),
+    ]);
+    await expect(graph.findOrphanNotes(10, publicOnly)).resolves.toMatchObject({
+      orphans: expect.not.arrayContaining([expect.objectContaining({ path: 'Wiki/Canonical.md' }), expect.objectContaining({ path: 'Wiki/Nested/Relative target.md' })]),
+    });
+  });
 });
