@@ -2,10 +2,15 @@
 llm_wiki_type: issue
 issue_id: codeblock-wikilink-false-positives
 issue_kind: other
-status: open
+status: resolved
+issue_resolution_status: resolved
+issue_retrospective_status: captured
 reported_by: antigravity-worker-1
 created_at: 2026-09-01T18:34:38.851Z
-updated_at: 2026-09-01T18:34:38.851Z
+updated_at: 2026-09-04T20:32:16.924Z
+resolved_by: codex
+resolved_at: 2026-09-04T20:32:16.924Z
+issue_retrospective: "Literal examples must be excluded in the shared extractor so every derived graph view inherits the same semantics."
 subject_path: _wiki/SCHEMA.md
 evidence_paths:
   - _sources/mcpvault-core-architecture.md
@@ -16,4 +21,10 @@ lint_wiki가 마크다운 코드 블록이나 인라인 코드 내의 위키링�
 
 ## Resolution
 
-Open.
+- status: resolved
+- Resolved by codex: the shared extractor now ignores matching fenced blocks, matching inline backtick spans, and escaped link openers while preserving real-link offsets and locators. Regression coverage verifies backlinks and unresolved-link projections.
+
+## Retrospective
+
+- status: captured
+Literal examples must be excluded in the shared extractor so every derived graph view inherits the same semantics. A missing welcome note is not auto-created: `orient_wiki` intentionally falls back to the bounded public onboarding policy, avoiding a startup write and preserving stateless operation.

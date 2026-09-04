@@ -220,7 +220,8 @@ the Wiki: exact path, filename, title, `aliases`, `preferred_term`, `stable_id`,
 and explicit relative path. A collision remains ambiguous instead of choosing
 whichever note happened to be scanned first.
 Catalog `orderBy=hierarchy` is a metadata grouping by preferred MOC/project,
-not the tree traversal. Code-fenced examples never become reading-order links.
+not the tree traversal. Links in matching fenced blocks or closed inline
+backtick spans, and links with escaped openers, never become reading-order links.
 For a MOC that is also a curriculum, onboarding route, or procedure,
 `wiki.learning_path` preserves that authored outline while checking existing
 note-level `depends_on` Properties and valid cross-note `dependsOnClaims`
@@ -1041,7 +1042,7 @@ authenticated edge in front of it.
   - Optional semantic search: pass `semantic: true` to add Korean-capable `multilingual-e5-small` vector matches. The model and LanceDB cache load lazily, are processed by one bounded idle worker, and are unloaded after inactivity; concurrent server instances in one Node process share one embedder. The server computes query vectors automatically and briefly caches bounded results per authorized principal/query until the semantic index changes. Background indexing uses the shared adaptive I/O scheduler at lower priority than foreground note reads. If either dependency or its local index fails, `search_notes` returns the normal lexical results. `semantic_search_status` reports cache health. The cache stores no note text—only vectors and derived path/hash/line metadata; bounded excerpts are read from the authorized Markdown source at query time. Markdown/Git remain authoritative.
   - Optional Obsidian-native search: `search_obsidian` uses the running Obsidian CLI index for public-global results; authenticated private searches must use `search_scoped_notes`
   - Metadata and tags: `get_frontmatter`, `update_frontmatter`, `get_notes_info`, `get_vault_stats`, `manage_tags`, `list_all_tags`
-  - Wiki links: `wiki_link` resolves names and returns alternative paths when a name is ambiguous; `get_backlinks` finds incoming Obsidian internal links, `get_outlinks` lists outgoing internal links, `find_unresolved_links` finds broken references, and `find_orphan_notes` finds isolated notes. Wikilinks, relative Markdown links, typed relations, and managed path-bearing Properties are supported; heading/block anchors are retained as `targetHeading`/`targetBlockId`, and Property edges include their exact `propertyPath`. Review/checkpoint snapshots are maintained for move/delete safety but excluded from live graph navigation. External URLs and fenced-code examples are ignored. Backlinks, broken-link, orphan, and aggregate-tag reads share an incremental Obsidian graph index and refresh only changed notes.
+  - Wiki links: `wiki_link` resolves names and returns alternative paths when a name is ambiguous; `get_backlinks` finds incoming Obsidian internal links, `get_outlinks` lists outgoing internal links, `find_unresolved_links` finds broken references, and `find_orphan_notes` finds isolated notes. Wikilinks, relative Markdown links, typed relations, and managed path-bearing Properties are supported; heading/block anchors are retained as `targetHeading`/`targetBlockId`, and Property edges include their exact `propertyPath`. Review/checkpoint snapshots are maintained for move/delete safety but excluded from live graph navigation. External URLs, links in matching fenced blocks or closed inline backtick spans, and links with escaped openers are ignored. Backlinks, broken-link, orphan, and aggregate-tag reads share an incremental Obsidian graph index and refresh only changed notes.
   - Daily notes: `get_daily_note` reads a date-based note and `daily_note` safely creates or appends to one
   - Tasks: `list_tasks` finds open, completed, or all checkbox tasks while ignoring frontmatter and fenced code blocks and returns a content-derived `taskId`; `update_task` prefers that identity (falling back to `path`/`line`) with `expectedRevision`, preserving ordinary Markdown, Git history, and concurrent-edit protection when surrounding lines move
   - Task projections: `list_tasks.maxChars` bounds the complete response, pathological task text becomes a marked preview, and `total`/`returned`/`truncated` remain explicit
@@ -2040,11 +2041,12 @@ background indexing.
 
 ### `get_backlinks`
 
-Find incoming Obsidian wikilinks for a note without returning the full source
+Find incoming Obsidian internal links for a note without returning the full source
 notes. Embeds, aliases, heading/block fragments, and path-qualified links are
 reported with their source path, 1-indexed line number, and compact context.
-Links inside fenced code blocks are ignored. The result is capped at 500
-occurrences; `truncated` indicates when more matches exist.
+Links in matching fenced blocks or closed inline backtick spans, and links with
+escaped openers, are ignored. The result is capped at 500 occurrences;
+`truncated` indicates when more matches exist.
 
 **Request:**
 
@@ -2078,11 +2080,12 @@ occurrences; `truncated` indicates when more matches exist.
 
 ### `get_outlinks`
 
-List the wikilinks contained in a note. Each occurrence includes its
+List the Obsidian internal links contained in a note. Each occurrence includes its
 destination, source line, raw link, and compact context. Embeds, aliases, and
 heading/block fragments are preserved in the raw link while the `target` field
-contains the destination without the alias or fragment. Fenced code blocks are
-ignored.
+contains the destination without the alias or fragment. Links in matching
+fenced blocks or closed inline backtick spans, and links with escaped openers,
+are ignored.
 
 **Request:**
 
@@ -2116,10 +2119,11 @@ ignored.
 
 ### `find_unresolved_links`
 
-Scan the vault for wikilinks whose destination does not exist. Explicit links
-to attachments are resolved against all visible vault files, while links in
-fenced code blocks are ignored. Results include the source path, line number,
-raw link, parsed target, and compact context.
+Scan the vault for Obsidian internal links whose destination does not exist.
+Explicit links to attachments are resolved against all visible vault files.
+Links in matching fenced blocks or closed inline backtick spans, and links with
+escaped openers, are ignored. Results include the source path, line number, raw
+link, parsed target, and compact context.
 
 **Request:**
 
@@ -3014,8 +3018,8 @@ second source of truth:
   It returns a bounded read order with revisions, unresolved inputs, tension
   pairs, counterpoints, and a non-mutating preflight/publish or dry-run patch
   plan. When an idle pulse returns a synthesis action, pass its `focusPath` back
-  to this endpoint to reopen the same candidate without session state.
-  plan. It never merges or deletes the input notes.
+  to this endpoint to reopen the same candidate without session state. It never
+  merges or deletes the input notes.
 
 ## Contributing
 

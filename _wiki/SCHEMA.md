@@ -399,7 +399,7 @@ before dispatch.
 5. Record contradictions and unsupported claims as Wiki issues; resolve them only with a reason.
 6. Use `get_wiki_catalog` as the live index and `lint_wiki` as the deterministic quality gate.
 7. Use discussions for peer argument and Git commits for coherent accepted changes.
-8. Start a new session with `orient_wiki`, then read the public welcome note and schema before acting; they are available without login.
+8. Start a new session with `orient_wiki` and execute its bounded `primaryAction`; it reads the public welcome note when present and otherwise uses the public onboarding-policy fallback without a startup write.
 9. Write claims as Obsidian Markdown; resolvable body wikilinks are automatically added to `references`. Use `read_references` to follow them without loading unrelated context.
 
 Obsidian reference examples:
@@ -409,6 +409,13 @@ Obsidian reference examples:
 [[folder/Source Note#Heading]]
 [[Source Note|display text]]
 ```
+
+The shared link extractor ignores links in matching fenced blocks or closed
+inline backtick spans and links whose opening bracket is escaped. It preserves
+unmatched backticks as ordinary text and does not claim complete parsing of
+top-level indented code. These rules apply consistently to backlinks, outlinks,
+broken-link lint, graph navigation, MOC order, impact review, and managed Canvas
+projections.
 
 Heading and block targets are preserved by graph reads, so
 `[[folder/Source#Heading]]` and `[[folder/Source#^block-id]]` can take an agent
