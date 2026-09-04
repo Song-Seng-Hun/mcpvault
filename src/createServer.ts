@@ -543,7 +543,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "search_notes",
-          description: "Search visible notes and return one compact excerpt per matching document. Matching LLM Wiki notes are prioritized. Obsidian aliases and bounded retrieval cues can surface a canonical note, with alias_match or retrieval_cue_match explaining why. Each result includes fresh and a bounded next hint: read_projection for Wiki context, read_section for a direct hit, or verify_evidence when only the note identity matched. Set expandAuthority=true to include bounded broader/related classification terms; those matches are labeled separately and never treated as exact evidence. Supports bounded Obsidian-style path:, tag:, property:, [property:value], section:(...), block:(...), task:, task-todo:, task-done:, quoted phrases, OR, and -excluded terms. Set semantic=true to add bounded Korean-capable vector matches; filtered/scoped searches remain lexical for correctness.",
+          description: "Search visible notes and return one compact excerpt per matching document. Matching LLM Wiki notes are prioritized. Obsidian aliases, authority_id, and bounded retrieval cues can surface a canonical note. Set expandAuthority=true to follow only explicit Markdown Properties in confidence order: same_as (exact), close_match (high), broader_terms (medium), then related_terms (low). Results carry a compact au explanation; embeddings never fabricate authority relations. Each result includes fresh and a bounded next hint. Supports bounded Obsidian-style path:, tag:, property:, [property:value], section:(...), block:(...), task:, task-todo:, task-done:, quoted phrases, OR, and -excluded terms. Set semantic=true to add bounded Korean-capable vector matches; filtered/scoped searches remain lexical for correctness.",
           inputSchema: {
             type: "object",
             properties: {
@@ -557,7 +557,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
               excludePaths: { type: "array", items: { type: "string" }, description: "Skip files under these subtrees, e.g. [\"Archive\", \"meta\"] (directory prefixes)" },
               semantic: { type: "boolean", description: "Add bounded semantic/vector matches using the optional multilingual index (default: false)" },
               includeRevisions: { type: "boolean", description: "Include each result's source revision (rv) so a later bounded read can validate freshness (default: false)" },
-              expandAuthority: { type: "boolean", description: "Also match bounded broader_terms and related_terms classification fields; results explain these as broader_term_match or related_term_match (default: false)" },
+              expandAuthority: { type: "boolean", description: "Also match explicit same_as, close_match, broader_terms, and related_terms in descending confidence; authority_id remains directly searchable (default: false)" },
               queryVector: { type: "array", minItems: 384, maxItems: 384, items: { type: "number" }, description: "Optional 384-dimensional query embedding computed by the client with Xenova/multilingual-e5-small; supplying it avoids loading the embedding model in this server process" },
               prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
             },

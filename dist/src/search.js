@@ -20,7 +20,7 @@ const MAX_INDEXED_TEXT_BYTES = 64 * 1024 * 1024;
 const NGRAM_SIZE = 3;
 const SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.bin';
 const LEGACY_SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.gz';
-const SEARCH_SNAPSHOT_VERSION = 5;
+const SEARCH_SNAPSHOT_VERSION = 6;
 const SNAPSHOT_SAVE_DEBOUNCE_MS = 1_000;
 const DIRECTORY_CACHE_TTL_MS = 5_000;
 const DIRECTORY_CACHE_MAX_ENTRIES = 1_024;
@@ -274,6 +274,21 @@ function encodeSnapshot(snapshot) {
         chunks.push(authorityCount);
         for (const term of document.authorityTerms)
             chunks.push(encodeSnapshotString(term));
+        const authorityIdCount = Buffer.allocUnsafe(4);
+        authorityIdCount.writeUInt32LE(document.authorityIds.length, 0);
+        chunks.push(authorityIdCount);
+        for (const term of document.authorityIds)
+            chunks.push(encodeSnapshotString(term));
+        const sameAsCount = Buffer.allocUnsafe(4);
+        sameAsCount.writeUInt32LE(document.sameAsTerms.length, 0);
+        chunks.push(sameAsCount);
+        for (const term of document.sameAsTerms)
+            chunks.push(encodeSnapshotString(term));
+        const closeMatchCount = Buffer.allocUnsafe(4);
+        closeMatchCount.writeUInt32LE(document.closeMatchTerms.length, 0);
+        chunks.push(closeMatchCount);
+        for (const term of document.closeMatchTerms)
+            chunks.push(encodeSnapshotString(term));
         const broaderCount = Buffer.allocUnsafe(4);
         broaderCount.writeUInt32LE(document.broaderTerms.length, 0);
         chunks.push(broaderCount);
@@ -363,45 +378,30 @@ function decodeSnapshot(buffer) {
         const title = readString();
         if (relativePath === undefined || title === undefined || offset + 1 > buffer.length)
             return undefined;
-        if (offset + 4 > buffer.length)
-            return undefined;
-        const authorityCount = buffer.readUInt32LE(offset);
-        offset += 4;
-        if (authorityCount > 64)
-            return undefined;
-        const authorityTerms = [];
-        for (let authorityIndex = 0; authorityIndex < authorityCount; authorityIndex += 1) {
-            const term = readString();
-            if (term === undefined)
+        const readBoundedStrings = (maximum) => {
+            if (offset + 4 > buffer.length)
                 return undefined;
-            authorityTerms.push(term);
-        }
-        if (offset + 4 > buffer.length)
-            return undefined;
-        const broaderCount = buffer.readUInt32LE(offset);
-        offset += 4;
-        if (broaderCount > 20)
-            return undefined;
-        const broaderTerms = [];
-        for (let broaderIndex = 0; broaderIndex < broaderCount; broaderIndex += 1) {
-            const term = readString();
-            if (term === undefined)
+            const valueCount = buffer.readUInt32LE(offset);
+            offset += 4;
+            if (valueCount > maximum)
                 return undefined;
-            broaderTerms.push(term);
-        }
-        if (offset + 4 > buffer.length)
+            const values = [];
+            for (let valueIndex = 0; valueIndex < valueCount; valueIndex += 1) {
+                const value = readString();
+                if (value === undefined)
+                    return undefined;
+                values.push(value);
+            }
+            return values;
+        };
+        const authorityTerms = readBoundedStrings(64);
+        const authorityIds = readBoundedStrings(8);
+        const sameAsTerms = readBoundedStrings(20);
+        const closeMatchTerms = readBoundedStrings(20);
+        const broaderTerms = readBoundedStrings(20);
+        const relatedTerms = readBoundedStrings(20);
+        if (!authorityTerms || !authorityIds || !sameAsTerms || !closeMatchTerms || !broaderTerms || !relatedTerms)
             return undefined;
-        const relatedCount = buffer.readUInt32LE(offset);
-        offset += 4;
-        if (relatedCount > 20)
-            return undefined;
-        const relatedTerms = [];
-        for (let relatedIndex = 0; relatedIndex < relatedCount; relatedIndex += 1) {
-            const term = readString();
-            if (term === undefined)
-                return undefined;
-            relatedTerms.push(term);
-        }
         if (offset + 4 > buffer.length)
             return undefined;
         const cueCount = buffer.readUInt32LE(offset);
@@ -437,7 +437,7 @@ function decodeSnapshot(buffer) {
         const titleGramIds = readGramIds(titleGramCount);
         if (!bodyGramIds || !frontmatterGramIds || !titleGramIds)
             return undefined;
-        documents.push({ relativePath, title, authorityTerms, broaderTerms, relatedTerms, retrievalCues, ...(useWhenValue && { useWhen: useWhenValue }), isWiki: (flags & 1) !== 0, moderationHidden: (flags & 2) !== 0, revision: revisionValue, size, mtimeMs, bodyLength, frontmatterLength, textBytes, bodyGramIds, frontmatterGramIds, titleGramIds });
+        documents.push({ relativePath, title, authorityTerms, authorityIds, sameAsTerms, closeMatchTerms, broaderTerms, relatedTerms, retrievalCues, ...(useWhenValue && { useWhen: useWhenValue }), isWiki: (flags & 1) !== 0, moderationHidden: (flags & 2) !== 0, revision: revisionValue, size, mtimeMs, bodyLength, frontmatterLength, textBytes, bodyGramIds, frontmatterGramIds, titleGramIds });
     }
     return offset === buffer.length ? { version, grams, documents } : undefined;
 }
@@ -468,7 +468,7 @@ function searchableTextFor(document, searchContent, searchFrontmatter) {
 }
 function authorityMetadataFromFrontmatter(frontmatter) {
     if (!frontmatter)
-        return { authorityTerms: [], broaderTerms: [], relatedTerms: [] };
+        return { authorityTerms: [], authorityIds: [], sameAsTerms: [], closeMatchTerms: [], broaderTerms: [], relatedTerms: [] };
     const title = typeof frontmatter.title === 'string' && frontmatter.title.trim() ? [frontmatter.title.trim()] : [];
     const aliases = Array.isArray(frontmatter.aliases)
         ? frontmatter.aliases.filter((value) => typeof value === 'string' && value.trim().length > 0)
@@ -478,6 +478,9 @@ function authorityMetadataFromFrontmatter(frontmatter) {
         : [];
     return {
         authorityTerms: [...title, ...aliases.slice(0, 32).map(alias => alias.trim())],
+        authorityIds: typeof frontmatter.authority_id === 'string' && frontmatter.authority_id.trim() ? [frontmatter.authority_id.trim()] : [],
+        sameAsTerms: list('same_as', 20),
+        closeMatchTerms: list('close_match', 20),
         broaderTerms: list('broader_terms', 20),
         relatedTerms: list('related_terms', 20),
     };
@@ -491,6 +494,14 @@ function retrievalMetadataFromFrontmatter(frontmatter) {
     const useWhen = typeof frontmatter.use_when === 'string' && frontmatter.use_when.trim() ? frontmatter.use_when.trim() : undefined;
     return useWhen ? { cues, useWhen } : { cues };
 }
+function matchingAuthorityValue(values, terms, caseSensitive) {
+    for (const value of values) {
+        const candidate = caseSensitive ? value : value.toLowerCase();
+        if (terms.some(term => candidate.includes(term)))
+            return value;
+    }
+    return undefined;
+}
 function rankCandidateFor(document, documentId, terms, scoringTerms, searchContent, searchFrontmatter, caseSensitive, expandAuthority) {
     const searchableText = searchableTextFor(document, searchContent, searchFrontmatter);
     const searchIn = caseSensitive ? searchableText : searchableText.toLowerCase();
@@ -498,22 +509,47 @@ function rankCandidateFor(document, documentId, terms, scoringTerms, searchConte
     const filenameToSearch = caseSensitive ? title : title.toLowerCase();
     const filenameMatch = terms.some(term => filenameToSearch.includes(term));
     const authorityText = document.authorityTerms.join('\n');
+    const authorityIdText = document.authorityIds.join('\n');
+    const sameAsText = document.sameAsTerms.join('\n');
+    const closeMatchText = document.closeMatchTerms.join('\n');
     const broaderText = document.broaderTerms.join('\n');
     const relatedText = document.relatedTerms.join('\n');
     const authorityIn = caseSensitive ? authorityText : authorityText.toLowerCase();
-    const broaderIn = caseSensitive ? broaderText : broaderText.toLowerCase();
-    const relatedIn = caseSensitive ? relatedText : relatedText.toLowerCase();
-    const authorityMatch = terms.some(term => authorityIn.includes(term));
-    const broaderTermMatch = expandAuthority && terms.some(term => broaderIn.includes(term));
-    const relatedTermMatch = expandAuthority && terms.some(term => relatedIn.includes(term));
+    const authorityTermMatch = terms.some(term => authorityIn.includes(term));
+    const authorityIdValue = matchingAuthorityValue(document.authorityIds, terms, caseSensitive);
+    const sameAsValue = expandAuthority ? matchingAuthorityValue(document.sameAsTerms, terms, caseSensitive) : undefined;
+    const closeMatchValue = expandAuthority ? matchingAuthorityValue(document.closeMatchTerms, terms, caseSensitive) : undefined;
+    const broaderValue = expandAuthority ? matchingAuthorityValue(document.broaderTerms, terms, caseSensitive) : undefined;
+    const relatedValue = expandAuthority ? matchingAuthorityValue(document.relatedTerms, terms, caseSensitive) : undefined;
+    const authorityIdMatch = Boolean(authorityIdValue);
+    const sameAsMatch = Boolean(sameAsValue);
+    const closeMatch = Boolean(closeMatchValue);
+    const broaderTermMatch = Boolean(broaderValue);
+    const relatedTermMatch = Boolean(relatedValue);
+    const authorityExpansion = authorityIdValue
+        ? { relation: 'authority_id', confidence: 'exact', matched: authorityIdValue }
+        : sameAsValue
+            ? { relation: 'same_as', confidence: 'exact', matched: sameAsValue }
+            : closeMatchValue
+                ? { relation: 'close_match', confidence: 'high', matched: closeMatchValue }
+                : broaderValue
+                    ? { relation: 'broader', confidence: 'medium', matched: broaderValue }
+                    : relatedValue
+                        ? { relation: 'related', confidence: 'low', matched: relatedValue }
+                        : undefined;
     const retrievalText = [...document.retrievalCues, ...(document.useWhen ? [document.useWhen] : [])].join('\n');
     const retrievalIn = caseSensitive ? retrievalText : retrievalText.toLowerCase();
     const retrievalCueMatch = terms.some(term => retrievalIn.includes(term));
     const termIndices = terms.map(term => searchIn.indexOf(term));
     const matchedIndices = termIndices.filter(index => index !== -1);
     const firstIndex = matchedIndices.length > 0 ? Math.min(...matchedIndices) : -1;
-    if (terms.length > 0 && firstIndex === -1 && !filenameMatch && !authorityMatch && !broaderTermMatch && !relatedTermMatch && !retrievalCueMatch)
+    if (terms.length > 0 && firstIndex === -1 && !filenameMatch && !authorityTermMatch && !authorityExpansion && !retrievalCueMatch)
         return undefined;
+    const explicitAuthorityText = [
+        authorityIdText,
+        ...(expandAuthority ? [sameAsText, closeMatchText, broaderText, relatedText] : []),
+    ].join('\n');
+    const explicitAuthorityIn = caseSensitive ? explicitAuthorityText : explicitAuthorityText.toLowerCase();
     const termFreqs = new Map();
     for (const term of scoringTerms) {
         let count = 0;
@@ -526,6 +562,11 @@ function rankCandidateFor(document, documentId, terms, scoringTerms, searchConte
         while ((authorityIndex = authorityIn.indexOf(term, authorityIndex)) !== -1) {
             count += 1;
             authorityIndex += term.length;
+        }
+        let explicitAuthorityIndex = 0;
+        while ((explicitAuthorityIndex = explicitAuthorityIn.indexOf(term, explicitAuthorityIndex)) !== -1) {
+            count += 1;
+            explicitAuthorityIndex += term.length;
         }
         let retrievalIndex = 0;
         while ((retrievalIndex = retrievalIn.indexOf(term, retrievalIndex)) !== -1) {
@@ -540,12 +581,16 @@ function rankCandidateFor(document, documentId, terms, scoringTerms, searchConte
         firstIndex,
         firstTermIndex: firstIndex === -1 ? -1 : termIndices.indexOf(firstIndex),
         filenameMatch,
-        authorityMatch,
+        authorityTermMatch,
+        authorityIdMatch,
+        sameAsMatch,
+        closeMatch,
         broaderTermMatch,
         relatedTermMatch,
+        ...(authorityExpansion && { authorityExpansion }),
         retrievalCueMatch,
         termFreqs,
-        docLength: (searchContent ? document.bodyLength : 0) + (searchFrontmatter ? document.frontmatterLength : 0) + countWords(authorityText) + countWords(retrievalText),
+        docLength: (searchContent ? document.bodyLength : 0) + (searchFrontmatter ? document.frontmatterLength : 0) + countWords(authorityText) + countWords(explicitAuthorityText) + countWords(retrievalText),
         wiki: document.isWiki,
     };
 }
@@ -789,6 +834,9 @@ export class SearchService {
                 authorityTerms: Array.isArray(item.authorityTerms)
                     ? item.authorityTerms.filter(value => typeof value === 'string').slice(0, 64)
                     : [String(item.title || relativePath)],
+                authorityIds: Array.isArray(item.authorityIds) ? item.authorityIds.filter(value => typeof value === 'string').slice(0, 8) : [],
+                sameAsTerms: Array.isArray(item.sameAsTerms) ? item.sameAsTerms.filter(value => typeof value === 'string').slice(0, 20) : [],
+                closeMatchTerms: Array.isArray(item.closeMatchTerms) ? item.closeMatchTerms.filter(value => typeof value === 'string').slice(0, 20) : [],
                 broaderTerms: Array.isArray(item.broaderTerms) ? item.broaderTerms.filter(value => typeof value === 'string').slice(0, 20) : [],
                 relatedTerms: Array.isArray(item.relatedTerms) ? item.relatedTerms.filter(value => typeof value === 'string').slice(0, 20) : [],
                 retrievalCues: Array.isArray(item.retrievalCues) ? item.retrievalCues.filter(value => typeof value === 'string').slice(0, 8) : [],
@@ -836,6 +884,9 @@ export class SearchService {
                 relativePath: document.relativePath,
                 title: document.title,
                 authorityTerms: document.authorityTerms,
+                authorityIds: document.authorityIds,
+                sameAsTerms: document.sameAsTerms,
+                closeMatchTerms: document.closeMatchTerms,
                 broaderTerms: document.broaderTerms,
                 relatedTerms: document.relatedTerms,
                 retrievalCues: document.retrievalCues,
@@ -958,7 +1009,7 @@ export class SearchService {
                 const searchIn = caseSensitive
                     ? searchableTextFor(document, searchContent, searchFrontmatter)
                     : searchableTextFor(document, searchContent, searchFrontmatter).toLowerCase();
-                const discoveryText = `${document.authorityTerms.join('\n')}\n${authorityExpansionEnabled ? `${document.broaderTerms.join('\n')}\n${document.relatedTerms.join('\n')}` : ''}\n${document.retrievalCues.join('\n')}\n${document.useWhen || ''}`;
+                const discoveryText = `${document.authorityTerms.join('\n')}\n${document.authorityIds.join('\n')}\n${authorityExpansionEnabled ? `${document.sameAsTerms.join('\n')}\n${document.closeMatchTerms.join('\n')}\n${document.broaderTerms.join('\n')}\n${document.relatedTerms.join('\n')}` : ''}\n${document.retrievalCues.join('\n')}\n${document.useWhen || ''}`;
                 const discoveryIn = caseSensitive ? discoveryText : discoveryText.toLowerCase();
                 const title = document.relativePath.split('/').pop()?.replace(/\.md$/, '') || document.relativePath;
                 const exclusionSearch = `${searchIn}\n${discoveryIn}\n${caseSensitive ? title : title.toLowerCase()}`;
@@ -1165,6 +1216,9 @@ export class SearchService {
                 ...(parsedFrontmatter ? { frontmatter: parsedFrontmatter } : {}),
                 title,
                 authorityTerms,
+                authorityIds: authorityMetadata.authorityIds,
+                sameAsTerms: authorityMetadata.sameAsTerms,
+                closeMatchTerms: authorityMetadata.closeMatchTerms,
                 broaderTerms: authorityMetadata.broaderTerms,
                 relatedTerms: authorityMetadata.relatedTerms,
                 retrievalCues: retrievalMetadata.cues,
@@ -1181,7 +1235,7 @@ export class SearchService {
                 lastAccessAt: Date.now(),
                 bodyGrams: this.gramIdsForText(body.toLowerCase()),
                 frontmatterGrams: this.gramIdsForText(frontmatterText.toLowerCase()),
-                titleGrams: this.gramIdsForText([...authorityTerms, ...authorityMetadata.broaderTerms, ...authorityMetadata.relatedTerms, ...retrievalMetadata.cues, ...(retrievalMetadata.useWhen ? [retrievalMetadata.useWhen] : [])].join('\n').toLowerCase()),
+                titleGrams: this.gramIdsForText([...authorityTerms, ...authorityMetadata.authorityIds, ...authorityMetadata.sameAsTerms, ...authorityMetadata.closeMatchTerms, ...authorityMetadata.broaderTerms, ...authorityMetadata.relatedTerms, ...retrievalMetadata.cues, ...(retrievalMetadata.useWhen ? [retrievalMetadata.useWhen] : [])].join('\n').toLowerCase()),
             };
         }
         catch {
@@ -1420,6 +1474,9 @@ export class SearchService {
             const title = document.relativePath.split('/').pop()?.replace(/\.md$/i, '') || document.relativePath;
             const authorityMetadata = authorityMetadataFromFrontmatter(parsedFrontmatter);
             document.authorityTerms = [title, ...authorityMetadata.authorityTerms];
+            document.authorityIds = authorityMetadata.authorityIds;
+            document.sameAsTerms = authorityMetadata.sameAsTerms;
+            document.closeMatchTerms = authorityMetadata.closeMatchTerms;
             document.broaderTerms = authorityMetadata.broaderTerms;
             document.relatedTerms = authorityMetadata.relatedTerms;
             const retrievalMetadata = retrievalMetadataFromFrontmatter(parsedFrontmatter);
@@ -1578,6 +1635,12 @@ export class SearchService {
                 const idf = idfByTerm.get(term) || 0;
                 score += idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * c.docLength / avgdl));
             }
+            score += c.authorityExpansion?.relation === 'authority_id' ? 2.0
+                : c.authorityExpansion?.relation === 'same_as' ? 1.6
+                    : c.authorityExpansion?.relation === 'close_match' ? 1.2
+                        : c.authorityExpansion?.relation === 'broader' ? 0.8
+                            : c.authorityExpansion?.relation === 'related' ? 0.4
+                                : 0;
             return { score, candidate: c, wiki: c.wiki, index };
         };
         const compare = (a, b) => Number(b.wiki) - Number(a.wiki) || b.score - a.score || a.index - b.index;
@@ -1602,11 +1665,9 @@ export class SearchService {
         const searchIn = caseSensitive ? searchableText : searchableText.toLowerCase();
         let excerpt;
         let matchCount = candidate.filenameMatch ? 1 : 0;
-        if (candidate.authorityMatch)
+        if (candidate.authorityTermMatch)
             matchCount += 1;
-        if (candidate.broaderTermMatch)
-            matchCount += 1;
-        if (candidate.relatedTermMatch)
+        if (candidate.authorityExpansion)
             matchCount += 1;
         if (candidate.retrievalCueMatch)
             matchCount += 1;
@@ -1637,10 +1698,16 @@ export class SearchService {
                 excerpt = `${excerpt}...`;
         }
         const next = document.isWiki
-            ? (candidate.authorityMatch || candidate.broaderTermMatch || candidate.relatedTermMatch || candidate.retrievalCueMatch
+            ? (candidate.authorityTermMatch || candidate.authorityExpansion || candidate.retrievalCueMatch
                 ? 'read_projection'
                 : candidate.firstIndex !== -1 ? 'read_section' : 'verify_evidence')
             : 'read_section';
+        const authorityReason = candidate.authorityExpansion?.relation === 'authority_id' ? 'authority_id_match'
+            : candidate.authorityExpansion?.relation === 'same_as' ? 'same_as_match'
+                : candidate.authorityExpansion?.relation === 'close_match' ? 'close_match'
+                    : candidate.authorityExpansion?.relation === 'broader' ? 'broader_term_match'
+                        : candidate.authorityExpansion?.relation === 'related' ? 'related_term_match'
+                            : undefined;
         return {
             p: document.relativePath,
             t: candidate.title,
@@ -1653,9 +1720,8 @@ export class SearchService {
                 ...filterReasons,
                 ...(document.isWiki ? ['wiki_priority'] : []),
                 ...(candidate.filenameMatch ? ['title_match'] : []),
-                ...(candidate.authorityMatch && !candidate.filenameMatch ? ['alias_match'] : []),
-                ...(candidate.broaderTermMatch ? ['broader_term_match'] : []),
-                ...(candidate.relatedTermMatch ? ['related_term_match'] : []),
+                ...(candidate.authorityTermMatch && !candidate.filenameMatch ? ['alias_match'] : []),
+                ...(authorityReason ? [authorityReason] : []),
                 ...(candidate.retrievalCueMatch ? ['retrieval_cue_match'] : []),
                 ...(candidate.firstIndex !== -1 && searchFrontmatter && candidate.firstIndex < (document.frontmatterText || '').length ? ['frontmatter_match'] : []),
                 ...(candidate.firstIndex !== -1 && (!searchFrontmatter || candidate.firstIndex >= (document.frontmatterText || '').length) ? ['content_match'] : []),
@@ -1665,6 +1731,7 @@ export class SearchService {
             ...(candidate.retrievalCueMatch && document.retrievalCues.length > 0 && { rc: document.retrievalCues.slice(0, 4) }),
             ...(candidate.retrievalCueMatch && document.useWhen && { uw: document.useWhen.slice(0, 280) }),
             ...(includeRevision && { rv: document.revision }),
+            ...(candidate.authorityExpansion && { au: candidate.authorityExpansion }),
         };
     }
 }

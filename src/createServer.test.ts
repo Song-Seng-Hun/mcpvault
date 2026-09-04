@@ -415,6 +415,19 @@ test("search_notes bounds output and prioritizes Wiki notes", async () => {
   }
 });
 
+test("search capability documents explicit authority confidence without implying relations from embeddings", async () => {
+  const server = createServer(testVaultPath, { version: "1.0.0" });
+  const runtime = getServerRuntime(server)!;
+  runtime.ensureEndpointRegistry();
+  const endpoint = runtime.endpointRegistry.resolve('wiki.search')!;
+  expect(endpoint.description).toContain('same_as');
+  expect(endpoint.description).toContain('close_match');
+  expect(endpoint.description).toContain('authority_id');
+  expect(endpoint.description).toContain('embeddings never fabricate');
+  expect((endpoint.input.properties as any).expandAuthority.description).toContain('same_as');
+  await server.close();
+});
+
 test("external Markdown edits invalidate the Wiki catalog without a restart", async () => {
   const { server, client } = await connectClient();
   try {

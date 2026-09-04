@@ -144,7 +144,7 @@ export interface SearchParams {
   semantic?: boolean;
   /** Include the source revision so a later bounded read can validate freshness. */
   includeRevisions?: boolean;
-  /** Expand exact terms through bounded broader/related authority fields. */
+  /** Expand through explicit same/close/broader/related authority fields. */
   expandAuthority?: boolean;
   /** Optional client-computed embedding for semantic search; avoids server model loading. */
   queryVector?: number[];
@@ -202,6 +202,12 @@ export interface SearchResult {
   next?: 'read_projection' | 'read_section' | 'verify_evidence' | 'inspect_neighbors';
   /** SHA-256 of the source note, included only when requested by the client. */
   rv?: string;
+  /** Strongest explicit authority relation declared by the source note. */
+  au?: {
+    relation: 'authority_id' | 'same_as' | 'close_match' | 'broader' | 'related';
+    confidence: 'exact' | 'high' | 'medium' | 'low';
+    matched: string;
+  };
 }
 
 export interface RankCandidate {
@@ -210,9 +216,13 @@ export interface RankCandidate {
   firstIndex: number;
   firstTermIndex: number;
   filenameMatch: boolean;
-  authorityMatch: boolean;
+  authorityTermMatch: boolean;
+  authorityIdMatch: boolean;
+  sameAsMatch: boolean;
+  closeMatch: boolean;
   broaderTermMatch: boolean;
   relatedTermMatch: boolean;
+  authorityExpansion?: SearchResult['au'];
   retrievalCueMatch: boolean;
   termFreqs: Map<string, number>;
   docLength: number;

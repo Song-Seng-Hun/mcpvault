@@ -75,6 +75,48 @@ describe("SearchService", () => {
     expect(related[0]).toMatchObject({ p: "narrow.md", why: expect.arrayContaining(["related_term_match"]) });
   });
 
+  test("ranks explicit authority relations by declared confidence and keeps expansion opt-in", async () => {
+    await writeNote("authority-id.md", "---\nauthority_id: AUTH.42\n---\n# Identity\n\nNeutral body.");
+    await writeNote("same.md", "---\nsame_as: ['[[Ontology Target]]']\n---\n# Same\n\nNeutral body.");
+    await writeNote("close.md", "---\nclose_match: ['[[Ontology Target]]']\n---\n# Close\n\nNeutral body.");
+    await writeNote("broader.md", "---\nbroader_terms: ['[[Ontology Target]]']\n---\n# Broader\n\nNeutral body.");
+    await writeNote("related.md", "---\nrelated_terms: ['[[Ontology Target]]']\n---\n# Related\n\nNeutral body.");
+
+    const identity = await searchService.search({ query: "AUTH.42" });
+    expect(identity[0]).toMatchObject({
+      p: "authority-id.md",
+      why: expect.arrayContaining(["authority_id_match"]),
+      au: { relation: "authority_id", confidence: "exact", matched: "AUTH.42" },
+    });
+
+    expect(await searchService.search({ query: "Ontology Target" })).toHaveLength(0);
+    const expanded = await searchService.search({ query: "Ontology Target", expandAuthority: true, limit: 10, maxChars: 2000 });
+    expect(expanded.map(result => result.p)).toEqual(["same.md", "close.md", "broader.md", "related.md"]);
+    const byPath = new Map(expanded.map(result => [result.p, result]));
+    expect(byPath.get("same.md")).toMatchObject({ why: expect.arrayContaining(["same_as_match"]), au: { relation: "same_as", confidence: "exact", matched: "[[Ontology Target]]" } });
+    expect(byPath.get("close.md")).toMatchObject({ why: expect.arrayContaining(["close_match"]), au: { relation: "close_match", confidence: "high", matched: "[[Ontology Target]]" } });
+    expect(byPath.get("broader.md")).toMatchObject({ why: expect.arrayContaining(["broader_term_match"]), au: { relation: "broader", confidence: "medium", matched: "[[Ontology Target]]" } });
+    expect(byPath.get("related.md")).toMatchObject({ why: expect.arrayContaining(["related_term_match"]), au: { relation: "related", confidence: "low", matched: "[[Ontology Target]]" } });
+    expect(JSON.stringify(expanded).length).toBeLessThanOrEqual(2000);
+    expect((await searchService.search({ query: "Ontology Target", expandAuthority: true, limit: 2 })).map(result => result.p)).toEqual(["same.md", "close.md"]);
+  });
+
+  test("invalidates explicit authority relation matches after update and delete", async () => {
+    await writeNote("mutable.md", "---\nclose_match: [OldAuthorityNeedle]\n---\n# Mutable\n\nNeutral body.");
+    expect((await searchService.search({ query: "OldAuthorityNeedle", expandAuthority: true })).map(result => result.p)).toContain("mutable.md");
+
+    await writeNote("mutable.md", "---\nclose_match: [NewAuthorityNeedle]\n---\n# Mutable\n\nNeutral body.");
+    searchService.invalidate("mutable.md", "upsert");
+    expect((await searchService.search({ query: "OldAuthorityNeedle", expandAuthority: true })).map(result => result.p)).not.toContain("mutable.md");
+    expect((await searchService.search({ query: "NewAuthorityNeedle", expandAuthority: true }))[0]).toMatchObject({
+      p: "mutable.md", au: { relation: "close_match", confidence: "high", matched: "NewAuthorityNeedle" },
+    });
+
+    await rm(join(testVaultPath, "mutable.md"));
+    searchService.invalidate("mutable.md", "delete");
+    expect((await searchService.search({ query: "NewAuthorityNeedle", expandAuthority: true })).map(result => result.p)).not.toContain("mutable.md");
+  });
+
   test("returns empty array when no matches", async () => {
     await writeNote("note.md", "# Note\n\nNothing relevant here.");
 
@@ -91,7 +133,9 @@ describe("SearchService", () => {
 
   test("restores the derived index snapshot after a server restart", async () => {
     await writeNote("restartable.md", "# Restartable\n\nSnapshot candidate.");
+    await writeNote("authority-restart.md", "---\nclose_match: [Restart Authority]\n---\n# Authority restart\n\nNeutral body.");
     expect(await searchService.search({ query: "candidate" })).toHaveLength(1);
+    expect((await searchService.search({ query: "Restart Authority", expandAuthority: true }))[0]).toMatchObject({ au: { relation: "close_match", confidence: "high" } });
     await new Promise(resolve => setTimeout(resolve, 1_100));
     const snapshot = await readFile(join(testVaultPath, ".mcpvault", "search-index.snapshot.bin"));
     expect(snapshot.subarray(0, 8).toString("ascii")).toBe("MCPVSRCH");
@@ -102,6 +146,9 @@ describe("SearchService", () => {
       const results = await restarted.search({ query: "candidate" });
       expect(results).toHaveLength(1);
       expect(results[0]!.p).toBe("restartable.md");
+      expect((await restarted.search({ query: "Restart Authority", expandAuthority: true }))[0]).toMatchObject({
+        p: "authority-restart.md", au: { relation: "close_match", confidence: "high", matched: "Restart Authority" },
+      });
     } finally {
       restarted.close();
     }
