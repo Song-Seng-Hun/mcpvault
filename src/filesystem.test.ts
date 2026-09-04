@@ -461,6 +461,10 @@ describe("getBacklinks", () => {
     expect(result.total).toBe(2);
     expect(result.backlinks).toHaveLength(1);
     expect(result.truncated).toBe(true);
+    const second = await fileSystem.getBacklinks("Target.md", 1, () => true, 1);
+    expect(second.backlinks).toHaveLength(1);
+    expect(second.backlinks[0]?.line).toBe(2);
+    expect(second.truncated).toBe(false);
     await expect(fileSystem.getBacklinks(".obsidian/app.json")).rejects.toThrow(/Access denied/);
   });
 });
@@ -476,6 +480,9 @@ describe("getOutlinks", () => {
     expect(result.outlinks).toHaveLength(1);
     expect(result.outlinks[0]).toMatchObject({ target: "One", line: 1, link: "[[One]]" });
     expect(result.truncated).toBe(true);
+    const second = await fileSystem.getOutlinks("source.md", 1, () => true, 1);
+    expect(second.outlinks[0]).toMatchObject({ target: "Two", line: 2 });
+    expect(second.truncated).toBe(false);
   });
 
   test("rejects restricted source paths", async () => {
@@ -505,6 +512,9 @@ describe("findUnresolvedLinks", () => {
     expect(result.total).toBe(2);
     expect(result.unresolved).toHaveLength(1);
     expect(result.truncated).toBe(true);
+    const second = await fileSystem.findUnresolvedLinks(1, () => true, 1);
+    expect(second.unresolved[0]?.target).toBe("MissingTwo");
+    expect(second.truncated).toBe(false);
   });
 });
 
@@ -534,6 +544,9 @@ describe("findOrphanNotes", () => {
     expect(result.orphans).toHaveLength(1);
     expect(result.total).toBe(2);
     expect(result.truncated).toBe(true);
+    const second = await fileSystem.findOrphanNotes(1, () => true, 1);
+    expect(second.orphans).toEqual([{ path: "two.md", incomingLinks: 0 }]);
+    expect(second.truncated).toBe(false);
   });
 });
 

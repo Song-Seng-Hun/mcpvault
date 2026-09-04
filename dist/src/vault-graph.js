@@ -192,7 +192,7 @@ export class VaultGraphIndex {
         this.entries.clear();
         this.allPaths.clear();
     }
-    async getBacklinks(path, limit, canAccessPath) {
+    async getBacklinks(path, limit, canAccessPath, offset = 0) {
         await this.ensure();
         const target = normalizePath(path);
         const normalizedTarget = normalizedPath(target);
@@ -229,13 +229,14 @@ export class VaultGraphIndex {
                     ...(link.relation && { relation: link.relation }),
                     ...(link.sourceClaimId && { sourceClaimId: link.sourceClaimId }),
                 };
-                addTopMatch(backlinks, backlink, limit, compare);
+                addTopMatch(backlinks, backlink, offset + limit, compare);
             }
         }
         backlinks.sort(compare);
-        return { target, backlinks, total, truncated: total > backlinks.length };
+        const page = backlinks.slice(offset, offset + limit);
+        return { target, backlinks: page, total, truncated: total > offset + page.length };
     }
-    async getOutlinks(path, limit, canAccessPath) {
+    async getOutlinks(path, limit, canAccessPath, offset = 0) {
         await this.ensure();
         const source = normalizePath(path);
         const entry = this.entries.get(source);
@@ -255,12 +256,12 @@ export class VaultGraphIndex {
         });
         return {
             source,
-            outlinks: outlinks.slice(0, limit),
+            outlinks: outlinks.slice(offset, offset + limit),
             total: outlinks.length,
-            truncated: outlinks.length > limit,
+            truncated: outlinks.length > offset + limit,
         };
     }
-    async findUnresolvedLinks(limit, canAccessPath) {
+    async findUnresolvedLinks(limit, canAccessPath, offset = 0) {
         await this.ensure();
         const { paths: visiblePaths, pathSet: visible, resolver } = this.visibilityContext(canAccessPath);
         const unresolved = [];
@@ -275,13 +276,13 @@ export class VaultGraphIndex {
                 if (resolveTargets(link.target, resolver, entry.path).some(path => visible.has(path)))
                     continue;
                 total += 1;
-                if (unresolved.length < limit)
+                if (total > offset && unresolved.length < limit)
                     unresolved.push({ ...link, path: entry.path });
             }
         }
-        return { unresolved, total, truncated: total > unresolved.length };
+        return { unresolved, total, truncated: total > offset + unresolved.length };
     }
-    async findOrphanNotes(limit, canAccessPath) {
+    async findOrphanNotes(limit, canAccessPath, offset = 0) {
         await this.ensure();
         const { paths: allVisiblePaths, resolver } = this.visibilityContext(canAccessPath);
         const notePaths = allVisiblePaths.filter(isNote);
@@ -302,8 +303,9 @@ export class VaultGraphIndex {
         }
         const orphans = notePaths
             .filter(path => incomingCounts.get(normalizedPath(path)) === 0)
-            .map(path => ({ path, incomingLinks: 0 }));
-        return { orphans: orphans.slice(0, limit), total: orphans.length, truncated: orphans.length > limit };
+            .map(path => ({ path, incomingLinks: 0 }))
+            .sort((left, right) => left.path.localeCompare(right.path));
+        return { orphans: orphans.slice(offset, offset + limit), total: orphans.length, truncated: orphans.length > offset + limit };
     }
     async listAllTags(canAccessPath) {
         await this.ensure();

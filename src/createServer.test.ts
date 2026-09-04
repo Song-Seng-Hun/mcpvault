@@ -276,6 +276,50 @@ test("custom options are applied", () => {
   expect(server).toBeDefined();
 });
 
+test("directory and graph navigation reads are bounded and resumable", async () => {
+  const { server, client, accessToken } = await connectClient();
+  try {
+    for (let index = 0; index < 70; index += 1) {
+      await client.callTool({
+        name: "write_note",
+        arguments: {
+          path: `Pages/page-${index.toString().padStart(3, "0")}-${"x".repeat(24)}.md`,
+          content: `# Page ${index}`,
+          expectedRevision: "missing",
+          accessToken,
+        },
+      });
+    }
+    const directory = await client.callTool({ name: "list_directory", arguments: { path: "Pages", maxChars: 1024 } });
+    const directoryText = (directory.content as any)[0].text as string;
+    const directoryValue = JSON.parse(directoryText);
+    expect(directoryText.length).toBeLessThanOrEqual(1024);
+    expect(directoryValue).toMatchObject({ path: "Pages", totalEntries: 70, truncated: true, nextAction: { endpointId: "mcp.list_directory" } });
+    const directoryNext = await client.callTool({ name: "list_directory", arguments: directoryValue.nextAction.arguments });
+    const directoryNextValue = JSON.parse((directoryNext.content as any)[0].text);
+    expect(directoryNextValue.offset).toBe(directoryValue.returned);
+    expect(new Set([...directoryValue.files, ...directoryNextValue.files]).size).toBe(directoryValue.files.length + directoryNextValue.files.length);
+
+    const links = Array.from({ length: 90 }, (_, index) => `[[Target]] trailing context ${index} ${"context ".repeat(80)}`).join("\n");
+    await client.callTool({ name: "write_note", arguments: { path: "Target.md", content: "# Target", expectedRevision: "missing", accessToken } });
+    await client.callTool({ name: "write_note", arguments: { path: "Links.md", content: links, expectedRevision: "missing", accessToken } });
+
+    const backlinks = await client.callTool({ name: "get_backlinks", arguments: { path: "Target.md", maxChars: 1200 } });
+    const backlinksText = (backlinks.content as any)[0].text as string;
+    const backlinksValue = JSON.parse(backlinksText);
+    expect(backlinksText.length).toBeLessThanOrEqual(1200);
+    expect(backlinksValue).toMatchObject({ total: 90, truncated: true, nextAction: { endpointId: "mcp.get_backlinks" } });
+    expect(backlinksValue.backlinks[0]).toMatchObject({ fieldsTruncated: true });
+    const backlinksNext = await client.callTool({ name: "get_backlinks", arguments: backlinksValue.nextAction.arguments });
+    const backlinksNextValue = JSON.parse((backlinksNext.content as any)[0].text);
+    expect(backlinksNextValue.offset).toBe(backlinksValue.returned);
+    expect(backlinksNextValue.backlinks[0].line).toBeGreaterThan(backlinksValue.backlinks.at(-1).line);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 async function connectClient() {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();

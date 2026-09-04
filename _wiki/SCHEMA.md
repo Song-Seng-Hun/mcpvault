@@ -333,6 +333,9 @@ bounded prefix, the current revision, total/returned lengths, and
 `mcp.read_note_lines` for only the selected section. The outline and line
 routes are themselves bounded and revision-stamped. Follow their returned
 `afterLine` or line/column continuation action rather than repeating a page.
+Directory and graph-navigation reads use the same rule: consume one bounded
+page and follow its exact offset continuation. A large backlink set or repair
+queue must never be loaded wholesale merely to discover the next item.
 
 ## Invariants
 

@@ -60,6 +60,18 @@ function compareQueryValues(a: unknown, b: unknown): number {
 
 const TOP_K_MAX = 1_024;
 
+function addBoundedSorted<T>(items: T[], item: T, limit: number, compare: (left: T, right: T) => number): void {
+  if (items.length < limit) {
+    items.push(item);
+    return;
+  }
+  let worst = 0;
+  for (let index = 1; index < items.length; index += 1) {
+    if (compare(items[index]!, items[worst]!) > 0) worst = index;
+  }
+  if (compare(item, items[worst]!) < 0) items[worst] = item;
+}
+
 function compareQueryNotes(a: QueryNote, b: QueryNote, sortBy: string, sortOrder: 'asc' | 'desc'): number {
   const aValue = sortBy === 'path' ? a.path : getFrontmatterValue(a.frontmatter, sortBy).value;
   const bValue = sortBy === 'path' ? b.path : getFrontmatterValue(b.frontmatter, sortBy).value;
@@ -1688,7 +1700,7 @@ export class FileSystemService {
     return matches;
   }
 
-  async getBacklinks(path: string, limit: number = 100, canAccessPath: (path: string) => boolean = () => true): Promise<BacklinksResult> {
+  async getBacklinks(path: string, limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0): Promise<BacklinksResult> {
     const target = this.normalizePath(path);
     if (!this.pathFilter.isAllowed(target)) {
       throw new Error(`Access denied: ${target}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
@@ -1697,7 +1709,7 @@ export class FileSystemService {
     if (this.graphIndex) {
       if (!canAccessPath(target)) throw new Error(`Access denied: ${target}`);
       await this.readNote(target);
-      return this.graphIndex.getBacklinks(target, limit, canAccessPath);
+      return this.graphIndex.getBacklinks(target, limit, canAccessPath, offset);
     }
 
     // Validate that the requested target is an existing readable note before
@@ -1731,9 +1743,12 @@ export class FileSystemService {
           const found = findBacklinkMatches(content, target);
           for (const backlink of found) {
             total += 1;
-            if (backlinks.length < limit) {
-              backlinks.push({ ...backlink, path: entryRelativePath });
-            }
+            addBoundedSorted(
+              backlinks,
+              { ...backlink, path: entryRelativePath },
+              offset + limit,
+              (left, right) => left.path.localeCompare(right.path) || left.line - right.line,
+            );
           }
         } catch {
           // A single unreadable or concurrently removed note should not make
@@ -1744,23 +1759,24 @@ export class FileSystemService {
 
     await scanDirectory(this.vaultPath);
     backlinks.sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line);
+    const page = backlinks.slice(offset, offset + limit);
 
     return {
       target,
-      backlinks,
+      backlinks: page,
       total,
-      truncated: total > backlinks.length,
+      truncated: total > offset + page.length,
     };
   }
 
-  async getOutlinks(path: string, limit: number = 100, canAccessPath: (path: string) => boolean = () => true): Promise<OutlinksResult> {
+  async getOutlinks(path: string, limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0): Promise<OutlinksResult> {
     const source = this.normalizePath(path);
     if (!this.pathFilter.isAllowed(source)) {
       throw new Error(`Access denied: ${source}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
     }
     if (!canAccessPath(source)) throw new Error(`Access denied: ${source}`);
 
-    if (this.graphIndex) return this.graphIndex.getOutlinks(source, limit, canAccessPath);
+    if (this.graphIndex) return this.graphIndex.getOutlinks(source, limit, canAccessPath, offset);
 
     const note = await this.readNote(source);
     const allOutlinks = extractObsidianLinkOccurrences(note.originalContent);
@@ -1777,19 +1793,19 @@ export class FileSystemService {
       if (anyMatches.length === 0) return true;
       return resolveWikiLinkTargets(link.target, allVisiblePaths).length > 0;
     });
-    const outlinks = visibleOutlinks.slice(0, limit);
+    const outlinks = visibleOutlinks.slice(offset, offset + limit);
     const total = visibleOutlinks.length;
 
     return {
       source,
       outlinks,
       total,
-      truncated: total > outlinks.length,
+      truncated: total > offset + outlinks.length,
     };
   }
 
-  async findUnresolvedLinks(limit: number = 100, canAccessPath: (path: string) => boolean = () => true): Promise<UnresolvedLinksResult> {
-    if (this.graphIndex) return this.graphIndex.findUnresolvedLinks(limit, canAccessPath);
+  async findUnresolvedLinks(limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0): Promise<UnresolvedLinksResult> {
+    if (this.graphIndex) return this.graphIndex.findUnresolvedLinks(limit, canAccessPath, offset);
     const vaultFiles = (await this.collectVaultFiles()).filter(canAccessPath);
     const noteFiles = vaultFiles.filter((path) => this.isNotePath(path));
     const unresolved: UnresolvedLinksResult['unresolved'] = [];
@@ -1802,9 +1818,12 @@ export class FileSystemService {
         const found = findUnresolvedLinkMatches(content, vaultFiles);
         for (const link of found) {
           total += 1;
-          if (unresolved.length < limit) {
-            unresolved.push({ ...link, path: source });
-          }
+          addBoundedSorted(
+            unresolved,
+            { ...link, path: source },
+            offset + limit,
+            (left, right) => left.path.localeCompare(right.path) || left.line - right.line,
+          );
         }
       } catch {
         // Skip files that are unreadable or disappear during the scan.
@@ -1812,15 +1831,16 @@ export class FileSystemService {
     }
 
     unresolved.sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line);
+    const page = unresolved.slice(offset, offset + limit);
     return {
-      unresolved,
+      unresolved: page,
       total,
-      truncated: total > unresolved.length,
+      truncated: total > offset + page.length,
     };
   }
 
-  async findOrphanNotes(limit: number = 100, canAccessPath: (path: string) => boolean = () => true): Promise<OrphanNotesResult> {
-    if (this.graphIndex) return this.graphIndex.findOrphanNotes(limit, canAccessPath);
+  async findOrphanNotes(limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0): Promise<OrphanNotesResult> {
+    if (this.graphIndex) return this.graphIndex.findOrphanNotes(limit, canAccessPath, offset);
     const vaultFiles = (await this.collectVaultFiles()).filter(canAccessPath);
     const noteFiles = vaultFiles.filter((path) => this.isNotePath(path));
     const incomingCounts = new Map(noteFiles.map((path) => [path.toLowerCase(), 0]));
@@ -1843,12 +1863,13 @@ export class FileSystemService {
 
     const orphans = noteFiles
       .filter((path) => incomingCounts.get(path.toLowerCase()) === 0)
-      .map((path) => ({ path, incomingLinks: 0 }));
+      .map((path) => ({ path, incomingLinks: 0 }))
+      .sort((left, right) => left.path.localeCompare(right.path));
 
     return {
-      orphans: orphans.slice(0, limit),
+      orphans: orphans.slice(offset, offset + limit),
       total: orphans.length,
-      truncated: orphans.length > Math.min(limit, orphans.length),
+      truncated: orphans.length > offset + limit,
     };
   }
 

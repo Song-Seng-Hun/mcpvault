@@ -30,20 +30,20 @@ export declare class VaultGraphIndex {
     invalidate(path?: string, kind?: VaultCatalogChangeKind): void;
     invalidateMany(changes: readonly VaultCatalogChange[]): void;
     close(): void;
-    getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean): Promise<{
+    getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number): Promise<{
         target: string;
         backlinks: BacklinkMatch[];
         total: number;
         truncated: boolean;
     }>;
-    getOutlinks(path: string, limit: number, canAccessPath: (path: string) => boolean): Promise<{
+    getOutlinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number): Promise<{
         source: string;
         outlinks: OutlinkMatch[];
         total: number;
         truncated: boolean;
     }>;
-    findUnresolvedLinks(limit: number, canAccessPath: (path: string) => boolean): Promise<UnresolvedLinksResult>;
-    findOrphanNotes(limit: number, canAccessPath: (path: string) => boolean): Promise<OrphanNotesResult>;
+    findUnresolvedLinks(limit: number, canAccessPath: (path: string) => boolean, offset?: number): Promise<UnresolvedLinksResult>;
+    findOrphanNotes(limit: number, canAccessPath: (path: string) => boolean, offset?: number): Promise<OrphanNotesResult>;
     listAllTags(canAccessPath: (path: string) => boolean): Promise<Array<{
         tag: string;
         count: number;

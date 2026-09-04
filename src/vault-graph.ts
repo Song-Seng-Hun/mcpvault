@@ -217,7 +217,7 @@ export class VaultGraphIndex {
     this.allPaths.clear();
   }
 
-  async getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean): Promise<{ target: string; backlinks: BacklinkMatch[]; total: number; truncated: boolean }> {
+  async getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset = 0): Promise<{ target: string; backlinks: BacklinkMatch[]; total: number; truncated: boolean }> {
     await this.ensure();
     const target = normalizePath(path);
     const normalizedTarget = normalizedPath(target);
@@ -250,14 +250,15 @@ export class VaultGraphIndex {
           ...(link.relation && { relation: link.relation }),
           ...(link.sourceClaimId && { sourceClaimId: link.sourceClaimId }),
         };
-        addTopMatch(backlinks, backlink, limit, compare);
+        addTopMatch(backlinks, backlink, offset + limit, compare);
       }
     }
     backlinks.sort(compare);
-    return { target, backlinks, total, truncated: total > backlinks.length };
+    const page = backlinks.slice(offset, offset + limit);
+    return { target, backlinks: page, total, truncated: total > offset + page.length };
   }
 
-  async getOutlinks(path: string, limit: number, canAccessPath: (path: string) => boolean): Promise<{ source: string; outlinks: OutlinkMatch[]; total: number; truncated: boolean }> {
+  async getOutlinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset = 0): Promise<{ source: string; outlinks: OutlinkMatch[]; total: number; truncated: boolean }> {
     await this.ensure();
     const source = normalizePath(path);
     const entry = this.entries.get(source);
@@ -274,13 +275,13 @@ export class VaultGraphIndex {
     });
     return {
       source,
-      outlinks: outlinks.slice(0, limit),
+      outlinks: outlinks.slice(offset, offset + limit),
       total: outlinks.length,
-      truncated: outlinks.length > limit,
+      truncated: outlinks.length > offset + limit,
     };
   }
 
-  async findUnresolvedLinks(limit: number, canAccessPath: (path: string) => boolean): Promise<UnresolvedLinksResult> {
+  async findUnresolvedLinks(limit: number, canAccessPath: (path: string) => boolean, offset = 0): Promise<UnresolvedLinksResult> {
     await this.ensure();
     const { paths: visiblePaths, pathSet: visible, resolver } = this.visibilityContext(canAccessPath);
     const unresolved: UnresolvedLinksResult['unresolved'] = [];
@@ -292,13 +293,13 @@ export class VaultGraphIndex {
       for (const link of entry.links) {
         if (resolveTargets(link.target, resolver, entry.path).some(path => visible.has(path))) continue;
         total += 1;
-        if (unresolved.length < limit) unresolved.push({ ...link, path: entry.path });
+        if (total > offset && unresolved.length < limit) unresolved.push({ ...link, path: entry.path });
       }
     }
-    return { unresolved, total, truncated: total > unresolved.length };
+    return { unresolved, total, truncated: total > offset + unresolved.length };
   }
 
-  async findOrphanNotes(limit: number, canAccessPath: (path: string) => boolean): Promise<OrphanNotesResult> {
+  async findOrphanNotes(limit: number, canAccessPath: (path: string) => boolean, offset = 0): Promise<OrphanNotesResult> {
     await this.ensure();
     const { paths: allVisiblePaths, resolver } = this.visibilityContext(canAccessPath);
     const notePaths = allVisiblePaths.filter(isNote);
@@ -318,8 +319,9 @@ export class VaultGraphIndex {
     }
     const orphans = notePaths
       .filter(path => incomingCounts.get(normalizedPath(path)) === 0)
-      .map(path => ({ path, incomingLinks: 0 }));
-    return { orphans: orphans.slice(0, limit), total: orphans.length, truncated: orphans.length > limit };
+      .map(path => ({ path, incomingLinks: 0 }))
+      .sort((left, right) => left.path.localeCompare(right.path));
+    return { orphans: orphans.slice(offset, offset + limit), total: orphans.length, truncated: orphans.length > offset + limit };
   }
 
   async listAllTags(canAccessPath: (path: string) => boolean): Promise<Array<{ tag: string; count: number }>> {

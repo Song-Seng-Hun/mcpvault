@@ -105,10 +105,10 @@ export declare class FileSystemService {
      * Throws only on caller misuse (empty name).
      */
     findPathForWikiLink(wikiLinkName: string, canAccessPath?: (path: string) => boolean): Promise<string[]>;
-    getBacklinks(path: string, limit?: number, canAccessPath?: (path: string) => boolean): Promise<BacklinksResult>;
-    getOutlinks(path: string, limit?: number, canAccessPath?: (path: string) => boolean): Promise<OutlinksResult>;
-    findUnresolvedLinks(limit?: number, canAccessPath?: (path: string) => boolean): Promise<UnresolvedLinksResult>;
-    findOrphanNotes(limit?: number, canAccessPath?: (path: string) => boolean): Promise<OrphanNotesResult>;
+    getBacklinks(path: string, limit?: number, canAccessPath?: (path: string) => boolean, offset?: number): Promise<BacklinksResult>;
+    getOutlinks(path: string, limit?: number, canAccessPath?: (path: string) => boolean, offset?: number): Promise<OutlinksResult>;
+    findUnresolvedLinks(limit?: number, canAccessPath?: (path: string) => boolean, offset?: number): Promise<UnresolvedLinksResult>;
+    findOrphanNotes(limit?: number, canAccessPath?: (path: string) => boolean, offset?: number): Promise<OrphanNotesResult>;
     private isNotePath;
     getDailyNote(dateInput?: DailyDateInput, folder?: string): Promise<DailyNoteResult>;
     writeDailyNote(params: {

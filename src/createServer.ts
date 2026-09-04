@@ -506,11 +506,14 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "list_directory",
-          description: "List files and directories in the vault (includes non-note filenames, while read/write tools remain note-only)",
+          description: "List one bounded page of files and directories (including non-note filenames). Follow nextAction for the next page.",
           inputSchema: {
             type: "object",
             properties: {
               path: { type: "string", description: "Path relative to vault root (default: '/')", default: "/" },
+              offset: { type: "integer", minimum: 0, maximum: 100000, description: "Zero-based page offset (default: 0)", default: 0 },
+              limit: { type: "integer", minimum: 1, maximum: 500, description: "Maximum directory entries before the character budget (default: 100)", default: 100 },
+              maxChars: { type: "integer", minimum: 1024, maximum: 12000, description: "Hard total response budget (default: 6000)", default: 6000 },
               prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
             }
           }
@@ -923,34 +926,40 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "find_orphan_notes",
-          description: "Find notes with no incoming wikilinks from another note. Self-links and attachment links do not prevent a note from being considered an orphan. Results include the note path and incoming link count.",
+          description: "Find a bounded page of notes with no incoming wikilinks. Self-links and attachment links do not prevent orphan status.",
           inputSchema: {
             type: "object",
             properties: {
-              limit: { type: "number", description: "Maximum orphan notes to return (default: 100, max: 500)", default: 100 },
+              limit: { type: "integer", minimum: 1, maximum: 500, description: "Maximum orphan notes to return (default: 100, max: 500)", default: 100 },
+              offset: { type: "integer", minimum: 0, maximum: 100000, description: "Zero-based result offset (default: 0)", default: 0 },
+              maxChars: { type: "integer", minimum: 1024, maximum: 12000, description: "Hard total response budget (default: 6000)", default: 6000 },
               prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
             }
           }
         },
         {
           name: "find_unresolved_links",
-          description: "Find broken Obsidian wikilinks across the vault. Returns source paths, line numbers, raw links, targets, and compact context. Explicit links to existing attachments are treated as resolved; fenced code blocks are ignored.",
+          description: "Find one bounded page of broken Obsidian wikilinks. Returns compact source, locator, target, and context data.",
           inputSchema: {
             type: "object",
             properties: {
-              limit: { type: "number", description: "Maximum unresolved link occurrences to return (default: 100, max: 500)", default: 100 },
+              limit: { type: "integer", minimum: 1, maximum: 500, description: "Maximum unresolved link occurrences to return (default: 100, max: 500)", default: 100 },
+              offset: { type: "integer", minimum: 0, maximum: 100000, description: "Zero-based result offset (default: 0)", default: 0 },
+              maxChars: { type: "integer", minimum: 1024, maximum: 12000, description: "Hard total response budget (default: 6000)", default: 6000 },
               prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
             }
           }
         },
         {
           name: "get_outlinks",
-          description: "List the Obsidian wikilinks from a note. Returns destination targets, line numbers, raw link text, and compact line context. Includes embeds, aliases, headings, and path-qualified links; ignores fenced code blocks.",
+          description: "List one bounded page of a note's Obsidian wikilinks with compact line context.",
           inputSchema: {
             type: "object",
             properties: {
               path: { type: "string", description: "Path to the source note relative to vault root" },
-              limit: { type: "number", description: "Maximum outlink occurrences to return (default: 100, max: 500)", default: 100 },
+              limit: { type: "integer", minimum: 1, maximum: 500, description: "Maximum outlink occurrences to return (default: 100, max: 500)", default: 100 },
+              offset: { type: "integer", minimum: 0, maximum: 100000, description: "Zero-based result offset (default: 0)", default: 0 },
+              maxChars: { type: "integer", minimum: 1024, maximum: 12000, description: "Hard total response budget (default: 6000)", default: 6000 },
               prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
             },
             required: ["path"]
@@ -958,12 +967,14 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "get_backlinks",
-          description: "Find notes that link to a target note. Returns matching note paths, line numbers, link text, and compact line context. Scans Obsidian wikilinks including embeds, aliases, headings, and path-qualified links; ignores fenced code blocks.",
+          description: "Find one bounded page of notes that link to a target note, with compact locator context.",
           inputSchema: {
             type: "object",
             properties: {
               path: { type: "string", description: "Path to the target note relative to vault root" },
-              limit: { type: "number", description: "Maximum backlink occurrences to return (default: 100, max: 500)", default: 100 },
+              limit: { type: "integer", minimum: 1, maximum: 500, description: "Maximum backlink occurrences to return (default: 100, max: 500)", default: 100 },
+              offset: { type: "integer", minimum: 0, maximum: 100000, description: "Zero-based result offset (default: 0)", default: 0 },
+              maxChars: { type: "integer", minimum: 1024, maximum: 12000, description: "Hard total response budget (default: 6000)", default: 6000 },
               prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
             },
             required: ["path"]
@@ -2201,10 +2212,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           const base = String(trimmedArgs.path || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
           listing.directories = listing.directories.filter(name => canAccessPath(base ? `${base}/${name}` : name));
           listing.files = listing.files.filter(name => canAccessPath(base ? `${base}/${name}` : name));
-          const indent = trimmedArgs.prettyPrint ? 2 : undefined;
-          return {
-            content: [{ type: "text", text: JSON.stringify({ dirs: listing.directories, files: listing.files }, null, indent) }]
-          };
+          return boundedDirectoryResult(base, listing.directories, listing.files, trimmedArgs);
         }
 
         case "delete_note": {
@@ -2644,39 +2652,21 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           return await handleWikiLinkTool(fileSystem, trimmedArgs, canAccessPath);
 
         case "get_backlinks": {
-          const requestedLimit = trimmedArgs.limit === undefined ? 100 : Number(trimmedArgs.limit);
-          if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
-            throw new Error('limit must be a positive integer');
-          }
-          const backlinks = await fileSystem.getBacklinks(trimmedArgs.path, Math.min(requestedLimit, 500), canAccessPath);
-          const indent = trimmedArgs.prettyPrint ? 2 : undefined;
-          return {
-            content: [{ type: "text", text: JSON.stringify(backlinks, null, indent) }]
-          };
+          const page = navigationPageArgs(trimmedArgs);
+          const backlinks = await fileSystem.getBacklinks(trimmedArgs.path, page.limit, canAccessPath, page.offset);
+          return boundedNavigationResult('backlinks', endpointIdForTool('get_backlinks'), backlinks, page, trimmedArgs);
         }
 
         case "get_outlinks": {
-          const requestedLimit = trimmedArgs.limit === undefined ? 100 : Number(trimmedArgs.limit);
-          if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
-            throw new Error('limit must be a positive integer');
-          }
-          const outlinks = await fileSystem.getOutlinks(trimmedArgs.path, Math.min(requestedLimit, 500), canAccessPath);
-          const indent = trimmedArgs.prettyPrint ? 2 : undefined;
-          return {
-            content: [{ type: "text", text: JSON.stringify(outlinks, null, indent) }]
-          };
+          const page = navigationPageArgs(trimmedArgs);
+          const outlinks = await fileSystem.getOutlinks(trimmedArgs.path, page.limit, canAccessPath, page.offset);
+          return boundedNavigationResult('outlinks', endpointIdForTool('get_outlinks'), outlinks, page, trimmedArgs);
         }
 
         case "find_unresolved_links": {
-          const requestedLimit = trimmedArgs.limit === undefined ? 100 : Number(trimmedArgs.limit);
-          if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
-            throw new Error('limit must be a positive integer');
-          }
-          const unresolved = await fileSystem.findUnresolvedLinks(Math.min(requestedLimit, 500), canAccessPath);
-          const indent = trimmedArgs.prettyPrint ? 2 : undefined;
-          return {
-            content: [{ type: "text", text: JSON.stringify(unresolved, null, indent) }]
-          };
+          const page = navigationPageArgs(trimmedArgs);
+          const unresolved = await fileSystem.findUnresolvedLinks(page.limit, canAccessPath, page.offset);
+          return boundedNavigationResult('unresolved', endpointIdForTool('find_unresolved_links'), unresolved, page, trimmedArgs);
         }
 
         case "get_daily_note": {
@@ -2707,15 +2697,9 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "find_orphan_notes": {
-          const requestedLimit = trimmedArgs.limit === undefined ? 100 : Number(trimmedArgs.limit);
-          if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
-            throw new Error('limit must be a positive integer');
-          }
-          const orphans = await fileSystem.findOrphanNotes(Math.min(requestedLimit, 500), canAccessPath);
-          const indent = trimmedArgs.prettyPrint ? 2 : undefined;
-          return {
-            content: [{ type: "text", text: JSON.stringify(orphans, null, indent) }]
-          };
+          const page = navigationPageArgs(trimmedArgs);
+          const orphans = await fileSystem.findOrphanNotes(page.limit, canAccessPath, page.offset);
+          return boundedNavigationResult('orphans', endpointIdForTool('find_orphan_notes'), orphans, page, trimmedArgs);
         }
 
         case "get_note_outline": {
@@ -2994,6 +2978,104 @@ function boundedNoteReadResult(
     }
   }
   return { content: [{ type: 'text' as const, text: JSON.stringify(selected) }] };
+}
+
+function navigationPageArgs(args: Record<string, any>): { offset: number; limit: number; maxChars: number } {
+  const offset = args.offset === undefined ? 0 : Number(args.offset);
+  const limit = args.limit === undefined ? 100 : Number(args.limit);
+  const maxChars = args.maxChars === undefined ? 6000 : Number(args.maxChars);
+  if (!Number.isInteger(offset) || offset < 0 || offset > 100000) throw new Error('offset must be an integer between 0 and 100000');
+  if (!Number.isInteger(limit) || limit < 1 || limit > 500) throw new Error('limit must be an integer between 1 and 500');
+  if (!Number.isInteger(maxChars) || maxChars < 1024 || maxChars > 12000) throw new Error('maxChars must be an integer between 1024 and 12000');
+  return { offset, limit, maxChars };
+}
+
+function compactNavigationItem(item: unknown): unknown {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
+  const compact: Record<string, unknown> = {};
+  let truncated = false;
+  for (const [key, value] of Object.entries(item as Record<string, unknown>)) {
+    if (typeof value !== 'string') {
+      compact[key] = value;
+      continue;
+    }
+    const cap = key === 'context' ? 240 : key === 'link' ? 180 : 300;
+    compact[key] = value.slice(0, cap);
+    if (value.length > cap) truncated = true;
+  }
+  if (truncated) compact.fieldsTruncated = true;
+  return compact;
+}
+
+function boundedNavigationResult(
+  key: 'backlinks' | 'outlinks' | 'unresolved' | 'orphans',
+  endpointId: string,
+  result: Record<string, any>,
+  page: { offset: number; limit: number; maxChars: number },
+  args: Record<string, any>,
+) {
+  const items = (Array.isArray(result[key]) ? result[key] : []).map(compactNavigationItem);
+  const metadata = Object.fromEntries(Object.entries(result).filter(([entryKey]) => entryKey !== key && entryKey !== 'truncated'));
+  const serialize = (count: number) => {
+    const selected = items.slice(0, count);
+    const nextOffset = page.offset + selected.length;
+    const truncated = Number(result.total || 0) > nextOffset;
+    const value: Record<string, unknown> = {
+      ...metadata,
+      ...((truncated || page.offset > 0) && { offset: page.offset, returned: selected.length }),
+      [key]: selected,
+      truncated,
+    };
+    if (truncated) {
+      value.remaining = Math.max(0, Number(result.total || 0) - nextOffset);
+      value.nextAction = {
+        endpointId,
+        arguments: {
+          ...(typeof args.path === 'string' && { path: args.path }),
+          offset: nextOffset,
+          limit: page.limit,
+          maxChars: page.maxChars,
+        },
+      };
+    }
+    return JSON.stringify(value, null, args.prettyPrint ? 2 : undefined);
+  };
+  let count = items.length;
+  let text = serialize(count);
+  while (text.length > page.maxChars && count > 0) text = serialize(--count);
+  return { content: [{ type: 'text' as const, text }] };
+}
+
+function boundedDirectoryResult(path: string, directories: string[], files: string[], args: Record<string, any>) {
+  const page = navigationPageArgs(args);
+  const entries = [
+    ...directories.map(name => ({ kind: 'directory' as const, name })),
+    ...files.map(name => ({ kind: 'file' as const, name })),
+  ].sort((left, right) => left.kind.localeCompare(right.kind) || left.name.localeCompare(right.name));
+  const candidates = entries.slice(page.offset, page.offset + page.limit);
+  const serialize = (count: number) => {
+    const selected = candidates.slice(0, count);
+    const nextOffset = page.offset + selected.length;
+    const truncated = entries.length > nextOffset;
+    const value: Record<string, unknown> = {
+      path: path || '/',
+      offset: page.offset,
+      totalEntries: entries.length,
+      returned: selected.length,
+      dirs: selected.filter(entry => entry.kind === 'directory').map(entry => entry.name),
+      files: selected.filter(entry => entry.kind === 'file').map(entry => entry.name),
+      truncated,
+    };
+    if (truncated) value.nextAction = {
+      endpointId: endpointIdForTool('list_directory'),
+      arguments: { path: path || '/', offset: nextOffset, limit: page.limit, maxChars: page.maxChars },
+    };
+    return JSON.stringify(value, null, args.prettyPrint ? 2 : undefined);
+  };
+  let count = candidates.length;
+  let text = serialize(count);
+  while (text.length > page.maxChars && count > 0) text = serialize(--count);
+  return { content: [{ type: 'text' as const, text }] };
 }
 
 function boundedOutlineResult(
