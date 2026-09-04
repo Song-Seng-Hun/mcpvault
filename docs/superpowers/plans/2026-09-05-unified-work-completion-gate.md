@@ -322,14 +322,14 @@ Run: `git diff --check`
 Expected: exit code 0. Verify `git status --short` contains no credentials,
 caches, `.agents/`, or `.mcpvault/` in the staged set.
 
-- [ ] **Step 5: Commit generated output and verification notes**
+- [x] **Step 5: Commit generated output and verification notes**
 
 ```bash
 git add dist README.md _wiki/SCHEMA.md src docs/superpowers
 git commit -m "build: refresh unified completion gate distribution"
 ```
 
-- [ ] **Step 6: Push only the user fork and verify parity**
+- [x] **Step 6: Push only the user fork and verify parity**
 
 Run: `git push origin main`
 
