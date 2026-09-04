@@ -111,6 +111,9 @@ for the next agent. `get_wiki_bases_view` returns an
 optional local Obsidian Bases YAML view; a `.base` view is not a security
 boundary. `get_wiki_property_contract` returns the canonical shape and allowed
 values for MCP-managed Properties without disallowing custom fields. An
+`appliesTo` list limits only that managed field to the stated note role;
+`lint_wiki` reports misplaced managed metadata while leaving unrelated custom
+Properties alone. An
 optional `review_interval_days` schedules the next `review_at` after a
 completed `review_wiki_note`; an explicit `reviewAt` always wins.
 

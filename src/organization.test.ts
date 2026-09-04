@@ -164,6 +164,28 @@ describe('knowledge organization focus and summary metadata', () => {
     }, '# Invalid negative\n').filter(issue => issue.code === 'property_contract_violation')).toHaveLength(2);
   });
 
+  test('reports managed Properties filed on the wrong kind of note', () => {
+    const issues = organizationLintIssues('Knowledge/Misfiled.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'review',
+      trust_level: 'high', next_action: 'Do unrelated work', nav_order: 3,
+    }, '# Misfiled\n');
+    const applicability = issues.filter(issue => issue.code === 'property_contract_applicability');
+    expect(applicability).toEqual(expect.arrayContaining([
+      expect.objectContaining({ detail: expect.stringContaining('trust_level applies only to source') }),
+      expect.objectContaining({ detail: expect.stringContaining('next_action applies only to project or task') }),
+      expect.objectContaining({ detail: expect.stringContaining('nav_order applies only to moc') }),
+    ]));
+    expect(applicability).toHaveLength(3);
+
+    expect(organizationLintIssues('_sources/valid.md', {
+      llm_wiki_type: 'source', immutable: true, trust_level: 'verified',
+    }, '# Source\n').map(issue => issue.code)).not.toContain('property_contract_applicability');
+    expect(organizationLintIssues('Projects/valid.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'project', lifecycle: 'active',
+      next_action: 'Run the test', task_status: 'open', completion_criteria: ['Test passes'],
+    }, '# Project\n').map(issue => issue.code)).not.toContain('property_contract_applicability');
+  });
+
   test('keeps archival arrangement on immutable source records only', () => {
     expect(getOrganizationPropertyContract()).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: 'archive_collection_id', type: 'text', appliesTo: ['source'] }),

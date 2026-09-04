@@ -298,7 +298,10 @@ see bounded incoming wikilinks/Markdown links and destination collisions;
 
 Call `get_wiki_property_contract` before creating or repairing a managed note
 to see the canonical field types and allowed values. It is a read-only guide;
-custom Properties remain valid. When a note declares `review_interval_days`,
+custom Properties remain valid. `appliesTo` is meaningful: `lint_wiki` reports
+MCP-managed fields placed on the wrong note role (for example source trust on
+an atomic note or execution state on a literature note) without forbidding
+unrelated custom Properties. When a note declares `review_interval_days`,
 `review_wiki_note` calculates the next `review_at` after a completed review
 unless the caller supplies an explicit date.
 

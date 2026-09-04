@@ -213,6 +213,11 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'relation_notes', type: 'object', description: 'Short rationale for typed relation fields; navigation metadata only' },
     { name: 'relation_evidence', type: 'object', description: 'Scope-safe evidence paths keyed by typed relation field' },
 ];
+const DEDICATED_APPLICABILITY_LINT_FIELDS = new Set([
+    'decision_status',
+    'archive_collection_id', 'archive_series', 'archive_sequence', 'accession_id',
+    'custodial_history', 'original_order_note',
+]);
 export function getOrganizationPropertyContract() {
     return ORGANIZATION_PROPERTY_CONTRACT.map(entry => ({ ...entry, ...(entry.allowed && { allowed: [...entry.allowed] }), ...(entry.appliesTo && { appliesTo: [...entry.appliesTo] }) }));
 }
@@ -1025,6 +1030,15 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
         }
         if (contract.allowed && actual === 'text' && !contract.allowed.includes(String(frontmatter[contract.name]).trim().toLowerCase())) {
             issues.push({ code: 'property_contract_violation', detail: `${contract.name} must be one of: ${contract.allowed.join(', ')}.` });
+        }
+        if (contract.appliesTo?.length && !DEDICATED_APPLICABILITY_LINT_FIELDS.has(contract.name)) {
+            const noteIdentities = new Set([type, kind].filter(Boolean));
+            if (!contract.appliesTo.some(target => noteIdentities.has(target))) {
+                issues.push({
+                    code: 'property_contract_applicability',
+                    detail: `${contract.name} applies only to ${contract.appliesTo.join(' or ')} notes; this note is ${kind || type || 'unclassified'}.`,
+                });
+            }
         }
     }
     if (frontmatter.review_interval_days !== undefined) {
