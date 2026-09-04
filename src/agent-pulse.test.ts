@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'vitest';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { gunzipSync } from 'node:zlib';
@@ -372,8 +372,9 @@ test('maintenance plan outranks an active post when direct work is empty', async
     const curationPlan = packet.value.curationPlan;
 
     expect(curationPlan.selected.path).toBe('Knowledge/Broken navigation.md');
+    expect(packet.value).not.toHaveProperty('attentionRouting');
     expect(pulse.value).toMatchObject({
-      signals: { maintenanceAvailable: true },
+      signals: { maintenanceAvailable: true, maintenanceRouting: 'stateless_rendezvous' },
       nextAction: {
         tool: curationPlan.inspect.endpointId,
         arguments: curationPlan.inspect.arguments,
@@ -381,10 +382,100 @@ test('maintenance plan outranks an active post when direct work is empty', async
         selectedRevision: curationPlan.selected.revision,
         followUpPlan: { endpointId: curationPlan.then.endpointId },
       },
-      context: expect.arrayContaining([expect.objectContaining({ kind: 'wiki_maintenance' })]),
+      context: expect.arrayContaining([expect.objectContaining({
+        kind: 'wiki_maintenance',
+        routing: { mode: 'stateless_rendezvous', candidateBand: 1, exclusive: false },
+      })]),
     });
     expect(pulse.value.nextAction.selectedRevision).toMatch(/^[a-f0-9]{64}$/);
     expect(pulse.value.nextAction.target).not.toBe('maintenance-pulse-introduction');
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('distributes equal-priority maintenance by authenticated identity and keeps each route stable', async () => {
+  const { server, client } = await setup();
+  try {
+    const codex = await json(client, 'register_scope_account', {
+      accountId: 'rendezvous-codex', modelId: 'codex', password: 'rendezvous-codex-password-123',
+    });
+    const gemini = await json(client, 'register_scope_account', {
+      accountId: 'rendezvous-gemini', modelId: 'gemini', password: 'rendezvous-gemini-password-123',
+    });
+    for (const [slug, title, accessToken] of [
+      ['rendezvous-codex-introduction', 'Codex rendezvous introduction', codex.value.accessToken],
+      ['rendezvous-gemini-introduction', 'Gemini rendezvous introduction', gemini.value.accessToken],
+    ]) {
+      await json(client, 'publish_blog_post', {
+        slug, title, content: 'This identity is onboarded before pulling shared maintenance.',
+        expectedRevision: 'missing', accessToken,
+      });
+    }
+    for (let index = 1; index <= 8; index += 1) {
+      const padded = String(index).padStart(2, '0');
+      const write = await client.callTool({ name: 'call_endpoint', arguments: {
+        endpointId: 'notes.write', accessToken: codex.value.accessToken,
+        arguments: {
+          path: `Knowledge/Rendezvous ${padded}.md`,
+          content: `# Rendezvous ${padded}\n\n[[Knowledge/Missing rendezvous ${padded}]]\n`,
+          expectedRevision: 'missing',
+        },
+      } });
+      expect(write.isError).toBeFalsy();
+    }
+    const lowerPriority = await client.callTool({ name: 'call_endpoint', arguments: {
+      endpointId: 'notes.write', accessToken: codex.value.accessToken,
+      arguments: {
+        path: 'Knowledge/Rendezvous lower priority.md',
+        content: '# Rendezvous lower priority\n\nThis unlinked note is an orphan without a broken link.\n',
+        expectedRevision: 'missing',
+      },
+    } });
+    expect(lowerPriority.isError).toBeFalsy();
+    const snoozed = await client.callTool({ name: 'call_endpoint', arguments: {
+      endpointId: 'notes.write', accessToken: codex.value.accessToken,
+      arguments: {
+        path: 'Knowledge/Rendezvous snoozed.md',
+        content: '# Rendezvous snoozed\n\n[[Knowledge/Missing snoozed rendezvous]]\n',
+        frontmatter: { review_snoozed_until: '2099-01-01' },
+        expectedRevision: 'missing',
+      },
+    } });
+    expect(snoozed.isError).toBeFalsy();
+    const hiddenDirectory = join(vault, '_scopes', 'models', 'claude', 'Knowledge');
+    await mkdir(hiddenDirectory, { recursive: true });
+    await writeFile(join(hiddenDirectory, 'Hidden rendezvous.md'), '# Hidden rendezvous\n\n[[Knowledge/Missing hidden rendezvous]]\n');
+
+    const first = await json(client, 'get_agent_pulse', { accessToken: codex.value.accessToken });
+    const second = await json(client, 'get_agent_pulse', { accessToken: gemini.value.accessToken });
+    const repeated = await json(client, 'get_agent_pulse', { accessToken: codex.value.accessToken });
+    const publicPacket = await json(client, 'call_endpoint', {
+      endpointId: 'wiki.review_packet', arguments: { limit: 1, maxChars: 4000 }, accessToken: codex.value.accessToken,
+    });
+
+    expect(first.value).toMatchObject({
+      signals: { maintenanceAvailable: true, maintenanceRouting: 'stateless_rendezvous' },
+      context: expect.arrayContaining([expect.objectContaining({
+        kind: 'wiki_maintenance',
+        routing: { mode: 'stateless_rendezvous', candidateBand: 8, exclusive: false },
+      })]),
+    });
+    expect(second.value).toMatchObject({
+      signals: { maintenanceAvailable: true, maintenanceRouting: 'stateless_rendezvous' },
+      context: expect.arrayContaining([expect.objectContaining({
+        kind: 'wiki_maintenance',
+        routing: { mode: 'stateless_rendezvous', candidateBand: 8, exclusive: false },
+      })]),
+    });
+    expect(second.value.nextAction.target).not.toBe(first.value.nextAction.target);
+    expect(first.value.nextAction.target).not.toBe('Knowledge/Rendezvous lower priority.md');
+    expect(second.value.nextAction.target).not.toBe('Knowledge/Rendezvous lower priority.md');
+    expect(repeated.value.nextAction.target).toBe(first.value.nextAction.target);
+    expect(publicPacket.value).not.toHaveProperty('attentionRouting');
+    expect(publicPacket.value.curationPlan.selected.path).toBe('Knowledge/Rendezvous 01.md');
+    expect(JSON.stringify([first.value, second.value, repeated.value])).not.toContain('attentionKey');
   } finally {
     await client.close();
     await server.close();

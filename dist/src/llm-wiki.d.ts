@@ -72,6 +72,9 @@ interface WikiLintResult {
     issues: WikiLintIssue[];
     truncated: boolean;
 }
+interface ReviewPacketOptions {
+    attentionKey?: string;
+}
 export declare class LlmWikiService {
     private readonly fileSystem;
     private readonly access;
@@ -1692,17 +1695,21 @@ export declare class LlmWikiService {
      * next. It is a projection over the existing Reflect/graph reports, not a
      * new task or history store.
      */
-    reviewPacket(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<Record<string, any> | {
+    reviewPacket(principal?: ScopePrincipal, limit?: number, maxChars?: number, options?: ReviewPacketOptions): Promise<Record<string, any> | {
         purpose: string;
-        priorities: Omit<Record<string, unknown> & {
+        priorities: (Record<string, unknown> & {
             priority: number;
             path: string;
             reason: string;
             reasons: string[];
             suggestedTool: string;
             suggestedTools: string[];
-            sourceOrder: number;
-        }, "sourceOrder">[];
+        })[];
+        attentionRouting?: {
+            mode: 'stateless_rendezvous';
+            candidateBand: number;
+            exclusive: false;
+        };
         counts: {
             snoozedPriorities: number;
             inbox: number;
@@ -2041,6 +2048,11 @@ export declare class LlmWikiService {
             endpointId: unknown;
         } | undefined;
         nextSnoozedReviewAt?: string;
+        attentionRouting?: {
+            mode: 'stateless_rendezvous';
+            candidateBand: number;
+            exclusive: false;
+        };
         priorityScanTruncated: boolean;
         truncated: boolean;
     }>;

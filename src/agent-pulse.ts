@@ -85,6 +85,11 @@ interface CompactMaintenancePlan {
   selected: { path: string; revision: string; reason?: string };
   inspect: CompactMaintenanceAction;
   followUpPlan?: CompactMaintenanceFollowUpAction;
+  routing?: {
+    mode: 'stateless_rendezvous';
+    candidateBand: number;
+    exclusive: false;
+  };
 }
 
 type CompactMaintenanceArgumentsResult =
@@ -133,6 +138,21 @@ function compactMaintenanceAction(input: unknown, includeFollowUpFields: boolean
   return JSON.stringify(compact).length <= maxChars ? compact : undefined;
 }
 
+function compactMaintenanceRouting(input: unknown): CompactMaintenancePlan['routing'] {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
+  const source = input as Record<string, unknown>;
+  if (source.mode !== 'stateless_rendezvous'
+    || !Number.isInteger(source.candidateBand)
+    || Number(source.candidateBand) < 1
+    || Number(source.candidateBand) > 500
+    || source.exclusive !== false) return undefined;
+  return {
+    mode: 'stateless_rendezvous',
+    candidateBand: Number(source.candidateBand),
+    exclusive: false,
+  };
+}
+
 function compactMaintenancePlan(packet: unknown, maxChars: number): CompactMaintenancePlan | undefined {
   if (!packet || typeof packet !== 'object' || Array.isArray(packet)) return undefined;
   const source = packet as Record<string, unknown>;
@@ -157,6 +177,7 @@ function compactMaintenancePlan(packet: unknown, maxChars: number): CompactMaint
   const followUpSource = plan.then || plan.followUp;
   const followUpPlan = compactMaintenanceAction(followUpSource, true, maxChars);
   if (followUpSource && !followUpPlan) return undefined;
+  const routing = compactMaintenanceRouting(source.attentionRouting);
   const compactPlan: CompactMaintenancePlan = {
     selected: {
       path: selectedSource.path,
@@ -165,6 +186,7 @@ function compactMaintenancePlan(packet: unknown, maxChars: number): CompactMaint
     },
     inspect,
     ...(followUpPlan && { followUpPlan }),
+    ...(routing && { routing }),
   };
   return JSON.stringify(compactPlan).length <= maxChars ? compactPlan : undefined;
 }
@@ -237,7 +259,7 @@ export class AgentPulseService {
       return cached.plan;
     }
     if (cached) this.maintenanceCache.delete(key);
-    const packet = await this.llmWiki?.reviewPacket(principal, 1, MAINTENANCE_PACKET_MAX_CHARS);
+    const packet = await this.llmWiki?.reviewPacket(principal, 1, MAINTENANCE_PACKET_MAX_CHARS, { attentionKey: key });
     const plan = compactMaintenancePlan(packet, MAINTENANCE_PACKET_MAX_CHARS);
     this.rememberMaintenancePlan(key, generation, plan, now);
     return plan;
@@ -412,7 +434,7 @@ export class AgentPulseService {
         selectedRevision: maintenancePlan.selected.revision,
         ...(maintenancePlan.followUpPlan && { followUpPlan: maintenancePlan.followUpPlan }),
       };
-      reason = 'No direct obligation is waiting. Inspect one bounded Wiki maintenance target before pulling optional community work.';
+      reason = 'No direct obligation is waiting. Inspect one bounded Wiki maintenance target before pulling optional community work. Equal-priority work is deterministically distributed to reduce duplicate effort, but this is advisory rather than an exclusive lock; re-read the selected revision before any mutation.';
     } else if (workshops.workshops.length > 0) {
       const workshop = workshops.workshops[0] as Record<string, any>;
       nextAction = {
@@ -475,6 +497,7 @@ export class AgentPulseService {
         knowledgeReviewQueue: reviewQueue.total,
         wikiInbox: wikiInbox.total,
         maintenanceAvailable: Boolean(maintenancePlan),
+        ...(maintenancePlan?.routing && { maintenanceRouting: maintenancePlan.routing.mode }),
         level: reputation.level,
         xp: reputation.xp,
       },

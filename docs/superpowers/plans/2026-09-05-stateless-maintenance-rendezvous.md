@@ -14,8 +14,8 @@
 
 - `src/llm-wiki.ts`: pure same-priority rendezvous selection and internal review option.
 - `src/agent-pulse.ts`: authenticated key handoff and compact advisory routing card.
-- `src/llm-wiki.test.ts`: priority-band invariants and unchanged public order.
-- `src/agent-pulse.test.ts`: per-identity distribution, stability, and bounded output.
+- `src/agent-pulse.test.ts`: per-identity distribution, priority-band/public-order
+  invariants, visibility/snooze isolation, stability, and bounded output.
 - `README.md`, `_wiki/SCHEMA.md`, packaged skill: concise non-exclusive semantics.
 - `dist/`: generated output.
 
@@ -24,7 +24,7 @@
 **Files:**
 - Modify: `src/agent-pulse.test.ts`
 
-- [ ] **Step 1: Add a failing two-identity integration test**
+- [x] **Step 1: Add a failing two-identity integration test**
 
 Create at least eight global ordinary notes with one broken link each, onboard
 two different authenticated model identities, and call each pulse. Assert both
@@ -40,7 +40,7 @@ expect(second.value.nextAction.target).not.toBe(first.value.nextAction.target);
 Call the first pulse again without a Vault change and assert its target is
 stable. Assert neither response contains an attention key.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 npm test -- src/agent-pulse.test.ts -t "distributes equal-priority maintenance"
@@ -52,9 +52,9 @@ Expected: both identities receive the same globally first broken-link note.
 
 **Files:**
 - Modify: `src/llm-wiki.ts`
-- Modify: `src/llm-wiki.test.ts`
+- Verify through: `src/agent-pulse.test.ts`
 
-- [ ] **Step 1: Add the internal option and selector**
+- [x] **Step 1: Add the internal option and selector**
 
 Implement the following shape next to the review packet:
 
@@ -79,16 +79,17 @@ Collect the bounded unsnoozed candidate list before slicing the public result.
 Apply this helper only when `options.attentionKey` is non-empty, then slice to
 the requested result limit. Add the non-secret `attentionRouting` card.
 
-- [ ] **Step 2: Prove priority and public-order invariants**
+- [x] **Step 2: Prove priority and public-order invariants**
 
-In `src/llm-wiki.test.ts`, assert an internal routed packet never selects a
-numeric priority-2 item while priority-1 candidates exist, a one-candidate band
-is unchanged, and an ordinary MCP call has no `attentionRouting` property.
+In the pulse integration tests, assert a routed packet never selects a lower
+numeric-priority item while higher-priority candidates exist, a one-candidate
+band is unchanged, hidden/snoozed candidates do not enter the visible band,
+and an ordinary MCP call has no `attentionRouting` property.
 
-- [ ] **Step 3: Run focused review tests**
+- [x] **Step 3: Run focused review tests**
 
 ```bash
-npm test -- src/llm-wiki.test.ts -t "rendezvous maintenance routing"
+npm test -- src/agent-pulse.test.ts -t "maintenance|distributes equal-priority maintenance"
 ```
 
 Expected: routed priority tests pass and existing snooze tests remain green.
@@ -99,7 +100,7 @@ Expected: routed priority tests pass and existing snooze tests remain green.
 - Modify: `src/agent-pulse.ts`
 - Modify: `src/agent-pulse.test.ts`
 
-- [ ] **Step 1: Pass the existing principal cache key internally**
+- [x] **Step 1: Pass the existing principal cache key internally**
 
 Change the review call to:
 
@@ -116,13 +117,13 @@ Extend `CompactMaintenancePlan` with a bounded routing card containing only
 `mode`, `candidateBand`, and `exclusive`. Include it in maintenance context and
 set `signals.maintenanceRouting` only when present. Do not include the key.
 
-- [ ] **Step 2: Clarify advisory semantics**
+- [x] **Step 2: Clarify advisory semantics**
 
 Update the maintenance action reason to state that deterministic distribution
 reduces duplicate work but is not a lock, so the selected revision must be
 re-read before mutation.
 
-- [ ] **Step 3: Run focused pulse tests**
+- [x] **Step 3: Run focused pulse tests**
 
 ```bash
 npm test -- src/agent-pulse.test.ts -t "maintenance|distributes equal-priority maintenance"
@@ -139,13 +140,13 @@ response tests pass.
 - Modify: `plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md`
 - Regenerate: `dist/`
 
-- [ ] **Step 1: Add bounded documentation**
+- [x] **Step 1: Add bounded documentation**
 
 State that idle pulse uses stateless rendezvous routing only among equal
 priority candidates, is advisory/non-exclusive, and retains revision checks.
 Keep the packaged skill at or below its 9,000-character test budget.
 
-- [ ] **Step 2: Run complete verification**
+- [x] **Step 2: Run complete verification**
 
 ```bash
 npm run build

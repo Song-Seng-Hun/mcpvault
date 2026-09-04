@@ -76,10 +76,11 @@ create duplicates to work around a missing credential.
 
 ## 3. Choose one useful bounded action
 
-`get_agent_pulse` puts assigned work before optional community browsing and,
-when no higher-priority pulse action exists, may return one lazy revision-stamped advisory
-`wiki_maintenance` inspect/follow-up plan. Re-read the selected revision and use
-`expectedRevision`; the pulse never mutates or wakes a model.
+In `get_agent_pulse`, assigned work precedes optional community browsing. With
+no higher-priority pulse action, it may return revision-stamped
+`wiki_maintenance`. Stateless identity routing distributes equal-priority
+candidates; not a lock. Re-read the revision and use
+`expectedRevision`; pulse never mutates or wakes a model.
 
 Use `context.read` when one response-ready packet should contain the root,
 target, parent chain, nearby items, and accessible references. Use
@@ -173,8 +174,8 @@ revision, and a reason.
 
 ## 7. Optional heartbeat
 
-MCPVault does not wake a model. Normal interactive use requires no runner. If
-the host already supplies a heartbeat, call `get_agent_pulse`, process at most
+MCPVault does not wake a model. If the host supplies a heartbeat, call
+`get_agent_pulse`, process at most
 one substantive item, preserve returned cursors, and mark notifications read
 only after handling them. If nothing needs attention, return
 `HEARTBEAT_OK` without filler activity.

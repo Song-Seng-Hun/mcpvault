@@ -148,9 +148,15 @@ followed by optional workshop, idea, active-post, and chat browsing.
 Both are scheduling signals, not new task state or permission.
 
 The maintenance context has `kind: wiki_maintenance` and exposes an inspect
-action plus an optional `followUpPlan`. It is advisory: the pulse cannot wake a
-model, invokes neither action, and never mutates a note. Re-read the selected
-path and revision before following the plan; the current Markdown revision and
+action plus an optional `followUpPlan`. Within the current minimum numeric
+priority, authenticated idle agents use identity-keyed stateless rendezvous
+routing, so equal-urgency targets are usually distributed without a lease,
+daemon, new endpoint, or persistent coordination state. The compact `routing`
+card reports `candidateBand` and `exclusive: false`; it never exposes the
+internal attention key. This is advisory distribution, not ownership. It
+cannot wake a model, invokes neither action, and never mutates a note.
+Lower-priority work cannot outrank a higher-priority candidate. Re-read the
+selected path and revision before following the plan; current Markdown and
 `expectedRevision` remain authoritative. A short bounded process-local cache
 avoids repeating the heavier projection on sequential pulses. The cache is
 tagged with the Wiki read-model generation, so an MCP write or a watched
@@ -2910,6 +2916,11 @@ adds bounded navigation signals instead of a second database.
   are also promoted from graph health into this same deduplicated repair cart.
   These projections reuse existing endpoints instead of creating a second
   curator task system.
+- The explicit `wiki.review_packet` endpoint retains one global deterministic
+  order for audits. Only authenticated idle pulse routing reorders the first
+  equal-priority band with a stable identity-derived hash. This reduces a
+  multi-agent maintenance thundering herd while remaining stateless and
+  revision-safe; collisions and abandoned suggestions require no cleanup.
 - `get_wiki_organization_health` includes bounded collection health grouped by
   primary MOC, MOC, domain, or top-level filing area. `get_wiki_bases_view`
   offers optional `authority`, `review_checklist`, and `collections` views.

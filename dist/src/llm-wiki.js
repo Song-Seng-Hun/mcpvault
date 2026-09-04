@@ -652,6 +652,28 @@ function genericEvergreenTitle(title) {
         || /^\d{4}[-_.]\d{1,2}(?:[-_.]\d{1,2})?$/.test(normalized);
 }
 const hash = (value) => createHash('sha256').update(value).digest('hex');
+function routeReviewAttention(priorities, attentionKey) {
+    if (!attentionKey || priorities.length === 0) {
+        return { priorities, candidateBand: priorities.length === 0 ? 0 : 1 };
+    }
+    const minimumPriority = priorities[0].priority;
+    const candidateBand = priorities.filter(item => item.priority === minimumPriority);
+    if (candidateBand.length < 2)
+        return { priorities, candidateBand: candidateBand.length };
+    let selected = candidateBand[0];
+    let selectedScore = hash(`${attentionKey}\0${selected.path}`);
+    for (const candidate of candidateBand.slice(1)) {
+        const score = hash(`${attentionKey}\0${candidate.path}`);
+        if (score > selectedScore || (score === selectedScore && candidate.path.localeCompare(selected.path) < 0)) {
+            selected = candidate;
+            selectedScore = score;
+        }
+    }
+    return {
+        priorities: [selected, ...priorities.filter(item => item !== selected)],
+        candidateBand: candidateBand.length,
+    };
+}
 function canvasScopeRoot(path) {
     const normalized = normalizePath(path);
     const privateScope = /^(_scopes\/(?:models|agents)\/[^/]+)(?:\/|$)/i.exec(normalized);
@@ -4781,7 +4803,7 @@ export class LlmWikiService {
      * next. It is a projection over the existing Reflect/graph reports, not a
      * new task or history store.
      */
-    async reviewPacket(principal, limit = 8, maxChars = 7000) {
+    async reviewPacket(principal, limit = 8, maxChars = 7000, options = {}) {
         const boundedLimit = Math.min(Math.max(Number(limit) || 8, 1), 30);
         const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
         // Internal discovery must be wider than the returned page. Otherwise one
@@ -4979,7 +5001,7 @@ export class LlmWikiService {
         const nowMs = Date.now();
         let snoozedPriorities = 0;
         let nextSnoozedReviewAtMs;
-        const priorities = [];
+        const actionablePriorities = [];
         for (const priority of scannedPriorities) {
             const physicalPath = physicalPathByPublicPath.get(priority.path);
             const metadata = physicalPath ? metadataByPath.get(normalizePath(physicalPath).toLocaleLowerCase('en-US')) : undefined;
@@ -4991,11 +5013,17 @@ export class LlmWikiService {
                 nextSnoozedReviewAtMs = nextSnoozedReviewAtMs === undefined ? snoozedUntil : Math.min(nextSnoozedReviewAtMs, snoozedUntil);
                 continue;
             }
-            if (priorities.length < boundedLimit) {
-                const { sourceOrder: _sourceOrder, ...item } = priority;
-                priorities.push(item);
-            }
+            const { sourceOrder: _sourceOrder, ...item } = priority;
+            actionablePriorities.push(item);
         }
+        const attentionKey = typeof options.attentionKey === 'string' && options.attentionKey.length > 0
+            ? options.attentionKey
+            : undefined;
+        const routedAttention = routeReviewAttention(actionablePriorities, attentionKey);
+        const priorities = routedAttention.priorities.slice(0, boundedLimit);
+        const attentionRouting = attentionKey && routedAttention.candidateBand > 0
+            ? { mode: 'stateless_rendezvous', candidateBand: routedAttention.candidateBand, exclusive: false }
+            : undefined;
         const priorityScanTruncated = sortedPriorities.length > scannedPriorities.length;
         const nextSnoozedReviewAt = nextSnoozedReviewAtMs === undefined ? undefined : new Date(nextSnoozedReviewAtMs).toISOString();
         let curationPlan;
@@ -5134,6 +5162,7 @@ export class LlmWikiService {
         const result = {
             purpose: 'One bounded action packet for the next knowledge-organization step. It is advisory; inspect the selected note and use expectedRevision before changing it.',
             priorities,
+            ...(attentionRouting && { attentionRouting }),
             counts: {
                 snoozedPriorities,
                 inbox: Number(sections.inbox?.total || 0),
@@ -5210,6 +5239,7 @@ export class LlmWikiService {
         const minimal = {
             purpose: result.purpose,
             counts: result.counts,
+            ...(attentionRouting && { attentionRouting }),
             ...(nextSnoozedReviewAt && { nextSnoozedReviewAt }),
             priorityScanTruncated,
             ...(curationPlan && { curationPlan }),
@@ -5228,6 +5258,7 @@ export class LlmWikiService {
                 nextAction: inspect ? { endpointId: inspect.endpointId, arguments: inspect.arguments } : undefined,
                 then: then ? { endpointId: then.endpointId } : undefined,
                 ...(nextSnoozedReviewAt && { nextSnoozedReviewAt }),
+                ...(attentionRouting && { attentionRouting }),
                 priorityScanTruncated,
                 truncated: true,
             };

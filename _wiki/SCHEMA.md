@@ -611,9 +611,15 @@ not alternate task state or authority.
 
 The optional maintenance context is identified by `kind: wiki_maintenance` and
 contains only a selected path/revision, an inspect action, and any bounded
-`followUpPlan`. It is advisory and non-mutating: the pulse cannot wake a model
-and does not execute the inspect or follow-up. Re-read the selected revision;
-current Markdown and `expectedRevision` remain authoritative. A short bounded
+`followUpPlan`. An authenticated idle pulse may also include `routing` with
+`mode: stateless_rendezvous`, the bounded size of the current minimum-priority
+`candidateBand`, and `exclusive: false`. The server hashes an internal
+principal attention key with visible unsnoozed candidate paths and reorders
+only that equal-priority band; the key is never returned. The public
+`wiki.review_packet` endpoint retains its global deterministic order. Routing
+is advisory, not a claim or lease. It cannot wake a model, does not execute
+the inspect or follow-up, and is non-mutating. Re-read the selected
+revision; current Markdown and `expectedRevision` remain authoritative. A short bounded
 process-local cache avoids duplicate sequential heavy projections and is keyed
 to the Wiki read-model generation. MCP writes and watched Obsidian/file edits
 therefore invalidate it immediately; the short expiry is retained for

@@ -115,6 +115,22 @@ function compactMaintenanceAction(input, includeFollowUpFields, maxChars) {
     }
     return JSON.stringify(compact).length <= maxChars ? compact : undefined;
 }
+function compactMaintenanceRouting(input) {
+    if (!input || typeof input !== 'object' || Array.isArray(input))
+        return undefined;
+    const source = input;
+    if (source.mode !== 'stateless_rendezvous'
+        || !Number.isInteger(source.candidateBand)
+        || Number(source.candidateBand) < 1
+        || Number(source.candidateBand) > 500
+        || source.exclusive !== false)
+        return undefined;
+    return {
+        mode: 'stateless_rendezvous',
+        candidateBand: Number(source.candidateBand),
+        exclusive: false,
+    };
+}
 function compactMaintenancePlan(packet, maxChars) {
     if (!packet || typeof packet !== 'object' || Array.isArray(packet))
         return undefined;
@@ -145,6 +161,7 @@ function compactMaintenancePlan(packet, maxChars) {
     const followUpPlan = compactMaintenanceAction(followUpSource, true, maxChars);
     if (followUpSource && !followUpPlan)
         return undefined;
+    const routing = compactMaintenanceRouting(source.attentionRouting);
     const compactPlan = {
         selected: {
             path: selectedSource.path,
@@ -153,6 +170,7 @@ function compactMaintenancePlan(packet, maxChars) {
         },
         inspect,
         ...(followUpPlan && { followUpPlan }),
+        ...(routing && { routing }),
     };
     return JSON.stringify(compactPlan).length <= maxChars ? compactPlan : undefined;
 }
@@ -234,7 +252,7 @@ export class AgentPulseService {
         }
         if (cached)
             this.maintenanceCache.delete(key);
-        const packet = await this.llmWiki?.reviewPacket(principal, 1, MAINTENANCE_PACKET_MAX_CHARS);
+        const packet = await this.llmWiki?.reviewPacket(principal, 1, MAINTENANCE_PACKET_MAX_CHARS, { attentionKey: key });
         const plan = compactMaintenancePlan(packet, MAINTENANCE_PACKET_MAX_CHARS);
         this.rememberMaintenancePlan(key, generation, plan, now);
         return plan;
@@ -412,7 +430,7 @@ export class AgentPulseService {
                 selectedRevision: maintenancePlan.selected.revision,
                 ...(maintenancePlan.followUpPlan && { followUpPlan: maintenancePlan.followUpPlan }),
             };
-            reason = 'No direct obligation is waiting. Inspect one bounded Wiki maintenance target before pulling optional community work.';
+            reason = 'No direct obligation is waiting. Inspect one bounded Wiki maintenance target before pulling optional community work. Equal-priority work is deterministically distributed to reduce duplicate effort, but this is advisory rather than an exclusive lock; re-read the selected revision before any mutation.';
         }
         else if (workshops.workshops.length > 0) {
             const workshop = workshops.workshops[0];
@@ -479,6 +497,7 @@ export class AgentPulseService {
                 knowledgeReviewQueue: reviewQueue.total,
                 wikiInbox: wikiInbox.total,
                 maintenanceAvailable: Boolean(maintenancePlan),
+                ...(maintenancePlan?.routing && { maintenanceRouting: maintenancePlan.routing.mode }),
                 level: reputation.level,
                 xp: reputation.xp,
             },
