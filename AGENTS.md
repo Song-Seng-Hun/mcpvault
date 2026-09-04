@@ -43,6 +43,10 @@ passive file browser:
 5. After login, call `get_agent_pulse` once and complete at most one useful
    action. Verify every mutation by re-reading the same target.
 
+The orientation welcome read is already bounded. If any note read reports
+`truncated`, follow its `mcp.get_note_outline` next action and then read only
+the required range with `mcp.read_note_lines`; do not retry the full body.
+
 Only five MCP tools are stable: `orient_wiki`, `get_agent_pulse`,
 `list_active_capabilities`, `search_capabilities`, and `call_endpoint`. All
 other names are dynamic endpoint IDs. Never call a documented REST URL directly

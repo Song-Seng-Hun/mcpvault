@@ -160,7 +160,11 @@ test("server can read and write notes via tools", async () => {
 
   // Read it back
   const result = await client.callTool({ name: "read_note", arguments: { path: "test.md" } });
-  const parsed = JSON.parse((result.content as any)[0].text);
+  const resultText = (result.content as any)[0].text as string;
+  expect(resultText.length).toBeLessThanOrEqual(12000);
+  const parsed = JSON.parse(resultText);
+  expect(parsed).toMatchObject({ path: "test.md" });
+  expect(parsed.truncated).toBeUndefined();
   expect(parsed.content).toContain("Hello World");
 
   const unchanged = await client.callTool({ name: "read_note", arguments: { path: "test.md", knownRevision: parsed.revision } });
@@ -192,6 +196,33 @@ test("server can read and write notes via tools", async () => {
   expect(changedValue.ok[0].content).toContain("Changed");
   expect(changedValue.ok[0].revision).not.toBe(parsed.revision);
   expect(changedValue.ok[0].unchanged).toBeUndefined();
+
+  const largeBody = `# Large note\n\n${"bounded context line\n".repeat(1800)}`;
+  await client.callTool({
+    name: "write_note",
+    arguments: { path: "large.md", content: largeBody, expectedRevision: "missing", accessToken },
+  });
+  const defaultBounded = await client.callTool({ name: "read_note", arguments: { path: "large.md" } });
+  const defaultBoundedText = (defaultBounded.content as any)[0].text as string;
+  const defaultBoundedValue = JSON.parse(defaultBoundedText);
+  expect(defaultBoundedText.length).toBeLessThanOrEqual(12000);
+  expect(defaultBoundedValue).toMatchObject({
+    path: "large.md",
+    truncated: true,
+    totalContentChars: largeBody.length,
+    returnedContentChars: expect.any(Number),
+    nextAction: { endpointId: "mcp.get_note_outline", arguments: { path: "large.md" } },
+  });
+  expect(defaultBoundedValue.content.length).toBe(defaultBoundedValue.returnedContentChars);
+  expect(defaultBoundedValue.content.length).toBeGreaterThan(0);
+  expect(defaultBoundedValue.revision).toMatch(/^[a-f0-9]{64}$/);
+
+  const tinyBounded = await client.callTool({ name: "read_note", arguments: { path: "large.md", maxChars: 800 } });
+  const tinyBoundedText = (tinyBounded.content as any)[0].text as string;
+  const tinyBoundedValue = JSON.parse(tinyBoundedText);
+  expect(tinyBoundedText.length).toBeLessThanOrEqual(800);
+  expect(tinyBoundedValue).toMatchObject({ path: "large.md", truncated: true, totalContentChars: largeBody.length });
+  expect(tinyBoundedValue.content.length).toBe(tinyBoundedValue.returnedContentChars);
 
   await client.close();
   await server.close();

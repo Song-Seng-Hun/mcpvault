@@ -3844,6 +3844,11 @@ export declare class LlmWikiService {
         publicOnboarding: {
             welcomePath: string;
             schemaPath: string | null;
+            schemaNavigation: {
+                policyEndpointId: string;
+                outlineEndpointId: string;
+                linesEndpointId: string;
+            } | null;
             readableWithoutLogin: boolean;
             commandCenterId: string;
             note: string;
@@ -3870,7 +3875,7 @@ export declare class LlmWikiService {
         lint: WikiLintResult;
         nextActions: {
             tool: string;
-            arguments?: Record<string, string>;
+            arguments?: Record<string, unknown>;
             reason: string;
         }[];
     } | {
@@ -3897,6 +3902,11 @@ export declare class LlmWikiService {
         publicOnboarding: {
             welcomePath: string;
             schemaPath: string | null;
+            schemaNavigation: {
+                policyEndpointId: string;
+                outlineEndpointId: string;
+                linesEndpointId: string;
+            } | null;
             readableWithoutLogin: boolean;
             commandCenterId: string;
             note: string;
@@ -3921,7 +3931,7 @@ export declare class LlmWikiService {
         routing: string;
         nextActions: {
             tool: string;
-            arguments?: Record<string, string>;
+            arguments?: Record<string, unknown>;
             reason: string;
         }[];
         catalog: {
@@ -3936,7 +3946,7 @@ export declare class LlmWikiService {
         protocol: string;
         nextActions: {
             tool: string;
-            arguments: Record<string, string> | undefined;
+            arguments: Record<string, unknown> | undefined;
         }[];
         guidance: string;
         truncated: boolean;

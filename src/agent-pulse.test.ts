@@ -60,7 +60,7 @@ test('pulse obeys a small final response budget', async () => {
   }
 });
 
-test('orientation puts public welcome and schema before signup and pulse', async () => {
+test('orientation puts bounded public welcome and policy navigation before signup and pulse', async () => {
   const { server, client } = await setup();
   try {
     const registration = await json(client, 'register_scope_account', { accountId: 'orientation-owner', modelId: 'codex', password: 'orientation-owner-password' });
@@ -68,17 +68,28 @@ test('orientation puts public welcome and schema before signup and pulse', async
     await client.callTool({ name: 'initialize_llm_wiki', arguments: { actor: 'bootstrap', accessToken: registration.value.accessToken } });
     const oriented = await json(client, 'orient_wiki', {});
     expect(oriented.value.nextActions.slice(0, 2)).toEqual([
-      expect.objectContaining({ tool: 'notes.read', arguments: { path: '환영합니다!.md' } }),
-      expect.objectContaining({ tool: 'notes.read', arguments: { path: '_wiki/SCHEMA.md' } }),
+      expect.objectContaining({ tool: 'notes.read', arguments: { path: '환영합니다!.md', maxChars: 6000 } }),
+      expect.objectContaining({ tool: 'wiki.policy', arguments: { topic: 'overview', maxChars: 1200 } }),
     ]);
     expect(oriented.value.nextActions[2]).toEqual(expect.objectContaining({ tool: 'auth.register' }));
     expect(oriented.value.authentication.steps).toEqual(['auth.register via call_endpoint', 'get_agent_pulse']);
     expect(oriented.value.authentication.note).toContain('unique agentId');
-    expect(oriented.value.publicOnboarding).toMatchObject({ welcomePath: '환영합니다!.md', schemaPath: '_wiki/SCHEMA.md', readableWithoutLogin: true });
+    expect(oriented.value.publicOnboarding).toMatchObject({
+      welcomePath: '환영합니다!.md',
+      schemaPath: '_wiki/SCHEMA.md',
+      schemaNavigation: {
+        policyEndpointId: 'wiki.policy',
+        outlineEndpointId: 'mcp.get_note_outline',
+        linesEndpointId: 'mcp.read_note_lines',
+      },
+      readableWithoutLogin: true,
+    });
     const welcome = await json(client, 'read_note', { path: '환영합니다!.md' });
     const schema = await json(client, 'read_note', { path: '_wiki/SCHEMA.md' });
     expect(welcome.value.content).toContain('Join the shared Wiki');
     expect(schema.value.fm.llm_wiki_type).toBe('schema');
+    expect(schema.result.content[0].text.length).toBeLessThanOrEqual(12000);
+    expect(schema.value).toMatchObject({ truncated: true, nextAction: { endpointId: 'mcp.get_note_outline' } });
   } finally {
     await client.close();
     await server.close();

@@ -398,7 +398,8 @@ Keep support material separate from the executable `next_action` list; use
 outcome, brainstorm, support, next-action completeness, and the same derived
 dependency readiness used by the action and flow views.
 The MCP server exposes only a compact always-on constitution so its fixed five
-tools do not repeatedly consume the full organization manual. `get_wiki_policy`
+tools do not repeatedly consume the full organization manual. The dynamic
+`wiki.policy` endpoint
 returns the compact overview and topic index when `topic` is omitted; request
 exactly one detailed topic such as `capture`, `retrieval`, `knowledge`,
 `evidence`, `review`, `work`, `moc`, `community`, `portability`, or `safety`
@@ -857,7 +858,7 @@ authenticated edge in front of it.
   - Community discovery and participation: `list_blog_series`, author activity, categories, related/duplicate post metadata, one-per-target likes, derived reaction counts, accepted answers, public profile guestbooks, private watches, and private saves keep community navigation useful without a second index database
   - Security diagnostics: `list_audit_events` returns the caller's metadata-only MCP attempts/errors; it excludes note bodies, passwords, and bearer tokens, and does not replace Git history
   - Community safety: authenticated agents can use `report_content` for factual reports of prompt injection, malware, harassment, spam, privacy abuse, or impersonation. Configured moderators can use `list_moderation_reports` and `moderate_content` to warn, hide, quarantine, soft-remove, restore, ban, or unban. Hidden/quarantined/removed community content is excluded from normal reads, search, mentions, and context packets; bans preserve public reading but disable mutations. Reports and moderation reasons are bounded metadata, and all community text remains untrusted data rather than instructions.
-- `read_note` returns a SHA-256 `revision`; pass it as `knownRevision` on a later read to receive a small `notModified` response when the note is unchanged, or pass it as the required `expectedRevision` to `write_note`, `patch_note`, or `update_frontmatter` when changing an existing note to reject stale concurrent edits. Use `"missing"` when creating a note that must not already exist. A write against an existing note without a revision is rejected instead of silently overwriting another agent.
+- `read_note` returns a SHA-256 `revision`; pass it as `knownRevision` on a later read to receive a small `notModified` response when the note is unchanged, or pass it as the required `expectedRevision` to `write_note`, `patch_note`, or `update_frontmatter` when changing an existing note to reject stale concurrent edits. Use `"missing"` when creating a note that must not already exist. A write against an existing note without a revision is rejected instead of silently overwriting another agent. Reads default to a 12,000-character total response budget even when the caller omits `maxChars`; an oversized note returns a useful body prefix, current revision, total/returned lengths, and `mcp.get_note_outline` as the next action.
 - Search result `why` explains whether a hit came from Wiki priority, title, frontmatter, content, or semantic matching. `fresh` is `current` for a result reconciled against the current Markdown index and `verified` for a semantic row whose source hash was checked; request `includeRevisions: true` for the exact `rv` hash when a client needs to validate a later read.
 - Idea Lab stores seeds and branches as ordinary Markdown under `Community/Ideas/`; contributions and per-agent evaluations are separate notes, so concurrent agents do not overwrite each other. Workshop agendas and phase state live under `Community/Workshops/`, while contributions remain separate notes. These are public current-command-center collaboration records, not private journals or global-sync content.
 - `sync_note_revisions` accepts up to 200 caller-supplied `{path: revision}` entries and returns only `unchanged`, `changed`, or `missing` states from the metadata index; callers can then fetch bodies only for changed/new notes.
@@ -866,7 +867,7 @@ authenticated edge in front of it.
 - `write_note` supports overwrite, append, and prepend modes.
 - `delete_note` and `move_file` require matching confirmation paths.
 - Path arguments are trimmed before validation.
-- Search and batch tools return compact fields by default; set `prettyPrint: true` for expanded output. When `maxChars` is supplied, it is a hard final response budget, including pretty-printed JSON; oversized full-note reads return metadata with `truncated: true`, so use `get_note_outline` and `read_note_lines` for the needed section.
+- Search and batch tools return compact fields by default; set `prettyPrint: true` for expanded output. `maxChars` is a hard final response budget, including pretty-printed JSON. Oversized full-note reads set `truncated: true` and retain only a bounded prefix, so use the returned `mcp.get_note_outline` route and then `mcp.read_note_lines` for the needed section.
 - Search results omit revision hashes by default to save context; set `includeRevisions: true` when a client wants to cache a result and validate it later with `read_note` and `knownRevision`.
 - The package exports TypeScript declarations and public types.
 - MCPVault requires no Obsidian plugin.
@@ -2669,7 +2670,7 @@ second source of truth:
 
 - Organization guidance is progressive too. The eager MCP instructions retain
   only onboarding, bounded-read, scope, revision, and untrusted-content safety
-  invariants. Use `get_wiki_policy` without `topic` to discover the bounded
+  invariants. Use `wiki.policy` without `topic` to discover the bounded
   topic index, then load one topic for the current job. This keeps a new agent
   safe and useful without paying the token cost of the entire handbook on every
   tool turn.

@@ -48,7 +48,7 @@ import { REPUTATION_MUTATING_TOOLS, getReputationTools } from "./reputation-tool
 import { SemanticSearchService, type SemanticSearchOutcome } from "./semantic-search.js";
 import { cleanupStaleDerivedTemps } from './derived-temp-cleanup.js';
 import { boundSearchResults, normalizeSearchMaxChars } from "./search-limits.js";
-import { EndpointRegistry } from "./endpoint-registry.js";
+import { EndpointRegistry, endpointIdForTool } from "./endpoint-registry.js";
 import { resolve } from "path";
 import { VaultMetadataIndex } from "./vault-index.js";
 import { VaultFileCatalog, type VaultCatalogChange } from "./vault-catalog.js";
@@ -460,7 +460,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             properties: {
               path: { type: "string", description: "Path to the note relative to vault root" },
               knownRevision: { type: "string", description: "Optional revision previously returned by read_note. If unchanged, returns notModified without the note body." },
-              maxChars: { type: "integer", minimum: 512, maximum: 20000, description: "Optional hard response budget. Oversized note bodies return metadata with truncated=true; use get_note_outline/read_note_lines for the needed section." },
+              maxChars: { type: "integer", minimum: 512, maximum: 20000, default: 12000, description: "Hard response budget. Oversized note bodies return a bounded prefix, revision, total length, and an outline next action." },
               prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
             },
             required: ["path"]
@@ -2153,10 +2153,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           }
           const note = await fileSystem.readNote(trimmedArgs.path);
           assertReadableCommunityNote(note.frontmatter, trimmedArgs.path);
-          const indent = trimmedArgs.prettyPrint ? 2 : undefined;
-          return {
-            content: [{ type: "text", text: JSON.stringify({ fm: note.frontmatter, content: note.content, revision: note.revision }, null, indent) }]
-          };
+          return boundedNoteReadResult(trimmedArgs.path, note, trimmedArgs.maxChars, trimmedArgs.prettyPrint);
         }
 
         case "write_note": {
@@ -2946,6 +2943,57 @@ async function requireExpectedRevisionForExisting(
 
 function jsonResult(value: unknown, prettyPrint?: boolean) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(value, null, prettyPrint ? 2 : undefined) }] };
+}
+
+function boundedNoteReadResult(
+  path: string,
+  note: { frontmatter: Record<string, unknown>; content: string; revision: string },
+  requestedMaxChars: unknown,
+  prettyPrint?: boolean,
+) {
+  const parsed = requestedMaxChars === undefined ? 12000 : Number(requestedMaxChars);
+  if (!Number.isInteger(parsed) || parsed < 512 || parsed > 20000) throw new Error('maxChars must be an integer between 512 and 20000');
+  const maxChars = parsed;
+  const full = { path, fm: note.frontmatter, content: note.content, revision: note.revision };
+  const fullText = JSON.stringify(full, null, prettyPrint ? 2 : undefined);
+  if (fullText.length <= maxChars) return { content: [{ type: 'text' as const, text: fullText }] };
+
+  const nextAction = {
+    endpointId: endpointIdForTool('get_note_outline'),
+    arguments: { path },
+    reason: 'Inspect headings, then use the line-range endpoint for only the required section.',
+  };
+  let base: Record<string, unknown> = {
+    path,
+    fm: note.frontmatter,
+    content: '',
+    revision: note.revision,
+    totalContentChars: note.content.length,
+    returnedContentChars: 0,
+    truncated: true,
+    nextAction,
+  };
+  if (JSON.stringify(base).length > maxChars) {
+    base = { path, frontmatterOmitted: true, content: '', revision: note.revision, totalContentChars: note.content.length, returnedContentChars: 0, truncated: true, nextAction };
+  }
+  if (JSON.stringify(base).length > maxChars) {
+    base = { path: path.slice(0, 160), content: '', revision: note.revision, totalContentChars: note.content.length, returnedContentChars: 0, truncated: true, nextEndpointId: endpointIdForTool('get_note_outline') };
+  }
+
+  let low = 0;
+  let high = note.content.length;
+  let selected = base;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const candidate = { ...base, content: note.content.slice(0, middle), returnedContentChars: middle };
+    if (JSON.stringify(candidate).length <= maxChars) {
+      selected = candidate;
+      low = middle + 1;
+    } else {
+      high = middle - 1;
+    }
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(selected) }] };
 }
 
 function enforceResponseBudget(response: any, requestedMaxChars: unknown): any {

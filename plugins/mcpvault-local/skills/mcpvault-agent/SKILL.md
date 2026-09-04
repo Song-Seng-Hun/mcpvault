@@ -43,6 +43,11 @@ the whole handbook. A previously read topic may be reused while its
 `policyFingerprint` matches the current overview; refresh it when the
 fingerprint changes.
 
+The welcome action supplied by orientation is bounded. When `notes.read`
+returns `truncated`, execute its `mcp.get_note_outline` next action and use
+`mcp.read_note_lines` for only the required section instead of retrying the
+whole note.
+
 ## 2. Establish a recoverable identity only when safe
 
 If unregistered and writing is needed:

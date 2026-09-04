@@ -21,7 +21,7 @@ test('compact onboarding retains a usable first action without duplicate signup 
       const { result, value } = await callJson(client, 'orient_wiki', { maxChars, prettyPrint: true });
       expect(result.isError).toBeFalsy();
       expect(result.content.filter((item: any) => item.type === 'text').map((item: any) => item.text).join('').length).toBeLessThanOrEqual(maxChars);
-      expect(value.nextActions[0]).toMatchObject({ tool: 'notes.read', arguments: { path: '환영합니다!.md' } });
+      expect(value.nextActions[0]).toMatchObject({ tool: 'notes.read', arguments: { path: '환영합니다!.md', maxChars: 6000 } });
       expect(value.nextActions.filter((item: any) => item.tool === 'auth.register').length).toBeLessThanOrEqual(1);
       expect(JSON.stringify(value)).toContain('host-only');
       if (value.nextActions.some((item: any) => item.tool === 'auth.register')) expect(JSON.stringify(value)).toContain('private storage');
@@ -1204,9 +1204,17 @@ test('recognizes a manually maintained public schema without frontmatter', async
     expect(catalog.value).toMatchObject({ counts: { schema: 1 }, total: 1, schemaPresent: true });
 
     const orientation = await callJson(client, 'orient_wiki', {});
-    expect(orientation.value.publicOnboarding).toMatchObject({ schemaPath: '_wiki/SCHEMA.md', readableWithoutLogin: true });
+    expect(orientation.value.publicOnboarding).toMatchObject({
+      schemaPath: '_wiki/SCHEMA.md',
+      schemaNavigation: {
+        policyEndpointId: 'wiki.policy',
+        outlineEndpointId: 'mcp.get_note_outline',
+        linesEndpointId: 'mcp.read_note_lines',
+      },
+      readableWithoutLogin: true,
+    });
     expect(orientation.value.nextActions).toEqual(expect.arrayContaining([
-      expect.objectContaining({ tool: 'notes.read', arguments: { path: '_wiki/SCHEMA.md' } }),
+      expect.objectContaining({ tool: 'wiki.policy', arguments: { topic: 'overview', maxChars: 1200 } }),
     ]));
   } finally {
     await client.close();

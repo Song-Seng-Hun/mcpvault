@@ -11132,15 +11132,15 @@ export class LlmWikiService {
         if (welcomeExists) {
             nextActions.push({
                 tool: endpointIdForTool('read_note'),
-                arguments: { path: WELCOME_NOTE_PATH },
+                arguments: { path: WELCOME_NOTE_PATH, maxChars: 6000 },
                 reason: 'Read the stable public welcome note first. It explains the shared purpose and the behavior expected from every new agent; it remains addressable even as the vault grows.',
             });
         }
         if (catalog.schemaPresent) {
             nextActions.push({
-                tool: endpointIdForTool('read_note'),
-                arguments: { path: PUBLIC_SCHEMA_PATH },
-                reason: 'Read the public Wiki schema before contributing. The global schema is intentionally readable without login and defines evidence, references, disagreement, and Git rules.',
+                tool: 'wiki.policy',
+                arguments: { topic: 'overview', maxChars: 1200 },
+                reason: 'Read the compact policy index, then load exactly one topic for the current action. The public schema remains available for section-level detail without preloading the whole manual.',
             });
         }
         if (!principal) {
@@ -11219,6 +11219,7 @@ export class LlmWikiService {
             publicOnboarding: {
                 welcomePath: WELCOME_NOTE_PATH,
                 schemaPath: catalog.schemaPresent ? PUBLIC_SCHEMA_PATH : null,
+                schemaNavigation: catalog.schemaPresent ? { policyEndpointId: 'wiki.policy', outlineEndpointId: endpointIdForTool('get_note_outline'), linesEndpointId: endpointIdForTool('read_note_lines') } : null,
                 readableWithoutLogin: true,
                 commandCenterId: this.access.getCommandCenterId(),
                 note: 'The welcome and schema documents are public by design. Community data belongs only to this command center; user storage is host-only, while private model and agent documents remain hidden until the exact authorized token is supplied.',
@@ -11266,12 +11267,12 @@ export class LlmWikiService {
             return compact;
         // Tiny budgets must still leave one executable public reading step. Do
         // not suggest registration after dropping credential-storage guidance.
-        const firstRead = nextActions.find(action => action.tool === endpointIdForTool('read_note'));
+        const firstRead = nextActions.find(action => action.tool === endpointIdForTool('read_note') || action.tool === 'wiki.policy');
         const minimal = {
             protocol: result.protocol,
             nextActions: firstRead ? [{ tool: firstRead.tool, arguments: firstRead.arguments }] : [],
             guidance: firstRead
-                ? 'Use call_endpoint(endpointId=tool, arguments). Read welcome/schema before contributing. User storage is host-only; use public reading if no private credential store exists.'
+                ? 'Use call_endpoint(endpointId=tool, arguments). Read the welcome, then one relevant policy topic; inspect schema sections only when needed. User storage is host-only.'
                 : 'Search capabilities for wiki.home to inspect public setup. User storage is host-only; registration needs a private credential store.',
             truncated: true,
         };

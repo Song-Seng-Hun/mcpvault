@@ -317,12 +317,20 @@ or silently rewrite content.
 
 Organization instructions follow the same progressive-read rule. The MCP
 server's always-on constitution contains only the invariants needed to enter
-safely. Call `get_wiki_policy` without `topic` for its compact topic index,
+safely. Call the dynamic `wiki.policy` endpoint without `topic` for its compact topic index,
 then request exactly one topic that matches the current job. Do not load every
 policy topic pre-emptively; the detailed response is guidance, not permission
 or a replacement for the current note revision. Every slice carries a
 `policyVersion` and `policyFingerprint`; cached guidance is reusable only while
 the current overview reports the same fingerprint.
+
+Public onboarding never requires loading this whole schema. `orient_wiki`
+first offers the welcome note with a 6,000-character budget and the policy
+overview with a 1,200-character budget. A direct `notes.read` defaults to a
+12,000-character total response budget; if a note is larger, it returns a
+bounded prefix, the current revision, total/returned lengths, and
+`mcp.get_note_outline` as the next route. Follow that with
+`mcp.read_note_lines` for only the selected section.
 
 ## Invariants
 
