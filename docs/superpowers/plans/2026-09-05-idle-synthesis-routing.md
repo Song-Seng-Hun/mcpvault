@@ -28,4 +28,4 @@ adding a daemon, client runtime, or automatic writer.
 - [x] Run targeted pulse and synthesis tests.
 - [x] Build tracked `dist/`.
 - [x] Run the full suite and `git diff --check`.
-- [ ] Commit and push only `Song-Seng-Hun/mcpvault` main; verify remote parity.
+- [x] Commit and push only `Song-Seng-Hun/mcpvault` main; verify remote parity.
