@@ -2259,6 +2259,99 @@ export declare class LlmWikiService {
         } | undefined;
         generatedAt: string;
     }>;
+    /**
+     * Convert one complete MOC sibling ordering into an exact change set. The
+     * complete-set requirement prevents an omitted sibling from being silently
+     * pushed out of the intended sequence.
+     */
+    mocOrderPreview(principal: ScopePrincipal | undefined, options: {
+        orderedMocs: unknown;
+        parentPath?: string;
+        startAt?: number;
+        step?: number;
+        maxChars?: number;
+    }): Promise<{
+        purpose: string;
+        parent?: {
+            path: string;
+            revision: string;
+        };
+        hierarchy: {
+            scannedMocs: number;
+            siblingTotal: number;
+        };
+        currentOrder: {
+            path: string;
+            revision: string;
+            navOrder?: number;
+        }[];
+        proposedOrder: {
+            path: string;
+            navOrder: number;
+            revision?: string;
+        }[];
+        requiredChanges: number;
+        changes: {
+            path: string;
+            expectedRevision: string;
+            frontmatter: {
+                set: {
+                    nav_order: number;
+                };
+            };
+        }[];
+        blockers: {
+            reason: string;
+            paths?: string[];
+        }[];
+        valid: boolean;
+        alreadyOrdered: boolean;
+        nextAction: {
+            endpointId: string;
+            instruction: string;
+        } | undefined;
+        generatedAt: string;
+    }>;
+    /** Build a two-note reciprocal related/same_as repair without risking a
+     * half-written graph edge. Existing malformed or ambiguous relation values
+     * are blockers rather than data this planner silently normalizes. */
+    reciprocalLinkPreview(principal: ScopePrincipal | undefined, options: {
+        leftPath: string;
+        rightPath: string;
+        relation: unknown;
+        maxChars?: number;
+    }): Promise<{
+        purpose: string;
+        relation: string;
+        left: {
+            path: string;
+            revision: string;
+            hasReciprocalEdge: boolean;
+        };
+        right: {
+            path: string;
+            revision: string;
+            hasReciprocalEdge: boolean;
+        };
+        changes: {
+            path: string;
+            expectedRevision: string;
+            frontmatter: {
+                set: Record<string, string[]>;
+            };
+        }[];
+        blockers: {
+            path?: string;
+            reason: string;
+        }[];
+        valid: boolean;
+        alreadyReciprocal: boolean;
+        nextAction: {
+            endpointId: string;
+            instruction: string;
+        } | undefined;
+        generatedAt: string;
+    }>;
     noteTemplate(noteKind?: string, maxChars?: number): {
         templateId: string;
         noteKind: import("./organization.js").NoteKind;
@@ -3045,6 +3138,10 @@ export declare class LlmWikiService {
             childrenTruncated: boolean;
         }[];
         mocOrdering: string;
+        mocOrderPlanner: {
+            endpointId: string;
+            requirement: string;
+        };
         projects: Record<string, unknown>[];
         inbox: Record<string, unknown>[];
         review: Record<string, unknown>[];

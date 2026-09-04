@@ -123,6 +123,27 @@ test('REST adapter uses the same dynamic endpoint registry and dispatcher', asyn
   });
   expect(migrationPreview.status).toBe(200);
   expect(await migrationPreview.json()).toMatchObject({ changes: [expect.objectContaining({ path: 'nested/migrate.md' })], nextAction: { endpointId: 'notes.change_set' } });
+
+  const reciprocalPreview = await fetch(`http://127.0.0.1:${api.port}/api/wiki/reciprocal-link`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ leftPath: 'nested/route.md', rightPath: 'nested/migrate.md', relation: 'related', accessToken }),
+  });
+  expect(reciprocalPreview.status).toBe(200);
+  expect(await reciprocalPreview.json()).toMatchObject({ valid: true, changes: [expect.objectContaining({ path: 'nested/route.md' }), expect.objectContaining({ path: 'nested/migrate.md' })], nextAction: { endpointId: 'notes.change_set' } });
+
+  for (const [path, navOrder] of [['nested/moc-a.md', 10], ['nested/moc-b.md', 20]] as const) {
+    const mocWrite = await fetch(`http://127.0.0.1:${api.port}/api/endpoint/notes.write`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ path, content: `# ${path}`, frontmatter: { note_kind: 'moc', nav_order: navOrder }, accessToken }),
+    });
+    expect(mocWrite.status).toBe(200);
+  }
+  const mocOrderPreview = await fetch(`http://127.0.0.1:${api.port}/api/wiki/moc-order`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ orderedMocs: ['nested/moc-b.md', 'nested/moc-a.md'], accessToken }),
+  });
+  expect(mocOrderPreview.status).toBe(200);
+  expect(await mocOrderPreview.json()).toMatchObject({ valid: true, requiredChanges: 2, nextAction: { endpointId: 'notes.change_set' } });
 });
 
 test('REST adapter rate-limits anonymous account registration per client address', async () => {

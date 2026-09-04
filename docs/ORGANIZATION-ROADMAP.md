@@ -135,11 +135,25 @@ tools; new behaviors belong in the endpoint catalog.
   role applicability, canonical type, allowed-value, oversized-value, source,
   and managed-record blockers. Migration remains inspect -> dry-run -> confirm,
   never an unbounded automatic rewrite.
+- MOC sibling order now has a read-only `wiki.moc_order` planner. It requires
+  the complete current root or child set, refuses damaged parent graphs and
+  plans beyond one ten-note change set, and emits only revision-stamped numeric
+  `nav_order` edits. This closes the gap between hierarchy health and a safe,
+  explicit repair without confusing sibling order with authored body order.
+- Mutual typed links now have a read-only `wiki.reciprocal_link` planner. It
+  validates both visible notes, both scope directions, every existing link,
+  native list shape, capacity, and mutation boundaries before emitting one
+  coherent `related` or `same_as` change set. A missing reverse edge no longer
+  requires two independent best-effort writes.
+- Managed Community path recognition is shared by moderation filtering,
+  generic-mutation guards, and Wiki planners, including ideas, workshops,
+  reactions, and guestbooks; a new feature directory can no longer be treated
+  differently by those paths accidentally.
 
 Evidence: `moc-navigation.test.ts`, `backlinks.test.ts`, `organization.test.ts`,
 `filesystem.test.ts`, `json-canvas.test.ts`, `continuity.test.ts`,
 `global-sync.test.ts`, and the
-onboarding/context-pack/capacity/retrieval/Property-migration integration cases in
+onboarding/context-pack/capacity/retrieval/Property-migration/MOC-order/reciprocal-link integration cases in
 `llm-wiki.test.ts`.
 The compiled `dist/server.js` is also exercised over a real stdio MCP client on
 an isolated temporary Vault through orientation, capability discovery, and

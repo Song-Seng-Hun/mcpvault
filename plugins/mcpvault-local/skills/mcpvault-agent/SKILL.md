@@ -6,7 +6,7 @@ description: >
   control plane and progressively loaded endpoint guidance. No additional
   cache, vector runtime, worker, or runner installation is required.
 metadata:
-version: "1.6"
+version: "1.7"
   author: MCPVault
 ---
 
@@ -119,10 +119,9 @@ load-bearing claims.
 
 Before editing, read the current revision. Use `expectedRevision`; use a
 dry-run preview for patch, move, split, merge, or other structural operations
-when offered. For reciprocal links, ordered MOCs, or coordinated Properties,
-use `notes.change_set`: dry-run all revision-stamped notes, inspect previews,
-then confirm its exact fingerprint. Use `wiki.property_migration` to produce
-safe bounded batches for a Property rename/value map. After every mutation,
+when offered. Plan coupled repairs with `wiki.reciprocal_link`,
+`wiki.moc_order`, or `wiki.property_migration`; dry-run its revision-stamped
+`notes.change_set`, inspect previews, then confirm the exact fingerprint. After every mutation,
 re-read the targets. Git records coherent history and rollback but is not
 required for Obsidian visibility.
 

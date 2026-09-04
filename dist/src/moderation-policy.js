@@ -22,10 +22,16 @@ export function isMarkdownModerationHidden(markdown) {
 }
 export function isManagedCommunityPath(path) {
     const normalized = String(path).replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').toLowerCase();
-    return normalized.startsWith('community/posts/')
-        || normalized.startsWith('community/comments/')
-        || normalized.startsWith('community/chatrooms/')
-        || normalized.startsWith('community/chatmessages/')
-        || normalized.startsWith('community/agents/')
-        || normalized.startsWith('community/tasks/');
+    return [
+        'community/posts',
+        'community/comments',
+        'community/chatrooms',
+        'community/chatmessages',
+        'community/agents',
+        'community/tasks',
+        'community/ideas',
+        'community/workshops',
+        'community/reactions',
+        'community/guestbooks',
+    ].some(root => normalized === root || normalized.startsWith(`${root}/`));
 }

@@ -6,7 +6,7 @@ import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
 import { getOrganizationPropertyContract, getOrganizationRelationContract, inapplicableOrganizationProperties, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, organizationLintIssues, organizationNoteTemplate, organizationPropertyAppliesTo, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, CONFIDENCE_LEVELS, DECISION_STATUSES, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS } from './organization.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
-import { isModerationHidden } from './moderation-policy.js';
+import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
 import { buildNoteReferenceIndex, normalizeNoteReferenceTerm, resolveNoteReference } from './note-reference.js';
@@ -563,6 +563,15 @@ function relationDocument(value) {
     catch {
         return value.trim();
     }
+}
+function canonicalRelationWikiLink(path) {
+    const normalized = normalizePath(path);
+    if (!/\.(?:md|markdown|txt)$/i.test(normalized))
+        throw new Error('Typed relations require a Markdown or text note target');
+    const document = normalized.replace(/\.(?:md|markdown|txt)$/i, '');
+    if (!document || /[\[\]#|]/.test(document))
+        throw new Error(`Cannot safely encode this path as an Obsidian wikilink: ${normalized}`);
+    return `[[${document}]]`;
 }
 function compareMocNavigation(left, right) {
     return navigationOrder(left.navOrder ?? left.nav_order) - navigationOrder(right.navOrder ?? right.nav_order)
@@ -4554,7 +4563,7 @@ export class LlmWikiService {
                 const path = typeof item.path === 'string' ? item.path : typeof item.mocPath === 'string' ? item.mocPath : undefined;
                 if (!path)
                     continue;
-                const details = Object.fromEntries(['title', 'question', 'recallPrompt', 'repairStatus', 'repairPath', 'state', 'target', 'line']
+                const details = Object.fromEntries(['title', 'question', 'recallPrompt', 'repairStatus', 'repairPath', 'state', 'target', 'relation', 'line']
                     .filter(key => item[key] !== undefined)
                     .map(key => [key, item[key]]));
                 const existing = priorityByPath.get(path);
@@ -4616,7 +4625,7 @@ export class LlmWikiService {
         add(graph.knowledgeConnectivity?.literatureWithoutInterpretation?.items, 'literature_interpretation_missing', 'wiki.answer_packet', 4);
         add(graph.focusHealth?.unparented?.items, 'focus_parent_missing', 'wiki.graph_health', 5);
         add(graph.knowledgeConnectivity?.isolated?.items, 'isolated_knowledge', 'wiki.neighborhood', 5);
-        add(graph.typedRelations?.reciprocityMissing?.items, 'typed_relation_reciprocity_missing', 'wiki.neighborhood', 6);
+        add(graph.typedRelations?.reciprocityMissing?.items, 'typed_relation_reciprocity_missing', 'wiki.reciprocal_link', 6);
         add(graph.evergreenQuality?.items?.filter((item) => item?.state === 'needs_attention'), 'evergreen_quality_hint', 'wiki.graph_health', 5);
         add(graph.unresolvedLinks?.items, 'broken_link', 'wiki.graph_health', 6);
         add(graph.orphanNotes?.items, 'orphan_note', 'wiki.graph_health', 7);
@@ -5070,8 +5079,7 @@ export class LlmWikiService {
             catch (error) {
                 reason = error instanceof Error ? error.message : 'This note is immutable.';
             }
-            const managedCommunity = /^(?:community\/(?:posts|comments|chatrooms|chatmessages|agents|tasks|ideas|workshops|reactions|guestbooks))(?:\/|$)/i.test(note.path);
-            if (!reason && managedCommunity)
+            if (!reason && isManagedCommunityPath(note.path))
                 reason = 'Managed community records must be changed through their dedicated endpoint, not a Property migration.';
             if (!reason && fromProperty === toProperty && mapped.mapped === 0)
                 reason = 'No source value matched valueMap; no change would be made.';
@@ -5139,6 +5147,279 @@ export class LlmWikiService {
         }
         if (JSON.stringify(result).length > boundedChars)
             throw new Error('maxChars is too small to preserve one executable migration item; narrow pathPrefix or increase maxChars');
+        return result;
+    }
+    /**
+     * Convert one complete MOC sibling ordering into an exact change set. The
+     * complete-set requirement prevents an omitted sibling from being silently
+     * pushed out of the intended sequence.
+     */
+    async mocOrderPreview(principal, options) {
+        if (!Array.isArray(options.orderedMocs) || options.orderedMocs.length < 1 || options.orderedMocs.length > 30) {
+            throw new Error('orderedMocs must contain 1 to 30 exact visible MOC paths');
+        }
+        const orderedPaths = options.orderedMocs.map((value, index) => {
+            if (typeof value !== 'string' || !value.trim())
+                throw new Error(`orderedMocs[${index}] must be a non-empty path`);
+            const path = normalizePath(value);
+            if (path.length > 1000)
+                throw new Error(`orderedMocs[${index}] is too long`);
+            return path;
+        });
+        const orderedKeys = orderedPaths.map(path => path.toLowerCase());
+        if (new Set(orderedKeys).size !== orderedKeys.length)
+            throw new Error('orderedMocs must not contain duplicate paths');
+        const startAt = options.startAt === undefined ? 10 : Number(options.startAt);
+        const step = options.step === undefined ? 10 : Number(options.step);
+        if (!Number.isInteger(startAt) || startAt < 0 || startAt > 1_000_000)
+            throw new Error('startAt must be an integer from 0 to 1000000');
+        if (!Number.isInteger(step) || step < 1 || step > 100_000)
+            throw new Error('step must be an integer from 1 to 100000');
+        if (startAt + step * Math.max(0, orderedPaths.length - 1) > 1_000_000)
+            throw new Error('The proposed nav_order sequence exceeds 1000000; lower startAt or step');
+        const boundedChars = Math.min(Math.max(Number(options.maxChars) || 12000, 4096), 20000);
+        const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        const mocNotes = [];
+        let scanned = 0;
+        for await (const note of iterateNotes(this.fileSystem, { filters: { note_kind: 'moc' }, sortBy: 'path' }, canAccess)) {
+            if (isModerationHidden(note.frontmatter) || String(note.frontmatter.note_kind || '').toLowerCase() !== 'moc')
+                continue;
+            scanned += 1;
+            if (scanned > 20_000)
+                throw new Error('MOC hierarchy exceeds the 20000-note planning bound; narrow the Vault before reordering');
+            const revision = note.revision || (await this.fileSystem.readNote(note.path)).revision;
+            mocNotes.push({ ...note, revision });
+        }
+        const nodes = mocNotes.map(note => ({
+            path: note.path,
+            title: note.frontmatter.title,
+            aliases: note.frontmatter.aliases,
+            preferredTerm: note.frontmatter.preferred_term,
+            stableId: note.frontmatter.stable_id,
+            navOrder: note.frontmatter.nav_order,
+            ...(typeof note.frontmatter.moc_parent === 'string' && { parent: note.frontmatter.moc_parent }),
+        }));
+        const navigation = buildMocNavigation(nodes);
+        const noteByKey = new Map(mocNotes.map(note => [normalizePath(note.path).toLowerCase(), note]));
+        const navByKey = new Map(navigation.items.map(item => [normalizePath(item.path).toLowerCase(), item]));
+        const blockers = [];
+        let currentPaths = [];
+        let parent;
+        if (options.parentPath) {
+            const parentPath = normalizePath(options.parentPath);
+            const parentNote = noteByKey.get(parentPath.toLowerCase());
+            const parentNavigation = navByKey.get(parentPath.toLowerCase());
+            if (!parentNote || !parentNavigation)
+                throw new Error('parentPath must identify one exact visible MOC note');
+            parent = { path: this.access.toPublicPath(parentNote.path), revision: parentNote.revision };
+            if (!['root', 'nested'].includes(parentNavigation.state)) {
+                blockers.push({ reason: `The parent MOC has unresolved hierarchy state '${parentNavigation.state}'; repair moc_parent before ordering this branch.`, paths: [parent.path] });
+            }
+            currentPaths = parentNavigation.children;
+        }
+        else {
+            currentPaths = navigation.roots;
+            if (navigation.missingParents.length || navigation.ambiguousParents.length || navigation.cycles.length) {
+                blockers.push({
+                    reason: 'Root order is unsafe while the MOC hierarchy has missing, ambiguous, self-referential, or cyclic parents.',
+                    paths: [
+                        ...navigation.missingParents.map(item => this.access.toPublicPath(item.path)),
+                        ...navigation.ambiguousParents.map(item => this.access.toPublicPath(item.path)),
+                        ...navigation.cycles.flatMap(item => item.nodes.map(path => this.access.toPublicPath(path))),
+                    ].slice(0, 10),
+                });
+            }
+        }
+        const relevantHierarchyKeys = options.parentPath
+            ? new Set([normalizePath(options.parentPath).toLowerCase(), ...currentPaths.map(path => normalizePath(path).toLowerCase())])
+            : undefined;
+        const scopeInvalidParents = navigation.items.filter(item => item.resolvedParent
+            && (!relevantHierarchyKeys || relevantHierarchyKeys.has(normalizePath(item.path).toLowerCase()))
+            && !this.access.canReferenceFrom(item.path, item.resolvedParent));
+        if (scopeInvalidParents.length)
+            blockers.push({
+                reason: 'The selected MOC hierarchy contains a moc_parent edge that crosses a privacy boundary.',
+                paths: scopeInvalidParents.slice(0, 10).map(item => this.access.toPublicPath(item.path)),
+            });
+        if (currentPaths.length > 30)
+            blockers.push({ reason: 'This sibling group exceeds the 30-item planning bound; split it under smaller sub-MOCs before assigning a durable order.' });
+        const currentKeys = new Set(currentPaths.map(path => normalizePath(path).toLowerCase()));
+        const proposedKeys = new Set(orderedKeys);
+        const missing = currentPaths.filter(path => !proposedKeys.has(normalizePath(path).toLowerCase()));
+        const extra = orderedPaths.filter(path => !currentKeys.has(path.toLowerCase()));
+        if (missing.length || extra.length) {
+            blockers.push({
+                reason: 'orderedMocs must contain the complete current sibling set exactly once; partial reorder plans are refused.',
+                paths: [...missing.map(path => this.access.toPublicPath(path)), ...extra.map(path => this.access.toPublicPath(path))].slice(0, 20),
+            });
+        }
+        const proposed = orderedPaths.map((path, index) => {
+            const note = noteByKey.get(path.toLowerCase());
+            return {
+                path: note ? this.access.toPublicPath(note.path) : this.access.toPublicPath(path),
+                navOrder: startAt + index * step,
+                ...(note && { revision: note.revision }),
+            };
+        });
+        const candidateChanges = [];
+        if (!missing.length && !extra.length) {
+            for (let index = 0; index < proposed.length; index += 1) {
+                const item = proposed[index];
+                const physicalPath = orderedPaths[index];
+                const note = noteByKey.get(physicalPath.toLowerCase());
+                let reason;
+                try {
+                    this.access.assertMutationAllowed(note.path, 'wiki.moc_order');
+                }
+                catch (error) {
+                    reason = error instanceof Error ? error.message : 'This MOC cannot be mutated.';
+                }
+                if (!reason && isManagedCommunityPath(note.path))
+                    reason = 'Managed Community records cannot participate in a generic MOC-order change set.';
+                if (reason)
+                    blockers.push({ reason, paths: [this.access.toPublicPath(note.path)] });
+                if (typeof note.frontmatter.nav_order !== 'number' || note.frontmatter.nav_order !== item.navOrder) {
+                    candidateChanges.push({ path: this.access.toPublicPath(note.path), expectedRevision: note.revision, frontmatter: { set: { nav_order: item.navOrder } } });
+                }
+            }
+        }
+        if (candidateChanges.length > 10)
+            blockers.push({ reason: `The order needs ${candidateChanges.length} note edits, exceeding one notes.change_set limit of 10; split the sibling group or preserve more existing nav_order values.` });
+        const changes = blockers.length === 0 ? candidateChanges : [];
+        const currentOrder = currentPaths.map(path => {
+            const note = noteByKey.get(normalizePath(path).toLowerCase());
+            const order = navigationOrder(note.frontmatter.nav_order);
+            return {
+                path: this.access.toPublicPath(note.path),
+                revision: note.revision,
+                ...(order !== Number.MAX_SAFE_INTEGER && { navOrder: order }),
+            };
+        });
+        const result = {
+            purpose: 'Read-only complete-sibling MOC order preflight. nav_order controls hierarchy siblings; authored links inside one MOC body keep their Markdown order.',
+            ...(parent && { parent }),
+            hierarchy: { scannedMocs: scanned, siblingTotal: currentPaths.length },
+            currentOrder,
+            proposedOrder: proposed,
+            requiredChanges: candidateChanges.length,
+            changes,
+            blockers,
+            valid: blockers.length === 0,
+            alreadyOrdered: blockers.length === 0 && candidateChanges.length === 0,
+            nextAction: changes.length ? {
+                endpointId: endpointIdForTool('patch_multiple_notes'),
+                instruction: 'Pass the complete changes array with dryRun=true. Inspect every revision and preview, then re-submit the identical array with dryRun=false and its confirmPlanFingerprint.',
+            } : undefined,
+            generatedAt: now(),
+        };
+        if (JSON.stringify(result).length > boundedChars)
+            throw new Error('maxChars is too small to preserve the complete MOC ordering plan; increase maxChars or use a smaller sibling group');
+        return result;
+    }
+    /** Build a two-note reciprocal related/same_as repair without risking a
+     * half-written graph edge. Existing malformed or ambiguous relation values
+     * are blockers rather than data this planner silently normalizes. */
+    async reciprocalLinkPreview(principal, options) {
+        const relation = String(options.relation || '').trim().toLowerCase();
+        if (!RECIPROCAL_RELATIONS.includes(relation))
+            throw new Error(`relation must be one of: ${RECIPROCAL_RELATIONS.join(', ')}`);
+        const leftPath = normalizePath(options.leftPath);
+        const rightPath = normalizePath(options.rightPath);
+        if (!leftPath || !rightPath)
+            throw new Error('leftPath and rightPath are required');
+        if (leftPath.toLowerCase() === rightPath.toLowerCase())
+            throw new Error('A reciprocal relation requires two different notes');
+        const boundedChars = Math.min(Math.max(Number(options.maxChars) || 8000, 4096), 20000);
+        const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        if (!canAccess(leftPath) || !canAccess(rightPath))
+            throw new Error('Both relation endpoints must be exact notes visible in the current scope');
+        const [left, right] = await Promise.all([this.fileSystem.readNote(leftPath), this.fileSystem.readNote(rightPath)]);
+        if (isModerationHidden(left.frontmatter) || isModerationHidden(right.frontmatter))
+            throw new Error('Moderation-hidden notes cannot be linked by this planner');
+        const publicLeft = this.access.toPublicPath(leftPath);
+        const publicRight = this.access.toPublicPath(rightPath);
+        const blockers = [];
+        if (!this.access.canReferenceFrom(leftPath, rightPath) || !this.access.canReferenceFrom(rightPath, leftPath)) {
+            blockers.push({ reason: 'A reciprocal relation would cross a scope privacy boundary; both directions must be safe.' });
+        }
+        for (const [path, label] of [[leftPath, publicLeft], [rightPath, publicRight]]) {
+            try {
+                this.access.assertMutationAllowed(path, 'wiki.reciprocal_link');
+            }
+            catch (error) {
+                blockers.push({ path: label, reason: error instanceof Error ? error.message : 'This note cannot be mutated.' });
+            }
+            if (isManagedCommunityPath(path))
+                blockers.push({ path: label, reason: 'Managed Community records must be changed through their dedicated endpoint.' });
+        }
+        const inspect = async (sourcePath, targetPath, frontmatter, publicPath) => {
+            const rawValue = frontmatter[relation];
+            if (rawValue === undefined)
+                return { values: [], present: false };
+            if (!Array.isArray(rawValue) || rawValue.some(value => typeof value !== 'string' || !value.trim())) {
+                blockers.push({ path: publicPath, reason: `${relation} must be a native Obsidian Property list of non-empty links before it can be repaired safely.` });
+                return { values: [], present: false };
+            }
+            const values = rawValue.map(value => value.trim());
+            if (values.length > 30)
+                blockers.push({ path: publicPath, reason: `${relation} exceeds the managed 30-link bound.` });
+            let present = false;
+            for (const raw of values) {
+                let matches = [];
+                try {
+                    matches = await this.fileSystem.findPathForWikiLink(relationDocument(raw), canAccess);
+                    matches = matches.filter(path => this.access.canReferenceFrom(sourcePath, path));
+                }
+                catch {
+                    matches = [];
+                }
+                if (matches.length !== 1) {
+                    blockers.push({ path: publicPath, reason: `${relation} contains a ${matches.length ? 'ambiguous' : 'missing or inaccessible'} target: ${boundedText(raw, 300)}` });
+                    continue;
+                }
+                if (normalizePath(matches[0]).toLowerCase() === targetPath.toLowerCase())
+                    present = true;
+            }
+            return { values, present };
+        };
+        const leftState = await inspect(leftPath, rightPath, left.frontmatter, publicLeft);
+        const rightState = await inspect(rightPath, leftPath, right.frontmatter, publicRight);
+        let leftLink;
+        let rightLink;
+        try {
+            leftLink = canonicalRelationWikiLink(rightPath);
+            rightLink = canonicalRelationWikiLink(leftPath);
+        }
+        catch (error) {
+            blockers.push({ reason: error instanceof Error ? error.message : 'A relation endpoint cannot be encoded as an Obsidian wikilink.' });
+        }
+        if (!leftState.present && leftState.values.length >= 30)
+            blockers.push({ path: publicLeft, reason: `${relation} is full; review and remove an obsolete relation before adding another.` });
+        if (!rightState.present && rightState.values.length >= 30)
+            blockers.push({ path: publicRight, reason: `${relation} is full; review and remove an obsolete relation before adding another.` });
+        const candidateChanges = [];
+        if (!leftState.present && leftLink)
+            candidateChanges.push({ path: publicLeft, expectedRevision: left.revision, frontmatter: { set: { [relation]: [...leftState.values, leftLink] } } });
+        if (!rightState.present && rightLink)
+            candidateChanges.push({ path: publicRight, expectedRevision: right.revision, frontmatter: { set: { [relation]: [...rightState.values, rightLink] } } });
+        const changes = blockers.length === 0 ? candidateChanges : [];
+        const result = {
+            purpose: 'Read-only reciprocal typed-link preflight. The returned revision-stamped changes keep both sides coherent through one notes.change_set.',
+            relation,
+            left: { path: publicLeft, revision: left.revision, hasReciprocalEdge: leftState.present },
+            right: { path: publicRight, revision: right.revision, hasReciprocalEdge: rightState.present },
+            changes,
+            blockers,
+            valid: blockers.length === 0,
+            alreadyReciprocal: blockers.length === 0 && candidateChanges.length === 0,
+            nextAction: changes.length ? {
+                endpointId: endpointIdForTool('patch_multiple_notes'),
+                instruction: 'Pass both changes together with dryRun=true. Inspect the plan, then confirm that exact plan fingerprint; never apply one side separately.',
+            } : undefined,
+            generatedAt: now(),
+        };
+        if (JSON.stringify(result).length > boundedChars)
+            throw new Error('maxChars is too small to preserve the reciprocal-link plan; increase maxChars');
         return result;
     }
     noteTemplate(noteKind = 'atomic', maxChars = 7000) {
@@ -6927,6 +7208,7 @@ export class LlmWikiService {
             workflowRoutes,
             mocs,
             mocOrdering: 'preorder: parent, then its branch; siblings by nav_order then title/path',
+            mocOrderPlanner: { endpointId: endpointIdForTool('get_wiki_moc_order_preview'), requirement: 'Pass the complete current root or child sibling set; then dry-run and confirm its notes.change_set.' },
             projects,
             inbox,
             review,
@@ -7128,7 +7410,16 @@ export class LlmWikiService {
                 && normalizePath(candidate.target).toLowerCase() === normalizePath(edge.source).toLowerCase()
                 && candidate.relation === edge.relation);
             if (!reverse)
-                typedReciprocityMissing.push({ path: this.access.toPublicPath(edge.source), relation: edge.relation, target: this.access.toPublicPath(edge.target), reason: 'reciprocal_edge_missing' });
+                typedReciprocityMissing.push({
+                    path: this.access.toPublicPath(edge.source),
+                    relation: edge.relation,
+                    target: this.access.toPublicPath(edge.target),
+                    reason: 'reciprocal_edge_missing',
+                    repair: {
+                        endpointId: endpointIdForTool('get_wiki_reciprocal_link_preview'),
+                        arguments: { leftPath: this.access.toPublicPath(edge.source), rightPath: this.access.toPublicPath(edge.target), relation: edge.relation },
+                    },
+                });
         }
         const relationMeaning = new Map(getOrganizationRelationContract().map(entry => [entry.field, entry.target]));
         const relationReverseMap = [...typedIncoming.entries()]

@@ -19,7 +19,7 @@ export const WIKI_POLICY_TOPICS = [
 ] as const;
 
 export type WikiPolicyTopicId = typeof WIKI_POLICY_TOPICS[number];
-export const WIKI_POLICY_VERSION = 4;
+export const WIKI_POLICY_VERSION = 5;
 
 type WikiPolicyTopic = {
   purpose: string;
@@ -130,11 +130,12 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
     rules: [
       'A MOC should state purpose, scope, questions, and optionally one resolvable moc_parent; ordinary body links remain free cross-links.',
       'The Markdown outline is authored order, nav_order controls sibling MOC order, and only moc_parent defines hierarchy.',
+      'Use wiki.moc_order with the complete current sibling set before changing nav_order; apply its revision-stamped plan through one confirmed notes.change_set.',
       'Use wiki.learning_path to compare authored order with note and claim prerequisites, inspect cycles and late edges, and preserve intentional pedagogical redundancy.',
       'Use one primary_moc as a launch point and bounded additional mocs for legitimate multiple contexts; do not duplicate the note.',
       'Use wiki.canvas_view for an optional spatial projection of the authored MOC and dependency edges; use wiki.canvas_health before reusing an old managed export and regenerate it after source revisions change.',
     ],
-    routes: ['wiki.moc_candidates', 'wiki.learning_path', 'wiki.graph_health', 'wiki.context_pack', 'wiki.canvas_view', 'wiki.canvas_export', 'wiki.canvas_health'],
+    routes: ['wiki.learning_path', 'wiki.moc_order', 'wiki.moc_candidates', 'wiki.graph_health', 'wiki.context_pack', 'wiki.canvas_view', 'wiki.canvas_export', 'wiki.canvas_health'],
     avoid: ['inferring hierarchy from every body link', 'automatic MOC reorder', 'treating a thematic external prerequisite as a broken course', 'treating a Canvas position as canonical structure'],
   },
   memory: {
@@ -154,11 +155,11 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
       'Begin with one bounded wiki.review_packet or wiki.exception_board item and follow only its selected repair route.',
       'Treat graph, vocabulary, duplicate, placement, and composition findings as advisory signals; inspect both current revisions before editing.',
       'Similarity, zero usage, high degree, or a missing reciprocal edge may justify review but never automatic merge, split, move, or deletion.',
-      'For a coupled reciprocal-link, MOC-order, or Property-contract repair, use wiki.property_migration when applicable, dry-run one notes.change_set, inspect every revision and preview, then confirm its exact fingerprint.',
+      'For a coupled repair, use wiki.reciprocal_link, wiki.moc_order, or wiki.property_migration as applicable; dry-run its complete notes.change_set, inspect every revision and preview, then confirm that exact fingerprint.',
       'After a repair, re-run only the originating bounded check and preserve the reason in Markdown Properties or Git as appropriate.',
       'Managed Canvas freshness belongs to wiki.canvas_health and the exception board; do not treat an unmanaged user Canvas as broken or rewrite it automatically.',
     ],
-    routes: ['wiki.review_packet', 'wiki.exception_board', 'wiki.graph_health', 'wiki.canvas_health', 'wiki.vocabulary_health', 'wiki.duplicate_candidates', 'wiki.property_migration', 'notes.change_set'],
+    routes: ['wiki.review_packet', 'wiki.exception_board', 'wiki.graph_health', 'wiki.canvas_health', 'wiki.vocabulary_health', 'wiki.duplicate_candidates', 'wiki.reciprocal_link', 'wiki.moc_order', 'wiki.property_migration', 'notes.change_set'],
     avoid: ['calling every health endpoint in one turn', 'repairing derived indexes instead of authoritative Markdown', 'independent writes for one logically coupled repair', 'automatic cleanup from an advisory score'],
   },
   ideation: {
@@ -255,11 +256,10 @@ export function getWikiPolicyTopic(topic: unknown, maxChars: unknown = 7000): Re
   const rules = result.rules as string[];
   const avoid = result.avoid as string[];
   const routes = result.routes as string[];
-  let truncated = false;
-  while (JSON.stringify(result).length > boundedChars && avoid.length > 1) { avoid.pop(); truncated = true; }
-  while (JSON.stringify(result).length > boundedChars && rules.length > 1) { rules.pop(); truncated = true; }
-  while (JSON.stringify(result).length > boundedChars && routes.length > 1) { routes.pop(); truncated = true; }
-  if (truncated) result.truncated = true;
+  const markTruncated = () => { result.truncated = true; };
+  while (JSON.stringify(result).length > boundedChars && avoid.length > 1) { avoid.pop(); markTruncated(); }
+  while (JSON.stringify(result).length > boundedChars && rules.length > 1) { rules.pop(); markTruncated(); }
+  while (JSON.stringify(result).length > boundedChars && routes.length > 1) { routes.pop(); markTruncated(); }
   if (JSON.stringify(result).length <= boundedChars) return result;
   return {
     topic: topicId,

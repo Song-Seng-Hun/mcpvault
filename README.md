@@ -333,6 +333,20 @@ before/after preview, then apply the identical array with its plan fingerprint.
 Repeat to process the next bounded batch; immutable sources and managed
 Community records remain outside this generic migration path.
 
+For a structural MOC order, call `wiki.moc_order` with either one exact
+`parentPath` or no parent for the root shelf, plus every current sibling in
+the desired `orderedMocs` order. The planner refuses partial sibling sets,
+broken root hierarchies, unsafe scopes, and plans that need more than the ten
+notes supported by one change set. It changes only numeric `nav_order`;
+the links authored inside an individual MOC keep their visible Markdown order.
+
+For mutual `related` or `same_as` edges, call `wiki.reciprocal_link` with the
+two exact note paths. It resolves all existing values first and refuses a
+malformed, ambiguous, full, hidden, immutable, managed-Community, or
+cross-privacy relation. The returned one- or two-note plan must be dry-run and
+confirmed as one `notes.change_set`, so a reciprocal edge is never knowingly
+left half-written.
+
 For a redirect or duplicate that must remain addressable, set
 `canonical_path` to the visible canonical note. For high-value knowledge,
 optionally add `recall_prompt` and `recall_interval_days`; attempt the prompt
@@ -1617,6 +1631,12 @@ write. If a later filesystem write fails, MCPVault restores attempted earlier
 writes and explicitly reports any rollback uncertainty. This is a guarded
 filesystem transaction rather than a claim of OS-wide atomicity; Git remains
 the durable audit and recovery layer.
+
+Prefer a purpose-built read-only planner when the coupled edit represents a
+known organization invariant: `wiki.moc_order` for one complete sibling order,
+`wiki.reciprocal_link` for `related`/`same_as`, and
+`wiki.property_migration` for one bounded Property migration. Each returns the
+same revision-stamped `notes.change_set` shape; the planner does not write.
 
 **Response (multiple matches with replaceAll=false):**
 

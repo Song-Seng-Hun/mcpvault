@@ -1379,6 +1379,109 @@ test('Property migrations produce executable bounded change sets and preserve sc
   } finally { await client.close(); await server.close(); }
 });
 
+test('MOC order previews require the complete sibling set and apply one revision-safe order', async () => {
+  await mkdir(join(vault, 'Knowledge', 'MOCs'), { recursive: true });
+  await writeFile(join(vault, 'Knowledge', 'MOCs', 'Root.md'), '---\nllm_wiki_type: knowledge\nnote_kind: moc\nnav_order: 0\n---\n# Root\n');
+  await writeFile(join(vault, 'Knowledge', 'MOCs', 'A.md'), '---\nllm_wiki_type: knowledge\nnote_kind: moc\nmoc_parent: "[[Knowledge/MOCs/Root]]"\nnav_order: 10\n---\n# A\n');
+  await writeFile(join(vault, 'Knowledge', 'MOCs', 'B.md'), '---\nllm_wiki_type: knowledge\nnote_kind: moc\nmoc_parent: "[[Knowledge/MOCs/Root]]"\nnav_order: 20\n---\n# B\n');
+  await writeFile(join(vault, 'Knowledge', 'MOCs', 'C.md'), '---\nllm_wiki_type: knowledge\nnote_kind: moc\nmoc_parent: "[[Knowledge/MOCs/Root]]"\nnav_order: 30\n---\n# C\n');
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'moc-order-owner', modelId: 'codex', password: 'moc-order-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const discovery = await callJson(client, 'search_capabilities', { query: 'MOC sibling nav order reorder change set', limit: 5, maxChars: 8000, accessToken });
+    expect(discovery.value.endpoints).toEqual(expect.arrayContaining([expect.objectContaining({ endpointId: 'wiki.moc_order', method: 'POST' })]));
+    const plan = await callJson(client, 'call_endpoint', { endpointId: 'wiki.moc_order', arguments: {
+      parentPath: 'Knowledge/MOCs/Root.md',
+      orderedMocs: ['Knowledge/MOCs/B.md', 'Knowledge/MOCs/C.md', 'Knowledge/MOCs/A.md'],
+      maxChars: 12000,
+      accessToken,
+    } });
+    expect(plan.value).toMatchObject({ valid: true, alreadyOrdered: false, requiredChanges: 3, hierarchy: { siblingTotal: 3 }, nextAction: { endpointId: 'notes.change_set' } });
+    expect(plan.value.currentOrder.map((item: any) => item.path)).toEqual(['Knowledge/MOCs/A.md', 'Knowledge/MOCs/B.md', 'Knowledge/MOCs/C.md']);
+    expect(plan.value.proposedOrder.map((item: any) => [item.path, item.navOrder])).toEqual([
+      ['Knowledge/MOCs/B.md', 10], ['Knowledge/MOCs/C.md', 20], ['Knowledge/MOCs/A.md', 30],
+    ]);
+    const preview = await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: { changes: plan.value.changes, dryRun: true, accessToken } });
+    const applied = await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: {
+      changes: plan.value.changes, dryRun: false, confirmPlanFingerprint: preview.value.planFingerprint, accessToken,
+    } });
+    expect(applied.value).toMatchObject({ success: true, applied: true, changedCount: 3 });
+    const confirmed = await callJson(client, 'call_endpoint', { endpointId: 'wiki.moc_order', arguments: {
+      parentPath: 'Knowledge/MOCs/Root.md', orderedMocs: ['Knowledge/MOCs/B.md', 'Knowledge/MOCs/C.md', 'Knowledge/MOCs/A.md'], accessToken,
+    } });
+    expect(confirmed.value).toMatchObject({ valid: true, alreadyOrdered: true, requiredChanges: 0, changes: [] });
+    const home = await callJson(client, 'call_endpoint', { endpointId: 'wiki.home', arguments: { limit: 10, maxChars: 10000, accessToken } });
+    expect(home.value.mocOrderPlanner).toMatchObject({ endpointId: 'wiki.moc_order' });
+    expect(home.value.mocs.map((item: any) => item.path)).toEqual([
+      'Knowledge/MOCs/Root.md', 'Knowledge/MOCs/B.md', 'Knowledge/MOCs/C.md', 'Knowledge/MOCs/A.md',
+    ]);
+    const partial = await callJson(client, 'call_endpoint', { endpointId: 'wiki.moc_order', arguments: {
+      parentPath: 'Knowledge/MOCs/Root.md', orderedMocs: ['Knowledge/MOCs/B.md', 'Knowledge/MOCs/C.md'], accessToken,
+    } });
+    expect(partial.value).toMatchObject({ valid: false, changes: [], blockers: [expect.objectContaining({ reason: expect.stringContaining('complete current sibling set') })] });
+    const brokenWrite = await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/MOCs/Broken.md', content: '# Broken\n', frontmatter: { note_kind: 'moc', moc_parent: '[[Missing parent]]' }, expectedRevision: 'missing', accessToken,
+    } });
+    expect(brokenWrite.isError).toBeFalsy();
+    const unsafeRoot = await callJson(client, 'call_endpoint', { endpointId: 'wiki.moc_order', arguments: {
+      orderedMocs: ['Knowledge/MOCs/Root.md'], accessToken,
+    } });
+    expect(unsafeRoot.value).toMatchObject({ valid: false, changes: [], blockers: [expect.objectContaining({ reason: expect.stringContaining('Root order is unsafe') })] });
+  } finally { await client.close(); await server.close(); }
+});
+
+test('reciprocal-link previews repair both graph directions atomically and reject unsafe scopes', async () => {
+  await mkdir(join(vault, 'Knowledge'), { recursive: true });
+  await writeFile(join(vault, 'Knowledge', 'Left.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nrelated:\n  - "[[Knowledge/Right]]"\n---\n# Left\n');
+  await writeFile(join(vault, 'Knowledge', 'Right.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\n---\n# Right\n');
+  await writeFile(join(vault, 'Knowledge', 'Scalar.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nrelated: "[[Knowledge/Right]]"\n---\n# Scalar\n');
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'reciprocal-owner', modelId: 'codex', password: 'reciprocal-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const discovery = await callJson(client, 'search_capabilities', { query: 'reciprocal mutual related backlink two notes', limit: 5, maxChars: 8000, accessToken });
+    expect(discovery.value.endpoints).toEqual(expect.arrayContaining([expect.objectContaining({ endpointId: 'wiki.reciprocal_link', method: 'POST' })]));
+    const before = await callJson(client, 'call_endpoint', { endpointId: 'wiki.graph_health', arguments: { limit: 20, maxChars: 12000, accessToken } });
+    expect(before.value.typedRelations.reciprocityMissing.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/Left.md', target: 'Knowledge/Right.md', repair: { endpointId: 'wiki.reciprocal_link', arguments: { leftPath: 'Knowledge/Left.md', rightPath: 'Knowledge/Right.md', relation: 'related' } } }),
+    ]));
+    const plan = await callJson(client, 'call_endpoint', { endpointId: 'wiki.reciprocal_link', arguments: {
+      leftPath: 'Knowledge/Left.md', rightPath: 'Knowledge/Right.md', relation: 'related', accessToken,
+    } });
+    expect(plan.value).toMatchObject({ valid: true, alreadyReciprocal: false, left: { hasReciprocalEdge: true }, right: { hasReciprocalEdge: false }, nextAction: { endpointId: 'notes.change_set' } });
+    expect(plan.value.changes).toEqual([
+      expect.objectContaining({ path: 'Knowledge/Right.md', frontmatter: { set: { related: ['[[Knowledge/Left]]'] } } }),
+    ]);
+    const preview = await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: { changes: plan.value.changes, dryRun: true, accessToken } });
+    await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: {
+      changes: plan.value.changes, dryRun: false, confirmPlanFingerprint: preview.value.planFingerprint, accessToken,
+    } });
+    const graph = await callJson(client, 'call_endpoint', { endpointId: 'wiki.graph_health', arguments: { limit: 20, maxChars: 12000, accessToken } });
+    expect(graph.value.typedRelations.reciprocityMissing.items).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/Left.md', target: 'Knowledge/Right.md' }),
+      expect.objectContaining({ path: 'Knowledge/Right.md', target: 'Knowledge/Left.md' }),
+    ]));
+    const confirmed = await callJson(client, 'call_endpoint', { endpointId: 'wiki.reciprocal_link', arguments: {
+      leftPath: 'Knowledge/Left.md', rightPath: 'Knowledge/Right.md', relation: 'related', accessToken,
+    } });
+    expect(confirmed.value).toMatchObject({ valid: true, alreadyReciprocal: true, changes: [] });
+    const malformed = await callJson(client, 'call_endpoint', { endpointId: 'wiki.reciprocal_link', arguments: {
+      leftPath: 'Knowledge/Scalar.md', rightPath: 'Knowledge/Right.md', relation: 'related', accessToken,
+    } });
+    expect(malformed.value).toMatchObject({ valid: false, changes: [], blockers: [expect.objectContaining({ path: 'Knowledge/Scalar.md', reason: expect.stringContaining('Property list') })] });
+
+    const privateWrite = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'notes.write', arguments: {
+      path: 'scope://model/codex/Private.md', content: '# Private\n', expectedRevision: 'missing', accessToken,
+    } } });
+    expect(privateWrite.isError).toBeFalsy();
+    const unsafe = await callJson(client, 'call_endpoint', { endpointId: 'wiki.reciprocal_link', arguments: {
+      leftPath: 'Knowledge/Left.md', rightPath: 'scope://model/codex/Private.md', relation: 'same_as', accessToken,
+    } });
+    expect(unsafe.value).toMatchObject({ valid: false, changes: [], blockers: [expect.objectContaining({ reason: expect.stringContaining('privacy boundary') })] });
+  } finally { await client.close(); await server.close(); }
+});
+
 async function setup() {
   const server = createServer(vault, { version: '1.0.0' });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();

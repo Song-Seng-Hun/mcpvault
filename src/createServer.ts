@@ -1715,6 +1715,25 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           }), trimmedArgs.prettyPrint);
         }
 
+        case "get_wiki_moc_order_preview": {
+          return jsonResult(await llmWiki.mocOrderPreview(principal, {
+            orderedMocs: trimmedArgs.orderedMocs,
+            ...(typeof trimmedArgs.parentPath === 'string' && { parentPath: trimmedArgs.parentPath }),
+            ...(trimmedArgs.startAt !== undefined && { startAt: trimmedArgs.startAt }),
+            ...(trimmedArgs.step !== undefined && { step: trimmedArgs.step }),
+            ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
+          }), trimmedArgs.prettyPrint);
+        }
+
+        case "get_wiki_reciprocal_link_preview": {
+          return jsonResult(await llmWiki.reciprocalLinkPreview(principal, {
+            leftPath: trimmedArgs.leftPath,
+            rightPath: trimmedArgs.rightPath,
+            relation: trimmedArgs.relation,
+            ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
+          }), trimmedArgs.prettyPrint);
+        }
+
         case "get_wiki_note_template": {
           return jsonResult(llmWiki.noteTemplate(trimmedArgs.noteKind, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
         }
@@ -2792,13 +2811,17 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 function trimPaths(args: any, access: ScopeAccessPolicy, principal?: ScopePrincipal): any {
   const trimmed = { ...args };
 
-  for (const key of ['path', 'oldPath', 'newPath', 'targetPath', 'confirmPath', 'confirmOldPath', 'confirmNewPath', 'folder', 'pathPrefix', 'scopeUri', 'subjectPath', 'outputPath']) {
+  for (const key of ['path', 'oldPath', 'newPath', 'targetPath', 'confirmPath', 'confirmOldPath', 'confirmNewPath', 'folder', 'pathPrefix', 'scopeUri', 'subjectPath', 'outputPath', 'parentPath', 'leftPath', 'rightPath']) {
     if (trimmed[key] && typeof trimmed[key] === 'string') trimmed[key] = access.resolveExternalPath(trimmed[key], principal);
   }
   if (trimmed.sortBy && typeof trimmed.sortBy === 'string') trimmed.sortBy = trimmed.sortBy.trim();
 
   if (trimmed.paths && Array.isArray(trimmed.paths)) {
     trimmed.paths = trimmed.paths.map((p: any) => typeof p === 'string' ? access.resolveExternalPath(p, principal) : p);
+  }
+
+  if (trimmed.orderedMocs && Array.isArray(trimmed.orderedMocs)) {
+    trimmed.orderedMocs = trimmed.orderedMocs.map((p: any) => typeof p === 'string' ? access.resolveExternalPath(p, principal) : p);
   }
 
   if (trimmed.changes && Array.isArray(trimmed.changes)) {
@@ -2871,19 +2894,7 @@ function assertManagedCommunityBoundary(toolName: string, args: any): void {
     for (const change of args.changes) if (change && typeof change.path === 'string') paths.push(change.path);
   }
   for (const path of paths) {
-    const normalized = String(path).replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').toLowerCase();
-    if (normalized === 'community/posts' || normalized.startsWith('community/posts/')
-      || normalized === 'community/comments' || normalized.startsWith('community/comments/')
-      || normalized === 'community/chatrooms' || normalized.startsWith('community/chatrooms/')
-      || normalized === 'community/chatmessages' || normalized.startsWith('community/chatmessages/')
-      || normalized === 'community/agents' || normalized.startsWith('community/agents/')
-      || normalized === 'community/tasks' || normalized.startsWith('community/tasks/')
-      || normalized === 'community/ideas' || normalized.startsWith('community/ideas/')
-      || normalized === 'community/workshops' || normalized.startsWith('community/workshops/')) {
-      throw new Error(`${toolName} cannot directly mutate managed community content; use the dedicated community tool so identity, threading, and references remain valid`);
-    }
-    if (normalized === 'community/reactions' || normalized.startsWith('community/reactions/')
-      || normalized === 'community/guestbooks' || normalized.startsWith('community/guestbooks/')) {
+    if (isManagedCommunityPath(String(path))) {
       throw new Error(`${toolName} cannot directly mutate managed community content; use the dedicated community tool so identity, threading, and references remain valid`);
     }
   }

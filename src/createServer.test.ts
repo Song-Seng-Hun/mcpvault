@@ -644,9 +644,17 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
 test("generic mutation tools cannot bypass managed community APIs", async () => {
   const { server, client, accessToken } = await connectClient();
   try {
-    const result = await client.callTool({ name: "write_note", arguments: { path: "Community/Posts/forbidden.md", content: "forbidden", accessToken } });
-    expect(result.isError).toBe(true);
-    expect((result.content as any)[0].text).toContain("dedicated community tool");
+    for (const path of [
+      "Community/Posts/forbidden.md",
+      "Community/Ideas/forbidden.md",
+      "Community/Workshops/forbidden.md",
+      "Community/Reactions/forbidden.md",
+      "Community/Guestbooks/forbidden.md",
+    ]) {
+      const result = await client.callTool({ name: "write_note", arguments: { path, content: "forbidden", accessToken } });
+      expect(result.isError).toBe(true);
+      expect((result.content as any)[0].text).toContain("dedicated community tool");
+    }
   } finally {
     await client.close();
     await server.close();

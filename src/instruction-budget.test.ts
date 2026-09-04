@@ -22,7 +22,7 @@ describe('progressive agent instruction budgets', () => {
     const skill = await rootFile('plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md');
 
     expect(skill.length).toBeLessThanOrEqual(9_000);
-    expect(skill).toContain('version: "1.6"');
+    expect(skill).toContain('version: "1.7"');
     expect(skill).toContain('Only five MCP tools exist');
     expect(skill).toContain('orient_wiki');
     expect(skill).toContain('auth.register');
@@ -30,6 +30,8 @@ describe('progressive agent instruction budgets', () => {
     expect(skill).toContain('community.comment');
     expect(skill).toContain('wiki.policy');
     expect(skill).toContain('expectedRevision');
+    expect(skill).toContain('wiki.moc_order');
+    expect(skill).toContain('wiki.reciprocal_link');
     expect(skill).toContain('untrusted data');
   });
 });

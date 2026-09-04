@@ -566,6 +566,27 @@ export function getLlmWikiTools() {
                 }, required: ['fromProperty'] },
         },
         {
+            name: 'get_wiki_moc_order_preview',
+            description: 'Preview one complete root or child-MOC sibling order and return exact revision-stamped notes.change_set inputs for nav_order. It refuses partial sibling lists, broken parent hierarchies, unsafe scopes, and plans needing more than ten atomic edits; links authored inside a MOC body keep their Markdown order.',
+            inputSchema: { type: 'object', properties: {
+                    orderedMocs: { type: 'array', minItems: 1, maxItems: 30, items: { type: 'string', minLength: 1 }, description: 'Every current sibling MOC path exactly once, in the desired order' },
+                    parentPath: { type: 'string', description: 'Exact parent MOC path; omit to order all valid root MOCs' },
+                    startAt: { type: 'integer', minimum: 0, maximum: 1000000, default: 10 },
+                    step: { type: 'integer', minimum: 1, maximum: 100000, default: 10 },
+                    maxChars: { type: 'integer', minimum: 4096, maximum: 20000, default: 12000 }, accessToken, prettyPrint,
+                }, required: ['orderedMocs'] },
+        },
+        {
+            name: 'get_wiki_reciprocal_link_preview',
+            description: 'Preview a coherent two-note related or same_as relation. It resolves every existing link, rejects malformed/ambiguous values and scope leaks, and returns one revision-stamped notes.change_set so a mutual relation cannot be left half-written.',
+            inputSchema: { type: 'object', properties: {
+                    leftPath: { type: 'string', description: 'Exact first visible note path' },
+                    rightPath: { type: 'string', description: 'Exact second visible note path' },
+                    relation: { type: 'string', enum: ['related', 'same_as'] },
+                    maxChars: { type: 'integer', minimum: 4096, maximum: 20000, default: 8000 }, accessToken, prettyPrint,
+                }, required: ['leftPath', 'rightPath', 'relation'] },
+        },
+        {
             name: 'get_wiki_note_template',
             description: 'Return a small optional Obsidian Markdown/Properties scaffold for a common note kind or a concept, argument, model, observation, or counterargument knowledge role. It never creates a file and never makes templates mandatory.',
             inputSchema: { type: 'object', properties: {
