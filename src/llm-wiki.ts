@@ -4884,10 +4884,14 @@ export class LlmWikiService {
    */
   propertyContract(maxChars = 7000) {
     const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
+    const fields = getOrganizationPropertyContract();
+    const relations = getOrganizationRelationContract();
+    const contractFingerprint = hash(JSON.stringify({ fields, relations }));
     const result = {
       purpose: 'A bounded MCPVault/Obsidian Properties contract. It standardizes only MCP-managed fields; custom Properties remain allowed. It is advisory metadata, not an access boundary.',
-      fields: getOrganizationPropertyContract(),
-      relations: getOrganizationRelationContract(),
+      contractFingerprint,
+      fields,
+      relations,
       conventions: {
         scalar: 'Use text, number, or ISO date-time values for status, identity, and schedule fields.',
         lists: 'Use lists for aliases, links, tags, key points, questions, and actions; avoid mixing a scalar and list under one property name.',
@@ -4903,11 +4907,45 @@ export class LlmWikiService {
       generatedAt: now(),
     };
     if (JSON.stringify(result).length <= boundedChars) return result;
-    // Keep every field name discoverable when the descriptive contract is too
-    // large. Dropping the latter half made important fields appear absent to
-    // clients; compact the prose instead of hiding the vocabulary.
-    const compactFields = result.fields.map(field => ({ name: field.name, type: field.type, ...(field.allowed && { allowed: field.allowed }), ...(field.appliesTo && { appliesTo: field.appliesTo }) }));
-    return { ...result, fields: compactFields, truncated: true };
+    const compactConventions = {
+      nativeCompatibility: {
+        safeTypes: result.conventions.nativeCompatibility.safeTypes,
+        mcpManagedComplexFields: result.conventions.nativeCompatibility.mcpManagedComplexFields,
+      },
+      lifecycle: 'Knowledge lifecycle and task execution state are separate.',
+    };
+    const typed = {
+      purpose: 'MCP-managed Obsidian Properties contract; custom fields remain allowed.',
+      contractFingerprint,
+      fields: fields.map(field => ({ name: field.name, type: field.type })),
+      relations: relations.map(relation => ({ field: relation.field, direction: relation.direction })),
+      conventions: compactConventions,
+      totalFields: fields.length,
+      totalRelations: relations.length,
+      truncated: true,
+    };
+    if (JSON.stringify(typed).length <= boundedChars) return typed;
+    // At smaller budgets keep the complete vocabulary as names. This is more
+    // useful than returning the first N rich entries and making the rest look
+    // unsupported to an agent.
+    const names = {
+      purpose: typed.purpose,
+      contractFingerprint,
+      fields: fields.map(field => field.name),
+      relations: typed.relations,
+      conventions: compactConventions,
+      totalFields: fields.length,
+      totalRelations: relations.length,
+      truncated: true,
+    };
+    if (JSON.stringify(names).length <= boundedChars) return names;
+    return {
+      contractFingerprint,
+      totalFields: fields.length,
+      totalRelations: relations.length,
+      truncated: true,
+      nextAction: { endpointId: endpointIdForTool('get_wiki_property_contract'), arguments: { maxChars: 4000 } },
+    };
   }
 
   noteTemplate(noteKind = 'atomic', maxChars = 7000) {

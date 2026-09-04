@@ -55,6 +55,19 @@ test('REST adapter uses the same dynamic endpoint registry and dispatcher', asyn
   const continuityProbe = await fetch(`http://127.0.0.1:${api.port}/api/endpoint/continuity.resume`);
   expect(continuityProbe.status).toBe(400);
 
+  const getMutation = await fetch(`http://127.0.0.1:${api.port}/api/endpoint/notes.write?path=forbidden.md&content=forbidden`);
+  expect(getMutation.status).toBe(405);
+  expect(getMutation.headers.get('allow')).toBe('POST');
+  expect(await getMutation.json()).toMatchObject({ endpointId: 'notes.write', expectedMethod: 'POST' });
+  const postRead = await fetch(`http://127.0.0.1:${api.port}/api/endpoint/context.read`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ targetType: 'post', targetId: 'missing' }),
+  });
+  expect(postRead.status).toBe(405);
+  expect(postRead.headers.get('allow')).toBe('GET');
+  await expect(readFile(join(vault, 'forbidden.md'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+
   const registration = await fetch(`http://127.0.0.1:${api.port}/api/auth/register`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

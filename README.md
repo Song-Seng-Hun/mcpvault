@@ -747,7 +747,10 @@ view exposes the same Properties locally in Obsidian.
 
 An optional localhost REST adapter uses the same endpoint registry and
 dispatcher. Start it with `--http` or `--http=PORT`; use `GET /api/capabilities`,
-`POST /api/endpoint/{endpointId}`, or one of the documented endpoint URLs. The
+then call `/api/endpoint/{endpointId}` or a documented endpoint URL with the
+exact GET/POST method returned by the catalog. All mutations are POST even
+when their internal operation name lacks a conventional write verb; a method
+mismatch returns `405 Method Not Allowed` and cannot reach the dispatcher. The
 adapter is opt-in and binds to `127.0.0.1` by default. Successful GET responses
 also include a private, short-lived `ETag` cache validator and
 `Cache-Control: private, max-age=2`; repeat the request with `If-None-Match` to
@@ -868,6 +871,7 @@ authenticated edge in front of it.
 - `delete_note` and `move_file` require matching confirmation paths.
 - Path arguments are trimmed before validation.
 - Search and batch tools return compact fields by default; set `prettyPrint: true` for expanded output. `maxChars` is a hard final response budget, including pretty-printed JSON. Oversized full-note reads set `truncated: true` and retain only a bounded prefix, so use the returned `mcp.get_note_outline` route and then `mcp.read_note_lines` for the needed section.
+- Every non-mutating endpoint advertises `maxChars`; the dispatcher applies a 12,000-character fallback even when the caller omits it. Specialized endpoints may enforce a smaller default. This final guard also covers older fixed-shape diagnostics so one forgotten schema option cannot produce an unbounded model response.
 - Structural navigation is paged too: `mcp.list_directory`, `mcp.get_backlinks`, `mcp.get_outlinks`, `mcp.find_unresolved_links`, and `mcp.find_orphan_notes` default to a 6,000-character response budget. Follow their returned `nextAction` rather than increasing the limit; each continuation carries the exact offset and preserves deterministic order.
 - Search results omit revision hashes by default to save context; set `includeRevisions: true` when a client wants to cache a result and validate it later with `read_note` and `knownRevision`.
 - The package exports TypeScript declarations and public types.

@@ -623,7 +623,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
               includeContent: { type: "boolean", description: "Include note content (default: true)", default: true },
               includeFrontmatter: { type: "boolean", description: "Include frontmatter (default: true)", default: true },
               knownRevisions: { type: "object", description: "Optional map of paths to previously returned revisions. Unchanged notes return only metadata; changed notes include their new revision.", additionalProperties: { type: "string" } },
-              maxChars: { type: "integer", minimum: 512, maximum: 20000, description: "Optional hard total response budget. Use includeContent=false or smaller batches for large notes." },
+              maxChars: { type: "integer", minimum: 512, maximum: 20000, default: 12000, description: "Hard total response budget. Use includeContent=false or smaller batches for large notes." },
               prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
             },
             required: ["paths"]
@@ -2724,7 +2724,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           throw new Error(`Unknown tool: ${toolName}`);
       }
       })();
-      return enforceResponseBudget(toolResponse, trimmedArgs.maxChars);
+      const responseContract = endpointRegistry.resolve(endpointIdForTool(toolName))?.input;
+      return enforceResponseBudget(toolResponse, normalizedResponseBudget(trimmedArgs.maxChars, responseContract));
     } catch (error) {
       await audit.record({ tool: toolName, ...(principal && { principal }), args: rawArgs, outcome: 'error', error });
       return {
@@ -3220,6 +3221,20 @@ function enforceResponseBudget(response: any, requestedMaxChars: unknown): any {
     ...response,
     content: [{ type: 'text' as const, text }],
   };
+}
+
+function normalizedResponseBudget(value: unknown, inputSchema?: Record<string, unknown>): number {
+  const maxCharsSchema = ((inputSchema?.properties as Record<string, unknown> | undefined)?.maxChars || {}) as Record<string, unknown>;
+  // A descriptor may recommend a larger useful projection, but every read
+  // endpoint still accepts the shared emergency/tiny response budget. Several
+  // service-specific projections intentionally preserve identity and a next
+  // action in 512 characters.
+  const minimum = 512;
+  const maximum = Number.isInteger(Number(maxCharsSchema.maximum)) ? Number(maxCharsSchema.maximum) : 20000;
+  const fallback = Number.isInteger(Number(maxCharsSchema.default)) ? Number(maxCharsSchema.default) : 12000;
+  const parsed = value === undefined ? fallback : Number(value);
+  if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) throw new Error(`maxChars must be an integer between ${minimum} and ${maximum}`);
+  return parsed;
 }
 
 function compactOverflowValue(value: unknown, maxChars: number): Record<string, unknown> {

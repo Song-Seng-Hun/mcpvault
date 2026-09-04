@@ -138,6 +138,27 @@ test("static REST endpoint routes take precedence over notes.read path parameter
   expect(runtime?.endpointRegistry.resolveRoute("POST", "/api/notes/tasks")?.endpoint.endpointId).toBe("notes.task_update");
 });
 
+test("endpoint catalog makes every mutation POST and every read response-budgeted", () => {
+  const server = createServer(testVaultPath, { version: "1.0.0" });
+  const runtime = getServerRuntime(server)!;
+  const descriptors = [...((runtime.endpointRegistry as any).descriptors.values() as Iterable<any>)];
+  expect(descriptors.length).toBeGreaterThan(100);
+  for (const endpoint of descriptors) {
+    if (endpoint.mutating) {
+      expect(endpoint.method, endpoint.endpointId).toBe("POST");
+    } else {
+      expect(endpoint.input.properties.maxChars, endpoint.endpointId).toMatchObject({
+        type: "integer",
+        default: expect.any(Number),
+      });
+    }
+  }
+  expect(runtime.endpointRegistry.resolve("mcp.add_discussion_argument")?.method).toBe("POST");
+  expect(runtime.endpointRegistry.resolve("auth.change_password")?.method).toBe("POST");
+  expect(runtime.endpointRegistry.resolve("mcp.ingest_source")?.method).toBe("POST");
+  expect(runtime.endpointRegistry.resolve("mcp.moderate_content")?.method).toBe("POST");
+});
+
 test("server can read and write notes via tools", async () => {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -224,6 +245,25 @@ test("server can read and write notes via tools", async () => {
   expect(tinyBoundedValue).toMatchObject({ path: "large.md", truncated: true, totalContentChars: largeBody.length });
   expect(tinyBoundedValue.content.length).toBe(tinyBoundedValue.returnedContentChars);
 
+  await client.callTool({
+    name: "write_note",
+    arguments: {
+      path: "large-frontmatter.md",
+      content: "# Metadata",
+      frontmatter: { oversized: "m".repeat(30000) },
+      expectedRevision: "missing",
+      accessToken,
+    },
+  });
+  const boundedFrontmatter = await client.callTool({ name: "get_frontmatter", arguments: { path: "large-frontmatter.md" } });
+  const boundedFrontmatterText = (boundedFrontmatter.content as any)[0].text as string;
+  expect(boundedFrontmatterText.length).toBeLessThanOrEqual(12000);
+  expect(JSON.parse(boundedFrontmatterText)).toMatchObject({ truncated: true, maxChars: 12000 });
+  const tinyFrontmatter = await client.callTool({ name: "get_frontmatter", arguments: { path: "large-frontmatter.md", maxChars: 1024 } });
+  const tinyFrontmatterText = (tinyFrontmatter.content as any)[0].text as string;
+  expect(tinyFrontmatterText.length).toBeLessThanOrEqual(1024);
+  expect(JSON.parse(tinyFrontmatterText)).toMatchObject({ truncated: true, maxChars: 1024 });
+
   const lineWindow = await client.callTool({
     name: "read_note_lines",
     arguments: { path: "large.md", startLine: 1, endLine: 1802 },
@@ -277,19 +317,16 @@ test("custom options are applied", () => {
 });
 
 test("directory and graph navigation reads are bounded and resumable", async () => {
-  const { server, client, accessToken } = await connectClient();
+  await mkdir(join(testVaultPath, "Pages"), { recursive: true });
+  await Promise.all(Array.from({ length: 70 }, (_, index) => writeFile(
+    join(testVaultPath, "Pages", `page-${index.toString().padStart(3, "0")}-${"x".repeat(24)}.md`),
+    `# Page ${index}`,
+  )));
+  const links = Array.from({ length: 90 }, (_, index) => `[[Target]] trailing context ${index} ${"context ".repeat(80)}`).join("\n");
+  await writeFile(join(testVaultPath, "Target.md"), "# Target");
+  await writeFile(join(testVaultPath, "Links.md"), links);
+  const { server, client } = await connectClient();
   try {
-    for (let index = 0; index < 70; index += 1) {
-      await client.callTool({
-        name: "write_note",
-        arguments: {
-          path: `Pages/page-${index.toString().padStart(3, "0")}-${"x".repeat(24)}.md`,
-          content: `# Page ${index}`,
-          expectedRevision: "missing",
-          accessToken,
-        },
-      });
-    }
     const directory = await client.callTool({ name: "list_directory", arguments: { path: "Pages", maxChars: 1024 } });
     const directoryText = (directory.content as any)[0].text as string;
     const directoryValue = JSON.parse(directoryText);
@@ -299,10 +336,6 @@ test("directory and graph navigation reads are bounded and resumable", async () 
     const directoryNextValue = JSON.parse((directoryNext.content as any)[0].text);
     expect(directoryNextValue.offset).toBe(directoryValue.returned);
     expect(new Set([...directoryValue.files, ...directoryNextValue.files]).size).toBe(directoryValue.files.length + directoryNextValue.files.length);
-
-    const links = Array.from({ length: 90 }, (_, index) => `[[Target]] trailing context ${index} ${"context ".repeat(80)}`).join("\n");
-    await client.callTool({ name: "write_note", arguments: { path: "Target.md", content: "# Target", expectedRevision: "missing", accessToken } });
-    await client.callTool({ name: "write_note", arguments: { path: "Links.md", content: links, expectedRevision: "missing", accessToken } });
 
     const backlinks = await client.callTool({ name: "get_backlinks", arguments: { path: "Target.md", maxChars: 1200 } });
     const backlinksText = (backlinks.content as any)[0].text as string;

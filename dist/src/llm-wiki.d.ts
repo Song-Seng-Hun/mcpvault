@@ -1937,6 +1937,7 @@ export declare class LlmWikiService {
      */
     propertyContract(maxChars?: number): {
         purpose: string;
+        contractFingerprint: string;
         fields: import("./organization.js").OrganizationPropertyContractEntry[];
         relations: ({
             field: 'supports';
@@ -2019,92 +2020,54 @@ export declare class LlmWikiService {
         generatedAt: string;
     } | {
         purpose: string;
-        relations: ({
-            field: 'supports';
-            direction: 'directional';
-            target: 'A claim, decision, or note supported by this note.';
-            reciprocal: false;
-        } | {
-            field: 'contradicts';
-            direction: 'directional';
-            target: 'A claim or conclusion challenged by this note.';
-            reciprocal: false;
-        } | {
-            field: 'supersedes';
-            direction: 'directional';
-            target: 'An older or replaced note.';
-            reciprocal: false;
-        } | {
-            field: 'derived_from';
-            direction: 'directional';
-            target: 'The source or note from which this note was derived.';
-            reciprocal: false;
-        } | {
-            field: 'depends_on';
-            direction: 'directional';
-            target: 'A prerequisite note, decision, or project.';
-            reciprocal: false;
-        } | {
-            field: 'implements';
-            direction: 'directional';
-            target: 'The design, decision, or requirement implemented here.';
-            reciprocal: false;
-        } | {
-            field: 'blocked_by';
-            direction: 'directional';
-            target: 'The note or dependency currently blocking this note.';
-            reciprocal: false;
-        } | {
-            field: 'answers_questions';
-            direction: 'directional';
-            target: 'A question note answered by this note.';
-            reciprocal: false;
-        } | {
-            field: 'tests';
-            direction: 'directional';
-            target: 'A question, hypothesis, or assumption tested by this experiment.';
-            reciprocal: false;
-        } | {
-            field: 'related';
-            direction: 'mutual';
-            target: 'A materially related note without a stronger claim.';
-            reciprocal: true;
-        } | {
-            field: 'same_as';
-            direction: 'mutual';
-            target: 'The same concept represented by another note or alias.';
-            reciprocal: true;
-        } | {
-            field: 'version_of';
-            direction: 'directional';
-            target: 'The conceptual note this version belongs to.';
-            reciprocal: false;
-        } | {
-            field: 'refines';
-            direction: 'directional';
-            target: 'A note made more precise or useful by this note.';
-            reciprocal: false;
-        })[];
-        conventions: {
-            scalar: string;
-            lists: string;
-            nested: string;
-            nativeCompatibility: {
-                safeTypes: string[];
-                mcpManagedComplexFields: string[];
-                rule: string;
-            };
-            lifecycle: string;
-            review: string;
-        };
-        generatedAt: string;
+        contractFingerprint: string;
         fields: {
             name: string;
             type: "boolean" | "list" | "number" | "object" | "text";
-            allowed?: readonly string[];
-            appliesTo?: readonly string[];
         }[];
+        relations: {
+            field: "answers_questions" | "blocked_by" | "contradicts" | "depends_on" | "derived_from" | "implements" | "refines" | "related" | "same_as" | "supersedes" | "supports" | "tests" | "version_of";
+            direction: "directional" | "mutual";
+        }[];
+        conventions: {
+            nativeCompatibility: {
+                safeTypes: string[];
+                mcpManagedComplexFields: string[];
+            };
+            lifecycle: string;
+        };
+        totalFields: number;
+        totalRelations: number;
         truncated: boolean;
+    } | {
+        purpose: string;
+        contractFingerprint: string;
+        fields: string[];
+        relations: {
+            field: "answers_questions" | "blocked_by" | "contradicts" | "depends_on" | "derived_from" | "implements" | "refines" | "related" | "same_as" | "supersedes" | "supports" | "tests" | "version_of";
+            direction: "directional" | "mutual";
+        }[];
+        conventions: {
+            nativeCompatibility: {
+                safeTypes: string[];
+                mcpManagedComplexFields: string[];
+            };
+            lifecycle: string;
+        };
+        totalFields: number;
+        totalRelations: number;
+        truncated: boolean;
+    } | {
+        contractFingerprint: string;
+        totalFields: number;
+        totalRelations: number;
+        truncated: boolean;
+        nextAction: {
+            endpointId: string;
+            arguments: {
+                maxChars: number;
+            };
+        };
     };
     noteTemplate(noteKind?: string, maxChars?: number): {
         templateId: string;

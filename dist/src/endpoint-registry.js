@@ -350,11 +350,10 @@ const ENDPOINT_ALIASES = {
 export function endpointIdForTool(toolName) {
     return EXPLICIT_IDS[toolName] || `mcp.${toolName}`;
 }
-function routeFor(tool) {
+function routeFor(tool, mutating) {
     const explicit = EXPLICIT_ROUTES[tool.name];
     if (explicit)
-        return explicit;
-    const mutating = tool.name.includes('write') || tool.name.includes('create') || tool.name.includes('update') || tool.name.includes('delete') || tool.name.includes('send') || tool.name.includes('publish') || tool.name.includes('commit') || tool.name.includes('restore') || tool.name.includes('move') || tool.name.includes('manage') || tool.name.includes('toggle') || tool.name.includes('save') || tool.name.includes('watch') || tool.name.includes('accept') || tool.name.includes('resolve') || tool.name.includes('report') || tool.name.includes('initialize') || tool.name.includes('handoff') || tool.name.includes('resume');
+        return mutating && explicit.method !== 'POST' ? { ...explicit, method: 'POST' } : explicit;
     return { method: mutating ? 'POST' : 'GET', url: `/api/mcp/${tool.name}` };
 }
 function compactEndpoint(endpoint) {
@@ -380,17 +379,26 @@ export class EndpointRegistry {
         for (const tool of tools) {
             if (CONTROL_TOOLS.has(tool.name))
                 continue;
-            const route = routeFor(tool);
+            const mutating = mutatingTools.has(tool.name);
+            const route = routeFor(tool, mutating);
             const required = requiredCapabilities[tool.name];
+            const originalInput = (tool.inputSchema || {});
+            const properties = { ...(originalInput.properties || {}) };
+            if (!mutating && properties.maxChars === undefined) {
+                properties.maxChars = {
+                    type: 'integer', minimum: 512, maximum: 20000, default: 12000,
+                    description: 'Hard total response budget. The server enforces this default even when omitted.',
+                };
+            }
             this.descriptors.set(endpointIdForTool(tool.name), {
                 endpointId: endpointIdForTool(tool.name),
                 toolName: tool.name,
                 method: route.method,
                 url: route.url,
                 description: tool.description || `Execute ${tool.name}`,
-                input: (tool.inputSchema || {}),
+                input: { ...originalInput, properties },
                 requires: required ? [required] : [],
-                mutating: mutatingTools.has(tool.name),
+                mutating,
                 ...(ENDPOINT_ALIASES[tool.name] && { aliases: ENDPOINT_ALIASES[tool.name] }),
             });
         }

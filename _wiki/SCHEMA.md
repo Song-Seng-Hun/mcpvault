@@ -336,6 +336,10 @@ routes are themselves bounded and revision-stamped. Follow their returned
 Directory and graph-navigation reads use the same rule: consume one bounded
 page and follow its exact offset continuation. A large backlink set or repair
 queue must never be loaded wholesale merely to discover the next item.
+Every other non-mutating endpoint also advertises a response budget, with a
+12,000-character dispatcher fallback when omitted. REST callers must use the
+catalogued method: all mutations are POST and a GET/POST mismatch is rejected
+before dispatch.
 
 ## Invariants
 

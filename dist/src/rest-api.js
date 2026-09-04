@@ -193,6 +193,16 @@ export async function startRestApi(server, options = {}) {
                 sendJson(request, response, 404, { error: 'unknown endpoint route' });
                 return;
             }
+            const endpoint = runtime.endpointRegistry.resolve(endpointId);
+            if (!endpoint) {
+                sendJson(request, response, 404, { error: 'unknown endpoint route' });
+                return;
+            }
+            if ((request.method || 'GET').toUpperCase() !== endpoint.method) {
+                response.setHeader('allow', endpoint.method);
+                sendJson(request, response, 405, { error: 'method not allowed', endpointId, expectedMethod: endpoint.method });
+                return;
+            }
             if (endpointId === 'auth.register' && !registrationAllowed(request.socket.remoteAddress || 'unknown')) {
                 response.statusCode = 429;
                 response.setHeader('retry-after', String(Math.ceil(REGISTRATION_WINDOW_MS / 1_000)));

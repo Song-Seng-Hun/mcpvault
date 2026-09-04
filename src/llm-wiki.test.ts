@@ -2126,6 +2126,28 @@ test('Property contract is discoverable and review cadence schedules the next re
       expect.objectContaining({ name: 'note_kind', type: 'text' }),
       expect.objectContaining({ name: 'review_interval_days', type: 'number' }),
     ]));
+    expect(contract.value.relations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'supports', direction: 'directional' }),
+    ]));
+    expect(JSON.stringify(contract.value).length).toBeLessThanOrEqual(12000);
+
+    const namedContract = await callJson(client, 'get_wiki_property_contract', { maxChars: 4000 });
+    expect(namedContract.value.fields).toEqual(expect.arrayContaining(['note_kind', 'review_interval_days']));
+    expect(namedContract.value.conventions.nativeCompatibility).toMatchObject({
+      safeTypes: expect.arrayContaining(['list']),
+      mcpManagedComplexFields: expect.arrayContaining(['claims', 'evidence']),
+    });
+    expect(JSON.stringify(namedContract.value).length).toBeLessThanOrEqual(4000);
+
+    const tinyContract = await callJson(client, 'get_wiki_property_contract', { maxChars: 512, prettyPrint: true });
+    expect(tinyContract.value).toMatchObject({
+      contractFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
+      totalFields: expect.any(Number),
+      totalRelations: expect.any(Number),
+      truncated: true,
+      nextAction: { endpointId: 'wiki.property_contract', arguments: { maxChars: 4000 } },
+    });
+    expect(String((tinyContract.result.content as any)[0].text).length).toBeLessThanOrEqual(512);
 
     const registration = await callJson(client, 'register_scope_account', { accountId: 'cadence-owner', modelId: 'codex', password: 'cadence-owner-password' });
     const accessToken = registration.value.accessToken;
