@@ -727,15 +727,22 @@ export type KnowledgeDispositionResult = {
   knowledgeDispositions: string[];
 };
 
-/** Normalize the completion outcome without performing filesystem or access
- * checks. Services validate referenced note roles before calling this helper. */
-export function normalizeKnowledgeDisposition(input: {
+export type KnowledgeDispositionInput = {
   retrospective?: unknown;
   knowledgeNotes?: unknown;
   negativeKnowledgeNotes?: unknown;
   noReusableKnowledge?: unknown;
   knowledgeDispositionReason?: unknown;
-}, existing: Record<string, unknown> = {}): KnowledgeDispositionResult {
+};
+
+export function hasExplicitKnowledgeDisposition(input: KnowledgeDispositionInput): boolean {
+  return [input.retrospective, input.knowledgeNotes, input.negativeKnowledgeNotes, input.noReusableKnowledge, input.knowledgeDispositionReason]
+    .some(value => value !== undefined);
+}
+
+/** Normalize the completion outcome without performing filesystem or access
+ * checks. Services validate referenced note roles before calling this helper. */
+export function normalizeKnowledgeDisposition(input: KnowledgeDispositionInput, existing: Record<string, unknown> = {}): KnowledgeDispositionResult {
   const retrospective = optionalText(
     input.retrospective === undefined ? existing.retrospective : input.retrospective,
     'retrospective',
@@ -759,11 +766,15 @@ export function normalizeKnowledgeDisposition(input: {
   const priorDispositions = Array.isArray(existing.knowledge_dispositions)
     ? existing.knowledge_dispositions.map(value => String(value).trim().toLowerCase())
     : [];
+  const replacementArtifactSupplied = [input.retrospective, input.knowledgeNotes, input.negativeKnowledgeNotes]
+    .some(value => value !== undefined);
   const noReusableKnowledge = input.noReusableKnowledge === undefined
-    ? priorDispositions.includes('no_reusable_knowledge')
+    ? (!replacementArtifactSupplied && priorDispositions.includes('no_reusable_knowledge'))
     : input.noReusableKnowledge;
   const knowledgeDispositionReason = optionalText(
-    input.knowledgeDispositionReason === undefined ? existing.knowledge_disposition_reason : input.knowledgeDispositionReason,
+    input.knowledgeDispositionReason === undefined
+      ? (noReusableKnowledge ? existing.knowledge_disposition_reason : undefined)
+      : input.knowledgeDispositionReason,
     'knowledgeDispositionReason',
     1000,
   );

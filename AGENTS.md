@@ -86,11 +86,6 @@ visibility needs no commit. Reuse policy only while its fingerprint matches.
 Pause a MOC path with `continuity.save` `learningProgress`; call
 `continuity.resume` to validate drift before the next read.
 
-Before moving agent tasks or ordinary actionable notes to `completed`, record
-linked durable/negative knowledge, a bounded retrospective, or an exclusive
-explained no-reuse disposition. Direct Obsidian edits that bypass this gate are
-repaired through the bounded review packet at the current revision.
-
 Scope is independent of folders: Global is public and synchronizable;
 Community is public only inside this command center; User storage is host-only
 and unavailable through MCP; model and agent scopes require the matching

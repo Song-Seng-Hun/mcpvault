@@ -16,7 +16,7 @@ export const WIKI_POLICY_TOPICS = [
     'portability',
     'safety',
 ];
-export const WIKI_POLICY_VERSION = 10;
+export const WIKI_POLICY_VERSION = 11;
 /**
  * The only policy that every MCP client must receive eagerly. Detailed
  * organization guidance is selected through wiki.policy so a rich Wiki does
@@ -116,7 +116,8 @@ const POLICY_TOPICS = {
             'blocked_by is a hard gate; depends_on gates only when it resolves to unfinished actionable work, while non-work knowledge is informational.',
             'Respect WIP limits, distinguish dueAt from scheduledAt, and record waiting/blocked/start/completion timestamps when known.',
             'Use the dependency plan stages and current revisions as advice; repair cycles or prerequisites instead of auto-changing downstream status.',
-            'Before completing an agent task, record an auditable knowledge disposition: knowledge_notes, negative_knowledge_notes, retrospective, or no_reusable_knowledge with a reason. Useful artifacts may be combined; no_reusable_knowledge is exclusive.',
+            'Before completing an agent task or ordinary actionable Wiki note, record an auditable knowledge disposition: knowledge_notes, negative_knowledge_notes, retrospective, or no_reusable_knowledge with a reason. Useful artifacts may be combined; no_reusable_knowledge is exclusive.',
+            'A direct Obsidian or Git edit remains authoritative but may bypass the preventive gate; wiki.review_packet surfaces an incomplete completion record for one revision-safe wiki.triage repair.',
             'focus_parent must point strictly upward from ground/project/area/goal/vision toward a higher horizon; use wiki.hierarchy_change to simulate set or clear before editing.',
             'focus_supports is also strictly upward; replace its complete verified target list through wiki.relation_set rather than editing one raw link in isolation.',
         ],

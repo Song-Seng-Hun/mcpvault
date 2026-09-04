@@ -6,7 +6,7 @@ import { normalizeScopeId } from './scopes.js';
 import { boundItems } from './search-limits.js';
 import { iterateNotes, queryWindow } from './paged-query.js';
 import { isModerationHidden } from './moderation-policy.js';
-import { COMPLETION_DISPOSITION_REQUIRED_MESSAGE, normalizeKnowledgeDisposition } from './organization.js';
+import { COMPLETION_DISPOSITION_REQUIRED_MESSAGE, hasExplicitKnowledgeDisposition, normalizeKnowledgeDisposition } from './organization.js';
 
 const ROOT = 'Community/Tasks';
 export const AGENT_TASK_STATUSES = ['proposed', 'accepted', 'in_progress', 'blocked', 'completed', 'cancelled'] as const;
@@ -230,8 +230,9 @@ export class AgentTaskService {
       ...(params.noReusableKnowledge !== undefined && { noReusableKnowledge: params.noReusableKnowledge }),
       ...(params.knowledgeDispositionReason !== undefined && { knowledgeDispositionReason: params.knowledgeDispositionReason }),
     }, note.frontmatter);
-    const entersCompleted = previousStatus !== 'completed' && status === 'completed';
-    if (entersCompleted && disposition.knowledgeDispositions.length === 0) throw new Error(COMPLETION_DISPOSITION_REQUIRED_MESSAGE);
+    const completionDispositionRequired = status === 'completed'
+      && (previousStatus !== 'completed' || hasExplicitKnowledgeDisposition(params));
+    if (completionDispositionRequired && disposition.knowledgeDispositions.length === 0) throw new Error(COMPLETION_DISPOSITION_REQUIRED_MESSAGE);
     const timestamp = now();
     const frontmatter: Record<string, any> = {
       ...note.frontmatter, description,

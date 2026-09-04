@@ -8,6 +8,9 @@
 export declare const NOTE_KINDS: readonly ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'experiment', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'];
 export declare const LIFECYCLES: readonly ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'];
 export declare const TASK_STATUSES: readonly ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'];
+/** Auditable outcomes that close the task-to-knowledge feedback loop. */
+export declare const KNOWLEDGE_DISPOSITIONS: readonly ['linked_knowledge', 'negative_knowledge', 'retrospective', 'no_reusable_knowledge'];
+export declare const COMPLETION_DISPOSITION_REQUIRED_MESSAGE = "Completing work requires a knowledge disposition: provide knowledgeNotes, negativeKnowledgeNotes, retrospective, or noReusableKnowledge=true with knowledgeDispositionReason";
 /** Optional Kanban-style class of service for executable work. */
 export declare const SERVICE_CLASSES: readonly ['expedite', 'fixed_date', 'standard', 'research'];
 export declare const REVIEW_POLICIES: readonly ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit', 'on_upstream_change'];
@@ -219,7 +222,7 @@ export declare function getOrganizationRelationContract(): ({
     target: 'A note made more precise or useful by this note.';
     reciprocal: false;
 })[];
-export declare const ORGANIZATION_LIST_FIELDS: readonly ["aliases", "tags", "mocs", "key_points", "open_questions", "next_actions", "project_support", "subject_terms", "methods", "audience", "see_also", "supports", "contradicts", "supersedes", "derived_from", "depends_on", "implements", "blocked_by", "answers_questions", "tests", "related", "same_as", "close_match", "version_of", "refines"];
+export declare const ORGANIZATION_LIST_FIELDS: readonly ["aliases", "tags", "mocs", "key_points", "open_questions", "next_actions", "project_support", "subject_terms", "methods", "audience", "see_also", "knowledge_notes", "negative_knowledge_notes", "knowledge_dispositions", "supports", "contradicts", "supersedes", "derived_from", "depends_on", "implements", "blocked_by", "answers_questions", "tests", "related", "same_as", "close_match", "version_of", "refines"];
 /** Fields that make an ordinary knowledge note participate in the work
  * system without changing its epistemic/content role. Project and task kinds
  * participate even before one of these fields is filled in. */
@@ -288,6 +291,25 @@ export declare function normalizeRetentionPolicy(value: unknown, fallback?: type
 export declare function normalizeRetentionEvent(value: unknown, fallback?: typeof RETENTION_EVENTS[number]): typeof RETENTION_EVENTS[number] | undefined;
 export declare function normalizeBoolean(value: unknown, field: string, fallback?: boolean): boolean | undefined;
 export declare function lifecycleForKnowledgeStatus(status: string): Lifecycle;
+export type KnowledgeDispositionResult = {
+    retrospective?: string;
+    knowledgeNotes?: string[];
+    negativeKnowledgeNotes?: string[];
+    noReusableKnowledge: boolean;
+    knowledgeDispositionReason?: string;
+    knowledgeDispositions: string[];
+};
+export type KnowledgeDispositionInput = {
+    retrospective?: unknown;
+    knowledgeNotes?: unknown;
+    negativeKnowledgeNotes?: unknown;
+    noReusableKnowledge?: unknown;
+    knowledgeDispositionReason?: unknown;
+};
+export declare function hasExplicitKnowledgeDisposition(input: KnowledgeDispositionInput): boolean;
+/** Normalize the completion outcome without performing filesystem or access
+ * checks. Services validate referenced note roles before calling this helper. */
+export declare function normalizeKnowledgeDisposition(input: KnowledgeDispositionInput, existing?: Record<string, unknown>): KnowledgeDispositionResult;
 export declare function normalizeReviewAt(value: unknown): string | undefined;
 export declare function normalizeReviewIntervalDays(value: unknown, fallback?: number): number | undefined;
 export declare function normalizeNavOrder(value: unknown, fallback?: number): number | undefined;

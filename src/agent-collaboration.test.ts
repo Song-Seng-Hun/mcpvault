@@ -81,6 +81,15 @@ test('profiles, durable notifications, tasks, and capability revocation compose 
       retrospective: 'Found that citation quality matters more than citation count.',
       knowledgeDispositions: ['linked_knowledge', 'retrospective'],
     });
+    const clearedCompletedTask = await client.callTool({ name: 'update_agent_task', arguments: {
+      taskId: task.value.taskId,
+      knowledgeNotes: [],
+      retrospective: '',
+      expectedRevision: editedCompletedTask.value.revision,
+      accessToken: agentToken,
+    } });
+    expect(clearedCompletedTask.isError).toBe(true);
+    expect(String((clearedCompletedTask.content as any)[0].text)).toContain('knowledge disposition');
 
     const capabilityChange = await json(client, 'update_agent_capabilities', { agentId: 'researcher', capabilities: ['profile', 'task'], accessToken: ownerToken });
     expect(capabilityChange.value.capabilities).toEqual(['profile', 'task']);

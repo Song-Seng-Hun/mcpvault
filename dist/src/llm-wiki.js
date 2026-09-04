@@ -4,7 +4,7 @@ import { stringify as stringifyYaml } from 'yaml';
 import { normalizeScopeId } from './scopes.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
-import { getOrganizationPropertyContract, getOrganizationRelationContract, inapplicableOrganizationProperties, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeVolatilityClass, organizationLintIssues, organizationNoteTemplate, organizationPropertyAppliesTo, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, CONFIDENCE_LEVELS, DECISION_STATUSES, FOCUS_HORIZONS, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, VOLATILITY_CLASSES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS } from './organization.js';
+import { getOrganizationPropertyContract, getOrganizationRelationContract, hasExplicitKnowledgeDisposition, inapplicableOrganizationProperties, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeKnowledgeDisposition, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeTaskStatus, normalizeVolatilityClass, organizationLintIssues, organizationNoteTemplate, organizationPropertyAppliesTo, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, COMPLETION_DISPOSITION_REQUIRED_MESSAGE, CONFIDENCE_LEVELS, DECISION_STATUSES, FOCUS_HORIZONS, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, VOLATILITY_CLASSES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS } from './organization.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
@@ -1126,6 +1126,65 @@ export class LlmWikiService {
     principalKey(principal) {
         return JSON.stringify(principal ? [principal.accountId, principal.userId || '', principal.modelId, principal.agentId || '', principal.commandCenterId || '', principal.role] : ['anonymous']);
     }
+    async validatedKnowledgeDisposition(params, existing, containerPath, principal, required) {
+        const supplied = [params.retrospective, params.knowledgeNotes, params.negativeKnowledgeNotes, params.noReusableKnowledge, params.knowledgeDispositionReason]
+            .some(value => value !== undefined);
+        if (!required && !supplied)
+            return undefined;
+        const validatePaths = async (value, expected) => {
+            if (value === undefined)
+                return undefined;
+            try {
+                const paths = (await this.references.validateAndNormalize(value, containerPath, principal)).slice(0, 20);
+                for (const path of paths) {
+                    const note = await this.fileSystem.readNote(path);
+                    const isKnowledge = String(note.frontmatter.llm_wiki_type || '').trim().toLowerCase() === 'knowledge';
+                    const isNegative = String(note.frontmatter.knowledge_polarity || '').trim().toLowerCase() === 'negative';
+                    if (normalizePath(path).toLowerCase() === normalizePath(containerPath).toLowerCase()
+                        || !isKnowledge
+                        || isModerationHidden(note.frontmatter)
+                        || (expected === 'negative' ? !isNegative : isNegative)) {
+                        throw new Error('wrong knowledge role');
+                    }
+                }
+                return paths;
+            }
+            catch {
+                const label = expected === 'negative' ? 'negativeKnowledgeNotes' : 'knowledgeNotes';
+                throw new Error(`All ${label} must identify visible ${expected === 'negative' ? 'negative ' : 'durable '}knowledge notes`);
+            }
+        };
+        const knowledgeNotes = await validatePaths(params.knowledgeNotes === undefined ? existing.knowledge_notes : params.knowledgeNotes, 'durable');
+        const negativeKnowledgeNotes = await validatePaths(params.negativeKnowledgeNotes === undefined ? existing.negative_knowledge_notes : params.negativeKnowledgeNotes, 'negative');
+        const disposition = normalizeKnowledgeDisposition({
+            ...(params.retrospective !== undefined && { retrospective: params.retrospective }),
+            ...(knowledgeNotes !== undefined && { knowledgeNotes }),
+            ...(negativeKnowledgeNotes !== undefined && { negativeKnowledgeNotes }),
+            ...(params.noReusableKnowledge !== undefined && { noReusableKnowledge: params.noReusableKnowledge }),
+            ...(params.knowledgeDispositionReason !== undefined && { knowledgeDispositionReason: params.knowledgeDispositionReason }),
+        }, existing);
+        if (required && disposition.knowledgeDispositions.length === 0)
+            throw new Error(COMPLETION_DISPOSITION_REQUIRED_MESSAGE);
+        return disposition;
+    }
+    knowledgeDispositionFrontmatter(disposition) {
+        return {
+            knowledge_notes: disposition.knowledgeNotes,
+            negative_knowledge_notes: disposition.negativeKnowledgeNotes,
+            retrospective: disposition.retrospective,
+            knowledge_dispositions: disposition.knowledgeDispositions,
+            knowledge_disposition_reason: disposition.knowledgeDispositionReason,
+        };
+    }
+    knowledgeDispositionProjection(disposition) {
+        return {
+            ...(disposition.knowledgeNotes !== undefined && { knowledgeNotes: disposition.knowledgeNotes }),
+            ...(disposition.negativeKnowledgeNotes !== undefined && { negativeKnowledgeNotes: disposition.negativeKnowledgeNotes }),
+            ...(disposition.retrospective && { retrospective: disposition.retrospective }),
+            knowledgeDispositions: disposition.knowledgeDispositions,
+            ...(disposition.knowledgeDispositionReason && { knowledgeDispositionReason: disposition.knowledgeDispositionReason }),
+        };
+    }
     /**
      * Build one request-local work graph so flow, project planning, and next
      * action projections agree about whether an action is actually executable.
@@ -2058,6 +2117,10 @@ export class LlmWikiService {
         }
         if (existing)
             assertPreservationControlsNotWeakened(existing.frontmatter, params);
+        const previousTaskStatus = normalizeTaskStatus(existing?.frontmatter.task_status);
+        const resultingTaskStatus = normalizeTaskStatus(params.taskStatus, previousTaskStatus);
+        const disposition = await this.validatedKnowledgeDisposition(params, existing?.frontmatter || {}, params.path, params.principal, resultingTaskStatus === 'completed'
+            && (previousTaskStatus !== 'completed' || hasExplicitKnowledgeDisposition(params)));
         const currentLifecycle = String(existing?.frontmatter.lifecycle || '').trim().toLowerCase();
         const requestedLifecycle = params.lifecycle === undefined ? undefined : normalizeLifecycle(params.lifecycle);
         const retirementMetadataRequested = params.archiveReason !== undefined
@@ -2258,6 +2321,7 @@ export class LlmWikiService {
                     contentDigest: hash(content),
                     status,
                 }),
+                ...(disposition && this.knowledgeDispositionFrontmatter(disposition)),
                 updated_by: params.author,
                 updated_at: timestamp,
                 ...(!existing && { created_by: params.author, created_at: timestamp }),
@@ -2276,6 +2340,7 @@ export class LlmWikiService {
             evidencePaths: evidencePaths.map(path => this.access.toPublicPath(path)),
             evidence: evidence.map(item => ({ ...item, path: this.access.toPublicPath(item.path) })),
             ...(claims && { claims }),
+            ...(disposition && this.knowledgeDispositionProjection(disposition)),
             revision: updated.revision,
         };
     }
@@ -3424,6 +3489,11 @@ export class LlmWikiService {
             ...(params.desiredOutcome !== undefined && { desiredOutcome: params.desiredOutcome }),
             ...(params.projectPurpose !== undefined && { projectPurpose: params.projectPurpose }),
             ...(params.projectSupport !== undefined && { projectSupport: params.projectSupport }),
+            ...(params.knowledgeNotes !== undefined && { knowledgeNotes: params.knowledgeNotes }),
+            ...(params.negativeKnowledgeNotes !== undefined && { negativeKnowledgeNotes: params.negativeKnowledgeNotes }),
+            ...(params.retrospective !== undefined && { retrospective: params.retrospective }),
+            ...(params.noReusableKnowledge !== undefined && { noReusableKnowledge: params.noReusableKnowledge }),
+            ...(params.knowledgeDispositionReason !== undefined && { knowledgeDispositionReason: params.knowledgeDispositionReason }),
             clarifyDisposition: disposition,
             clarifiedBy: params.clarifiedBy,
             ...(params.clarifyNote !== undefined && { clarifyNote: params.clarifyNote }),
@@ -4981,6 +5051,9 @@ export class LlmWikiService {
         add(vocabulary.unresolvedSubjectTerms.map((item) => ({ path: item.paths?.[0], title: item.term })), 'subject_term_needs_authority', 'wiki.vocabulary_health', 8);
         add(vocabulary.termCollisions.map((item) => ({ path: item.paths?.[0], title: item.term })), 'authority_term_collision', 'wiki.vocabulary_health', 8);
         add([...claimLintByPath.entries()].map(([path, codes]) => ({ path, title: path.split('/').at(-1), issueCodes: codes })), 'claim_argument_needs_repair', 'wiki.argument_map', 2);
+        add(lint.issues
+            .filter(issue => issue.code === 'completed_work_without_knowledge_disposition')
+            .map(issue => ({ path: issue.path, title: issue.path.split('/').at(-1), issueCodes: [issue.code] })), 'completed_work_without_knowledge_disposition', 'wiki.triage', 2);
         add([...lintByPath.entries()].map(([path, codes]) => ({ path, title: path.split('/').at(-1), issueCodes: codes })), 'lint_quality_issue', 'wiki.organization_health', 8);
         const sortedPriorities = [...priorityByPath.values()]
             .sort((left, right) => left.priority - right.priority || left.sourceOrder - right.sourceOrder || left.path.localeCompare(right.path));
@@ -5056,6 +5129,15 @@ export class LlmWikiService {
                             instruction: 'Use the selected recallPrompt before opening the note body. If a repair is pending, inspect its bounded repairPath only after attempting recall.',
                         };
                         mutation = { endpointId: endpointIdForTool('record_wiki_recall'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['recallQuality'] };
+                    }
+                    else if (reason === 'completed_work_without_knowledge_disposition') {
+                        inspect = { endpointId: endpointIdForTool('read_wiki_projection'), arguments: { path: selectedPriority.path, view: 'summary', maxChars: 4000 } };
+                        mutation = {
+                            endpointId: endpointIdForTool('triage_wiki_note'),
+                            arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision },
+                            requiredArguments: ['knowledgeNotes, negativeKnowledgeNotes, retrospective, or noReusableKnowledge with knowledgeDispositionReason'],
+                            instruction: 'Recover the completed work record with one auditable outcome. A retrospective is experiential context; factual claims still require evidence.',
+                        };
                     }
                     else if (reason === 'moc_sequence_needs_repair') {
                         inspect = { endpointId: endpointIdForTool('get_wiki_learning_path'), arguments: { path: selectedPriority.path, maxDepth: 2, limit: Math.min(30, Math.max(10, boundedLimit)), maxChars: Math.min(7000, boundedChars) } };
@@ -7126,7 +7208,7 @@ export class LlmWikiService {
             || retirementMetadataRequested) {
             throw new Error('Use wiki.lifecycle_transition to preview lifecycle, retention, reference impact, and replacement lineage before retiring or reactivating knowledge.');
         }
-        const hasOrganizationInput = [params.noteKind, params.lifecycle, params.decisionStatus, params.primaryMoc, params.mocs, params.moc, params.navOrder, params.project, params.reviewAt, params.reviewIntervalDays, params.volatilityClass, params.reviewSnoozedUntil, params.reviewSnoozeReason, params.nextAction, params.waitingFor, params.desiredOutcome, params.projectPurpose, params.projectSupport, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.serviceClass, params.completionCriteria, params.startedAt, params.blockedSince, params.waitingSince, params.completedAt, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.canonicalPath, params.recallPrompt, params.recallIntervalDays, params.lastRecalledAt, params.recallQuality, params.retentionPolicy, params.retentionEvent, params.retentionAt, params.preserveUntil, params.legalHold, params.retentionReason, params.archiveReason, params.replacedBy, params.knowledgeRole, params.termStatus, params.termReplacedBy, params.termScopeNote, params.preferredTerm, params.termLanguage, params.authorityScheme, params.authorityId, params.disambiguation, params.broaderTerms, params.relatedTerms, params.subjectTerms, params.domain, params.methods, params.audience, params.retrievalCues, params.useWhen, params.validFrom, params.validUntil, params.observedAt, params.temporalScope, params.seeAlso, params.relations, params.relationNotes, params.relationEvidence, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.reviewChecks, params.reviewOpenItems, params.interpretationStatus, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
+        const hasOrganizationInput = [params.noteKind, params.lifecycle, params.decisionStatus, params.primaryMoc, params.mocs, params.moc, params.navOrder, params.project, params.reviewAt, params.reviewIntervalDays, params.volatilityClass, params.reviewSnoozedUntil, params.reviewSnoozeReason, params.nextAction, params.waitingFor, params.desiredOutcome, params.projectPurpose, params.projectSupport, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.serviceClass, params.completionCriteria, params.startedAt, params.blockedSince, params.waitingSince, params.completedAt, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.canonicalPath, params.recallPrompt, params.recallIntervalDays, params.lastRecalledAt, params.recallQuality, params.retentionPolicy, params.retentionEvent, params.retentionAt, params.preserveUntil, params.legalHold, params.retentionReason, params.archiveReason, params.replacedBy, params.knowledgeRole, params.termStatus, params.termReplacedBy, params.termScopeNote, params.preferredTerm, params.termLanguage, params.authorityScheme, params.authorityId, params.disambiguation, params.broaderTerms, params.relatedTerms, params.subjectTerms, params.domain, params.methods, params.audience, params.retrievalCues, params.useWhen, params.validFrom, params.validUntil, params.observedAt, params.temporalScope, params.seeAlso, params.relations, params.relationNotes, params.relationEvidence, params.taskStatus, params.knowledgeNotes, params.negativeKnowledgeNotes, params.retrospective, params.noReusableKnowledge, params.knowledgeDispositionReason, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.reviewChecks, params.reviewOpenItems, params.interpretationStatus, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
             .some(value => value !== undefined);
         if (!hasOrganizationInput && !params.clearInapplicable && [params.tags, params.timeEstimateMinutes, params.energy, params.effort].every(value => value === undefined))
             throw new Error('At least one organization field is required');
@@ -7245,8 +7327,13 @@ export class LlmWikiService {
             contentDigest: hash(note.content),
             status: String(note.frontmatter.knowledge_status || note.frontmatter.status || 'draft'),
         });
+        const previousTaskStatus = normalizeTaskStatus(note.frontmatter.task_status);
+        const resultingTaskStatus = normalizeTaskStatus(params.taskStatus, previousTaskStatus);
+        const disposition = await this.validatedKnowledgeDisposition(params, note.frontmatter, params.path, params.principal, resultingTaskStatus === 'completed'
+            && (previousTaskStatus !== 'completed' || hasExplicitKnowledgeDisposition(params)));
+        const dispositionPatch = disposition ? this.knowledgeDispositionFrontmatter(disposition) : {};
         const targetKind = String(patch.note_kind || note.frontmatter.note_kind || 'knowledge').trim().toLowerCase();
-        const projectedFrontmatter = { ...note.frontmatter, ...patch, llm_wiki_type: 'knowledge', note_kind: targetKind };
+        const projectedFrontmatter = { ...note.frontmatter, ...patch, ...dispositionPatch, llm_wiki_type: 'knowledge', note_kind: targetKind };
         const inapplicableBefore = inapplicableOrganizationProperties(projectedFrontmatter, 'knowledge', targetKind);
         const changingKind = params.noteKind !== undefined && targetKind !== String(note.frontmatter.note_kind || '').trim().toLowerCase();
         if (changingKind && inapplicableBefore.length > 0 && !params.clearInapplicable) {
@@ -7255,7 +7342,7 @@ export class LlmWikiService {
         const removals = params.clearInapplicable
             ? Object.fromEntries(inapplicableBefore.map(property => [property, undefined]))
             : {};
-        await this.fileSystem.updateFrontmatter({ path: params.path, frontmatter: { ...patch, ...removals }, merge: true, expectedRevision: params.expectedRevision });
+        await this.fileSystem.updateFrontmatter({ path: params.path, frontmatter: { ...patch, ...dispositionPatch, ...removals }, merge: true, expectedRevision: params.expectedRevision });
         const updated = await this.fileSystem.readNote(params.path);
         const inapplicableAfter = inapplicableOrganizationProperties(updated.frontmatter, 'knowledge', targetKind);
         return {
@@ -7327,6 +7414,7 @@ export class LlmWikiService {
                 ...(updated.frontmatter.next_actions && { nextActions: updated.frontmatter.next_actions }),
                 ...(updated.frontmatter.stable_id && { stableId: updated.frontmatter.stable_id }),
                 ...(updated.frontmatter.task_status && { taskStatus: updated.frontmatter.task_status }),
+                ...(disposition && this.knowledgeDispositionProjection(disposition)),
                 ...(updated.frontmatter.service_class && { serviceClass: updated.frontmatter.service_class }),
                 ...(updated.frontmatter.completion_criteria && { completionCriteria: updated.frontmatter.completion_criteria }),
                 ...(updated.frontmatter.started_at && { startedAt: updated.frontmatter.started_at }),
@@ -14030,6 +14118,7 @@ export class LlmWikiService {
         const citationKeyOwners = new Map();
         const propertyTypes = new Map();
         const classificationNotes = [];
+        const completionDispositionIssuePaths = new Set();
         const resolvedRelationEdges = [];
         const claimRecords = [];
         const claimRecordCap = 20_000;
@@ -14049,6 +14138,9 @@ export class LlmWikiService {
                 }
             }
             for (const organizationIssue of organizationLintIssues(publicPath, note.frontmatter, note.content || '')) {
+                if (organizationIssue.code === 'completed_work_without_knowledge_disposition') {
+                    completionDispositionIssuePaths.add(normalizePath(note.path).toLocaleLowerCase('en-US'));
+                }
                 addIssue({ severity: 'warning', code: organizationIssue.code, path: publicPath, detail: organizationIssue.detail });
             }
             const authorityScheme = typeof note.frontmatter.authority_scheme === 'string'
@@ -14324,8 +14416,66 @@ export class LlmWikiService {
             keyed.push(claim);
             claimsByKey.set(key, keyed);
         }
-        const claimReferenceIndex = buildNoteReferenceIndex(classificationNotes
-            .filter(note => note.frontmatter.llm_wiki_type === 'knowledge')
+        const visibleKnowledgeNotes = classificationNotes
+            .filter(note => note.frontmatter.llm_wiki_type === 'knowledge' && !isModerationHidden(note.frontmatter));
+        const completionReferenceIndex = buildNoteReferenceIndex(visibleKnowledgeNotes.map(note => ({
+            path: note.path,
+            title: note.frontmatter.title,
+            aliases: note.frontmatter.aliases,
+            preferredTerm: note.frontmatter.preferred_term,
+            stableId: note.frontmatter.stable_id,
+        })));
+        const visibleKnowledgeByPath = new Map(visibleKnowledgeNotes
+            .map(note => [normalizePath(note.path).toLocaleLowerCase('en-US'), note.frontmatter]));
+        for (const candidate of classificationNotes) {
+            const candidateKey = normalizePath(candidate.path).toLocaleLowerCase('en-US');
+            if (completionDispositionIssuePaths.has(candidateKey)
+                || !isActionableKnowledge(candidate.frontmatter)
+                || String(candidate.frontmatter.task_status || '').trim().toLowerCase() !== 'completed')
+                continue;
+            let invalidReference = false;
+            for (const [field, expected] of [['knowledge_notes', 'durable'], ['negative_knowledge_notes', 'negative']]) {
+                const values = Array.isArray(candidate.frontmatter[field]) ? candidate.frontmatter[field] : [];
+                for (const raw of values) {
+                    if (typeof raw !== 'string' || !raw.trim())
+                        continue;
+                    let target = raw.trim();
+                    if (/^!?\[\[.+\]\]$/.test(target)) {
+                        try {
+                            target = parseWikiLink(target.replace(/^!/, '')).document;
+                        }
+                        catch {
+                            invalidReference = true;
+                            break;
+                        }
+                    }
+                    const targets = resolveNoteReference(target, completionReferenceIndex, { sourcePath: candidate.path })
+                        .filter(path => this.access.canReferenceFrom(candidate.path, path));
+                    if (targets.length !== 1 || normalizePath(targets[0]).toLocaleLowerCase('en-US') === candidateKey) {
+                        invalidReference = true;
+                        break;
+                    }
+                    const targetFrontmatter = visibleKnowledgeByPath.get(normalizePath(targets[0]).toLocaleLowerCase('en-US'));
+                    const isNegative = String(targetFrontmatter?.knowledge_polarity || '').trim().toLowerCase() === 'negative';
+                    if ((expected === 'negative') !== isNegative) {
+                        invalidReference = true;
+                        break;
+                    }
+                }
+                if (invalidReference)
+                    break;
+            }
+            if (invalidReference) {
+                completionDispositionIssuePaths.add(candidateKey);
+                addIssue({
+                    severity: 'warning',
+                    code: 'completed_work_without_knowledge_disposition',
+                    path: this.access.toPublicPath(candidate.path),
+                    detail: 'Completed work has a knowledge-note disposition that is missing, ambiguous, hidden, self-referential, or has the wrong durable/negative role.',
+                });
+            }
+        }
+        const claimReferenceIndex = buildNoteReferenceIndex(visibleKnowledgeNotes
             .map(note => ({
             path: note.path,
             title: note.frontmatter.title,

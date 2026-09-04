@@ -236,6 +236,13 @@ test('ordinary work completion requires a scope-safe auditable knowledge disposi
       task_status: 'completed', retrospective: 'Revision checks prevented an accidental overwrite.',
       knowledge_dispositions: ['retrospective'],
     });
+    const clearedCompletion = await client.callTool({ name: 'triage_wiki_note', arguments: {
+      path: missing.path, retrospective: '', expectedRevision: persistedRetrospective.value.revision, accessToken,
+    } });
+    expect(clearedCompletion.isError).toBe(true);
+    expect(String((clearedCompletion.content as any)[0].text)).toContain('knowledge disposition');
+    expect((await callJson(client, 'read_note', { path: missing.path, accessToken })).value.fm.retrospective)
+      .toBe('Revision checks prevented an accidental overwrite.');
 
     const linked = await createWork('Projects/Linked disposition.md');
     const linkedCompletion = await callJson(client, 'triage_wiki_note', {
@@ -308,6 +315,18 @@ test('ordinary work completion requires a scope-safe auditable knowledge disposi
       knowledgeDispositionReason: 'The result only confirmed the already cited source.', expectedRevision: 'missing', accessToken,
     });
     expect(published.value).toMatchObject({ knowledgeDispositions: ['no_reusable_knowledge'] });
+    const revisedDisposition = await callJson(client, 'triage_wiki_note', {
+      path: published.value.path,
+      retrospective: 'A later review recovered a reusable operational lesson.',
+      expectedRevision: published.value.revision,
+      accessToken,
+    });
+    expect(revisedDisposition.value.frontmatter).toMatchObject({
+      retrospective: 'A later review recovered a reusable operational lesson.',
+      knowledgeDispositions: ['retrospective'],
+    });
+    const revisedDispositionNote = await callJson(client, 'read_note', { path: published.value.path, accessToken });
+    expect(revisedDispositionNote.value.fm).not.toHaveProperty('knowledge_disposition_reason');
 
     const capture = await callJson(client, 'capture_wiki_note', { path: 'Inbox/Completed capture.md', content: '# Completed capture\n', expectedRevision: 'missing', accessToken });
     const clarified = await callJson(client, 'clarify_wiki_note', {
@@ -325,10 +344,28 @@ test('review packet promotes direct-edit completion bypasses to one bounded repa
     const accessToken = account.value.accessToken;
     const write = await client.callTool({ name: 'write_note', arguments: {
       path: 'Projects/Unreturned lesson.md', content: '# Unreturned lesson\n\nThe work was marked done outside the Wiki workflow.\n',
-      frontmatter: { note_kind: 'task', lifecycle: 'active', task_status: 'completed', completed_at: '2030-01-01T00:00:00.000Z' },
+      frontmatter: {
+        note_kind: 'task', lifecycle: 'active', task_status: 'completed', completed_at: '2030-01-01T00:00:00.000Z',
+        knowledge_notes: ['Knowledge/Does not exist.md'], knowledge_dispositions: ['linked_knowledge'],
+      },
       expectedRevision: 'missing', accessToken,
     } });
     expect(write.isError).toBeFalsy();
+    const durable = await client.callTool({ name: 'write_note', arguments: {
+      path: 'Knowledge/Returned lesson.md', content: '# Returned lesson\n',
+      frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'active', knowledge_status: 'draft' },
+      expectedRevision: 'missing', accessToken,
+    } });
+    expect(durable.isError).toBeFalsy();
+    const validCompletion = await client.callTool({ name: 'write_note', arguments: {
+      path: 'Projects/Returned lesson.md', content: '# Returned work\n',
+      frontmatter: {
+        note_kind: 'task', lifecycle: 'active', task_status: 'completed', completed_at: '2030-01-01T00:00:00.000Z',
+        knowledge_notes: ['Knowledge/Returned lesson.md'], knowledge_dispositions: ['linked_knowledge'],
+      },
+      expectedRevision: 'missing', accessToken,
+    } });
+    expect(validCompletion.isError).toBeFalsy();
     const current = await callJson(client, 'read_note', { path: 'Projects/Unreturned lesson.md', accessToken });
     const packet = await callJson(client, 'get_wiki_review_packet', { limit: 10, maxChars: 12000, accessToken });
     expect(JSON.stringify(packet.value).length).toBeLessThanOrEqual(12000);
@@ -337,6 +374,9 @@ test('review packet promotes direct-edit completion bypasses to one bounded repa
         path: 'Projects/Unreturned lesson.md', priority: 2,
         reason: 'completed_work_without_knowledge_disposition', suggestedTool: 'wiki.triage',
       }),
+    ]));
+    expect(packet.value.priorities).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Projects/Returned lesson.md', reason: 'completed_work_without_knowledge_disposition' }),
     ]));
     expect(packet.value.curationPlan).toMatchObject({
       selected: { path: 'Projects/Unreturned lesson.md', revision: current.value.revision, reason: 'completed_work_without_knowledge_disposition' },

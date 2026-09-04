@@ -9,7 +9,7 @@ import type { ReferenceService } from './references.js';
 import type { SemanticSearchService } from './semantic-search.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
-import { getOrganizationPropertyContract, getOrganizationRelationContract, inapplicableOrganizationProperties, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeKnowledgeDisposition, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeTaskStatus, normalizeVolatilityClass, organizationLintIssues, organizationNoteTemplate, organizationPropertyAppliesTo, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, COMPLETION_DISPOSITION_REQUIRED_MESSAGE, CONFIDENCE_LEVELS, DECISION_STATUSES, FOCUS_HORIZONS, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, VOLATILITY_CLASSES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS, type AnswerPacketIntent, type CatalogOrder, type KnowledgeDispositionResult, type TemporalValidityState, type WikiProjectionView } from './organization.js';
+import { getOrganizationPropertyContract, getOrganizationRelationContract, hasExplicitKnowledgeDisposition, inapplicableOrganizationProperties, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeKnowledgeDisposition, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeTaskStatus, normalizeVolatilityClass, organizationLintIssues, organizationNoteTemplate, organizationPropertyAppliesTo, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, COMPLETION_DISPOSITION_REQUIRED_MESSAGE, CONFIDENCE_LEVELS, DECISION_STATUSES, FOCUS_HORIZONS, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, VOLATILITY_CLASSES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS, type AnswerPacketIntent, type CatalogOrder, type KnowledgeDispositionResult, type TemporalValidityState, type WikiProjectionView } from './organization.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
@@ -2383,7 +2383,8 @@ export class LlmWikiService {
       existing?.frontmatter || {},
       params.path,
       params.principal,
-      previousTaskStatus !== 'completed' && resultingTaskStatus === 'completed',
+      resultingTaskStatus === 'completed'
+        && (previousTaskStatus !== 'completed' || hasExplicitKnowledgeDisposition(params)),
     );
     const currentLifecycle = String(existing?.frontmatter.lifecycle || '').trim().toLowerCase();
     const requestedLifecycle = params.lifecycle === undefined ? undefined : normalizeLifecycle(params.lifecycle);
@@ -7400,7 +7401,8 @@ export class LlmWikiService {
       note.frontmatter,
       params.path,
       params.principal,
-      previousTaskStatus !== 'completed' && resultingTaskStatus === 'completed',
+      resultingTaskStatus === 'completed'
+        && (previousTaskStatus !== 'completed' || hasExplicitKnowledgeDisposition(params)),
     );
     const dispositionPatch = disposition ? this.knowledgeDispositionFrontmatter(disposition) : {};
     const targetKind = String(patch.note_kind || note.frontmatter.note_kind || 'knowledge').trim().toLowerCase();
@@ -13870,6 +13872,7 @@ export class LlmWikiService {
     const citationKeyOwners = new Map<string, string>();
     const propertyTypes = new Map<string, { type: string; path: string }>();
     const classificationNotes: Array<{ path: string; frontmatter: Record<string, any> }> = [];
+    const completionDispositionIssuePaths = new Set<string>();
     const resolvedRelationEdges: Array<{ source: string; target: string; relation: string; raw: string }> = [];
     type ClaimLintRecord = {
       path: string;
@@ -13900,6 +13903,9 @@ export class LlmWikiService {
         }
       }
       for (const organizationIssue of organizationLintIssues(publicPath, note.frontmatter, note.content || '')) {
+        if (organizationIssue.code === 'completed_work_without_knowledge_disposition') {
+          completionDispositionIssuePaths.add(normalizePath(note.path).toLocaleLowerCase('en-US'));
+        }
         addIssue({ severity: 'warning', code: organizationIssue.code, path: publicPath, detail: organizationIssue.detail });
       }
       const authorityScheme = typeof note.frontmatter.authority_scheme === 'string'
@@ -14158,8 +14164,58 @@ export class LlmWikiService {
       claimsByKey.set(key, keyed);
     }
 
-    const claimReferenceIndex = buildNoteReferenceIndex(classificationNotes
-      .filter(note => note.frontmatter.llm_wiki_type === 'knowledge')
+    const visibleKnowledgeNotes = classificationNotes
+      .filter(note => note.frontmatter.llm_wiki_type === 'knowledge' && !isModerationHidden(note.frontmatter));
+    const completionReferenceIndex = buildNoteReferenceIndex(visibleKnowledgeNotes.map(note => ({
+      path: note.path,
+      title: note.frontmatter.title,
+      aliases: note.frontmatter.aliases,
+      preferredTerm: note.frontmatter.preferred_term,
+      stableId: note.frontmatter.stable_id,
+    })));
+    const visibleKnowledgeByPath = new Map(visibleKnowledgeNotes
+      .map(note => [normalizePath(note.path).toLocaleLowerCase('en-US'), note.frontmatter] as const));
+    for (const candidate of classificationNotes) {
+      const candidateKey = normalizePath(candidate.path).toLocaleLowerCase('en-US');
+      if (completionDispositionIssuePaths.has(candidateKey)
+        || !isActionableKnowledge(candidate.frontmatter)
+        || String(candidate.frontmatter.task_status || '').trim().toLowerCase() !== 'completed') continue;
+      let invalidReference = false;
+      for (const [field, expected] of [['knowledge_notes', 'durable'], ['negative_knowledge_notes', 'negative']] as const) {
+        const values = Array.isArray(candidate.frontmatter[field]) ? candidate.frontmatter[field] : [];
+        for (const raw of values) {
+          if (typeof raw !== 'string' || !raw.trim()) continue;
+          let target = raw.trim();
+          if (/^!?\[\[.+\]\]$/.test(target)) {
+            try { target = parseWikiLink(target.replace(/^!/, '')).document; } catch { invalidReference = true; break; }
+          }
+          const targets = resolveNoteReference(target, completionReferenceIndex, { sourcePath: candidate.path })
+            .filter(path => this.access.canReferenceFrom(candidate.path, path));
+          if (targets.length !== 1 || normalizePath(targets[0]!).toLocaleLowerCase('en-US') === candidateKey) {
+            invalidReference = true;
+            break;
+          }
+          const targetFrontmatter = visibleKnowledgeByPath.get(normalizePath(targets[0]!).toLocaleLowerCase('en-US'));
+          const isNegative = String(targetFrontmatter?.knowledge_polarity || '').trim().toLowerCase() === 'negative';
+          if ((expected === 'negative') !== isNegative) {
+            invalidReference = true;
+            break;
+          }
+        }
+        if (invalidReference) break;
+      }
+      if (invalidReference) {
+        completionDispositionIssuePaths.add(candidateKey);
+        addIssue({
+          severity: 'warning',
+          code: 'completed_work_without_knowledge_disposition',
+          path: this.access.toPublicPath(candidate.path),
+          detail: 'Completed work has a knowledge-note disposition that is missing, ambiguous, hidden, self-referential, or has the wrong durable/negative role.',
+        });
+      }
+    }
+
+    const claimReferenceIndex = buildNoteReferenceIndex(visibleKnowledgeNotes
       .map(note => ({
         path: note.path,
         title: note.frontmatter.title,

@@ -229,6 +229,16 @@ describe('knowledge organization focus and summary metadata', () => {
       noReusableKnowledge: false,
       knowledgeDispositions: ['retrospective'],
     });
+    expect(normalizeKnowledgeDisposition({
+      retrospective: 'A reusable lesson emerged after a later review.',
+    }, {
+      knowledge_dispositions: ['no_reusable_knowledge'],
+      knowledge_disposition_reason: 'Initially appeared to be routine work only.',
+    })).toEqual({
+      retrospective: 'A reusable lesson emerged after a later review.',
+      noReusableKnowledge: false,
+      knowledgeDispositions: ['retrospective'],
+    });
   });
 
   test('publishes completion disposition Properties and lints direct-edit bypasses', () => {

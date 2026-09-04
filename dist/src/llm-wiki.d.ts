@@ -93,6 +93,9 @@ export declare class LlmWikiService {
      */
     readModelGeneration(): number;
     private principalKey;
+    private validatedKnowledgeDisposition;
+    private knowledgeDispositionFrontmatter;
+    private knowledgeDispositionProjection;
     /**
      * Build one request-local work graph so flow, project planning, and next
      * action projections agree about whether an action is actually executable.
@@ -313,6 +316,11 @@ export declare class LlmWikiService {
         relationNotes?: unknown;
         relationEvidence?: unknown;
         taskStatus?: unknown;
+        knowledgeNotes?: unknown;
+        negativeKnowledgeNotes?: unknown;
+        retrospective?: unknown;
+        noReusableKnowledge?: unknown;
+        knowledgeDispositionReason?: unknown;
         reviewPolicy?: unknown;
         reviewOutcome?: unknown;
         reviewedBy?: string;
@@ -562,6 +570,11 @@ export declare class LlmWikiService {
         lifecycle?: string;
         epistemicStatus?: unknown;
         taskStatus?: unknown;
+        knowledgeNotes?: unknown;
+        negativeKnowledgeNotes?: unknown;
+        retrospective?: unknown;
+        noReusableKnowledge?: unknown;
+        knowledgeDispositionReason?: unknown;
         project?: string;
         nextAction?: string;
         waitingFor?: string;
@@ -2923,6 +2936,11 @@ export declare class LlmWikiService {
         relationNotes?: unknown;
         relationEvidence?: unknown;
         taskStatus?: unknown;
+        knowledgeNotes?: unknown;
+        negativeKnowledgeNotes?: unknown;
+        retrospective?: unknown;
+        noReusableKnowledge?: unknown;
+        knowledgeDispositionReason?: unknown;
         reviewPolicy?: unknown;
         reviewOutcome?: unknown;
         reviewedBy?: string;
