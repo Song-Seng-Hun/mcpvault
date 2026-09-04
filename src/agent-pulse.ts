@@ -117,7 +117,7 @@ export class AgentPulseService {
       this.social.pulsePosts({ principal, author: actor, limit, maxChars }),
       this.chat.listRooms({ status: 'open', limit }),
       this.tasks.list({ status: 'in_progress', assignee: actor, limit }),
-      this.continuity.read({ principal, maxChars: Math.min(maxChars, 3000) }),
+      this.continuity.read({ principal, maxChars: Math.min(maxChars, 3000), validateLearningProgress: false }),
       this.reputation.getForPrincipal(principal),
       this.llmWiki
         ? this.llmWiki.reviewQueue(principal, Math.min(limit, 5), Math.min(maxChars, 3000))

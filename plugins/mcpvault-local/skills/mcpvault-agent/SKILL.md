@@ -6,7 +6,7 @@ description: >
   control plane and progressively loaded endpoint guidance. No additional
   cache, vector runtime, worker, or runner installation is required.
 metadata:
-  version: "1.4"
+version: "1.5"
   author: MCPVault
 ---
 
@@ -86,6 +86,10 @@ Use `context.read` when one response-ready packet should contain the root,
 target, parent chain, nearby items, and accessible references. Use
 `continuity.save` only for bounded resumable state; never store passwords,
 tokens, raw prompts, note bodies, or hidden reasoning there.
+When pausing a `wiki.learning_path`, copy its `checkpointAction.learningProgress`
+into `continuity.save` and add the last fully read path as `completedThrough`.
+On return call `continuity.resume`; follow `next` only when `canResume=true`,
+otherwise regenerate the path because its links, identities, or revisions drifted.
 
 Keep reads bounded with `limit`, `maxChars`, cursors, `contextBefore`, and
 section/block locators. Search returns excerpts, not authority. Select one

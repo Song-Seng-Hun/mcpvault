@@ -208,6 +208,16 @@ revision-checked edit.
 Every readable entry includes its current revision. The projection never
 rewrites the MOC, and a recommendation is navigation—not proof or permission
 to discard a deliberate narrative order.
+For a route that spans sessions, copy `wiki.learning_path.checkpointAction`
+into `continuity.save`, add the last fully read path as
+`learningProgress.completedThrough`, and later call `continuity.resume`.
+The private checkpoint stores no bodies: it records the root/order plus a
+bounded path/revision snapshot and structure/revision fingerprints. Resume
+recomputes the path and returns the next unread note only while links, identity
+resolution, order, and revisions still match; otherwise it returns
+`canResume=false` with a `wiki.learning_path` refresh action. Recommended order
+cannot be checkpointed while cycles or blocked entries make it incomplete, and
+an MOC over 50 expanded entries should be split into nested maps first.
 Graph/organization health also expose actionable MOC sequence defects, and the
 exception board gives each affected map a `wiki.learning_path` repair route.
 External-only prerequisites remain informational so thematic maps are not
@@ -1109,6 +1119,10 @@ For session continuity, `continuity.save` stores a single private
 `_continuity/work-state.md` note in the current agent or model scope. It is a
 resume pointer, not a secret store: passwords, bearer tokens, and sensitive
 prompt text are rejected by policy and must remain in the host secret store.
+Its optional `learningProgress` needs only `rootPath`, authored/recommended
+`order`, optional `maxDepth`, and the last `completedThrough` path. The server
+builds the revision snapshot; routine pulses return an unchecked compact hint,
+while explicit `continuity.resume` performs the more expensive drift check.
 
 ## Prerequisites
 

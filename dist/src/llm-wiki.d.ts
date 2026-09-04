@@ -3573,7 +3573,33 @@ export declare class LlmWikiService {
      * path. The Markdown order remains authoritative; the topological order is
      * returned separately as an advisory projection and never mutates notes.
      */
-    learningPath(principal: ScopePrincipal | undefined, path: string, maxDepth?: number, limit?: number, maxChars?: number): Promise<{
+    learningPath(principal: ScopePrincipal | undefined, path: string, maxDepth?: number, limit?: number, maxChars?: number, checkpointOnly?: boolean): Promise<{
+        mode: string;
+        root: {
+            path: string;
+            revision: string;
+        };
+        authoredOrder: {
+            path: string;
+            revision: string;
+            title: string;
+            noteKind: string;
+            lifecycle?: string;
+            knowledgeRole?: string;
+            authoredPosition: number;
+            depth: number;
+            parentMoc: string;
+            line: number;
+            section?: string;
+            targetHeading?: string;
+            targetBlockId?: string;
+        }[];
+        recommendedOrder: string[];
+        summary: {
+            entries: number;
+            omittedEntries: number;
+        };
+    } | {
         mode: string;
         root: {
             path: string;

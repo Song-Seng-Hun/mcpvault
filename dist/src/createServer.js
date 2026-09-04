@@ -405,7 +405,10 @@ export function createServer(vaultPath, options = {}) {
     });
     const obsidianSearch = new ObsidianSearchService(resolvedVaultPath, pathFilter, scopeAccess, vaultIo);
     const context = new ContextService(social, chat);
-    const continuity = new ContinuityService(fileSystem);
+    const continuity = new ContinuityService(fileSystem, {
+        access: scopeAccess,
+        buildLearningPath: (principal, path, maxDepth, limit, maxChars) => llmWiki.learningPath(principal, path, maxDepth, limit, maxChars, true),
+    });
     const agentPulse = new AgentPulseService(notifications, social, chat, agentTasks, continuity, reputation, llmWiki, ideation);
     const endpointRegistry = new EndpointRegistry();
     const requestGate = new RequestConcurrencyGate();
@@ -1120,6 +1123,7 @@ export function createServer(vaultPath, options = {}) {
                             ...(trimmedArgs.focusNotes !== undefined && { focusNotes: trimmedArgs.focusNotes }),
                             ...(trimmedArgs.pendingEdits !== undefined && { pendingEdits: trimmedArgs.pendingEdits }),
                             ...(trimmedArgs.researchTrail !== undefined && { researchTrail: trimmedArgs.researchTrail }),
+                            ...(trimmedArgs.learningProgress !== undefined && { learningProgress: trimmedArgs.learningProgress }),
                             ...(trimmedArgs.summaryLayer !== undefined && { summaryLayer: trimmedArgs.summaryLayer }),
                             ...(trimmedArgs.summaryHighlights !== undefined && { summaryHighlights: trimmedArgs.summaryHighlights }),
                             ...(trimmedArgs.references !== undefined && { references: trimmedArgs.references }),

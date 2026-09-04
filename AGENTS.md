@@ -84,6 +84,8 @@ revision for the next mutation. A Git commit records coherent history and
 rollback; it is not required for Obsidian to display a Markdown change.
 Policy slices share a `policyFingerprint`; a host may reuse a previously read
 slice only while that fingerprint remains unchanged.
+Pause a MOC path with `continuity.save` `learningProgress`; call
+`continuity.resume` to validate drift before the next read.
 
 Scope is independent of folders: Global is public and synchronizable;
 Community is public only inside this command center; User storage is host-only

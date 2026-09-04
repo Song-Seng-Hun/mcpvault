@@ -9002,7 +9002,7 @@ export class LlmWikiService {
      * path. The Markdown order remains authoritative; the topological order is
      * returned separately as an advisory projection and never mutates notes.
      */
-    async learningPath(principal, path, maxDepth = 2, limit = 30, maxChars = 7000) {
+    async learningPath(principal, path, maxDepth = 2, limit = 30, maxChars = 7000, checkpointOnly = false) {
         const boundedDepth = Math.min(Math.max(Number(maxDepth) || 0, 0), 6);
         const boundedLimit = Math.min(Math.max(Number(limit) || 30, 1), 50);
         const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 1024), 16000);
@@ -9418,6 +9418,15 @@ export class LlmWikiService {
         const latestRoot = await this.fileSystem.readNote(path);
         if (latestRoot.revision !== rootNote.revision)
             throw new Error('The root MOC changed while building its learning path; re-read it and retry.');
+        if (checkpointOnly) {
+            return {
+                mode: 'learning_path_checkpoint_source',
+                root: { path: this.access.toPublicPath(path), revision: rootNote.revision },
+                authoredOrder,
+                recommendedOrder,
+                summary: { entries: authoredOrder.length, omittedEntries },
+            };
+        }
         const result = {
             mode: 'dependency_aware_moc_learning_path',
             purpose: 'Preserve the authored Obsidian outline while exposing a separate prerequisite-safe reading suggestion. This is bounded navigation, not a truth score or an automatic rewrite.',
@@ -9457,7 +9466,11 @@ export class LlmWikiService {
                 navigationIssues: navigationIssues.length,
                 omittedEntries,
             },
-            guidance: 'Keep the MOC body order when it expresses pedagogy or narrative. recommendedStages groups only internally acyclic entries at the same prerequisite depth; entries in one stage may be read in parallel, but external or incomplete prerequisites still require inspection. unlockPoints identifies high-leverage reading starts, not importance or truth. redundantPrerequisiteEdges are review candidates, not automatic deletions. Repair an edge inside dependencyCycles before touching cycleBlockedDependents.',
+            checkpointAction: {
+                endpointId: 'continuity.save',
+                learningProgress: { rootPath: this.access.toPublicPath(path), order: 'authored', maxDepth: boundedDepth },
+            },
+            guidance: 'Preserve deliberate pedagogy in authored order. Same-stage entries may be read in parallel, but external or incomplete prerequisites still need inspection. Unlock and redundant-edge hints are advisory. Repair dependencyCycles before cycleBlockedDependents. Add completedThrough to checkpointAction.learningProgress after each finished entry; continuity.resume validates drift.',
             truncated: truncated || recommendedStages.length > Math.min(12, boundedLimit) || prerequisiteEdges.length > boundedLimit || redundantPrerequisiteEdges.length > boundedLimit || unlockPoints.length > Math.min(12, boundedLimit) || dependencyCycles.length > Math.min(8, boundedLimit) || cycleBlockedDependents.length > boundedLimit || externalPrerequisites.length > boundedLimit || orderIssues.length > boundedLimit || navigationIssues.length > boundedLimit,
         };
         if (JSON.stringify(result).length <= boundedChars)

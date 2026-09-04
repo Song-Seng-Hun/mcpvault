@@ -553,7 +553,7 @@ test('drillable facets and synthesis candidates close the authored Distill to Ex
 test('dependency-aware MOC learning paths preserve authorship and diagnose prerequisite order safely', async () => {
   const { server, client } = await setup();
   try {
-    const registration = await callJson(client, 'register_scope_account', { accountId: 'learning-path-owner', modelId: 'codex', password: 'learning-path-password' });
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'learning-path-owner', userId: 'learning-path-family', modelId: 'codex', agentId: 'learning-path-worker', password: 'learning-path-password' });
     const accessToken = registration.value.accessToken;
     const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
       const result = await client.callTool({ name: 'write_note', arguments: { path, content, frontmatter, expectedRevision: 'missing', accessToken } });
@@ -601,6 +601,7 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
     expect(discovery.value.endpoints).toEqual(expect.arrayContaining([expect.objectContaining({ endpointId: 'wiki.learning_path' })]));
     const path = await callJson(client, 'get_wiki_learning_path', { path: 'Knowledge/MOCs/Curriculum.md', maxDepth: 2, limit: 20, maxChars: 16000, accessToken });
     expect(path.value.mode).toBe('dependency_aware_moc_learning_path');
+    expect(path.value.checkpointAction).toMatchObject({ endpointId: 'continuity.save', learningProgress: { rootPath: 'Knowledge/MOCs/Curriculum.md', order: 'authored', maxDepth: 2 } });
     expect(path.value.authoredOrder.map((item: any) => item.path)).toEqual([
       'Knowledge/Advanced.md',
       'Knowledge/Basics.md',
@@ -721,6 +722,24 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
     const tiny = await callJson(client, 'get_wiki_learning_path', { path: 'Knowledge/MOCs/Curriculum.md', maxDepth: 2, limit: 20, maxChars: 1024, accessToken, prettyPrint: true });
     expect(String((tiny.result.content as any)[0].text).length).toBeLessThanOrEqual(1024);
     expect(tiny.value.root).toMatchObject({ path: 'Knowledge/MOCs/Curriculum.md', revision: expect.any(String) });
+
+    const checkpoint = await callJson(client, 'save_work_state', {
+      topic: 'Curriculum reading', summary: 'The authored first entry was read.', nextAction: 'Resume only after validating the saved path.',
+      learningProgress: { rootPath: 'Knowledge/MOCs/Curriculum.md', order: 'authored', maxDepth: 2, completedThrough: 'Knowledge/Advanced.md' },
+      accessToken,
+    });
+    expect(checkpoint.value.learningProgress).toMatchObject({ state: 'ready', completedCount: 1, next: { path: 'Knowledge/Basics.md', endpointId: 'notes.read' } });
+    const resumed = await callJson(client, 'resume_work_state', { accessToken });
+    expect(resumed.value.learningProgress).toMatchObject({ state: 'ready', canResume: true, completedCount: 1, next: { path: 'Knowledge/Basics.md', revision: expect.any(String) } });
+
+    const basics = path.value.authoredOrder.find((item: any) => item.path === 'Knowledge/Basics.md');
+    await callJson(client, 'patch_note', { path: 'Knowledge/Basics.md', oldString: '# Basics', newString: '# Basics\n\nCheckpoint drift probe.', expectedRevision: basics.revision, accessToken });
+    const staleCheckpoint = await callJson(client, 'resume_work_state', { accessToken });
+    expect(staleCheckpoint.value.learningProgress).toMatchObject({
+      state: 'stale', canResume: false,
+      drift: { structureChanged: false, revisionsChanged: true, changedEntries: expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Basics.md', state: 'revised' })]) },
+      nextAction: { endpointId: 'wiki.learning_path' },
+    });
 
     const notMoc = await client.callTool({ name: 'get_wiki_learning_path', arguments: { path: 'Knowledge/Basics.md', accessToken } });
     expect(notMoc.isError).toBe(true);

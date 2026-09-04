@@ -142,7 +142,7 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
     rules: [
       'Attempt a due recall prompt before opening its note, then record failed, partial, or good only for the current authenticated reader.',
       'Use resurfacing as a small deterministic rediscovery sample; re-read the current note revision before relying on it.',
-      'Before interruption or handoff, save only bounded focus, cursors, pending revision guards, and research-trail summaries in the private continuity checkpoint.',
+      'Before interruption or handoff, save only bounded focus, cursors, revision guards, research summaries, and optional MOC learningProgress in the private continuity checkpoint; resume it to detect path or note drift before reading on.',
       'Recall history, reading continuity, evidence review, and knowledge status are separate signals; none proves a claim.',
     ],
     routes: ['wiki.recall_queue', 'wiki.record_recall', 'wiki.resurface', 'continuity.resume', 'continuity.save'],

@@ -262,6 +262,11 @@ unchanged. For MOCs, record `moc_purpose`, `moc_scope`, `moc_questions`, and
 optional `moc_parent` alongside ordinary `[[wikilinks]]` or relative Markdown
 links; nested MOCs are followed to bounded depth by graph health; use
 `get_wiki_moc_candidates` for bounded suggestions, not automatic map creation.
+When a learning path crosses sessions, use the `checkpointAction` returned by
+`wiki.learning_path` with `continuity.save` and set `completedThrough` to the
+last fully read entry. `continuity.resume` recomputes the path and refuses to
+advance when structure, identity resolution, or any tracked revision changed.
+This private progress pointer stores no note bodies and never proves knowledge.
 
 To make question coverage explicit, write each `moc_questions` item as a
 Markdown list item under a Questions section and put one or more answer
