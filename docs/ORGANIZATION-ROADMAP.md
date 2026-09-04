@@ -149,11 +149,30 @@ tools; new behaviors belong in the endpoint catalog.
   generic-mutation guards, and Wiki planners, including ideas, workshops,
   reactions, and guestbooks; a new feature directory can no longer be treated
   differently by those paths accidentally.
+- Explicit hierarchy changes now use the read-only `wiki.hierarchy_change`
+  planner. MOC reparenting is simulated against the visible map graph and
+  refuses cycles, broken ancestors, and privacy-invalid edges. GTD focus
+  reparenting additionally requires a strictly higher parent horizon and walks
+  the proposed ancestor chain before returning one revision-stamped edit;
+  clear is an explicit operation rather than an empty-string convention.
+- Graph health now distinguishes resolvable-but-downward/equal focus links from
+  missing or ambiguous links. Each invalid `focus_parent` includes a direct
+  hierarchy-repair route, and organization health/review budgeting counts the
+  new defect instead of using it as valid prioritization structure.
+- Ordinary-note map placement now has a read-only `wiki.moc_membership`
+  planner. One primary and a complete bounded contextual MOC set must resolve
+  to real visible MOC notes in a safe scope; the output uses canonical
+  path-qualified Obsidian links and preserves legacy `moc` as an explicit
+  migration warning instead of deleting compatibility metadata silently.
+- Review-packet mutation routing now invokes the reciprocal-link planner for a
+  missing reverse edge and the hierarchy planner for MOC/focus parent defects;
+  the suggested tool is therefore executable rather than a label followed by
+  a generic manual triage operation.
 
 Evidence: `moc-navigation.test.ts`, `backlinks.test.ts`, `organization.test.ts`,
 `filesystem.test.ts`, `json-canvas.test.ts`, `continuity.test.ts`,
 `global-sync.test.ts`, and the
-onboarding/context-pack/capacity/retrieval/Property-migration/MOC-order/reciprocal-link integration cases in
+onboarding/context-pack/capacity/retrieval/Property-migration/MOC-order/MOC-membership/hierarchy/reciprocal-link integration cases in
 `llm-wiki.test.ts`.
 The compiled `dist/server.js` is also exercised over a real stdio MCP client on
 an isolated temporary Vault through orientation, capability discovery, and

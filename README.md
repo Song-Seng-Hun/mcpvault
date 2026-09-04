@@ -340,6 +340,20 @@ broken root hierarchies, unsafe scopes, and plans that need more than the ten
 notes supported by one change set. It changes only numeric `nav_order`;
 the links authored inside an individual MOC keep their visible Markdown order.
 
+For a structural parent edge, call `wiki.hierarchy_change` with `hierarchy`
+set to `moc` or `focus` and `operation` set to `set` or `clear`. A MOC plan is
+simulated against the complete visible MOC graph before it can create a cycle
+or join a damaged ancestor branch. A focus plan requires both endpoints to
+declare valid horizons and the parent to be strictly higher than the child;
+equal/downward outcome links are reported by graph health instead of silently
+becoming prioritization input.
+
+To place an ordinary note in curated maps, call `wiki.moc_membership` with one
+exact `primaryMocPath` and the complete optional `additionalMocPaths` list.
+Every target must be a visible `note_kind: moc`, and the planner emits canonical
+path-qualified Obsidian links. It replaces only `primary_moc` and `mocs`; an
+old legacy `moc` value remains visible as an explicit migration decision.
+
 For mutual `related` or `same_as` edges, call `wiki.reciprocal_link` with the
 two exact note paths. It resolves all existing values first and refuses a
 malformed, ambiguous, full, hidden, immutable, managed-Community, or

@@ -144,6 +144,20 @@ test('REST adapter uses the same dynamic endpoint registry and dispatcher', asyn
   });
   expect(mocOrderPreview.status).toBe(200);
   expect(await mocOrderPreview.json()).toMatchObject({ valid: true, requiredChanges: 2, nextAction: { endpointId: 'notes.change_set' } });
+
+  const hierarchyPreview = await fetch(`http://127.0.0.1:${api.port}/api/wiki/hierarchy-change`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ hierarchy: 'moc', operation: 'set', childPath: 'nested/moc-b.md', parentPath: 'nested/moc-a.md', accessToken }),
+  });
+  expect(hierarchyPreview.status).toBe(200);
+  expect(await hierarchyPreview.json()).toMatchObject({ valid: true, afterState: 'nested', changes: [expect.objectContaining({ path: 'nested/moc-b.md' })] });
+
+  const membershipPreview = await fetch(`http://127.0.0.1:${api.port}/api/wiki/moc-membership`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ notePath: 'nested/route.md', primaryMocPath: 'nested/moc-a.md', additionalMocPaths: ['nested/moc-b.md'], accessToken }),
+  });
+  expect(membershipPreview.status).toBe(200);
+  expect(await membershipPreview.json()).toMatchObject({ valid: true, primaryMoc: { link: '[[nested/moc-a]]' }, nextAction: { endpointId: 'notes.change_set' } });
 });
 
 test('REST adapter rate-limits anonymous account registration per client address', async () => {

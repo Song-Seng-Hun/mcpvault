@@ -6,7 +6,7 @@ description: >
   control plane and progressively loaded endpoint guidance. No additional
   cache, vector runtime, worker, or runner installation is required.
 metadata:
-version: "1.7"
+version: "1.8"
   author: MCPVault
 ---
 
@@ -120,7 +120,8 @@ load-bearing claims.
 Before editing, read the current revision. Use `expectedRevision`; use a
 dry-run preview for patch, move, split, merge, or other structural operations
 when offered. Plan coupled repairs with `wiki.reciprocal_link`,
-`wiki.moc_order`, or `wiki.property_migration`; dry-run its revision-stamped
+`wiki.moc_order`, `wiki.hierarchy_change`, `wiki.moc_membership`, or
+`wiki.property_migration`; dry-run its revision-stamped
 `notes.change_set`, inspect previews, then confirm the exact fingerprint. After every mutation,
 re-read the targets. Git records coherent history and rollback but is not
 required for Obsidian visibility.

@@ -1725,6 +1725,25 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           }), trimmedArgs.prettyPrint);
         }
 
+        case "get_wiki_hierarchy_change_preview": {
+          return jsonResult(await llmWiki.hierarchyChangePreview(principal, {
+            hierarchy: trimmedArgs.hierarchy,
+            operation: trimmedArgs.operation,
+            childPath: trimmedArgs.childPath,
+            ...(typeof trimmedArgs.parentPath === 'string' && { parentPath: trimmedArgs.parentPath }),
+            ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
+          }), trimmedArgs.prettyPrint);
+        }
+
+        case "get_wiki_moc_membership_preview": {
+          return jsonResult(await llmWiki.mocMembershipPreview(principal, {
+            notePath: trimmedArgs.notePath,
+            primaryMocPath: trimmedArgs.primaryMocPath,
+            ...(trimmedArgs.additionalMocPaths !== undefined && { additionalMocPaths: trimmedArgs.additionalMocPaths }),
+            ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
+          }), trimmedArgs.prettyPrint);
+        }
+
         case "get_wiki_reciprocal_link_preview": {
           return jsonResult(await llmWiki.reciprocalLinkPreview(principal, {
             leftPath: trimmedArgs.leftPath,
@@ -2811,7 +2830,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 function trimPaths(args: any, access: ScopeAccessPolicy, principal?: ScopePrincipal): any {
   const trimmed = { ...args };
 
-  for (const key of ['path', 'oldPath', 'newPath', 'targetPath', 'confirmPath', 'confirmOldPath', 'confirmNewPath', 'folder', 'pathPrefix', 'scopeUri', 'subjectPath', 'outputPath', 'parentPath', 'leftPath', 'rightPath']) {
+  for (const key of ['path', 'oldPath', 'newPath', 'targetPath', 'confirmPath', 'confirmOldPath', 'confirmNewPath', 'folder', 'pathPrefix', 'scopeUri', 'subjectPath', 'outputPath', 'parentPath', 'childPath', 'notePath', 'primaryMocPath', 'leftPath', 'rightPath']) {
     if (trimmed[key] && typeof trimmed[key] === 'string') trimmed[key] = access.resolveExternalPath(trimmed[key], principal);
   }
   if (trimmed.sortBy && typeof trimmed.sortBy === 'string') trimmed.sortBy = trimmed.sortBy.trim();
@@ -2822,6 +2841,10 @@ function trimPaths(args: any, access: ScopeAccessPolicy, principal?: ScopePrinci
 
   if (trimmed.orderedMocs && Array.isArray(trimmed.orderedMocs)) {
     trimmed.orderedMocs = trimmed.orderedMocs.map((p: any) => typeof p === 'string' ? access.resolveExternalPath(p, principal) : p);
+  }
+
+  if (trimmed.additionalMocPaths && Array.isArray(trimmed.additionalMocPaths)) {
+    trimmed.additionalMocPaths = trimmed.additionalMocPaths.map((p: any) => typeof p === 'string' ? access.resolveExternalPath(p, principal) : p);
   }
 
   if (trimmed.changes && Array.isArray(trimmed.changes)) {

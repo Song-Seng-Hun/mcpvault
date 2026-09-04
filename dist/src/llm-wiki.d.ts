@@ -849,6 +849,14 @@ export declare class LlmWikiService {
                             reason: string;
                             path: string;
                             parent: string;
+                            repair: {
+                                endpointId: string;
+                                arguments: {
+                                    hierarchy: string;
+                                    childPath: string;
+                                };
+                                requiredArguments: string[];
+                            };
                         }[];
                         truncated: boolean;
                     };
@@ -860,6 +868,14 @@ export declare class LlmWikiService {
                             parent: string;
                             matches: string[];
                             matchesTruncated: boolean;
+                            repair: {
+                                endpointId: string;
+                                arguments: {
+                                    hierarchy: string;
+                                    childPath: string;
+                                };
+                                requiredArguments: string[];
+                            };
                         }[];
                         truncated: boolean;
                     };
@@ -870,6 +886,14 @@ export declare class LlmWikiService {
                             nodes: string[];
                             nodeTotal: number;
                             truncated: boolean;
+                            repair: {
+                                endpointId: string;
+                                arguments: {
+                                    hierarchy: string;
+                                    operation: string;
+                                    childPath: string;
+                                };
+                            } | undefined;
                         }[];
                         truncated: boolean;
                     };
@@ -925,6 +949,7 @@ export declare class LlmWikiService {
                 };
                 focusHealth: {
                     focusedNotes: number;
+                    declaredParentEdges?: number;
                     parentEdges: number;
                     supportEdges: number;
                     horizonCounts: {
@@ -936,6 +961,11 @@ export declare class LlmWikiService {
                         truncated: boolean;
                     };
                     ambiguous: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    horizonMismatches?: {
                         total: number;
                         items: Record<string, unknown>[];
                         truncated: boolean;
@@ -1188,6 +1218,14 @@ export declare class LlmWikiService {
                             reason: string;
                             path: string;
                             parent: string;
+                            repair: {
+                                endpointId: string;
+                                arguments: {
+                                    hierarchy: string;
+                                    childPath: string;
+                                };
+                                requiredArguments: string[];
+                            };
                         }[];
                         truncated: boolean;
                     };
@@ -1199,6 +1237,14 @@ export declare class LlmWikiService {
                             parent: string;
                             matches: string[];
                             matchesTruncated: boolean;
+                            repair: {
+                                endpointId: string;
+                                arguments: {
+                                    hierarchy: string;
+                                    childPath: string;
+                                };
+                                requiredArguments: string[];
+                            };
                         }[];
                         truncated: boolean;
                     };
@@ -1209,6 +1255,14 @@ export declare class LlmWikiService {
                             nodes: string[];
                             nodeTotal: number;
                             truncated: boolean;
+                            repair: {
+                                endpointId: string;
+                                arguments: {
+                                    hierarchy: string;
+                                    operation: string;
+                                    childPath: string;
+                                };
+                            } | undefined;
                         }[];
                         truncated: boolean;
                     };
@@ -1264,6 +1318,7 @@ export declare class LlmWikiService {
                 };
                 focusHealth: {
                     focusedNotes: number;
+                    declaredParentEdges?: number;
                     parentEdges: number;
                     supportEdges: number;
                     horizonCounts: {
@@ -1275,6 +1330,11 @@ export declare class LlmWikiService {
                         truncated: boolean;
                     };
                     ambiguous: {
+                        total: number;
+                        items: Record<string, unknown>[];
+                        truncated: boolean;
+                    };
+                    horizonMismatches?: {
                         total: number;
                         items: Record<string, unknown>[];
                         truncated: boolean;
@@ -2312,6 +2372,111 @@ export declare class LlmWikiService {
         } | undefined;
         generatedAt: string;
     }>;
+    /**
+     * Preflight one explicit MOC or GTD-focus parent edge. The selected edge is
+     * simulated against the visible graph so an apparently small Properties
+     * edit cannot create a cycle, attach below a broken ancestor, or point a
+     * focus item toward an equal/lower horizon.
+     */
+    hierarchyChangePreview(principal: ScopePrincipal | undefined, options: {
+        hierarchy: unknown;
+        operation: unknown;
+        childPath: string;
+        parentPath?: string;
+        maxChars?: number;
+    }): Promise<{
+        purpose: string;
+        hierarchy: string;
+        operation: string;
+        field: string;
+        child: {
+            path: string;
+            revision: string;
+            currentParent?: string;
+        };
+        parent?: {
+            path: string;
+            revision: string;
+        };
+        afterState: string;
+        changes: {
+            path: string;
+            expectedRevision: string;
+            frontmatter: {
+                set: {
+                    [x: string]: string;
+                };
+                remove?: never;
+            } | {
+                set?: never;
+                remove: string[];
+            };
+        }[];
+        blockers: {
+            path?: string;
+            reason: string;
+        }[];
+        warnings: {
+            path?: string;
+            reason: string;
+        }[];
+        valid: boolean;
+        alreadyApplied: boolean;
+        nextAction: {
+            endpointId: string;
+            instruction: string;
+        } | undefined;
+        generatedAt: string;
+    }>;
+    /** Validate and canonicalize one note's preferred and contextual MOC entry
+     * points. This replaces only primary_moc/mocs and deliberately leaves the
+     * legacy moc field visible for an explicit later migration. */
+    mocMembershipPreview(principal: ScopePrincipal | undefined, options: {
+        notePath: string;
+        primaryMocPath: string;
+        additionalMocPaths?: unknown;
+        maxChars?: number;
+    }): Promise<{
+        purpose: string;
+        note: {
+            path: string;
+            revision: string;
+        };
+        primaryMoc: {
+            path: string;
+            link: string | undefined;
+        };
+        additionalMocs: {
+            path: string;
+            link: string | undefined;
+        }[];
+        changes: {
+            path: string;
+            expectedRevision: string;
+            frontmatter: {
+                set: {
+                    primary_moc: string;
+                    mocs?: string[];
+                };
+                remove?: string[];
+            };
+        }[];
+        blockers: {
+            path?: string;
+            reason: string;
+        }[];
+        warnings: {
+            path?: string;
+            reason: string;
+        }[];
+        valid: boolean;
+        alreadyApplied: boolean;
+        nextAction: {
+            endpointId: string;
+            instruction: string;
+        } | undefined;
+        generatedAt: string;
+    }>;
     /** Build a two-note reciprocal related/same_as repair without risking a
      * half-written graph edge. Existing malformed or ambiguous relation values
      * are blockers rather than data this planner silently normalizes. */
@@ -3142,6 +3307,8 @@ export declare class LlmWikiService {
             endpointId: string;
             requirement: string;
         };
+        hierarchyPlanner: string;
+        mocMembershipPlanner: string;
         projects: Record<string, unknown>[];
         inbox: Record<string, unknown>[];
         review: Record<string, unknown>[];
@@ -3274,6 +3441,14 @@ export declare class LlmWikiService {
                     reason: string;
                     path: string;
                     parent: string;
+                    repair: {
+                        endpointId: string;
+                        arguments: {
+                            hierarchy: string;
+                            childPath: string;
+                        };
+                        requiredArguments: string[];
+                    };
                 }[];
                 truncated: boolean;
             };
@@ -3285,6 +3460,14 @@ export declare class LlmWikiService {
                     parent: string;
                     matches: string[];
                     matchesTruncated: boolean;
+                    repair: {
+                        endpointId: string;
+                        arguments: {
+                            hierarchy: string;
+                            childPath: string;
+                        };
+                        requiredArguments: string[];
+                    };
                 }[];
                 truncated: boolean;
             };
@@ -3295,6 +3478,14 @@ export declare class LlmWikiService {
                     nodes: string[];
                     nodeTotal: number;
                     truncated: boolean;
+                    repair: {
+                        endpointId: string;
+                        arguments: {
+                            hierarchy: string;
+                            operation: string;
+                            childPath: string;
+                        };
+                    } | undefined;
                 }[];
                 truncated: boolean;
             };
@@ -3326,6 +3517,7 @@ export declare class LlmWikiService {
         };
         focusHealth: {
             focusedNotes: number;
+            declaredParentEdges?: number;
             parentEdges: number;
             supportEdges: number;
             horizonCounts: {
@@ -3337,6 +3529,11 @@ export declare class LlmWikiService {
                 truncated: boolean;
             };
             ambiguous: {
+                total: number;
+                items: Record<string, unknown>[];
+                truncated: boolean;
+            };
+            horizonMismatches?: {
                 total: number;
                 items: Record<string, unknown>[];
                 truncated: boolean;

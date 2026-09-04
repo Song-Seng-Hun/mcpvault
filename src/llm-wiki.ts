@@ -9,7 +9,7 @@ import type { ReferenceService } from './references.js';
 import type { SemanticSearchService } from './semantic-search.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
-import { getOrganizationPropertyContract, getOrganizationRelationContract, inapplicableOrganizationProperties, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, organizationLintIssues, organizationNoteTemplate, organizationPropertyAppliesTo, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, CONFIDENCE_LEVELS, DECISION_STATUSES, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS, type AnswerPacketIntent, type CatalogOrder, type TemporalValidityState, type WikiProjectionView } from './organization.js';
+import { getOrganizationPropertyContract, getOrganizationRelationContract, inapplicableOrganizationProperties, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, organizationLintIssues, organizationNoteTemplate, organizationPropertyAppliesTo, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, CONFIDENCE_LEVELS, DECISION_STATUSES, FOCUS_HORIZONS, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS, type AnswerPacketIntent, type CatalogOrder, type TemporalValidityState, type WikiProjectionView } from './organization.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
@@ -895,6 +895,12 @@ function isWikiControlPath(path: string): boolean {
     || normalized === '_sources'
     || normalized.startsWith('_sources/')
     || /^_scopes\/(models|agents|users)\/[^/]+\/(?:_wiki|_sources)(?:\/|$)/.test(normalized);
+}
+
+function organizationRoleBoundaryReason(path: string): string | undefined {
+  if (isWikiControlPath(path)) return 'Reserved _wiki and immutable _sources records cannot act as organization notes.';
+  if (isManagedCommunityPath(path)) return 'Managed Community records must be changed and organized through their dedicated endpoint.';
+  return undefined;
 }
 
 const DEFAULT_SCHEMA = `# LLM Wiki schema
@@ -4677,7 +4683,7 @@ export class LlmWikiService {
         const item = raw as Record<string, unknown>;
         const path = typeof item.path === 'string' ? item.path : typeof item.mocPath === 'string' ? item.mocPath : undefined;
         if (!path) continue;
-        const details = Object.fromEntries(['title', 'question', 'recallPrompt', 'repairStatus', 'repairPath', 'state', 'target', 'relation', 'line']
+        const details = Object.fromEntries(['title', 'question', 'recallPrompt', 'repairStatus', 'repairPath', 'state', 'target', 'relation', 'field', 'sourceHorizon', 'targetHorizon', 'line']
           .filter(key => item[key] !== undefined)
           .map(key => [key, item[key]]));
         const existing = priorityByPath.get(path);
@@ -4718,15 +4724,16 @@ export class LlmWikiService {
     add(graph.epistemicConsistency?.items, 'epistemic_state_needs_evidence', 'wiki.answer_packet', 1);
     add(graph.knowledgeFlow?.literatureWithoutSource?.items, 'literature_source_missing', 'wiki.answer_packet', 1);
     add(graph.knowledgeFlow?.synthesisWithoutInputs?.items, 'synthesis_inputs_missing', 'wiki.answer_packet', 1);
-    add(cycleRepresentatives(graph.mocHierarchy?.cycles?.items), 'moc_hierarchy_cycle', 'wiki.graph_health', 2);
+    add(cycleRepresentatives(graph.mocHierarchy?.cycles?.items), 'moc_hierarchy_cycle', 'wiki.hierarchy_change', 2);
     add(cycleRepresentatives(graph.focusHealth?.cycles?.items), 'focus_hierarchy_cycle', 'wiki.graph_health', 2);
     add(graph.typedRelations?.self?.items, 'typed_relation_self_link', 'wiki.neighborhood', 2);
     add(graph.typedRelations?.kindMismatches?.items, 'typed_relation_kind_mismatch', 'wiki.neighborhood', 2);
     add(graph.mocSequenceHealth?.items, 'moc_sequence_needs_repair', 'wiki.learning_path', 3);
-    add(graph.mocHierarchy?.missingParents?.items, 'moc_parent_unresolved', 'wiki.graph_health', 3);
-    add(graph.mocHierarchy?.ambiguousParents?.items, 'moc_parent_ambiguous', 'wiki.graph_health', 3);
+    add(graph.mocHierarchy?.missingParents?.items, 'moc_parent_unresolved', 'wiki.hierarchy_change', 3);
+    add(graph.mocHierarchy?.ambiguousParents?.items, 'moc_parent_ambiguous', 'wiki.hierarchy_change', 3);
     add(graph.focusHealth?.unresolved?.items, 'focus_relation_unresolved', 'wiki.graph_health', 3);
     add(graph.focusHealth?.ambiguous?.items, 'focus_relation_ambiguous', 'wiki.graph_health', 3);
+    add(graph.focusHealth?.horizonMismatches?.items, 'focus_horizon_mismatch', 'wiki.hierarchy_change', 3);
     add(graph.typedRelations?.unresolved?.items, 'typed_relation_unresolved', 'wiki.neighborhood', 3);
     add(graph.typedRelations?.ambiguous?.items, 'typed_relation_ambiguous', 'wiki.neighborhood', 3);
     add(graph.mocQuestionCoverage?.unlinked?.items, 'moc_question_has_no_linked_answer', 'wiki.graph_health', 4);
@@ -4805,12 +4812,22 @@ export class LlmWikiService {
           } else if (reason === 'atomic_projection_missing') {
             inspect = { endpointId: endpointIdForTool('read_wiki_projection'), arguments: { path: selectedPriority.path, view: 'progressive', maxChars: 5000 } };
             mutation = { endpointId: endpointIdForTool('update_wiki_projection'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['summary or keyPoints or openQuestions or summaryHighlights'], instruction: 'Refresh only the compact projection after checking the authoritative Markdown body.' };
+          } else if (reason === 'typed_relation_reciprocity_missing' && typeof selectedPriority.target === 'string' && typeof selectedPriority.relation === 'string') {
+            inspect = { endpointId: endpointIdForTool('get_wiki_neighborhood'), arguments: { path: selectedPriority.path, includeSemantic: false, limit: Math.min(12, boundedLimit), maxChars: 5000 } };
+            mutation = {
+              endpointId: endpointIdForTool('get_wiki_reciprocal_link_preview'),
+              arguments: { leftPath: selectedPriority.path, rightPath: selectedPriority.target, relation: selectedPriority.relation },
+              instruction: 'Preview both directions, then dry-run and confirm the returned complete notes.change_set; never repair only one side.',
+            };
           } else if (reason.startsWith('typed_relation_')) {
             inspect = { endpointId: endpointIdForTool('get_wiki_neighborhood'), arguments: { path: selectedPriority.path, includeSemantic: false, limit: Math.min(12, boundedLimit), maxChars: 5000 } };
             mutation = { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['the exact typed relation repair'], instruction: 'Preserve directional meaning and verify both visible endpoints; never infer a relation from similarity alone.' };
           } else if (reason.startsWith('moc_parent_') || reason === 'moc_hierarchy_cycle') {
             inspect = { endpointId: endpointIdForTool('read_wiki_projection'), arguments: { path: selectedPriority.path, view: 'metadata', maxChars: 4000 } };
-            mutation = { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['mocParent'], instruction: 'Repair one explicit parent edge; ordinary body links may still cross MOC branches.' };
+            mutation = { endpointId: endpointIdForTool('get_wiki_hierarchy_change_preview'), arguments: { hierarchy: 'moc', childPath: selectedPriority.path }, requiredArguments: ['operation; parentPath when operation=set'], instruction: 'Choose set or clear after inspecting the branch. The planner simulates the hierarchy before returning a change set.' };
+          } else if (reason === 'focus_horizon_mismatch' && selectedPriority.field === 'focus_parent') {
+            inspect = { endpointId: endpointIdForTool('read_wiki_projection'), arguments: { path: selectedPriority.path, view: 'metadata', maxChars: 4000 } };
+            mutation = { endpointId: endpointIdForTool('get_wiki_hierarchy_change_preview'), arguments: { hierarchy: 'focus', childPath: selectedPriority.path }, requiredArguments: ['operation; a strictly higher-horizon parentPath when operation=set'], instruction: 'Choose a genuinely higher outcome or clear the invalid parent; the planner blocks equal/lower horizons and cycles.' };
           } else if (reason.startsWith('focus_')) {
             inspect = { endpointId: endpointIdForTool('read_wiki_projection'), arguments: { path: selectedPriority.path, view: 'metadata', maxChars: 4000 } };
             mutation = { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['focusParent or focusSupports'], instruction: 'Repair the smallest focus edge without inventing hierarchy from folder placement.' };
@@ -5267,6 +5284,10 @@ export class LlmWikiService {
     const noteByKey = new Map(mocNotes.map(note => [normalizePath(note.path).toLowerCase(), note]));
     const navByKey = new Map(navigation.items.map(item => [normalizePath(item.path).toLowerCase(), item]));
     const blockers: Array<{ reason: string; paths?: string[] }> = [];
+    for (const path of orderedPaths) {
+      const roleBoundary = organizationRoleBoundaryReason(path);
+      if (roleBoundary) blockers.push({ reason: roleBoundary, paths: [this.access.toPublicPath(path)] });
+    }
     let currentPaths: string[] = [];
     let parent: { path: string; revision: string } | undefined;
     if (options.parentPath) {
@@ -5275,6 +5296,8 @@ export class LlmWikiService {
       const parentNavigation = navByKey.get(parentPath.toLowerCase());
       if (!parentNote || !parentNavigation) throw new Error('parentPath must identify one exact visible MOC note');
       parent = { path: this.access.toPublicPath(parentNote.path), revision: parentNote.revision };
+      const roleBoundary = organizationRoleBoundaryReason(parentNote.path);
+      if (roleBoundary) blockers.push({ reason: roleBoundary, paths: [parent.path] });
       if (!['root', 'nested'].includes(parentNavigation.state)) {
         blockers.push({ reason: `The parent MOC has unresolved hierarchy state '${parentNavigation.state}'; repair moc_parent before ordering this branch.`, paths: [parent.path] });
       }
@@ -5330,7 +5353,7 @@ export class LlmWikiService {
         let reason: string | undefined;
         try { this.access.assertMutationAllowed(note.path, 'wiki.moc_order'); }
         catch (error) { reason = error instanceof Error ? error.message : 'This MOC cannot be mutated.'; }
-        if (!reason && isManagedCommunityPath(note.path)) reason = 'Managed Community records cannot participate in a generic MOC-order change set.';
+        if (!reason) reason = organizationRoleBoundaryReason(note.path);
         if (reason) blockers.push({ reason, paths: [this.access.toPublicPath(note.path)] });
         if (typeof note.frontmatter.nav_order !== 'number' || note.frontmatter.nav_order !== item.navOrder) {
           candidateChanges.push({ path: this.access.toPublicPath(note.path), expectedRevision: note.revision, frontmatter: { set: { nav_order: item.navOrder } } });
@@ -5366,6 +5389,321 @@ export class LlmWikiService {
       generatedAt: now(),
     };
     if (JSON.stringify(result).length > boundedChars) throw new Error('maxChars is too small to preserve the complete MOC ordering plan; increase maxChars or use a smaller sibling group');
+    return result;
+  }
+
+  /**
+   * Preflight one explicit MOC or GTD-focus parent edge. The selected edge is
+   * simulated against the visible graph so an apparently small Properties
+   * edit cannot create a cycle, attach below a broken ancestor, or point a
+   * focus item toward an equal/lower horizon.
+   */
+  async hierarchyChangePreview(principal: ScopePrincipal | undefined, options: {
+    hierarchy: unknown;
+    operation: unknown;
+    childPath: string;
+    parentPath?: string;
+    maxChars?: number;
+  }) {
+    const hierarchy = String(options.hierarchy || '').trim().toLowerCase();
+    const operation = String(options.operation || '').trim().toLowerCase();
+    if (!['moc', 'focus'].includes(hierarchy)) throw new Error('hierarchy must be moc or focus');
+    if (!['set', 'clear'].includes(operation)) throw new Error('operation must be set or clear');
+    const childPath = normalizePath(options.childPath);
+    if (!childPath) throw new Error('childPath is required');
+    const parentPath = operation === 'set' && options.parentPath ? normalizePath(options.parentPath) : undefined;
+    if (operation === 'set' && !parentPath) throw new Error('parentPath is required when operation is set');
+    if (operation === 'clear' && options.parentPath) throw new Error('parentPath must be omitted when operation is clear');
+    if (parentPath && childPath.toLowerCase() === parentPath.toLowerCase()) throw new Error('A hierarchy edge cannot point to the same note');
+    const boundedChars = Math.min(Math.max(Number(options.maxChars) || 9000, 4096), 20000);
+    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+    if (!canAccess(childPath) || (parentPath && !canAccess(parentPath))) throw new Error('Every hierarchy endpoint must be an exact note visible in the current scope');
+    const child = await this.fileSystem.readNote(childPath);
+    const parent = parentPath ? await this.fileSystem.readNote(parentPath) : undefined;
+    if (isModerationHidden(child.frontmatter) || (parent && isModerationHidden(parent.frontmatter))) throw new Error('Moderation-hidden notes cannot participate in a hierarchy plan');
+    const publicChild = this.access.toPublicPath(childPath);
+    const publicParent = parentPath ? this.access.toPublicPath(parentPath) : undefined;
+    const field = hierarchy === 'moc' ? 'moc_parent' : 'focus_parent';
+    const blockers: Array<{ path?: string; reason: string }> = [];
+    const warnings: Array<{ path?: string; reason: string }> = [];
+    try { this.access.assertMutationAllowed(childPath, 'wiki.hierarchy_change'); }
+    catch (error) { blockers.push({ path: publicChild, reason: error instanceof Error ? error.message : 'The child note cannot be mutated.' }); }
+    const childBoundary = organizationRoleBoundaryReason(childPath);
+    if (childBoundary) blockers.push({ path: publicChild, reason: childBoundary });
+    const parentBoundary = parentPath ? organizationRoleBoundaryReason(parentPath) : undefined;
+    if (parentBoundary) blockers.push({ path: publicParent!, reason: parentBoundary });
+    if (parentPath && !this.access.canReferenceFrom(childPath, parentPath)) blockers.push({ reason: 'The proposed parent edge crosses a scope privacy boundary.' });
+
+    const childKind = String(child.frontmatter.note_kind || '').trim().toLowerCase();
+    const parentKind = String(parent?.frontmatter.note_kind || '').trim().toLowerCase();
+    let desiredParent: string | undefined;
+    if (parentPath) {
+      try { desiredParent = canonicalRelationWikiLink(parentPath); }
+      catch (error) { blockers.push({ reason: error instanceof Error ? error.message : 'The parent path cannot be encoded as an Obsidian wikilink.' }); }
+    }
+    let afterState = operation === 'clear' ? 'root' : 'unverified';
+
+    if (hierarchy === 'moc') {
+      if (childKind !== 'moc') blockers.push({ path: publicChild, reason: 'A moc hierarchy child must have note_kind: moc.' });
+      if (parent && parentKind !== 'moc') blockers.push({ path: publicParent!, reason: 'A moc hierarchy parent must have note_kind: moc.' });
+      if (operation === 'set' && desiredParent) {
+        const nodes: Array<{ path: string; title?: unknown; aliases?: unknown; preferredTerm?: unknown; stableId?: unknown; navOrder?: unknown; parent?: string }> = [];
+        let scanned = 0;
+        for await (const note of iterateNotes(this.fileSystem, { filters: { note_kind: 'moc' }, sortBy: 'path' }, canAccess)) {
+          if (isModerationHidden(note.frontmatter) || String(note.frontmatter.note_kind || '').trim().toLowerCase() !== 'moc') continue;
+          scanned += 1;
+          if (scanned > 20_000) throw new Error('MOC hierarchy exceeds the 20000-note planning bound');
+          nodes.push({
+            path: note.path,
+            title: note.frontmatter.title,
+            aliases: note.frontmatter.aliases,
+            preferredTerm: note.frontmatter.preferred_term,
+            stableId: note.frontmatter.stable_id,
+            navOrder: note.frontmatter.nav_order,
+            ...(normalizePath(note.path).toLowerCase() === childPath.toLowerCase()
+              ? { parent: desiredParent }
+              : typeof note.frontmatter.moc_parent === 'string' && note.frontmatter.moc_parent.trim()
+                ? { parent: note.frontmatter.moc_parent }
+                : {}),
+          });
+        }
+        const navigation = buildMocNavigation(nodes);
+        const planned = navigation.items.find(item => normalizePath(item.path).toLowerCase() === childPath.toLowerCase());
+        afterState = planned?.state || 'missing';
+        if (!planned || planned.state !== 'nested' || normalizePath(planned.resolvedParent || '').toLowerCase() !== parentPath!.toLowerCase()) {
+          blockers.push({ path: publicChild, reason: `The proposed MOC edge does not produce one valid nested branch (simulated state: ${afterState}).` });
+        }
+        if (navigation.cycles.some(cycle => cycle.nodes.some(path => normalizePath(path).toLowerCase() === childPath.toLowerCase()))) {
+          blockers.push({ path: publicChild, reason: 'The proposed MOC parent creates a cycle.' });
+        }
+        const byPath = new Map(navigation.items.map(item => [normalizePath(item.path).toLowerCase(), item]));
+        const visited = new Set<string>();
+        let cursor = childPath.toLowerCase();
+        while (cursor && !visited.has(cursor)) {
+          visited.add(cursor);
+          const item = byPath.get(cursor);
+          const roleBoundary = item ? organizationRoleBoundaryReason(item.path) : undefined;
+          if (roleBoundary) {
+            blockers.push({ path: this.access.toPublicPath(item!.path), reason: `The proposed MOC branch enters an invalid organization role: ${roleBoundary}` });
+            break;
+          }
+          if (!item?.resolvedParent) break;
+          if (!this.access.canReferenceFrom(item.path, item.resolvedParent)) {
+            blockers.push({ path: this.access.toPublicPath(item.path), reason: 'The proposed MOC branch contains an ancestor edge that crosses a scope privacy boundary.' });
+            break;
+          }
+          cursor = normalizePath(item.resolvedParent).toLowerCase();
+        }
+      }
+    } else {
+      const horizonRank = new Map((FOCUS_HORIZONS as readonly string[]).map((value, index) => [value, index]));
+      const childHorizon = String(child.frontmatter.focus_horizon || '').trim().toLowerCase();
+      const parentHorizon = String(parent?.frontmatter.focus_horizon || '').trim().toLowerCase();
+      if (operation === 'set') {
+        if (!horizonRank.has(childHorizon)) blockers.push({ path: publicChild, reason: 'The focus child needs a valid focus_horizon before it can be parented.' });
+        if (!horizonRank.has(parentHorizon)) blockers.push({ path: publicParent!, reason: 'The focus parent needs a valid focus_horizon.' });
+        if (horizonRank.has(childHorizon) && horizonRank.has(parentHorizon) && horizonRank.get(parentHorizon)! <= horizonRank.get(childHorizon)!) {
+          blockers.push({ path: publicChild, reason: `focus_parent must point upward to a higher horizon; ${childHorizon} cannot be parented by ${parentHorizon}.` });
+        }
+      }
+      if (operation === 'set' && desiredParent) {
+        type FocusNode = { path: string; title?: unknown; aliases?: unknown; preferredTerm?: unknown; stableId?: unknown; horizon: string; parent?: string };
+        const nodes: FocusNode[] = [];
+        let scanned = 0;
+        for await (const note of iterateNotes(this.fileSystem, { sortBy: 'path' }, canAccess)) {
+          if (isModerationHidden(note.frontmatter)) continue;
+          scanned += 1;
+          if (scanned > 20_000) throw new Error('Focus hierarchy exceeds the 20000-note planning bound');
+          nodes.push({
+            path: note.path,
+            title: note.frontmatter.title,
+            aliases: note.frontmatter.aliases,
+            preferredTerm: note.frontmatter.preferred_term,
+            stableId: note.frontmatter.stable_id,
+            horizon: String(note.frontmatter.focus_horizon || '').trim().toLowerCase(),
+            ...(normalizePath(note.path).toLowerCase() === childPath.toLowerCase()
+              ? { parent: desiredParent }
+              : typeof note.frontmatter.focus_parent === 'string' && note.frontmatter.focus_parent.trim()
+                ? { parent: note.frontmatter.focus_parent }
+                : {}),
+          });
+        }
+        const referenceIndex = buildNoteReferenceIndex(nodes);
+        const parentByPath = new Map<string, string>();
+        const problemByPath = new Map<string, string>();
+        const nodeByPath = new Map(nodes.map(node => [normalizePath(node.path).toLowerCase(), node]));
+        for (const node of nodes) {
+          if (!node.parent) continue;
+          const matches = resolveNoteReference(relationDocument(node.parent), referenceIndex, { sourcePath: node.path })
+            .filter(path => this.access.canReferenceFrom(node.path, path));
+          const key = normalizePath(node.path).toLowerCase();
+          if (matches.length !== 1) problemByPath.set(key, matches.length ? 'ambiguous focus_parent' : 'missing or inaccessible focus_parent');
+          else parentByPath.set(key, normalizePath(matches[0]!).toLowerCase());
+        }
+        const visited = new Set<string>();
+        let cursor = childPath.toLowerCase();
+        afterState = 'nested';
+        while (cursor) {
+          if (visited.has(cursor)) {
+            blockers.push({ path: publicChild, reason: 'The proposed focus parent creates or enters a cycle.' });
+            afterState = 'cycle';
+            break;
+          }
+          visited.add(cursor);
+          const problem = problemByPath.get(cursor);
+          if (problem) {
+            blockers.push({ path: this.access.toPublicPath(nodeByPath.get(cursor)?.path || cursor), reason: `The proposed focus branch reaches an ${problem}.` });
+            afterState = 'ancestor_problem';
+            break;
+          }
+          const sourceNode = nodeByPath.get(cursor);
+          const roleBoundary = sourceNode ? organizationRoleBoundaryReason(sourceNode.path) : undefined;
+          if (roleBoundary) {
+            blockers.push({ path: this.access.toPublicPath(sourceNode!.path), reason: `The proposed focus branch enters an invalid organization role: ${roleBoundary}` });
+            afterState = 'role_problem';
+            break;
+          }
+          const next = parentByPath.get(cursor);
+          if (!next) break;
+          const targetNode = nodeByPath.get(next);
+          const sourceRank = horizonRank.get(sourceNode?.horizon || '');
+          const targetRank = horizonRank.get(targetNode?.horizon || '');
+          if (sourceRank === undefined || targetRank === undefined || targetRank <= sourceRank) {
+            blockers.push({ path: this.access.toPublicPath(sourceNode?.path || cursor), reason: 'The proposed focus branch contains a parent edge that is not strictly upward across focus horizons.' });
+            afterState = 'horizon_problem';
+            break;
+          }
+          cursor = next;
+        }
+      }
+    }
+
+    const currentValue = child.frontmatter[field];
+    if (currentValue !== undefined && typeof currentValue !== 'string') warnings.push({ path: publicChild, reason: `${field} is malformed and will be replaced or removed by this explicit plan.` });
+    const needsChange = operation === 'set'
+      ? currentValue !== desiredParent
+      : Object.hasOwn(child.frontmatter, field);
+    const candidateChanges = needsChange ? [{
+      path: publicChild,
+      expectedRevision: child.revision,
+      frontmatter: operation === 'set'
+        ? { set: { [field]: desiredParent! } }
+        : { remove: [field] },
+    }] : [];
+    const changes = blockers.length === 0 ? candidateChanges : [];
+    const result = {
+      purpose: 'Read-only hierarchy-edge preflight. It simulates the selected MOC or focus branch and emits at most one revision-stamped notes.change_set edit.',
+      hierarchy,
+      operation,
+      field,
+      child: { path: publicChild, revision: child.revision, ...(typeof currentValue === 'string' && currentValue.trim() ? { currentParent: boundedText(currentValue, 500) } : {}) },
+      ...(publicParent && parent ? { parent: { path: publicParent, revision: parent.revision } } : {}),
+      afterState,
+      changes,
+      blockers,
+      warnings,
+      valid: blockers.length === 0,
+      alreadyApplied: blockers.length === 0 && candidateChanges.length === 0,
+      nextAction: changes.length ? {
+        endpointId: endpointIdForTool('patch_multiple_notes'),
+        instruction: 'Dry-run this exact changes array, inspect the simulated hierarchy and note preview, then confirm the returned plan fingerprint.',
+      } : undefined,
+      generatedAt: now(),
+    };
+    if (JSON.stringify(result).length > boundedChars) throw new Error('maxChars is too small to preserve the hierarchy plan; increase maxChars');
+    return result;
+  }
+
+  /** Validate and canonicalize one note's preferred and contextual MOC entry
+   * points. This replaces only primary_moc/mocs and deliberately leaves the
+   * legacy moc field visible for an explicit later migration. */
+  async mocMembershipPreview(principal: ScopePrincipal | undefined, options: {
+    notePath: string;
+    primaryMocPath: string;
+    additionalMocPaths?: unknown;
+    maxChars?: number;
+  }) {
+    const notePath = normalizePath(options.notePath);
+    const primaryMocPath = normalizePath(options.primaryMocPath);
+    if (!notePath || !primaryMocPath) throw new Error('notePath and primaryMocPath are required');
+    const rawAdditionalMocPaths = options.additionalMocPaths ?? [];
+    if (!Array.isArray(rawAdditionalMocPaths)) throw new Error('additionalMocPaths must be an array');
+    const additionalMocPaths: string[] = rawAdditionalMocPaths.map((value: unknown, index: number) => {
+      if (typeof value !== 'string' || !value.trim()) throw new Error(`additionalMocPaths[${index}] must be a non-empty path`);
+      return normalizePath(value);
+    });
+    if (additionalMocPaths.length > 12) throw new Error('additionalMocPaths is limited to 12 MOCs');
+    const targetPaths = [primaryMocPath, ...additionalMocPaths];
+    const targetKeys = targetPaths.map(path => path.toLowerCase());
+    if (new Set(targetKeys).size !== targetKeys.length) throw new Error('The primary and additional MOC paths must be distinct');
+    if (targetKeys.includes(notePath.toLowerCase())) throw new Error('A note cannot use itself as a MOC entry point');
+    const boundedChars = Math.min(Math.max(Number(options.maxChars) || 9000, 4096), 20000);
+    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+    if (!canAccess(notePath) || targetPaths.some(path => !canAccess(path))) throw new Error('The note and every MOC must be exact paths visible in the current scope');
+    const note = await this.fileSystem.readNote(notePath);
+    const mocs = await Promise.all(targetPaths.map(path => this.fileSystem.readNote(path)));
+    if (isModerationHidden(note.frontmatter) || mocs.some(item => isModerationHidden(item.frontmatter))) throw new Error('Moderation-hidden notes cannot participate in a MOC-membership plan');
+    const publicNote = this.access.toPublicPath(notePath);
+    const blockers: Array<{ path?: string; reason: string }> = [];
+    const warnings: Array<{ path?: string; reason: string }> = [];
+    try { this.access.assertMutationAllowed(notePath, 'wiki.moc_membership'); }
+    catch (error) { blockers.push({ path: publicNote, reason: error instanceof Error ? error.message : 'The note cannot be mutated.' }); }
+    const noteBoundary = organizationRoleBoundaryReason(notePath);
+    if (noteBoundary) blockers.push({ path: publicNote, reason: noteBoundary });
+    if (String(note.frontmatter.note_kind || '').trim().toLowerCase() === 'moc') blockers.push({ path: publicNote, reason: 'Nested MOCs use moc_parent through wiki.hierarchy_change; primary_moc is for a note entering a map.' });
+    for (let index = 0; index < targetPaths.length; index += 1) {
+      const path = targetPaths[index]!;
+      const target = mocs[index]!;
+      const publicPath = this.access.toPublicPath(path);
+      const roleBoundary = organizationRoleBoundaryReason(path);
+      if (roleBoundary) blockers.push({ path: publicPath, reason: roleBoundary });
+      if (String(target.frontmatter.note_kind || '').trim().toLowerCase() !== 'moc') blockers.push({ path: publicPath, reason: 'Every membership target must have note_kind: moc.' });
+      if (!this.access.canReferenceFrom(notePath, path)) blockers.push({ path: publicPath, reason: 'This MOC would cross a scope privacy boundary from the member note.' });
+    }
+    let primaryLink: string | undefined;
+    let additionalLinks: string[] = [];
+    try {
+      primaryLink = canonicalRelationWikiLink(primaryMocPath);
+      additionalLinks = additionalMocPaths.map(canonicalRelationWikiLink);
+    } catch (error) {
+      blockers.push({ reason: error instanceof Error ? error.message : 'A MOC path cannot be encoded as an Obsidian wikilink.' });
+    }
+    const currentPrimary = note.frontmatter.primary_moc;
+    const currentAdditional = note.frontmatter.mocs;
+    if (currentPrimary !== undefined && typeof currentPrimary !== 'string') warnings.push({ path: publicNote, reason: 'Malformed primary_moc will be replaced by the explicit canonical target.' });
+    if (currentAdditional !== undefined && !Array.isArray(currentAdditional)) warnings.push({ path: publicNote, reason: 'Malformed mocs will be replaced by the explicit complete contextual set.' });
+    if (typeof note.frontmatter.moc === 'string' && note.frontmatter.moc.trim()) warnings.push({ path: publicNote, reason: 'Legacy moc is preserved. Migrate or remove it explicitly only after confirming that older clients no longer need it.' });
+    const additionalEqual = Array.isArray(currentAdditional)
+      && currentAdditional.length === additionalLinks.length
+      && currentAdditional.every((value, index) => value === additionalLinks[index]);
+    const needsChange = currentPrimary !== primaryLink
+      || (additionalLinks.length > 0 ? !additionalEqual : Object.hasOwn(note.frontmatter, 'mocs'));
+    const candidateChanges = needsChange && primaryLink ? [{
+      path: publicNote,
+      expectedRevision: note.revision,
+      frontmatter: {
+        set: { primary_moc: primaryLink, ...(additionalLinks.length > 0 ? { mocs: additionalLinks } : {}) },
+        ...(additionalLinks.length === 0 && Object.hasOwn(note.frontmatter, 'mocs') ? { remove: ['mocs'] } : {}),
+      },
+    }] : [];
+    const changes = blockers.length === 0 ? candidateChanges : [];
+    const result = {
+      purpose: 'Read-only MOC-membership preflight. It validates real visible MOCs and emits one canonical revision-stamped primary_moc/mocs replacement.',
+      note: { path: publicNote, revision: note.revision },
+      primaryMoc: { path: this.access.toPublicPath(primaryMocPath), link: primaryLink },
+      additionalMocs: additionalMocPaths.map((path, index) => ({ path: this.access.toPublicPath(path), link: additionalLinks[index] })),
+      changes,
+      blockers,
+      warnings,
+      valid: blockers.length === 0,
+      alreadyApplied: blockers.length === 0 && candidateChanges.length === 0,
+      nextAction: changes.length ? {
+        endpointId: endpointIdForTool('patch_multiple_notes'),
+        instruction: 'Dry-run this exact change, inspect the current revision and canonical MOC links, then confirm its plan fingerprint.',
+      } : undefined,
+      generatedAt: now(),
+    };
+    if (JSON.stringify(result).length > boundedChars) throw new Error('maxChars is too small to preserve the MOC-membership plan; increase maxChars');
     return result;
   }
 
@@ -7275,6 +7613,8 @@ export class LlmWikiService {
       mocs,
       mocOrdering: 'preorder: parent, then its branch; siblings by nav_order then title/path',
       mocOrderPlanner: { endpointId: endpointIdForTool('get_wiki_moc_order_preview'), requirement: 'Pass the complete current root or child sibling set; then dry-run and confirm its notes.change_set.' },
+      hierarchyPlanner: endpointIdForTool('get_wiki_hierarchy_change_preview'),
+      mocMembershipPlanner: endpointIdForTool('get_wiki_moc_membership_preview'),
       projects,
       inbox,
       review,
@@ -7605,7 +7945,9 @@ export class LlmWikiService {
 
     const focusUnresolved: Array<Record<string, unknown>> = [];
     const focusAmbiguous: Array<Record<string, unknown>> = [];
+    const focusHorizonMismatches: Array<Record<string, unknown>> = [];
     const focusUnparented: Array<Record<string, unknown>> = [];
+    const focusResolvedParentEdges = new Map<string, string>();
     const focusParentEdges = new Map<string, string>();
     const focusSupportEdges = new Map<string, string[]>();
     const focusChildren = new Map<string, string[]>();
@@ -7625,8 +7967,24 @@ export class LlmWikiService {
       if (parentTargets.length === 1) {
         const source = normalizePath(note.path).toLowerCase();
         const target = parentTargets[0]!;
-        focusParentEdges.set(source, target);
-        focusChildren.set(target, [...(focusChildren.get(target) || []), source]);
+        focusResolvedParentEdges.set(source, target);
+        const targetNote = graphByPath.get(target);
+        const sourceRank = focusHorizonRank.get(note.horizon);
+        const targetRank = focusHorizonRank.get(targetNote?.horizon || '');
+        if (sourceRank === undefined || targetRank === undefined || targetRank <= sourceRank) {
+          focusHorizonMismatches.push({
+            path: publicPath,
+            field: 'focus_parent',
+            target: this.access.toPublicPath(targetNote?.path || target),
+            sourceHorizon: note.horizon || undefined,
+            targetHorizon: targetNote?.horizon || undefined,
+            reason: sourceRank === undefined || targetRank === undefined ? 'focus_horizon_missing_on_relation_endpoint' : 'focus_parent_must_point_to_higher_horizon',
+            repair: { endpointId: endpointIdForTool('get_wiki_hierarchy_change_preview'), arguments: { hierarchy: 'focus', operation: 'set', childPath: publicPath, parentPath: this.access.toPublicPath(targetNote?.path || target) } },
+          });
+        } else {
+          focusParentEdges.set(source, target);
+          focusChildren.set(target, [...(focusChildren.get(target) || []), source]);
+        }
       }
       if (note.horizon && !['ground', 'purpose'].includes(note.horizon) && !parent) {
         focusUnparented.push({ path: publicPath, title: note.title, focusHorizon: note.horizon, reason: 'higher-horizon-note-has-no-focus_parent' });
@@ -7636,7 +7994,22 @@ export class LlmWikiService {
         const targets = resolveFocus(note.path, rawSupport);
         if (targets.length === 0) focusUnresolved.push({ path: publicPath, field: 'focus_supports', target: rawSupport });
         else if (targets.length > 1) focusAmbiguous.push({ path: publicPath, field: 'focus_supports', target: rawSupport, matches: targets.slice(0, boundedLimit).map(path => this.access.toPublicPath(path)) });
-        else supports.push(targets[0]!);
+        else {
+          const target = targets[0]!;
+          const targetNote = graphByPath.get(target);
+          const sourceRank = focusHorizonRank.get(note.horizon);
+          const targetRank = focusHorizonRank.get(targetNote?.horizon || '');
+          if (sourceRank === undefined || targetRank === undefined || targetRank <= sourceRank) {
+            focusHorizonMismatches.push({
+              path: publicPath,
+              field: 'focus_supports',
+              target: this.access.toPublicPath(targetNote?.path || target),
+              sourceHorizon: note.horizon || undefined,
+              targetHorizon: targetNote?.horizon || undefined,
+              reason: sourceRank === undefined || targetRank === undefined ? 'focus_horizon_missing_on_relation_endpoint' : 'focus_supports_must_point_to_higher_horizon',
+            });
+          } else supports.push(target);
+        }
       }
       if (supports.length > 0) {
         const source = normalizePath(note.path).toLowerCase();
@@ -7657,11 +8030,11 @@ export class LlmWikiService {
       if (visitedFocus.has(path)) return;
       visitedFocus.add(path);
       activeFocus.add(path);
-      const parent = focusParentEdges.get(path);
+      const parent = focusResolvedParentEdges.get(path);
       if (parent) walkFocus(parent, [...trail, path]);
       activeFocus.delete(path);
     };
-    for (const path of focusParentEdges.keys()) walkFocus(path, []);
+    for (const path of focusResolvedParentEdges.keys()) walkFocus(path, []);
 
     // Reverse focus map: let an agent start from a goal/area and discover the
     // concrete projects, actions, waiting items, and supporting notes beneath
@@ -7719,11 +8092,13 @@ export class LlmWikiService {
     }
     const focusHealth = {
       focusedNotes: graphNotes.filter(note => note.horizon).length,
+      ...(focusResolvedParentEdges.size !== focusParentEdges.size && { declaredParentEdges: focusResolvedParentEdges.size }),
       parentEdges: focusParentEdges.size,
       supportEdges: [...focusSupportEdges.values()].reduce((sum, values) => sum + values.length, 0),
       horizonCounts: Object.fromEntries([...focusHorizonRank.keys()].map(horizon => [horizon, graphNotes.filter(note => note.horizon === horizon).length])),
       unresolved: { total: focusUnresolved.length, items: focusUnresolved.slice(0, boundedLimit), truncated: focusUnresolved.length > boundedLimit },
       ambiguous: { total: focusAmbiguous.length, items: focusAmbiguous.slice(0, boundedLimit), truncated: focusAmbiguous.length > boundedLimit },
+      ...(focusHorizonMismatches.length > 0 && { horizonMismatches: { total: focusHorizonMismatches.length, items: focusHorizonMismatches.slice(0, boundedLimit), truncated: focusHorizonMismatches.length > boundedLimit } }),
       unparented: { total: focusUnparented.length, items: focusUnparented.slice(0, boundedLimit), truncated: focusUnparented.length > boundedLimit },
       cycles: { total: focusCycles.length, items: focusCycles.slice(0, boundedLimit), truncated: focusCycles.length > boundedLimit },
       reverseMap: { total: focusedNoteTotal, items: focusMap, truncated: focusedNoteTotal > focusMap.length },
@@ -8073,9 +8448,9 @@ export class LlmWikiService {
       total: mocTotal,
       explicitParentEdges: navigation.explicitParentEdges,
       roots: { total: navigation.roots.length, items: navigation.roots.slice(0, boundedLimit).map(path => this.access.toPublicPath(path)), truncated: navigation.roots.length > boundedLimit },
-      missingParents: { total: navigation.missingParents.length, items: navigation.missingParents.slice(0, boundedLimit).map(item => ({ ...item, path: this.access.toPublicPath(item.path), parent: boundedText(item.parent, 300) })), truncated: navigation.missingParents.length > boundedLimit },
-      ambiguousParents: { total: navigation.ambiguousParents.length, items: navigation.ambiguousParents.slice(0, boundedLimit).map(item => ({ ...item, path: this.access.toPublicPath(item.path), parent: boundedText(item.parent, 300), matches: item.matches.slice(0, boundedLimit).map(path => this.access.toPublicPath(path)), matchesTruncated: item.matches.length > boundedLimit })), truncated: navigation.ambiguousParents.length > boundedLimit },
-      cycles: { total: navigation.cycles.length, items: navigation.cycles.slice(0, boundedLimit).map(item => ({ ...item, nodes: item.nodes.slice(0, boundedLimit).map(path => this.access.toPublicPath(path)), nodeTotal: item.nodes.length, truncated: item.nodes.length > boundedLimit })), truncated: navigation.cycles.length > boundedLimit },
+      missingParents: { total: navigation.missingParents.length, items: navigation.missingParents.slice(0, boundedLimit).map(item => ({ ...item, path: this.access.toPublicPath(item.path), parent: boundedText(item.parent, 300), repair: { endpointId: endpointIdForTool('get_wiki_hierarchy_change_preview'), arguments: { hierarchy: 'moc', childPath: this.access.toPublicPath(item.path) }, requiredArguments: ['operation; parentPath when operation=set'] } })), truncated: navigation.missingParents.length > boundedLimit },
+      ambiguousParents: { total: navigation.ambiguousParents.length, items: navigation.ambiguousParents.slice(0, boundedLimit).map(item => ({ ...item, path: this.access.toPublicPath(item.path), parent: boundedText(item.parent, 300), matches: item.matches.slice(0, boundedLimit).map(path => this.access.toPublicPath(path)), matchesTruncated: item.matches.length > boundedLimit, repair: { endpointId: endpointIdForTool('get_wiki_hierarchy_change_preview'), arguments: { hierarchy: 'moc', childPath: this.access.toPublicPath(item.path) }, requiredArguments: ['operation; one exact parentPath when operation=set'] } })), truncated: navigation.ambiguousParents.length > boundedLimit },
+      cycles: { total: navigation.cycles.length, items: navigation.cycles.slice(0, boundedLimit).map(item => ({ ...item, nodes: item.nodes.slice(0, boundedLimit).map(path => this.access.toPublicPath(path)), nodeTotal: item.nodes.length, truncated: item.nodes.length > boundedLimit, repair: item.nodes[0] ? { endpointId: endpointIdForTool('get_wiki_hierarchy_change_preview'), arguments: { hierarchy: 'moc', operation: 'clear', childPath: this.access.toPublicPath(item.nodes[0]) } } : undefined })), truncated: navigation.cycles.length > boundedLimit },
       maxDepth: navigation.maxDepth,
       items: mocHierarchyItems.slice(0, boundedLimit),
       truncated: mocHierarchyItems.length > boundedLimit,
@@ -8174,6 +8549,7 @@ export class LlmWikiService {
         report.evergreenQuality.items,
         report.focusHealth.unresolved.items,
         report.focusHealth.ambiguous.items,
+        ...(report.focusHealth.horizonMismatches ? [report.focusHealth.horizonMismatches.items] : []),
         report.focusHealth.unparented.items,
         report.focusHealth.cycles.items,
         report.focusHealth.reverseMap.items,
@@ -8427,8 +8803,8 @@ export class LlmWikiService {
     if (mocSequenceHealth && Number(mocSequenceHealth.needsAttention || 0) > 0) {
       recommendations.push('Inspect one MOC sequence with wiki.learning_path: resolve missing or ambiguous prerequisites, break dependency cycles, and deliberately reconcile authored order with depends_on without automatic rewriting.');
     }
-    if (focusHealth && (Number(focusHealth.unresolved?.total) > 0 || Number(focusHealth.ambiguous?.total) > 0 || Number(focusHealth.cycles?.total) > 0)) {
-      recommendations.push('Repair unresolved, ambiguous, or cyclic focus_parent/focus_supports links before using the GTD horizon map for prioritization.');
+    if (focusHealth && (Number(focusHealth.unresolved?.total) > 0 || Number(focusHealth.ambiguous?.total) > 0 || Number(focusHealth.horizonMismatches?.total) > 0 || Number(focusHealth.cycles?.total) > 0)) {
+      recommendations.push('Repair unresolved, ambiguous, downward/equal-horizon, or cyclic focus_parent/focus_supports links before using the GTD horizon map for prioritization.');
     }
     if (focusHealth && Number(focusHealth.unparented?.total) > 0) {
       recommendations.push('Give focused project, area, goal, or vision notes a focus_parent, or explicitly keep them as a root note.');
@@ -8480,7 +8856,7 @@ export class LlmWikiService {
       ...(typedRelations && { typedRelations }),
       collectionHealth,
       quarantine,
-      advisoryIssueTotal: (focusHealth ? Number(focusHealth.unresolved?.total || 0) + Number(focusHealth.ambiguous?.total || 0) + Number(focusHealth.unparented?.total || 0) + Number(focusHealth.cycles?.total || 0) : 0)
+      advisoryIssueTotal: (focusHealth ? Number(focusHealth.unresolved?.total || 0) + Number(focusHealth.ambiguous?.total || 0) + Number(focusHealth.horizonMismatches?.total || 0) + Number(focusHealth.unparented?.total || 0) + Number(focusHealth.cycles?.total || 0) : 0)
          + (knowledgeConnectivity ? Number(knowledgeConnectivity.isolated?.total || 0) + Number(knowledgeConnectivity.atomicWithoutProjection?.total || 0) + Number(knowledgeConnectivity.literatureWithoutPermanent?.total || 0) + Number(knowledgeConnectivity.literatureWithoutInterpretation?.total || 0) : 0)
          + (knowledgeUsage ? Number(knowledgeUsage.hubs?.total || 0) : 0)
         + (typedRelations ? Number(typedRelations.unresolved?.total || 0) + Number(typedRelations.ambiguous?.total || 0) + Number(typedRelations.self?.total || 0) + Number(typedRelations.kindMismatches?.total || 0) + Number(typedRelations.reciprocityMissing?.total || 0) : 0)
@@ -8499,6 +8875,7 @@ export class LlmWikiService {
     const compact: any = {
       healthy: result.healthy,
       organizationIssueTotal: result.organizationIssueTotal,
+      advisoryIssueTotal: result.advisoryIssueTotal,
       byCode: result.byCode,
       issues: result.issues.slice(),
       recommendations: result.recommendations.slice(),
@@ -8506,6 +8883,20 @@ export class LlmWikiService {
       ...(typedRelations && {
         typedRelations: Object.fromEntries(['unresolved', 'ambiguous', 'self', 'kindMismatches', 'reciprocityMissing'].flatMap(key => {
           const item = typedRelations[key];
+          if (!item || typeof item !== 'object') return [];
+          return [[key, { total: Number(item.total || 0), items: Array.isArray(item.items) ? item.items.slice(0, 2) : [], truncated: Boolean(item.truncated) || (Array.isArray(item.items) && item.items.length > 2) }]];
+        })),
+      }),
+      ...(focusHealth && {
+        focusHealth: Object.fromEntries(['unresolved', 'ambiguous', 'horizonMismatches', 'unparented', 'cycles'].flatMap(key => {
+          const item = focusHealth[key];
+          if (!item || typeof item !== 'object') return [];
+          return [[key, { total: Number(item.total || 0), items: Array.isArray(item.items) ? item.items.slice(0, 2) : [], truncated: Boolean(item.truncated) || (Array.isArray(item.items) && item.items.length > 2) }]];
+        })),
+      }),
+      ...(knowledgeConnectivity && {
+        knowledgeConnectivity: Object.fromEntries(['isolated', 'isolatedAtomic', 'atomicWithoutProjection', 'literatureWithoutPermanent', 'literatureWithoutInterpretation'].flatMap(key => {
+          const item = knowledgeConnectivity[key];
           if (!item || typeof item !== 'object') return [];
           return [[key, { total: Number(item.total || 0), items: Array.isArray(item.items) ? item.items.slice(0, 2) : [], truncated: Boolean(item.truncated) || (Array.isArray(item.items) && item.items.length > 2) }]];
         })),
@@ -8532,6 +8923,17 @@ export class LlmWikiService {
       truncated: true,
       generatedAt: result.generatedAt,
     };
+    const compactSignalArrays: Array<Array<Record<string, unknown>>> = [
+      ...Object.values(compact.focusHealth || {}).flatMap((item: any) => Array.isArray(item?.items) ? [item.items] : []),
+      ...Object.values(compact.knowledgeConnectivity || {}).flatMap((item: any) => Array.isArray(item?.items) ? [item.items] : []),
+      ...Object.values(compact.typedRelations || {}).flatMap((item: any) => Array.isArray(item?.items) ? [item.items] : []),
+    ];
+    while (JSON.stringify(compact).length > boundedChars && compact.collectionHealth.items.length > 1) compact.collectionHealth.items.pop();
+    while (JSON.stringify(compact).length > boundedChars) {
+      const largest = compactSignalArrays.sort((left, right) => right.length - left.length)[0];
+      if (!largest || largest.length <= 1) break;
+      largest.pop();
+    }
     while (JSON.stringify(compact).length > boundedChars && compact.issues.length > 1) compact.issues.pop();
     while (JSON.stringify(compact).length > boundedChars && compact.quarantine.items.length > 0) compact.quarantine.items.pop();
     while (JSON.stringify(compact).length > boundedChars && compact.mocSequenceHealth?.items?.length > 0) compact.mocSequenceHealth.items.pop();

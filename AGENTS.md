@@ -80,10 +80,11 @@ exactly one topic needed for the current action:
 The policy is guidance, not an access grant. Keep reads bounded with `limit`,
 `maxChars`, cursors, section/block locators, and nearby context. Use
 `expectedRevision` for edits, dry-run previews where offered, and the returned
-revision for the next mutation. For coupled notes, plan with
-`wiki.reciprocal_link`, `wiki.moc_order`, or `wiki.property_migration`; dry-run
-its `notes.change_set` and confirm the exact fingerprint. Git records history but is not
-required for Obsidian visibility. Reuse policy only while its fingerprint matches.
+revision for the next mutation. Plan edits with
+`wiki.reciprocal_link`, `wiki.moc_order`, `wiki.hierarchy_change`,
+`wiki.moc_membership`, or `wiki.property_migration`; dry-run
+its `notes.change_set` and confirm its fingerprint. Git records history; Obsidian
+visibility needs no commit. Reuse policy only while its fingerprint matches.
 Pause a MOC path with `continuity.save` `learningProgress`; call
 `continuity.resume` to validate drift before the next read.
 

@@ -16,7 +16,7 @@ export const WIKI_POLICY_TOPICS = [
     'portability',
     'safety',
 ];
-export const WIKI_POLICY_VERSION = 5;
+export const WIKI_POLICY_VERSION = 6;
 /**
  * The only policy that every MCP client must receive eagerly. Detailed
  * organization guidance is selected through wiki.policy so a rich Wiki does
@@ -109,8 +109,9 @@ const POLICY_TOPICS = {
             'blocked_by is a hard gate; depends_on gates only when it resolves to unfinished actionable work, while non-work knowledge is informational.',
             'Respect WIP limits, distinguish dueAt from scheduledAt, and record waiting/blocked/start/completion timestamps when known.',
             'Use the dependency plan stages and current revisions as advice; repair cycles or prerequisites instead of auto-changing downstream status.',
+            'focus_parent must point strictly upward from ground/project/area/goal/vision toward a higher horizon; use wiki.hierarchy_change to simulate set or clear before editing.',
         ],
-        routes: ['wiki.flow_health', 'wiki.next_actions', 'wiki.project_packet', 'mcp.list_tasks', 'notes.task_update'],
+        routes: ['wiki.flow_health', 'wiki.next_actions', 'wiki.project_packet', 'wiki.hierarchy_change', 'mcp.list_tasks', 'notes.task_update'],
         avoid: ['turning support material into tasks', 'pulling standard work over the WIP limit', 'inventing timestamps from file modification time'],
     },
     moc: {
@@ -119,11 +120,12 @@ const POLICY_TOPICS = {
             'A MOC should state purpose, scope, questions, and optionally one resolvable moc_parent; ordinary body links remain free cross-links.',
             'The Markdown outline is authored order, nav_order controls sibling MOC order, and only moc_parent defines hierarchy.',
             'Use wiki.moc_order with the complete current sibling set before changing nav_order; apply its revision-stamped plan through one confirmed notes.change_set.',
+            'Use wiki.hierarchy_change to set or clear one moc_parent only after cycle/scope simulation, and wiki.moc_membership to validate a note primary_moc plus its complete contextual mocs list.',
             'Use wiki.learning_path to compare authored order with note and claim prerequisites, inspect cycles and late edges, and preserve intentional pedagogical redundancy.',
             'Use one primary_moc as a launch point and bounded additional mocs for legitimate multiple contexts; do not duplicate the note.',
             'Use wiki.canvas_view for an optional spatial projection of the authored MOC and dependency edges; use wiki.canvas_health before reusing an old managed export and regenerate it after source revisions change.',
         ],
-        routes: ['wiki.learning_path', 'wiki.moc_order', 'wiki.moc_candidates', 'wiki.graph_health', 'wiki.context_pack', 'wiki.canvas_view', 'wiki.canvas_export', 'wiki.canvas_health'],
+        routes: ['wiki.learning_path', 'wiki.moc_order', 'wiki.hierarchy_change', 'wiki.moc_membership', 'wiki.moc_candidates', 'wiki.graph_health', 'wiki.context_pack', 'wiki.canvas_view', 'wiki.canvas_export', 'wiki.canvas_health'],
         avoid: ['inferring hierarchy from every body link', 'automatic MOC reorder', 'treating a thematic external prerequisite as a broken course', 'treating a Canvas position as canonical structure'],
     },
     memory: {
@@ -143,11 +145,11 @@ const POLICY_TOPICS = {
             'Begin with one bounded wiki.review_packet or wiki.exception_board item and follow only its selected repair route.',
             'Treat graph, vocabulary, duplicate, placement, and composition findings as advisory signals; inspect both current revisions before editing.',
             'Similarity, zero usage, high degree, or a missing reciprocal edge may justify review but never automatic merge, split, move, or deletion.',
-            'For a coupled repair, use wiki.reciprocal_link, wiki.moc_order, or wiki.property_migration as applicable; dry-run its complete notes.change_set, inspect every revision and preview, then confirm that exact fingerprint.',
+            'For a coupled repair, use wiki.reciprocal_link, wiki.moc_order, wiki.hierarchy_change, wiki.moc_membership, or wiki.property_migration as applicable; dry-run its complete notes.change_set, inspect every revision and preview, then confirm that exact fingerprint.',
             'After a repair, re-run only the originating bounded check and preserve the reason in Markdown Properties or Git as appropriate.',
             'Managed Canvas freshness belongs to wiki.canvas_health and the exception board; do not treat an unmanaged user Canvas as broken or rewrite it automatically.',
         ],
-        routes: ['wiki.review_packet', 'wiki.exception_board', 'wiki.graph_health', 'wiki.canvas_health', 'wiki.vocabulary_health', 'wiki.duplicate_candidates', 'wiki.reciprocal_link', 'wiki.moc_order', 'wiki.property_migration', 'notes.change_set'],
+        routes: ['wiki.review_packet', 'wiki.exception_board', 'wiki.graph_health', 'wiki.canvas_health', 'wiki.vocabulary_health', 'wiki.duplicate_candidates', 'wiki.reciprocal_link', 'wiki.moc_order', 'wiki.hierarchy_change', 'wiki.moc_membership', 'wiki.property_migration', 'notes.change_set'],
         avoid: ['calling every health endpoint in one turn', 'repairing derived indexes instead of authoritative Markdown', 'independent writes for one logically coupled repair', 'automatic cleanup from an advisory score'],
     },
     ideation: {

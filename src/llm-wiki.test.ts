@@ -1428,6 +1428,14 @@ test('MOC order previews require the complete sibling set and apply one revision
       orderedMocs: ['Knowledge/MOCs/Root.md'], accessToken,
     } });
     expect(unsafeRoot.value).toMatchObject({ valid: false, changes: [], blockers: [expect.objectContaining({ reason: expect.stringContaining('Root order is unsafe') })] });
+    await mkdir(join(vault, '_wiki'), { recursive: true });
+    await writeFile(join(vault, '_wiki', 'Forged MOC.md'), '---\nllm_wiki_type: knowledge\nnote_kind: moc\nmoc_parent: "[[Knowledge/MOCs/Root]]"\nnav_order: 40\n---\n# Forged MOC\n');
+    const reserved = await callJson(client, 'call_endpoint', { endpointId: 'wiki.moc_order', arguments: {
+      parentPath: 'Knowledge/MOCs/Root.md',
+      orderedMocs: ['Knowledge/MOCs/B.md', 'Knowledge/MOCs/C.md', 'Knowledge/MOCs/A.md', '_wiki/Forged MOC.md'],
+      accessToken,
+    } });
+    expect(reserved.value).toMatchObject({ valid: false, changes: [], blockers: expect.arrayContaining([expect.objectContaining({ reason: expect.stringContaining('Reserved _wiki') })]) });
   } finally { await client.close(); await server.close(); }
 });
 
@@ -1479,6 +1487,140 @@ test('reciprocal-link previews repair both graph directions atomically and rejec
       leftPath: 'Knowledge/Left.md', rightPath: 'scope://model/codex/Private.md', relation: 'same_as', accessToken,
     } });
     expect(unsafe.value).toMatchObject({ valid: false, changes: [], blockers: [expect.objectContaining({ reason: expect.stringContaining('privacy boundary') })] });
+  } finally { await client.close(); await server.close(); }
+});
+
+test('review packets route a selected reciprocity defect to the executable reciprocal planner', async () => {
+  await mkdir(join(vault, 'Notes'), { recursive: true });
+  await writeFile(join(vault, 'Notes', 'Left.md'), '---\nrelated:\n  - "[[Notes/Right]]"\n---\n# Left\n\n[[Notes/Right]]\n');
+  await writeFile(join(vault, 'Notes', 'Right.md'), '# Right\n\n[[Notes/Left]]\n');
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'review-route-owner', modelId: 'codex', password: 'review-route-password' });
+    const accessToken = registration.value.accessToken;
+    const packet = await callJson(client, 'call_endpoint', { endpointId: 'wiki.review_packet', arguments: { limit: 10, maxChars: 12000, accessToken } });
+    expect(packet.value.priorities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Notes/Left.md', reason: 'typed_relation_reciprocity_missing', suggestedTool: 'wiki.reciprocal_link' }),
+    ]));
+    expect(packet.value.curationPlan).toMatchObject({
+      selected: { path: 'Notes/Left.md', reason: 'typed_relation_reciprocity_missing' },
+      then: { endpointId: 'wiki.reciprocal_link', arguments: { leftPath: 'Notes/Left.md', rightPath: 'Notes/Right.md', relation: 'related' } },
+    });
+  } finally { await client.close(); await server.close(); }
+});
+
+test('hierarchy-change previews repair MOC and focus parents while blocking cycles and downward horizons', async () => {
+  await mkdir(join(vault, 'Knowledge', 'MOCs'), { recursive: true });
+  await mkdir(join(vault, 'Goals'), { recursive: true });
+  await mkdir(join(vault, 'Projects'), { recursive: true });
+  await writeFile(join(vault, 'Knowledge', 'MOCs', 'Root.md'), '---\nllm_wiki_type: knowledge\nnote_kind: moc\n---\n# Root\n[[Knowledge/MOCs/Child]]\n');
+  await writeFile(join(vault, 'Knowledge', 'MOCs', 'Child.md'), '---\nllm_wiki_type: knowledge\nnote_kind: moc\nmoc_parent: "[[Missing MOC]]"\n---\n# Child\n');
+  await writeFile(join(vault, 'Goals', 'Goal.md'), '---\nllm_wiki_type: knowledge\nnote_kind: knowledge\nfocus_horizon: goal\n---\n# Goal\n');
+  await writeFile(join(vault, 'Projects', 'Project.md'), '---\nllm_wiki_type: knowledge\nnote_kind: project\nfocus_horizon: project\n---\n# Project\n');
+  await writeFile(join(vault, 'Projects', 'Peer.md'), '---\nllm_wiki_type: knowledge\nnote_kind: project\nfocus_horizon: project\n---\n# Peer\n');
+  await writeFile(join(vault, 'Projects', 'Wrong.md'), '---\nllm_wiki_type: knowledge\nnote_kind: project\nfocus_horizon: project\nfocus_parent: "[[Projects/Peer]]"\n---\n# Wrong\n');
+  await mkdir(join(vault, '_wiki'), { recursive: true });
+  await writeFile(join(vault, '_wiki', 'Forged Goal MOC.md'), '---\nllm_wiki_type: knowledge\nnote_kind: moc\nfocus_horizon: goal\n---\n# Forged Goal MOC\n');
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'hierarchy-owner', modelId: 'codex', password: 'hierarchy-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const discovery = await callJson(client, 'search_capabilities', { query: 'hierarchy', limit: 8, maxChars: 9000, accessToken });
+    expect(discovery.value.endpoints).toEqual(expect.arrayContaining([expect.objectContaining({ endpointId: 'wiki.hierarchy_change', method: 'POST' })]));
+
+    const mocPlan = await callJson(client, 'call_endpoint', { endpointId: 'wiki.hierarchy_change', arguments: {
+      hierarchy: 'moc', operation: 'set', childPath: 'Knowledge/MOCs/Child.md', parentPath: 'Knowledge/MOCs/Root.md', accessToken,
+    } });
+    expect(mocPlan.value).toMatchObject({ valid: true, afterState: 'nested', alreadyApplied: false, changes: [expect.objectContaining({ path: 'Knowledge/MOCs/Child.md', frontmatter: { set: { moc_parent: '[[Knowledge/MOCs/Root]]' } } })], nextAction: { endpointId: 'notes.change_set' } });
+    const mocDryRun = await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: { changes: mocPlan.value.changes, dryRun: true, accessToken } });
+    await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: { changes: mocPlan.value.changes, dryRun: false, confirmPlanFingerprint: mocDryRun.value.planFingerprint, accessToken } });
+    const mocConfirmed = await callJson(client, 'call_endpoint', { endpointId: 'wiki.hierarchy_change', arguments: {
+      hierarchy: 'moc', operation: 'set', childPath: 'Knowledge/MOCs/Child.md', parentPath: 'Knowledge/MOCs/Root.md', accessToken,
+    } });
+    expect(mocConfirmed.value).toMatchObject({ valid: true, alreadyApplied: true, changes: [] });
+    const mocClear = await callJson(client, 'call_endpoint', { endpointId: 'wiki.hierarchy_change', arguments: {
+      hierarchy: 'moc', operation: 'clear', childPath: 'Knowledge/MOCs/Child.md', accessToken,
+    } });
+    expect(mocClear.value).toMatchObject({ valid: true, afterState: 'root', changes: [expect.objectContaining({ frontmatter: { remove: ['moc_parent'] } })] });
+    const mocCycle = await callJson(client, 'call_endpoint', { endpointId: 'wiki.hierarchy_change', arguments: {
+      hierarchy: 'moc', operation: 'set', childPath: 'Knowledge/MOCs/Root.md', parentPath: 'Knowledge/MOCs/Child.md', accessToken,
+    } });
+    expect(mocCycle.value).toMatchObject({ valid: false, changes: [], blockers: expect.arrayContaining([expect.objectContaining({ reason: expect.stringMatching(/cycle|valid nested branch/) })]) });
+    const reservedMoc = await callJson(client, 'call_endpoint', { endpointId: 'wiki.hierarchy_change', arguments: {
+      hierarchy: 'moc', operation: 'set', childPath: 'Knowledge/MOCs/Child.md', parentPath: '_wiki/Forged Goal MOC.md', accessToken,
+    } });
+    expect(reservedMoc.value).toMatchObject({ valid: false, changes: [], blockers: expect.arrayContaining([expect.objectContaining({ reason: expect.stringContaining('Reserved _wiki') })]) });
+
+    const focusPlan = await callJson(client, 'call_endpoint', { endpointId: 'wiki.hierarchy_change', arguments: {
+      hierarchy: 'focus', operation: 'set', childPath: 'Projects/Project.md', parentPath: 'Goals/Goal.md', accessToken,
+    } });
+    expect(focusPlan.value).toMatchObject({ valid: true, afterState: 'nested', changes: [expect.objectContaining({ frontmatter: { set: { focus_parent: '[[Goals/Goal]]' } } })] });
+    const downward = await callJson(client, 'call_endpoint', { endpointId: 'wiki.hierarchy_change', arguments: {
+      hierarchy: 'focus', operation: 'set', childPath: 'Goals/Goal.md', parentPath: 'Projects/Project.md', accessToken,
+    } });
+    expect(downward.value).toMatchObject({ valid: false, changes: [], blockers: expect.arrayContaining([expect.objectContaining({ reason: expect.stringContaining('higher horizon') })]) });
+    const reservedFocus = await callJson(client, 'call_endpoint', { endpointId: 'wiki.hierarchy_change', arguments: {
+      hierarchy: 'focus', operation: 'set', childPath: 'Projects/Project.md', parentPath: '_wiki/Forged Goal MOC.md', accessToken,
+    } });
+    expect(reservedFocus.value).toMatchObject({ valid: false, changes: [], blockers: expect.arrayContaining([expect.objectContaining({ reason: expect.stringContaining('Reserved _wiki') })]) });
+    const graph = await callJson(client, 'call_endpoint', { endpointId: 'wiki.graph_health', arguments: { limit: 20, maxChars: 14000, accessToken } });
+    expect(graph.value.focusHealth.horizonMismatches.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Projects/Wrong.md', target: 'Projects/Peer.md', reason: 'focus_parent_must_point_to_higher_horizon', repair: expect.objectContaining({ endpointId: 'wiki.hierarchy_change' }) }),
+    ]));
+    expect(graph.value.focusHealth).toMatchObject({ declaredParentEdges: 1, parentEdges: 0 });
+    expect(graph.value.focusHealth.reverseMap.items.find((item: any) => item.path === 'Projects/Peer.md')?.children || []).not.toContain('Projects/Wrong.md');
+  } finally { await client.close(); await server.close(); }
+});
+
+test('MOC-membership previews validate real maps and replace canonical navigation Properties', async () => {
+  await mkdir(join(vault, 'Knowledge', 'MOCs'), { recursive: true });
+  await mkdir(join(vault, 'Knowledge'), { recursive: true });
+  await writeFile(join(vault, 'Knowledge', 'MOCs', 'Primary.md'), '---\nllm_wiki_type: knowledge\nnote_kind: moc\n---\n# Primary\n[[Knowledge/Note]]\n');
+  await writeFile(join(vault, 'Knowledge', 'MOCs', 'Context.md'), '---\nllm_wiki_type: knowledge\nnote_kind: moc\n---\n# Context\n[[Knowledge/Note]]\n');
+  await writeFile(join(vault, 'Knowledge', 'Not a MOC.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\n---\n# Not a MOC\n');
+  await writeFile(join(vault, 'Knowledge', 'Note.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nmoc: "[[Legacy Map]]"\n---\n# Note\n');
+  await mkdir(join(vault, '_wiki'), { recursive: true });
+  await writeFile(join(vault, '_wiki', 'Forged MOC.md'), '---\nllm_wiki_type: knowledge\nnote_kind: moc\n---\n# Forged MOC\n');
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'membership-owner', modelId: 'codex', password: 'membership-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const plan = await callJson(client, 'call_endpoint', { endpointId: 'wiki.moc_membership', arguments: {
+      notePath: 'Knowledge/Note.md', primaryMocPath: 'Knowledge/MOCs/Primary.md', additionalMocPaths: ['Knowledge/MOCs/Context.md'], accessToken,
+    } });
+    expect(plan.value).toMatchObject({
+      valid: true,
+      primaryMoc: { link: '[[Knowledge/MOCs/Primary]]' },
+      additionalMocs: [{ link: '[[Knowledge/MOCs/Context]]' }],
+      changes: [expect.objectContaining({ frontmatter: { set: { primary_moc: '[[Knowledge/MOCs/Primary]]', mocs: ['[[Knowledge/MOCs/Context]]'] } } })],
+      warnings: [expect.objectContaining({ reason: expect.stringContaining('Legacy moc is preserved') })],
+    });
+    const dryRun = await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: { changes: plan.value.changes, dryRun: true, accessToken } });
+    await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: { changes: plan.value.changes, dryRun: false, confirmPlanFingerprint: dryRun.value.planFingerprint, accessToken } });
+    const confirmed = await callJson(client, 'call_endpoint', { endpointId: 'wiki.moc_membership', arguments: {
+      notePath: 'Knowledge/Note.md', primaryMocPath: 'Knowledge/MOCs/Primary.md', additionalMocPaths: ['Knowledge/MOCs/Context.md'], accessToken,
+    } });
+    expect(confirmed.value).toMatchObject({ valid: true, alreadyApplied: true, changes: [] });
+    const removeContext = await callJson(client, 'call_endpoint', { endpointId: 'wiki.moc_membership', arguments: {
+      notePath: 'Knowledge/Note.md', primaryMocPath: 'Knowledge/MOCs/Primary.md', additionalMocPaths: [], accessToken,
+    } });
+    expect(removeContext.value).toMatchObject({ valid: true, changes: [expect.objectContaining({ frontmatter: { set: { primary_moc: '[[Knowledge/MOCs/Primary]]' }, remove: ['mocs'] } })] });
+    const wrongKind = await callJson(client, 'call_endpoint', { endpointId: 'wiki.moc_membership', arguments: {
+      notePath: 'Knowledge/Note.md', primaryMocPath: 'Knowledge/Not a MOC.md', accessToken,
+    } });
+    expect(wrongKind.value).toMatchObject({ valid: false, changes: [], blockers: [expect.objectContaining({ reason: expect.stringContaining('note_kind: moc') })] });
+    const reserved = await callJson(client, 'call_endpoint', { endpointId: 'wiki.moc_membership', arguments: {
+      notePath: 'Knowledge/Note.md', primaryMocPath: '_wiki/Forged MOC.md', accessToken,
+    } });
+    expect(reserved.value).toMatchObject({ valid: false, changes: [], blockers: expect.arrayContaining([expect.objectContaining({ reason: expect.stringContaining('Reserved _wiki') })]) });
+    const privateMoc = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'notes.write', arguments: {
+      path: 'scope://model/codex/Private MOC.md', content: '# Private MOC\n', frontmatter: { note_kind: 'moc' }, expectedRevision: 'missing', accessToken,
+    } } });
+    expect(privateMoc.isError).toBeFalsy();
+    const scopeBlocked = await callJson(client, 'call_endpoint', { endpointId: 'wiki.moc_membership', arguments: {
+      notePath: 'Knowledge/Note.md', primaryMocPath: 'scope://model/codex/Private MOC.md', accessToken,
+    } });
+    expect(scopeBlocked.value).toMatchObject({ valid: false, changes: [], blockers: [expect.objectContaining({ reason: expect.stringContaining('privacy boundary') })] });
   } finally { await client.close(); await server.close(); }
 });
 

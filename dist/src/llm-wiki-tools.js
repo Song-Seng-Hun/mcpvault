@@ -577,6 +577,27 @@ export function getLlmWikiTools() {
                 }, required: ['orderedMocs'] },
         },
         {
+            name: 'get_wiki_hierarchy_change_preview',
+            description: 'Preview setting or clearing one explicit MOC or GTD focus parent. It simulates the visible branch, rejects MOC cycles and broken ancestors, requires focus_parent to point strictly upward across focus horizons, and returns one revision-stamped notes.change_set edit.',
+            inputSchema: { type: 'object', properties: {
+                    hierarchy: { type: 'string', enum: ['moc', 'focus'], description: 'moc manages moc_parent; focus manages focus_parent' },
+                    operation: { type: 'string', enum: ['set', 'clear'] },
+                    childPath: { type: 'string', description: 'Exact visible note whose parent edge is changing' },
+                    parentPath: { type: 'string', description: 'Exact visible parent; required for set and omitted for clear' },
+                    maxChars: { type: 'integer', minimum: 4096, maximum: 20000, default: 9000 }, accessToken, prettyPrint,
+                }, required: ['hierarchy', 'operation', 'childPath'] },
+        },
+        {
+            name: 'get_wiki_moc_membership_preview',
+            description: 'Preview replacing one ordinary note\'s preferred primary_moc and complete contextual mocs list. Every target must be an exact visible note_kind:moc in a safe scope; canonical Obsidian wikilinks and the source revision are returned as one notes.change_set edit.',
+            inputSchema: { type: 'object', properties: {
+                    notePath: { type: 'string', description: 'Exact visible ordinary note to place in one or more maps' },
+                    primaryMocPath: { type: 'string', description: 'Exact visible preferred MOC path' },
+                    additionalMocPaths: { type: 'array', maxItems: 12, items: { type: 'string', minLength: 1 }, description: 'Complete ordered contextual MOC set, excluding the primary MOC' },
+                    maxChars: { type: 'integer', minimum: 4096, maximum: 20000, default: 9000 }, accessToken, prettyPrint,
+                }, required: ['notePath', 'primaryMocPath'] },
+        },
+        {
             name: 'get_wiki_reciprocal_link_preview',
             description: 'Preview a coherent two-note related or same_as relation. It resolves every existing link, rejects malformed/ambiguous values and scope leaks, and returns one revision-stamped notes.change_set so a mutual relation cannot be left half-written.',
             inputSchema: { type: 'object', properties: {
