@@ -30,6 +30,7 @@ function organizationPropertySchema(propertyName, overrides = {}) {
 const prettyPrint = { type: 'boolean', description: 'Format JSON response with indentation', default: false };
 const accessToken = { type: 'string', description: 'Token from login_scope. Omit for public global scope only.' };
 const scopeUri = { type: 'string', description: 'Target scope root; defaults to scope://global/. Private scopes require an authorized accessToken.', default: 'scope://global/' };
+const ACTIVE_LIFECYCLES = ['inbox', 'active', 'review', 'evergreen'];
 const executionProperties = {
     tags: { type: 'array', items: { type: 'string', maxLength: 100 }, maxItems: 30, description: 'Native Obsidian tag list; [] clears tags without changing the body' },
     timeEstimateMinutes: { type: 'integer', minimum: 1, maximum: 1440, description: 'Estimated minutes for one next action; used by wiki.next_actions maxMinutes' },
@@ -108,7 +109,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'publish_knowledge',
-            description: 'Create or update an evidence-grounded knowledge note while preserving ordinary Markdown/Obsidian/Git behavior. Publish what another agent can verify, mark uncertainty, and make disagreements useful. Every evidence path must be an immutable source snapshot.',
+            description: 'Create or update active evidence-grounded knowledge while preserving ordinary Markdown/Obsidian/Git behavior. Use wiki.lifecycle_transition instead of this endpoint for retirement or reactivation. Every evidence path must be an immutable source snapshot.',
             inputSchema: { type: 'object', properties: {
                     ...executionProperties,
                     ...temporalProperties,
@@ -116,7 +117,7 @@ export function getLlmWikiTools() {
                     author: { type: 'string' }, confidence: organizationPropertySchema('confidence', { default: 'medium' }),
                     status: organizationPropertySchema('knowledge_status', { default: 'draft' }),
                     noteKind: organizationPropertySchema('note_kind', { default: 'knowledge' }),
-                    lifecycle: organizationPropertySchema('lifecycle'),
+                    lifecycle: organizationPropertySchema('lifecycle', { enum: [...ACTIVE_LIFECYCLES], description: 'Retired states are managed only by wiki.lifecycle_transition' }),
                     decisionStatus: organizationPropertySchema('decision_status', { description: 'For noteKind=decision, prefer wiki.decision_record for creation and state transitions' }),
                     moc: { type: 'string', description: 'Optional legacy single Obsidian [[MOC]] link or path' }, mocs: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'Additional Obsidian [[MOC]] links for multi-context discovery; navigation only' }, primaryMoc: { type: 'string', maxLength: 500, description: 'Preferred Obsidian MOC entry point for this note; navigation only' }, navOrder: { type: 'integer', minimum: 0, maximum: 1000000, description: 'Optional order among sibling MOCs; lower numbers appear first' }, project: { type: 'string', description: 'Optional Obsidian [[Project]] link or path' },
                     reviewAt: { type: 'string', description: 'Optional ISO date/time for evidence review' }, reviewIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: 'Optional cadence in days; review_wiki_note schedules the next review after completion' }, reviewSnoozedUntil: { type: 'string', description: 'Temporarily omit this note from review queues until an ISO date/time' }, reviewSnoozeReason: { type: 'string', maxLength: 500 },
@@ -363,7 +364,7 @@ export function getLlmWikiTools() {
             name: 'review_wiki_note',
             description: 'Record completion of an evidence review without resubmitting the Markdown body. Refreshes the body/link review baseline, records the reviewer and outcome, and can schedule the next review; non-manual policies without an explicit interval use a bounded adaptive cadence.',
             inputSchema: { type: 'object', properties: {
-                    path: { type: 'string' }, reviewOutcome: organizationPropertySchema('last_review_outcome'), reviewedBy: { type: 'string' }, reviewAt: { type: 'string', description: 'Optional next review ISO date/time; if omitted, reviewIntervalDays is used when present' }, reviewIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: 'Optional cadence in days; completed reviews schedule the next review automatically' }, nextLifecycle: organizationPropertySchema('lifecycle', { description: 'Optional explicit lifecycle after review; omit to keep the current lifecycle and receive follow-up guidance' }), reviewReason: { type: 'string', maxLength: 120, description: 'Why this review was entered, such as source_changed, link_changed, note_edited, or manual_review' }, reviewChecks: organizationPropertySchema('review_checks', { maxItems: 7, description: 'Quality dimensions actually checked during this review' }), reviewOpenItems: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 8, description: 'Bounded follow-up items left by the review' }, reviewNote: { type: 'string', maxLength: 1000 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
+                    path: { type: 'string' }, reviewOutcome: organizationPropertySchema('last_review_outcome'), reviewedBy: { type: 'string' }, reviewAt: { type: 'string', description: 'Optional next review ISO date/time; if omitted, reviewIntervalDays is used when present' }, reviewIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: 'Optional cadence in days; completed reviews schedule the next review automatically' }, nextLifecycle: organizationPropertySchema('lifecycle', { enum: [...ACTIVE_LIFECYCLES], description: 'Optional active lifecycle after review; retirement or reactivation uses wiki.lifecycle_transition' }), reviewReason: { type: 'string', maxLength: 120, description: 'Why this review was entered, such as source_changed, link_changed, note_edited, or manual_review' }, reviewChecks: organizationPropertySchema('review_checks', { maxItems: 7, description: 'Quality dimensions actually checked during this review' }), reviewOpenItems: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 8, description: 'Bounded follow-up items left by the review' }, reviewNote: { type: 'string', maxLength: 1000 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
                 }, required: ['path', 'reviewOutcome', 'expectedRevision'] },
         },
         {
@@ -466,12 +467,12 @@ export function getLlmWikiTools() {
         },
         {
             name: 'triage_wiki_note',
-            description: 'Classify one ordinary Markdown note with PARA/Zettelkasten-style metadata without changing its body or moving it. New managed fields are rejected when they do not apply to the selected note role. A noteKind change that would strand old role-specific fields requires an explicit retry with clearInapplicable after reviewing the reported list. Use expectedRevision to avoid overwriting another agent.',
+            description: 'Classify one active ordinary Markdown note with PARA/Zettelkasten-style metadata without changing its body or moving it. Retirement and reactivation use wiki.lifecycle_transition. New managed fields are rejected when they do not apply to the selected note role. Use expectedRevision to avoid overwriting another agent.',
             inputSchema: { type: 'object', properties: {
                     ...executionProperties,
                     ...temporalProperties,
                     path: { type: 'string' }, noteKind: organizationPropertySchema('note_kind'),
-                    lifecycle: organizationPropertySchema('lifecycle'),
+                    lifecycle: organizationPropertySchema('lifecycle', { enum: [...ACTIVE_LIFECYCLES], description: 'Retired states are managed only by wiki.lifecycle_transition' }),
                     decisionStatus: organizationPropertySchema('decision_status', { description: 'Metadata-only migration/repair for an existing Decision Record; use wiki.decision_record for an actual state transition' }),
                     moc: { type: 'string' }, mocs: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'Additional Obsidian [[MOC]] links for multi-context discovery; navigation only' }, primaryMoc: { type: 'string', maxLength: 500, description: 'Preferred Obsidian MOC entry point for this note; navigation only' }, navOrder: { type: 'integer', minimum: 0, maximum: 1000000, description: 'Optional order among sibling MOCs; lower numbers appear first' }, project: { type: 'string' }, reviewAt: { type: 'string' },
                     aliases: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 30 }, reviewIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: 'Optional review cadence in days; review_wiki_note advances review_at after a completed review' },
@@ -616,6 +617,19 @@ export function getLlmWikiTools() {
                     relation: { type: 'string', enum: ['related', 'same_as'] },
                     maxChars: { type: 'integer', minimum: 4096, maximum: 20000, default: 8000 }, accessToken, prettyPrint,
                 }, required: ['leftPath', 'rightPath', 'relation'] },
+        },
+        {
+            name: 'get_wiki_lifecycle_transition_preview',
+            description: 'Preview one coherent retirement or reactivation of a visible knowledge note. It checks legal preservation, scope-safe reference impact, replacement lineage, and exact revisions, then returns an atomic notes.change_set without writing, moving, deleting, or committing.',
+            inputSchema: { type: 'object', properties: {
+                    path: { type: 'string', description: 'Exact visible ordinary knowledge-note path' },
+                    operation: { type: 'string', enum: ['archive', 'supersede', 'tombstone', 'reactivate'] },
+                    reason: { type: 'string', minLength: 1, maxLength: 1000, description: 'Why this lifecycle transition is being proposed; Git remains the authoritative change history' },
+                    replacementPath: { type: 'string', description: 'Exact visible successor path for supersede/replacement tombstones, or the current successor whose reverse edge must be removed during reactivation' },
+                    targetLifecycle: { type: 'string', enum: ['active', 'review', 'evergreen'], default: 'review', description: 'Reactivation destination; review is the conservative default' },
+                    nextKnowledgeStatus: { type: 'string', enum: ['draft', 'verified', 'disputed'], description: 'Required to reactivate a note whose knowledge_status is superseded; the planner never infers epistemic quality' },
+                    maxChars: { type: 'integer', minimum: 4096, maximum: 20000, default: 10000 }, accessToken, prettyPrint,
+                }, required: ['path', 'operation', 'reason'] },
         },
         {
             name: 'get_wiki_note_template',

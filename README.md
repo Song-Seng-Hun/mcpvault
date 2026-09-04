@@ -324,10 +324,13 @@ one bounded set of inbound body links, path-bearing Properties, and ambiguous
 references before deleting a Markdown note. `notes.delete` refuses to create
 dangling references by default. A deliberate override requires both
 `allowDanglingReferences: true` and the note's current `expectedRevision`;
-it can never override an inaccessible-scope reference barrier. Prefer
-`archived`/`superseded` lifecycle or an explained tombstone when history or
-incoming navigation still matters. Git remains the recovery history, not a
-substitute for preserving live link integrity.
+it can never override an inaccessible-scope reference barrier. Prefer a
+`wiki.lifecycle_transition` archive, supersession, or explained tombstone when
+history or incoming navigation still matters. The planner checks holds,
+retention windows, scope-safe replacement lineage, and bounded inbound
+references, then returns one revision-stamped `notes.change_set`; it does not
+write or delete by itself. Git remains the recovery history, not a substitute
+for preserving live link integrity.
 
 Call `get_wiki_property_contract` before creating or repairing a managed note
 to see the canonical field types and allowed values. The unfiltered response is
@@ -450,9 +453,12 @@ it returns a move-preview action bound to the clarified note revision. A clarifi
 removed from the unprocessed Inbox queue even while it remains physically in
 Inbox. `review_wiki_note` records a completed evidence review and refreshes its
 body/link baseline without requiring the agent to resubmit the whole body.
-Pass `nextLifecycle` when the review changes the knowledge state (for example,
-`evergreen`, `superseded`, or `archived`); otherwise the response explicitly
-asks for a follow-up decision. `get_wiki_review_dashboard` combines Inbox,
+Pass `nextLifecycle` when the review moves among active states such as `review`
+and `evergreen`. For `archive`, `supersede`, `tombstone`, or `reactivate`, use
+`wiki.lifecycle_transition`, inspect its blockers and reference impact, then
+dry-run and confirm the exact returned `notes.change_set`. Direct retirement
+or reactivation through triage, review, or general `publish_knowledge` is
+rejected. `get_wiki_review_dashboard` combines Inbox,
 active work on any note kind, due work, waiting/someday items, open
 questions/hypotheses/assumptions, due knowledge, and MOC/graph/focus/
 connectivity health into one bounded Reflect pass. MOC question coverage is
@@ -752,9 +758,25 @@ returns Markdown and suggested Properties without creating files. For
 `related` and `same_as`, graph health
 also reports missing reverse edges as advisory `reciprocityMissing`; other
 typed relations remain directional. Retention metadata
-(`retention_policy`, `retention_at`, `retention_reason`, `replaced_by`) makes
-archive and replacement decisions explainable without enabling automatic
-deletion.
+(`retention_policy`, `retention_event`, `retention_at`, `preserve_until`,
+`legal_hold`, `retention_reason`, `archive_reason`, `replaced_by`) makes archive
+and replacement decisions explainable without enabling automatic deletion.
+`wiki.lifecycle_transition` is the coherent transition boundary: `archive`
+records why the note left active use, `supersede` maintains the old note's
+`replaced_by` and the successor's complete `supersedes` list, `tombstone`
+preserves the Markdown body while marking retirement, and `reactivate` removes
+retirement markers without silently discarding holds. The planner is read-only;
+apply its exact fingerprinted `notes.change_set` only after reviewing every
+revision and blocker.
+Visible inbound references are reported for review. Hidden-scope inbound
+references become a path-free warning rather than a veto because lifecycle
+transitions preserve the note body and path; hidden or quarantined source and
+replacement metadata is never projected.
+Agents may add or extend `legal_hold`/`preserve_until`, but MCP cannot release
+an active hold or shorten a future preservation window; that deliberate release
+is a server-host human edit. A Decision Record uses its dedicated rejected
+state, while an existing decision must complete `wiki.lifecycle_transition`
+before it can be marked `superseded` or returned to an active state.
 
 Decision Records keep their own `decision_status` (`proposed`, `accepted`,
 `rejected`, or `superseded`) instead of losing the distinction inside the
@@ -934,7 +956,7 @@ authenticated edge in front of it.
 - AST-aware frontmatter updates preserve formatting for unchanged YAML fields.
 - Path checks block traversal, symlink escapes, dotfiles, `.obsidian`, `.git`, and `node_modules`.
 - The dynamic endpoint catalog covers note, collaboration, private scope, LLM Wiki, social journaling, public community, chat, references, agent coordination, and private coordination operations:
-  - File operations: `read_note`, `write_note`, `patch_note`, `patch_multiple_notes` (`notes.change_set`), `delete_note`, `preview_delete_note`, `move_note`, `preview_move_note`, `move_file`. `notes.change_set` coordinates up to ten existing notes under one dry-run fingerprint, revision preflight, stable lock order, and rollback-backed apply; use it only when reciprocal links, ordered MOCs, or a Property migration must remain coherent. A rename is review-first: `preview_move_note` reports bounded inbound/self body links, moved-note relative Markdown outlinks, link-bearing Properties, and ambiguous references. `move_note` leaves them unchanged by default; explicit `updateLinks: true` plus the source `expectedRevision` applies only uniquely resolved rewrites and rolls rewritten notes and destination state back if the move fails. Deletion is also review-first: `notes.delete_preview` reports bounded body/Property impact, `notes.delete` blocks dangling or hidden-scope references by default, and an intentional visible-reference override requires the current revision.
+  - File operations: `read_note`, `write_note`, `patch_note`, `patch_multiple_notes` (`notes.change_set`), `delete_note`, `preview_delete_note`, `move_note`, `preview_move_note`, `move_file`. `notes.change_set` coordinates up to ten existing notes under one dry-run fingerprint, revision preflight, stable lock order, and rollback-backed apply; use it only when reciprocal links, ordered MOCs, a Property migration, or a planned lifecycle transition must remain coherent. A rename is review-first: `preview_move_note` reports bounded inbound/self body links, moved-note relative Markdown outlinks, link-bearing Properties, and ambiguous references. `move_note` leaves them unchanged by default; explicit `updateLinks: true` plus the source `expectedRevision` applies only uniquely resolved rewrites and rolls rewritten notes and destination state back if the move fails. Deletion is also review-first: `notes.delete_preview` reports bounded body/Property impact, `notes.delete` blocks dangling or hidden-scope references by default, and an intentional visible-reference override requires the current revision. `wiki.lifecycle_transition` plans archive, supersede, tombstone, and reactivation as one scope-safe, revision-stamped change set without deleting or rewriting a note body.
   - Partial reads: `get_note_outline`, `read_note_lines`. Both are revision-stamped, character-bounded, and resumable. Directory listing, backlinks, outlinks, unresolved links, and orphan-note diagnostics likewise default to bounded pages and return an executable offset continuation when more records remain.
   - Directory and batch reads: `list_directory`, `read_multiple_notes`
   - Search: `search_notes` with multi-word matching, LLM Wiki-first ranking, one compact excerpt per document, bounded result count/characters, match reasons (`why`) and freshness (`fresh`), Obsidian-style `path:`, `tag:`, `property:`, `[property:value]`, `section:(...)`, `block:(...)`, `task:`, `task-todo:`, `task-done:`, quoted exact phrases, `OR`, and `-excluded` terms, plus automatic server-side incremental document indexing. Scoped filters match within one section/block/task, and `property:null` finds missing or empty values. Set `expandAuthority: true` when browsing by classification: bounded `broader_terms`/`related_terms` matches are returned with explicit lower-confidence reasons rather than being confused with body or alias matches. Semantic search is skipped when lexical filters/exclusions are present so the requested filter cannot be bypassed.

@@ -318,6 +318,7 @@ export interface KnowledgeOrganizationInput {
     preserveUntil?: unknown;
     legalHold?: unknown;
     retentionReason?: unknown;
+    archiveReason?: unknown;
     replacedBy?: unknown;
     reviewSnoozedUntil?: unknown;
     reviewSnoozeReason?: unknown;

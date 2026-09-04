@@ -52,6 +52,15 @@ export declare class FileSystemService {
     noteExists(path: string): Promise<boolean>;
     private assertExpectedRevision;
     writeNote(params: NoteWriteParams): Promise<void>;
+    /**
+     * Write one note while holding revision locks for related notes whose state
+     * is an invariant of the write. Guards are assertions only: they are never
+     * rewritten, but a stale guard aborts before the target changes.
+     */
+    writeNoteWithRevisionGuards(params: NoteWriteParams, guards: Array<{
+        path: string;
+        expectedRevision: string;
+    }>): Promise<void>;
     private writeDerivedViewFile;
     /**
      * Write an Obsidian Bases definition as a derived, revision-checked view.

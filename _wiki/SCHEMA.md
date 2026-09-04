@@ -226,8 +226,12 @@ selecting one of `knowledge`, `reference`, `project`, `someday`, `discard`, or
 silently moves or deletes the note. A clarified item leaves the unprocessed
 Inbox view. Use `triage_wiki_note` for ordinary metadata edits and
 `review_wiki_note` after checking evidence to refresh the review baseline.
-Pass `nextLifecycle` when the review should become `evergreen`, `superseded`,
-or another explicit state; otherwise the response keeps the follow-up visible.
+Pass `nextLifecycle` only when the review moves among active states such as
+`review` and `evergreen`. Use `wiki.lifecycle_transition` for `archive`,
+`supersede`, `tombstone`, or `reactivate`; inspect the plan and dry-run the exact
+returned `notes.change_set` before confirming it. Direct retirement or
+reactivation through triage, review, or general `publish_knowledge` is
+rejected.
 `get_wiki_review_dashboard` is a bounded Reflect pass over Inbox, next actions,
 due work, waiting/someday items, open questions/hypotheses/assumptions,
 knowledge review, and graph/focus/connectivity health. `focus_parent` and
@@ -458,9 +462,21 @@ advisory `reciprocityMissing` item. Directional relations such as `supports`,
 `contradicts`, `depends_on`, and `supersedes` do not need a reverse field.
 `get_wiki_note_template` provides optional small role scaffolds for common
 note kinds. It never creates a file or makes a template mandatory. Retention
-metadata (`retention_policy`, `retention_at`, `retention_reason`, and
+metadata (`retention_policy`, `retention_event`, `retention_at`,
+`preserve_until`, `legal_hold`, `retention_reason`, `archive_reason`, and
 `replaced_by`) records preservation intent only; it never authorizes automatic
-deletion. Use a reason and replacement link when archiving or tombstoning.
+deletion. Use `wiki.lifecycle_transition` to plan archive, supersede, tombstone,
+or reactivation. It checks current revisions, holds, retention windows, inbound
+references, scope boundaries, and both sides of replacement lineage, then
+returns a fingerprinted `notes.change_set` without writing or deleting.
+Hidden-scope inbound references are reported only as a path-free warning, not
+a veto, because the body and path remain intact. Hidden or quarantined source
+and replacement metadata is not returned.
+MCP may add or extend `legal_hold`/`preserve_until`, but only an authorized
+human at the server host may release an active hold or shorten a future window.
+Existing Decision Records must apply `wiki.lifecycle_transition` before
+entering `superseded` or returning to an active decision state; the dedicated
+`rejected` decision state remains distinct and still respects preservation.
 `retention_event` records what started the retention window,
 `preserve_until` prevents premature disposition proposals, and
 `legal_hold: true` requires explicit human release before archival or
@@ -539,8 +555,12 @@ Knowledge lifecycle is deliberately separate from execution state. A
 `superseded` note should retain a `replacement_path` (or equivalent
 `replaced_by`/`superseded_by`) and an `archived` note should retain
 `archive_reason`; completed review outcomes should retain both reviewer and
-review time. These are advisory lint checks that preserve the reasoning trail
-without automatically moving, deleting, or rewriting notes.
+review time. Create retirement metadata through `wiki.lifecycle_transition`,
+review its bounded reference impact, and apply only the exact revision-stamped
+`notes.change_set`. `supersede` updates `replaced_by` and the successor's
+`supersedes` together; `reactivate` removes retirement lineage from both sides.
+The source body is preserved. Lint remains advisory and never moves, deletes,
+or rewrites notes automatically.
 
 10. Prioritize Wiki participation: read existing notes, add grounded corrections, ingest evidence before load-bearing claims, and lint before considering a conclusion accepted. For durable architectural or policy choices, use `wiki.decision_record` with context, alternatives, consequences, evidence, and a revision-checked status; it creates a normal `note_kind: decision` note rather than a parallel history database. Use bounded `wiki.promotion_candidates`, `wiki.source_trust`, `wiki.summary_candidates`, and `wiki.unused_knowledge` reports to maintain quality. These reports are advisory: verify before writing, archiving, or superseding, and never auto-delete.
 11. Search results include compact `why` match reasons and `fresh` state. Use `includeRevisions` when an exact hash is needed before a later edit; start with bounded projections and follow only relevant references.

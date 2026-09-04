@@ -34,6 +34,11 @@ an unnamed requested action, make one focused `search_capabilities` query with
 a small limit, select one result, and stop discovery. Never call a returned
 REST URL directly, guess an endpoint, or bypass a locked endpoint.
 
+Lifecycle is exact: `wiki.lifecycle_transition` → returned `notes.change_set`
+dry-run → fingerprinted apply → re-read named notes → STOP. Its plan already
+includes bounded backlinks. Do not append lint/status/Git unless explicitly
+requested; saying Git is authoritative is not a commit request.
+
 Detailed organization guidance is progressive. Search for or call
 `wiki.policy` without `topic` only to obtain the topic index, then request one
 topic needed now: `onboarding`, `capture`, `retrieval`, `knowledge`, `evidence`,
@@ -114,14 +119,13 @@ Resolvable links become scope-safe references, but links are navigation rather
 than evidence. Preserve immutable source snapshots and exact revisions for
 load-bearing claims.
 
-Before editing, read the current revision. Use `expectedRevision`; use a
-dry-run preview for patch, move, split, merge, or other structural operations
-when offered. Use `wiki.relation_set`, `wiki.reciprocal_link`,
+Read the current revision and use `expectedRevision`. Preview structural edits.
+Use `wiki.relation_set`, `wiki.reciprocal_link`,
 `wiki.moc_order`, `wiki.hierarchy_change`, `wiki.moc_membership`, or
-`wiki.property_migration`; dry-run its revision-stamped
-`notes.change_set`, inspect previews, then confirm the exact fingerprint. After every mutation,
-re-read the targets. Git records coherent history and rollback but is not
-required for Obsidian visibility.
+`wiki.property_migration`; dry-run its `notes.change_set`, inspect it, confirm
+the exact fingerprint, and re-read targets. Obsidian visibility needs no commit.
+
+Never use triage/review/publish for retirement or reactivation.
 
 Scope is independent of PARA folders:
 

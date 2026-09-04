@@ -179,6 +179,21 @@ test("multi-note change sets preflight every revision before writing any note", 
   expect((await fileSystem.readNote("B.md")).content).toBe("External edit\n");
 });
 
+test("guarded note writes reject a stale related-note revision before changing the target", async () => {
+  await writeFile(join(testVaultPath, "Decision.md"), "Original decision\n");
+  await writeFile(join(testVaultPath, "Successor.md"), "Successor with reverse lineage\n");
+  const decision = await fileSystem.readNote("Decision.md");
+  const successor = await fileSystem.readNote("Successor.md");
+  await writeFile(join(testVaultPath, "Successor.md"), "Successor after concurrent lineage removal\n");
+
+  await expect(fileSystem.writeNoteWithRevisionGuards({
+    path: "Decision.md",
+    content: "Updated decision\n",
+    expectedRevision: decision.revision,
+  }, [{ path: "Successor.md", expectedRevision: successor.revision }])).rejects.toThrow("Revision conflict for Successor.md");
+  expect((await fileSystem.readNote("Decision.md")).content).toBe("Original decision\n");
+});
+
 test("multi-note change sets restore earlier writes when a later filesystem write fails", async () => {
   await writeFile(join(testVaultPath, "A.md"), "Alpha\n");
   await writeFile(join(testVaultPath, "B.md"), "Beta\n");

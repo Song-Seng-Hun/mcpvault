@@ -233,6 +233,7 @@ export const ORGANIZATION_PROPERTY_CONTRACT: readonly OrganizationPropertyContra
   { name: 'preserve_until', type: 'text', description: 'Do not propose archival or tombstoning before this date' },
   { name: 'legal_hold', type: 'boolean', description: 'Preserve this note and its history until an authorized human releases the hold' },
   { name: 'retention_reason', type: 'text', description: 'Why the note should be preserved, reviewed, archived, or tombstoned' },
+  { name: 'archive_reason', type: 'text', description: 'Why an archived note left the active knowledge lifecycle' },
   { name: 'replaced_by', type: 'text', description: 'Visible replacement note for a superseded or tombstoned note' },
   { name: 'review_policy', type: 'text', description: 'Event that re-enters review', allowed: REVIEW_POLICIES },
   { name: 'review_basis_upstream', type: 'object', description: 'Bounded typed note/claim upstream state baseline captured by publish or review' },
@@ -794,6 +795,7 @@ export interface KnowledgeOrganizationInput {
   preserveUntil?: unknown;
   legalHold?: unknown;
   retentionReason?: unknown;
+  archiveReason?: unknown;
   replacedBy?: unknown;
   reviewSnoozedUntil?: unknown;
   reviewSnoozeReason?: unknown;
@@ -974,6 +976,7 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
   const preserveUntil = input.preserveUntil === undefined ? normalizeIsoDate(existing.preserve_until, 'preserveUntil') : normalizeIsoDate(input.preserveUntil, 'preserveUntil');
   const legalHold = input.legalHold === undefined ? normalizeBoolean(existing.legal_hold, 'legalHold') : normalizeBoolean(input.legalHold, 'legalHold');
   const retentionReason = input.retentionReason === undefined ? optionalText(existing.retention_reason, 'retentionReason', 1000) : optionalText(input.retentionReason, 'retentionReason', 1000);
+  const archiveReason = input.archiveReason === undefined ? optionalText(existing.archive_reason, 'archiveReason', 1000) : optionalText(input.archiveReason, 'archiveReason', 1000);
   const replacedBy = input.replacedBy === undefined ? optionalText(existing.replaced_by, 'replacedBy', 500) : optionalText(input.replacedBy, 'replacedBy', 500);
   const aliases = input.aliases === undefined ? normalizedList(existing.aliases, 'aliases', 30, 200) : normalizedList(input.aliases, 'aliases', 30, 200);
   const summary = input.summary === undefined ? optionalText(existing.summary, 'summary', 2000) : optionalText(input.summary, 'summary', 2000);
@@ -1113,6 +1116,7 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
     ...(preserveUntil && { preserve_until: preserveUntil }),
     ...(legalHold !== undefined && { legal_hold: legalHold }),
     ...(retentionReason && { retention_reason: retentionReason }),
+    ...(archiveReason && { archive_reason: archiveReason }),
     ...(replacedBy && { replaced_by: replacedBy }),
     ...(aliases && { aliases }),
     ...(summary && { summary }),
@@ -1534,6 +1538,9 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
   }
   if (frontmatter.retention_reason !== undefined && (typeof frontmatter.retention_reason !== 'string' || !String(frontmatter.retention_reason).trim() || Array.from(String(frontmatter.retention_reason)).length > 1000)) {
     issues.push({ code: 'invalid_retention_reason', detail: 'retention_reason must be non-empty text of 1000 Unicode characters or fewer.' });
+  }
+  if (frontmatter.archive_reason !== undefined && (typeof frontmatter.archive_reason !== 'string' || !String(frontmatter.archive_reason).trim() || Array.from(String(frontmatter.archive_reason)).length > 1000)) {
+    issues.push({ code: 'invalid_archive_reason', detail: 'archive_reason must be non-empty text of 1000 Unicode characters or fewer.' });
   }
   if (frontmatter.replaced_by !== undefined && (typeof frontmatter.replaced_by !== 'string' || !String(frontmatter.replaced_by).trim() || Array.from(String(frontmatter.replaced_by)).length > 500)) {
     issues.push({ code: 'invalid_replaced_by', detail: 'replaced_by must be non-empty text of 500 Unicode characters or fewer.' });

@@ -1777,6 +1777,18 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           }), trimmedArgs.prettyPrint);
         }
 
+        case "get_wiki_lifecycle_transition_preview": {
+          return jsonResult(await llmWiki.lifecycleTransitionPreview(principal, {
+            path: trimmedArgs.path,
+            operation: trimmedArgs.operation,
+            reason: trimmedArgs.reason,
+            ...(typeof trimmedArgs.replacementPath === 'string' && { replacementPath: trimmedArgs.replacementPath }),
+            ...(typeof trimmedArgs.targetLifecycle === 'string' && { targetLifecycle: trimmedArgs.targetLifecycle }),
+            ...(typeof trimmedArgs.nextKnowledgeStatus === 'string' && { nextKnowledgeStatus: trimmedArgs.nextKnowledgeStatus }),
+            ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
+          }), trimmedArgs.prettyPrint);
+        }
+
         case "get_wiki_note_template": {
           return jsonResult(llmWiki.noteTemplate(trimmedArgs.noteKind, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
         }
@@ -2877,7 +2889,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 function trimPaths(args: any, access: ScopeAccessPolicy, principal?: ScopePrincipal): any {
   const trimmed = { ...args };
 
-  for (const key of ['path', 'oldPath', 'newPath', 'targetPath', 'confirmPath', 'confirmOldPath', 'confirmNewPath', 'folder', 'pathPrefix', 'scopeUri', 'subjectPath', 'outputPath', 'parentPath', 'childPath', 'notePath', 'primaryMocPath', 'sourcePath', 'leftPath', 'rightPath']) {
+  for (const key of ['path', 'oldPath', 'newPath', 'targetPath', 'confirmPath', 'confirmOldPath', 'confirmNewPath', 'folder', 'pathPrefix', 'scopeUri', 'subjectPath', 'outputPath', 'parentPath', 'childPath', 'notePath', 'primaryMocPath', 'sourcePath', 'replacementPath', 'leftPath', 'rightPath']) {
     if (trimmed[key] && typeof trimmed[key] === 'string') trimmed[key] = access.resolveExternalPath(trimmed[key], principal);
   }
   if (trimmed.sortBy && typeof trimmed.sortBy === 'string') trimmed.sortBy = trimmed.sortBy.trim();

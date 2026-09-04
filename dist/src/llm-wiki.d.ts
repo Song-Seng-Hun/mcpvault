@@ -267,6 +267,7 @@ export declare class LlmWikiService {
         preserveUntil?: unknown;
         legalHold?: unknown;
         retentionReason?: string;
+        archiveReason?: string;
         replacedBy?: string;
         reviewSnoozedUntil?: unknown;
         reviewSnoozeReason?: unknown;
@@ -325,6 +326,12 @@ export declare class LlmWikiService {
         evidence?: unknown;
         claims?: WikiClaimInput[];
         expectedRevision: string;
+    }, internal?: {
+        allowRetiredLifecycle?: boolean;
+        revisionGuards?: Array<{
+            path: string;
+            expectedRevision: string;
+        }>;
     }): Promise<{
         success: boolean;
         created: boolean;
@@ -2580,6 +2587,59 @@ export declare class LlmWikiService {
         } | undefined;
         generatedAt: string;
     }>;
+    /**
+     * Plan one coherent knowledge-lifecycle transition without mutating the
+     * Vault. Retirement metadata and replacement lineage must change together,
+     * so callers receive one revision-stamped notes.change_set instead of a
+     * sequence of partially applied triage edits.
+     */
+    lifecycleTransitionPreview(principal: ScopePrincipal | undefined, options: {
+        path: string;
+        operation: unknown;
+        reason: string;
+        replacementPath?: string;
+        targetLifecycle?: string;
+        nextKnowledgeStatus?: string;
+        maxChars?: number;
+    }): Promise<{
+        purpose: string;
+        operation: string;
+        source: {
+            path: string;
+            revision: string;
+            lifecycle: string | undefined;
+            knowledgeStatus: string | undefined;
+        };
+        replacement?: {
+            path: string;
+            revision: string;
+            hasReverseSupersedes: boolean;
+        };
+        referenceImpact: Record<string, unknown>;
+        changes: {
+            path: string;
+            expectedRevision: string;
+            frontmatter: {
+                set?: Record<string, unknown>;
+                remove?: string[];
+            };
+        }[];
+        blockers: {
+            path?: string;
+            reason: string;
+        }[];
+        warnings: {
+            path?: string;
+            reason: string;
+        }[];
+        valid: boolean;
+        alreadyApplied: boolean;
+        nextAction: {
+            endpointId: string;
+            instruction: string;
+        } | undefined;
+        generatedAt: string;
+    }>;
     noteTemplate(noteKind?: string, maxChars?: number): {
         templateId: string;
         noteKind: import("./organization.js").NoteKind;
@@ -2775,6 +2835,7 @@ export declare class LlmWikiService {
         preserveUntil?: unknown;
         legalHold?: unknown;
         retentionReason?: string;
+        archiveReason?: string;
         replacedBy?: string;
         reviewSnoozedUntil?: unknown;
         reviewSnoozeReason?: unknown;

@@ -782,6 +782,36 @@ export class FileSystemService {
     return this.withMutationLock(path, () => this.writeNoteUnlocked({ ...params, path }));
   }
 
+  /**
+   * Write one note while holding revision locks for related notes whose state
+   * is an invariant of the write. Guards are assertions only: they are never
+   * rewritten, but a stale guard aborts before the target changes.
+   */
+  async writeNoteWithRevisionGuards(
+    params: NoteWriteParams,
+    guards: Array<{ path: string; expectedRevision: string }>,
+  ): Promise<void> {
+    const path = this.normalizePath(params.path);
+    if (!Array.isArray(guards) || guards.length < 1 || guards.length > 9) {
+      throw new Error('A guarded note write requires between 1 and 9 related-note revision guards');
+    }
+    const normalizedGuards = guards.map(guard => {
+      const guardPath = this.normalizePath(guard?.path);
+      if (!guardPath || !this.pathFilter.isAllowed(guardPath)) throw new Error(`Access denied: ${guardPath || '(empty path)'}`);
+      if (guardPath.toLowerCase() === path.toLowerCase()) throw new Error('A guarded note write cannot repeat the target as a related-note guard');
+      if (!/^[a-f0-9]{64}$/i.test(String(guard?.expectedRevision || ''))) {
+        throw new Error(`Each related-note guard requires a current SHA-256 revision: ${guardPath}`);
+      }
+      return { path: guardPath, expectedRevision: guard.expectedRevision };
+    });
+    const duplicate = normalizedGuards.map(guard => guard.path.toLowerCase()).find((candidate, index, all) => all.indexOf(candidate) !== index);
+    if (duplicate) throw new Error(`A related note may appear only once in revision guards: ${duplicate}`);
+    return this.withMutationLocks([path, ...normalizedGuards.map(guard => guard.path)], async () => {
+      for (const guard of normalizedGuards) await this.assertExpectedRevision(guard.path, guard.expectedRevision);
+      await this.writeNoteUnlocked({ ...params, path });
+    });
+  }
+
   private async writeDerivedViewFile(params: { path: string; content: string; expectedRevision: string }, extension: 'base' | 'canvas'): Promise<{ path: string; previousRevision: string; revision: string }> {
     const path = this.normalizePath(params.path);
     const allowed = new RegExp(`^(?:Community/|_scopes/(?:models|agents)/[A-Za-z0-9._-]+/)?Views/[^/]+\\.${extension}$`, 'i');

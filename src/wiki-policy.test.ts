@@ -48,4 +48,14 @@ describe('progressive Wiki policy', () => {
     expect((policyTool.inputSchema as any).properties.topic.enum).toEqual([...WIKI_POLICY_TOPICS]);
   });
 
+  test('routes retirement through one coherent lifecycle transition plan', () => {
+    const review = getWikiPolicyTopic('review', 2000);
+    const maintenance = getWikiPolicyTopic('maintenance', 2000);
+    expect(review.routes).toEqual(expect.arrayContaining(['wiki.lifecycle_transition', 'notes.change_set']));
+    expect(maintenance.routes).toEqual(expect.arrayContaining(['wiki.lifecycle_transition', 'notes.change_set']));
+    expect(review.rules.join(' ')).toContain('archive');
+    expect(review.rules.join(' ')).toContain('reactivate');
+    expect(review.avoid.join(' ')).toContain('triage');
+  });
+
 });

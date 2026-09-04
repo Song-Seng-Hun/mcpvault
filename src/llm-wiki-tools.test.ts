@@ -16,7 +16,6 @@ import {
   KNOWLEDGE_POLARITIES,
   KNOWLEDGE_ROLES,
   KNOWLEDGE_STATUSES,
-  LIFECYCLES,
   NEGATIVE_KINDS,
   NOTE_KINDS,
   RECALL_QUALITIES,
@@ -36,7 +35,8 @@ import {
   WIKI_PROJECTION_VIEWS,
   getOrganizationPropertyContract,
 } from './organization.js';
-import { getLlmWikiTools } from './llm-wiki-tools.js';
+import { getLlmWikiTools, LLM_WIKI_MUTATING_TOOLS } from './llm-wiki-tools.js';
+import { endpointIdForTool } from './endpoint-registry.js';
 
 interface SchemaProperty {
   type?: string;
@@ -63,7 +63,6 @@ describe('LLM Wiki organization vocabulary contracts', () => {
   test('uses the canonical vocabulary for publish and triage schemas', () => {
     const common = [
       ['noteKind', NOTE_KINDS],
-      ['lifecycle', LIFECYCLES],
       ['knowledgeRole', KNOWLEDGE_ROLES],
       ['retentionPolicy', RETENTION_POLICIES],
       ['retentionEvent', RETENTION_EVENTS],
@@ -81,6 +80,7 @@ describe('LLM Wiki organization vocabulary contracts', () => {
     for (const toolName of ['publish_knowledge', 'triage_wiki_note']) {
       const schema = properties(toolName);
       for (const [field, expected] of common) expectEnum(schema, field, expected);
+      expectEnum(schema, 'lifecycle', ['inbox', 'active', 'review', 'evergreen']);
     }
 
     const clearInapplicable = properties('triage_wiki_note').clearInapplicable;
@@ -94,10 +94,19 @@ describe('LLM Wiki organization vocabulary contracts', () => {
 
     const review = properties('review_wiki_note');
     expectEnum(review, 'reviewOutcome', REVIEW_OUTCOMES);
-    expectEnum(review, 'nextLifecycle', LIFECYCLES);
+    expectEnum(review, 'nextLifecycle', ['inbox', 'active', 'review', 'evergreen']);
     expect(review.reviewChecks?.items?.enum).toEqual([...REVIEW_CHECKS]);
 
     expectEnum(properties('record_wiki_recall'), 'recallQuality', RECALL_QUALITIES);
+
+    const lifecycle = properties('get_wiki_lifecycle_transition_preview');
+    expectEnum(lifecycle, 'operation', ['archive', 'supersede', 'tombstone', 'reactivate']);
+    expectEnum(lifecycle, 'targetLifecycle', ['active', 'review', 'evergreen']);
+    expectEnum(lifecycle, 'nextKnowledgeStatus', ['draft', 'verified', 'disputed']);
+    const lifecycleTool = tools.get('get_wiki_lifecycle_transition_preview')!.inputSchema as { required?: string[] };
+    expect(lifecycleTool.required).toEqual(['path', 'operation', 'reason']);
+    expect(endpointIdForTool('get_wiki_lifecycle_transition_preview')).toBe('wiki.lifecycle_transition');
+    expect(LLM_WIKI_MUTATING_TOOLS).not.toContain('get_wiki_lifecycle_transition_preview');
 
     const issue = properties('resolve_wiki_issue');
     expectEnum(issue, 'resolutionStatus', ISSUE_RESOLUTION_STATUSES);

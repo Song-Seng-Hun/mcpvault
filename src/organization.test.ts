@@ -503,6 +503,25 @@ describe('knowledge organization focus and summary metadata', () => {
     }, '# Tombstone\n').map(issue => issue.code)).toEqual(expect.arrayContaining([
       'retention_reason_missing', 'tombstone_lifecycle_mismatch',
     ]));
+    expect(getOrganizationPropertyContract()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'archive_reason', type: 'text' }),
+    ]));
+    expect(knowledgeOrganization({
+      status: 'verified', noteKind: 'atomic', lifecycle: 'archived',
+      archiveReason: 'No longer operational.', retentionPolicy: 'archive',
+      retentionReason: 'No longer operational.',
+    })).toMatchObject({
+      lifecycle: 'archived', archive_reason: 'No longer operational.',
+      retention_policy: 'archive', retention_reason: 'No longer operational.',
+    });
+    expect(organizationLintIssues('Knowledge/Archived.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'archived',
+      archive_reason: 'No longer operational.', retention_policy: 'archive',
+      retention_reason: 'No longer operational.',
+    }, '# Archived\n').map(issue => issue.code)).not.toContain('archived_reason_missing');
+    expect(organizationLintIssues('Knowledge/Bad archive.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'archived', archive_reason: '',
+    }, '# Bad archive\n').map(issue => issue.code)).toContain('invalid_archive_reason');
   });
 
   test('preserves authority, relation rationale, and review checklist metadata', () => {

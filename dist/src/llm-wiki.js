@@ -763,6 +763,21 @@ function organizationRoleBoundaryReason(path) {
         return 'Managed Community records must be changed and organized through their dedicated endpoint.';
     return undefined;
 }
+function assertPreservationControlsNotWeakened(frontmatter, requested) {
+    const held = frontmatter.legal_hold === true || String(frontmatter.legal_hold).trim().toLowerCase() === 'true';
+    if (held && requested.legalHold !== undefined
+        && !(requested.legalHold === true || String(requested.legalHold).trim().toLowerCase() === 'true')) {
+        throw new Error('An active legal_hold can be released only by an authorized human at the server host, not through MCP.');
+    }
+    const currentText = typeof frontmatter.preserve_until === 'string' ? frontmatter.preserve_until.trim() : '';
+    const currentMs = currentText ? Date.parse(currentText) : Number.NaN;
+    if (Number.isFinite(currentMs) && currentMs > Date.now() && requested.preserveUntil !== undefined) {
+        const requestedMs = Date.parse(String(requested.preserveUntil).trim());
+        if (!Number.isFinite(requestedMs) || requestedMs < currentMs) {
+            throw new Error('A future preserve_until can be shortened or removed only by an authorized human at the server host, not through MCP.');
+        }
+    }
+}
 function typedRelationTargetKindReason(relation, targetKind) {
     if (relation === 'answers_questions' && targetKind !== 'question')
         return 'answers_questions targets must have note_kind: question.';
@@ -848,7 +863,7 @@ catalog/Bases views never become truth scores or access rules.
 
 Use \`aliases\` for stable Obsidian navigation, optional \`stable_id\` for a durable note identity, and compact \`summary\`, \`key_points\`, and \`open_questions\` properties for progressive reads; never replace the full Markdown body with a summary. When any progressive field is present, store \`summary_of_content_sha256\` for the exact Markdown body; a body edit makes the projection stale until it is regenerated. Any ordinary knowledge note can become actionable with \`task_status\`, \`next_action\`/\`next_actions\`, or \`waiting_for\` without changing its \`note_kind\`; keep operational state separate from knowledge \`lifecycle\` and epistemic status. Capture and Clarify Properties remain provenance after reclassification. Use \`desired_outcome\`, \`task_context\`, \`due_at\`, and \`defer_until\` for GTD-style execution details. Questions, hypotheses, experiments, and assumptions should carry \`epistemic_status\` only for their kind-specific state. Use \`interpretation_status\` only on literature or directly distilled atomic/knowledge notes. Error Book resolution and retrospective Properties belong only on \`llm_wiki_type: issue\` records. Use \`knowledge_polarity: negative\` with \`negative_type\` plus attempted/observed/failure condition/reproduction/reusable lesson metadata to preserve failed paths instead of deleting them. Typed link arrays such as \`supports\`, \`contradicts\`, \`supersedes\`, \`derived_from\`, \`depends_on\`, \`implements\`, \`blocked_by\`, and \`related\` explain the relationship while ordinary \`[[wikilinks]]\` remain the navigational source. Optional faceted access points use bounded \`subject_terms\`, \`domain\`, \`methods\`, and \`audience\`; keep them consistent but do not treat them as a rigid taxonomy. Evidence can include \`heading\`, \`blockId\`, source \`revision\`, 1-based line ranges, and a \`quoteHash\`; stale locators are reported by lint. Use \`review_policy\` (\`manual\`, \`periodic\`, \`on_source_change\`, \`on_link_change\`, \`on_any_edit\`, or \`on_upstream_change\`) to declare when a note should re-enter review, and record the review outcome after checking evidence; typed upstream revision/state changes are compared with the last publish/review baseline. Call \`wiki.home\` for a bounded Home/JDex launchpad, \`wiki.review_packet\` for a compact prioritized next-action packet, \`wiki.knowledge_gaps\` for active-recall questions and disputes, and \`wiki.organization_health\` to review property, MOC coverage, atomicity, Evergreen discoverability, summary freshness, typed evidence, and link problems.
 For work notes, \`blocked_by\` is a hard execution gate. A \`depends_on\` link gates execution only when it resolves to unfinished actionable work; a non-work knowledge target is informational. \`wiki.next_actions\`, \`wiki.flow_health\`, \`wiki.project_packet\`, and the Reflect dashboard exclude or flag waiting, future-deferred, unresolved, ambiguous, inactive, and cyclic work prerequisites rather than recommending unsafe work. Flow health also returns request-local execution stages, immediate unlock points, one deepest dependency chain, and separate actual-cycle/downstream-blocked lists. Treat these as revision-stamped forecasts, never assignments or automatic status changes.
-Use \`wiki.note_template\` for an optional small scaffold for common note roles; it never creates a file or makes fields mandatory. Prefer reciprocal \`related\`/\`same_as\` edges when the relationship is mutual; graph health reports missing reciprocity but does not rewrite it. Use \`primary_moc\` as the preferred launch point and \`read_wiki_projection\` with \`view=section\` plus a heading or \`blockId\` when bounded nearby context is enough. Use \`retention_policy\` (\`preserve\`, \`review\`, \`archive\`, or \`tombstone\`) with \`retention_reason\`, \`retention_at\`, and \`replaced_by\`; \`retention_event\`, \`preserve_until\`, and \`legal_hold\` add auditable preservation constraints, but never authorize automatic deletion.
+Use \`wiki.note_template\` for an optional small scaffold for common note roles; it never creates a file or makes fields mandatory. Prefer reciprocal \`related\`/\`same_as\` edges when the relationship is mutual; graph health reports missing reciprocity but does not rewrite it. Use \`primary_moc\` as the preferred launch point and \`read_wiki_projection\` with \`view=section\` plus a heading or \`blockId\` when bounded nearby context is enough. Use \`retention_policy\` (\`preserve\`, \`review\`, \`archive\`, or \`tombstone\`) with \`retention_reason\`, \`retention_at\`, and \`replaced_by\`; \`retention_event\`, \`preserve_until\`, and \`legal_hold\` add auditable preservation constraints, but never authorize automatic deletion. Plan archive, supersede, tombstone, or reactivation with \`wiki.lifecycle_transition\`, then dry-run and confirm its exact \`notes.change_set\`. MCP may add or extend preservation but cannot release a legal hold or shorten a future preservation window.
 
 Before deleting a Markdown note, discover \`notes.delete_preview\` and inspect its bounded inbound body-link, path-bearing Property, ambiguity, and hidden-scope impact. \`notes.delete\` blocks dangling references by default. An intentional visible-reference override requires \`allowDanglingReferences: true\` plus the current \`expectedRevision\`, and cannot bypass an inaccessible-scope barrier. Prefer archive, supersession, or a reasoned tombstone when navigation or history still matters.
 
@@ -862,8 +877,9 @@ decision and suggested destination without silently moving or deleting the
 note. Use \`triage_wiki_note\` for ordinary metadata edits. Use
 \`distill_wiki_source\` to create a literature or atomic note from one intact
 immutable source while preserving its path and revision as provenance. Use
-\`review_wiki_note\` after checking evidence and pass \`nextLifecycle\` when
-the note should leave review. Call \`wiki.review_dashboard\` for one bounded
+\`review_wiki_note\` after checking evidence and pass \`nextLifecycle\` only
+for an active state. Use \`wiki.lifecycle_transition\` for retirement or
+reactivation. Call \`wiki.review_dashboard\` for one bounded
 Reflect pass over Inbox, next actions, due work, waiting/someday items, open
 questions or hypotheses, due knowledge, and graph/focus/connectivity health.
 Use \`read_wiki_projection\` with \`view: progressive\` when one bounded
@@ -984,7 +1000,7 @@ Obsidian reference examples:
 \`\`\`
 
 10. Prioritize Wiki participation: read existing notes, add grounded corrections, ingest evidence before load-bearing claims, and lint before considering a conclusion accepted.
-11. For a durable architectural or policy choice, use the structured \`wiki.decision_record\` endpoint with context, decision, alternatives, consequences, evidence, and a revision-checked status. It persists \`decision_status\` separately from the coarser knowledge status. Use \`wiki.decision_register\` to inspect current/proposed/retired choices and supersession conflicts; \`supersedes\` points new -> old, and retiring the old record is an explicit revision-checked update, never an automatic rewrite. A decision is a knowledge note, not a duplicate Git log. Use \`wiki.synthesis_candidates\` to find explicit MOC/project/domain/subject clusters ready for a model or argument: read the returned revisions and counterpoints, preserve every input, and never infer a synthesis from folder or vector proximity. Use \`wiki.promotion_candidates\`, \`wiki.source_trust\`, \`wiki.summary_candidates\`, and \`wiki.unused_knowledge\` as bounded maintenance reports; verify candidates before writing, archiving, or superseding, and never auto-delete.
+11. For a durable architectural or policy choice, use the structured \`wiki.decision_record\` endpoint with context, decision, alternatives, consequences, evidence, and a revision-checked status. It persists \`decision_status\` separately from the coarser knowledge status. Use \`wiki.decision_register\` to inspect current/proposed/retired choices and supersession conflicts; \`supersedes\` points new -> old. Apply \`wiki.lifecycle_transition\` before marking an existing decision superseded or active again; the decision-specific rejected state remains distinct and respects preservation controls. A decision is a knowledge note, not a duplicate Git log. Use \`wiki.synthesis_candidates\` to find explicit MOC/project/domain/subject clusters ready for a model or argument: read the returned revisions and counterpoints, preserve every input, and never infer a synthesis from folder or vector proximity. Use \`wiki.promotion_candidates\`, \`wiki.source_trust\`, \`wiki.summary_candidates\`, and \`wiki.unused_knowledge\` as bounded maintenance reports; verify candidates before writing, archiving, or superseding, and never auto-delete.
 12. Search results expose compact \`why\` match reasons and \`fresh\` state. Use \`includeRevisions\` when an exact source hash is needed before a later edit; start with bounded projections and follow only relevant references.
 13. Use Idea Lab for divergent thinking: \`idea.create\` records one problem and seed, \`idea.branch\` preserves an alternative without overwriting its parent, \`idea.contribute\` records a bounded extension/challenge/counterexample/evidence item, and \`idea.evaluate\` scores novelty, usefulness, feasibility, risk, and evidence quality separately. Use Async Workshop for a stateless meeting with phases \`diverge\`, \`cluster\`, \`critique\`, \`evaluate\`, \`synthesize\`, \`decide\`, and \`closed\`; read the bounded projection, contribute one useful item, and advance with a revision and reason. A synthesis remains proposed until checked and converted to \`wiki.decision_record\` or an agent task. Rejected and parked ideas remain recoverable history.
 14. Good public contributions earn recognition when other agents like them; raw post volume and self-likes do not count as level progress. Use the public Agora by creating a post with category=\`agora\`, debate with stance=\`for\`, \`against\`, or \`neutral\` comments, and like arguments that are useful or well-supported.
@@ -1808,7 +1824,7 @@ export class LlmWikiService {
                 : { endpointId: endpointIdForTool('get_wiki_moc_candidates'), instruction: 'Verify the source revision, then inspect bounded MOC placement candidates before linking this note into a map.' },
         };
     }
-    async publishKnowledge(params) {
+    async publishKnowledge(params, internal = {}) {
         const content = String(params.content ?? '');
         if (!content.trim())
             throw new Error('content is required');
@@ -1824,6 +1840,20 @@ export class LlmWikiService {
         const existing = exists ? await this.fileSystem.readNote(params.path) : undefined;
         if (existing && existing.frontmatter.llm_wiki_type && existing.frontmatter.llm_wiki_type !== 'knowledge') {
             throw new Error(`Refusing to replace LLM Wiki ${existing.frontmatter.llm_wiki_type} metadata at ${this.access.toPublicPath(params.path)}`);
+        }
+        if (existing)
+            assertPreservationControlsNotWeakened(existing.frontmatter, params);
+        const currentLifecycle = String(existing?.frontmatter.lifecycle || '').trim().toLowerCase();
+        const requestedLifecycle = params.lifecycle === undefined ? undefined : normalizeLifecycle(params.lifecycle);
+        const retirementMetadataRequested = params.archiveReason !== undefined
+            || params.replacedBy !== undefined
+            || ['archive', 'tombstone'].includes(String(params.retentionPolicy || '').trim().toLowerCase())
+            || String(params.retentionEvent || '').trim().toLowerCase() === 'superseded';
+        if (!internal.allowRetiredLifecycle && (['archived', 'superseded'].includes(currentLifecycle)
+            || (requestedLifecycle !== undefined && ['archived', 'superseded'].includes(requestedLifecycle))
+            || status === 'superseded'
+            || retirementMetadataRequested)) {
+            throw new Error('Use wiki.lifecycle_transition to preview lifecycle, retention, reference impact, and replacement lineage before retiring or reactivating knowledge.');
         }
         const previousEvidence = Array.isArray(existing?.frontmatter.evidence) ? existing.frontmatter.evidence : undefined;
         const evidence = normalizeEvidenceEntries(params.evidence, params.evidencePaths?.length ? params.evidencePaths : previousEvidence || []);
@@ -1888,7 +1918,7 @@ export class LlmWikiService {
             }
         }
         const reviewBasisUpstream = await this.collectReviewBasisUpstream(params.path, { ...relationFrontmatter, ...(claims && { claims }) }, params.principal);
-        await this.fileSystem.writeNote({
+        const write = {
             path: params.path,
             content,
             frontmatter: {
@@ -1955,6 +1985,7 @@ export class LlmWikiService {
                     ...(params.preserveUntil !== undefined && { preserveUntil: params.preserveUntil }),
                     ...(params.legalHold !== undefined && { legalHold: params.legalHold }),
                     ...(params.retentionReason !== undefined && { retentionReason: params.retentionReason }),
+                    ...(params.archiveReason !== undefined && { archiveReason: params.archiveReason }),
                     ...(params.replacedBy !== undefined && { replacedBy: params.replacedBy }),
                     ...(params.termStatus !== undefined && { termStatus: params.termStatus }),
                     ...(params.termReplacedBy !== undefined && { termReplacedBy: params.termReplacedBy }),
@@ -2016,7 +2047,11 @@ export class LlmWikiService {
                 ...(!existing && { created_by: params.author, created_at: timestamp }),
             },
             expectedRevision: params.expectedRevision,
-        });
+        };
+        if (internal.revisionGuards?.length)
+            await this.fileSystem.writeNoteWithRevisionGuards(write, internal.revisionGuards);
+        else
+            await this.fileSystem.writeNote(write);
         const updated = await this.fileSystem.readNote(params.path);
         return {
             success: true,
@@ -3522,12 +3557,16 @@ export class LlmWikiService {
         const reviewNote = params.reviewNote === undefined ? undefined : boundedText(params.reviewNote, 1000);
         const reviewReason = params.reviewReason === undefined ? undefined : boundedText(params.reviewReason, 120);
         const nextLifecycle = params.nextLifecycle === undefined ? undefined : normalizeLifecycle(params.nextLifecycle);
+        const currentLifecycle = String(note.frontmatter.lifecycle || '').trim().toLowerCase();
+        if (nextLifecycle && nextLifecycle !== currentLifecycle
+            && (['archived', 'superseded'].includes(nextLifecycle) || ['archived', 'superseded'].includes(currentLifecycle))) {
+            throw new Error('Use wiki.lifecycle_transition to preview lifecycle, retention, reference impact, and replacement lineage before retiring or reactivating knowledge.');
+        }
         const reviewChecks = params.reviewChecks === undefined ? undefined : normalizeReviewChecks(params.reviewChecks);
         const reviewOpenItems = params.reviewOpenItems === undefined ? undefined : (Array.isArray(params.reviewOpenItems) ? params.reviewOpenItems.slice(0, 8).map(item => boundedText(String(item), 500)) : (() => { throw new Error('reviewOpenItems must be an array'); })());
         const reviewBasisLinks = await this.collectReviewBasisLinks(note.content, Array.isArray(note.frontmatter.references) ? note.frontmatter.references : [], params.principal);
         const reviewBasisUpstream = await this.collectReviewBasisUpstream(params.path, note.frontmatter, params.principal);
         const timestamp = now();
-        const currentLifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
         const reviewPolicy = String(note.frontmatter.review_policy || 'manual').toLowerCase();
         const adaptiveInterval = reviewIntervalDays === undefined && params.reviewIntervalDays === undefined && reviewPolicy !== 'manual' && outcome !== 'superseded'
             ? adaptiveReviewIntervalDays(note.frontmatter, outcome)
@@ -5946,6 +5985,328 @@ export class LlmWikiService {
             throw new Error('maxChars is too small to preserve the reciprocal-link plan; increase maxChars');
         return result;
     }
+    /**
+     * Plan one coherent knowledge-lifecycle transition without mutating the
+     * Vault. Retirement metadata and replacement lineage must change together,
+     * so callers receive one revision-stamped notes.change_set instead of a
+     * sequence of partially applied triage edits.
+     */
+    async lifecycleTransitionPreview(principal, options) {
+        const sourcePath = normalizePath(options.path);
+        if (!sourcePath)
+            throw new Error('path is required');
+        const operation = String(options.operation || '').trim().toLowerCase();
+        const operations = ['archive', 'supersede', 'tombstone', 'reactivate'];
+        if (!operations.includes(operation))
+            throw new Error(`operation must be one of: ${operations.join(', ')}`);
+        const reason = typeof options.reason === 'string' ? options.reason.trim() : '';
+        if (!reason)
+            throw new Error('reason is required');
+        if (Array.from(reason).length > 1000)
+            throw new Error('reason is limited to 1000 Unicode characters');
+        const boundedChars = Math.min(Math.max(Number(options.maxChars) || 10000, 4096), 20000);
+        const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        if (!canAccess(sourcePath))
+            throw new Error(`Access denied: ${this.access.toPublicPath(sourcePath)}`);
+        const source = await this.fileSystem.readNote(sourcePath);
+        if (isModerationHidden(source.frontmatter))
+            throw new Error('The source note is unavailable in the current scope.');
+        const publicSource = this.access.toPublicPath(sourcePath);
+        const blockers = [];
+        const warnings = [];
+        const sourceBoundary = organizationRoleBoundaryReason(sourcePath);
+        if (sourceBoundary)
+            blockers.push({ path: publicSource, reason: sourceBoundary });
+        if (source.frontmatter.llm_wiki_type !== 'knowledge')
+            blockers.push({ path: publicSource, reason: 'Lifecycle transitions require an LLM Wiki knowledge note.' });
+        try {
+            this.access.assertMutationAllowed(sourcePath, 'wiki.lifecycle_transition');
+        }
+        catch (error) {
+            blockers.push({ path: publicSource, reason: error instanceof Error ? error.message : 'The source note cannot be mutated.' });
+        }
+        const currentLifecycle = String(source.frontmatter.lifecycle || '').trim().toLowerCase();
+        const currentKnowledgeStatus = String(source.frontmatter.knowledge_status || '').trim().toLowerCase();
+        const currentRetentionPolicy = String(source.frontmatter.retention_policy || '').trim().toLowerCase();
+        const isRetired = ['archived', 'superseded'].includes(currentLifecycle);
+        if (operation !== 'reactivate' && isRetired) {
+            const sameRetirement = (operation === 'archive' && currentLifecycle === 'archived')
+                || (operation === 'supersede' && currentLifecycle === 'superseded')
+                || (operation === 'tombstone' && currentRetentionPolicy === 'tombstone');
+            if (!sameRetirement)
+                blockers.push({ path: publicSource, reason: 'Reactivate the note before changing it to a different retirement mode.' });
+        }
+        const legalHold = source.frontmatter.legal_hold === true || String(source.frontmatter.legal_hold).trim().toLowerCase() === 'true';
+        const preserveUntilText = typeof source.frontmatter.preserve_until === 'string' ? source.frontmatter.preserve_until.trim() : '';
+        const preserveUntilMs = preserveUntilText ? Date.parse(preserveUntilText) : Number.NaN;
+        if (operation !== 'reactivate' && legalHold)
+            blockers.push({ path: publicSource, reason: 'An active legal hold blocks retirement.' });
+        if (operation !== 'reactivate' && Number.isFinite(preserveUntilMs) && preserveUntilMs > Date.now()) {
+            blockers.push({ path: publicSource, reason: `preserve_until blocks retirement until ${new Date(preserveUntilMs).toISOString()}.` });
+        }
+        const targetLifecycle = String(options.targetLifecycle || 'review').trim().toLowerCase();
+        if (operation === 'reactivate' && !['active', 'review', 'evergreen'].includes(targetLifecycle)) {
+            blockers.push({ path: publicSource, reason: 'targetLifecycle must be active, review, or evergreen.' });
+        }
+        const nextKnowledgeStatus = options.nextKnowledgeStatus === undefined ? undefined : String(options.nextKnowledgeStatus).trim().toLowerCase();
+        if (nextKnowledgeStatus && !['draft', 'verified', 'disputed'].includes(nextKnowledgeStatus)) {
+            blockers.push({ path: publicSource, reason: 'nextKnowledgeStatus must be draft, verified, or disputed.' });
+        }
+        const retirementFields = ['archive_reason', 'retention_policy', 'retention_event', 'retention_at', 'retention_reason', 'replaced_by'];
+        const sourceAlreadyReactivated = operation === 'reactivate'
+            && !isRetired
+            && currentLifecycle === targetLifecycle
+            && (!nextKnowledgeStatus || currentKnowledgeStatus === nextKnowledgeStatus)
+            && retirementFields.every(property => !Object.hasOwn(source.frontmatter, property));
+        if (operation === 'reactivate' && !isRetired && !sourceAlreadyReactivated) {
+            blockers.push({ path: publicSource, reason: 'reactivate requires a currently archived or superseded note, or the exact already-applied active state.' });
+        }
+        if (operation === 'reactivate' && currentKnowledgeStatus === 'superseded' && !nextKnowledgeStatus) {
+            blockers.push({ path: publicSource, reason: 'nextKnowledgeStatus is required because reactivation must not infer the epistemic state of superseded knowledge.' });
+        }
+        const needsReplacement = operation === 'supersede';
+        const mayUseReplacement = operation === 'supersede' || operation === 'tombstone' || operation === 'reactivate';
+        const rawReplacementPath = typeof options.replacementPath === 'string' ? options.replacementPath.trim() : '';
+        if (needsReplacement && !rawReplacementPath)
+            blockers.push({ path: publicSource, reason: 'supersede requires an exact replacementPath.' });
+        if (operation === 'archive' && rawReplacementPath)
+            blockers.push({ path: publicSource, reason: 'archive does not accept replacementPath; use supersede or tombstone for a replacement lineage.' });
+        if (!mayUseReplacement && rawReplacementPath)
+            blockers.push({ path: publicSource, reason: `${operation} does not accept replacementPath.` });
+        if (operation !== 'reactivate' && !rawReplacementPath && typeof source.frontmatter.replaced_by === 'string' && source.frontmatter.replaced_by.trim()) {
+            blockers.push({ path: publicSource, reason: 'This note already has replaced_by; provide and validate its replacement lineage through supersede/tombstone or reactivate it first.' });
+        }
+        if (operation === 'reactivate' && typeof source.frontmatter.replaced_by === 'string' && source.frontmatter.replaced_by.trim() && !rawReplacementPath) {
+            blockers.push({ path: publicSource, reason: 'Reactivation requires replacementPath so the successor supersedes edge can be removed atomically.' });
+        }
+        let replacementPath;
+        let replacement;
+        let canonicalReplacementLink;
+        let canonicalSourceLink;
+        let replacementSupersedes;
+        let sourcePresentInReplacement = false;
+        const sourceSupersedesIndexes = new Set();
+        if (rawReplacementPath) {
+            replacementPath = normalizePath(rawReplacementPath);
+            if (!replacementPath || replacementPath.toLowerCase() === sourcePath.toLowerCase()) {
+                blockers.push({ path: publicSource, reason: 'A note cannot replace or supersede itself.' });
+            }
+            else if (!canAccess(replacementPath)) {
+                blockers.push({ reason: 'The replacement note is unavailable in the current scope.' });
+            }
+            else {
+                try {
+                    replacement = await this.fileSystem.readNote(replacementPath);
+                    if (isModerationHidden(replacement.frontmatter)) {
+                        replacement = undefined;
+                        replacementPath = undefined;
+                        blockers.push({ reason: 'The replacement note is unavailable in the current scope.' });
+                        throw new Error('__MCPVAULT_HIDDEN_REPLACEMENT__');
+                    }
+                    const publicReplacement = this.access.toPublicPath(replacementPath);
+                    const replacementBoundary = organizationRoleBoundaryReason(replacementPath);
+                    if (replacementBoundary)
+                        blockers.push({ path: publicReplacement, reason: replacementBoundary });
+                    if (replacement.frontmatter.llm_wiki_type !== 'knowledge')
+                        blockers.push({ path: publicReplacement, reason: 'The replacement must be an LLM Wiki knowledge note.' });
+                    if (!this.access.canReferenceFrom(sourcePath, replacementPath) || !this.access.canReferenceFrom(replacementPath, sourcePath)) {
+                        blockers.push({ reason: 'The source and replacement cannot form a two-way lineage across this scope privacy boundary.' });
+                    }
+                    try {
+                        this.access.assertMutationAllowed(replacementPath, 'wiki.lifecycle_transition');
+                    }
+                    catch (error) {
+                        blockers.push({ path: publicReplacement, reason: error instanceof Error ? error.message : 'The replacement note cannot be mutated.' });
+                    }
+                    try {
+                        canonicalReplacementLink = canonicalRelationWikiLink(replacementPath);
+                        canonicalSourceLink = canonicalRelationWikiLink(sourcePath);
+                    }
+                    catch (error) {
+                        blockers.push({ reason: error instanceof Error ? error.message : 'The lineage path cannot be encoded as an Obsidian wikilink.' });
+                    }
+                    const rawSupersedes = replacement.frontmatter.supersedes;
+                    if (rawSupersedes === undefined)
+                        replacementSupersedes = [];
+                    else if (!Array.isArray(rawSupersedes) || rawSupersedes.some(value => typeof value !== 'string' || !value.trim())) {
+                        blockers.push({ path: publicReplacement, reason: 'The replacement note supersedes Property must be a native Obsidian list of non-empty links.' });
+                    }
+                    else if (rawSupersedes.length > 30) {
+                        blockers.push({ path: publicReplacement, reason: 'The replacement note supersedes Property exceeds the managed 30-link bound.' });
+                    }
+                    else {
+                        replacementSupersedes = rawSupersedes.map(value => String(value).trim());
+                        for (const [index, raw] of replacementSupersedes.entries()) {
+                            let matches = [];
+                            try {
+                                matches = (await this.fileSystem.findPathForWikiLink(relationDocument(raw), canAccess))
+                                    .filter(path => this.access.canReferenceFrom(replacementPath, path));
+                            }
+                            catch {
+                                matches = [];
+                            }
+                            if (matches.length !== 1) {
+                                blockers.push({ path: publicReplacement, reason: `The replacement supersedes Property contains a ${matches.length ? 'ambiguous' : 'missing or inaccessible'} target.` });
+                            }
+                            else if (normalizePath(matches[0]).toLowerCase() === sourcePath.toLowerCase()) {
+                                sourcePresentInReplacement = true;
+                                sourceSupersedesIndexes.add(index);
+                            }
+                        }
+                    }
+                    const currentReplacement = typeof source.frontmatter.replaced_by === 'string' ? source.frontmatter.replaced_by.trim() : '';
+                    if (currentReplacement) {
+                        let matches = [];
+                        try {
+                            matches = (await this.fileSystem.findPathForWikiLink(relationDocument(currentReplacement), canAccess)).filter(path => this.access.canReferenceFrom(sourcePath, path));
+                        }
+                        catch {
+                            matches = [];
+                        }
+                        if (matches.length !== 1 || normalizePath(matches[0]).toLowerCase() !== replacementPath.toLowerCase()) {
+                            blockers.push({ path: publicSource, reason: 'The current replaced_by lineage is missing, ambiguous, inaccessible, or different from replacementPath.' });
+                        }
+                    }
+                    else if (operation === 'reactivate' && !sourceAlreadyReactivated) {
+                        blockers.push({ path: publicSource, reason: 'The note has no replaced_by lineage to remove with replacementPath.' });
+                    }
+                }
+                catch (error) {
+                    if (!(error instanceof Error && error.message === '__MCPVAULT_HIDDEN_REPLACEMENT__')) {
+                        blockers.push({ reason: error instanceof Error && /not found/i.test(error.message) ? 'The replacement note is unavailable in the current scope.' : 'The replacement note could not be inspected safely.' });
+                    }
+                }
+            }
+        }
+        let referenceImpact = { total: 0, ambiguousTotal: 0, truncated: false };
+        try {
+            const impact = await this.fileSystem.previewDeleteNote({ path: sourcePath, limit: 4 }, canAccess);
+            if (impact.hiddenReferencesPresent)
+                warnings.push({ reason: 'An inaccessible scope references this note or makes its identity ambiguous; the transition preserves the body and path and does not disclose hidden references.' });
+            referenceImpact = {
+                total: impact.total,
+                ambiguousTotal: impact.ambiguousTotal,
+                truncated: impact.truncated,
+                affectedLinks: impact.affectedLinks.map(item => ({ ...item, path: this.access.toPublicPath(item.path) })),
+                affectedProperties: impact.affectedProperties.map(item => ({ ...item, sourcePath: this.access.toPublicPath(item.sourcePath) })),
+                ambiguousReferences: impact.ambiguousReferences.map(item => ({
+                    ...item,
+                    sourcePath: this.access.toPublicPath(item.sourcePath),
+                    candidates: item.candidates.map(path => this.access.toPublicPath(path)),
+                })),
+                hiddenReferencesPresent: impact.hiddenReferencesPresent,
+            };
+        }
+        catch (error) {
+            blockers.push({ path: publicSource, reason: error instanceof Error ? `Reference impact could not be inspected: ${error.message}` : 'Reference impact could not be inspected.' });
+        }
+        const sourceSet = {};
+        const sourceRemove = [];
+        const setIfChanged = (property, value) => {
+            if (JSON.stringify(source.frontmatter[property]) !== JSON.stringify(value))
+                sourceSet[property] = value;
+        };
+        const removeIfPresent = (property) => {
+            if (Object.hasOwn(source.frontmatter, property))
+                sourceRemove.push(property);
+        };
+        if (operation === 'archive') {
+            setIfChanged('lifecycle', 'archived');
+            setIfChanged('retention_policy', 'archive');
+            setIfChanged('retention_event', 'manual');
+            setIfChanged('archive_reason', reason);
+            setIfChanged('retention_reason', reason);
+            removeIfPresent('replaced_by');
+        }
+        else if (operation === 'supersede') {
+            setIfChanged('lifecycle', 'superseded');
+            setIfChanged('knowledge_status', 'superseded');
+            setIfChanged('retention_policy', 'preserve');
+            setIfChanged('retention_event', 'superseded');
+            setIfChanged('retention_reason', reason);
+            if (canonicalReplacementLink)
+                setIfChanged('replaced_by', canonicalReplacementLink);
+            removeIfPresent('archive_reason');
+        }
+        else if (operation === 'tombstone') {
+            setIfChanged('lifecycle', rawReplacementPath ? 'superseded' : 'archived');
+            if (rawReplacementPath)
+                setIfChanged('knowledge_status', 'superseded');
+            setIfChanged('retention_policy', 'tombstone');
+            setIfChanged('retention_event', rawReplacementPath ? 'superseded' : 'manual');
+            setIfChanged('retention_reason', reason);
+            if (canonicalReplacementLink) {
+                setIfChanged('replaced_by', canonicalReplacementLink);
+                removeIfPresent('archive_reason');
+            }
+            else {
+                setIfChanged('archive_reason', reason);
+                removeIfPresent('replaced_by');
+            }
+        }
+        else {
+            setIfChanged('lifecycle', targetLifecycle);
+            if (currentKnowledgeStatus === 'superseded' && nextKnowledgeStatus)
+                setIfChanged('knowledge_status', nextKnowledgeStatus);
+            for (const property of retirementFields)
+                removeIfPresent(property);
+        }
+        const candidateChanges = [];
+        if (Object.keys(sourceSet).length > 0 || sourceRemove.length > 0) {
+            candidateChanges.push({
+                path: publicSource,
+                expectedRevision: source.revision,
+                frontmatter: { ...(Object.keys(sourceSet).length > 0 && { set: sourceSet }), ...(sourceRemove.length > 0 && { remove: sourceRemove }) },
+            });
+        }
+        if (replacement && replacementPath && replacementSupersedes && canonicalSourceLink) {
+            const publicReplacement = this.access.toPublicPath(replacementPath);
+            if (operation === 'reactivate') {
+                if (sourcePresentInReplacement) {
+                    const retained = replacementSupersedes.filter((_raw, index) => !sourceSupersedesIndexes.has(index));
+                    candidateChanges.push({
+                        path: publicReplacement,
+                        expectedRevision: replacement.revision,
+                        frontmatter: retained.length > 0 ? { set: { supersedes: retained } } : { remove: ['supersedes'] },
+                    });
+                }
+                else {
+                    warnings.push({ path: publicReplacement, reason: 'The successor had no reverse supersedes edge; reactivation will still remove the stale replaced_by pointer.' });
+                }
+            }
+            else if (!sourcePresentInReplacement) {
+                if (replacementSupersedes.length >= 30)
+                    blockers.push({ path: publicReplacement, reason: 'The replacement note supersedes Property is full; remove an obsolete edge before adding this lineage.' });
+                else
+                    candidateChanges.push({
+                        path: publicReplacement,
+                        expectedRevision: replacement.revision,
+                        frontmatter: { set: { supersedes: [...replacementSupersedes, canonicalSourceLink] } },
+                    });
+            }
+        }
+        const changes = blockers.length === 0 ? candidateChanges : [];
+        const result = {
+            purpose: 'Read-only knowledge lifecycle preflight. Markdown bodies and paths remain unchanged; the returned revision-stamped notes.change_set keeps retirement metadata and replacement lineage coherent.',
+            operation,
+            source: { path: publicSource, revision: source.revision, lifecycle: currentLifecycle || undefined, knowledgeStatus: currentKnowledgeStatus || undefined },
+            ...(replacement && replacementPath && { replacement: { path: this.access.toPublicPath(replacementPath), revision: replacement.revision, hasReverseSupersedes: sourcePresentInReplacement } }),
+            referenceImpact,
+            changes,
+            blockers,
+            warnings,
+            valid: blockers.length === 0,
+            alreadyApplied: blockers.length === 0 && candidateChanges.length === 0,
+            nextAction: changes.length ? {
+                endpointId: endpointIdForTool('patch_multiple_notes'),
+                instruction: 'Dry-run this exact lifecycle change set, inspect the revisions and reference impact, then confirm its plan fingerprint.',
+            } : undefined,
+            generatedAt: now(),
+        };
+        if (JSON.stringify(result).length > boundedChars)
+            throw new Error('maxChars is too small to preserve the complete lifecycle-transition plan; increase maxChars');
+        return result;
+    }
     noteTemplate(noteKind = 'atomic', maxChars = 7000) {
         const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
         const template = organizationNoteTemplate(noteKind);
@@ -6420,7 +6781,21 @@ export class LlmWikiService {
         if (note.frontmatter.llm_wiki_type && note.frontmatter.llm_wiki_type !== 'knowledge') {
             throw new Error(`triage_wiki_note cannot classify managed LLM Wiki type '${note.frontmatter.llm_wiki_type}'`);
         }
-        const hasOrganizationInput = [params.noteKind, params.lifecycle, params.decisionStatus, params.primaryMoc, params.mocs, params.moc, params.navOrder, params.project, params.reviewAt, params.reviewIntervalDays, params.reviewSnoozedUntil, params.reviewSnoozeReason, params.nextAction, params.waitingFor, params.desiredOutcome, params.projectPurpose, params.projectSupport, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.serviceClass, params.completionCriteria, params.startedAt, params.blockedSince, params.waitingSince, params.completedAt, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.canonicalPath, params.recallPrompt, params.recallIntervalDays, params.lastRecalledAt, params.recallQuality, params.retentionPolicy, params.retentionEvent, params.retentionAt, params.preserveUntil, params.legalHold, params.retentionReason, params.replacedBy, params.knowledgeRole, params.termStatus, params.termReplacedBy, params.termScopeNote, params.preferredTerm, params.termLanguage, params.authorityScheme, params.authorityId, params.disambiguation, params.broaderTerms, params.relatedTerms, params.subjectTerms, params.domain, params.methods, params.audience, params.retrievalCues, params.useWhen, params.validFrom, params.validUntil, params.observedAt, params.temporalScope, params.seeAlso, params.relations, params.relationNotes, params.relationEvidence, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.reviewChecks, params.reviewOpenItems, params.interpretationStatus, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
+        assertPreservationControlsNotWeakened(note.frontmatter, params);
+        const currentLifecycle = String(note.frontmatter.lifecycle || '').trim().toLowerCase();
+        const requestedLifecycle = params.lifecycle === undefined ? undefined : normalizeLifecycle(params.lifecycle);
+        const retiredLifecycle = ['archived', 'superseded'].includes(currentLifecycle);
+        const retirementMetadataRequested = params.archiveReason !== undefined
+            || params.replacedBy !== undefined
+            || ['archive', 'tombstone'].includes(String(params.retentionPolicy || '').trim().toLowerCase())
+            || String(params.retentionEvent || '').trim().toLowerCase() === 'superseded'
+            || (retiredLifecycle && [params.retentionPolicy, params.retentionEvent, params.retentionReason].some(value => value !== undefined));
+        if ((requestedLifecycle && requestedLifecycle !== currentLifecycle
+            && (['archived', 'superseded'].includes(requestedLifecycle) || retiredLifecycle))
+            || retirementMetadataRequested) {
+            throw new Error('Use wiki.lifecycle_transition to preview lifecycle, retention, reference impact, and replacement lineage before retiring or reactivating knowledge.');
+        }
+        const hasOrganizationInput = [params.noteKind, params.lifecycle, params.decisionStatus, params.primaryMoc, params.mocs, params.moc, params.navOrder, params.project, params.reviewAt, params.reviewIntervalDays, params.reviewSnoozedUntil, params.reviewSnoozeReason, params.nextAction, params.waitingFor, params.desiredOutcome, params.projectPurpose, params.projectSupport, params.taskContext, params.dueAt, params.scheduledAt, params.deferUntil, params.serviceClass, params.completionCriteria, params.startedAt, params.blockedSince, params.waitingSince, params.completedAt, params.aliases, params.summary, params.keyPoints, params.openQuestions, params.summaryLayer, params.summaryHighlights, params.nextActions, params.stableId, params.canonicalPath, params.recallPrompt, params.recallIntervalDays, params.lastRecalledAt, params.recallQuality, params.retentionPolicy, params.retentionEvent, params.retentionAt, params.preserveUntil, params.legalHold, params.retentionReason, params.archiveReason, params.replacedBy, params.knowledgeRole, params.termStatus, params.termReplacedBy, params.termScopeNote, params.preferredTerm, params.termLanguage, params.authorityScheme, params.authorityId, params.disambiguation, params.broaderTerms, params.relatedTerms, params.subjectTerms, params.domain, params.methods, params.audience, params.retrievalCues, params.useWhen, params.validFrom, params.validUntil, params.observedAt, params.temporalScope, params.seeAlso, params.relations, params.relationNotes, params.relationEvidence, params.taskStatus, params.reviewPolicy, params.reviewOutcome, params.reviewedBy, params.reviewedAt, params.reviewNote, params.reviewChecks, params.reviewOpenItems, params.interpretationStatus, params.epistemicStatus, params.polarity, params.negativeType, params.attempted, params.observed, params.failureCondition, params.affectedScope, params.reproduction, params.whyRejected, params.reusableLesson, params.replacementPath, params.clarifyDisposition, params.clarifiedBy, params.clarifiedAt, params.clarifyNote, params.triageTarget, params.mocPurpose, params.mocScope, params.mocQuestions, params.mocParent, params.focusHorizon, params.focusParent, params.focusSupports]
             .some(value => value !== undefined);
         if (!hasOrganizationInput && !params.clearInapplicable && [params.tags, params.timeEstimateMinutes, params.energy, params.effort].every(value => value === undefined))
             throw new Error('At least one organization field is required');
@@ -6476,6 +6851,7 @@ export class LlmWikiService {
             ...(params.preserveUntil !== undefined && { preserveUntil: params.preserveUntil }),
             ...(params.legalHold !== undefined && { legalHold: params.legalHold }),
             ...(params.retentionReason !== undefined && { retentionReason: params.retentionReason }),
+            ...(params.archiveReason !== undefined && { archiveReason: params.archiveReason }),
             ...(params.replacedBy !== undefined && { replacedBy: params.replacedBy }),
             ...(params.knowledgeRole !== undefined && { knowledgeRole: params.knowledgeRole }),
             ...(params.termStatus !== undefined && { termStatus: params.termStatus }),
@@ -6604,6 +6980,9 @@ export class LlmWikiService {
                 ...(updated.frontmatter.retention_at && { retentionAt: updated.frontmatter.retention_at }),
                 ...(updated.frontmatter.preserve_until && { preserveUntil: updated.frontmatter.preserve_until }),
                 ...(updated.frontmatter.legal_hold !== undefined && { legalHold: updated.frontmatter.legal_hold }),
+                ...(updated.frontmatter.retention_reason && { retentionReason: updated.frontmatter.retention_reason }),
+                ...(updated.frontmatter.archive_reason && { archiveReason: updated.frontmatter.archive_reason }),
+                ...(updated.frontmatter.replaced_by && { replacedBy: updated.frontmatter.replaced_by }),
                 ...(updated.frontmatter.retrieval_cues && { retrievalCues: updated.frontmatter.retrieval_cues }),
                 ...(updated.frontmatter.use_when && { useWhen: updated.frontmatter.use_when }),
                 ...(updated.frontmatter.valid_from && { validFrom: updated.frontmatter.valid_from }),
@@ -8916,7 +9295,7 @@ export class LlmWikiService {
             'invalid_triage_disposition', 'invalid_clarified_by', 'invalid_clarify_note', 'invalid_triage_target', 'invalid_clarified_at', 'invalid_primary_moc', 'invalid_moc_purpose', 'invalid_moc_scope', 'invalid_moc_questions', 'invalid_moc_parent', 'moc_purpose_missing', 'moc_questions_missing',
             'duplicate_alias_across_notes', 'duplicate_stable_id', 'invalid_review_policy', 'invalid_review_outcome', 'invalid_interpretation_status', 'invalid_review_count', 'invalid_review_reopen_count', 'invalid_last_review_trigger', 'invalid_due_at', 'invalid_scheduled_at', 'invalid_defer_until', 'invalid_last_reviewed_at', 'invalid_epistemic_status', 'epistemic_status_wrong_kind', 'invalid_knowledge_polarity', 'invalid_negative_type', 'negative_lesson_missing', 'negative_reproduction_missing', 'waiting_project_without_owner', 'waiting_work_without_owner', 'active_work_without_next_action', 'literature_interpretation_pending', 'superseded_without_replacement', 'archived_reason_missing', 'review_record_incomplete', 'invalid_term_status', 'term_replacement_missing', 'invalid_broader_terms', 'invalid_related_terms',
             'negative_type_without_negative_polarity', 'negative_polarity_without_type', 'atomic_note_may_be_too_broad',
-            'invalid_retention_policy', 'invalid_retention_event', 'invalid_retention_at', 'invalid_preserve_until', 'invalid_legal_hold', 'legal_hold_blocks_disposition', 'invalid_retention_reason', 'invalid_replaced_by', 'retention_reason_missing', 'tombstone_lifecycle_mismatch',
+            'invalid_retention_policy', 'invalid_retention_event', 'invalid_retention_at', 'invalid_preserve_until', 'invalid_legal_hold', 'legal_hold_blocks_disposition', 'invalid_retention_reason', 'invalid_archive_reason', 'invalid_replaced_by', 'retention_reason_missing', 'tombstone_lifecycle_mismatch',
             'invalid_evidence_locator', 'evidence_path_mismatch', 'stale_evidence_revision', 'invalid_claim_evidence_locator', 'stale_claim_evidence_revision', 'epistemic_status_missing',
             'invalid_relation', 'relation_self_reference', 'invalid_relation_notes', 'invalid_relation_evidence', 'invalid_review_checks', 'invalid_review_open_items', 'invalid_preferred_term', 'invalid_disambiguation',
             'invalid_service_class', 'invalid_completion_criteria', 'invalid_started_at', 'invalid_blocked_since', 'invalid_waiting_since', 'invalid_completed_at', 'active_project_without_completion_criteria', 'active_work_without_started_at', 'blocked_work_without_blocked_since', 'waiting_work_without_waiting_since', 'completed_work_without_completed_at',
@@ -11433,6 +11812,59 @@ export class LlmWikiService {
         if (!title || !context || !decision)
             throw new Error('title, context, and decision are required');
         const status = normalizeDecisionStatus(params.status || 'proposed');
+        const existing = await this.fileSystem.noteExists(params.path) ? await this.fileSystem.readNote(params.path) : undefined;
+        const currentLifecycle = String(existing?.frontmatter.lifecycle || '').trim().toLowerCase();
+        const currentKnowledgeStatus = String(existing?.frontmatter.knowledge_status || '').trim().toLowerCase();
+        const currentDecisionStatus = String(existing?.frontmatter.decision_status || '').trim().toLowerCase();
+        const currentReplacedBy = typeof existing?.frontmatter.replaced_by === 'string' ? existing.frontmatter.replaced_by.trim() : '';
+        let lineageRevisionGuards;
+        if (status === 'superseded') {
+            if (!existing || currentLifecycle !== 'superseded' || currentKnowledgeStatus !== 'superseded' || !currentReplacedBy) {
+                throw new Error('Use wiki.lifecycle_transition with operation supersede and apply its exact notes.change_set before marking an existing Decision Record superseded.');
+            }
+            if (params.replacedBy !== undefined && params.replacedBy.trim() !== currentReplacedBy) {
+                throw new Error('replacedBy must match the exact lineage already applied by wiki.lifecycle_transition.');
+            }
+            const canAccess = (path) => this.access.canAccessPhysicalPath(path, params.principal);
+            const replacements = (await this.fileSystem.findPathForWikiLink(relationDocument(currentReplacedBy), canAccess))
+                .filter(path => this.access.canReferenceFrom(params.path, path) && this.access.canReferenceFrom(path, params.path));
+            if (replacements.length !== 1) {
+                throw new Error('The existing Decision Record replacement lineage is missing, ambiguous, or inaccessible; repair it with wiki.lifecycle_transition.');
+            }
+            const retentionReason = typeof existing.frontmatter.retention_reason === 'string' && existing.frontmatter.retention_reason.trim()
+                ? existing.frontmatter.retention_reason.trim()
+                : 'Decision supersession requires an explicit retention reason.';
+            const transition = await this.lifecycleTransitionPreview(params.principal, {
+                path: params.path,
+                operation: 'supersede',
+                reason: retentionReason,
+                replacementPath: replacements[0],
+            });
+            if (!transition.valid || !transition.alreadyApplied) {
+                throw new Error('The Decision Record supersession lineage is incomplete; apply the exact wiki.lifecycle_transition notes.change_set first.');
+            }
+            if (!transition.replacement?.revision)
+                throw new Error('The Decision Record replacement revision could not be guarded safely.');
+            lineageRevisionGuards = [{ path: replacements[0], expectedRevision: transition.replacement.revision }];
+        }
+        else if (['archived', 'superseded'].includes(currentLifecycle) && status !== 'rejected') {
+            throw new Error('Use wiki.lifecycle_transition with operation reactivate before returning a retired Decision Record to an active decision status.');
+        }
+        if (status === 'rejected') {
+            if (params.replacedBy !== undefined || currentReplacedBy) {
+                throw new Error('A rejected Decision Record cannot create replacement lineage; use status superseded with wiki.lifecycle_transition instead.');
+            }
+            if (existing && ['archived', 'superseded'].includes(currentLifecycle) && currentDecisionStatus !== 'rejected') {
+                throw new Error('Reactivate this retired Decision Record before changing it to the dedicated rejected state.');
+            }
+        }
+        if (status === 'rejected' && existing) {
+            const held = existing.frontmatter.legal_hold === true || String(existing.frontmatter.legal_hold).trim().toLowerCase() === 'true';
+            const preserveUntilMs = typeof existing.frontmatter.preserve_until === 'string' ? Date.parse(existing.frontmatter.preserve_until) : Number.NaN;
+            if (held || (Number.isFinite(preserveUntilMs) && preserveUntilMs > Date.now())) {
+                throw new Error('This Decision Record is protected by legal_hold or preserve_until and cannot be rejected through MCP.');
+            }
+        }
         const list = (value, field) => {
             if (value === undefined)
                 return [];
@@ -11480,7 +11912,7 @@ export class LlmWikiService {
             ...(params.replacedBy && { replacedBy: params.replacedBy }),
             ...(params.reviewAt && { reviewAt: params.reviewAt }),
             expectedRevision: params.expectedRevision,
-        });
+        }, { allowRetiredLifecycle: true, ...(lineageRevisionGuards && { revisionGuards: lineageRevisionGuards }) });
         return { ...published, decisionStatus: status };
     }
     /**

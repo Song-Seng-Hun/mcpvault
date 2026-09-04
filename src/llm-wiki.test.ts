@@ -467,9 +467,60 @@ test('Decision Records preserve structured state and expose a bounded conflict-a
       expect.objectContaining({ path: 'Knowledge/Decisions/Successor.md', issues: expect.arrayContaining([expect.objectContaining({ code: 'superseded_target_still_active', target: 'Knowledge/Decisions/Original.md' })]) }),
     ]));
 
-    await callJson(client, 'publish_decision_record', {
+    const directSupersede = await client.callTool({ name: 'publish_decision_record', arguments: {
       path: 'Knowledge/Decisions/Original.md', title: 'Original policy', context: 'The first policy was in force.', decision: 'Use the original policy.', status: 'superseded', replacedBy: '[[Knowledge/Decisions/Successor]]',
       evidencePaths: [source.value.path], expectedRevision: originalRead.value.revision, accessToken,
+    } });
+    expect(directSupersede.isError).toBe(true);
+    expect(String((directSupersede.content as any)[0].text)).toContain('wiki.lifecycle_transition');
+    const rejectedWithLineage = await client.callTool({ name: 'publish_decision_record', arguments: {
+      path: 'Knowledge/Decisions/Rejected-with-lineage.md', title: 'Rejected policy', context: 'The proposal was evaluated.', decision: 'Do not adopt it.', status: 'rejected',
+      replacedBy: '[[Knowledge/Decisions/Successor]]', evidencePaths: [source.value.path], expectedRevision: 'missing', accessToken,
+    } });
+    expect(rejectedWithLineage.isError).toBe(true);
+    expect(String((rejectedWithLineage.content as any)[0].text)).toContain('cannot create replacement lineage');
+    const transition = await callJson(client, 'call_endpoint', { endpointId: 'wiki.lifecycle_transition', arguments: {
+      path: 'Knowledge/Decisions/Original.md', operation: 'supersede', replacementPath: 'Knowledge/Decisions/Successor.md',
+      reason: 'The successor policy replaces this decision.', accessToken,
+    } });
+    const transitionDryRun = await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: { changes: transition.value.changes, dryRun: true, accessToken } });
+    const transitionApplied = await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: {
+      changes: transition.value.changes, dryRun: false, confirmPlanFingerprint: transitionDryRun.value.planFingerprint, accessToken,
+    } });
+    const transitionedOriginal = transitionApplied.value.changes.find((item: any) => item.path === 'Knowledge/Decisions/Original.md');
+
+    const successorAfterTransition = await callJson(client, 'read_note', { path: 'Knowledge/Decisions/Successor.md', accessToken });
+    const removeReverseChanges = [{
+      path: 'Knowledge/Decisions/Successor.md', expectedRevision: successorAfterTransition.value.revision,
+      frontmatter: { remove: ['supersedes'] },
+    }];
+    const removeReverseDryRun = await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: {
+      changes: removeReverseChanges, dryRun: true, accessToken,
+    } });
+    await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: {
+      changes: removeReverseChanges, dryRun: false, confirmPlanFingerprint: removeReverseDryRun.value.planFingerprint, accessToken,
+    } });
+    const incompleteLineage = await client.callTool({ name: 'publish_decision_record', arguments: {
+      path: 'Knowledge/Decisions/Original.md', title: 'Original policy', context: 'The first policy was in force.', decision: 'Use the original policy.', status: 'superseded', replacedBy: '[[Knowledge/Decisions/Successor]]',
+      evidencePaths: [source.value.path], expectedRevision: transitionedOriginal.revision, accessToken,
+    } });
+    expect(incompleteLineage.isError).toBe(true);
+    expect(String((incompleteLineage.content as any)[0].text)).toContain('supersession lineage is incomplete');
+
+    const lineageRepair = await callJson(client, 'call_endpoint', { endpointId: 'wiki.lifecycle_transition', arguments: {
+      path: 'Knowledge/Decisions/Original.md', operation: 'supersede', replacementPath: 'Knowledge/Decisions/Successor.md',
+      reason: 'The successor policy replaces this decision.', accessToken,
+    } });
+    expect(lineageRepair.value).toMatchObject({ valid: true, alreadyApplied: false, changes: [expect.objectContaining({ path: 'Knowledge/Decisions/Successor.md' })] });
+    const lineageRepairDryRun = await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: {
+      changes: lineageRepair.value.changes, dryRun: true, accessToken,
+    } });
+    await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: {
+      changes: lineageRepair.value.changes, dryRun: false, confirmPlanFingerprint: lineageRepairDryRun.value.planFingerprint, accessToken,
+    } });
+    await callJson(client, 'publish_decision_record', {
+      path: 'Knowledge/Decisions/Original.md', title: 'Original policy', context: 'The first policy was in force.', decision: 'Use the original policy.', status: 'superseded', replacedBy: '[[Knowledge/Decisions/Successor]]',
+      evidencePaths: [source.value.path], expectedRevision: transitionedOriginal.revision, accessToken,
     });
     const repaired = await callJson(client, 'get_wiki_decision_register', { limit: 20, maxChars: 12000, accessToken });
     expect(repaired.value.counts.statuses).toMatchObject({ accepted: 1, superseded: 1 });
@@ -1704,6 +1755,265 @@ test('relation-set previews replace complete directional and focus-support sets 
     } } });
     expect(reciprocal.isError).toBe(true);
     expect(String((reciprocal.content as any)[0].text)).toContain('wiki.reciprocal_link');
+  } finally { await client.close(); await server.close(); }
+});
+
+test('lifecycle transition planner keeps retirement and reactivation metadata coherent', async () => {
+  await mkdir(join(vault, 'Knowledge'), { recursive: true });
+  await writeFile(join(vault, 'Knowledge', 'Old.md'), [
+    '---', 'llm_wiki_type: knowledge', 'note_kind: atomic', 'lifecycle: evergreen', 'knowledge_status: verified', '---',
+    '# Old', '', 'Useful historical content.',
+  ].join('\n'));
+  await writeFile(join(vault, 'Knowledge', 'New.md'), [
+    '---', 'llm_wiki_type: knowledge', 'note_kind: atomic', 'lifecycle: evergreen', 'knowledge_status: verified', '---',
+    '# New', '', 'Corrected current content.',
+  ].join('\n'));
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'lifecycle-owner', modelId: 'codex', password: 'lifecycle-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const discovery = await callJson(client, 'search_capabilities', { query: 'archive supersede tombstone reactivate lifecycle retention', limit: 5, maxChars: 8000, accessToken });
+    expect(discovery.value.endpoints).toEqual(expect.arrayContaining([
+      expect.objectContaining({ endpointId: 'wiki.lifecycle_transition', method: 'POST', available: true }),
+    ]));
+
+    const oldBefore = await callJson(client, 'read_note', { path: 'Knowledge/Old.md', accessToken });
+    const archive = await callJson(client, 'call_endpoint', { endpointId: 'wiki.lifecycle_transition', arguments: {
+      path: 'Knowledge/Old.md', operation: 'archive', reason: 'The project ended.', accessToken,
+    } });
+    expect(archive.value).toMatchObject({
+      valid: true, operation: 'archive', changes: [expect.objectContaining({
+        path: 'Knowledge/Old.md', expectedRevision: oldBefore.value.revision,
+        frontmatter: { set: expect.objectContaining({
+          lifecycle: 'archived', retention_policy: 'archive', retention_event: 'manual',
+          archive_reason: 'The project ended.', retention_reason: 'The project ended.',
+        }) },
+      })],
+      nextAction: { endpointId: 'notes.change_set' },
+    });
+    const stillCurrent = await callJson(client, 'read_note', { path: 'Knowledge/Old.md', accessToken });
+    expect(stillCurrent.value.fm.lifecycle).toBe('evergreen');
+    expect(stillCurrent.value.revision).toBe(oldBefore.value.revision);
+
+    const supersede = await callJson(client, 'call_endpoint', { endpointId: 'wiki.lifecycle_transition', arguments: {
+      path: 'Knowledge/Old.md', operation: 'supersede', replacementPath: 'Knowledge/New.md', reason: 'A corrected note replaces it.', accessToken,
+    } });
+    expect(supersede.value).toMatchObject({
+      valid: true, operation: 'supersede', replacement: { path: 'Knowledge/New.md' },
+      changes: [
+        expect.objectContaining({ path: 'Knowledge/Old.md', frontmatter: { set: expect.objectContaining({
+          lifecycle: 'superseded', knowledge_status: 'superseded', retention_policy: 'preserve',
+          retention_event: 'superseded', retention_reason: 'A corrected note replaces it.', replaced_by: '[[Knowledge/New]]',
+        }) } }),
+        expect.objectContaining({ path: 'Knowledge/New.md', frontmatter: { set: { supersedes: ['[[Knowledge/Old]]'] } } }),
+      ],
+    });
+    const dryRun = await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: { changes: supersede.value.changes, dryRun: true, accessToken } });
+    await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: {
+      changes: supersede.value.changes, dryRun: false, confirmPlanFingerprint: dryRun.value.planFingerprint, accessToken,
+    } });
+    const repeated = await callJson(client, 'call_endpoint', { endpointId: 'wiki.lifecycle_transition', arguments: {
+      path: 'Knowledge/Old.md', operation: 'supersede', replacementPath: 'Knowledge/New.md', reason: 'A corrected note replaces it.', accessToken,
+    } });
+    expect(repeated.value).toMatchObject({ valid: true, alreadyApplied: true, changes: [] });
+
+    const reactivate = await callJson(client, 'call_endpoint', { endpointId: 'wiki.lifecycle_transition', arguments: {
+      path: 'Knowledge/Old.md', operation: 'reactivate', replacementPath: 'Knowledge/New.md', targetLifecycle: 'review',
+      nextKnowledgeStatus: 'draft', reason: 'New evidence reopens the older note.', accessToken,
+    } });
+    expect(reactivate.value).toMatchObject({
+      valid: true, operation: 'reactivate', changes: [
+        expect.objectContaining({ path: 'Knowledge/Old.md', frontmatter: { set: { lifecycle: 'review', knowledge_status: 'draft' }, remove: expect.arrayContaining(['replaced_by', 'retention_policy', 'retention_event', 'retention_reason']) } }),
+        expect.objectContaining({ path: 'Knowledge/New.md', frontmatter: { remove: ['supersedes'] } }),
+      ],
+    });
+    const reactivateDryRun = await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: { changes: reactivate.value.changes, dryRun: true, accessToken } });
+    await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: {
+      changes: reactivate.value.changes, dryRun: false, confirmPlanFingerprint: reactivateDryRun.value.planFingerprint, accessToken,
+    } });
+    const repeatedReactivation = await callJson(client, 'call_endpoint', { endpointId: 'wiki.lifecycle_transition', arguments: {
+      path: 'Knowledge/Old.md', operation: 'reactivate', replacementPath: 'Knowledge/New.md', targetLifecycle: 'review',
+      nextKnowledgeStatus: 'draft', reason: 'New evidence reopens the older note.', accessToken,
+    } });
+    expect(repeatedReactivation.value).toMatchObject({ valid: true, alreadyApplied: true, changes: [], blockers: [] });
+  } finally { await client.close(); await server.close(); }
+});
+
+test('lifecycle transition planner blocks preservation and unsafe lineage without leaking hidden paths', async () => {
+  await mkdir(join(vault, 'Knowledge'), { recursive: true });
+  await mkdir(join(vault, '_scopes', 'models', 'claude'), { recursive: true });
+  await writeFile(join(vault, 'Knowledge', 'Held.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\nlegal_hold: true\n---\n# Held\n');
+  await writeFile(join(vault, 'Knowledge', 'Protected.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\npreserve_until: 2999-01-01\n---\n# Protected\n');
+  await writeFile(join(vault, 'Knowledge', 'Tomb.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\nknowledge_status: disputed\n---\n# Tomb\n');
+  await writeFile(join(vault, 'Knowledge', 'Hidden impact.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\n---\n# Hidden impact\n');
+  await writeFile(join(vault, '_scopes', 'models', 'claude', 'Secret.md'), '# Secret\n\n[[Knowledge/Hidden impact]]\n');
+  await writeFile(join(vault, 'Knowledge', 'Malformed successor.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\nsupersedes: broken\n---\n# Successor\n');
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'lifecycle-guard-owner', modelId: 'codex', password: 'lifecycle-guard-password' });
+    const accessToken = registration.value.accessToken;
+    for (const [path, reason] of [['Knowledge/Held.md', 'legal hold'], ['Knowledge/Protected.md', 'preserve_until']] as const) {
+      const result = await callJson(client, 'call_endpoint', { endpointId: 'wiki.lifecycle_transition', arguments: {
+        path, operation: 'archive', reason: 'Attempted retirement.', accessToken,
+      } });
+      expect(result.value).toMatchObject({ valid: false, changes: [], blockers: expect.arrayContaining([expect.objectContaining({ reason: expect.stringContaining(reason) })]) });
+    }
+    const malformed = await callJson(client, 'call_endpoint', { endpointId: 'wiki.lifecycle_transition', arguments: {
+      path: 'Knowledge/Protected.md', operation: 'supersede', replacementPath: 'Knowledge/Malformed successor.md',
+      reason: 'Attempted replacement.', accessToken,
+    } });
+    expect(malformed.value).toMatchObject({ valid: false, changes: [] });
+    expect(malformed.value.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ reason: expect.stringContaining('supersedes') }),
+    ]));
+
+    const tombstone = await callJson(client, 'call_endpoint', { endpointId: 'wiki.lifecycle_transition', arguments: {
+      path: 'Knowledge/Tomb.md', operation: 'tombstone', reason: 'Keep only a visible retirement marker.', accessToken,
+    } });
+    expect(tombstone.value).toMatchObject({ valid: true, changes: [expect.objectContaining({
+      path: 'Knowledge/Tomb.md', frontmatter: { set: expect.objectContaining({
+        lifecycle: 'archived', retention_policy: 'tombstone',
+        retention_event: 'manual', archive_reason: 'Keep only a visible retirement marker.',
+        retention_reason: 'Keep only a visible retirement marker.',
+      }) },
+    })] });
+    expect(tombstone.value.changes[0].frontmatter.set).not.toHaveProperty('knowledge_status');
+
+    const hiddenImpact = await callJson(client, 'call_endpoint', { endpointId: 'wiki.lifecycle_transition', arguments: {
+      path: 'Knowledge/Hidden impact.md', operation: 'archive', reason: 'Retire after review.', accessToken,
+    } });
+    expect(hiddenImpact.value).toMatchObject({
+      valid: true, changes: [expect.objectContaining({ path: 'Knowledge/Hidden impact.md' })],
+      referenceImpact: { hiddenReferencesPresent: true }, blockers: [],
+      warnings: expect.arrayContaining([expect.objectContaining({ reason: expect.stringContaining('inaccessible scope') })]),
+    });
+    expect(JSON.stringify(hiddenImpact.value)).not.toContain('Secret.md');
+
+    const heldRead = await callJson(client, 'read_note', { path: 'Knowledge/Held.md', accessToken });
+    const clearHold = await client.callTool({ name: 'triage_wiki_note', arguments: {
+      path: 'Knowledge/Held.md', legalHold: false, expectedRevision: heldRead.value.revision, accessToken,
+    } });
+    expect(clearHold.isError).toBe(true);
+    expect(String((clearHold.content as any)[0].text)).toContain('server host');
+    const protectedRead = await callJson(client, 'read_note', { path: 'Knowledge/Protected.md', accessToken });
+    const shortenPreservation = await client.callTool({ name: 'triage_wiki_note', arguments: {
+      path: 'Knowledge/Protected.md', preserveUntil: '2025-01-01', expectedRevision: protectedRead.value.revision, accessToken,
+    } });
+    expect(shortenPreservation.isError).toBe(true);
+    expect(String((shortenPreservation.content as any)[0].text)).toContain('server host');
+    const direct = await client.callTool({ name: 'triage_wiki_note', arguments: {
+      path: 'Knowledge/Held.md', lifecycle: 'archived', archiveReason: 'Bypass.', retentionPolicy: 'archive', retentionReason: 'Bypass.',
+      expectedRevision: heldRead.value.revision, accessToken,
+    } });
+    expect(direct.isError).toBe(true);
+    expect(String((direct.content as any)[0].text)).toContain('wiki.lifecycle_transition');
+    const reviewed = await client.callTool({ name: 'review_wiki_note', arguments: {
+      path: 'Knowledge/Held.md', reviewOutcome: 'superseded', reviewedBy: 'codex', nextLifecycle: 'superseded',
+      expectedRevision: heldRead.value.revision, accessToken,
+    } });
+    expect(reviewed.isError).toBe(true);
+    expect(String((reviewed.content as any)[0].text)).toContain('wiki.lifecycle_transition');
+  } finally { await client.close(); await server.close(); }
+});
+
+test('lifecycle transition closes writer bypasses, resolves scoped successors, and hides moderated metadata', async () => {
+  await mkdir(join(vault, 'Knowledge'), { recursive: true });
+  await mkdir(join(vault, 'Community', 'Posts'), { recursive: true });
+  await mkdir(join(vault, '_wiki'), { recursive: true });
+  await mkdir(join(vault, '_scopes', 'models', 'codex'), { recursive: true });
+  const active = (title: string, extra = '') => ['---', 'llm_wiki_type: knowledge', 'note_kind: atomic', 'lifecycle: evergreen', 'knowledge_status: verified', extra, '---', `# ${title}`, ''].filter(Boolean).join('\n');
+  await writeFile(join(vault, 'Knowledge', 'Retired.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: superseded\nknowledge_status: superseded\nretention_policy: preserve\nretention_event: superseded\nretention_reason: Replaced.\nreplaced_by: "[[Knowledge/Successor]]"\n---\n# Retired\n');
+  await writeFile(join(vault, 'Knowledge', 'Successor.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\nknowledge_status: verified\nsupersedes:\n  - "[[Knowledge/Retired]]"\n---\n# Successor\n');
+  await writeFile(join(vault, 'Knowledge', 'Visible source.md'), active('Visible source'));
+  await writeFile(join(vault, 'Knowledge', 'Hidden source.md'), active('Hidden source', 'moderation_status: quarantined'));
+  await writeFile(join(vault, 'Knowledge', 'Hidden successor.md'), active('Hidden successor', 'moderation_status: quarantined'));
+  for (let index = 1; index <= 4; index += 1) {
+    await writeFile(join(vault, 'Knowledge', `Reference ${index}.md`), `# Reference ${index}\n\n${'before '.repeat(70)}[[Knowledge/Visible source]]${' after'.repeat(70)}\n`);
+  }
+  await writeFile(join(vault, 'Community', 'Posts', 'Managed.md'), active('Managed community record'));
+  await writeFile(join(vault, '_wiki', 'Control.md'), active('Control record'));
+  await writeFile(join(vault, '_scopes', 'models', 'codex', 'Old.md'), active('Scoped old'));
+  await writeFile(join(vault, '_scopes', 'models', 'codex', 'New.md'), active('Scoped new'));
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'lifecycle-bypass-owner', modelId: 'codex', password: 'lifecycle-bypass-password' });
+    const accessToken = registration.value.accessToken;
+    const retired = await callJson(client, 'read_note', { path: 'Knowledge/Retired.md', accessToken });
+    for (const [name, arguments_] of [
+      ['triage_wiki_note', { path: 'Knowledge/Retired.md', lifecycle: 'evergreen', expectedRevision: retired.value.revision, accessToken }],
+      ['review_wiki_note', { path: 'Knowledge/Retired.md', reviewOutcome: 'confirmed', nextLifecycle: 'evergreen', expectedRevision: retired.value.revision, accessToken }],
+    ] as const) {
+      const result = await client.callTool({ name, arguments: arguments_ });
+      expect(result.isError).toBe(true);
+      expect(String((result.content as any)[0].text)).toContain('wiki.lifecycle_transition');
+    }
+
+    const source = await callJson(client, 'ingest_source', {
+      sourceId: 'lifecycle-bypass-evidence', title: 'Lifecycle evidence', content: 'Retirement must be coherent.', capturedBy: 'codex', accessToken,
+    });
+    const publishBypass = await client.callTool({ name: 'publish_knowledge', arguments: {
+      path: 'Knowledge/Published retired.md', content: '# Published retired\n', evidencePaths: [source.value.path], author: 'codex',
+      status: 'superseded', lifecycle: 'superseded', replacedBy: '[[Knowledge/Successor]]', retentionPolicy: 'preserve',
+      retentionReason: 'Bypass.', expectedRevision: 'missing', accessToken,
+    } });
+    expect(publishBypass.isError).toBe(true);
+    expect(String((publishBypass.content as any)[0].text)).toContain('wiki.lifecycle_transition');
+
+    const scoped = await callJson(client, 'call_endpoint', { endpointId: 'wiki.lifecycle_transition', arguments: {
+      path: 'scope://model/codex/Old.md', operation: 'supersede', replacementPath: 'scope://model/codex/New.md', reason: 'Scoped successor.', accessToken,
+    } });
+    expect(scoped.value).toMatchObject({
+      valid: true, source: { path: 'scope://model/codex/Old.md' }, replacement: { path: 'scope://model/codex/New.md' },
+      changes: [expect.objectContaining({ path: 'scope://model/codex/Old.md' }), expect.objectContaining({ path: 'scope://model/codex/New.md' })],
+    });
+
+    const boundedFailure = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'wiki.lifecycle_transition', arguments: {
+      path: 'Knowledge/Visible source.md', operation: 'archive', reason: 'x'.repeat(1000), maxChars: 4096, accessToken,
+    } } });
+    expect(boundedFailure.isError).toBe(true);
+    expect(String((boundedFailure.content as any)[0].text)).toContain('maxChars');
+
+    const stalePlan = await callJson(client, 'call_endpoint', { endpointId: 'wiki.lifecycle_transition', arguments: {
+      path: 'Knowledge/Visible source.md', operation: 'archive', reason: 'Concurrency check.', accessToken,
+    } });
+    const visibleBefore = await callJson(client, 'read_note', { path: 'Knowledge/Visible source.md', accessToken });
+    const concurrentEdit = await client.callTool({ name: 'update_frontmatter', arguments: {
+      path: 'Knowledge/Visible source.md', frontmatter: { concurrency_marker: true }, expectedRevision: visibleBefore.value.revision, accessToken,
+    } });
+    expect(concurrentEdit.isError).toBeFalsy();
+    const staleApply = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'notes.change_set', arguments: {
+      changes: stalePlan.value.changes, dryRun: true, accessToken,
+    } } });
+    expect(staleApply.isError).toBe(true);
+    expect(String((staleApply.content as any)[0].text)).toMatch(/revision|changed/i);
+
+    const hiddenSource = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'wiki.lifecycle_transition', arguments: {
+      path: 'Knowledge/Hidden source.md', operation: 'archive', reason: 'Hidden source.', accessToken,
+    } } });
+    expect(hiddenSource.isError).toBe(true);
+    expect(String((hiddenSource.content as any)[0].text)).not.toMatch(/revision|lifecycle|knowledgeStatus/);
+
+    const hiddenReplacement = await callJson(client, 'call_endpoint', { endpointId: 'wiki.lifecycle_transition', arguments: {
+      path: 'Knowledge/Visible source.md', operation: 'supersede', replacementPath: 'Knowledge/Hidden successor.md', reason: 'Hidden successor.', accessToken,
+    } });
+    expect(hiddenReplacement.value).toMatchObject({ valid: false, changes: [] });
+    expect(hiddenReplacement.value).not.toHaveProperty('replacement');
+    expect(JSON.stringify(hiddenReplacement.value)).not.toMatch(/Hidden successor.*revision|hasReverseSupersedes/);
+
+    const selfReplacement = await callJson(client, 'call_endpoint', { endpointId: 'wiki.lifecycle_transition', arguments: {
+      path: 'Knowledge/Visible source.md', operation: 'supersede', replacementPath: 'Knowledge/Visible source.md', reason: 'Invalid self replacement.', accessToken,
+    } });
+    expect(selfReplacement.value).toMatchObject({ valid: false, changes: [], blockers: expect.arrayContaining([expect.objectContaining({ reason: expect.stringContaining('itself') })]) });
+
+    const managedCommunity = await callJson(client, 'call_endpoint', { endpointId: 'wiki.lifecycle_transition', arguments: {
+      path: 'Community/Posts/Managed.md', operation: 'archive', reason: 'Wrong endpoint.', accessToken,
+    } });
+    expect(managedCommunity.value).toMatchObject({ valid: false, changes: [], blockers: expect.arrayContaining([expect.objectContaining({ reason: expect.stringContaining('dedicated endpoint') })]) });
+
+    const controlRecord = await callJson(client, 'call_endpoint', { endpointId: 'wiki.lifecycle_transition', arguments: {
+      path: '_wiki/Control.md', operation: 'archive', reason: 'Wrong target.', accessToken,
+    } });
+    expect(controlRecord.value).toMatchObject({ valid: false, changes: [], blockers: expect.arrayContaining([expect.objectContaining({ reason: expect.stringContaining('Reserved _wiki') })]) });
   } finally { await client.close(); await server.close(); }
 });
 
