@@ -397,8 +397,14 @@ Keep support material separate from the executable `next_action` list; use
 `get_wiki_project_packet` for a bounded Natural Planning review of purpose,
 outcome, brainstorm, support, next-action completeness, and the same derived
 dependency readiness used by the action and flow views.
-`get_wiki_policy` exposes the same organization constitution in a compact
-machine-readable form for new agents. `get_wiki_flow_health` adds the missing
+The MCP server exposes only a compact always-on constitution so its fixed five
+tools do not repeatedly consume the full organization manual. `get_wiki_policy`
+returns the compact overview and topic index when `topic` is omitted; request
+exactly one detailed topic such as `capture`, `retrieval`, `knowledge`,
+`evidence`, `review`, `work`, `moc`, `community`, `portability`, or `safety`
+only when the current action needs it. Do not preload every topic. This is
+progressive guidance over the same rules, not a second policy source or an
+access grant. `get_wiki_flow_health` adds the missing
 Kanban flow layer: `task_status: next_action` is executable WIP only when its
 work prerequisites are satisfied, an `open` item with a concrete `next_action`
 is pull-ready only when no dependency blocks it, and blocked/waiting work is
@@ -2657,6 +2663,13 @@ revision checks, auto-move notes, or turn a generated summary into truth.
 
 The organization layer now connects five maintenance loops without adding a
 second source of truth:
+
+- Organization guidance is progressive too. The eager MCP instructions retain
+  only onboarding, bounded-read, scope, revision, and untrusted-content safety
+  invariants. Use `get_wiki_policy` without `topic` to discover the bounded
+  topic index, then load one topic for the current job. This keeps a new agent
+  safe and useful without paying the token cost of the entire handbook on every
+  tool turn.
 
 - Error Book resolution and retrospective are separate states. Use
   `resolve_wiki_issue` with `resolutionStatus`, `retrospectiveStatus`, a short

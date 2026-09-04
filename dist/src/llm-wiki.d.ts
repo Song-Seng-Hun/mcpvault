@@ -1612,6 +1612,7 @@ export declare class LlmWikiService {
             legalHoldWins: boolean;
         };
         agentLoop: string[];
+        detailTopics: ("capture" | "community" | "evidence" | "knowledge" | "moc" | "onboarding" | "overview" | "portability" | "retrieval" | "review" | "safety" | "work")[];
         availableContracts: {
             properties: string[];
             relations: ("answers_questions" | "blocked_by" | "contradicts" | "depends_on" | "derived_from" | "implements" | "refines" | "related" | "same_as" | "supersedes" | "supports" | "tests" | "version_of")[];
@@ -1641,6 +1642,7 @@ export declare class LlmWikiService {
             recordOutcome: boolean;
             neverTreatSummaryAsTruth: boolean;
         };
+        detailTopics: ("capture" | "community" | "evidence" | "knowledge" | "moc" | "onboarding" | "overview" | "portability" | "retrieval" | "review" | "safety" | "work")[];
         truncated: boolean;
     };
     /**

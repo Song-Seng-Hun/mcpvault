@@ -1040,7 +1040,17 @@ test('projects expose bounded flow health and the organization policy contract',
     expect(policy.value.work).toMatchObject({ wipLimitDefault: 3, separateFromKnowledgeLifecycle: true, completionCriteria: expect.any(String) });
     expect(policy.value.work.statuses).toEqual(expect.arrayContaining(['next_action', 'waiting', 'blocked']));
     expect(policy.value.filing.rule).toContain('visibility boundaries');
+    expect(policy.value.detailTopics).toEqual(expect.arrayContaining(['overview', 'moc', 'evidence', 'work', 'safety']));
     expect(JSON.stringify(policy.value).length).toBeLessThanOrEqual(7000);
+
+    const mocPolicy = await callJson(client, 'get_wiki_policy', { topic: 'moc', maxChars: 1200, accessToken });
+    expect(mocPolicy.value).toMatchObject({
+      topic: 'moc',
+      rules: expect.any(Array),
+      routes: expect.arrayContaining(['wiki.learning_path']),
+    });
+    expect(JSON.stringify(mocPolicy.value).length).toBeLessThanOrEqual(1200);
+    expect(JSON.stringify(mocPolicy.value)).not.toContain('auth.register');
 
     const packet = await callJson(client, 'get_wiki_review_packet', { limit: 10, maxChars: 12000, accessToken });
     expect(packet.value.counts).toMatchObject({ activeWip: 1, readyToPull: 1, blocked: 1, waiting: 1 });

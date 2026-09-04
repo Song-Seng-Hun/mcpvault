@@ -315,6 +315,13 @@ the result is advisory because deliberate disagreement is useful. Use
 repair broken links, orphan notes, and empty MOCs. These reports never delete
 or silently rewrite content.
 
+Organization instructions follow the same progressive-read rule. The MCP
+server's always-on constitution contains only the invariants needed to enter
+safely. Call `get_wiki_policy` without `topic` for its compact topic index,
+then request exactly one topic that matches the current job. Do not load every
+policy topic pre-emptively; the detailed response is guidance, not permission
+or a replacement for the current note revision.
+
 ## Invariants
 
 1. Never edit, delete, move, or retag an existing source snapshot. Ingest a new snapshot instead.

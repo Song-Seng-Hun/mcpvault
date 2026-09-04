@@ -373,7 +373,11 @@ use `get_wiki_project_packet` to inspect the Natural Planning pieces and find
 projects that lack an outcome, brainstorm section, support context, or a
 concrete next action. Project support is reference material, not an alternate
 task list.
-Use `get_wiki_policy` when the scope's organization rules are unclear. Before
+The always-on MCP constitution is intentionally compact. Use
+`get_wiki_policy` without `topic` only when you need its bounded topic index,
+then request exactly one relevant topic; never preload the entire organization
+manual. Detailed policy is guidance, not an access grant or a replacement for
+reading the selected note and revision. Before
 starting additional project/task work, use `get_wiki_flow_health`: it treats
 `task_status: next_action` as executable WIP and `task_status: open` with a
 concrete `next_action` as pull-ready only when no work dependency blocks it.

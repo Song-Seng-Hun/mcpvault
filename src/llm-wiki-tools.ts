@@ -368,8 +368,11 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_policy',
-      description: 'Return the bounded machine-readable organization constitution for the visible scope: source-of-truth rules, PARA filing, lifecycle, WIP/pull policy, completion criteria, evidence, links, review, and retention. It is guidance, not an access grant or a mutation.',
-      inputSchema: { type: 'object', properties: { maxChars: { type: 'integer', minimum: 1024, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
+      description: 'Return a bounded machine-readable organization constitution. Omit topic for the compact overview and available topic index; select exactly one topic only when the current job needs detailed guidance. Policy is guidance, not an access grant or mutation.',
+      inputSchema: { type: 'object', properties: {
+        topic: { type: 'string', enum: ['overview', 'onboarding', 'capture', 'retrieval', 'knowledge', 'evidence', 'review', 'work', 'moc', 'community', 'portability', 'safety'], default: 'overview', description: 'Load one relevant policy slice instead of the whole handbook' },
+        maxChars: { type: 'integer', minimum: 1024, maximum: 16000, default: 7000 }, accessToken, prettyPrint,
+      } },
     },
     {
       name: 'record_wiki_recall',

@@ -15,6 +15,7 @@ import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
 import { buildNoteReferenceIndex, normalizeNoteReferenceTerm, resolveNoteReference, type NoteReferenceIndex } from './note-reference.js';
+import { WIKI_POLICY_TOPICS } from './wiki-policy.js';
 import type { QueryNote } from './types.js';
 
 const KNOWLEDGE_STATUSES = new Set(['draft', 'verified', 'disputed', 'superseded']);
@@ -1010,6 +1011,13 @@ its content digest remain authoritative. The progressive projection reports
 freshness and must not be treated as current when stale. GTD Horizons can be recorded with
 \`focus_horizon\` (ground, project, area, goal, vision, purpose),
 \`focus_parent\`, and \`focus_supports\` to connect actions to outcomes.
+
+Organization instructions follow the same progressive-read rule. The MCP
+server's always-on constitution contains only the invariants needed to enter
+safely. Call \`get_wiki_policy\` without \`topic\` for its compact topic index,
+then request exactly one topic that matches the current job. Do not load every
+policy topic pre-emptively; the detailed response is guidance, not permission
+or a replacement for the current note revision.
 
 ## Invariants
 
@@ -4191,10 +4199,11 @@ export class LlmWikiService {
       review: { inspectCurrentRevision: true, useReviewQueue: true, recordOutcome: true, neverTreatSummaryAsTruth: true },
       retention: { policies: ['preserve', 'review', 'archive', 'tombstone'], automaticDeletion: false, legalHoldWins: true },
       agentLoop: ['capture quickly', 'clarify and file', 'distill into reusable knowledge', 'link it to a map', 'review evidence and flow', 'express or execute one next action'],
+      detailTopics: [...WIKI_POLICY_TOPICS],
       availableContracts: { properties: getOrganizationPropertyContract().map(entry => entry.name), relations: getOrganizationRelationContract().map(entry => entry.field) },
     };
     if (JSON.stringify(result).length <= boundedChars) return result;
-    return { purpose: result.purpose, sourceOfTruth: result.sourceOfTruth, filing: result.filing, work: result.work, review: result.review, truncated: true };
+    return { purpose: result.purpose, sourceOfTruth: result.sourceOfTruth, filing: result.filing, work: result.work, review: result.review, detailTopics: result.detailTopics, truncated: true };
   }
 
   /**
