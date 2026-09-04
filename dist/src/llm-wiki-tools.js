@@ -627,7 +627,7 @@ export function getLlmWikiTools() {
                     compareManifest: { type: 'object', description: 'Optional counterpart organization manifest returned by this endpoint; limited to 128000 serialized characters' },
                     expectedCounterpartFingerprint: { type: 'string', pattern: '^[a-fA-F0-9]{64}$', description: 'Optional revision guard for the compared contract' },
                     limit: { type: 'integer', minimum: 1, maximum: 100, default: 30, description: 'Maximum readiness issues and metadata inventory rows' },
-                    maxChars: { type: 'integer', minimum: 2048, maximum: 24000, default: 12000 }, accessToken, prettyPrint,
+                    maxChars: { type: 'integer', minimum: 2048, maximum: 24000, default: 14000 }, accessToken, prettyPrint,
                 } },
         },
         {

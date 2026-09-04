@@ -1020,6 +1020,11 @@ or a replacement for the current note revision. Every slice carries a
 \`policyVersion\` and \`policyFingerprint\`; cached guidance is reusable only while
 the current overview reports the same fingerprint.
 
+Portable organization manifests keep only machine-significant Property and
+relation fields in their contract rows. This lets a bounded manifest retain
+the exact allowed values, applicability, direction, and reciprocity needed to
+recompute its fingerprint; read \`get_wiki_property_contract\` for prose guidance.
+
 ## Invariants
 
 1. Never edit, delete, move, or retag an existing source snapshot. Ingest a new snapshot instead.
@@ -4203,15 +4208,29 @@ export class LlmWikiService {
     // Authentication must not widen a portable export. The readiness scan
     // below deliberately uses anonymous/global access rules.
     void principal;
-    const boundedChars = Math.min(Math.max(Number(options.maxChars) || 12000, 2048), 24000);
+    const boundedChars = Math.min(Math.max(Number(options.maxChars) || 14000, 2048), 24000);
     const boundedLimit = Math.min(Math.max(Number(options.limit) || 30, 1), 100);
+    // A portable manifest is a machine compatibility contract, not the prose
+    // reference manual. Keep only fields that participate in its fingerprint;
+    // wiki.property_contract remains the bounded human-facing documentation.
+    const propertyContracts = getOrganizationPropertyContract().map(entry => ({
+      name: entry.name,
+      type: entry.type,
+      ...(entry.allowed && { allowed: entry.allowed }),
+      ...(entry.appliesTo && { appliesTo: entry.appliesTo }),
+    }));
+    const relationContracts = getOrganizationRelationContract().map(entry => ({
+      field: entry.field,
+      direction: entry.direction,
+      reciprocal: entry.reciprocal,
+    }));
     const contracts = {
       noteKinds: [...NOTE_KINDS],
       lifecycles: [...LIFECYCLES],
       taskStatuses: [...TASK_STATUSES],
       serviceClasses: [...SERVICE_CLASSES],
-      properties: getOrganizationPropertyContract(),
-      relations: getOrganizationRelationContract(),
+      properties: propertyContracts,
+      relations: relationContracts,
       claimRoles: [...CLAIM_ROLES],
       claimRelations: CLAIM_RELATION_FIELDS.map(item => item.property),
     };

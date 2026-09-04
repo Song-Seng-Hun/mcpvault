@@ -2613,8 +2613,22 @@ test('portable migration preflight excludes non-global content and reports revis
     await client.callTool({ name: 'write_note', arguments: { path: 'Knowledge/Quarantined Portable.md', content: '# Quarantined\nNever export.', frontmatter: { note_kind: 'atomic', moderation_status: 'quarantined', stable_id: 'quarantined-id' }, expectedRevision: 'missing', accessToken } });
     await callJson(client, 'publish_blog_post', { slug: 'portable-community-only', title: 'Community only', content: 'Never enter a global migration inventory.', expectedRevision: 'missing', accessToken });
 
-    const defaultManifest = await callJson(client, 'get_wiki_organization_manifest', { maxChars: 24000, accessToken });
+    const defaultManifest = await callJson(client, 'get_wiki_organization_manifest', { accessToken });
     expect(defaultManifest.value).toMatchObject({ manifestVersion: 5, portable: true, contentFreeByDefault: true, contractFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/), templates: expect.arrayContaining(['concept', 'model']), basesViews: expect.arrayContaining(['concepts', 'authority', 'archives']), contracts: expect.objectContaining({ claimRoles: expect.arrayContaining(['premise', 'conclusion', 'objection']), claimRelations: expect.arrayContaining(['supports_claims', 'contradicts_claims', 'depends_on_claims']) }) });
+    expect(defaultManifest.value.truncated).toBeUndefined();
+    expect(defaultManifest.value.contracts.properties).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'task_status', type: 'text', allowed: expect.arrayContaining(['open', 'completed']), appliesTo: ['project', 'task'] }),
+    ]));
+    expect(defaultManifest.value.contracts.properties[0].description).toBeUndefined();
+    const selfCompared = await callJson(client, 'get_wiki_organization_manifest', {
+      compareManifest: defaultManifest.value,
+      expectedCounterpartFingerprint: defaultManifest.value.contractFingerprint,
+      limit: 50,
+      maxChars: 24000,
+      accessToken,
+    });
+    expect(selfCompared.value.migrationPreview).toMatchObject({ compatible: true, blockingIssues: 0, counterpartChanged: false });
+    expect(selfCompared.value.migrationPreview.issueCounts).toEqual({});
     expect(defaultManifest.value.readiness).toBeUndefined();
     expect(JSON.stringify(defaultManifest.value)).not.toContain('Portable One');
 

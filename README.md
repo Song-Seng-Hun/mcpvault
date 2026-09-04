@@ -2733,7 +2733,11 @@ second source of truth:
   rewriting anything.
 - `get_wiki_organization_manifest` returns a versioned, fingerprinted portable
   contract for PARA, Obsidian syntax, Properties, relations, lifecycles, and
-  migration. Its default response is content-free. `includeReadiness` adds a
+  migration. Its default response is content-free. Property and relation rows
+  contain only the machine fields used by the fingerprint, so one bounded
+  response remains complete without dropping allowed values, `appliesTo`,
+  direction, or reciprocity; use `get_wiki_property_contract` for the longer
+  human-facing descriptions. `includeReadiness` adds a
   bounded metadata-only global inventory and detects Property shape drift,
   vocabulary/stable-ID collisions, and missing/non-portable typed-relation
   targets. It excludes Community, private scopes, whispers, note bodies,
