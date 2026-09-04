@@ -2144,6 +2144,9 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             reason: trimmedArgs.reason,
             retrospective: trimmedArgs.retrospective,
             knowledgeNotes: trimmedArgs.knowledgeNotes,
+            negativeKnowledgeNotes: trimmedArgs.negativeKnowledgeNotes,
+            noReusableKnowledge: trimmedArgs.noReusableKnowledge,
+            knowledgeDispositionReason: trimmedArgs.knowledgeDispositionReason,
             expectedRevision: trimmedArgs.expectedRevision,
           }), trimmedArgs.prettyPrint);
         }

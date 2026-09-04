@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
@@ -55,6 +55,8 @@ test('profiles, durable notifications, tasks, and capability revocation compose 
     expect(taskRead.value.fm).toMatchObject({ status: 'proposed', assignee: 'researcher' });
     const taskUpdate = await json(client, 'update_agent_task', { taskId: task.value.taskId, status: 'in_progress', reason: 'Researcher accepted the review.', expectedRevision: taskRead.value.revision, accessToken: agentToken });
     expect(taskUpdate.value).toMatchObject({ status: 'in_progress', assignee: 'researcher' });
+    await mkdir(join(vault, 'Knowledge'), { recursive: true });
+    await writeFile(join(vault, 'Knowledge/evidence-quality.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: review\nknowledge_status: draft\n---\n# Evidence quality\n');
     const taskComplete = await json(client, 'update_agent_task', {
       taskId: task.value.taskId,
       status: 'completed',
@@ -64,9 +66,9 @@ test('profiles, durable notifications, tasks, and capability revocation compose 
       expectedRevision: taskUpdate.value.revision,
       accessToken: agentToken,
     });
-    expect(taskComplete.value).toMatchObject({ status: 'completed', retrospective: 'Found that citation quality matters more than citation count.', knowledgeNotes: ['Knowledge/evidence-quality.md'] });
+    expect(taskComplete.value).toMatchObject({ status: 'completed', retrospective: 'Found that citation quality matters more than citation count.', knowledgeNotes: ['Knowledge/evidence-quality.md'], knowledgeDispositions: ['linked_knowledge', 'retrospective'] });
     const completedTask = await json(client, 'read_agent_task', { taskId: task.value.taskId });
-    expect(completedTask.value.fm).toMatchObject({ status: 'completed', retrospective: 'Found that citation quality matters more than citation count.', knowledge_notes: ['Knowledge/evidence-quality.md'] });
+    expect(completedTask.value.fm).toMatchObject({ status: 'completed', retrospective: 'Found that citation quality matters more than citation count.', knowledge_notes: ['Knowledge/evidence-quality.md'], knowledge_dispositions: ['linked_knowledge', 'retrospective'] });
 
     const capabilityChange = await json(client, 'update_agent_capabilities', { agentId: 'researcher', capabilities: ['profile', 'task'], accessToken: ownerToken });
     expect(capabilityChange.value.capabilities).toEqual(['profile', 'task']);
@@ -84,6 +86,143 @@ test('profiles, durable notifications, tasks, and capability revocation compose 
     expect(audit.value.events.some((event: any) => event.tool === 'update_agent_capabilities')).toBe(true);
     expect(audit.value.events.some((event: any) => event.tool === 'publish_blog_post')).toBe(true);
     expect(audit.value.events.every((event: any) => !('accessToken' in event) && !('password' in event))).toBe(true);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('task completion requires a bounded auditable knowledge disposition', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await client.callTool({ name: 'register_scope_account', arguments: { accountId: 'disposition-owner', modelId: 'codex', password: 'disposition-owner-password' } });
+    const accessToken = JSON.parse((registration.content as any)[0].text).accessToken as string;
+    await mkdir(join(vault, 'Knowledge/Failed approaches'), { recursive: true });
+    await writeFile(join(vault, 'Knowledge/Durable lesson.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: review\nknowledge_status: draft\n---\n# Durable lesson\n');
+    await writeFile(join(vault, 'Knowledge/Failed approaches/Blind retry.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: review\nknowledge_status: disputed\nknowledge_polarity: negative\nnegative_type: failure\n---\n# Blind retry\n');
+
+    const createTask = async (taskId: string) => json(client, 'create_agent_task', {
+      taskId,
+      title: `Disposition ${taskId}`,
+      description: 'Verify that task learning is not silently discarded.',
+      expectedRevision: 'missing',
+      accessToken,
+    });
+
+    const missing = await createTask('missing-disposition');
+    const rejected = await client.callTool({ name: 'update_agent_task', arguments: {
+      taskId: missing.value.taskId,
+      status: 'completed',
+      reason: 'Work finished.',
+      expectedRevision: missing.value.revision,
+      accessToken,
+    } });
+    expect(rejected.isError).toBe(true);
+    expect((rejected.content as any)[0].text).toContain('knowledge disposition');
+    expect((await json(client, 'read_agent_task', { taskId: missing.value.taskId })).value.fm.status).toBe('proposed');
+
+    const retrospectiveTask = await createTask('retrospective-disposition');
+    const retrospective = await json(client, 'update_agent_task', {
+      taskId: retrospectiveTask.value.taskId,
+      status: 'completed',
+      reason: 'Work finished.',
+      retrospective: 'Revision guards prevented an accidental overwrite.',
+      expectedRevision: retrospectiveTask.value.revision,
+      accessToken,
+    });
+    expect(retrospective.value).toMatchObject({ knowledgeDispositions: ['retrospective'] });
+
+    const linkedTask = await createTask('linked-disposition');
+    const linked = await json(client, 'update_agent_task', {
+      taskId: linkedTask.value.taskId,
+      status: 'completed',
+      reason: 'Work finished.',
+      knowledgeNotes: ['Knowledge/Durable lesson.md'],
+      expectedRevision: linkedTask.value.revision,
+      accessToken,
+    });
+    expect(linked.value).toMatchObject({ knowledgeDispositions: ['linked_knowledge'], knowledgeNotes: ['Knowledge/Durable lesson.md'] });
+
+    const negativeTask = await createTask('negative-disposition');
+    const negative = await json(client, 'update_agent_task', {
+      taskId: negativeTask.value.taskId,
+      status: 'completed',
+      reason: 'The attempted approach failed.',
+      negativeKnowledgeNotes: ['Knowledge/Failed approaches/Blind retry.md'],
+      expectedRevision: negativeTask.value.revision,
+      accessToken,
+    });
+    expect(negative.value).toMatchObject({ knowledgeDispositions: ['negative_knowledge'], negativeKnowledgeNotes: ['Knowledge/Failed approaches/Blind retry.md'] });
+
+    const emptyTask = await createTask('no-reusable-disposition');
+    const noReusable = await json(client, 'update_agent_task', {
+      taskId: emptyTask.value.taskId,
+      status: 'completed',
+      reason: 'The acknowledgement is complete.',
+      noReusableKnowledge: true,
+      knowledgeDispositionReason: 'The task only confirmed an already documented fact and produced no new reusable result.',
+      expectedRevision: emptyTask.value.revision,
+      accessToken,
+    });
+    expect(noReusable.value).toMatchObject({ knowledgeDispositions: ['no_reusable_knowledge'], knowledgeDispositionReason: expect.stringContaining('already documented') });
+
+    const contradictoryTask = await createTask('contradictory-disposition');
+    const contradictory = await client.callTool({ name: 'update_agent_task', arguments: {
+      taskId: contradictoryTask.value.taskId,
+      status: 'completed',
+      reason: 'Work finished.',
+      retrospective: 'A reusable lesson exists.',
+      noReusableKnowledge: true,
+      knowledgeDispositionReason: 'No reusable result.',
+      expectedRevision: contradictoryTask.value.revision,
+      accessToken,
+    } });
+    expect(contradictory.isError).toBe(true);
+    expect((contradictory.content as any)[0].text).toContain('cannot be combined');
+
+    const invalidTask = await createTask('invalid-linked-disposition');
+    const invalid = await client.callTool({ name: 'update_agent_task', arguments: {
+      taskId: invalidTask.value.taskId,
+      status: 'completed',
+      reason: 'Work finished.',
+      knowledgeNotes: ['Knowledge/does-not-exist.md'],
+      expectedRevision: invalidTask.value.revision,
+      accessToken,
+    } });
+    expect(invalid.isError).toBe(true);
+    expect((invalid.content as any)[0].text).toContain('visible public knowledge notes');
+    expect((invalid.content as any)[0].text).not.toContain('does-not-exist');
+
+    const staleTask = await createTask('stale-disposition');
+    const changed = await json(client, 'update_agent_task', {
+      taskId: staleTask.value.taskId,
+      status: 'in_progress',
+      reason: 'Work started.',
+      expectedRevision: staleTask.value.revision,
+      accessToken,
+    });
+    const stale = await client.callTool({ name: 'update_agent_task', arguments: {
+      taskId: staleTask.value.taskId,
+      status: 'completed',
+      reason: 'Work finished.',
+      retrospective: 'This update used a stale revision.',
+      expectedRevision: staleTask.value.revision,
+      accessToken,
+    } });
+    expect(stale.isError).toBe(true);
+    expect((stale.content as any)[0].text).toMatch(/revision/i);
+    expect(changed.value.status).toBe('in_progress');
+
+    const legacyTask = await createTask('legacy-compatible');
+    await writeFile(join(vault, 'Community/Tasks/legacy-compatible.md'), `---\nmcpvault_type: agent_task\ntask_id: legacy-compatible\ntitle: Legacy compatible\ndescription: Historical completion.\nrequester: codex\nrequester_role: model\nstatus: completed\ncreated_at: 2026-01-01T00:00:00.000Z\nupdated_at: 2026-01-01T00:00:00.000Z\n---\n# Legacy compatible\n\nHistorical completion.\n`);
+    const legacyRead = await json(client, 'read_agent_task', { taskId: legacyTask.value.taskId });
+    const legacyUpdate = await json(client, 'update_agent_task', {
+      taskId: legacyTask.value.taskId,
+      description: 'Historical completion remains editable.',
+      expectedRevision: legacyRead.value.revision,
+      accessToken,
+    });
+    expect(legacyUpdate.value.status).toBe('completed');
   } finally {
     await client.close();
     await server.close();
