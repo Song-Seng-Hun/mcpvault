@@ -163,6 +163,22 @@ function boundedText(value: unknown, maxChars: number): string {
   return `${text.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
 }
 
+/** Budget the complete report, preserving an executable read when prose is cut. */
+function boundedMaintenanceReport<T extends Record<string, unknown>>(candidates: Array<Record<string, any>>, total: number, maxChars: number, endpointId: string, extra: T) {
+  const items: Array<Record<string, any>> = [];
+  for (const candidate of candidates) {
+    const trial = { ...extra, items: [...items, candidate], total, truncated: total > items.length + 1 };
+    if (JSON.stringify(trial).length > maxChars) break;
+    items.push(candidate);
+  }
+  if (items.length || total === 0) return { ...extra, items, total, truncated: total > items.length };
+  if (!candidates.length) return { ...extra, items, total, truncated: true, nextAction: { endpointId, arguments: { ...extra, limit: 1, maxChars } } };
+  const first = candidates[0]!;
+  const compact = { ...extra, items: [{ path: first.path, revision: first.revision, nextAction: first.nextAction, candidateTruncated: true }], total, truncated: true };
+  if (JSON.stringify(compact).length <= maxChars) return compact;
+  return { ...extra, items: [], total, truncated: true, nextAction: { endpointId, arguments: { ...extra, limit: 1, maxChars: 16000 } } };
+}
+
 function normalizeArchiveIdentifier(value: unknown, field: string): string | undefined {
   if (value === undefined || value === null || value === '') return undefined;
   const normalized = String(value).trim();
@@ -13631,14 +13647,34 @@ export class LlmWikiService {
     return { total, truncated: true };
   }
 
+  private async currentMaintenanceCandidates(candidates: Array<Record<string, any>>, principal?: ScopePrincipal) {
+    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+    const paths = candidates.map(item => this.access.resolveExternalPath(String(item.path), principal));
+    const current = await this.fileSystem.readNoteMetadata(paths, canAccess, { fresh: true, strict: true });
+    const revisions = new Map(current.filter(note => !isModerationHidden(note.frontmatter))
+      .map(note => [this.access.toPublicPath(note.path), note.revision]));
+    return candidates.filter(item => item.revision && revisions.get(item.path) === item.revision);
+  }
+
   async summaryCandidates(principal?: ScopePrincipal, limit = 10, maxChars = 6000) {
     const boundedLimit = Math.min(Math.max(Number(limit) || 10, 1), 30);
     const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 16000);
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
     const candidates: Array<Record<string, any>> = [];
     let total = 0;
-    for await (const note of iterateNotes(this.fileSystem, { includeContent: true }, canAccess)) {
-      if (note.frontmatter.llm_wiki_type !== 'knowledge' || !note.content?.trim()) continue;
+    const compare = (left: Record<string, any>, right: Record<string, any>) => Number(right.reason === 'stale_summary') - Number(left.reason === 'stale_summary') || Number(right.reason === 'missing_summary') - Number(left.reason === 'missing_summary') || right.contentChars - left.contentChars || String(left.path).localeCompare(String(right.path));
+    // Hash validation needs current bodies, but do not hydrate unrelated sources
+    // or retain every candidate's prose while scanning the knowledge inventory.
+    for await (const metadata of iterateNotes(this.fileSystem, {}, canAccess)) {
+      if (metadata.frontmatter.llm_wiki_type !== 'knowledge' || isModerationHidden(metadata.frontmatter)) continue;
+      let source;
+      try { source = await this.fileSystem.readNote(metadata.path); } catch (error) {
+        const current = await this.fileSystem.readNoteMetadata([metadata.path], canAccess, { fresh: true, strict: true });
+        if (current.length) throw error;
+        continue;
+      }
+      const note = { ...source, path: metadata.path };
+      if (!canAccess(note.path) || isModerationHidden(note.frontmatter) || note.frontmatter.llm_wiki_type !== 'knowledge' || !note.content.trim()) continue;
       const summary = typeof note.frontmatter.summary === 'string' ? note.frontmatter.summary.trim() : '';
       const hasProgressiveFields = Boolean(summary || note.frontmatter.key_points || note.frontmatter.open_questions || note.frontmatter.summary_layer !== undefined || note.frontmatter.summary_highlights);
       const summaryFresh = typeof note.frontmatter.summary_of_content_sha256 === 'string'
@@ -13648,20 +13684,19 @@ export class LlmWikiService {
       total += 1;
       candidates.push({
         path: this.access.toPublicPath(note.path),
-        title: note.frontmatter.title || note.path.split('/').at(-1),
+        title: boundedText(note.frontmatter.title || note.path.split('/').at(-1), 160),
         reason: !hasProgressiveFields ? 'missing_summary' : !summaryFresh ? 'stale_summary' : 'long_without_compact_projection',
         contentChars: note.content.length,
-        summaryCandidate: boundedText(summary || paragraphs[0] || note.content, 500),
+        summaryCandidate: boundedText((summaryFresh ? summary : '') || paragraphs[0] || note.content, 500),
+        revision: note.revision,
+        nextAction: { endpointId: 'notes.read', arguments: { path: this.access.toPublicPath(note.path), maxChars: 3000 } },
         ...(hasProgressiveFields && { summaryFresh }),
       });
+      candidates.sort(compare);
+      if (candidates.length > boundedLimit) candidates.pop();
     }
-    candidates.sort((left, right) => Number(right.reason === 'stale_summary') - Number(left.reason === 'stale_summary') || Number(right.reason === 'missing_summary') - Number(left.reason === 'missing_summary') || right.contentChars - left.contentChars || String(left.path).localeCompare(String(right.path)));
-    const items: Array<Record<string, unknown>> = [];
-    for (const item of candidates.slice(0, boundedLimit)) {
-      if (JSON.stringify([...items, item]).length + 2 > boundedChars) break;
-      items.push(item);
-    }
-    return { items, total, truncated: total > items.length };
+    const current = await this.currentMaintenanceCandidates(candidates, principal);
+    return boundedMaintenanceReport(current, total - (candidates.length - current.length), boundedChars, 'wiki.summary_candidates', {});
   }
 
   async unusedKnowledge(principal?: ScopePrincipal, olderThanDays = 180, limit = 20, maxChars = 7000) {
@@ -13672,18 +13707,31 @@ export class LlmWikiService {
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
     const candidates: Array<Record<string, any>> = [];
     let total = 0;
-    for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
-      if (note.frontmatter.llm_wiki_type !== 'knowledge') continue;
-      const snoozedUntil = Date.parse(String(note.frontmatter.review_snoozed_until || ''));
-      if (Number.isFinite(snoozedUntil) && snoozedUntil > Date.now()) continue;
+    const compare = (left: Record<string, any>, right: Record<string, any>) => String(left.updatedAt).localeCompare(String(right.updatedAt)) || String(left.path).localeCompare(String(right.path));
+    const eligibleDate = (fm: Record<string, any>): number | undefined => {
+      if (fm.llm_wiki_type !== 'knowledge' || isModerationHidden(fm)) return undefined;
+      const snoozedUntil = Date.parse(String(fm.review_snoozed_until || ''));
+      if (Number.isFinite(snoozedUntil) && snoozedUntil > Date.now()) return undefined;
+      if (['archived', 'superseded'].includes(String(fm.lifecycle || '').toLowerCase())) return undefined;
+      const updated = Date.parse(String(fm.updated_at || fm.created_at || ''));
+      return Number.isFinite(updated) && updated <= cutoff ? updated : undefined;
+    };
+    for await (const metadata of iterateNotes(this.fileSystem, {}, canAccess)) {
+      if (eligibleDate(metadata.frontmatter) === undefined) continue;
+      // Read authoritative metadata before eligibility/counting, not just the
+      // final winner; an index lag must not expose a hidden row through totals.
+      const current = await this.fileSystem.readNoteMetadata([metadata.path], canAccess, { fresh: true, strict: true });
+      const note = current[0];
+      if (!note) continue;
+      const updated = eligibleDate(note.frontmatter);
+      if (updated === undefined) continue;
       const lifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
-      if (lifecycle === 'archived' || lifecycle === 'superseded') continue;
-      const updated = Date.parse(String(note.frontmatter.updated_at || note.frontmatter.created_at || ''));
-      if (!Number.isFinite(updated) || updated > cutoff) continue;
       total += 1;
       const item = {
         path: this.access.toPublicPath(note.path),
-        title: note.frontmatter.title || note.path.split('/').at(-1),
+        title: boundedText(note.frontmatter.title || note.path.split('/').at(-1), 160),
+        revision: note.revision,
+        nextAction: { endpointId: 'notes.read', arguments: { path: this.access.toPublicPath(note.path), maxChars: 3000 } },
         updatedAt: new Date(updated).toISOString(),
         ageDays: Math.floor((Date.now() - updated) / (24 * 60 * 60 * 1000)),
         lifecycle: lifecycle || undefined,
@@ -13691,12 +13739,22 @@ export class LlmWikiService {
         references: Array.isArray(note.frontmatter.references) ? note.frontmatter.references.length : 0,
       };
       candidates.push(item);
+      candidates.sort(compare);
+      if (candidates.length > boundedLimit) candidates.pop();
     }
-    candidates.sort((left, right) => String(left.updatedAt).localeCompare(String(right.updatedAt)) || String(left.path).localeCompare(String(right.path)));
-    const selected = candidates.slice(0, boundedLimit);
+    const selected = candidates;
     const items: Array<Record<string, unknown>> = [];
     for (const item of selected) {
-      const backlinks = await this.fileSystem.getBacklinks(String(item.path), 1, canAccess);
+      let backlinks;
+      try {
+        backlinks = await this.fileSystem.getBacklinks(this.access.resolveExternalPath(String(item.path), principal), 1, canAccess);
+      } catch (error) {
+        // A concurrent delete/retirement must not fail the whole advisory
+        // report. Preserve genuine lookup failures for still-current notes.
+        if ((await this.currentMaintenanceCandidates([item], principal)).length) throw error;
+        total -= 1;
+        continue;
+      }
       const reasons = [
         'not_updated_recently',
         ...(backlinks.total === 0 ? ['no_incoming_links'] : []),
@@ -13704,10 +13762,10 @@ export class LlmWikiService {
       ];
       const action = backlinks.total === 0 && Number(item.references) === 0 ? 'review_then_archive_or_supersede' : 'review_evidence_and_refresh';
       const enriched = { ...item, incomingLinks: backlinks.total, reasons, suggestedAction: action };
-      if (JSON.stringify([...items, enriched]).length + 2 > boundedChars) break;
       items.push(enriched);
     }
-    return { items, total, truncated: total > items.length, olderThanDays: ageDays };
+    const current = await this.currentMaintenanceCandidates(items, principal);
+    return boundedMaintenanceReport(current, total - (items.length - current.length), boundedChars, 'wiki.unused_knowledge', { olderThanDays: ageDays });
   }
 
   /**

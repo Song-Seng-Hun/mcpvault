@@ -790,12 +790,12 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_summary_candidates',
-            description: 'Find bounded knowledge notes missing a compact summary or too long for progressive reads, and return a candidate summary for an agent to verify and write.',
+            description: 'Find visible knowledge notes with missing/stale summaries or long bodies. Returns a current revision and bounded notes.read action; stale replacements are excerpted from the current body, never the obsolete summary. maxChars covers the whole report; small responses preserve an inspect action. Verify and write explicitly; this read never changes notes.',
             inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 30, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint } },
         },
         {
             name: 'get_wiki_unused_knowledge',
-            description: 'Suggest bounded review actions for knowledge notes older than a threshold with weak incoming links or references. It never archives or deletes anything automatically.',
+            description: 'Suggest review actions for visible knowledge notes not updated recently, using incoming links and reference counts as advisory signals, not proof of disuse. Skips snoozed/retired notes, rechecks current revisions, and budgets the whole report with a bounded notes.read action. It never archives or deletes automatically.',
             inputSchema: { type: 'object', properties: { olderThanDays: { type: 'integer', minimum: 1, maximum: 3650, default: 180 }, limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
         },
         {

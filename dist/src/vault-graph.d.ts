@@ -30,7 +30,7 @@ export declare class VaultGraphIndex {
     invalidate(path?: string, kind?: VaultCatalogChangeKind): void;
     invalidateMany(changes: readonly VaultCatalogChange[]): void;
     close(): void;
-    getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number): Promise<{
+    getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, canIncludeSource?: (path: string) => Promise<boolean>): Promise<{
         target: string;
         backlinks: BacklinkMatch[];
         total: number;

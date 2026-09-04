@@ -3026,6 +3026,26 @@ second source of truth:
   answers, reputation, and task retrospectives are provenance context and
   leads—not immutable factual evidence—so a promotion must preserve the
   original record and cite separately captured evidence.
+- `wiki.summary_candidates` and `wiki.unused_knowledge` exclude hidden notes
+  before candidate totals and recheck selected revisions before returning them.
+  Their entire JSON response fits `maxChars`; a small budget preserves a
+  revision-bearing `notes.read` action, or requests a larger report when even
+  the exact path cannot fit. A stale summary is never reused as its own proposed
+  replacement: the candidate excerpt comes from the current Markdown body.
+  Old modification dates suggest review, not proof that a note is unused.
+  Recently updated, snoozed, and retired notes are filtered before fresh
+  unused-note reads; both reports retain only the requested top candidates.
+  Summary hash checks still require reading eligible knowledge bodies. Neither
+  report writes summaries, archives notes, or substitutes for agent judgment.
+  Authorized private-scope candidates retain usable scope URIs; internal
+  backlink queries resolve them through the caller's access policy. If a
+  candidate disappears during that lookup it is omitted, while genuine lookup
+  failures for an unchanged candidate still surface as errors.
+  Fresh candidate metadata checks distinguish missing paths from storage or
+  permission failures. A scan window invalidated by concurrent edits returns a
+  bounded retry action when other candidates remain. Backlink counts exclude
+  moderation-hidden authors before pagination, including fresh author checks
+  for matching indexed links; unrelated graph entries need no extra read.
 - `get_wiki_synthesis_candidates` identifies explicitly organized durable-note
   clusters that may deserve a model, argument, counterargument, or decision.
   It returns a bounded read order with revisions, unresolved inputs, tension

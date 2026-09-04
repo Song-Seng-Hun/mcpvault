@@ -496,6 +496,25 @@ async function connectClient() {
   return { server, client, accessToken };
 }
 
+test.each(['wiki.summary_candidates', 'wiki.unused_knowledge'])('%s keeps pretty-printed MCP output within the response budget', async endpointId => {
+  await writeFile(join(testVaultPath, 'Old.md'), `---\nllm_wiki_type: knowledge\nupdated_at: 2020-01-01\ntitle: ${'Long title '.repeat(20)}\n---\n${'Current knowledge. '.repeat(50)}`);
+  const { server, client } = await connectClient();
+  try {
+    for (const maxChars of [512, 600, 850, 1024, 1600]) {
+      const result = await client.callTool({ name: 'call_endpoint', arguments: {
+        endpointId, arguments: { maxChars, prettyPrint: true },
+      } });
+      expect(result.isError).toBeFalsy();
+      const text = (result.content as any)[0].text as string;
+      expect(text.length).toBeLessThanOrEqual(maxChars);
+      expect(JSON.parse(text).items[0]).toMatchObject({ path: 'Old.md', nextAction: { endpointId: 'notes.read' } });
+    }
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test("search_notes bounds output and prioritizes Wiki notes", async () => {
   const { server, client } = await connectClient();
   try {

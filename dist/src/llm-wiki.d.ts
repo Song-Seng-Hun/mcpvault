@@ -4606,17 +4606,65 @@ export declare class LlmWikiService {
         nextAction?: unknown;
         truncated: boolean;
     }>;
+    private currentMaintenanceCandidates;
     summaryCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
-        items: Record<string, unknown>[];
+        items: Record<string, any>[];
+        total: number;
+        truncated: boolean;
+    } | {
+        items: Record<string, any>[];
+        total: number;
+        truncated: boolean;
+        nextAction: {
+            endpointId: string;
+            arguments: {
+                limit: number;
+                maxChars: number;
+            };
+        };
+    } | {
+        items: {
+            path: any;
+            revision: any;
+            nextAction: any;
+            candidateTruncated: boolean;
+        }[];
         total: number;
         truncated: boolean;
     }>;
-    unusedKnowledge(principal?: ScopePrincipal, olderThanDays?: number, limit?: number, maxChars?: number): Promise<{
-        items: Record<string, unknown>[];
-        total: number;
-        truncated: boolean;
+    unusedKnowledge(principal?: ScopePrincipal, olderThanDays?: number, limit?: number, maxChars?: number): Promise<({
         olderThanDays: number;
-    }>;
+    } & {
+        items: Record<string, any>[];
+        total: number;
+        truncated: boolean;
+    }) | ({
+        olderThanDays: number;
+    } & {
+        items: Record<string, any>[];
+        total: number;
+        truncated: boolean;
+        nextAction: {
+            endpointId: string;
+            arguments: {
+                olderThanDays: number;
+            } & {
+                limit: number;
+                maxChars: number;
+            };
+        };
+    }) | ({
+        olderThanDays: number;
+    } & {
+        items: {
+            path: any;
+            revision: any;
+            nextAction: any;
+            candidateTruncated: boolean;
+        }[];
+        total: number;
+        truncated: boolean;
+    })>;
     /**
      * Surface a small deterministic-but-rotating set of durable notes. This is
      * the Zettelkasten "surprise" loop: it is intentionally stateless, does

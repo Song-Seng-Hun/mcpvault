@@ -218,7 +218,7 @@ export class VaultGraphIndex {
     this.allPaths.clear();
   }
 
-  async getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset = 0): Promise<{ target: string; backlinks: BacklinkMatch[]; total: number; truncated: boolean }> {
+  async getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset = 0, canIncludeSource?: (path: string) => Promise<boolean>): Promise<{ target: string; backlinks: BacklinkMatch[]; total: number; truncated: boolean }> {
     await this.ensure();
     const target = normalizePath(path);
     const normalizedTarget = normalizedPath(target);
@@ -237,8 +237,16 @@ export class VaultGraphIndex {
     const compare = (a: BacklinkMatch, b: BacklinkMatch) => a.path.localeCompare(b.path) || a.line - b.line;
     for (const entry of this.entries.values()) {
       if (normalizedPath(entry.path) === normalizedTarget || !canAccessPath(entry.path)) continue;
+      let sourceChecked = false;
       for (const link of entry.links) {
         if (!resolveTargets(link.target, visible.resolver, entry.path).some(path => normalizedPath(path) === normalizedTarget)) continue;
+        // Check each matching author once, before counts and pagination. The
+        // filesystem supplies a fresh, path-guarded moderation check so a
+        // stale graph entry cannot disclose a newly hidden author's links.
+        if (!sourceChecked) {
+          if (canIncludeSource && !await canIncludeSource(entry.path)) break;
+          sourceChecked = true;
+        }
         total += 1;
         const backlink: BacklinkMatch = {
           path: entry.path,

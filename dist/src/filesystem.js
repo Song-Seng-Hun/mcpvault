@@ -16,6 +16,7 @@ import { acceptsPlainReference, collectPlainFrontmatterReferences, isNavigationa
 import { RELATION_FIELDS } from './organization.js';
 import { assertLegacyDiscussionMutationAllowed } from './scope-access.js';
 import { extractMarkdownTasks } from './markdown-tasks.js';
+import { isModerationHidden } from './moderation-policy.js';
 /** Hard per-note write limit so stdio callers cannot exhaust the vault disk. */
 export const MAX_NOTE_CONTENT_BYTES = 8 * 1024 * 1024;
 /** Health scans never load arbitrarily large derived views into memory. */
@@ -2222,7 +2223,10 @@ export class FileSystemService {
             if (!canAccessPath(target))
                 throw new Error(`Access denied: ${target}`);
             await this.readNote(target);
-            return this.graphIndex.getBacklinks(target, limit, canAccessPath, offset);
+            return this.graphIndex.getBacklinks(target, limit, canAccessPath, offset, async (sourcePath) => {
+                const current = await this.readNoteMetadata([sourcePath], canAccessPath, { fresh: true, strict: true });
+                return current.length > 0 && !isModerationHidden(current[0].frontmatter);
+            });
         }
         // Validate that the requested target is an existing readable note before
         // scanning the vault. This also applies the same symlink boundary checks
@@ -2251,6 +2255,8 @@ export class FileSystemService {
                     const content = await readFile(fullEntryPath, 'utf-8');
                     const found = findBacklinkMatches(content, target);
                     const parsed = this.frontmatterHandler.parse(content);
+                    if (isModerationHidden(parsed.frontmatter))
+                        continue;
                     for (const reference of collectPlainFrontmatterReferences(parsed.frontmatter)) {
                         if (!isNavigationalFrontmatterReference(reference))
                             continue;
@@ -2997,7 +3003,7 @@ export class FileSystemService {
             throw new Error('Authority shelf queries require the metadata index');
         return this.metadataIndex.queryAuthorityShelf(params, canAccessPath);
     }
-    /** Read exact-path metadata; fresh bypasses the index for disclosure checks. */
+    /** Fresh bypasses indexes; strict preserves storage failures instead of treating them as missing notes. */
     async readNoteMetadata(paths, canAccessPath = () => true, options = {}) {
         if (paths.length > 500)
             throw new Error('note metadata lookup supports at most 500 paths');
@@ -3026,9 +3032,12 @@ export class FileSystemService {
                     continue;
                 notes.push({ path, frontmatter: parsed.frontmatter, revision: this.revision(raw) });
             }
-            catch {
+            catch (error) {
                 // A projected candidate may be deleted between the source scan and
                 // this metadata read. Omit it rather than returning stale authority.
+                const code = error?.code;
+                if (options.strict && code !== 'ENOENT' && code !== 'ENOTDIR')
+                    throw error;
             }
         }
         return notes;

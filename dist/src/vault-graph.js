@@ -193,7 +193,7 @@ export class VaultGraphIndex {
         this.entries.clear();
         this.allPaths.clear();
     }
-    async getBacklinks(path, limit, canAccessPath, offset = 0) {
+    async getBacklinks(path, limit, canAccessPath, offset = 0, canIncludeSource) {
         await this.ensure();
         const target = normalizePath(path);
         const normalizedTarget = normalizedPath(target);
@@ -215,9 +215,18 @@ export class VaultGraphIndex {
         for (const entry of this.entries.values()) {
             if (normalizedPath(entry.path) === normalizedTarget || !canAccessPath(entry.path))
                 continue;
+            let sourceChecked = false;
             for (const link of entry.links) {
                 if (!resolveTargets(link.target, visible.resolver, entry.path).some(path => normalizedPath(path) === normalizedTarget))
                     continue;
+                // Check each matching author once, before counts and pagination. The
+                // filesystem supplies a fresh, path-guarded moderation check so a
+                // stale graph entry cannot disclose a newly hidden author's links.
+                if (!sourceChecked) {
+                    if (canIncludeSource && !await canIncludeSource(entry.path))
+                        break;
+                    sourceChecked = true;
+                }
                 total += 1;
                 const backlink = {
                     path: entry.path,
