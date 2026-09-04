@@ -83,7 +83,7 @@ Commit `src/markdown-tasks.ts`, `src/markdown-tasks.test.ts`, and
 
 ### Task 2: Add the completed-work consistency invariant
 
-- [ ] **Step 1: Add failing organization tests**
+- [x] **Step 1: Add failing organization tests**
 
 Extend `src/organization.test.ts` with a completed actionable note carrying a
 valid retrospective disposition. Assert that a real `- [ ]` produces
@@ -100,12 +100,12 @@ expect(organizationLintIssues('Projects/Done.md', frontmatter, '- [ ] Still open
   .map(issue => issue.code)).toContain('completed_work_with_open_checkboxes');
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `npm test -- src/organization.test.ts -t "open Markdown tasks"`.
 Expected: the new issue code is absent.
 
-- [ ] **Step 3: Implement the advisory lint**
+- [x] **Step 3: Implement the advisory lint**
 
 Import `extractMarkdownTasks` in `src/organization.ts`. Inside the existing
 `taskStatus === 'completed'` block, select at most the first 100 open tasks and
@@ -125,12 +125,12 @@ if (openBodyTasks.length > 0) {
 
 The parser returns no body text in the issue, keeping output bounded.
 
-- [ ] **Step 4: Run organization tests**
+- [x] **Step 4: Run organization tests**
 
 Run `npm test -- src/organization.test.ts`.
 Expected: all organization tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Commit `src/organization.ts` and `src/organization.test.ts` as
 `feat: detect completed work with open markdown tasks`.

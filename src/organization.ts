@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { extractMarkdownTasks } from './markdown-tasks.js';
 
 /**
  * Lightweight knowledge-organization vocabulary.
@@ -1758,6 +1759,15 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
         }
       } catch (error) {
         issues.push({ code: 'completed_work_without_knowledge_disposition', detail: error instanceof Error ? error.message : 'Completed work has an invalid knowledge disposition.' });
+      }
+      const openBodyTasks = extractMarkdownTasks(content, path)
+        .filter(task => task.status === 'open')
+        .slice(0, 100);
+      if (openBodyTasks.length > 0) {
+        issues.push({
+          code: 'completed_work_with_open_checkboxes',
+          detail: `Completed work still contains ${openBodyTasks.length}${openBodyTasks.length === 100 ? '+' : ''} open Markdown task(s); first at line ${openBodyTasks[0]!.line}. Reopen the work, complete/remove obsolete boxes, or move real follow-ups explicitly.`,
+        });
       }
     }
     if (kind !== 'project' && taskStatus === 'waiting' && !String(frontmatter.waiting_for || '').trim()) {

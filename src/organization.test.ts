@@ -261,6 +261,36 @@ describe('knowledge organization focus and summary metadata', () => {
     }, '# Explained\n').map(issue => issue.code)).not.toContain('completed_work_without_knowledge_disposition');
   });
 
+  test('flags open Markdown tasks on completed actionable notes only', () => {
+    const frontmatter = {
+      llm_wiki_type: 'knowledge', note_kind: 'task', lifecycle: 'active',
+      task_status: 'completed', completed_at: '2030-01-01T00:00:00.000Z',
+      retrospective: 'Preserved the result.', knowledge_dispositions: ['retrospective'],
+    };
+    const body = [
+      '---',
+      'example: "- [ ] yaml example"',
+      '---',
+      '- [x] Finished task',
+      '```md',
+      '- [ ] backtick example',
+      '```',
+      '~~~md',
+      '- [ ] tilde example',
+      '~~~',
+      '- [ ] Still open',
+    ].join('\n');
+    const issues = organizationLintIssues('Projects/Done.md', frontmatter, body)
+      .filter(issue => issue.code === 'completed_work_with_open_checkboxes');
+    expect(issues).toEqual([
+      expect.objectContaining({ detail: expect.stringMatching(/1 open Markdown task.*line 11/) }),
+    ]);
+    expect(organizationLintIssues('Projects/Done.md', frontmatter, '- [x] Finished task\n')
+      .map(issue => issue.code)).not.toContain('completed_work_with_open_checkboxes');
+    expect(organizationLintIssues('Projects/Open.md', { ...frontmatter, task_status: 'open' }, '- [ ] Still open\n')
+      .map(issue => issue.code)).not.toContain('completed_work_with_open_checkboxes');
+  });
+
   test('keeps organization writer output inside one unique public Property contract', () => {
     const contract = getOrganizationPropertyContract();
     const names = contract.map(entry => entry.name);
