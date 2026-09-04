@@ -10,6 +10,9 @@ import { createHash } from 'node:crypto';
 export const NOTE_KINDS = ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'experiment', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'] as const;
 export const LIFECYCLES = ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'] as const;
 export const TASK_STATUSES = ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'] as const;
+/** Auditable outcomes that close the task-to-knowledge feedback loop. */
+export const KNOWLEDGE_DISPOSITIONS = ['linked_knowledge', 'negative_knowledge', 'retrospective', 'no_reusable_knowledge'] as const;
+export const COMPLETION_DISPOSITION_REQUIRED_MESSAGE = 'Completing work requires a knowledge disposition: provide knowledgeNotes, negativeKnowledgeNotes, retrospective, or noReusableKnowledge=true with knowledgeDispositionReason';
 /** Optional Kanban-style class of service for executable work. */
 export const SERVICE_CLASSES = ['expedite', 'fixed_date', 'standard', 'research'] as const;
 export const REVIEW_POLICIES = ['manual', 'periodic', 'on_source_change', 'on_link_change', 'on_any_edit', 'on_upstream_change'] as const;
@@ -103,7 +106,7 @@ export const RELATION_SEMANTICS = [
 export function getOrganizationRelationContract() {
   return RELATION_SEMANTICS.map(entry => ({ ...entry }));
 }
-export const ORGANIZATION_LIST_FIELDS = ['aliases', 'tags', 'mocs', 'key_points', 'open_questions', 'next_actions', 'project_support', 'subject_terms', 'methods', 'audience', 'see_also', ...RELATION_FIELDS] as const;
+export const ORGANIZATION_LIST_FIELDS = ['aliases', 'tags', 'mocs', 'key_points', 'open_questions', 'next_actions', 'project_support', 'subject_terms', 'methods', 'audience', 'see_also', 'knowledge_notes', 'negative_knowledge_notes', 'knowledge_dispositions', ...RELATION_FIELDS] as const;
 /** Fields that make an ordinary knowledge note participate in the work
  * system without changing its epistemic/content role. Project and task kinds
  * participate even before one of these fields is filled in. */
@@ -206,6 +209,11 @@ export const ORGANIZATION_PROPERTY_CONTRACT: readonly OrganizationPropertyContra
   { name: 'project_support', type: 'list', description: 'Project reference material, not another task list', appliesTo: ['project'] },
   { name: 'task_context', type: 'text', description: 'Execution context such as @research or @computer' },
   { name: 'task_status', type: 'text', description: 'Operational state for any actionable note, separate from lifecycle and epistemic status', allowed: TASK_STATUSES },
+  { name: 'knowledge_notes', type: 'list', description: 'Visible durable knowledge notes created or updated before completing actionable work' },
+  { name: 'negative_knowledge_notes', type: 'list', description: 'Visible negative-knowledge notes preserving failed or rejected paths before completing actionable work' },
+  { name: 'retrospective', type: 'text', description: 'Bounded experiential lesson recorded before completing actionable work; not factual evidence by itself' },
+  { name: 'knowledge_dispositions', type: 'list', description: 'Normalized auditable outcomes of completed work', allowed: KNOWLEDGE_DISPOSITIONS },
+  { name: 'knowledge_disposition_reason', type: 'text', description: 'Auditable reason why completed work produced no reusable knowledge' },
   { name: 'service_class', type: 'text', description: 'Optional Kanban priority class; does not bypass evidence or scope rules', allowed: SERVICE_CLASSES },
   { name: 'completion_criteria', type: 'list', description: 'Bounded observable conditions for considering the actionable work complete' },
   { name: 'started_at', type: 'text', description: 'Optional ISO time when executable work entered progress' },
@@ -708,6 +716,80 @@ function optionalText(value: unknown, field: string, maximum: number): string | 
   const text = String(value).trim();
   if (Array.from(text).length > maximum) throw new Error(`${field} must be ${maximum} Unicode characters or fewer`);
   return text;
+}
+
+export type KnowledgeDispositionResult = {
+  retrospective?: string;
+  knowledgeNotes?: string[];
+  negativeKnowledgeNotes?: string[];
+  noReusableKnowledge: boolean;
+  knowledgeDispositionReason?: string;
+  knowledgeDispositions: string[];
+};
+
+/** Normalize the completion outcome without performing filesystem or access
+ * checks. Services validate referenced note roles before calling this helper. */
+export function normalizeKnowledgeDisposition(input: {
+  retrospective?: unknown;
+  knowledgeNotes?: unknown;
+  negativeKnowledgeNotes?: unknown;
+  noReusableKnowledge?: unknown;
+  knowledgeDispositionReason?: unknown;
+}, existing: Record<string, unknown> = {}): KnowledgeDispositionResult {
+  const retrospective = optionalText(
+    input.retrospective === undefined ? existing.retrospective : input.retrospective,
+    'retrospective',
+    1000,
+  );
+  const knowledgeNotes = normalizedList(
+    input.knowledgeNotes === undefined ? existing.knowledge_notes : input.knowledgeNotes,
+    'knowledgeNotes',
+    20,
+    500,
+  );
+  const negativeKnowledgeNotes = normalizedList(
+    input.negativeKnowledgeNotes === undefined ? existing.negative_knowledge_notes : input.negativeKnowledgeNotes,
+    'negativeKnowledgeNotes',
+    20,
+    500,
+  );
+  if (input.noReusableKnowledge !== undefined && typeof input.noReusableKnowledge !== 'boolean') {
+    throw new Error('noReusableKnowledge must be a boolean');
+  }
+  const priorDispositions = Array.isArray(existing.knowledge_dispositions)
+    ? existing.knowledge_dispositions.map(value => String(value).trim().toLowerCase())
+    : [];
+  const noReusableKnowledge = input.noReusableKnowledge === undefined
+    ? priorDispositions.includes('no_reusable_knowledge')
+    : input.noReusableKnowledge;
+  const knowledgeDispositionReason = optionalText(
+    input.knowledgeDispositionReason === undefined ? existing.knowledge_disposition_reason : input.knowledgeDispositionReason,
+    'knowledgeDispositionReason',
+    1000,
+  );
+  const knowledgeDispositions = [
+    ...(knowledgeNotes?.length ? ['linked_knowledge'] : []),
+    ...(negativeKnowledgeNotes?.length ? ['negative_knowledge'] : []),
+    ...(retrospective ? ['retrospective'] : []),
+    ...(noReusableKnowledge ? ['no_reusable_knowledge'] : []),
+  ];
+  if (noReusableKnowledge && !knowledgeDispositionReason) {
+    throw new Error('knowledgeDispositionReason is required when noReusableKnowledge=true');
+  }
+  if (knowledgeDispositionReason && !noReusableKnowledge) {
+    throw new Error('knowledgeDispositionReason is only valid when noReusableKnowledge=true');
+  }
+  if (noReusableKnowledge && knowledgeDispositions.some(value => value !== 'no_reusable_knowledge')) {
+    throw new Error('noReusableKnowledge cannot be combined with retrospective or knowledge note artifacts');
+  }
+  return {
+    ...(knowledgeNotes !== undefined && { knowledgeNotes }),
+    ...(negativeKnowledgeNotes !== undefined && { negativeKnowledgeNotes }),
+    ...(retrospective && { retrospective }),
+    noReusableKnowledge,
+    ...(knowledgeDispositionReason && { knowledgeDispositionReason }),
+    knowledgeDispositions,
+  };
 }
 
 export function normalizeReviewAt(value: unknown): string | undefined {
@@ -1657,6 +1739,16 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
     if (taskStatus === 'blocked' && !frontmatter.blocked_since) issues.push({ code: 'blocked_work_without_blocked_since', detail: 'Blocked work should record blocked_since so aging and escalation remain explainable.' });
     if (waiting && !frontmatter.waiting_since) issues.push({ code: 'waiting_work_without_waiting_since', detail: 'Waiting work should record waiting_since so follow-up aging remains explainable.' });
     if (taskStatus === 'completed' && !frontmatter.completed_at) issues.push({ code: 'completed_work_without_completed_at', detail: 'Completed work should record completed_at so cycle-time history is measurable.' });
+    if (taskStatus === 'completed') {
+      try {
+        const disposition = normalizeKnowledgeDisposition({}, frontmatter);
+        if (disposition.knowledgeDispositions.length === 0) {
+          issues.push({ code: 'completed_work_without_knowledge_disposition', detail: 'Completed work should link durable knowledge, preserve negative knowledge, record a retrospective, or explain why no reusable knowledge was produced.' });
+        }
+      } catch (error) {
+        issues.push({ code: 'completed_work_without_knowledge_disposition', detail: error instanceof Error ? error.message : 'Completed work has an invalid knowledge disposition.' });
+      }
+    }
     if (kind !== 'project' && taskStatus === 'waiting' && !String(frontmatter.waiting_for || '').trim()) {
       issues.push({ code: 'waiting_work_without_owner', detail: 'Waiting work should identify the person, event, or resource it is waiting for.' });
     }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { BASES_VIEW_IDS, CONFIDENCE_LEVELS, KNOWLEDGE_STATUSES, NOTE_TEMPLATE_IDS, RECIPROCAL_RELATIONS, RELATION_FIELDS, SOURCE_TRUST_LEVELS, VOLATILITY_CLASSES, getOrganizationPropertyContract, getOrganizationRelationContract, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, organizationLintIssues, organizationNoteTemplate, temporalValidity } from './organization.js';
+import { BASES_VIEW_IDS, CONFIDENCE_LEVELS, KNOWLEDGE_STATUSES, NOTE_TEMPLATE_IDS, RECIPROCAL_RELATIONS, RELATION_FIELDS, SOURCE_TRUST_LEVELS, VOLATILITY_CLASSES, getOrganizationPropertyContract, getOrganizationRelationContract, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeKnowledgeDisposition, organizationLintIssues, organizationNoteTemplate, temporalValidity } from './organization.js';
 
 describe('knowledge organization focus and summary metadata', () => {
   test('normalizes and validates knowledge volatility classes', () => {
@@ -200,6 +200,55 @@ describe('knowledge organization focus and summary metadata', () => {
     expect(organizationLintIssues('Knowledge/InvalidVolatility.md', {
       llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'review', volatility_class: 'chaotic',
     }, '# Invalid volatility\n').map(issue => issue.code)).toEqual(expect.arrayContaining(['property_contract_violation', 'invalid_volatility_class']));
+  });
+
+  test('normalizes one shared knowledge disposition contract for completed work', () => {
+    expect(normalizeKnowledgeDisposition({
+      knowledgeNotes: [' Knowledge/Lesson.md ', 'Knowledge/Lesson.md'],
+      negativeKnowledgeNotes: ['Knowledge/Failed path.md'],
+      retrospective: '  Verify the revision before applying a repair.  ',
+    })).toEqual({
+      knowledgeNotes: ['Knowledge/Lesson.md'],
+      negativeKnowledgeNotes: ['Knowledge/Failed path.md'],
+      retrospective: 'Verify the revision before applying a repair.',
+      noReusableKnowledge: false,
+      knowledgeDispositions: ['linked_knowledge', 'negative_knowledge', 'retrospective'],
+    });
+    expect(() => normalizeKnowledgeDisposition({ noReusableKnowledge: true }))
+      .toThrow('knowledgeDispositionReason is required');
+    expect(() => normalizeKnowledgeDisposition({
+      noReusableKnowledge: true,
+      knowledgeDispositionReason: 'No durable lesson emerged.',
+      retrospective: 'A reusable lesson exists.',
+    })).toThrow('noReusableKnowledge cannot be combined');
+    expect(normalizeKnowledgeDisposition({}, {
+      retrospective: 'Preserved lesson.',
+      knowledge_dispositions: ['retrospective'],
+    })).toMatchObject({
+      retrospective: 'Preserved lesson.',
+      noReusableKnowledge: false,
+      knowledgeDispositions: ['retrospective'],
+    });
+  });
+
+  test('publishes completion disposition Properties and lints direct-edit bypasses', () => {
+    expect(getOrganizationPropertyContract()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'knowledge_notes', type: 'list' }),
+      expect.objectContaining({ name: 'negative_knowledge_notes', type: 'list' }),
+      expect.objectContaining({ name: 'retrospective', type: 'text' }),
+      expect.objectContaining({ name: 'knowledge_dispositions', type: 'list' }),
+      expect.objectContaining({ name: 'knowledge_disposition_reason', type: 'text' }),
+    ]));
+    expect(organizationLintIssues('Projects/Done.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'project', lifecycle: 'active',
+      task_status: 'completed', completed_at: '2030-01-01T00:00:00.000Z',
+    }, '# Done\n').map(issue => issue.code)).toContain('completed_work_without_knowledge_disposition');
+    expect(organizationLintIssues('Projects/Explained.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'project', lifecycle: 'active',
+      task_status: 'completed', completed_at: '2030-01-01T00:00:00.000Z',
+      knowledge_dispositions: ['no_reusable_knowledge'],
+      knowledge_disposition_reason: 'Routine administrative change only.',
+    }, '# Explained\n').map(issue => issue.code)).not.toContain('completed_work_without_knowledge_disposition');
   });
 
   test('keeps organization writer output inside one unique public Property contract', () => {
