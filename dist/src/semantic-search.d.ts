@@ -66,6 +66,7 @@ export declare class SemanticSearchService {
     private dbPromise;
     private semanticActive;
     private indexLease;
+    private indexLeaseNonce;
     private indexWorker;
     private lastScanAt;
     private tableNamesCache;
@@ -101,6 +102,7 @@ export declare class SemanticSearchService {
      * start a second indexing worker.
      */
     private acquireIndexLease;
+    private releaseIndexLease;
     private getTableNames;
     private getEmbedder;
     private embed;

@@ -320,7 +320,9 @@ server's always-on constitution contains only the invariants needed to enter
 safely. Call `get_wiki_policy` without `topic` for its compact topic index,
 then request exactly one topic that matches the current job. Do not load every
 policy topic pre-emptively; the detailed response is guidance, not permission
-or a replacement for the current note revision.
+or a replacement for the current note revision. Every slice carries a
+`policyVersion` and `policyFingerprint`; cached guidance is reusable only while
+the current overview reports the same fingerprint.
 
 ## Invariants
 

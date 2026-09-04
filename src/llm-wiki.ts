@@ -15,7 +15,6 @@ import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
 import { buildNoteReferenceIndex, normalizeNoteReferenceTerm, resolveNoteReference, type NoteReferenceIndex } from './note-reference.js';
-import { WIKI_POLICY_TOPICS } from './wiki-policy.js';
 import type { QueryNote } from './types.js';
 
 const KNOWLEDGE_STATUSES = new Set(['draft', 'verified', 'disputed', 'superseded']);
@@ -1017,7 +1016,9 @@ server's always-on constitution contains only the invariants needed to enter
 safely. Call \`get_wiki_policy\` without \`topic\` for its compact topic index,
 then request exactly one topic that matches the current job. Do not load every
 policy topic pre-emptively; the detailed response is guidance, not permission
-or a replacement for the current note revision.
+or a replacement for the current note revision. Every slice carries a
+\`policyVersion\` and \`policyFingerprint\`; cached guidance is reusable only while
+the current overview reports the same fingerprint.
 
 ## Invariants
 
@@ -4184,26 +4185,6 @@ export class LlmWikiService {
     if (JSON.stringify(minimal).length > boundedChars) minimal.dependencyPlan.unlockPoints.items = [];
     if (JSON.stringify(minimal).length > boundedChars) delete minimal.nextActions;
     return minimal;
-  }
-
-  /** Return the machine-readable organization constitution used by agents. */
-  policy(maxChars = 7000) {
-    const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 1024), 16000);
-    const result = {
-      purpose: 'The bounded organization policy for one already-authorized scope. It guides filing and review but never grants access, replaces Markdown, or replaces Git history.',
-      sourceOfTruth: ['ordinary Markdown body', 'YAML Properties', 'Git history and revisions'],
-      filing: { inbox: 'rough captures only', projects: 'outcome-oriented work', areas: 'ongoing responsibilities', resources: 'reusable references', archives: 'inactive material', rule: 'folders are filing aids, not visibility boundaries' },
-      lifecycle: [...LIFECYCLES],
-      work: { statuses: [...TASK_STATUSES], serviceClasses: [...SERVICE_CLASSES], wipLimitDefault: 3, completionCriteria: 'Use completion_criteria or a visible completion-criteria heading for active projects.', dependencyPolicy: 'blocked_by is a hard gate. depends_on gates execution only when it resolves to unfinished project/task work; non-work targets are informational. Unresolved, ambiguous, inactive, or cyclic work dependencies are not executable.', separateFromKnowledgeLifecycle: true },
-      knowledge: { durableAtomicity: 'one reusable concept or claim per atomic note when practical', roles: [...KNOWLEDGE_ROLES], roleRule: 'A role explains the note job and optional Markdown rubric; it is not a truth score or a new storage type.', links: 'prefer Obsidian [[wikilinks]] and MOCs; use typed relations to explain meaning', claims: { roles: [...CLAIM_ROLES], relations: CLAIM_RELATION_FIELDS.map(item => item.property), locator: 'Put ^claim-id on the corresponding Markdown block and relate claims with [[Note#^claim-id]].' }, evidence: 'claims and published knowledge must preserve inspectable provenance; source-work diversity is advisory and snapshots of one work are not independent corroboration', temporalValidity: 'valid_from is inclusive and valid_until is exclusive; observed_at and temporal_scope describe applicability, never file modification, source publication, task, or review dates', uncertainty: 'use question/hypothesis/assumption, connect reproducible experiment runs with tests, and preserve negative knowledge' },
-      review: { inspectCurrentRevision: true, useReviewQueue: true, recordOutcome: true, neverTreatSummaryAsTruth: true },
-      retention: { policies: ['preserve', 'review', 'archive', 'tombstone'], automaticDeletion: false, legalHoldWins: true },
-      agentLoop: ['capture quickly', 'clarify and file', 'distill into reusable knowledge', 'link it to a map', 'review evidence and flow', 'express or execute one next action'],
-      detailTopics: [...WIKI_POLICY_TOPICS],
-      availableContracts: { properties: getOrganizationPropertyContract().map(entry => entry.name), relations: getOrganizationRelationContract().map(entry => entry.field) },
-    };
-    if (JSON.stringify(result).length <= boundedChars) return result;
-    return { purpose: result.purpose, sourceOfTruth: result.sourceOfTruth, filing: result.filing, work: result.work, review: result.review, detailTopics: result.detailTopics, truncated: true };
   }
 
   /**

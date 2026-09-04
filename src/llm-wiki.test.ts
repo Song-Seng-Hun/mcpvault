@@ -3,8 +3,9 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from './createServer.js';
+import { createServer, getServerRuntime } from './createServer.js';
 import { createHash } from 'node:crypto';
+import { getWikiPolicyTopic, WIKI_POLICY_TOPICS } from './wiki-policy.js';
 
 let vault: string;
 
@@ -1036,21 +1037,44 @@ test('projects expose bounded flow health and the organization policy contract',
     expect(JSON.stringify(flow.value).length).toBeLessThanOrEqual(7000);
 
     const policy = await callJson(client, 'get_wiki_policy', { maxChars: 7000, accessToken });
-    expect(policy.value.sourceOfTruth).toEqual(expect.arrayContaining(['ordinary Markdown body', 'YAML Properties', 'Git history and revisions']));
-    expect(policy.value.work).toMatchObject({ wipLimitDefault: 3, separateFromKnowledgeLifecycle: true, completionCriteria: expect.any(String) });
-    expect(policy.value.work.statuses).toEqual(expect.arrayContaining(['next_action', 'waiting', 'blocked']));
-    expect(policy.value.filing.rule).toContain('visibility boundaries');
-    expect(policy.value.detailTopics).toEqual(expect.arrayContaining(['overview', 'moc', 'evidence', 'work', 'safety']));
-    expect(JSON.stringify(policy.value).length).toBeLessThanOrEqual(7000);
+    expect(policy.value).toMatchObject({
+      topic: 'overview',
+      policyVersion: 1,
+      policyFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
+      availableTopics: expect.arrayContaining(['overview', 'moc', 'evidence', 'work', 'safety']),
+    });
+    expect(JSON.stringify(policy.value).length).toBeLessThanOrEqual(1200);
+
+    const workPolicy = await callJson(client, 'get_wiki_policy', { topic: 'work', maxChars: 1600, accessToken });
+    expect(workPolicy.value).toMatchObject({
+      topic: 'work',
+      policyFingerprint: policy.value.policyFingerprint,
+      routes: expect.arrayContaining(['wiki.flow_health', 'wiki.next_actions', 'mcp.list_tasks', 'notes.task_update']),
+    });
+    expect(JSON.stringify(workPolicy.value)).toContain('task_status');
+    expect(JSON.stringify(workPolicy.value).length).toBeLessThanOrEqual(1600);
 
     const mocPolicy = await callJson(client, 'get_wiki_policy', { topic: 'moc', maxChars: 1200, accessToken });
     expect(mocPolicy.value).toMatchObject({
       topic: 'moc',
+      policyVersion: policy.value.policyVersion,
+      policyFingerprint: policy.value.policyFingerprint,
       rules: expect.any(Array),
       routes: expect.arrayContaining(['wiki.learning_path']),
     });
     expect(JSON.stringify(mocPolicy.value).length).toBeLessThanOrEqual(1200);
     expect(JSON.stringify(mocPolicy.value)).not.toContain('auth.register');
+
+    const runtime = getServerRuntime(server)!;
+    runtime.ensureEndpointRegistry();
+    const controlTools = new Set(['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint']);
+    const missingRoutes = WIKI_POLICY_TOPICS.flatMap(topic => {
+      const topicPolicy = getWikiPolicyTopic(topic, 16_000);
+      return ((topicPolicy.routes || []) as string[])
+        .filter(endpointId => !controlTools.has(endpointId) && !runtime.endpointRegistry.resolve(endpointId))
+        .map(endpointId => ({ topic, endpointId }));
+    });
+    expect(missingRoutes).toEqual([]);
 
     const packet = await callJson(client, 'get_wiki_review_packet', { limit: 10, maxChars: 12000, accessToken });
     expect(packet.value.counts).toMatchObject({ activeWip: 1, readyToPull: 1, blocked: 1, waiting: 1 });

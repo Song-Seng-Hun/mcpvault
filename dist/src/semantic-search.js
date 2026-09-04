@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { mkdir, open, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { gzip, gunzip } from 'node:zlib';
@@ -269,6 +269,7 @@ export class SemanticSearchService {
     dbPromise;
     semanticActive = false;
     indexLease;
+    indexLeaseNonce;
     indexWorker = 'standby';
     lastScanAt = 0;
     tableNamesCache;
@@ -321,6 +322,7 @@ export class SemanticSearchService {
     }
     async close() {
         this.catalogUnsubscribe?.();
+        this.semanticActive = false;
         if (this.idleTimer)
             clearTimeout(this.idleTimer);
         if (this.unloadTimer)
@@ -342,6 +344,20 @@ export class SemanticSearchService {
         this.tableCache.clear();
         this.tableLastUsed.clear();
         this.tableOpening.clear();
+        this.embedder = undefined;
+        this.embedderLease?.release();
+        this.embedderLease = undefined;
+        const database = this.db || await this.dbPromise?.catch(() => undefined);
+        this.db = undefined;
+        this.dbPromise = undefined;
+        try {
+            await Promise.resolve(database?.close?.());
+        }
+        catch {
+            // The vector database is a disposable read model; shutdown remains
+            // best-effort after authoritative Markdown work has stopped.
+        }
+        await this.releaseIndexLease();
     }
     clearQueryCache() {
         this.queryCache.clear();
@@ -793,10 +809,20 @@ export class SemanticSearchService {
             return true;
         await mkdir(this.indexPath, { recursive: true });
         const createLease = async () => {
+            const nonce = randomUUID();
             try {
                 const handle = await open(this.workerLockPath, 'wx');
-                await handle.writeFile(JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }), 'utf8');
+                try {
+                    await handle.writeFile(JSON.stringify({ pid: process.pid, nonce, startedAt: new Date().toISOString() }), 'utf8');
+                    await handle.sync();
+                }
+                catch (error) {
+                    await handle.close().catch(() => undefined);
+                    await unlink(this.workerLockPath).catch(() => undefined);
+                    throw error;
+                }
                 this.indexLease = handle;
+                this.indexLeaseNonce = nonce;
                 this.indexWorker = 'leader';
                 return true;
             }
@@ -829,6 +855,28 @@ export class SemanticSearchService {
         if (!acquired)
             this.indexWorker = 'standby';
         return acquired;
+    }
+    async releaseIndexLease() {
+        const handle = this.indexLease;
+        const nonce = this.indexLeaseNonce;
+        this.indexLease = undefined;
+        this.indexLeaseNonce = undefined;
+        this.indexWorker = 'standby';
+        if (!handle)
+            return;
+        await handle.close().catch(() => undefined);
+        if (!nonce)
+            return;
+        const owner = await readFile(this.workerLockPath, 'utf8').catch(() => '');
+        try {
+            const record = JSON.parse(owner);
+            if (record.pid === process.pid && record.nonce === nonce)
+                await unlink(this.workerLockPath).catch(() => undefined);
+        }
+        catch {
+            // Never remove a corrupt or replaced lock during shutdown. A future
+            // acquisition can apply the existing stale-lock recovery policy.
+        }
     }
     async getTableNames() {
         if (this.tableNamesCache && Date.now() - this.tableNamesCachedAt < SCAN_INTERVAL_MS)

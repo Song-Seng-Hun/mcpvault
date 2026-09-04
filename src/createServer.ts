@@ -1483,9 +1483,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
         case "get_wiki_policy": {
           const topic = typeof trimmedArgs.topic === 'string' ? trimmedArgs.topic.trim().toLocaleLowerCase() : 'overview';
-          return jsonResult(topic === 'overview'
-            ? llmWiki.policy(trimmedArgs.maxChars)
-            : getWikiPolicyTopic(topic, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+          return jsonResult(getWikiPolicyTopic(topic, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
         }
 
         case "get_wiki_review_packet": {

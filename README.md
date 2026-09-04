@@ -404,7 +404,10 @@ exactly one detailed topic such as `capture`, `retrieval`, `knowledge`,
 `evidence`, `review`, `work`, `moc`, `community`, `portability`, or `safety`
 only when the current action needs it. Do not preload every topic. This is
 progressive guidance over the same rules, not a second policy source or an
-access grant. `get_wiki_flow_health` adds the missing
+access grant. Every overview and topic carries the same `policyVersion` and
+`policyFingerprint`, so a client may retain a previously read slice until the
+fingerprint changes without maintaining another configuration file.
+`get_wiki_flow_health` adds the missing
 Kanban flow layer: `task_status: next_action` is executable WIP only when its
 work prerequisites are satisfied, an `open` item with a concrete `next_action`
 is pull-ready only when no dependency blocks it, and blocked/waiting work is
@@ -839,7 +842,7 @@ authenticated edge in front of it.
   - Long-running index hygiene: lexical gram dictionaries compact stale IDs after large deletion waves, derived search snapshots skip rewrites when the index generation is unchanged, broad searches materialize excerpts only after Top-K ranking, graph backlink reads avoid cloning the full graph, and background reads age fairly behind foreground work; all of these structures remain disposable and Markdown/Git stays authoritative
   - Search cache reuse: equivalent whitespace, path-separator, and exclusion-order variants share normalized result and BM25 corpus-stat cache entries, while eviction callbacks are identity-checked so cache pressure cannot remove a newer result
   - Read-model snapshot sharing: internal search, semantic, graph, metadata, and notification readers reuse the catalog's immutable-by-convention path snapshot; watched catalog subtrees reuse completed note/all-path buckets and refresh their cache accounting when changed; watcher changes and direct MCP mutations are delivered to read models in one batch, including both sides of a move; graph visibility resolvers are reused per access predicate and generation; public catalog methods retain defensive copies for compatibility
-  - Semantic table hygiene: the optional LanceDB adapter keeps a bounded table-handle LRU and drops inactive table references with the existing idle lifecycle, while the vector index remains disposable and rebuildable
+  - Semantic table hygiene: the optional LanceDB adapter keeps a bounded table-handle LRU and drops inactive table references with the existing idle lifecycle; shutdown explicitly releases the database, shared embedder lease, and only the nonce-owned indexing lock so another server instance can safely take over, while the vector index remains disposable and rebuildable
   - Bounded background indexing: semantic change scans use limited parallel stat/hash batches through the shared I/O coordinator, preserving foreground search priority and retry fallback without requiring a client-side runtime
   - Shared file metadata and bounded guestbooks: concurrent search/metadata/semantic refreshes reuse in-flight catalog stat calls, while guestbook reads use count plus keyset windows instead of loading every entry into memory
   - Balanced feedback: each post or comment accepts one reaction per identity; switch it between `like`, `dislike`, or inactive. Likes recognize useful reasoning, while dislikes are a non-authoritative quality/safety signal and never hide or delete content by themselves
@@ -2670,6 +2673,11 @@ second source of truth:
   topic index, then load one topic for the current job. This keeps a new agent
   safe and useful without paying the token cost of the entire handbook on every
   tool turn.
+- The same budget applies to repository `AGENTS.md` and the packaged
+  `mcpvault-agent` Skill. They contain the safe bootstrap and route agents to
+  one policy topic, the public schema, or a focused README section instead of
+  duplicating the complete feature catalog. A regression test caps each eager
+  document at 9,000 characters.
 
 - Error Book resolution and retrospective are separate states. Use
   `resolve_wiki_issue` with `resolutionStatus`, `retrospectiveStatus`, a short

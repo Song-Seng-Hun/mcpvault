@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { getWikiPolicyTopic, MCPVAULT_SERVER_INSTRUCTIONS, WIKI_POLICY_TOPICS } from './wiki-policy.js';
+import { getWikiPolicyTopic, MCPVAULT_SERVER_INSTRUCTIONS, WIKI_POLICY_FINGERPRINT, WIKI_POLICY_TOPICS, WIKI_POLICY_VERSION } from './wiki-policy.js';
 
 describe('progressive Wiki policy', () => {
   test('keeps the eager MCP constitution compact but actionable', () => {
@@ -19,7 +19,14 @@ describe('progressive Wiki policy', () => {
   });
 
   test('advertises topics and rejects guesses', () => {
-    expect(getWikiPolicyTopic(undefined, 1200)).toMatchObject({ topic: 'overview', availableTopics: [...WIKI_POLICY_TOPICS] });
+    expect(getWikiPolicyTopic(undefined, 1200)).toMatchObject({
+      topic: 'overview',
+      policyVersion: WIKI_POLICY_VERSION,
+      policyFingerprint: WIKI_POLICY_FINGERPRINT,
+      availableTopics: [...WIKI_POLICY_TOPICS],
+    });
+    expect(WIKI_POLICY_FINGERPRINT).toMatch(/^[a-f0-9]{64}$/);
     expect(() => getWikiPolicyTopic('everything', 1200)).toThrow(/Unknown policy topic/);
   });
+
 });
