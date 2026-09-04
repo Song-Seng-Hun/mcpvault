@@ -614,21 +614,21 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_relation_set_preview',
-      description: 'Preview replacing one directional typed-relation or focus_supports Property with a complete exact target set. It resolves and canonicalizes every visible target, rejects self/scope/kind/horizon errors, and returns one revision-stamped notes.change_set edit. Use wiki.reciprocal_link for related or same_as.',
+      description: 'Preview replacing one directional typed-relation or focus_supports Property with a complete exact target set. It resolves and canonicalizes every visible target, rejects self/scope/kind/horizon errors, and returns one revision-stamped notes.change_set edit. Use wiki.reciprocal_link for related, same_as, or close_match.',
       inputSchema: { type: 'object', properties: {
         sourcePath: { type: 'string', description: 'Exact visible ordinary note whose relation list is being replaced' },
-        relation: { type: 'string', enum: [...RELATION_FIELDS.filter(field => !(RECIPROCAL_RELATIONS as readonly string[]).includes(field)), 'focus_supports'], description: 'Directional typed relation or focus_supports; use the reciprocal planner for related/same_as' },
+        relation: { type: 'string', enum: [...RELATION_FIELDS.filter(field => !(RECIPROCAL_RELATIONS as readonly string[]).includes(field)), 'focus_supports'], description: 'Directional typed relation or focus_supports; use the reciprocal planner for related/same_as/close_match' },
         targetPaths: { type: 'array', maxItems: 30, items: { type: 'string', minLength: 1 }, description: 'Complete ordered exact target-note set; pass [] to clear the Property' },
         maxChars: { type: 'integer', minimum: 4096, maximum: 20000, default: 9000 }, accessToken, prettyPrint,
       }, required: ['sourcePath', 'relation', 'targetPaths'] },
     },
     {
       name: 'get_wiki_reciprocal_link_preview',
-      description: 'Preview a coherent two-note related or same_as relation. It resolves every existing link, rejects malformed/ambiguous values and scope leaks, and returns one revision-stamped notes.change_set so a mutual relation cannot be left half-written.',
+      description: 'Preview a coherent two-note related, same_as, or close_match relation. It resolves every existing link, rejects malformed/ambiguous values and scope leaks, and returns one revision-stamped notes.change_set so a mutual relation cannot be left half-written.',
       inputSchema: { type: 'object', properties: {
         leftPath: { type: 'string', description: 'Exact first visible note path' },
         rightPath: { type: 'string', description: 'Exact second visible note path' },
-        relation: { type: 'string', enum: ['related', 'same_as'] },
+        relation: { type: 'string', enum: [...RECIPROCAL_RELATIONS] },
         maxChars: { type: 'integer', minimum: 4096, maximum: 20000, default: 8000 }, accessToken, prettyPrint,
       }, required: ['leftPath', 'rightPath', 'relation'] },
     },

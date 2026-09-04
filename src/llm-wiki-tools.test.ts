@@ -150,6 +150,7 @@ describe('LLM Wiki organization vocabulary contracts', () => {
     ]);
     const relationSet = tools.get('get_wiki_relation_set_preview')!.inputSchema as { required?: string[] };
     expect(relationSet.required).toEqual(['sourcePath', 'relation', 'targetPaths']);
+    expectEnum(properties('get_wiki_reciprocal_link_preview'), 'relation', [...RECIPROCAL_RELATIONS]);
   });
 
   test('derives managed Property schemas from the public contract', () => {

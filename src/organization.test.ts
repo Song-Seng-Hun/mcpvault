@@ -1,7 +1,25 @@
 import { describe, expect, test } from 'vitest';
-import { BASES_VIEW_IDS, CONFIDENCE_LEVELS, KNOWLEDGE_STATUSES, NOTE_TEMPLATE_IDS, SOURCE_TRUST_LEVELS, getOrganizationPropertyContract, getOrganizationRelationContract, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, organizationLintIssues, organizationNoteTemplate, temporalValidity } from './organization.js';
+import { BASES_VIEW_IDS, CONFIDENCE_LEVELS, KNOWLEDGE_STATUSES, NOTE_TEMPLATE_IDS, RECIPROCAL_RELATIONS, RELATION_FIELDS, SOURCE_TRUST_LEVELS, getOrganizationPropertyContract, getOrganizationRelationContract, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, organizationLintIssues, organizationNoteTemplate, temporalValidity } from './organization.js';
 
 describe('knowledge organization focus and summary metadata', () => {
+  test('distinguishes reciprocal near-equivalence from exact identity and general association', () => {
+    expect(RELATION_FIELDS).toContain('close_match');
+    expect(RECIPROCAL_RELATIONS).toContain('close_match');
+    const relations = getOrganizationRelationContract();
+    expect(relations).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        field: 'close_match',
+        direction: 'mutual',
+        reciprocal: true,
+        target: expect.stringContaining('near-equivalent'),
+      }),
+    ]));
+    expect(relations.find(item => item.field === 'same_as')?.target)
+      .not.toBe(relations.find(item => item.field === 'close_match')?.target);
+    expect(relations.find(item => item.field === 'related')?.target)
+      .not.toBe(relations.find(item => item.field === 'close_match')?.target);
+  });
+
   test('filing edits and partial stale projection edits cannot certify inherited summaries', () => {
     const existing = { summary: 'Old summary', key_points: ['Old point'], summary_of_content_sha256: 'a'.repeat(64) };
     const metadataOnly = knowledgeOrganization({ existing, status: 'draft', tags: ['research'], contentDigest: 'b'.repeat(64) });
