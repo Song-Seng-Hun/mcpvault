@@ -45,6 +45,7 @@ interface SchemaProperty {
   enum?: unknown[];
   default?: unknown;
   maxLength?: number;
+  maxItems?: number;
   maximum?: number;
   items?: SchemaProperty;
   properties?: SchemaProperties;
@@ -125,6 +126,19 @@ describe('LLM Wiki organization vocabulary contracts', () => {
     expect(rebalance.saturationThreshold).toMatchObject({ type: 'integer', maximum: 200 });
     expect(endpointIdForTool('get_wiki_moc_rebalance')).toBe('wiki.moc_rebalance');
     expect(LLM_WIKI_MUTATING_TOOLS).not.toContain('get_wiki_moc_rebalance');
+  });
+
+  test('exposes one bounded knowledge disposition schema on every ordinary completion workflow', () => {
+    for (const toolName of ['publish_knowledge', 'triage_wiki_note', 'clarify_wiki_note']) {
+      const schema = properties(toolName);
+      expect(schema.knowledgeNotes).toMatchObject({ type: 'array', maxItems: 20 });
+      expect(schema.knowledgeNotes?.items).toMatchObject({ type: 'string', maxLength: 500 });
+      expect(schema.negativeKnowledgeNotes).toMatchObject({ type: 'array', maxItems: 20 });
+      expect(schema.negativeKnowledgeNotes?.items).toMatchObject({ type: 'string', maxLength: 500 });
+      expect(schema.retrospective).toMatchObject({ type: 'string', maxLength: 1000 });
+      expect(schema.noReusableKnowledge).toMatchObject({ type: 'boolean' });
+      expect(schema.knowledgeDispositionReason).toMatchObject({ type: 'string', maxLength: 1000 });
+    }
   });
 
   test('keeps retrieval, provenance, and epistemic schemas aligned with runtime vocabularies', () => {

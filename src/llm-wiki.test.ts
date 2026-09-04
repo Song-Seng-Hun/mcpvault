@@ -193,6 +193,131 @@ test('triage exposes execution capacity and tags without rebasing stale summarie
   } finally { await client.close(); await server.close(); }
 });
 
+test('ordinary work completion requires a scope-safe auditable knowledge disposition', async () => {
+  const { server, client } = await setup();
+  try {
+    const account = await callJson(client, 'register_scope_account', { accountId: 'wiki-exit-owner', modelId: 'codex', password: 'wiki-exit-owner-secret' });
+    const accessToken = account.value.accessToken;
+    await mkdir(join(vault, 'Knowledge'), { recursive: true });
+    await writeFile(join(vault, 'Knowledge', 'Durable lesson.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: review\nknowledge_status: draft\n---\n# Durable lesson\n');
+    await writeFile(join(vault, 'Knowledge', 'Negative lesson.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: review\nknowledge_status: disputed\nknowledge_polarity: negative\nnegative_type: failure\n---\n# Negative lesson\n');
+    await writeFile(join(vault, 'Knowledge', 'Hidden lesson.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: review\nmoderation_status: quarantined\n---\n# Hidden lesson\n');
+
+    const createWork = async (path: string) => {
+      const written = await client.callTool({ name: 'write_note', arguments: {
+        path, content: `# ${path.split('/').at(-1)}\n`,
+        frontmatter: { note_kind: 'task', lifecycle: 'active', task_status: 'open' },
+        expectedRevision: 'missing', accessToken,
+      } });
+      expect(written.isError).toBeFalsy();
+      return (await callJson(client, 'read_note', { path, accessToken })).value;
+    };
+
+    const missing = await createWork('Projects/Missing disposition.md');
+    const rejected = await client.callTool({ name: 'triage_wiki_note', arguments: {
+      path: missing.path, taskStatus: 'completed', completedAt: '2030-01-01T00:00:00.000Z',
+      expectedRevision: missing.revision, accessToken,
+    } });
+    expect(rejected.isError).toBe(true);
+    expect(String((rejected.content as any)[0].text)).toContain('knowledge disposition');
+    expect((await callJson(client, 'read_note', { path: missing.path, accessToken })).value.fm.task_status).toBe('open');
+
+    const retrospective = await callJson(client, 'triage_wiki_note', {
+      path: missing.path, taskStatus: 'completed', completedAt: '2030-01-01T00:00:00.000Z',
+      retrospective: 'Revision checks prevented an accidental overwrite.',
+      expectedRevision: missing.revision, accessToken,
+    });
+    expect(retrospective.value.frontmatter).toMatchObject({
+      taskStatus: 'completed', retrospective: 'Revision checks prevented an accidental overwrite.',
+      knowledgeDispositions: ['retrospective'],
+    });
+    const persistedRetrospective = await callJson(client, 'read_note', { path: missing.path, accessToken });
+    expect(persistedRetrospective.value.fm).toMatchObject({
+      task_status: 'completed', retrospective: 'Revision checks prevented an accidental overwrite.',
+      knowledge_dispositions: ['retrospective'],
+    });
+
+    const linked = await createWork('Projects/Linked disposition.md');
+    const linkedCompletion = await callJson(client, 'triage_wiki_note', {
+      path: linked.path, taskStatus: 'completed', knowledgeNotes: ['Knowledge/Durable lesson.md'],
+      negativeKnowledgeNotes: ['Knowledge/Negative lesson.md'], expectedRevision: linked.revision, accessToken,
+    });
+    expect(linkedCompletion.value.frontmatter).toMatchObject({
+      knowledgeNotes: ['Knowledge/Durable lesson.md'], negativeKnowledgeNotes: ['Knowledge/Negative lesson.md'],
+      knowledgeDispositions: ['linked_knowledge', 'negative_knowledge'],
+    });
+
+    for (const [path, field, value] of [
+      ['Projects/Wrong role.md', 'knowledgeNotes', ['Knowledge/Negative lesson.md']],
+      ['Projects/Hidden role.md', 'knowledgeNotes', ['Knowledge/Hidden lesson.md']],
+      ['Projects/Missing role.md', 'negativeKnowledgeNotes', ['Knowledge/Absent.md']],
+    ] as const) {
+      const work = await createWork(path);
+      const invalid = await client.callTool({ name: 'triage_wiki_note', arguments: {
+        path, taskStatus: 'completed', [field]: value, expectedRevision: work.revision, accessToken,
+      } });
+      expect(invalid.isError).toBe(true);
+      expect(String((invalid.content as any)[0].text)).toContain('visible');
+      expect(String((invalid.content as any)[0].text)).not.toContain(value[0]);
+    }
+
+    const contradictory = await createWork('Projects/Contradictory disposition.md');
+    const contradictoryResult = await client.callTool({ name: 'triage_wiki_note', arguments: {
+      path: contradictory.path, taskStatus: 'completed', retrospective: 'A lesson exists.',
+      noReusableKnowledge: true, knowledgeDispositionReason: 'No lesson exists.',
+      expectedRevision: contradictory.revision, accessToken,
+    } });
+    expect(contradictoryResult.isError).toBe(true);
+    expect(String((contradictoryResult.content as any)[0].text)).toContain('cannot be combined');
+
+    const staleWork = await createWork('Projects/Stale disposition.md');
+    const changed = await callJson(client, 'triage_wiki_note', { path: staleWork.path, tags: ['changed'], expectedRevision: staleWork.revision, accessToken });
+    const stale = await client.callTool({ name: 'triage_wiki_note', arguments: {
+      path: staleWork.path, taskStatus: 'completed', retrospective: 'Stale write.', expectedRevision: staleWork.revision, accessToken,
+    } });
+    expect(stale.isError).toBe(true);
+    expect(String((stale.content as any)[0].text)).toMatch(/revision/i);
+    expect(changed.value.revision).not.toBe(staleWork.revision);
+
+    const legacy = await client.callTool({ name: 'write_note', arguments: {
+      path: 'Projects/Legacy completed.md', content: '# Legacy completed\n',
+      frontmatter: { note_kind: 'task', lifecycle: 'active', task_status: 'completed', completed_at: '2029-01-01T00:00:00.000Z' },
+      expectedRevision: 'missing', accessToken,
+    } });
+    expect(legacy.isError).toBeFalsy();
+    const legacyRead = await callJson(client, 'read_note', { path: 'Projects/Legacy completed.md', accessToken });
+    const legacyEdit = await callJson(client, 'triage_wiki_note', {
+      path: legacyRead.value.path, tags: ['legacy'], expectedRevision: legacyRead.value.revision, accessToken,
+    });
+    expect(legacyEdit.value.frontmatter.tags).toEqual(['legacy']);
+    const repaired = await callJson(client, 'triage_wiki_note', {
+      path: legacyRead.value.path, retrospective: 'Recovered a legacy completion record.',
+      expectedRevision: legacyEdit.value.revision, accessToken,
+    });
+    expect(repaired.value.frontmatter.knowledgeDispositions).toEqual(['retrospective']);
+
+    const source = await callJson(client, 'ingest_source', { sourceId: 'completion-source', title: 'Completion source', content: 'Grounded completion evidence.', accessToken });
+    const publishRejected = await client.callTool({ name: 'publish_knowledge', arguments: {
+      path: 'Projects/Published missing.md', content: '# Published missing\n', evidencePaths: [source.value.path],
+      noteKind: 'task', taskStatus: 'completed', expectedRevision: 'missing', accessToken,
+    } });
+    expect(publishRejected.isError).toBe(true);
+    const published = await callJson(client, 'publish_knowledge', {
+      path: 'Projects/Published explained.md', content: '# Published explained\n', evidencePaths: [source.value.path],
+      noteKind: 'task', taskStatus: 'completed', noReusableKnowledge: true,
+      knowledgeDispositionReason: 'The result only confirmed the already cited source.', expectedRevision: 'missing', accessToken,
+    });
+    expect(published.value).toMatchObject({ knowledgeDispositions: ['no_reusable_knowledge'] });
+
+    const capture = await callJson(client, 'capture_wiki_note', { path: 'Inbox/Completed capture.md', content: '# Completed capture\n', expectedRevision: 'missing', accessToken });
+    const clarified = await callJson(client, 'clarify_wiki_note', {
+      path: capture.value.path, disposition: 'project', taskStatus: 'completed',
+      retrospective: 'Clarification completed the bounded capture.', expectedRevision: capture.value.revision, accessToken,
+    });
+    expect(clarified.value.frontmatter).toMatchObject({ taskStatus: 'completed', knowledgeDispositions: ['retrospective'] });
+  } finally { await client.close(); await server.close(); }
+});
+
 test('MOC navigation preserves explicit sibling order, body link order, and multi-MOC neighborhoods', async () => {
   const { server, client } = await setup();
   try {

@@ -1335,6 +1335,11 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             ...(typeof trimmedArgs.desiredOutcome === 'string' && { desiredOutcome: trimmedArgs.desiredOutcome }),
             ...(typeof trimmedArgs.projectPurpose === 'string' && { projectPurpose: trimmedArgs.projectPurpose }),
             ...(trimmedArgs.projectSupport !== undefined && { projectSupport: trimmedArgs.projectSupport }),
+            ...(trimmedArgs.knowledgeNotes !== undefined && { knowledgeNotes: trimmedArgs.knowledgeNotes }),
+            ...(trimmedArgs.negativeKnowledgeNotes !== undefined && { negativeKnowledgeNotes: trimmedArgs.negativeKnowledgeNotes }),
+            ...(trimmedArgs.retrospective !== undefined && { retrospective: trimmedArgs.retrospective }),
+            ...(trimmedArgs.noReusableKnowledge !== undefined && { noReusableKnowledge: trimmedArgs.noReusableKnowledge }),
+            ...(trimmedArgs.knowledgeDispositionReason !== undefined && { knowledgeDispositionReason: trimmedArgs.knowledgeDispositionReason }),
             expectedRevision: trimmedArgs.expectedRevision,
           }), trimmedArgs.prettyPrint);
         }

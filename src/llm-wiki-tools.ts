@@ -55,6 +55,13 @@ const temporalProperties = {
   observedAt: { type: 'string', description: 'ISO date/time when the represented condition was observed' },
   temporalScope: { type: 'string', maxLength: 1000, description: 'Short condition or period in which this knowledge applies' },
 } as const;
+const knowledgeDispositionProperties = {
+  knowledgeNotes: organizationPropertySchema('knowledge_notes', { maxItems: 20, items: { maxLength: 500 }, description: 'Use only visible durable knowledge notes created or updated by the work' }),
+  negativeKnowledgeNotes: organizationPropertySchema('negative_knowledge_notes', { maxItems: 20, items: { maxLength: 500 }, description: 'Use only visible negative-knowledge notes preserving failed or rejected paths' }),
+  retrospective: organizationPropertySchema('retrospective', { maxLength: 1000 }),
+  noReusableKnowledge: { type: 'boolean', description: 'Exclusive explicit completion outcome when no reusable lesson exists; requires knowledgeDispositionReason and cannot accompany artifacts' },
+  knowledgeDispositionReason: organizationPropertySchema('knowledge_disposition_reason', { maxLength: 1000 }),
+} as const;
 
 export const LLM_WIKI_MUTATING_TOOLS = [
   'initialize_llm_wiki', 'ingest_source', 'capture_wiki_note', 'clarify_wiki_note', 'distill_wiki_source', 'publish_knowledge', 'publish_decision_record', 'triage_wiki_note', 'review_wiki_note', 'review_wiki_claim', 'report_wiki_issue', 'propose_wiki_term_change', 'resolve_wiki_issue', 'export_wiki_base', 'export_wiki_canvas',
@@ -91,8 +98,9 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'clarify_wiki_note',
-      description: 'Complete the GTD Clarify step for one Inbox capture. Applies the disposition lifecycle, detects an existing proposed destination, and returns a revision-safe move-preview or merge-preview action without deleting, overwriting, or silently moving the note.',
+      description: 'Complete the GTD Clarify step for one Inbox capture. Applies the disposition lifecycle, detects an existing proposed destination, and returns a revision-safe move-preview or merge-preview action without deleting, overwriting, or silently moving the note. Entering taskStatus=completed requires one auditable knowledge disposition.',
       inputSchema: { type: 'object', properties: {
+        ...knowledgeDispositionProperties,
         path: { type: 'string' }, disposition: organizationPropertySchema('triage_disposition'), clarifiedBy: { type: 'string' }, clarifyNote: { type: 'string', maxLength: 1000 }, targetPath: { type: 'string', description: 'Optional vault-relative destination suggestion; the note is not moved automatically' },
         noteKind: organizationPropertySchema('note_kind'), lifecycle: organizationPropertySchema('lifecycle'), epistemicStatus: { type: 'string', description: 'Required when clarifying as question, hypothesis, experiment, or assumption; experiment uses planned/running/completed/failed/inconclusive/reproduced' }, taskStatus: organizationPropertySchema('task_status'), project: { type: 'string' }, nextAction: { type: 'string', maxLength: 500 }, waitingFor: { type: 'string', maxLength: 500 }, desiredOutcome: { type: 'string', maxLength: 1000 }, projectPurpose: { type: 'string', maxLength: 1000 }, projectSupport: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 30 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
       }, required: ['path', 'disposition', 'expectedRevision'] },
@@ -123,10 +131,11 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'publish_knowledge',
-      description: 'Create or update active evidence-grounded knowledge while preserving ordinary Markdown/Obsidian/Git behavior. Use wiki.lifecycle_transition instead of this endpoint for retirement or reactivation. Every evidence path must be an immutable source snapshot.',
+      description: 'Create or update active evidence-grounded knowledge while preserving ordinary Markdown/Obsidian/Git behavior. Use wiki.lifecycle_transition instead of this endpoint for retirement or reactivation. Every evidence path must be an immutable source snapshot. Entering taskStatus=completed requires one auditable knowledge disposition.',
       inputSchema: { type: 'object', properties: {
         ...executionProperties,
         ...temporalProperties,
+        ...knowledgeDispositionProperties,
         path: { type: 'string' }, content: { type: 'string', description: 'Obsidian Markdown; resolvable [[Note]] links are automatically recorded as references' }, evidencePaths: { type: 'array', items: { type: 'string' } }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths or Obsidian [[Note]] references' },
         author: { type: 'string' }, confidence: organizationPropertySchema('confidence', { default: 'medium' }),
         status: organizationPropertySchema('knowledge_status', { default: 'draft' }),
@@ -484,10 +493,11 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'triage_wiki_note',
-      description: 'Classify one active ordinary Markdown note with PARA/Zettelkasten-style metadata without changing its body or moving it. Retirement and reactivation use wiki.lifecycle_transition. New managed fields are rejected when they do not apply to the selected note role. Use expectedRevision to avoid overwriting another agent.',
+      description: 'Classify one active ordinary Markdown note with PARA/Zettelkasten-style metadata without changing its body or moving it. Retirement and reactivation use wiki.lifecycle_transition. Entering taskStatus=completed requires one auditable knowledge disposition. New managed fields are rejected when they do not apply to the selected note role. Use expectedRevision to avoid overwriting another agent.',
       inputSchema: { type: 'object', properties: {
         ...executionProperties,
         ...temporalProperties,
+        ...knowledgeDispositionProperties,
         path: { type: 'string' }, noteKind: organizationPropertySchema('note_kind'),
         lifecycle: organizationPropertySchema('lifecycle', { enum: [...ACTIVE_LIFECYCLES], description: 'Retired states are managed only by wiki.lifecycle_transition' }),
         decisionStatus: organizationPropertySchema('decision_status', { description: 'Metadata-only migration/repair for an existing Decision Record; use wiki.decision_record for an actual state transition' }),
