@@ -216,7 +216,24 @@ export interface MoveNotePreviewResult {
     heading?: string;
     targetHeading?: string;
     targetBlockId?: string;
+    direction?: 'inbound' | 'outgoing' | 'self';
+    replacement?: string;
   }>;
+  affectedProperties: Array<{
+    sourcePath: string;
+    propertyPath: string;
+    value: string;
+    replacement: string;
+    direction: 'inbound' | 'outgoing' | 'self';
+  }>;
+  ambiguousReferences: Array<{
+    sourcePath: string;
+    value: string;
+    candidates: string[];
+    line?: number;
+    propertyPath?: string;
+  }>;
+  ambiguousTotal: number;
   total: number;
   truncated: boolean;
   message: string;

@@ -1,4 +1,4 @@
-import { join, resolve, relative, dirname } from 'path';
+import { join, resolve, relative, dirname, posix } from 'path';
 import { homedir } from 'os';
 import { readdir, stat, readFile, writeFile, unlink, mkdir, access, rename, copyFile } from 'node:fs/promises';
 import { constants, lstatSync, realpathSync } from 'node:fs';
@@ -162,17 +162,101 @@ function rewriteLinkText(link, sourcePath, newPath) {
     if (!markdown)
         return link;
     const destination = relative(dirname(sourcePath), newPath).replace(/\\/g, '/') || newPath;
-    return `${markdown[1]}${destination}${markdown[3]}`;
+    const rawTarget = markdown[2];
+    const suffixAt = [rawTarget.indexOf('?'), rawTarget.indexOf('#')].filter(index => index >= 0).sort((a, b) => a - b)[0];
+    const suffix = suffixAt === undefined ? '' : rawTarget.slice(suffixAt);
+    const wrappedDestination = /<$/.test(markdown[1])
+        ? `${destination}${suffix}`
+        : /\s/.test(destination) ? `<${destination}${suffix}>` : `${destination}${suffix}`;
+    return `${markdown[1]}${wrappedDestination}${markdown[3]}`;
 }
-function rewriteInboundLinks(content, sourcePath, oldPath, newPath, allPaths) {
+const PLAIN_REFERENCE_PROPERTIES = new Set([
+    'related_task', 'primary_moc', 'mocs', 'moc', 'project', 'term_replaced_by',
+    'canonical_path', 'broader_terms', 'related_terms', 'see_also', 'project_support',
+    'recall_repair_path', 'issue_follow_up_paths', 'replaced_by', 'replacement_path',
+    'superseded_by', 'negative_replacement_path', 'moc_parent', 'focus_parent',
+    'focus_supports', 'references', 'evidence_paths', 'knowledge_notes', 'focus_notes',
+    'supersedes_source',
+    'supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements',
+    'blocked_by', 'answers_questions', 'tests', 'related', 'same_as', 'version_of', 'refines',
+]);
+const NESTED_REFERENCE_PROPERTIES = new Set([
+    'path', 'target', 'evidence_paths', 'supports_claims', 'contradicts_claims', 'depends_on_claims',
+]);
+function frontmatterEndLine(content) {
     const lines = content.split('\n');
-    const occurrences = extractObsidianLinkOccurrences(content)
-        .filter(occurrence => resolveWikiLinkTargets(occurrence.target, allPaths).some(target => normalizeNoteTarget(target) === normalizeNoteTarget(oldPath)))
-        .sort((a, b) => a.line - b.line);
+    if (lines[0]?.replace(/\r$/, '') !== '---')
+        return 0;
+    for (let index = 1; index < lines.length; index += 1) {
+        if (lines[index]?.replace(/\r$/, '') === '---')
+            return index + 1;
+    }
+    return 0;
+}
+function isWikiSyntax(link) {
+    return link.startsWith('[[') || link.startsWith('![[');
+}
+function resolveMarkdownLinkTargets(target, sourcePath, referenceIndex) {
+    const normalizedTarget = target.replace(/\\/g, '/').trim();
+    const candidate = posix.normalize(normalizedTarget.startsWith('/')
+        ? normalizedTarget.slice(1)
+        : posix.join(posix.dirname(sourcePath), normalizedTarget));
+    if (!candidate || candidate === '..' || candidate.startsWith('../'))
+        return [];
+    const normalizedCandidate = candidate.toLowerCase();
+    const matches = referenceIndex.qualified.get(normalizedCandidate)
+        || referenceIndex.qualified.get(normalizedCandidate.replace(/\.(?:md|markdown|txt)$/i, ''));
+    return [...(matches || [])].sort((left, right) => left.localeCompare(right));
+}
+function resolveOccurrenceTargets(link, target, sourcePath, referenceIndex) {
+    return isWikiSyntax(link)
+        ? resolveNoteReference(target, referenceIndex)
+        : resolveMarkdownLinkTargets(target, sourcePath, referenceIndex);
+}
+function moveDirection(sourcePath, oldPath, targetPath) {
+    const sourceIsMoved = normalizeNoteTarget(sourcePath) === normalizeNoteTarget(oldPath);
+    const targetIsMoved = normalizeNoteTarget(targetPath) === normalizeNoteTarget(oldPath);
+    return sourceIsMoved && targetIsMoved ? 'self' : sourceIsMoved ? 'outgoing' : 'inbound';
+}
+function rewriteExplicitLinks(content, sourcePath, renderedSourcePath, oldPath, newPath, referenceIndex, lineOffset = 0) {
+    const lines = content.split('\n');
+    const changes = [];
+    const ambiguous = [];
+    const occurrences = extractObsidianLinkOccurrences(content).sort((a, b) => a.line - b.line);
     const byLine = new Map();
-    for (const occurrence of occurrences)
+    const replacements = new Map();
+    for (const occurrence of occurrences) {
+        const targets = resolveOccurrenceTargets(occurrence.link, occurrence.target, sourcePath, referenceIndex);
+        const includesMovedTarget = targets.some(target => normalizeNoteTarget(target) === normalizeNoteTarget(oldPath));
+        if (targets.length > 1 && includesMovedTarget) {
+            ambiguous.push({ sourcePath, value: occurrence.link, candidates: targets, line: occurrence.line + lineOffset });
+            continue;
+        }
+        if (targets.length !== 1)
+            continue;
+        const targetPath = targets[0];
+        const targetIsMoved = normalizeNoteTarget(targetPath) === normalizeNoteTarget(oldPath);
+        const sourceIsMoved = normalizeNoteTarget(sourcePath) === normalizeNoteTarget(oldPath);
+        if (!targetIsMoved && !(sourceIsMoved && !isWikiSyntax(occurrence.link)))
+            continue;
+        const renderedTarget = targetIsMoved ? newPath : targetPath;
+        const replacement = rewriteLinkText(occurrence.link, renderedSourcePath, renderedTarget);
+        if (replacement === occurrence.link)
+            continue;
+        changes.push({
+            sourcePath,
+            line: occurrence.line + lineOffset,
+            link: occurrence.link,
+            replacement,
+            context: occurrence.context,
+            direction: moveDirection(sourcePath, oldPath, targetPath),
+            ...(occurrence.heading && { heading: occurrence.heading }),
+            ...(occurrence.targetHeading && { targetHeading: occurrence.targetHeading }),
+            ...(occurrence.targetBlockId && { targetBlockId: occurrence.targetBlockId }),
+        });
+        replacements.set(occurrence, replacement);
         byLine.set(occurrence.line, [...(byLine.get(occurrence.line) || []), occurrence]);
-    let count = 0;
+    }
     for (const [lineNumber, lineOccurrences] of byLine) {
         let line = lines[lineNumber - 1] || '';
         let cursor = 0;
@@ -180,14 +264,131 @@ function rewriteInboundLinks(content, sourcePath, oldPath, newPath, allPaths) {
             const offset = line.indexOf(occurrence.link, cursor);
             if (offset === -1)
                 continue;
-            const replacement = rewriteLinkText(occurrence.link, sourcePath, newPath);
+            const replacement = replacements.get(occurrence);
+            if (!replacement)
+                continue;
             line = `${line.slice(0, offset)}${replacement}${line.slice(offset + occurrence.link.length)}`;
             cursor = offset + replacement.length;
-            count += 1;
         }
         lines[lineNumber - 1] = line;
     }
-    return { content: lines.join('\n'), count };
+    return { content: lines.join('\n'), changes, ambiguous };
+}
+function propertyPathText(segments) {
+    return segments.map((segment, index) => typeof segment === 'number' ? `[${segment}]` : `${index > 0 ? '.' : ''}${segment}`).join('');
+}
+function acceptsPlainReference(segments) {
+    const names = segments.filter((segment) => typeof segment === 'string');
+    const root = names[0] || '';
+    const leaf = names.at(-1) || '';
+    if (PLAIN_REFERENCE_PROPERTIES.has(root) && names.length === 1)
+        return true;
+    if (root === 'relation_evidence')
+        return true;
+    if (root === 'claims' && NESTED_REFERENCE_PROPERTIES.has(leaf))
+        return true;
+    if (['evidence', 'review_basis_links', 'review_basis_upstream', 'pending_edits', 'research_trail'].includes(root) && NESTED_REFERENCE_PROPERTIES.has(leaf))
+        return true;
+    return false;
+}
+function rewritePlainReference(value, oldPath, newPath, referenceIndex) {
+    const trimmed = value.trim();
+    if (!trimmed || /^[a-z][a-z0-9+.-]*:/i.test(trimmed) || trimmed.startsWith('#'))
+        return {};
+    const suffixAt = [trimmed.indexOf('?'), trimmed.indexOf('#')].filter(index => index >= 0).sort((a, b) => a - b)[0];
+    const document = suffixAt === undefined ? trimmed : trimmed.slice(0, suffixAt);
+    const suffix = suffixAt === undefined ? '' : trimmed.slice(suffixAt);
+    const targets = resolveNoteReference(document, referenceIndex);
+    const includesMovedTarget = targets.some(target => normalizeNoteTarget(target) === normalizeNoteTarget(oldPath));
+    if (targets.length > 1 && includesMovedTarget)
+        return { candidates: targets };
+    if (targets.length !== 1 || !includesMovedTarget)
+        return {};
+    const keepExtension = /\.(?:md|markdown|txt)$/i.test(document);
+    return { replacement: `${keepExtension ? newPath : newPath.replace(/\.(?:md|markdown|txt)$/i, '')}${suffix}` };
+}
+function rewriteFrontmatterReferences(frontmatter, sourcePath, renderedSourcePath, oldPath, newPath, referenceIndex) {
+    const changes = [];
+    const ambiguous = [];
+    const visit = (value, segments) => {
+        if (typeof value === 'string') {
+            const explicit = rewriteExplicitLinks(value, sourcePath, renderedSourcePath, oldPath, newPath, referenceIndex);
+            if (explicit.ambiguous.length > 0) {
+                ambiguous.push(...explicit.ambiguous.map(({ line: _line, ...item }) => ({ ...item, propertyPath: propertyPathText(segments) })));
+            }
+            if (explicit.changes.length > 0) {
+                changes.push({
+                    sourcePath,
+                    propertyPath: propertyPathText(segments),
+                    value,
+                    replacement: explicit.content,
+                    direction: explicit.changes[0].direction,
+                });
+                return explicit.content;
+            }
+            if (!acceptsPlainReference(segments))
+                return value;
+            const plain = rewritePlainReference(value, oldPath, newPath, referenceIndex);
+            if (plain.candidates) {
+                ambiguous.push({ sourcePath, propertyPath: propertyPathText(segments), value, candidates: plain.candidates });
+                return value;
+            }
+            if (!plain.replacement || plain.replacement === value)
+                return value;
+            changes.push({ sourcePath, propertyPath: propertyPathText(segments), value, replacement: plain.replacement, direction: moveDirection(sourcePath, oldPath, oldPath) });
+            return plain.replacement;
+        }
+        if (Array.isArray(value)) {
+            let changed = false;
+            const next = value.map((item, index) => {
+                const rewritten = visit(item, [...segments, index]);
+                changed ||= rewritten !== item;
+                return rewritten;
+            });
+            return changed ? next : value;
+        }
+        if (value && typeof value === 'object') {
+            let changed = false;
+            const next = {};
+            for (const [key, item] of Object.entries(value)) {
+                const rewritten = visit(item, [...segments, key]);
+                changed ||= rewritten !== item;
+                next[key] = rewritten;
+            }
+            return changed ? next : value;
+        }
+        return value;
+    };
+    const updates = {};
+    for (const [key, value] of Object.entries(frontmatter)) {
+        const rewritten = visit(value, [key]);
+        if (rewritten !== value)
+            updates[key] = rewritten;
+    }
+    return { updates, changes, ambiguous };
+}
+function planMoveReferenceRewrite(handler, content, sourcePath, oldPath, newPath, referenceIndex) {
+    const renderedSourcePath = normalizeNoteTarget(sourcePath) === normalizeNoteTarget(oldPath) ? newPath : sourcePath;
+    const matterEnd = frontmatterEndLine(content);
+    const body = matterEnd > 0 ? content.split('\n').slice(matterEnd).join('\n') : content;
+    const bodyRewrite = rewriteExplicitLinks(body, sourcePath, renderedSourcePath, oldPath, newPath, referenceIndex, matterEnd);
+    const parsed = handler.parse(content);
+    const properties = rewriteFrontmatterReferences(parsed.frontmatter, sourcePath, renderedSourcePath, oldPath, newPath, referenceIndex);
+    let rewritten = bodyRewrite.content;
+    if (matterEnd > 0) {
+        rewritten = Object.keys(properties.updates).length > 0
+            ? handler.preserveStringify(parsed.matter || '', properties.updates, bodyRewrite.content)
+            : `${content.split('\n').slice(0, matterEnd).join('\n')}\n${bodyRewrite.content}`;
+    }
+    else if (Object.keys(properties.updates).length > 0) {
+        rewritten = handler.stringify({ ...parsed.frontmatter, ...properties.updates }, bodyRewrite.content);
+    }
+    return {
+        content: rewritten,
+        linkChanges: bodyRewrite.changes,
+        propertyChanges: properties.changes,
+        ambiguous: [...bodyRewrite.ambiguous, ...properties.ambiguous],
+    };
 }
 function selectSortedNotes(notes, sortBy, sortOrder, offset, limit) {
     const needed = offset + limit;
@@ -1296,9 +1497,14 @@ export class FileSystemService {
         }
     }
     async moveNote(params, canAccessPath = () => true) {
-        const { overwrite = false, updateLinks = false } = params;
         const oldPath = this.normalizePath(params.oldPath);
         const newPath = this.normalizePath(params.newPath);
+        return this.withMutationLocks([oldPath, newPath], () => this.moveNoteUnlocked({ ...params, oldPath, newPath }, canAccessPath));
+    }
+    async moveNoteUnlocked(params, canAccessPath) {
+        const { overwrite = false, updateLinks = false } = params;
+        const oldPath = params.oldPath;
+        const newPath = params.newPath;
         if (oldPath.toLowerCase() === newPath.toLowerCase()) {
             return { success: false, oldPath, newPath, message: 'Source and destination are identical; no move was performed.' };
         }
@@ -1321,6 +1527,8 @@ export class FileSystemService {
         const oldFullPath = this.resolveWritablePath(oldPath);
         const newFullPath = this.resolveWritablePath(newPath);
         const linkBackups = [];
+        let destinationBackup;
+        let destinationTouched = false;
         try {
             // Read source content (will throw ENOENT if not found)
             let content;
@@ -1356,8 +1564,10 @@ export class FileSystemService {
                 const allPaths = (await this.collectVaultFiles())
                     .filter(path => this.pathFilter.isAllowed(path) && canAccessPath(path) && /\.(?:md|markdown|txt)$/i.test(path))
                     .sort((a, b) => a.localeCompare(b));
+                const referenceIndex = buildNoteReferenceIndex(allPaths.map(path => ({ path })));
+                const ambiguities = [];
                 for (const sourcePath of allPaths) {
-                    if (sourcePath.toLowerCase() === oldPath.toLowerCase() || sourcePath.toLowerCase() === newPath.toLowerCase())
+                    if (sourcePath.toLowerCase() === newPath.toLowerCase() && sourcePath.toLowerCase() !== oldPath.toLowerCase())
                         continue;
                     let sourceContent;
                     try {
@@ -1366,24 +1576,54 @@ export class FileSystemService {
                     catch {
                         continue;
                     }
-                    const rewritten = rewriteInboundLinks(sourceContent, sourcePath, oldPath, newPath, allPaths);
-                    if (rewritten.count > 0)
-                        linkBackups.push({ path: sourcePath, original: sourceContent, rewritten: rewritten.content, updated: false });
+                    const plan = planMoveReferenceRewrite(this.frontmatterHandler, sourceContent, sourcePath, oldPath, newPath, referenceIndex);
+                    ambiguities.push(...plan.ambiguous);
+                    if (sourcePath.toLowerCase() === oldPath.toLowerCase()) {
+                        content = plan.content;
+                    }
+                    else if (plan.content !== sourceContent) {
+                        linkBackups.push({ path: sourcePath, original: sourceContent, rewritten: plan.content, updated: false });
+                    }
                 }
+                if (ambiguities.length > 0) {
+                    const first = ambiguities[0];
+                    return {
+                        success: false,
+                        oldPath,
+                        newPath,
+                        message: `Move blocked: ${ambiguities.length} ambiguous reference${ambiguities.length === 1 ? '' : 's'} may point to the source note. Disambiguate ${first.sourcePath}${first.propertyPath ? ` ${first.propertyPath}` : first.line ? ` line ${first.line}` : ''} before retrying updateLinks=true.`,
+                    };
+                }
+                assertNoteContentSize(content, newPath);
                 for (const backup of linkBackups) {
                     const current = await this.readNote(backup.path);
                     if (current.originalContent !== backup.original)
                         throw new Error(`Inbound link source changed during rename: ${backup.path}`);
                     assertNoteContentSize(backup.rewritten, backup.path);
-                    await writeFile(this.resolveWritablePath(backup.path), backup.rewritten, 'utf-8');
+                    // Mark before write because writeFile may truncate and then fail.
+                    // Rollback must cover both complete and partial writes.
                     backup.updated = true;
+                    await writeFile(this.resolveWritablePath(backup.path), backup.rewritten, 'utf-8');
                     this.notifyNoteChanged(backup.path, 'upsert');
                 }
             }
             // Create directories if needed
             await mkdir(dirname(newFullPath), { recursive: true });
+            if (overwrite) {
+                try {
+                    destinationBackup = await readFile(newFullPath, 'utf-8');
+                }
+                catch (error) {
+                    if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT')
+                        throw error;
+                }
+            }
             // Write to new location, checking for existing file atomically if !overwrite
             try {
+                // A failed write can still leave a truncated/partial destination. For
+                // exclusive creation, EEXIST below clears this flag because that file
+                // belongs to the pre-existing/racing writer and must not be removed.
+                destinationTouched = true;
                 if (overwrite) {
                     await writeFile(newFullPath, content, 'utf-8');
                 }
@@ -1394,12 +1634,8 @@ export class FileSystemService {
             }
             catch (error) {
                 if (error instanceof Error && 'code' in error && error.code === 'EEXIST') {
-                    return {
-                        success: false,
-                        oldPath,
-                        newPath,
-                        message: `Target file already exists: ${newPath}. Use overwrite=true to replace it.`
-                    };
+                    destinationTouched = false;
+                    throw new Error(`Target file already exists: ${newPath}. Use overwrite=true to replace it.`);
                 }
                 throw error;
             }
@@ -1411,10 +1647,22 @@ export class FileSystemService {
                 success: true,
                 oldPath,
                 newPath,
-                message: `Successfully moved note from ${oldPath} to ${newPath}${linkBackups.length ? ` and updated ${linkBackups.length} inbound note${linkBackups.length === 1 ? '' : 's'}` : ''}`
+                message: `Successfully moved note from ${oldPath} to ${newPath}${linkBackups.length ? ` and updated references in ${linkBackups.length} dependent note${linkBackups.length === 1 ? '' : 's'}` : ''}`
             };
         }
         catch (error) {
+            if (destinationTouched) {
+                try {
+                    if (destinationBackup !== undefined)
+                        await writeFile(newFullPath, destinationBackup, 'utf-8');
+                    else
+                        await unlink(newFullPath);
+                    this.notifyNoteChanged(newPath, destinationBackup !== undefined ? 'upsert' : 'delete');
+                }
+                catch {
+                    // Preserve the original error; the failure message below flags that the move did not complete.
+                }
+            }
             for (const backup of linkBackups.filter(item => item.updated).reverse()) {
                 try {
                     await writeFile(this.resolveWritablePath(backup.path), backup.original, 'utf-8');
@@ -1611,10 +1859,10 @@ export class FileSystemService {
         return this.withMutationLock(path, () => this.updateFrontmatterUnlocked({ ...params, path }));
     }
     /**
-     * Preview a note move without changing files. Markdown and wikilinks remain
-     * authoritative, so this resolves the current link graph and reports the
-     * exact bounded set of source lines that would need review after a rename.
-     * It deliberately does not rewrite links automatically.
+     * Preview a note move without changing files. Markdown, Properties, and
+     * Obsidian links remain authoritative, so this resolves one bounded,
+     * explainable rewrite plan. Applying that plan remains explicit and
+     * revision-checked through moveNote(updateLinks=true).
      */
     async previewMoveNote(params, canAccessPath = () => true) {
         const oldPath = this.normalizePath(params.oldPath);
@@ -1630,10 +1878,13 @@ export class FileSystemService {
         const allPaths = (await this.collectVaultFiles())
             .filter(path => this.pathFilter.isAllowed(path) && canAccessPath(path) && /\.(?:md|markdown|txt)$/i.test(path))
             .sort((a, b) => a.localeCompare(b));
-        const normalizedOld = oldPath.replace(/\.(?:md|markdown|txt)$/i, '').toLowerCase();
+        const referenceIndex = buildNoteReferenceIndex(allPaths.map(path => ({ path })));
+        const [targetExists, collision] = await Promise.all([this.noteExists(oldPath), this.noteExists(newPath)]);
         const affectedLinks = [];
+        const affectedProperties = [];
+        const ambiguousReferences = [];
         for (const sourcePath of allPaths) {
-            if (sourcePath.toLowerCase() === oldPath.toLowerCase())
+            if (sourcePath.toLowerCase() === newPath.toLowerCase() && sourcePath.toLowerCase() !== oldPath.toLowerCase())
                 continue;
             let content;
             try {
@@ -1642,25 +1893,34 @@ export class FileSystemService {
             catch {
                 continue;
             }
-            for (const occurrence of extractObsidianLinkOccurrences(content)) {
-                const targets = resolveWikiLinkTargets(occurrence.target, allPaths);
-                const referencesOld = targets.some(target => target.replace(/\.(?:md|markdown|txt)$/i, '').toLowerCase() === normalizedOld);
-                if (!referencesOld)
-                    continue;
-                affectedLinks.push({ sourcePath, line: occurrence.line, link: occurrence.link, context: occurrence.context, ...(occurrence.heading && { heading: occurrence.heading }), ...(occurrence.targetHeading && { targetHeading: occurrence.targetHeading }), ...(occurrence.targetBlockId && { targetBlockId: occurrence.targetBlockId }) });
-            }
+            const plan = planMoveReferenceRewrite(this.frontmatterHandler, content, sourcePath, oldPath, newPath, referenceIndex);
+            affectedLinks.push(...plan.linkChanges);
+            affectedProperties.push(...plan.propertyChanges);
+            ambiguousReferences.push(...plan.ambiguous);
         }
+        const total = affectedLinks.length + affectedProperties.length;
+        const returnedAmbiguous = ambiguousReferences.slice(0, limit);
+        const linkBudget = Math.max(0, limit - returnedAmbiguous.length);
+        const returnedLinks = affectedLinks.slice(0, linkBudget);
+        const propertyBudget = Math.max(0, linkBudget - returnedLinks.length);
+        const returnedProperties = affectedProperties.slice(0, propertyBudget);
+        const returnedCount = returnedAmbiguous.length + returnedLinks.length + returnedProperties.length;
         return {
             oldPath,
             newPath,
-            targetExists: allPaths.some(path => path.toLowerCase() === oldPath.toLowerCase()),
-            collision: allPaths.some(path => path.toLowerCase() === newPath.toLowerCase()),
-            affectedLinks: affectedLinks.slice(0, limit),
-            total: affectedLinks.length,
-            truncated: affectedLinks.length > limit,
-            message: affectedLinks.length > 0
-                ? 'Review affected links before moving. The move operation does not rewrite Markdown links automatically.'
-                : 'No visible Markdown links currently resolve to this note. The move operation still requires normal revision/Git review.',
+            targetExists,
+            collision,
+            affectedLinks: returnedLinks,
+            affectedProperties: returnedProperties,
+            ambiguousReferences: returnedAmbiguous,
+            ambiguousTotal: ambiguousReferences.length,
+            total,
+            truncated: total + ambiguousReferences.length > returnedCount,
+            message: ambiguousReferences.length > 0
+                ? 'Disambiguate every reported reference before using updateLinks=true; the server will refuse to guess which same-name note was intended.'
+                : total > 0
+                    ? 'Review the bounded body and Property rewrite plan, then pass updateLinks=true with the current source revision to apply it transactionally with the move.'
+                    : 'No visible body or Property reference requires rewriting. The move still requires normal revision and Git review.',
         };
     }
     async updateFrontmatterUnlocked(params) {

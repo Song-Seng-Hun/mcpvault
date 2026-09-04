@@ -312,8 +312,12 @@ Properties should keep one native shape per property name across the vault
 in another). `lint_wiki` and `get_wiki_organization_health` report
 `property_type_drift` as an advisory warning so Obsidian Properties/Bases
 views remain predictable. Before renaming a note, use `preview_move_note` to
-see bounded incoming wikilinks/Markdown links and destination collisions;
-`move_note` intentionally does not rewrite links automatically.
+see bounded incoming/self links, relative Markdown outlinks that depend on the
+old folder, link-bearing Properties, ambiguous references, and destination
+collisions. `move_note` leaves references untouched by default. After review,
+`updateLinks: true` plus the current source `expectedRevision` applies the
+reported uniquely resolved rewrites with rollback; an ambiguous same-name
+reference blocks automatic rewriting instead of being guessed.
 
 Call `get_wiki_property_contract` before creating or repairing a managed note
 to see the canonical field types and allowed values. The unfiltered response is
@@ -920,7 +924,7 @@ authenticated edge in front of it.
 - AST-aware frontmatter updates preserve formatting for unchanged YAML fields.
 - Path checks block traversal, symlink escapes, dotfiles, `.obsidian`, `.git`, and `node_modules`.
 - The dynamic endpoint catalog covers note, collaboration, private scope, LLM Wiki, social journaling, public community, chat, references, agent coordination, and private coordination operations:
-  - File operations: `read_note`, `write_note`, `patch_note`, `patch_multiple_notes` (`notes.change_set`), `delete_note`, `move_note`, `preview_move_note`, `move_file`. `notes.change_set` coordinates up to ten existing notes under one dry-run fingerprint, revision preflight, stable lock order, and rollback-backed apply; use it only when reciprocal links, ordered MOCs, or a Property migration must remain coherent. A rename is review-first: `preview_move_note` reports bounded inbound links; `move_note` leaves them unchanged by default, while explicit `updateLinks: true` plus the source `expectedRevision` applies a checked Markdown/wikilink rewrite and rolls link edits back if the move fails.
+  - File operations: `read_note`, `write_note`, `patch_note`, `patch_multiple_notes` (`notes.change_set`), `delete_note`, `move_note`, `preview_move_note`, `move_file`. `notes.change_set` coordinates up to ten existing notes under one dry-run fingerprint, revision preflight, stable lock order, and rollback-backed apply; use it only when reciprocal links, ordered MOCs, or a Property migration must remain coherent. A rename is review-first: `preview_move_note` reports bounded inbound/self body links, moved-note relative Markdown outlinks, link-bearing Properties, and ambiguous references. `move_note` leaves them unchanged by default; explicit `updateLinks: true` plus the source `expectedRevision` applies only uniquely resolved rewrites and rolls rewritten notes and destination state back if the move fails.
   - Partial reads: `get_note_outline`, `read_note_lines`. Both are revision-stamped, character-bounded, and resumable. Directory listing, backlinks, outlinks, unresolved links, and orphan-note diagnostics likewise default to bounded pages and return an executable offset continuation when more records remain.
   - Directory and batch reads: `list_directory`, `read_multiple_notes`
   - Search: `search_notes` with multi-word matching, LLM Wiki-first ranking, one compact excerpt per document, bounded result count/characters, match reasons (`why`) and freshness (`fresh`), Obsidian-style `path:`, `tag:`, `property:`, `[property:value]`, `section:(...)`, `block:(...)`, `task:`, `task-todo:`, `task-done:`, quoted exact phrases, `OR`, and `-excluded` terms, plus automatic server-side incremental document indexing. Scoped filters match within one section/block/task, and `property:null` finds missing or empty values. Set `expandAuthority: true` when browsing by classification: bounded `broader_terms`/`related_terms` matches are returned with explicit lower-confidence reasons rather than being confused with body or alias matches. Semantic search is skipped when lexical filters/exclusions are present so the requested filter cannot be bypassed.
@@ -2518,7 +2522,9 @@ Move or rename a note in the vault (`.md`, `.markdown`, `.txt`, `.base`, `.canva
   "arguments": {
     "oldPath": "drafts/article.md",
     "newPath": "published/article.md",
-    "overwrite": false
+    "overwrite": false,
+    "updateLinks": true,
+    "expectedRevision": "revision returned by read_note"
   }
 }
 ```
@@ -2533,6 +2539,14 @@ Move or rename a note in the vault (`.md`, `.markdown`, `.txt`, `.base`, `.canva
   "message": "Successfully moved note from drafts/article.md to published/article.md"
 }
 ```
+
+Call `preview_move_note` first. Its `affectedLinks` distinguishes inbound,
+outgoing, and self rewrites; `affectedProperties` names exact YAML paths such
+as `primary_moc`, `evidence[0].path`, or `claims[0].supports_claims[0]`.
+`ambiguousReferences` must be repaired with path-qualified links before an
+automatic rewrite. The move preserves heading/block anchors and Markdown link
+labels, adjusts relative outlinks for the new folder, and never treats vector
+similarity as identity.
 
 ### `move_file`
 

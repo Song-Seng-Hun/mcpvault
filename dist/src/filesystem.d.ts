@@ -103,14 +103,15 @@ export declare class FileSystemService {
     private moveNoteToVaultTrash;
     deleteNote(params: DeleteNoteParams): Promise<DeleteResult>;
     moveNote(params: MoveNoteParams, canAccessPath?: (path: string) => boolean): Promise<MoveResult>;
+    private moveNoteUnlocked;
     moveFile(params: MoveFileParams): Promise<MoveResult>;
     readMultipleNotes(params: BatchReadParams): Promise<BatchReadResult>;
     updateFrontmatter(params: UpdateFrontmatterParams): Promise<void>;
     /**
-     * Preview a note move without changing files. Markdown and wikilinks remain
-     * authoritative, so this resolves the current link graph and reports the
-     * exact bounded set of source lines that would need review after a rename.
-     * It deliberately does not rewrite links automatically.
+     * Preview a note move without changing files. Markdown, Properties, and
+     * Obsidian links remain authoritative, so this resolves one bounded,
+     * explainable rewrite plan. Applying that plan remains explicit and
+     * revision-checked through moveNote(updateLinks=true).
      */
     previewMoveNote(params: MoveNotePreviewParams, canAccessPath?: (path: string) => boolean): Promise<MoveNotePreviewResult>;
     private updateFrontmatterUnlocked;

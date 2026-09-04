@@ -85,12 +85,13 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
     purpose: 'Turn observations into durable, connected, revisable knowledge without duplicating truth.',
     rules: [
       'Keep one canonical Markdown note and use MOCs, primary_moc, additional mocs, typed relations, aliases, and see_also as navigation.',
+      'Before moving that canonical note, use notes.move_preview; apply notes.move with updateLinks only at the returned current revision so body links, link-bearing Properties, self-links, and relative Markdown outlinks stay coherent. Disambiguate same-name targets instead of guessing.',
       'Use wiki.relation_set to replace one complete directional relation list with exact canonical targets; use wiki.reciprocal_link for related or same_as so both directions remain coherent.',
       'Use note_kind and lifecycle for knowledge state; keep actionable-note task_status separate from epistemic or knowledge lifecycle.',
       'Use question, hypothesis, assumption, experiment, decision, and negative knowledge for different epistemic jobs instead of flattening them into generic notes.',
       'Summaries, key points, highlights, and generated syntheses are projections or interpretations; preserve the full body and their source revision/fingerprint.',
     ],
-    routes: ['mcp.publish_knowledge', 'wiki.note_template', 'wiki.projection_update', 'wiki.relation_set', 'wiki.reciprocal_link', 'wiki.synthesis_candidates', 'wiki.decision_record'],
+    routes: ['mcp.publish_knowledge', 'wiki.note_template', 'wiki.projection_update', 'wiki.relation_set', 'wiki.reciprocal_link', 'notes.move_preview', 'notes.move', 'wiki.synthesis_candidates', 'wiki.decision_record'],
     avoid: ['copying one concept into several folders', 'treating a summary or relation as truth', 'merging from similarity alone'],
   },
   evidence: {

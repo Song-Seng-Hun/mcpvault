@@ -578,14 +578,14 @@ export function createServer(vaultPath, options = {}) {
         },
         {
             name: "move_note",
-            description: "Move or rename a note in the vault. Use preview_move_note first when the note may have Obsidian backlinks; this operation does not rewrite links automatically, so update inbound [[wikilinks]] deliberately with patch_note after reviewing the preview.",
+            description: "Move or rename a note. Preview first. By default references remain untouched; updateLinks=true plus the source revision atomically rewrites uniquely resolved inbound body links, link-bearing Properties, self-links, and the moved note's relative Markdown outlinks. Ambiguous same-name references block automatic rewriting.",
             inputSchema: {
                 type: "object",
                 properties: {
                     oldPath: { type: "string", description: "Current path of the note" },
                     newPath: { type: "string", description: "New path for the note" },
                     overwrite: { type: "boolean", description: "Allow overwriting existing file (default: false)", default: false },
-                    updateLinks: { type: "boolean", description: "After preview, rewrite visible inbound Obsidian/Markdown links; requires expectedRevision and rolls back link edits if the move fails", default: false },
+                    updateLinks: { type: "boolean", description: "Apply the previewed body/Property/self/relative-outlink plan; requires expectedRevision, refuses ambiguous targets, and rolls back rewritten notes and destination state if the move fails", default: false },
                     expectedRevision: { type: "string", description: "Required when updateLinks=true; current revision of oldPath" }
                 },
                 required: ["oldPath", "newPath"]
@@ -716,13 +716,13 @@ export function createServer(vaultPath, options = {}) {
         },
         {
             name: "preview_move_note",
-            description: "Preview a note move without writing. Reports visible Obsidian/Markdown backlinks, target existence, and destination collisions so a rename can be reviewed before Git-visible changes.",
+            description: "Preview a note move without writing. Reports bounded inbound and self body links, moved-note relative Markdown outlinks, link-bearing Properties, ambiguous same-name references, source existence, and destination collisions.",
             inputSchema: {
                 type: "object",
                 properties: {
                     oldPath: { type: "string", description: "Current path of the note" },
                     newPath: { type: "string", description: "Proposed new path" },
-                    limit: { type: "number", description: "Maximum affected links to return (default: 100, max: 200)", default: 100 },
+                    limit: { type: "number", description: "Shared maximum ambiguous references, body-link rewrites, and Property rewrites to return (default: 100, max: 200); blockers are returned first and totals/truncation remain explicit", default: 100 },
                     prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
                 },
                 required: ["oldPath", "newPath"]

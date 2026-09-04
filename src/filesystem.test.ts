@@ -3,7 +3,7 @@ import { FileSystemService, classifyWriteError, MAX_DERIVED_VIEW_READ_BYTES, MAX
 import { PathFilter } from "./pathfilter.js";
 import { FrontmatterHandler } from "./frontmatter.js";
 import { VaultMetadataIndex } from "./vault-index.js";
-import { writeFile, readFile, mkdir, mkdtemp, rm, symlink } from "fs/promises";
+import { writeFile, readFile, mkdir, mkdtemp, rm, symlink, access } from "fs/promises";
 import { join, relative } from "path";
 import { tmpdir, homedir } from "os";
 
@@ -795,6 +795,98 @@ describe("tasks", () => {
     })).resolves.toMatchObject({ success: true, oldPath: "Target.md", newPath: "Knowledge/Decision.md" });
     await expect(readFile(join(testVaultPath, "Guide.md"), "utf-8")).resolves.toContain("[[Knowledge/Decision.md#Decision|the decision]]");
     await expect(readFile(join(testVaultPath, "Knowledge/Decision.md"), "utf-8")).resolves.toContain("# Target");
+  });
+
+  test("moves a note without breaking typed Properties, evidence locators, self links, or relative outgoing links", async () => {
+    await writeFile(join(testVaultPath, "Guide.md"), "# Guide\n\n## Usage\n");
+    await writeFile(join(testVaultPath, "Target.md"), [
+      "# Target",
+      "",
+      "See [[Target#Decision|this note]] and [the guide](Guide.md#Usage).",
+      "",
+      "## Decision",
+    ].join("\n"));
+    await writeFile(join(testVaultPath, "Source.md"), [
+      "---",
+      "primary_moc: Target",
+      "evidence_paths:",
+      "  - Target.md",
+      "evidence:",
+      "  - path: Target.md",
+      "    line_start: 1",
+      "claims:",
+      "  - id: claim-1",
+      "    evidence_paths: [Target.md]",
+      "    supports_claims: ['[[Target#^claim-1]]']",
+      "review_basis_links:",
+      "  - path: Target.md",
+      "    revision: abc",
+      "relation_evidence:",
+      "  supports: [Target.md]",
+      "---",
+      "Read [[Target#Decision|the decision]] or [the target](Target.md#Decision).",
+    ].join("\n"));
+    const source = await fileSystem.readNote("Target.md");
+
+    const preview = await fileSystem.previewMoveNote({ oldPath: "Target.md", newPath: "Knowledge/Renamed Target.md" });
+    expect(preview.ambiguousTotal).toBe(0);
+    expect(preview.affectedLinks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourcePath: "Target.md", direction: "self", replacement: "[[Knowledge/Renamed Target.md#Decision|this note]]" }),
+      expect.objectContaining({ sourcePath: "Target.md", direction: "outgoing", replacement: "[the guide](../Guide.md#Usage)" }),
+      expect.objectContaining({ sourcePath: "Source.md", direction: "inbound", replacement: "[the target](<Knowledge/Renamed Target.md#Decision>)" }),
+    ]));
+    expect(preview.affectedProperties).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourcePath: "Source.md", propertyPath: "primary_moc", value: "Target", replacement: "Knowledge/Renamed Target" }),
+      expect.objectContaining({ sourcePath: "Source.md", propertyPath: "evidence[0].path", replacement: "Knowledge/Renamed Target.md" }),
+      expect.objectContaining({ sourcePath: "Source.md", propertyPath: "claims[0].supports_claims[0]", replacement: "[[Knowledge/Renamed Target.md#^claim-1]]" }),
+      expect.objectContaining({ sourcePath: "Source.md", propertyPath: "review_basis_links[0].path", replacement: "Knowledge/Renamed Target.md" }),
+      expect.objectContaining({ sourcePath: "Source.md", propertyPath: "relation_evidence.supports[0]", replacement: "Knowledge/Renamed Target.md" }),
+    ]));
+
+    await expect(fileSystem.moveNote({
+      oldPath: "Target.md",
+      newPath: "Knowledge/Renamed Target.md",
+      updateLinks: true,
+      expectedRevision: source.revision,
+    })).resolves.toMatchObject({ success: true });
+
+    const updatedSource = await fileSystem.readNote("Source.md");
+    expect(updatedSource.frontmatter).toMatchObject({
+      primary_moc: "Knowledge/Renamed Target",
+      evidence_paths: ["Knowledge/Renamed Target.md"],
+      evidence: [{ path: "Knowledge/Renamed Target.md", line_start: 1 }],
+      claims: [{ evidence_paths: ["Knowledge/Renamed Target.md"], supports_claims: ["[[Knowledge/Renamed Target.md#^claim-1]]"] }],
+      review_basis_links: [{ path: "Knowledge/Renamed Target.md", revision: "abc" }],
+      relation_evidence: { supports: ["Knowledge/Renamed Target.md"] },
+    });
+    expect(updatedSource.content).toContain("[[Knowledge/Renamed Target.md#Decision|the decision]]");
+    expect(updatedSource.content).toContain("[the target](<Knowledge/Renamed Target.md#Decision>)");
+    const moved = await fileSystem.readNote("Knowledge/Renamed Target.md");
+    expect(moved.content).toContain("[[Knowledge/Renamed Target.md#Decision|this note]]");
+    expect(moved.content).toContain("[the guide](../Guide.md#Usage)");
+  });
+
+  test("refuses to guess when an unqualified link could name more than one move source", async () => {
+    await mkdir(join(testVaultPath, "A"), { recursive: true });
+    await mkdir(join(testVaultPath, "B"), { recursive: true });
+    await writeFile(join(testVaultPath, "A/Target.md"), "# A target\n");
+    await writeFile(join(testVaultPath, "B/Target.md"), "# B target\n");
+    await writeFile(join(testVaultPath, "Source.md"), "# Source\n\nSee [[Target]].\n");
+    const source = await fileSystem.readNote("A/Target.md");
+
+    await expect(fileSystem.previewMoveNote({ oldPath: "A/Target.md", newPath: "Moved.md" })).resolves.toMatchObject({
+      ambiguousTotal: 1,
+      ambiguousReferences: [expect.objectContaining({ sourcePath: "Source.md", value: "[[Target]]", candidates: ["A/Target.md", "B/Target.md"] })],
+    });
+    await expect(fileSystem.moveNote({
+      oldPath: "A/Target.md",
+      newPath: "Moved.md",
+      updateLinks: true,
+      expectedRevision: source.revision,
+    })).resolves.toMatchObject({ success: false, message: expect.stringContaining("ambiguous reference") });
+    await expect(readFile(join(testVaultPath, "Source.md"), "utf-8")).resolves.toContain("[[Target]]");
+    await expect(readFile(join(testVaultPath, "A/Target.md"), "utf-8")).resolves.toContain("# A target");
+    await expect(access(join(testVaultPath, "Moved.md"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 });
 
