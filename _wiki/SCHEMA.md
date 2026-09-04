@@ -474,6 +474,19 @@ ambiguous match is selected automatically. A retired note's
 `redirect` hint when `lifecycle` is `superseded`/`archived` or
 `retention_policy` is `tombstone`; the original note and Git history remain
 authoritative.
+`get_wiki_canvas_view` can project either that authored MOC sequence or one
+visible note's bounded neighborhood into the open JSON Canvas 1.0 shape.
+MOC entries keep authored vertical order and nested maps move right;
+neighborhood nodes are tiered from direct links/backlinks through shared
+provenance/context to optional semantic or temporal discovery. File nodes
+refer to notes without copying their bodies. Position, color, distance, and
+semantic proximity are navigation hints only and never evidence, truth, or an
+access rule. `export_wiki_canvas` writes only one validated, derived
+`Views/*.canvas` file in the same Global, Community, model, or agent scope as
+its root. It requires the output revision, may guard the root revision, and
+rechecks every included source revision immediately before writing. Global
+maps exclude Community and private notes. Regenerate a Canvas after its source
+revisions change; Markdown, Properties, wikilinks, and Git remain authoritative.
 Catalog browsing also accepts `orderBy: location`, `alphabet`, `time`,
 `category`, or `hierarchy`, corresponding to different LATCH-style retrieval
 needs. Neighborhood entries include a bounded `pathTrace` so an agent can see

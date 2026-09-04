@@ -19,7 +19,7 @@ export const WIKI_POLICY_TOPICS = [
 ] as const;
 
 export type WikiPolicyTopicId = typeof WIKI_POLICY_TOPICS[number];
-export const WIKI_POLICY_VERSION = 2;
+export const WIKI_POLICY_VERSION = 3;
 
 type WikiPolicyTopic = {
   purpose: string;
@@ -75,15 +75,16 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
       'Use lexical filters as authoritative constraints and semantic matches only as discovery hints.',
       'Visible note identities resolve exact paths, filenames, titles, aliases, preferred terms, stable IDs, and explicit relative paths; ambiguity is repair debt, not permission to guess.',
       'Use wiki.home for one intent route, wiki.neighborhood for nearby context, and wiki.context_pack only when a reusable bounded shelf is warranted.',
+      'Use wiki.canvas_view only when spatial arrangement materially helps; export through wiki.canvas_export so source and output revisions remain checked and the derived Canvas stays in the root scope.',
     ],
-    routes: ['wiki.search', 'wiki.home', 'wiki.read_projection', 'wiki.neighborhood', 'wiki.context_pack'],
-    avoid: ['loading whole documents for a single section', 'treating vector similarity as evidence', 'following an ambiguous identity'],
+    routes: ['wiki.search', 'wiki.home', 'wiki.read_projection', 'wiki.neighborhood', 'wiki.context_pack', 'wiki.canvas_view'],
+    avoid: ['loading whole documents for a single section', 'treating vector similarity or Canvas proximity as evidence', 'following an ambiguous identity'],
   },
   knowledge: {
     purpose: 'Turn observations into durable, connected, revisable knowledge without duplicating truth.',
     rules: [
       'Keep one canonical Markdown note and use MOCs, primary_moc, additional mocs, typed relations, aliases, and see_also as navigation.',
-      'Use note_kind and lifecycle for knowledge state; keep project task_status separate from epistemic or knowledge lifecycle.',
+      'Use note_kind and lifecycle for knowledge state; keep actionable-note task_status separate from epistemic or knowledge lifecycle.',
       'Use question, hypothesis, assumption, experiment, decision, and negative knowledge for different epistemic jobs instead of flattening them into generic notes.',
       'Summaries, key points, highlights, and generated syntheses are projections or interpretations; preserve the full body and their source revision/fingerprint.',
     ],
@@ -130,9 +131,10 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
       'The Markdown outline is authored order, nav_order controls sibling MOC order, and only moc_parent defines hierarchy.',
       'Use wiki.learning_path to compare authored order with note and claim prerequisites, inspect cycles and late edges, and preserve intentional pedagogical redundancy.',
       'Use one primary_moc as a launch point and bounded additional mocs for legitimate multiple contexts; do not duplicate the note.',
+      'Use wiki.canvas_view for an optional spatial projection of the authored MOC and dependency edges; regenerate the derived Canvas after source revisions change.',
     ],
-    routes: ['wiki.moc_candidates', 'wiki.learning_path', 'wiki.graph_health', 'wiki.context_pack'],
-    avoid: ['inferring hierarchy from every body link', 'automatic MOC reorder', 'treating a thematic external prerequisite as a broken course'],
+    routes: ['wiki.moc_candidates', 'wiki.learning_path', 'wiki.graph_health', 'wiki.context_pack', 'wiki.canvas_view', 'wiki.canvas_export'],
+    avoid: ['inferring hierarchy from every body link', 'automatic MOC reorder', 'treating a thematic external prerequisite as a broken course', 'treating a Canvas position as canonical structure'],
   },
   memory: {
     purpose: 'Retain useful personal continuity and strengthen recall without turning memory signals into shared truth.',

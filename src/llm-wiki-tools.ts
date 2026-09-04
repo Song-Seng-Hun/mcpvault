@@ -56,7 +56,7 @@ const temporalProperties = {
 } as const;
 
 export const LLM_WIKI_MUTATING_TOOLS = [
-  'initialize_llm_wiki', 'ingest_source', 'capture_wiki_note', 'clarify_wiki_note', 'distill_wiki_source', 'publish_knowledge', 'publish_decision_record', 'triage_wiki_note', 'review_wiki_note', 'review_wiki_claim', 'report_wiki_issue', 'propose_wiki_term_change', 'resolve_wiki_issue', 'export_wiki_base',
+  'initialize_llm_wiki', 'ingest_source', 'capture_wiki_note', 'clarify_wiki_note', 'distill_wiki_source', 'publish_knowledge', 'publish_decision_record', 'triage_wiki_note', 'review_wiki_note', 'review_wiki_claim', 'report_wiki_issue', 'propose_wiki_term_change', 'resolve_wiki_issue', 'export_wiki_base', 'export_wiki_canvas',
 ] as const;
 
 export function getLlmWikiTools(): Tool[] {
@@ -596,6 +596,35 @@ export function getLlmWikiTools(): Tool[] {
         limit: { type: 'integer', minimum: 1, maximum: 500, default: 100 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 12000 },
         expectedRevision: { type: 'string', description: "Required file revision; use 'missing' for a new Bases file" }, accessToken, prettyPrint,
       }, required: ['expectedRevision'] },
+    },
+    {
+      name: 'get_wiki_canvas_view',
+      description: 'Preview one visible note as a bounded Obsidian JSON Canvas 1.0 spatial map without copying note bodies. MOCs preserve authored order, nesting, and prerequisite edges; ordinary notes place direct links/backlinks closest, shared provenance/context next, and optional semantic/temporal discoveries farthest away. The result is a disposable navigation projection with exact source revisions, not evidence or an access boundary.',
+      inputSchema: { type: 'object', properties: {
+        path: { type: 'string', description: 'Visible Markdown/text root note' },
+        mode: { type: 'string', enum: ['auto', 'moc', 'neighborhood'], default: 'auto', description: 'auto uses MOC layout for note_kind=moc and neighborhood layout otherwise' },
+        maxDepth: { type: 'integer', minimum: 0, maximum: 6, default: 2, description: 'Nested MOC depth in moc mode' },
+        includeSemantic: { type: 'boolean', default: false, description: 'Add optional semantic discovery only in neighborhood mode; lexical links and scope rules remain authoritative' },
+        limit: { type: 'integer', minimum: 1, maximum: 50, default: 24, description: 'Maximum file nodes including the root' },
+        maxChars: { type: 'integer', minimum: 2048, maximum: 24000, default: 12000 },
+        accessToken, prettyPrint,
+      }, required: ['path'] },
+    },
+    {
+      name: 'export_wiki_canvas',
+      description: 'Regenerate and save one validated scope-local Views/*.canvas file from the current MOC or neighborhood. Requires a Canvas file revision (use missing when new), optionally guards the root revision, rechecks every included source before writing, and never copies note bodies or changes authoritative Markdown.',
+      inputSchema: { type: 'object', properties: {
+        path: { type: 'string', description: 'Visible Markdown/text root note' },
+        mode: { type: 'string', enum: ['auto', 'moc', 'neighborhood'], default: 'auto' },
+        maxDepth: { type: 'integer', minimum: 0, maximum: 6, default: 2 },
+        includeSemantic: { type: 'boolean', default: false },
+        limit: { type: 'integer', minimum: 1, maximum: 50, default: 24 },
+        maxChars: { type: 'integer', minimum: 2048, maximum: 24000, default: 12000 },
+        outputPath: { type: 'string', description: 'Optional single Views/*.canvas path in the same scope as the root; defaults to the preview suggestedPath' },
+        expectedSourceRevision: { type: 'string', pattern: '^[a-fA-F0-9]{64}$', description: 'Optional root revision returned by the preview' },
+        expectedRevision: { type: 'string', description: "Required Canvas file revision; use 'missing' for a new file" },
+        accessToken, prettyPrint,
+      }, required: ['path', 'expectedRevision'] },
     },
     {
       name: 'get_wiki_home',

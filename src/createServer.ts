@@ -247,6 +247,8 @@ const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
   report_wiki_issue: "publish",
   propose_wiki_term_change: "publish",
   resolve_wiki_issue: "status",
+  export_wiki_base: "write",
+  export_wiki_canvas: "write",
   create_discussion: "publish",
   add_discussion_argument: "publish",
   update_discussion_status: "status",
@@ -1694,6 +1696,25 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           }), trimmedArgs.prettyPrint);
         }
 
+        case "get_wiki_canvas_view": {
+          return jsonResult(await llmWiki.canvasView(principal, trimmedArgs.path, trimmedArgs.mode, trimmedArgs.maxDepth, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.includeSemantic === true), trimmedArgs.prettyPrint);
+        }
+
+        case "export_wiki_canvas": {
+          return jsonResult(await llmWiki.writeCanvasView({
+            ...(principal && { principal }),
+            path: trimmedArgs.path,
+            ...(trimmedArgs.mode !== undefined && { mode: trimmedArgs.mode }),
+            ...(trimmedArgs.maxDepth !== undefined && { maxDepth: trimmedArgs.maxDepth }),
+            ...(trimmedArgs.limit !== undefined && { limit: trimmedArgs.limit }),
+            ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
+            ...(trimmedArgs.includeSemantic !== undefined && { includeSemantic: trimmedArgs.includeSemantic === true }),
+            ...(typeof trimmedArgs.outputPath === 'string' && { outputPath: trimmedArgs.outputPath }),
+            ...(typeof trimmedArgs.expectedSourceRevision === 'string' && { expectedSourceRevision: trimmedArgs.expectedSourceRevision }),
+            expectedRevision: trimmedArgs.expectedRevision,
+          }), trimmedArgs.prettyPrint);
+        }
+
         case "get_wiki_home": {
           return jsonResult(await llmWiki.home(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
         }
@@ -2712,7 +2733,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 function trimPaths(args: any, access: ScopeAccessPolicy, principal?: ScopePrincipal): any {
   const trimmed = { ...args };
 
-  for (const key of ['path', 'oldPath', 'newPath', 'targetPath', 'confirmPath', 'confirmOldPath', 'confirmNewPath', 'folder', 'pathPrefix', 'scopeUri', 'subjectPath']) {
+  for (const key of ['path', 'oldPath', 'newPath', 'targetPath', 'confirmPath', 'confirmOldPath', 'confirmNewPath', 'folder', 'pathPrefix', 'scopeUri', 'subjectPath', 'outputPath']) {
     if (trimmed[key] && typeof trimmed[key] === 'string') trimmed[key] = access.resolveExternalPath(trimmed[key], principal);
   }
   if (trimmed.sortBy && typeof trimmed.sortBy === 'string') trimmed.sortBy = trimmed.sortBy.trim();

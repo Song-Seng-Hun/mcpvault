@@ -29,6 +29,28 @@ test("rejects note writes beyond the hard content limit", async () => {
   await expect(readFile(join(testVaultPath, "oversized.md"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
 });
 
+test("writes only validated revision-checked JSON Canvas views", async () => {
+  const content = JSON.stringify({
+    nodes: [
+      { id: "a", type: "file", x: 0, y: 0, width: 360, height: 220, file: "Knowledge/A.md" },
+      { id: "b", type: "file", x: 500, y: 0, width: 360, height: 220, file: "Knowledge/B.md" },
+    ],
+    edges: [{ id: "a-b", fromNode: "a", toNode: "b", toEnd: "arrow", label: "links_to" }],
+  });
+  const created = await fileSystem.writeCanvasFile({ path: "Views/Knowledge.canvas", content, expectedRevision: "missing" });
+  expect(created.previousRevision).toBe("missing");
+  expect(created.revision).toMatch(/^[a-f0-9]{64}$/);
+  expect(JSON.parse(await readFile(join(testVaultPath, "Views/Knowledge.canvas"), "utf8"))).toMatchObject({ nodes: expect.any(Array), edges: expect.any(Array) });
+
+  await expect(fileSystem.writeCanvasFile({ path: "Other/Knowledge.canvas", content, expectedRevision: "missing" })).rejects.toThrow(/Views/);
+  await expect(fileSystem.writeCanvasFile({
+    path: "Views/Broken.canvas",
+    content: JSON.stringify({ nodes: [{ id: "a", type: "file", x: 0, y: 0, width: 10, height: 10, file: "A.md" }], edges: [{ id: "bad", fromNode: "a", toNode: "missing" }] }),
+    expectedRevision: "missing",
+  })).rejects.toThrow(/existing nodes/);
+  await expect(fileSystem.writeCanvasFile({ path: "Views/Knowledge.canvas", content, expectedRevision: "missing" })).rejects.toThrow(/Revision conflict/);
+});
+
 // ============================================================================
 // PATCH TESTS
 // ============================================================================

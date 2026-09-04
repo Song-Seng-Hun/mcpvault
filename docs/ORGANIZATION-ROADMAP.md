@@ -111,9 +111,17 @@ tools; new behaviors belong in the endpoint catalog.
   excluded from current dependency stages through one shared open-work rule.
   Home reports historical and open work separately and routes only on open
   work without duplicating every work item into its compact launchpad.
+- Obsidian-native spatial retrieval now has a deterministic JSON Canvas 1.0
+  projection. MOCs preserve authored order, hierarchy, and prerequisite edges;
+  ordinary notes use explainable proximity tiers. Preview and export remain
+  bounded, carry source revisions and a snapshot fingerprint, exclude illegal
+  cross-scope nodes, never copy note bodies, and write only a revision-checked
+  scope-local `Views/*.canvas` derived file. No client helper or extra plugin is
+  required.
 
 Evidence: `moc-navigation.test.ts`, `backlinks.test.ts`, `organization.test.ts`,
-`filesystem.test.ts`, `continuity.test.ts`, `global-sync.test.ts`, and the
+`filesystem.test.ts`, `json-canvas.test.ts`, `continuity.test.ts`,
+`global-sync.test.ts`, and the
 onboarding/context-pack/capacity/retrieval/migration integration cases in
 `llm-wiki.test.ts`.
 The compiled `dist/server.js` is also exercised over a real stdio MCP client on

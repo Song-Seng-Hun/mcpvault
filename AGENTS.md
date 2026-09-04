@@ -104,6 +104,13 @@ Links navigate; `evidence_paths` and exact source revisions establish
 provenance. Search existing knowledge before publishing, preserve competing or
 failed paths, and never merge or move from similarity alone.
 
+When a spatial view materially clarifies a MOC or one note's neighborhood,
+use `wiki.canvas_view`; use its exact `wiki.canvas_export` action to persist a
+scope-local `Views/*.canvas` file. The Canvas contains file nodes and derived
+edges, not copied note bodies. Its position, color, and proximity are
+navigation hints only, so regenerate it after source revisions change and
+never treat it as evidence, canonical hierarchy, or a visibility boundary.
+
 Knowledge role and execution state are orthogonal. A question, hypothesis,
 experiment, atomic note, or other ordinary knowledge note may carry
 `task_status`, `next_action`/`next_actions`, or `waiting_for` without becoming a

@@ -57,6 +57,78 @@ test('MOC context packs follow authored links with revisions and exclude example
   } finally { await client.close(); await server.close(); }
 });
 
+test('Obsidian Canvas projections preserve spatial order, scope boundaries, and source revisions', async () => {
+  await mkdir(join(vault, 'Knowledge'), { recursive: true });
+  await mkdir(join(vault, 'Community'), { recursive: true });
+  await writeFile(join(vault, 'Knowledge', 'Spatial map.md'), [
+    '---', 'llm_wiki_type: knowledge', 'note_kind: moc', 'lifecycle: evergreen', '---',
+    '# Spatial map', '', '[[Knowledge/Basics]]', '[[Knowledge/Advanced]]', '[[Community/Local only]]',
+  ].join('\n'));
+  await writeFile(join(vault, 'Knowledge', 'Basics.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\n---\n# Basics\n\nA body that must not be copied into Canvas.\n');
+  await writeFile(join(vault, 'Knowledge', 'Advanced.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\ndepends_on:\n  - "[[Knowledge/Basics]]"\n---\n# Advanced\n');
+  await writeFile(join(vault, 'Community', 'Local only.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\n---\n# Command-center-only note\n');
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'canvas-owner', modelId: 'codex', password: 'canvas-owner-secret' });
+    const accessToken = registration.value.accessToken;
+    const discovery = await callJson(client, 'search_capabilities', { query: 'Obsidian spatial Canvas knowledge map', limit: 4, maxChars: 8000, accessToken });
+    expect(discovery.value.endpoints).toEqual(expect.arrayContaining([
+      expect.objectContaining({ endpointId: 'wiki.canvas_view', available: true }),
+      expect.objectContaining({ endpointId: 'wiki.canvas_export', available: true, method: 'POST' }),
+    ]));
+
+    const preview = await callJson(client, 'get_wiki_canvas_view', { path: 'Knowledge/Spatial map.md', mode: 'auto', maxDepth: 2, limit: 20, maxChars: 16000, accessToken });
+    expect(preview.value).toMatchObject({
+      mode: 'moc_canvas', standard: 'JSON Canvas 1.0', suggestedPath: 'Views/Spatial map Spatial.canvas', outputRevision: 'missing',
+      root: { path: 'Knowledge/Spatial map.md', revision: expect.stringMatching(/^[a-f0-9]{64}$/) },
+      exportAction: { endpointId: 'wiki.canvas_export', arguments: { expectedRevision: 'missing', expectedSourceRevision: expect.any(String) } },
+      counts: { excludedCrossScope: 1 },
+    });
+    const canvasText = JSON.stringify(preview.value.canvas);
+    expect(canvasText).toContain('Knowledge/Basics.md');
+    expect(canvasText).toContain('Knowledge/Advanced.md');
+    expect(canvasText).not.toContain('Community/Local only.md');
+    expect(canvasText).not.toContain('A body that must not be copied');
+    expect(preview.value.canvas.edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: expect.stringMatching(/^curates/) }),
+      expect.objectContaining({ label: 'depends_on', color: '2' }),
+    ]));
+    expect(JSON.stringify(preview.value).length).toBeLessThanOrEqual(16000);
+
+    const compact = await callJson(client, 'get_wiki_canvas_view', { path: 'Knowledge/Spatial map.md', mode: 'moc', maxDepth: 2, limit: 20, maxChars: 2400, prettyPrint: true, accessToken });
+    expect(String((compact.result.content as any)[0]?.text).length).toBeLessThanOrEqual(2400);
+    expect(compact.value.root).toMatchObject({ path: 'Knowledge/Spatial map.md', revision: preview.value.root.revision });
+    expect(compact.value.canvas.nodes).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'file', file: 'Knowledge/Spatial map.md' })]));
+    expect(compact.value.truncated).toBe(true);
+
+    const wrongScope = await client.callTool({ name: 'export_wiki_canvas', arguments: {
+      path: 'Knowledge/Spatial map.md', mode: 'moc', outputPath: 'Community/Views/Leaked.canvas',
+      expectedSourceRevision: preview.value.root.revision, expectedRevision: 'missing', accessToken,
+    } });
+    expect(wrongScope.isError).toBe(true);
+    expect(String((wrongScope.content as any)[0]?.text)).toContain('same Global, Community, model, or agent scope');
+
+    const saved = await callJson(client, 'export_wiki_canvas', {
+      path: 'Knowledge/Spatial map.md', mode: 'moc', maxDepth: 2, limit: 20, maxChars: 16000,
+      expectedSourceRevision: preview.value.root.revision, expectedRevision: 'missing', accessToken,
+    });
+    expect(saved.value).toMatchObject({ persisted: true, path: 'Views/Spatial map Spatial.canvas', previousRevision: 'missing', snapshotFingerprint: preview.value.snapshotFingerprint });
+    const persisted = JSON.parse(await readFile(join(vault, 'Views', 'Spatial map Spatial.canvas'), 'utf8'));
+    expect(persisted).toMatchObject({ nodes: expect.any(Array), edges: expect.any(Array) });
+    expect(JSON.stringify(persisted)).not.toContain('A body that must not be copied');
+
+    const root = await callJson(client, 'read_note', { path: 'Knowledge/Spatial map.md', accessToken });
+    const changed = await client.callTool({ name: 'patch_note', arguments: { path: 'Knowledge/Spatial map.md', oldString: '# Spatial map', newString: '# Spatial map updated', expectedRevision: root.value.revision, accessToken } });
+    expect(changed.isError).toBeFalsy();
+    const stale = await client.callTool({ name: 'export_wiki_canvas', arguments: {
+      path: 'Knowledge/Spatial map.md', mode: 'moc', maxChars: 16000,
+      expectedSourceRevision: preview.value.root.revision, expectedRevision: saved.value.revision, accessToken,
+    } });
+    expect(stale.isError).toBe(true);
+    expect(String((stale.content as any)[0]?.text)).toContain('source revision conflict');
+  } finally { await client.close(); await server.close(); }
+});
+
 test('triage exposes execution capacity and tags without rebasing stale summaries or accepting stale revisions', async () => {
   const { server, client } = await setup();
   try {

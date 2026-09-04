@@ -2724,6 +2724,33 @@ export declare class LlmWikiService {
         revision: string;
         note: string;
     }>;
+    private buildSpatialCanvasGraph;
+    private fitSpatialCanvasGraph;
+    /** Preview one bounded MOC or neighborhood as an Obsidian JSON Canvas. */
+    canvasView(principal: ScopePrincipal | undefined, path: string, mode?: unknown, maxDepth?: unknown, limit?: unknown, maxChars?: unknown, includeSemantic?: boolean): Promise<Record<string, any>>;
+    /** Persist a fresh derived Canvas after rechecking every included revision. */
+    writeCanvasView(params: {
+        principal?: ScopePrincipal;
+        path: string;
+        mode?: unknown;
+        maxDepth?: unknown;
+        limit?: unknown;
+        maxChars?: unknown;
+        includeSemantic?: boolean;
+        outputPath?: string;
+        expectedSourceRevision?: string;
+        expectedRevision: string;
+    }): Promise<{
+        persisted: boolean;
+        path: string;
+        previousRevision: string;
+        revision: string;
+        source: any;
+        snapshotFingerprint: any;
+        counts: any;
+        truncated: any;
+        note: string;
+    }>;
     /**
      * Return a derived launchpad for an authorized scope. This is the
      * scope-local equivalent of an Obsidian Home note/JDex: it points at live
@@ -2780,8 +2807,9 @@ export declare class LlmWikiService {
                 limit: number;
                 maxChars: number;
                 intent?: never;
-                path?: never;
                 maxDepth?: never;
+                path?: never;
+                mode?: never;
                 context?: never;
                 includeReadiness?: never;
             };
@@ -2796,8 +2824,9 @@ export declare class LlmWikiService {
                 query?: never;
                 expectedRevision: string;
                 intent?: never;
-                path?: never;
                 maxDepth?: never;
+                path?: never;
+                mode?: never;
                 context?: never;
                 includeReadiness?: never;
                 limit?: never;
@@ -2817,8 +2846,9 @@ export declare class LlmWikiService {
                 limit: number;
                 maxChars: number;
                 intent?: never;
-                path?: never;
                 maxDepth?: never;
+                path?: never;
+                mode?: never;
                 context?: never;
                 includeReadiness?: never;
             };
@@ -2838,6 +2868,7 @@ export declare class LlmWikiService {
                 limit: number;
                 maxChars: number;
                 maxDepth?: never;
+                mode?: never;
                 context?: never;
                 includeReadiness?: never;
             };
@@ -2854,8 +2885,9 @@ export declare class LlmWikiService {
                 intent?: never;
                 limit: number;
                 maxChars: number;
-                path?: never;
                 maxDepth?: never;
+                path?: never;
+                mode?: never;
                 context?: never;
                 includeReadiness?: never;
             };
@@ -2874,6 +2906,7 @@ export declare class LlmWikiService {
                 maxDepth: number;
                 limit: number;
                 maxChars: number;
+                mode?: never;
                 context?: never;
                 includeReadiness?: never;
             };
@@ -2888,8 +2921,28 @@ export declare class LlmWikiService {
                 expectedRevision?: never;
                 query?: never;
                 intent?: never;
-                path?: never;
                 maxDepth?: never;
+                path: string;
+                mode: string;
+                limit: number;
+                maxChars: number;
+                context?: never;
+                includeReadiness?: never;
+            };
+            requiredArguments: string[];
+        } | {
+            mutating?: never;
+            followUpEndpointId?: never;
+            intent: string;
+            useWhen: string;
+            endpointId: string;
+            arguments: {
+                expectedRevision?: never;
+                query?: never;
+                intent?: never;
+                maxDepth?: never;
+                path?: never;
+                mode?: never;
                 context: string;
                 limit: number;
                 maxChars: number;
@@ -2907,8 +2960,9 @@ export declare class LlmWikiService {
                 expectedRevision?: never;
                 query?: never;
                 intent?: never;
-                path?: never;
                 maxDepth?: never;
+                path?: never;
+                mode?: never;
                 context?: never;
                 includeReadiness: boolean;
                 limit: number;

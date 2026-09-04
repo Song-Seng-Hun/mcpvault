@@ -600,6 +600,21 @@ the Vault again. It also resolves relative Markdown links from the containing
 MOC, validates the referenced claim ID, and labels each ordering reason as a
 note or claim dependency, keeping coverage, sequence health, and the detailed
 learning path aligned.
+`get_wiki_canvas_view` turns either that MOC path or one ordinary note's
+neighborhood into a deterministic [JSON Canvas 1.0](https://jsoncanvas.org/spec/1.0/)
+preview. MOC file nodes retain authored top-to-bottom order and nested depth,
+while prerequisite edges remain visibly distinct. A neighborhood keeps direct
+links/backlinks nearest, shared source/MOC/project context next, and optional
+semantic or temporal discovery farthest away. File nodes point to the original
+notes and never copy their bodies. A Global-root Canvas excludes Community and
+private nodes so a derived view cannot weaken synchronization boundaries.
+`export_wiki_canvas` writes the preview only beneath the root scope's
+`Views/*.canvas`, validates node/edge integrity, checks the root revision and
+the destination revision, then rechecks every included source immediately
+before writing. The embedded fingerprint makes an old layout recognizable,
+but position, color, and proximity remain disposable navigation hints rather
+than evidence, canonical hierarchy, or permissions. No Obsidian plugin or
+client-side helper is required.
 `get_wiki_exception_board` combines organization, graph,
 quarantine, freshness, vocabulary, and execution findings into one 5S-style
 repair board. `get_wiki_quality_check` applies a small role-specific checklist

@@ -11,6 +11,7 @@ import { extractObsidianLinkOccurrences, findBacklinkMatches, findUnresolvedLink
 import { buildDailyNotePath, resolveDailyDate } from './daily.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import { buildNoteReferenceIndex, resolveNoteReference } from './note-reference.js';
+import { validateJsonCanvasDocument } from './json-canvas.js';
 /** Hard per-note write limit so stdio callers cannot exhaust the vault disk. */
 export const MAX_NOTE_CONTENT_BYTES = 8 * 1024 * 1024;
 function assertNoteContentSize(content, path) {
@@ -558,20 +559,16 @@ export class FileSystemService {
         const path = this.normalizePath(params.path);
         return this.withMutationLock(path, () => this.writeNoteUnlocked({ ...params, path }));
     }
-    /**
-     * Write an Obsidian Bases definition as a derived, revision-checked view.
-     * Bases files are deliberately limited to Views/ so an export cannot become
-     * a general-purpose non-Markdown write primitive. Markdown and Git remain
-     * authoritative; this file is disposable presentation metadata.
-     */
-    async writeBaseFile(params) {
+    async writeDerivedViewFile(params, extension) {
         const path = this.normalizePath(params.path);
-        if (!/^Views\/[^/]+\.base$/i.test(path))
-            throw new Error('Bases export path must be a single .base file directly under Views/');
+        const allowed = new RegExp(`^(?:Community/|_scopes/(?:models|agents)/[A-Za-z0-9._-]+/)?Views/[^/]+\\.${extension}$`, 'i');
+        const label = extension === 'base' ? 'Bases' : 'Canvas';
+        if (!allowed.test(path))
+            throw new Error(`${label} export path must be a single .${extension} file directly under the current scope's Views/ directory`);
         if (!this.pathFilter.isAllowed(path))
             throw new Error(`Access denied: ${path}`);
         if (!params.expectedRevision)
-            throw new Error("expectedRevision is required; use 'missing' for a new Bases file");
+            throw new Error(`expectedRevision is required; use 'missing' for a new ${label} file`);
         const content = String(params.content ?? '');
         assertNoteContentSize(content, path);
         return this.withMutationLock(path, async () => {
@@ -585,12 +582,32 @@ export class FileSystemService {
                     throw error;
             }
             if (params.expectedRevision !== previousRevision) {
-                throw new Error(`Revision conflict for ${path}: expected ${params.expectedRevision}, current ${previousRevision}. Read the Bases file again before replacing it.`);
+                throw new Error(`Revision conflict for ${path}: expected ${params.expectedRevision}, current ${previousRevision}. Read the ${label} file again before replacing it.`);
             }
             await mkdir(dirname(fullPath), { recursive: true });
             await writeFile(fullPath, content, 'utf-8');
             return { path, previousRevision, revision: this.revision(content) };
         });
+    }
+    /**
+     * Write an Obsidian Bases definition as a derived, revision-checked view.
+     * Derived views are limited to one file directly under a scope-local Views/
+     * directory so this cannot become a general-purpose write primitive.
+     */
+    async writeBaseFile(params) {
+        return this.writeDerivedViewFile(params, 'base');
+    }
+    /** Write a validated JSON Canvas 1.0 projection as a disposable view. */
+    async writeCanvasFile(params) {
+        let parsed;
+        try {
+            parsed = JSON.parse(String(params.content ?? ''));
+        }
+        catch {
+            throw new Error('Canvas content must be valid JSON');
+        }
+        validateJsonCanvasDocument(parsed);
+        return this.writeDerivedViewFile(params, 'canvas');
     }
     async writeNoteUnlocked(params) {
         const { content, frontmatter, mode = 'overwrite', expectedRevision } = params;

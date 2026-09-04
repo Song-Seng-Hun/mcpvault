@@ -16,6 +16,7 @@ import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
 import { buildNoteReferenceIndex, normalizeNoteReferenceTerm, resolveNoteReference, type NoteReferenceIndex } from './note-reference.js';
 import type { QueryNote } from './types.js';
+import { buildJsonCanvasProjection, type JsonCanvasDocument, type WikiCanvasEdge, type WikiCanvasMode, type WikiCanvasNote } from './json-canvas.js';
 
 export { SOURCE_TRUST_LEVELS } from './organization.js';
 const knowledgeStatuses = new Set<string>(KNOWLEDGE_STATUSES);
@@ -119,6 +120,17 @@ type WorkDependencySnapshot = {
     immediateUnlockByPath: Map<string, number>;
     edgeCount: number;
   };
+};
+
+type SpatialCanvasGraph = {
+  mode: WikiCanvasMode;
+  root: WikiCanvasNote;
+  notes: WikiCanvasNote[];
+  edges: WikiCanvasEdge[];
+  suggestedInternalPath: string;
+  totalCandidates: number;
+  excludedCrossScope: number;
+  upstreamTruncated: boolean;
 };
 
 const claimStatuses = new Set<string>(CLAIM_STATUSES);
@@ -753,6 +765,20 @@ interface WikiLintResult {
 }
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
+
+function canvasScopeRoot(path: string): string {
+  const normalized = normalizePath(path);
+  const privateScope = /^(_scopes\/(?:models|agents)\/[^/]+)(?:\/|$)/i.exec(normalized);
+  if (privateScope) return privateScope[1]!;
+  return /^Community(?:\/|$)/i.test(normalized) ? 'Community' : '';
+}
+
+function canvasSuggestedPath(sourcePath: string): string {
+  const scopeRoot = canvasScopeRoot(sourcePath);
+  const rawName = posix.basename(normalizePath(sourcePath)).replace(/\.(?:md|markdown|txt)$/i, '');
+  const safeName = Array.from(rawName.replace(/[<>:"/\\|?*\u0000-\u001f]+/g, '-').replace(/[. ]+$/g, '').trim()).slice(0, 80).join('') || 'Knowledge';
+  return `${scopeRoot ? `${scopeRoot}/` : ''}Views/${safeName} Spatial.canvas`;
+}
 
 type OrganizationManifestShape = {
   manifestVersion?: unknown;
@@ -6374,6 +6400,218 @@ export class LlmWikiService {
     };
   }
 
+  private async buildSpatialCanvasGraph(principal: ScopePrincipal | undefined, path: string, requestedMode: unknown, maxDepth: unknown, limit: unknown, includeSemantic: boolean): Promise<SpatialCanvasGraph> {
+    const boundedLimit = Math.min(Math.max(Number(limit) || 24, 1), 50);
+    const sourcePath = normalizePath(path);
+    if (!this.access.canAccessPhysicalPath(sourcePath, principal)) throw new Error('Access denied');
+    if (/\.(?:base|canvas)$/i.test(sourcePath)) throw new Error('Canvas source path must be a Markdown or text note, not another derived view');
+    const source = await this.fileSystem.readNote(sourcePath);
+    if (isModerationHidden(source.frontmatter)) throw new Error('The source note is unavailable');
+    const requested = String(requestedMode || 'auto').trim().toLowerCase();
+    if (!['auto', 'moc', 'neighborhood'].includes(requested)) throw new Error("mode must be 'auto', 'moc', or 'neighborhood'");
+    const sourceKind = String(source.frontmatter.note_kind || '').trim().toLowerCase();
+    const mode: WikiCanvasMode = requested === 'auto' ? (sourceKind === 'moc' ? 'moc' : 'neighborhood') : requested as WikiCanvasMode;
+    if (mode === 'moc' && sourceKind !== 'moc') throw new Error("mode='moc' requires a visible note_kind: moc root");
+    const rootScope = canvasScopeRoot(sourcePath);
+    const mayInclude = (candidatePath: string): boolean => {
+      if (!this.access.canAccessPhysicalPath(candidatePath, principal)) return false;
+      const candidateScope = canvasScopeRoot(candidatePath);
+      if (!rootScope) return !candidateScope;
+      if (rootScope === 'Community') return !candidateScope || candidateScope === 'Community';
+      return this.access.canReferenceFrom(sourcePath, candidatePath);
+    };
+    const root: WikiCanvasNote = {
+      path: sourcePath,
+      publicPath: this.access.toPublicPath(sourcePath),
+      revision: source.revision,
+      title: boundedText(source.frontmatter.title || sourcePath.split('/').at(-1), 160),
+      role: 'root',
+    };
+    const notes: WikiCanvasNote[] = [root];
+    const edges: WikiCanvasEdge[] = [];
+    const includedPaths = new Set([sourcePath.toLowerCase()]);
+    let totalCandidates = 1;
+    let excludedCrossScope = 0;
+    let upstreamTruncated = false;
+    const resolvePublicPath = (value: unknown): string | undefined => {
+      if (typeof value !== 'string' || !value.trim()) return undefined;
+      try { return normalizePath(this.access.resolveExternalPath(value, principal)); }
+      catch { return undefined; }
+    };
+
+    if (mode === 'moc') {
+      const learning = await this.learningPath(principal, sourcePath, maxDepth as number, Math.max(1, boundedLimit - 1), 16000) as Record<string, any>;
+      const authored = Array.isArray(learning.authoredOrder) ? learning.authoredOrder as Array<Record<string, any>> : [];
+      totalCandidates = Number(learning.summary?.entries || authored.length) + 1;
+      upstreamTruncated = Boolean(learning.truncated);
+      const stageByPath = new Map<string, number>();
+      for (const stage of Array.isArray(learning.recommendedStages) ? learning.recommendedStages : []) {
+        for (const entry of Array.isArray(stage.entries) ? stage.entries : []) {
+          if (typeof entry?.path === 'string') stageByPath.set(entry.path.toLowerCase(), Number(stage.stage) || 0);
+        }
+      }
+      for (const entry of authored) {
+        const internalPath = resolvePublicPath(entry.path);
+        if (!internalPath || !mayInclude(internalPath)) { excludedCrossScope += 1; continue; }
+        if (includedPaths.has(internalPath.toLowerCase()) || notes.length >= boundedLimit) continue;
+        includedPaths.add(internalPath.toLowerCase());
+        notes.push({
+          path: internalPath,
+          publicPath: this.access.toPublicPath(internalPath),
+          revision: String(entry.revision || ''),
+          title: boundedText(entry.title || internalPath.split('/').at(-1), 160),
+          role: 'moc_entry',
+          depth: Number(entry.depth) || 0,
+          authoredPosition: Number(entry.authoredPosition) || notes.length,
+          ...(stageByPath.has(String(entry.path).toLowerCase()) && { stage: stageByPath.get(String(entry.path).toLowerCase()) }),
+        });
+      }
+      for (const entry of authored) {
+        const internalPath = resolvePublicPath(entry.path);
+        const parentPath = resolvePublicPath(entry.parentMoc);
+        if (!internalPath || !parentPath || !includedPaths.has(internalPath.toLowerCase()) || !includedPaths.has(parentPath.toLowerCase())) continue;
+        edges.push({ fromPath: parentPath, toPath: internalPath, label: entry.section ? `curates: ${entry.section}` : 'curates', kind: 'authored' });
+      }
+      for (const edge of Array.isArray(learning.prerequisiteEdges) ? learning.prerequisiteEdges : []) {
+        const prerequisite = resolvePublicPath(edge.prerequisite);
+        const dependent = resolvePublicPath(edge.dependent);
+        if (!prerequisite || !dependent || !includedPaths.has(prerequisite.toLowerCase()) || !includedPaths.has(dependent.toLowerCase())) continue;
+        edges.push({ fromPath: prerequisite, toPath: dependent, label: edge.dependencyType === 'claim' ? 'claim prerequisite' : 'depends_on', kind: 'dependency' });
+      }
+    } else {
+      const nearby = await this.neighborhood(principal, sourcePath, Math.max(1, boundedLimit - 1), 16000, includeSemantic) as Record<string, any>;
+      const neighbors = Array.isArray(nearby.neighbors) ? nearby.neighbors as Array<Record<string, any>> : [];
+      totalCandidates = Number(nearby.totalCandidates || neighbors.length) + 1;
+      upstreamTruncated = Boolean(nearby.truncated);
+      for (const entry of neighbors) {
+        const internalPath = resolvePublicPath(entry.path);
+        if (!internalPath || !mayInclude(internalPath)) { excludedCrossScope += 1; continue; }
+        if (includedPaths.has(internalPath.toLowerCase()) || notes.length >= boundedLimit) continue;
+        includedPaths.add(internalPath.toLowerCase());
+        const reasons = Array.isArray(entry.reasons) ? entry.reasons.filter((item: unknown): item is string => typeof item === 'string').slice(0, 8) : [];
+        notes.push({
+          path: internalPath,
+          publicPath: this.access.toPublicPath(internalPath),
+          revision: String(entry.revision || ''),
+          title: boundedText(entry.title || internalPath.split('/').at(-1), 160),
+          role: 'neighbor',
+          reasons,
+        });
+        const relations = Array.isArray(entry.relations) ? entry.relations.filter((item: unknown): item is string => typeof item === 'string') : [];
+        const relation = relations[0] || reasons[0] || 'related';
+        if (reasons.includes('direct_link')) edges.push({ fromPath: sourcePath, toPath: internalPath, label: relation, kind: 'direct_link' });
+        if (reasons.includes('backlink')) edges.push({ fromPath: internalPath, toPath: sourcePath, label: 'backlink', kind: 'backlink' });
+        if (!reasons.includes('direct_link') && !reasons.includes('backlink')) edges.push({ fromPath: sourcePath, toPath: internalPath, label: reasons[0] || 'related', kind: 'proximity' });
+      }
+    }
+    const latest = await this.fileSystem.readNote(sourcePath);
+    if (latest.revision !== source.revision) throw new Error('The Canvas root changed while deriving its spatial view; re-read it and retry');
+    return {
+      mode,
+      root,
+      notes,
+      edges,
+      suggestedInternalPath: canvasSuggestedPath(sourcePath),
+      totalCandidates,
+      excludedCrossScope,
+      upstreamTruncated,
+    };
+  }
+
+  private async fitSpatialCanvasGraph(graph: SpatialCanvasGraph, maxChars: unknown, outputInternalPath = graph.suggestedInternalPath): Promise<{ response: Record<string, any>; canvas: JsonCanvasDocument; notes: WikiCanvasNote[] }> {
+    const boundedChars = Math.min(Math.max(Number(maxChars) || 12000, 2048), 24000);
+    const notes = [...graph.notes];
+    const outputRevision = await this.fileSystem.noteExists(outputInternalPath) ? (await this.fileSystem.readNote(outputInternalPath)).revision : 'missing';
+    while (true) {
+      const included = new Set(notes.map(note => note.path.toLowerCase()));
+      const edges = graph.edges.filter(edge => included.has(edge.fromPath.toLowerCase()) && included.has(edge.toPath.toLowerCase()));
+      const rendered = buildJsonCanvasProjection({ mode: graph.mode, notes, edges });
+      const publicCanvas: JsonCanvasDocument = {
+        nodes: rendered.canvas.nodes.map(node => node.type === 'file' && node.file ? { ...node, file: this.access.toPublicPath(node.file) } : node),
+        edges: rendered.canvas.edges,
+      };
+      const truncated = graph.upstreamTruncated || graph.excludedCrossScope > 0 || notes.length < graph.notes.length || graph.totalCandidates > notes.length;
+      const response = {
+        mode: `${graph.mode}_canvas`,
+        standard: 'JSON Canvas 1.0',
+        purpose: 'A deterministic Obsidian-native spatial projection. File nodes contain no copied note bodies; Markdown, links, revisions, and Git remain authoritative.',
+        root: { path: graph.root.publicPath, revision: graph.root.revision, title: graph.root.title },
+        layout: graph.mode === 'moc'
+          ? 'Authored MOC order runs top-to-bottom; nested MOCs move right; orange edges show prerequisites.'
+          : 'Direct links/backlinks stay closest to the root, shared provenance/context follows, and semantic or temporal discovery stays farthest away.',
+        canvas: publicCanvas,
+        sourceRevisions: notes.map(note => ({ path: note.publicPath, revision: note.revision, role: note.role, ...(note.reasons?.length && { reasons: note.reasons }) })),
+        snapshotFingerprint: rendered.snapshotFingerprint,
+        counts: { sourceCandidates: graph.totalCandidates, fileNodes: notes.length, canvasNodes: rendered.canvas.nodes.length, edges: rendered.canvas.edges.length, excludedCrossScope: graph.excludedCrossScope },
+        suggestedPath: this.access.toPublicPath(outputInternalPath),
+        outputRevision,
+        exportAction: {
+          endpointId: endpointIdForTool('export_wiki_canvas'),
+          arguments: { path: graph.root.publicPath, mode: graph.mode, expectedSourceRevision: graph.root.revision, outputPath: this.access.toPublicPath(outputInternalPath), expectedRevision: outputRevision },
+        },
+        truncated,
+        note: 'Preview paths are scope-safe. Use exportAction to resolve them to vault-relative file nodes and persist one revision-checked Views/*.canvas file in the same scope as the root.',
+      };
+      // Fit against the larger pretty-printed representation so maxChars is a
+      // hard response bound even when a caller requests prettyPrint.
+      if (JSON.stringify(response, null, 2).length <= boundedChars) return { response, canvas: rendered.canvas, notes };
+      if (notes.length <= 1) throw new Error('maxChars is too small to preserve the Canvas root, fingerprint, and revision guard');
+      notes.pop();
+    }
+  }
+
+  /** Preview one bounded MOC or neighborhood as an Obsidian JSON Canvas. */
+  async canvasView(principal: ScopePrincipal | undefined, path: string, mode: unknown = 'auto', maxDepth: unknown = 2, limit: unknown = 24, maxChars: unknown = 12000, includeSemantic = false) {
+    const graph = await this.buildSpatialCanvasGraph(principal, path, mode, maxDepth, limit, includeSemantic);
+    return (await this.fitSpatialCanvasGraph(graph, maxChars)).response;
+  }
+
+  /** Persist a fresh derived Canvas after rechecking every included revision. */
+  async writeCanvasView(params: {
+    principal?: ScopePrincipal;
+    path: string;
+    mode?: unknown;
+    maxDepth?: unknown;
+    limit?: unknown;
+    maxChars?: unknown;
+    includeSemantic?: boolean;
+    outputPath?: string;
+    expectedSourceRevision?: string;
+    expectedRevision: string;
+  }) {
+    if (!params.expectedRevision) throw new Error("expectedRevision is required; use 'missing' for a new Canvas file");
+    const graph = await this.buildSpatialCanvasGraph(params.principal, params.path, params.mode, params.maxDepth, params.limit, params.includeSemantic === true);
+    if (params.expectedSourceRevision && params.expectedSourceRevision !== graph.root.revision) {
+      throw new Error(`Canvas source revision conflict: expected ${params.expectedSourceRevision}, current ${graph.root.revision}. Re-run the preview before exporting.`);
+    }
+    const outputPath = normalizePath(params.outputPath || graph.suggestedInternalPath);
+    if (!this.access.canAccessPhysicalPath(outputPath, params.principal)) throw new Error('Canvas output path is not accessible to this identity');
+    if (canvasScopeRoot(outputPath).toLowerCase() !== canvasScopeRoot(graph.root.path).toLowerCase()) {
+      throw new Error('Canvas output must stay in the same Global, Community, model, or agent scope as its root note');
+    }
+    const fitted = await this.fitSpatialCanvasGraph(graph, params.maxChars, outputPath);
+    for (let offset = 0; offset < fitted.notes.length; offset += 8) {
+      const batch = fitted.notes.slice(offset, offset + 8);
+      const current = await Promise.all(batch.map(async note => ({ note, current: await this.fileSystem.readNote(note.path) })));
+      const changed = current.find(item => item.current.revision !== item.note.revision);
+      if (changed) throw new Error(`Canvas source changed during export: ${changed.note.publicPath}. Re-run the preview.`);
+    }
+    const content = `${JSON.stringify(fitted.canvas, null, 2)}\n`;
+    const written = await this.fileSystem.writeCanvasFile({ path: outputPath, content, expectedRevision: params.expectedRevision });
+    this.invalidate();
+    return {
+      persisted: true,
+      path: this.access.toPublicPath(written.path),
+      previousRevision: written.previousRevision,
+      revision: written.revision,
+      source: fitted.response.root,
+      snapshotFingerprint: fitted.response.snapshotFingerprint,
+      counts: fitted.response.counts,
+      truncated: fitted.response.truncated,
+      note: 'Saved as a validated, derived JSON Canvas view. Regenerate it when source revisions change; it never replaces Markdown, evidence, MOCs, or Git history.',
+    };
+  }
+
   /**
    * Return a derived launchpad for an authorized scope. This is the
    * scope-local equivalent of an Obsidian Home note/JDex: it points at live
@@ -6459,6 +6697,7 @@ export class LlmWikiService {
       { intent: 'govern_decisions', useWhen: 'You need current, proposed, retired, conflicting, or legacy Decision Records and their lineage.', endpointId: endpointIdForTool('get_wiki_decision_register'), arguments: { limit: 20, maxChars: 6000 } },
       { intent: 'synthesize_or_express', useWhen: 'Several explicitly related durable notes may support a model, argument, or decision without replacing their originals.', endpointId: endpointIdForTool('get_wiki_synthesis_candidates'), arguments: { limit: 5, maxChars: 6000 } },
       { intent: 'follow_curated_sequence', useWhen: 'You selected a MOC that is meant to be read or executed in order.', endpointId: endpointIdForTool('get_wiki_learning_path'), arguments: { path: '<selected MOC path>', maxDepth: 2, limit: 20, maxChars: 6000 }, requiredArguments: ['path'] },
+      { intent: 'map_spatially', useWhen: 'A MOC order or one note neighborhood is easier to inspect as a bounded Obsidian Canvas.', endpointId: endpointIdForTool('get_wiki_canvas_view'), arguments: { path: '<selected path>', mode: 'auto', limit: 24, maxChars: 12000 }, requiredArguments: ['path'] },
       { intent: 'browse_source_archives', useWhen: 'You need the creator context, series, accession, or original order of an imported source collection.', endpointId: endpointIdForTool('get_wiki_archive_finding_aid'), arguments: { limit: 20, maxChars: 6000 } },
       { intent: 'execute_in_context', useWhen: 'You need one dependency-safe executable action that fits a known GTD context.', endpointId: endpointIdForTool('get_wiki_next_actions'), arguments: { context: '<exact context>', limit: 5, maxChars: 4000 }, requiredArguments: ['context'] },
       { intent: 'review_one', useWhen: 'You want one prioritized evidence, flow, or maintenance item.', endpointId: endpointIdForTool('get_wiki_review_packet'), arguments: { limit: 1, maxChars: 4000 } },

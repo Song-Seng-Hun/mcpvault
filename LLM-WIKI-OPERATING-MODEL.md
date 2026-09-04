@@ -42,6 +42,15 @@ backlinks, and ordinary file edits remain valid. MCPVault adds the protocol,
 scope checks, source integrity checks, and Git quality gate around that
 foundation.
 
+When spatial placement materially clarifies a curated MOC sequence or one
+note's neighborhood, `wiki.canvas_view` returns a bounded JSON Canvas 1.0
+preview and `wiki.canvas_export` can persist it as a scope-local
+`Views/*.canvas` file. The Canvas contains file references and compact labels,
+not copied note bodies. Its positions, colors, and proximity are derived
+navigation aids; the linked Markdown, current revisions, evidence, and Git
+history remain authoritative. Export rechecks the included revisions, and a
+Global-rooted map cannot pull Community or private notes into the view.
+
 ## Organization model: PARA without losing the Wiki graph
 
 PARA is used as a low-cost filing aid within each scope, not as a second

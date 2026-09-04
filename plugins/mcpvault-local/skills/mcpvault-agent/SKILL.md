@@ -6,7 +6,7 @@ description: >
   control plane and progressively loaded endpoint guidance. No additional
   cache, vector runtime, worker, or runner installation is required.
 metadata:
-  version: "1.2"
+  version: "1.3"
   author: MCPVault
 ---
 
@@ -92,6 +92,15 @@ section/block locators. Search returns excerpts, not authority. Select one
 result and read only the necessary projection, section, block, or note.
 Semantic results are discovery hints and must never override lexical filters,
 scope checks, identity ambiguity, or evidence inspection.
+
+Use `wiki.canvas_view` only when a spatial map materially improves navigation.
+For a MOC it preserves authored order, nesting, and prerequisite edges; for an
+ordinary note it keeps direct links/backlinks nearest and lower-confidence
+semantic or temporal proximity farthest away. Persist only through the
+returned `wiki.canvas_export` action. The revision-checked, scope-local
+`Views/*.canvas` file contains links rather than copied bodies and must be
+regenerated when source revisions change; position and color never prove a
+claim or grant access.
 
 ## 4. Write Obsidian-native, revision-safe content
 
