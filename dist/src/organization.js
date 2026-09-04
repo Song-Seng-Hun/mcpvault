@@ -138,7 +138,7 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'valid_until', type: 'text', description: 'Exclusive ISO date/time after which the claim or observation must be reviewed before reuse' },
     { name: 'observed_at', type: 'text', description: 'ISO date/time when the represented condition was observed; distinct from file modification and source publication time' },
     { name: 'temporal_scope', type: 'text', description: 'Short human-readable condition or period in which the knowledge applies' },
-    { name: 'knowledge_role', type: 'text', description: 'Atomic-note role in the knowledge graph', allowed: KNOWLEDGE_ROLES },
+    { name: 'knowledge_role', type: 'text', description: 'Reasoning role for durable atomic, knowledge, or Decision Record notes', allowed: KNOWLEDGE_ROLES, appliesTo: ['atomic', 'knowledge', 'decision'] },
     { name: 'see_also', type: 'list', description: 'Additional Obsidian links for adjacent knowledge' },
     { name: 'summary', type: 'text', description: 'Compact progressive-read projection' },
     { name: 'key_points', type: 'list', description: 'Compact key points for progressive reads' },
@@ -178,10 +178,10 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'recall_repair_status', type: 'text', description: 'Whether a failed or partial recall needs a repair note', allowed: RECALL_REPAIR_STATUSES },
     { name: 'recall_repair_path', type: 'text', description: 'Scope-safe note or task linked to repairing a recall failure' },
     { name: 'triage_disposition', type: 'text', description: 'GTD Clarify disposition recorded without moving or deleting the note', allowed: CLARIFY_DISPOSITIONS, appliesTo: ['fleeting'] },
-    { name: 'issue_resolution_status', type: 'text', description: 'Error Book resolution state, separate from retrospective learning', allowed: ISSUE_RESOLUTION_STATUSES },
-    { name: 'issue_retrospective_status', type: 'text', description: 'Error Book retrospective state after resolution', allowed: ISSUE_RETROSPECTIVE_STATUSES },
-    { name: 'issue_retrospective', type: 'text', description: 'Bounded reusable lesson from an exception review' },
-    { name: 'issue_follow_up_paths', type: 'list', description: 'Bounded notes or tasks created to prevent recurrence' },
+    { name: 'issue_resolution_status', type: 'text', description: 'Error Book resolution state, separate from retrospective learning', allowed: ISSUE_RESOLUTION_STATUSES, appliesTo: ['issue'] },
+    { name: 'issue_retrospective_status', type: 'text', description: 'Error Book retrospective state after resolution', allowed: ISSUE_RETROSPECTIVE_STATUSES, appliesTo: ['issue'] },
+    { name: 'issue_retrospective', type: 'text', description: 'Bounded reusable lesson from an exception review', appliesTo: ['issue'] },
+    { name: 'issue_follow_up_paths', type: 'list', description: 'Bounded notes or tasks created to prevent recurrence', appliesTo: ['issue'] },
     { name: 'retention_policy', type: 'text', description: 'Preservation hint; never an automatic delete instruction', allowed: RETENTION_POLICIES },
     { name: 'retention_event', type: 'text', description: 'Event from which a retention window is interpreted', allowed: RETENTION_EVENTS },
     { name: 'retention_at', type: 'text', description: 'Optional date for preservation review or archival consideration' },
@@ -201,8 +201,8 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'last_review_trigger', type: 'text', description: 'Bounded event or reason that caused the latest evidence review to reopen' },
     { name: 'review_count', type: 'number', description: 'Number of completed reviews' },
     { name: 'review_reopen_count', type: 'number', description: 'Number of reviews reopened' },
-    { name: 'interpretation_status', type: 'text', description: 'Source-to-knowledge processing stage', allowed: INTERPRETATION_STATUSES },
-    { name: 'epistemic_status', type: 'text', description: 'Question, hypothesis, experiment, or assumption state' },
+    { name: 'interpretation_status', type: 'text', description: 'Source-to-knowledge processing stage for literature and distilled durable notes', allowed: INTERPRETATION_STATUSES, appliesTo: ['literature', 'atomic', 'knowledge'] },
+    { name: 'epistemic_status', type: 'text', description: 'Question, hypothesis, experiment, or assumption state', appliesTo: ['question', 'hypothesis', 'experiment', 'assumption'] },
     { name: 'knowledge_polarity', type: 'text', description: 'Positive or preserved negative-knowledge orientation; never a truth score', allowed: KNOWLEDGE_POLARITIES },
     { name: 'negative_type', type: 'text', description: 'Reusable kind of failed, rejected, contradicted, or superseded knowledge', allowed: NEGATIVE_KINDS },
     { name: 'negative_attempted', type: 'text', description: 'Bounded account of the approach that was attempted' },
@@ -234,6 +234,7 @@ const DEDICATED_APPLICABILITY_LINT_FIELDS = new Set([
     'decision_status',
     'archive_collection_id', 'archive_series', 'archive_sequence', 'accession_id',
     'custodial_history', 'original_order_note',
+    'epistemic_status',
 ]);
 const ORGANIZATION_PROPERTY_NAMES = new Set(ORGANIZATION_PROPERTY_CONTRACT.map(entry => entry.name));
 function assertOrganizationPropertiesDeclared(properties) {
@@ -1059,8 +1060,15 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
             issues.push({ code: 'property_contract_violation', detail: `${contract.name} must be one of: ${contract.allowed.join(', ')}.` });
         }
         if (contract.appliesTo?.length && !DEDICATED_APPLICABILITY_LINT_FIELDS.has(contract.name)) {
-            const noteIdentities = new Set([type, kind].filter(Boolean));
-            if (!contract.appliesTo.some(target => noteIdentities.has(target))) {
+            // `knowledge` is both an llm_wiki_type and a note_kind.  Treat contract
+            // targets that are real note kinds as kind constraints; otherwise they
+            // constrain the record type (for example source or issue).  A project
+            // must not satisfy appliesTo: knowledge merely because all durable notes
+            // use llm_wiki_type: knowledge.
+            const applies = contract.appliesTo.some(target => (NOTE_KINDS.includes(target)
+                ? target === kind
+                : target === type));
+            if (!applies) {
                 issues.push({
                     code: 'property_contract_applicability',
                     detail: `${contract.name} applies only to ${contract.appliesTo.join(' or ')} notes; this note is ${kind || type || 'unclassified'}.`,

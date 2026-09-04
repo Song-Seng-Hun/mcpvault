@@ -148,6 +148,10 @@ describe('knowledge organization focus and summary metadata', () => {
       expect.objectContaining({ name: 'knowledge_status', type: 'text', allowed: [...KNOWLEDGE_STATUSES] }),
       expect.objectContaining({ name: 'confidence', type: 'text', allowed: [...CONFIDENCE_LEVELS] }),
       expect.objectContaining({ name: 'trust_level', type: 'text', allowed: [...SOURCE_TRUST_LEVELS], appliesTo: ['source'] }),
+      expect.objectContaining({ name: 'knowledge_role', type: 'text', appliesTo: ['atomic', 'knowledge', 'decision'] }),
+      expect.objectContaining({ name: 'interpretation_status', type: 'text', appliesTo: ['literature', 'atomic', 'knowledge'] }),
+      expect.objectContaining({ name: 'epistemic_status', type: 'text', appliesTo: ['question', 'hypothesis', 'experiment', 'assumption'] }),
+      expect.objectContaining({ name: 'issue_resolution_status', type: 'text', appliesTo: ['issue'] }),
       expect.objectContaining({ name: 'knowledge_polarity', type: 'text' }),
       expect.objectContaining({ name: 'negative_type', type: 'text' }),
       expect.objectContaining({ name: 'triage_disposition', type: 'text', appliesTo: ['fleeting'] }),
@@ -225,6 +229,41 @@ describe('knowledge organization focus and summary metadata', () => {
       llm_wiki_type: 'knowledge', note_kind: 'project', lifecycle: 'active',
       next_action: 'Run the test', task_status: 'open', completion_criteria: ['Test passes'],
     }, '# Project\n').map(issue => issue.code)).not.toContain('property_contract_applicability');
+  });
+
+  test('keeps reasoning, interpretation, epistemic, and issue workflow metadata on their intended note roles', () => {
+    const misplaced = organizationLintIssues('Projects/Misclassified workflow.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'project', lifecycle: 'active',
+      knowledge_role: 'model', interpretation_status: 'interpreted',
+      issue_resolution_status: 'resolved', issue_retrospective_status: 'captured',
+      issue_retrospective: 'This is not an Error Book entry.', issue_follow_up_paths: ['[[Projects/Repair]]'],
+      next_action: 'Repair the metadata.', task_status: 'open', completion_criteria: ['Lint passes'],
+    }, '# Misclassified workflow\n');
+    const details = misplaced
+      .filter(issue => issue.code === 'property_contract_applicability')
+      .map(issue => issue.detail);
+    expect(details).toEqual(expect.arrayContaining([
+      expect.stringContaining('knowledge_role applies only to atomic or knowledge or decision'),
+      expect.stringContaining('interpretation_status applies only to literature or atomic or knowledge'),
+      expect.stringContaining('issue_resolution_status applies only to issue'),
+      expect.stringContaining('issue_retrospective_status applies only to issue'),
+      expect.stringContaining('issue_retrospective applies only to issue'),
+      expect.stringContaining('issue_follow_up_paths applies only to issue'),
+    ]));
+    expect(details).toHaveLength(6);
+
+    const wrongEpistemic = organizationLintIssues('Knowledge/Wrong epistemic state.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'review', epistemic_status: 'open',
+    }, '# Wrong epistemic state\n');
+    expect(wrongEpistemic.filter(issue => issue.code === 'epistemic_status_wrong_kind')).toHaveLength(1);
+    expect(wrongEpistemic.filter(issue => issue.code === 'property_contract_applicability')).toHaveLength(0);
+
+    expect(organizationLintIssues('Knowledge/Interpreted atomic.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'review', interpretation_status: 'interpreted', knowledge_role: 'concept',
+    }, '# Interpreted atomic\n').map(issue => issue.code)).not.toContain('property_contract_applicability');
+    expect(organizationLintIssues('_wiki/issues/valid.md', {
+      llm_wiki_type: 'issue', issue_resolution_status: 'resolved', issue_retrospective_status: 'captured', issue_retrospective: 'Regression covered.', issue_follow_up_paths: ['Knowledge/Regression.md'],
+    }, '# Valid issue\n').map(issue => issue.code)).not.toContain('property_contract_applicability');
   });
 
   test('keeps archival arrangement on immutable source records only', () => {

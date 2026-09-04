@@ -2173,6 +2173,15 @@ test('Property contract is discoverable and review cadence schedules the next re
         expect.objectContaining({ name: 'moc_purpose', appliesTo: ['moc'], description: expect.any(String) }),
       ]),
     });
+    const roleContract = await callJson(client, 'get_wiki_property_contract', {
+      names: ['knowledge_role', 'interpretation_status', 'epistemic_status', 'issue_resolution_status'], maxChars: 7000,
+    });
+    expect(roleContract.value.fields).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'knowledge_role', appliesTo: ['atomic', 'knowledge', 'decision'] }),
+      expect.objectContaining({ name: 'interpretation_status', appliesTo: ['literature', 'atomic', 'knowledge'] }),
+      expect.objectContaining({ name: 'epistemic_status', appliesTo: ['question', 'hypothesis', 'experiment', 'assumption'] }),
+      expect.objectContaining({ name: 'issue_resolution_status', appliesTo: ['issue'] }),
+    ]));
     const contractPage = await callJson(client, 'get_wiki_property_contract', { query: 'review', limit: 2, maxChars: 5000 });
     expect(contractPage.value.selection).toMatchObject({ mode: 'query', query: 'review', offset: 0, returned: 2, nextOffset: 2 });
     expect(contractPage.value.nextAction).toMatchObject({ endpointId: 'wiki.property_contract', arguments: { query: 'review', offset: 2, limit: 2, maxChars: 5000 } });

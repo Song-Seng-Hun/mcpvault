@@ -163,9 +163,13 @@ Properties, or Git history.
 
 Use `answers_questions` when a note explicitly answers a `question` note. The
 relation is a navigation and review signal, not proof of correctness; verify
-the answer's evidence and keep its target revision current. Literature notes
-may declare `interpretation_status: unprocessed`, `interpreted`, or
-`synthesized` to make the source-to-knowledge transition visible. Completed
+the answer's evidence and keep its target revision current. Literature and
+directly distilled atomic/knowledge notes may declare
+`interpretation_status: unprocessed`, `interpreted`, or `synthesized` to make
+the source-to-knowledge transition visible. These values do not belong on
+project/task notes. Error Book workflow fields (`issue_resolution_status`,
+`issue_retrospective_status`, `issue_retrospective`, and
+`issue_follow_up_paths`) belong only on `llm_wiki_type: issue` records. Completed
 reviews may carry bounded `review_count`, `review_reopen_count`,
 `last_reviewed_revision`, and `last_review_trigger` metadata. These fields are
 derived workflow memory and do not replace Git history. Before splitting a
@@ -397,8 +401,9 @@ Obsidian links between two visible notes. `get_wiki_placement_candidates`
 reports lifecycle/`note_kind` versus PARA-folder disagreements as advisory
 repair candidates. Review the current revision before any triage or move; no
 automatic relocation occurs.
-Atomic notes may also use `knowledge_role` (`concept`, `argument`, `model`,
-`observation`, or `counterargument`), `see_also` for adjacent Obsidian links,
+Atomic, knowledge, and Decision Record notes may also use `knowledge_role`
+(`concept`, `argument`, `model`, `observation`, or `counterargument`), while
+`see_also` provides adjacent Obsidian links,
 and `term_scope_note` for a concise definition boundary. Immutable source
 snapshots can be grouped with `sourceFamily`, `sourceVersion`, and
 `supersedesSource`; the original snapshot remains authoritative.

@@ -275,9 +275,13 @@ reopen the same review indefinitely until it changes again. The bounded
 review metadata also records the reviewed source revision, review count,
 re-entry count, and last review trigger, so repeated stale or disputed notes
 remain visible without a duplicate history database. Use
-`interpretation_status` (`unprocessed`, `interpreted`, or `synthesized`) to
-distinguish captured literature from an agent's interpretation and a reusable
-knowledge synthesis. The typed `answers_questions` relation makes explicit
+`interpretation_status` (`unprocessed`, `interpreted`, or `synthesized`) on
+literature and directly distilled atomic/knowledge notes to distinguish a
+captured source from an agent's interpretation and a reusable knowledge
+synthesis. Error Book-only `issue_resolution_status`,
+`issue_retrospective_status`, `issue_retrospective`, and
+`issue_follow_up_paths` must remain on `llm_wiki_type: issue` records. The typed
+`answers_questions` relation makes explicit
 question-to-answer navigation available to backlinks and graph health; it is
 not evidence by itself. Use `preview_wiki_split` to inspect a heading extract
 and its source revision before performing a normal revision-checked split.
@@ -641,7 +645,8 @@ Use `get_wiki_note_template` for an optional small scaffold when starting an
 atomic, literature, question, hypothesis, experiment, assumption, decision,
 project, MOC, or negative-knowledge note. It also provides role-specific
 concept, argument, model, observation, and counterargument scaffolds. These
-remain ordinary atomic/knowledge notes and only add `knowledge_role` plus a
+remain ordinary atomic/knowledge notes (or an explicit Decision Record where
+appropriate) and only add `knowledge_role` plus a
 useful Markdown outline. `get_wiki_quality_check` checks the corresponding
 definition/boundary, claim/warrant, model-mechanism, observation/interpretation,
 or rebuttal structure without making it a publication gate. The template
@@ -675,8 +680,9 @@ with freshness, provenance, and typed relations. For precise edits, request
 `contextAfter` values instead of loading the complete note. Optional
 `retention_event`, `preserve_until`, and `legal_hold` fields record why and
 until when content must be preserved; they never authorize automatic deletion.
-Atomic notes may additionally declare `knowledge_role` (`concept`, `argument`,
-`model`, `observation`, or `counterargument`), `see_also` for adjacent
+Atomic, knowledge, and Decision Record notes may additionally declare
+`knowledge_role` (`concept`, `argument`, `model`, `observation`, or
+`counterargument`), while `see_also` provides adjacent
 Obsidian links, and `term_scope_note` for a concise definition boundary. When
 one source has multiple immutable editions, preserve each snapshot and link
 them with `sourceFamily`, `sourceVersion`, and `supersedesSource`.
