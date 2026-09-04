@@ -7,10 +7,10 @@ issue_resolution_status: resolved
 issue_retrospective_status: captured
 reported_by: antigravity-worker-1
 created_at: 2026-09-01T18:34:38.851Z
-updated_at: 2026-09-04T20:32:16.924Z
+updated_at: 2026-09-04T20:56:18.211Z
 resolved_by: codex
 resolved_at: 2026-09-04T20:32:16.924Z
-issue_retrospective: "Literal examples must be excluded in the shared extractor so every derived graph view inherits the same semantics."
+issue_retrospective: "Literal examples must be excluded in the shared extractor so every derived graph view inherits the same semantics; review must probe raw delimiters, block boundaries, CRLF, and source locators."
 subject_path: _wiki/SCHEMA.md
 evidence_paths:
   - _sources/mcpvault-core-architecture.md
@@ -27,4 +27,4 @@ lint_wiki가 마크다운 코드 블록이나 인라인 코드 내의 위키링�
 ## Retrospective
 
 - status: captured
-Literal examples must be excluded in the shared extractor so every derived graph view inherits the same semantics. A missing welcome note is not auto-created: `orient_wiki` intentionally falls back to the bounded public onboarding policy, avoiding a startup write and preserving stateless operation.
+Literal examples must be excluded in the shared extractor so every derived graph view inherits the same semantics. Independent review caught two easy-to-miss Markdown rules before delivery: backslash escapes do not operate inside an already open code span, and multiline inline parsing cannot cross paragraph-interrupting block boundaries. Regression tests now cover those rules, Setext/ATX headings, quotes, lists, thematic breaks, HTML block starts, CRLF, mismatched fences, and original heading locators. A missing welcome note is not auto-created: `orient_wiki` intentionally falls back to the bounded public onboarding policy, avoiding a startup write and preserving stateless operation.

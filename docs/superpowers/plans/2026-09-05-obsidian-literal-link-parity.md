@@ -316,3 +316,21 @@ Run: `git rev-parse HEAD`
 Run: `git ls-remote origin refs/heads/main`
 
 Expected: the local and remote commit hashes are identical; no pull request, release, tag, package publish, or upstream operation occurs.
+
+## Review Corrections Applied
+
+An independent review found additional CommonMark boundary cases after the
+initial GREEN state. The delivered implementation also:
+
+- treats an escaped backtick as unable to open a span in ordinary text but as a
+  valid raw closer after a span has opened, because escapes do not operate
+  inside code spans;
+- prevents a multiline candidate from crossing ATX/Setext headings, block
+  quotes, interrupting list starts, thematic breaks, recognized HTML block
+  starts, blank lines, or fences;
+- recognizes a heading on the masked projection but captures its full locator
+  text from the original line;
+- verifies CRLF offsets, mismatched fence markers and lengths, dynamic endpoint
+  descriptions, and endpoint-level backlink/outlink/unresolved behavior; and
+- states linear mask plus delimiter-metadata memory honestly instead of claiming
+  that the complete scanner uses only the one-byte mask.

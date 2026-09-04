@@ -1002,7 +1002,9 @@ an access rule, or a reason to move a note.
 For Obsidian compatibility, relative Markdown links such as
 \`[Guide](Resources/Guide.md#section)\` are treated like \`[[Guide]]\` for
 references, backlinks, unresolved-link checks, and MOC coverage. External URLs
-and links inside fenced code are ignored. Progressive Summarization is
+and links in matching fenced blocks or closed inline backtick spans, plus links
+with escaped openers, are ignored. Top-level indented code is outside this
+literal scanner. Progressive Summarization is
 optional: \`summary_layer\` 0-4 and bounded \`summary_highlights\` describe
 how much of the original note has been compressed; the full Markdown body and
 its content digest remain authoritative. The progressive projection reports

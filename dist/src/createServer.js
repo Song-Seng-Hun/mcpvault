@@ -948,7 +948,7 @@ export function createServer(vaultPath, options = {}) {
         },
         {
             name: "find_unresolved_links",
-            description: "Find one bounded page of broken Obsidian wikilinks. Returns compact source, locator, target, and context data.",
+            description: "Find one bounded page of broken Obsidian wikilinks and relative Markdown note links. Returns compact source, locator, target, and context data. Links in matching fences or closed inline backtick spans and links with escaped openers are ignored; top-level indented code is outside the literal scanner.",
             inputSchema: {
                 type: "object",
                 properties: {
@@ -961,7 +961,7 @@ export function createServer(vaultPath, options = {}) {
         },
         {
             name: "get_outlinks",
-            description: "List one bounded page of a note's Obsidian wikilinks with compact line context.",
+            description: "List one bounded page of a note's Obsidian wikilinks and relative Markdown note links with compact line context. Links in matching fences or closed inline backtick spans and links with escaped openers are ignored; top-level indented code is outside the literal scanner.",
             inputSchema: {
                 type: "object",
                 properties: {
@@ -976,7 +976,7 @@ export function createServer(vaultPath, options = {}) {
         },
         {
             name: "get_backlinks",
-            description: "Find one bounded page of notes that link to a target note, with compact locator context.",
+            description: "Find one bounded page of notes containing Obsidian wikilinks or relative Markdown links to a target note, with compact locator context. Links in matching fences or closed inline backtick spans and links with escaped openers are ignored; top-level indented code is outside the literal scanner.",
             inputSchema: {
                 type: "object",
                 properties: {

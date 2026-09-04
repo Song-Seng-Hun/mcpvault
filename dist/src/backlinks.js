@@ -4,15 +4,130 @@ const WIKI_LINK_PATTERN = /!?(\[\[[^\]]+\]\])/g;
 // are not vault graph edges.
 const MARKDOWN_LINK_PATTERN = /(?<!!)(?:\[([^\]]*)\])\(\s*(<[^>]+>|[^\s)]+)(?:\s+['"][^)]*['"])?\s*\)/g;
 const FENCE_PATTERN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+const ATX_HEADING_PATTERN = /^ {0,3}#{1,6}(?:[ \t]+|$)/;
+const BLOCK_QUOTE_PATTERN = /^ {0,3}>/;
+const INTERRUPTING_LIST_PATTERN = /^ {0,3}(?:[*+-][ \t]+\S|1[.)][ \t]+\S)/;
+const THEMATIC_BREAK_PATTERN = /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}|(?:-[ \t]*){3,})$/;
+const SETEXT_UNDERLINE_PATTERN = /^ {0,3}(?:=+|-+)[ \t]*$/;
+const HTML_BLOCK_START_PATTERN = /^ {0,3}(?:<(?:script|pre|style|textarea)(?:[ \t>]|$)|<!--|<\?|<!\[CDATA\[|<![A-Z]|<\/?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:[ \t/>]|$))/i;
+function markRange(mask, start, end) {
+    mask.fill(1, start, end);
+}
+function startsParagraphInterruptingBlock(line) {
+    return ATX_HEADING_PATTERN.test(line)
+        || BLOCK_QUOTE_PATTERN.test(line)
+        || INTERRUPTING_LIST_PATTERN.test(line)
+        || THEMATIC_BREAK_PATTERN.test(line)
+        || SETEXT_UNDERLINE_PATTERN.test(line)
+        || HTML_BLOCK_START_PATTERN.test(line);
+}
 /**
- * Find Obsidian wikilinks in a note that refer to a target note.
+ * Build an offset-preserving mask for Markdown regions that cannot create an
+ * Obsidian graph edge. The scan is deliberately smaller than a full Markdown
+ * parser, but it handles the literal forms used in notes and examples:
+ * matching fences, closed backtick code spans, and escaped link openers.
+ */
+function buildLinkLiteralMask(content) {
+    const mask = new Uint8Array(content.length);
+    const backtickRuns = [];
+    let fenceChar = '';
+    let fenceLength = 0;
+    let segment = 0;
+    let lineStart = 0;
+    while (lineStart <= content.length) {
+        const newline = content.indexOf('\n', lineStart);
+        const lineEnd = newline === -1 ? content.length : newline;
+        const rawLine = content.slice(lineStart, lineEnd);
+        const line = rawLine.replace(/\r$/, '');
+        const fence = FENCE_PATTERN.exec(line);
+        if (fenceChar || fence) {
+            markRange(mask, lineStart, lineEnd);
+            if (fence) {
+                const markers = fence[1];
+                const trailing = fence[2];
+                const char = markers[0];
+                if (!fenceChar) {
+                    fenceChar = char;
+                    fenceLength = markers.length;
+                    segment += 1;
+                }
+                else if (char === fenceChar && markers.length >= fenceLength && trailing.trim() === '') {
+                    fenceChar = '';
+                    fenceLength = 0;
+                    segment += 1;
+                }
+            }
+        }
+        else {
+            const interruptsParagraph = startsParagraphInterruptingBlock(line);
+            if (interruptsParagraph)
+                segment += 1;
+            let precedingBackslashes = 0;
+            for (let offset = lineStart; offset < lineEnd; offset += 1) {
+                const char = content[offset];
+                const escaped = precedingBackslashes % 2 === 1;
+                if (char === '[' && escaped)
+                    mask[offset] = 1;
+                if (char === '`') {
+                    const start = offset;
+                    while (offset + 1 < lineEnd && content[offset + 1] === '`')
+                        offset += 1;
+                    backtickRuns.push({ start, length: offset - start + 1, segment, escaped });
+                    precedingBackslashes = 0;
+                    continue;
+                }
+                precedingBackslashes = char === '\\' ? precedingBackslashes + 1 : 0;
+            }
+            if (interruptsParagraph || line.trim() === '')
+                segment += 1;
+        }
+        if (newline === -1)
+            break;
+        lineStart = newline + 1;
+    }
+    const nextMatchingRun = new Int32Array(backtickRuns.length).fill(-1);
+    const lastByDelimiter = new Map();
+    for (let index = backtickRuns.length - 1; index >= 0; index -= 1) {
+        const run = backtickRuns[index];
+        const key = `${run.segment}:${run.length}`;
+        nextMatchingRun[index] = lastByDelimiter.get(key) ?? -1;
+        lastByDelimiter.set(key, index);
+    }
+    for (let index = 0; index < backtickRuns.length;) {
+        if (backtickRuns[index].escaped) {
+            index += 1;
+            continue;
+        }
+        const closerIndex = nextMatchingRun[index];
+        if (closerIndex === -1) {
+            index += 1;
+            continue;
+        }
+        const opening = backtickRuns[index];
+        const closing = backtickRuns[closerIndex];
+        markRange(mask, opening.start, closing.start + closing.length);
+        index = closerIndex + 1;
+    }
+    return mask;
+}
+function applyLineMask(line, lineOffset, mask) {
+    const projected = line.split('');
+    for (let index = 0; index < projected.length; index += 1) {
+        if (mask[lineOffset + index])
+            projected[index] = ' ';
+    }
+    return projected.join('');
+}
+/**
+ * Find Obsidian internal links in a note that refer to a target note.
  *
  * This deliberately works on raw lines so the result can point an agent to
- * an exact line without returning the source note's full content. Fenced code
- * blocks are ignored because links shown as examples there are not graph
- * edges. Inline code is left alone: Obsidian can still index a wikilink that
- * appears in inline code, and deciding otherwise would require a Markdown
- * parser with different semantics from Obsidian.
+ * an exact line without returning the source note's full content. Matching
+ * fenced blocks, closed inline backtick spans, and escaped link openers are
+ * ignored because literal examples are not graph edges. Unmatched backticks
+ * remain ordinary text. Top-level indented-code parsing is intentionally out
+ * of scope because it requires complete block semantics to distinguish nested
+ * list content without hiding valid links.
  */
 export function findBacklinkMatches(content, targetPath) {
     const normalizedTarget = normalizeTarget(targetPath);
@@ -44,36 +159,23 @@ export function extractObsidianLinkOccurrences(content, limit = Number.POSITIVE_
 function extractLinkOccurrences(content, includeMarkdown, limit = Number.POSITIVE_INFINITY) {
     const matches = [];
     const lines = content.split('\n');
-    let fenceChar = '';
-    let fenceLength = 0;
+    const literalMask = buildLinkLiteralMask(content);
+    let lineOffset = 0;
     let currentHeading;
     for (let index = 0; index < lines.length && matches.length < limit; index += 1) {
-        const line = lines[index].replace(/\r$/, '');
-        const fence = FENCE_PATTERN.exec(line);
-        if (fence) {
-            const markers = fence[1];
-            const trailing = fence[2];
-            const char = markers[0];
-            if (!fenceChar) {
-                fenceChar = char;
-                fenceLength = markers.length;
-            }
-            else if (char === fenceChar && markers.length >= fenceLength && trailing.trim() === '') {
-                fenceChar = '';
-                fenceLength = 0;
-            }
-            continue;
+        const rawLine = lines[index];
+        const line = rawLine.replace(/\r$/, '');
+        const searchableLine = applyLineMask(line, lineOffset, literalMask);
+        if (ATX_HEADING_PATTERN.test(searchableLine)) {
+            const heading = line.match(/^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/);
+            if (heading)
+                currentHeading = heading[1].trim();
         }
-        if (fenceChar)
-            continue;
-        const heading = line.match(/^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/);
-        if (heading)
-            currentHeading = heading[1].trim();
         WIKI_LINK_PATTERN.lastIndex = 0;
         const lineMatches = [];
         let match;
-        while ((match = WIKI_LINK_PATTERN.exec(line)) !== null) {
-            const link = match[0];
+        while ((match = WIKI_LINK_PATTERN.exec(searchableLine)) !== null) {
+            const link = line.slice(match.index, match.index + match[0].length);
             const parsed = linkDocument(link);
             if (!parsed.document)
                 continue;
@@ -89,8 +191,8 @@ function extractLinkOccurrences(content, includeMarkdown, limit = Number.POSITIV
         }
         if (includeMarkdown) {
             MARKDOWN_LINK_PATTERN.lastIndex = 0;
-            while ((match = MARKDOWN_LINK_PATTERN.exec(line)) !== null) {
-                const link = match[0];
+            while ((match = MARKDOWN_LINK_PATTERN.exec(searchableLine)) !== null) {
+                const link = line.slice(match.index, match.index + match[0].length);
                 const parsed = markdownLinkDocument(match[2]);
                 if (!parsed.document)
                     continue;
@@ -111,6 +213,7 @@ function extractLinkOccurrences(content, includeMarkdown, limit = Number.POSITIV
                 break;
             matches.push(match.item);
         }
+        lineOffset += rawLine.length + 1;
     }
     return matches;
 }

@@ -412,10 +412,11 @@ Obsidian reference examples:
 
 The shared link extractor ignores links in matching fenced blocks or closed
 inline backtick spans and links whose opening bracket is escaped. It preserves
-unmatched backticks as ordinary text and does not claim complete parsing of
-top-level indented code. These rules apply consistently to backlinks, outlinks,
-broken-link lint, graph navigation, MOC order, impact review, and managed Canvas
-projections.
+unmatched backticks as ordinary text; multiline pairing stops at blank lines,
+fences, headings, block quotes, interrupting list starts, thematic breaks, and
+recognized HTML block starts. It does not claim complete parsing of top-level
+indented code. These rules apply consistently to backlinks, outlinks, broken-link
+lint, graph navigation, MOC order, impact review, and managed Canvas projections.
 
 Heading and block targets are preserved by graph reads, so
 `[[folder/Source#Heading]]` and `[[folder/Source#^block-id]]` can take an agent

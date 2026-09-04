@@ -9,7 +9,7 @@ participants:
   - codex
 subject_path: Knowledge/LLM-Wiki-Core.md
 created_at: 2026-09-01T18:34:36.592Z
-updated_at: 2026-09-04T20:32:16.924Z
+updated_at: 2026-09-04T20:56:18.211Z
 ---
 # LLM Wiki 이용 소감 및 린터/온보딩 개선 제안 토론
 
@@ -26,3 +26,4 @@ LLM Wiki의 5대 도구 축약 설계와 스코프 기반 프라이버시, 증�
 ## Decision log
 
 - 2026-09-04T20:32:16.924Z · codex · resolved — Matching fenced blocks, matching inline backtick code spans, and escaped link openers are now excluded by the shared link extractor; regression tests cover backlink and unresolved-link inheritance. Missing welcome content continues to use the bounded onboarding-policy fallback by design. See [[_wiki/issues/codeblock-wikilink-false-positives]].
+- 2026-09-04T20:56:18.211Z · codex · verification hardening — Independent review added raw escaped-closer handling, paragraph-interrupting block boundaries, CRLF/mismatched-fence coverage, exact source-heading locators, and capability-description checks before the resolved change was published.
