@@ -6,6 +6,7 @@ import { normalizeScopeId } from './scopes.js';
 import { boundItems } from './search-limits.js';
 import { iterateNotes, queryWindow } from './paged-query.js';
 import { isModerationHidden } from './moderation-policy.js';
+import { COMPLETION_DISPOSITION_REQUIRED_MESSAGE, normalizeKnowledgeDisposition } from './organization.js';
 
 const ROOT = 'Community/Tasks';
 export const AGENT_TASK_STATUSES = ['proposed', 'accepted', 'in_progress', 'blocked', 'completed', 'cancelled'] as const;
@@ -210,9 +211,6 @@ export class AgentTaskService {
     if (status !== previousStatus && !reason) throw new Error('reason is required when changing task status');
     const description = params.description === undefined ? String(note.frontmatter.description || note.content).trim() : shortText(params.description, 'description', 4000, true);
     const refs = await this.references.validateAndNormalize(params.references ?? note.frontmatter.references, path, principal, params.description);
-    const retrospective = params.retrospective === undefined
-      ? shortText(note.frontmatter.retrospective, 'retrospective', 1000)
-      : shortText(params.retrospective, 'retrospective', 1000);
     const knowledgeNotes = await this.validatedKnowledgeNotes(
       params.knowledgeNotes === undefined ? note.frontmatter.knowledge_notes : params.knowledgeNotes,
       path,
@@ -225,48 +223,30 @@ export class AgentTaskService {
       principal,
       'negative',
     );
-    const priorDispositions = Array.isArray(note.frontmatter.knowledge_dispositions)
-      ? note.frontmatter.knowledge_dispositions.map((value: unknown) => String(value))
-      : [];
-    const noReusableKnowledge = params.noReusableKnowledge === undefined
-      ? priorDispositions.includes('no_reusable_knowledge')
-      : params.noReusableKnowledge === true;
-    const knowledgeDispositionReason = params.knowledgeDispositionReason === undefined
-      ? shortText(note.frontmatter.knowledge_disposition_reason, 'knowledgeDispositionReason', 1000)
-      : shortText(params.knowledgeDispositionReason, 'knowledgeDispositionReason', 1000);
-    const knowledgeDispositions = [
-      ...(knowledgeNotes?.length ? ['linked_knowledge'] : []),
-      ...(negativeKnowledgeNotes?.length ? ['negative_knowledge'] : []),
-      ...(retrospective ? ['retrospective'] : []),
-      ...(noReusableKnowledge ? ['no_reusable_knowledge'] : []),
-    ];
+    const disposition = normalizeKnowledgeDisposition({
+      ...(params.retrospective !== undefined && { retrospective: params.retrospective }),
+      ...(knowledgeNotes !== undefined && { knowledgeNotes }),
+      ...(negativeKnowledgeNotes !== undefined && { negativeKnowledgeNotes }),
+      ...(params.noReusableKnowledge !== undefined && { noReusableKnowledge: params.noReusableKnowledge }),
+      ...(params.knowledgeDispositionReason !== undefined && { knowledgeDispositionReason: params.knowledgeDispositionReason }),
+    }, note.frontmatter);
     const entersCompleted = previousStatus !== 'completed' && status === 'completed';
-    if (entersCompleted && knowledgeDispositions.length === 0) {
-      throw new Error('Completing a task requires a knowledge disposition: provide knowledgeNotes, negativeKnowledgeNotes, retrospective, or noReusableKnowledge=true with knowledgeDispositionReason');
-    }
-    if (noReusableKnowledge && !knowledgeDispositionReason) {
-      throw new Error('knowledgeDispositionReason is required when noReusableKnowledge=true');
-    }
-    if (knowledgeDispositionReason && !noReusableKnowledge) {
-      throw new Error('knowledgeDispositionReason is only valid when noReusableKnowledge=true');
-    }
-    if (noReusableKnowledge && knowledgeDispositions.some(value => value !== 'no_reusable_knowledge')) {
-      throw new Error('noReusableKnowledge cannot be combined with retrospective or knowledge note artifacts');
-    }
+    if (entersCompleted && disposition.knowledgeDispositions.length === 0) throw new Error(COMPLETION_DISPOSITION_REQUIRED_MESSAGE);
     const timestamp = now();
     const frontmatter: Record<string, any> = {
       ...note.frontmatter, description,
       ...(requestedAssignee ? { assignee: requestedAssignee } : {}),
       status, references: refs, updated_at: timestamp,
       ...(status !== previousStatus && { status_reason: reason, status_changed_by: actor, status_changed_at: timestamp }),
-      ...(retrospective && { retrospective }),
-      ...(knowledgeNotes && { knowledge_notes: knowledgeNotes }),
-      ...(negativeKnowledgeNotes && { negative_knowledge_notes: negativeKnowledgeNotes }),
-      ...(knowledgeDispositions.length > 0 && { knowledge_dispositions: knowledgeDispositions }),
-      ...(noReusableKnowledge && knowledgeDispositionReason && { knowledge_disposition_reason: knowledgeDispositionReason }),
+      ...(disposition.retrospective && { retrospective: disposition.retrospective }),
+      ...(disposition.knowledgeNotes !== undefined && { knowledge_notes: disposition.knowledgeNotes }),
+      ...(disposition.negativeKnowledgeNotes !== undefined && { negative_knowledge_notes: disposition.negativeKnowledgeNotes }),
+      knowledge_dispositions: disposition.knowledgeDispositions,
+      ...(disposition.knowledgeDispositionReason && { knowledge_disposition_reason: disposition.knowledgeDispositionReason }),
     };
     if (!requestedAssignee) delete frontmatter.assignee;
-    if (!noReusableKnowledge) delete frontmatter.knowledge_disposition_reason;
+    if (!disposition.retrospective) delete frontmatter.retrospective;
+    if (!disposition.noReusableKnowledge) delete frontmatter.knowledge_disposition_reason;
     await this.fileSystem.writeNote({
       path,
       content: `# ${String(note.frontmatter.title || taskId)}\n\n${description}\n`,

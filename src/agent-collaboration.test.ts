@@ -69,6 +69,18 @@ test('profiles, durable notifications, tasks, and capability revocation compose 
     expect(taskComplete.value).toMatchObject({ status: 'completed', retrospective: 'Found that citation quality matters more than citation count.', knowledgeNotes: ['Knowledge/evidence-quality.md'], knowledgeDispositions: ['linked_knowledge', 'retrospective'] });
     const completedTask = await json(client, 'read_agent_task', { taskId: task.value.taskId });
     expect(completedTask.value.fm).toMatchObject({ status: 'completed', retrospective: 'Found that citation quality matters more than citation count.', knowledge_notes: ['Knowledge/evidence-quality.md'], knowledge_dispositions: ['linked_knowledge', 'retrospective'] });
+    const editedCompletedTask = await json(client, 'update_agent_task', {
+      taskId: task.value.taskId,
+      description: 'Compare the cited claims and preserve the verified lesson.',
+      expectedRevision: completedTask.value.revision,
+      accessToken: agentToken,
+    });
+    expect(editedCompletedTask.value).toMatchObject({
+      status: 'completed',
+      knowledgeNotes: ['Knowledge/evidence-quality.md'],
+      retrospective: 'Found that citation quality matters more than citation count.',
+      knowledgeDispositions: ['linked_knowledge', 'retrospective'],
+    });
 
     const capabilityChange = await json(client, 'update_agent_capabilities', { agentId: 'researcher', capabilities: ['profile', 'task'], accessToken: ownerToken });
     expect(capabilityChange.value.capabilities).toEqual(['profile', 'task']);
