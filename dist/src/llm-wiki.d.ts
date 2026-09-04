@@ -4607,6 +4607,7 @@ export declare class LlmWikiService {
         truncated: boolean;
     }>;
     private currentMaintenanceCandidates;
+    private maintenanceReplacement;
     summaryCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
         items: Record<string, any>[];
         total: number;
@@ -4615,13 +4616,9 @@ export declare class LlmWikiService {
         items: Record<string, any>[];
         total: number;
         truncated: boolean;
-        nextAction: {
-            endpointId: string;
-            arguments: {
-                limit: number;
-                maxChars: number;
-            };
-        };
+        metadataTruncated: boolean;
+        retry?: never;
+        instruction?: never;
     } | {
         items: {
             path: any;
@@ -4631,31 +4628,29 @@ export declare class LlmWikiService {
         }[];
         total: number;
         truncated: boolean;
-    }>;
-    unusedKnowledge(principal?: ScopePrincipal, olderThanDays?: number, limit?: number, maxChars?: number): Promise<({
-        olderThanDays: number;
-    } & {
-        items: Record<string, any>[];
+    } | {
+        metadataTruncated?: never;
+        items: never[];
         total: number;
         truncated: boolean;
-    }) | ({
-        olderThanDays: number;
-    } & {
-        items: Record<string, any>[];
-        total: number;
-        truncated: boolean;
-        nextAction: {
+        retry: {
             endpointId: string;
-            arguments: {
-                olderThanDays: number;
-            } & {
+            reuseOriginalArguments: boolean;
+            overrides: {
                 limit: number;
                 maxChars: number;
             };
         };
-    }) | ({
-        olderThanDays: number;
-    } & {
+        instruction: string;
+    }>;
+    unusedKnowledge(principal?: ScopePrincipal, olderThanDays?: number, limit?: number, maxChars?: number): Promise<{
+        items: Record<string, any>[];
+        total: number;
+        truncated: boolean;
+        metadataTruncated: boolean;
+        retry?: never;
+        instruction?: never;
+    } | {
         items: {
             path: any;
             revision: any;
@@ -4664,30 +4659,106 @@ export declare class LlmWikiService {
         }[];
         total: number;
         truncated: boolean;
-    })>;
-    /**
-     * Surface a small deterministic-but-rotating set of durable notes. This is
-     * the Zettelkasten "surprise" loop: it is intentionally stateless, does
-     * not create a recommendation database, and always returns paths for a
-     * follow-up bounded read.
-     */
-    retentionQueue(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
-        purpose: string;
-        items: Record<string, unknown>[];
+    } | {
+        metadataTruncated?: never;
+        items: never[];
         total: number;
         truncated: boolean;
-        generatedAt: string;
-    }>;
-    resurfaceKnowledge(principal?: ScopePrincipal, limit?: number, maxChars?: number, context?: string): Promise<{
-        purpose: string;
-        rotationDate: string;
-        context?: string;
+        retry: {
+            endpointId: string;
+            reuseOriginalArguments: boolean;
+            overrides: {
+                limit: number;
+                maxChars: number;
+            };
+        };
+        instruction: string;
+    } | ({
+        olderThanDays: number;
+    } & {
+        items: Record<string, any>[];
+        total: number;
+        truncated: boolean;
+    })>;
+    /** Advisory preservation queue; hold metadata never authorizes disposition. */
+    retentionQueue(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        items: Record<string, any>[];
+        total: number;
+        truncated: boolean;
+        metadataTruncated: boolean;
+        retry?: never;
+        instruction?: never;
+    } | {
         items: {
-            [x: string]: unknown;
+            path: any;
+            revision: any;
+            nextAction: any;
+            candidateTruncated: boolean;
         }[];
         total: number;
         truncated: boolean;
-    }>;
+    } | {
+        metadataTruncated?: never;
+        items: never[];
+        total: number;
+        truncated: boolean;
+        retry: {
+            endpointId: string;
+            reuseOriginalArguments: boolean;
+            overrides: {
+                limit: number;
+                maxChars: number;
+            };
+        };
+        instruction: string;
+    } | ({
+        purpose: string;
+        generatedAt: string;
+    } & {
+        items: Record<string, any>[];
+        total: number;
+        truncated: boolean;
+    })>;
+    /** Stateless daily rediscovery with bounded current-body context, not a recommendation database. */
+    resurfaceKnowledge(principal?: ScopePrincipal, limit?: number, maxChars?: number, context?: string): Promise<{
+        items: Record<string, any>[];
+        total: number;
+        truncated: boolean;
+        metadataTruncated: boolean;
+        retry?: never;
+        instruction?: never;
+    } | {
+        items: {
+            path: any;
+            revision: any;
+            nextAction: any;
+            candidateTruncated: boolean;
+        }[];
+        total: number;
+        truncated: boolean;
+    } | {
+        metadataTruncated?: never;
+        items: never[];
+        total: number;
+        truncated: boolean;
+        retry: {
+            endpointId: string;
+            reuseOriginalArguments: boolean;
+            overrides: {
+                limit: number;
+                maxChars: number;
+            };
+        };
+        instruction: string;
+    } | ({
+        purpose: string;
+        rotationDate: string;
+        context?: string;
+    } & {
+        items: Record<string, any>[];
+        total: number;
+        truncated: boolean;
+    })>;
     orient(principal?: ScopePrincipal, maxChars?: number): Promise<{
         protocol: string;
         purpose: string;

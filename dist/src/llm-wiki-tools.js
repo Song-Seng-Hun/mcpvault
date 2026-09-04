@@ -800,12 +800,12 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_retention_queue',
-            description: 'Return a bounded preservation and disposition queue for knowledge notes with retention metadata or an overdue retention review. It distinguishes preserve, legal hold, review, archive, and tombstone candidates; it never deletes or archives automatically.',
+            description: 'Return a current, visibility-filtered preservation queue with revisions and bounded notes.read actions. Legal hold and preserve-until override disposition advice. Replacement links resolve only to readable targets and carry their revisions. maxChars covers the complete report, including retry guidance. Inspect before changing anything; this read never archives or deletes.',
             inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
         },
         {
             name: 'resurface_wiki_knowledge',
-            description: 'Return a small deterministic rotating set of durable notes for Zettelkasten-style serendipitous rediscovery. An optional context/problem signal makes retrieval cues and use_when metadata influence the bounded ranking. Read selected notes before relying on them; this is a derived view and never mutates files.',
+            description: 'Return visible durable notes in a deterministic daily rotation; optional context influences retrieval-cue ranking. Results carry current revisions and notes.read actions. Summaries appear only when their body fingerprint matches; otherwise a bounded current-body excerpt is returned. maxChars covers the full report. If retry.reuseOriginalArguments is true, repeat this request with retry.overrides while preserving the original context. This advisory read never mutates files.',
             inputSchema: { type: 'object', properties: { context: { type: 'string', maxLength: 1000, description: 'Optional current task, question, or problem signal used only to rank retrieval cues' }, limit: { type: 'integer', minimum: 1, maximum: 20, default: 8 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 5000 }, accessToken, prettyPrint } },
         },
         {

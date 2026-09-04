@@ -40,7 +40,7 @@ function boundedText(value, maxChars) {
     return `${text.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
 }
 /** Budget the complete report, preserving an executable read when prose is cut. */
-function boundedMaintenanceReport(candidates, total, maxChars, endpointId, extra) {
+function boundedMaintenanceReport(candidates, total, maxChars, endpointId, extra, retryArguments = extra, retryMaxChars = 16000) {
     const items = [];
     for (const candidate of candidates) {
         const trial = { ...extra, items: [...items, candidate], total, truncated: total > items.length + 1 };
@@ -48,15 +48,27 @@ function boundedMaintenanceReport(candidates, total, maxChars, endpointId, extra
             break;
         items.push(candidate);
     }
-    if (items.length || total === 0)
-        return { ...extra, items, total, truncated: total > items.length };
-    if (!candidates.length)
-        return { ...extra, items, total, truncated: true, nextAction: { endpointId, arguments: { ...extra, limit: 1, maxChars } } };
-    const first = candidates[0];
-    const compact = { ...extra, items: [{ path: first.path, revision: first.revision, nextAction: first.nextAction, candidateTruncated: true }], total, truncated: true };
-    if (JSON.stringify(compact).length <= maxChars)
-        return compact;
-    return { ...extra, items: [], total, truncated: true, nextAction: { endpointId, arguments: { ...extra, limit: 1, maxChars: 16000 } } };
+    if (items.length || total === 0) {
+        const result = { ...extra, items, total, truncated: total > items.length };
+        return JSON.stringify(result).length <= maxChars ? result : { items, total, truncated: total > items.length, metadataTruncated: true };
+    }
+    if (candidates.length) {
+        const first = candidates[0];
+        const compact = { items: [{ path: first.path, revision: first.revision, nextAction: first.nextAction, candidateTruncated: true }], total, truncated: true };
+        const withMetadata = { ...extra, ...compact };
+        if (JSON.stringify(withMetadata).length <= maxChars)
+            return withMetadata;
+        if (JSON.stringify(compact).length <= maxChars)
+            return compact;
+    }
+    const retry = { items: [], total, truncated: true, nextAction: { endpointId, arguments: { ...retryArguments, limit: 1, maxChars: candidates.length ? retryMaxChars : maxChars } } };
+    const withMetadata = { ...extra, ...retry };
+    if (JSON.stringify(withMetadata).length <= maxChars)
+        return withMetadata;
+    if (JSON.stringify(retry).length <= maxChars)
+        return retry;
+    // Never silently truncate a caller's ranking context to make a retry fit.
+    return { items: [], total, truncated: true, retry: { endpointId, reuseOriginalArguments: true, overrides: { limit: 1, maxChars: retryMaxChars } }, instruction: 'Repeat the original request with these overrides; preserve its context and other arguments.' };
 }
 function normalizeArchiveIdentifier(value, field) {
     if (value === undefined || value === null || value === '')
@@ -13896,7 +13908,56 @@ export class LlmWikiService {
         const current = await this.fileSystem.readNoteMetadata(paths, canAccess, { fresh: true, strict: true });
         const revisions = new Map(current.filter(note => !isModerationHidden(note.frontmatter))
             .map(note => [this.access.toPublicPath(note.path), note.revision]));
-        return candidates.filter(item => item.revision && revisions.get(item.path) === item.revision);
+        const selected = candidates.filter(item => item.revision && revisions.get(item.path) === item.revision);
+        const replacementPaths = selected.filter(item => typeof item.replacedBy === 'string')
+            .map(item => this.access.resolveExternalPath(item.replacedBy, principal));
+        if (!replacementPaths.length)
+            return selected;
+        const replacements = await this.fileSystem.readNoteMetadata(replacementPaths, canAccess, { fresh: true, strict: true });
+        const replacementRevisions = new Map(replacements.filter(note => !isModerationHidden(note.frontmatter))
+            .map(note => [this.access.toPublicPath(note.path), note.revision]));
+        return selected.map(item => {
+            if (!item.replacedBy || (item.replacementRevision && replacementRevisions.get(item.replacedBy) === item.replacementRevision))
+                return item;
+            const { replacedBy: _path, replacementRevision: _revision, ...rest } = item;
+            return { ...rest, replacementState: 'unavailable' };
+        });
+    }
+    async maintenanceReplacement(raw, sourcePath, principal) {
+        if (typeof raw !== 'string' || !raw.trim())
+            return {};
+        const unavailable = { replacementState: 'unavailable' };
+        if (raw.length > 2048)
+            return unavailable;
+        const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        let matches;
+        const target = relationDocument(raw);
+        if (/^scope:\/\//i.test(target)) {
+            try {
+                matches = [this.access.resolveExternalPath(target, principal)];
+            }
+            catch {
+                return unavailable;
+            }
+        }
+        else {
+            matches = await this.fileSystem.findPathForWikiLink(target, canAccess);
+        }
+        matches = matches.filter(path => this.access.canReferenceFrom(sourcePath, path));
+        let replacement;
+        for (let offset = 0; offset < matches.length; offset += 100) {
+            const notes = await this.fileSystem.readNoteMetadata(matches.slice(offset, offset + 100), canAccess, { fresh: true, strict: true });
+            for (const note of notes) {
+                if (isModerationHidden(note.frontmatter))
+                    continue;
+                if (replacement)
+                    return unavailable;
+                replacement = note;
+            }
+        }
+        if (!replacement)
+            return unavailable;
+        return { replacedBy: this.access.toPublicPath(replacement.path), replacementRevision: replacement.revision };
     }
     async summaryCandidates(principal, limit = 10, maxChars = 6000) {
         const boundedLimit = Math.min(Math.max(Number(limit) || 10, 1), 30);
@@ -14025,21 +14086,20 @@ export class LlmWikiService {
         const current = await this.currentMaintenanceCandidates(items, principal);
         return boundedMaintenanceReport(current, total - (items.length - current.length), boundedChars, 'wiki.unused_knowledge', { olderThanDays: ageDays });
     }
-    /**
-     * Surface a small deterministic-but-rotating set of durable notes. This is
-     * the Zettelkasten "surprise" loop: it is intentionally stateless, does
-     * not create a recommendation database, and always returns paths for a
-     * follow-up bounded read.
-     */
+    /** Advisory preservation queue; hold metadata never authorizes disposition. */
     async retentionQueue(principal, limit = 20, maxChars = 7000) {
         const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
         const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
         const nowMs = Date.now();
         const candidates = [];
+        const compare = (left, right) => right.priority - left.priority || left.sortAt - right.sortAt || String(left.path).localeCompare(String(right.path));
         let total = 0;
-        for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
-            if (note.frontmatter.llm_wiki_type !== 'knowledge')
+        for await (const metadata of iterateNotes(this.fileSystem, {}, canAccess)) {
+            if (metadata.frontmatter.llm_wiki_type !== 'knowledge' || isModerationHidden(metadata.frontmatter))
+                continue;
+            const [note] = await this.fileSystem.readNoteMetadata([metadata.path], canAccess, { fresh: true, strict: true });
+            if (!note || note.frontmatter.llm_wiki_type !== 'knowledge' || isModerationHidden(note.frontmatter))
                 continue;
             const policy = typeof note.frontmatter.retention_policy === 'string' ? note.frontmatter.retention_policy.trim().toLowerCase() : '';
             const retentionAt = Date.parse(String(note.frontmatter.retention_at || ''));
@@ -14068,30 +14128,35 @@ export class LlmWikiService {
             const priority = (due ? 5 : 0) + (legalHold ? 4 : 0) + (policy === 'tombstone' ? 3 : policy === 'archive' ? 2 : 1);
             candidates.push({
                 path: this.access.toPublicPath(note.path),
-                title: note.frontmatter.title || note.path.split('/').at(-1),
+                title: boundedText(note.frontmatter.title || note.path.split('/').at(-1), 160),
+                revision: note.revision,
+                nextAction: { endpointId: 'notes.read', arguments: { path: this.access.toPublicPath(note.path), maxChars: 3000 } },
                 policy: policy || undefined,
                 lifecycle: lifecycle || undefined,
                 ...(Number.isFinite(retentionAt) && { retentionAt: new Date(retentionAt).toISOString(), due }),
                 ...(Number.isFinite(preserveUntil) && { preserveUntil: new Date(preserveUntil).toISOString(), protectedUntil }),
                 ...(legalHold && { legalHold: true }),
                 ...(typeof note.frontmatter.retention_reason === 'string' && note.frontmatter.retention_reason.trim() && { reason: boundedText(note.frontmatter.retention_reason, 500) }),
-                ...(typeof note.frontmatter.replaced_by === 'string' && note.frontmatter.replaced_by.trim() && { replacedBy: note.frontmatter.replaced_by }),
+                _replacement: note.frontmatter.replaced_by,
                 reasons,
                 priority,
                 suggestedAction: action,
                 sortAt: Number.isFinite(retentionAt) ? retentionAt : Number.isFinite(preserveUntil) ? preserveUntil : Number.MAX_SAFE_INTEGER,
             });
+            candidates.sort(compare);
+            if (candidates.length > boundedLimit)
+                candidates.pop();
         }
-        candidates.sort((left, right) => right.priority - left.priority || left.sortAt - right.sortAt || String(left.path).localeCompare(String(right.path)));
         const items = [];
-        for (const candidate of candidates.slice(0, boundedLimit)) {
-            const { priority: _priority, sortAt: _sortAt, ...item } = candidate;
-            if (JSON.stringify([...items, item]).length + 2 > boundedChars)
-                break;
-            items.push(item);
+        for (const candidate of candidates) {
+            const { priority: _priority, sortAt: _sortAt, _replacement, ...item } = candidate;
+            const replacement = await this.maintenanceReplacement(_replacement, this.access.resolveExternalPath(String(item.path), principal), principal);
+            items.push({ ...item, ...replacement });
         }
-        return { purpose: 'Bounded preservation/disposition queue derived from note Properties. It never deletes, archives, or tombstones automatically.', items, total, truncated: total > items.length, generatedAt: now() };
+        const current = await this.currentMaintenanceCandidates(items, principal);
+        return boundedMaintenanceReport(current, total - (items.length - current.length), boundedChars, 'wiki.retention_queue', { purpose: 'Advisory preservation queue. Read current notes; nothing is automatically disposed.', generatedAt: now() }, {});
     }
+    /** Stateless daily rediscovery with bounded current-body context, not a recommendation database. */
     async resurfaceKnowledge(principal, limit = 8, maxChars = 5000, context) {
         const boundedLimit = Math.min(Math.max(Number(limit) || 8, 1), 20);
         const boundedChars = Math.min(Math.max(Number(maxChars) || 5000, 512), 12000);
@@ -14099,14 +14164,19 @@ export class LlmWikiService {
         const day = new Date().toISOString().slice(0, 10);
         const contextWords = normalizedWords(String(context || ''));
         const candidates = [];
+        const compare = (left, right) => left.rank - right.rank || String(left.path).localeCompare(String(right.path));
+        const eligible = (fm) => !isModerationHidden(fm)
+            && (['atomic', 'knowledge', 'decision'].includes(String(fm.note_kind || '').toLowerCase()) || fm.llm_wiki_type === 'knowledge')
+            && !['archived', 'superseded'].includes(String(fm.lifecycle || '').toLowerCase());
         let total = 0;
-        for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+        for await (const metadata of iterateNotes(this.fileSystem, {}, canAccess)) {
+            if (!eligible(metadata.frontmatter))
+                continue;
+            const [note] = await this.fileSystem.readNoteMetadata([metadata.path], canAccess, { fresh: true, strict: true });
+            if (!note || !eligible(note.frontmatter))
+                continue;
             const kind = String(note.frontmatter.note_kind || '').toLowerCase();
             const lifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
-            if (!['atomic', 'knowledge', 'decision'].includes(kind) && note.frontmatter.llm_wiki_type !== 'knowledge')
-                continue;
-            if (['archived', 'superseded'].includes(lifecycle))
-                continue;
             total += 1;
             const digest = hash(`${day}|${normalizePath(note.path).toLowerCase()}`);
             const cues = Array.isArray(note.frontmatter.retrieval_cues) ? note.frontmatter.retrieval_cues.filter((item) => typeof item === 'string' && Boolean(item.trim())).slice(0, 8) : [];
@@ -14123,30 +14193,46 @@ export class LlmWikiService {
                 reasons.unshift('unprocessed_interpretation');
             candidates.push({
                 path: this.access.toPublicPath(note.path),
-                title: note.frontmatter.title || note.path.split('/').at(-1),
+                title: boundedText(note.frontmatter.title || note.path.split('/').at(-1), 160),
+                revision: note.revision,
+                nextAction: { endpointId: 'notes.read', arguments: { path: this.access.toPublicPath(note.path), maxChars: 3000 } },
                 noteKind: kind || 'knowledge',
                 ...(lifecycle && { lifecycle }),
                 reasons,
-                ...(typeof note.frontmatter.summary === 'string' && { summary: boundedText(note.frontmatter.summary, 500) }),
-                ...(cues.length > 0 && { retrievalCues: cues }),
+                ...(cues.length > 0 && { retrievalCues: cues.map(cue => boundedText(cue, 160)) }),
                 ...(useWhen && { useWhen: boundedText(useWhen, 500) }),
                 ...(context && { contextMatch: Number(contextMatch.toFixed(3)) }),
                 rank,
             });
+            candidates.sort(compare);
+            if (candidates.length > boundedLimit)
+                candidates.pop();
         }
-        candidates.sort((left, right) => left.rank - right.rank || String(left.path).localeCompare(String(right.path)));
-        const items = candidates.slice(0, boundedLimit).map(({ rank: _rank, ...item }) => item);
-        const result = {
+        const items = [];
+        for (const { rank: _rank, ...item } of candidates) {
+            const path = this.access.resolveExternalPath(String(item.path), principal);
+            let note;
+            try {
+                note = await this.fileSystem.readNote(path);
+            }
+            catch (error) {
+                if ((await this.fileSystem.readNoteMetadata([path], canAccess, { fresh: true, strict: true })).length)
+                    throw error;
+                continue;
+            }
+            if (note.revision !== item.revision || !eligible(note.frontmatter))
+                continue;
+            const summary = typeof note.frontmatter.summary === 'string' ? note.frontmatter.summary.trim() : '';
+            const summaryFresh = Boolean(summary && note.frontmatter.summary_of_content_sha256 === hash(note.content));
+            const excerpt = boundedText(note.content.split(/\n\s*\n/).find(paragraph => paragraph.trim() && !paragraph.trim().startsWith('#')) || note.content, 300);
+            items.push({ ...item, ...(summary && { summaryFresh }), ...(summaryFresh ? { summary: boundedText(summary, 500) } : { excerpt }) });
+        }
+        const current = await this.currentMaintenanceCandidates(items, principal);
+        return boundedMaintenanceReport(current, total - (candidates.length - current.length), boundedChars, 'wiki.resurface', {
             purpose: 'A bounded serendipity queue for reconnecting with durable knowledge. Read the selected notes before treating them as relevant; this projection is not evidence or a truth score.',
             rotationDate: day,
             ...(context && { context: boundedText(context, 1000) }),
-            items,
-            total,
-            truncated: total > items.length,
-        };
-        if (JSON.stringify(result).length <= boundedChars)
-            return result;
-        return { ...result, items: items.slice(0, Math.min(4, boundedLimit)), truncated: true };
+        }, context ? { context } : {}, 12000);
     }
     async orient(principal, maxChars = 3000) {
         const boundedChars = Math.min(Math.max(Number(maxChars) || 3000, 512), 20000);

@@ -172,6 +172,14 @@ action itself. `resurface_wiki_knowledge` is a small deterministic daily
 rotation of durable notes for Zettelkasten-style rediscovery; it is derived,
 read-only, and does not create a recommendation queue. Read selected notes and
 check their current revision before relying on either view.
+`wiki.resurface` verifies selected summary fingerprints; a stale or absent
+summary yields a short current-body excerpt instead. `wiki.retention_queue`
+preserves legal-hold/preserve-until precedence and exposes only visible
+replacement targets with revisions. Both filter hidden candidates before totals,
+revalidate selected revisions, and bound the whole response. Follow the exact
+`nextAction` read when prose is cut. If `retry.reuseOriginalArguments` is true,
+repeat the original endpoint request with `retry.overrides`; do not drop or
+truncate the original context. These reports never perform disposition.
 
 Graph health also reports epistemic consistency and the source-to-knowledge
 flow: an answered question without `answers_questions`, a resolved

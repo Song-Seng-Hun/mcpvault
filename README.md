@@ -497,6 +497,18 @@ ordinary knowledge remains informational rather than becoming a false task gate.
 `resurface_wiki_knowledge`
 returns a small deterministic daily rotation of durable notes, so Zettelkasten
 style rediscovery does not require an ever-growing queue or permanent cache.
+Rediscovery (`wiki.resurface`) and preservation (`wiki.retention_queue`) filter
+hidden notes before counting, check current revisions, and retain only the
+requested top candidates. Selected rediscovery notes include a verified summary
+or a current-body excerpt; obsolete summaries are not recycled. Preservation
+keeps legal holds and preserve-until restrictions ahead of disposition advice,
+and resolves replacement links only to visible notes with their own revisions.
+Hidden/non-referenceable alias matches do not create false ambiguity. A
+replacement changed, deleted, or hidden during lookup is omitted from the
+final report rather than paired with an obsolete revision.
+Their complete responses fit `maxChars`. Small responses preserve an exact
+`notes.read` action; if even a long path and ranking context cannot fit, follow
+`retry.overrides` on the original request with its original arguments/context.
 Both are bounded and read-only: read the returned notes and check their current
 revision before acting. Graph health also reports missing evidence for resolved
 questions/hypotheses/assumptions, literature without an immutable source, and
