@@ -799,8 +799,8 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_synthesis_candidates',
-      description: 'Find bounded authored clusters of durable notes that may merit a model, argument, or decision synthesis. It groups by one explicit primary MOC/moc, project, domain, or subject term; returns current input revisions, counterpoints, existing-synthesis coverage, and a revision-safe non-mutating plan. Coverage and contradiction links use the same visible path/title/alias/preferred-term/stable-ID/relative-path resolver as the graph. It never clusters by folder/vector similarity, merges originals, guesses ambiguity, or treats synthesis as truth.',
-      inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 30, default: 10 }, maxChars: { type: 'integer', minimum: 768, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
+      description: 'Find bounded authored clusters of durable notes that may merit a model, argument, or decision synthesis. It groups by one explicit primary MOC/moc, project, domain, or subject term; returns current input revisions, counterpoints, existing-synthesis coverage, and a revision-safe non-mutating plan. Coverage and contradiction links use the same visible path/title/alias/preferred-term/stable-ID/relative-path resolver as the graph. Pass a pulse-returned focusPath to reopen that exact stateless candidate. It never clusters by folder/vector similarity, merges originals, guesses ambiguity, or treats synthesis as truth.',
+      inputSchema: { type: 'object', properties: { focusPath: { type: 'string', maxLength: 1024, description: 'Optional visible input-note path returned by an idle pulse; keeps the same synthesis candidate first after a stateless round trip' }, limit: { type: 'integer', minimum: 1, maximum: 30, default: 10 }, maxChars: { type: 'integer', minimum: 768, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
     },
     {
       name: 'get_wiki_summary_candidates',

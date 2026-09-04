@@ -19,7 +19,7 @@ export const WIKI_POLICY_TOPICS = [
 ] as const;
 
 export type WikiPolicyTopicId = typeof WIKI_POLICY_TOPICS[number];
-export const WIKI_POLICY_VERSION = 12;
+export const WIKI_POLICY_VERSION = 13;
 
 type WikiPolicyTopic = {
   purpose: string;
@@ -92,6 +92,7 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
       'Use note_kind and lifecycle for knowledge state; keep actionable-note task_status separate from epistemic or knowledge lifecycle.',
       'Use question, hypothesis, assumption, experiment, decision, and negative knowledge for different epistemic jobs instead of flattening them into generic notes.',
       'Summaries, key points, highlights, and generated syntheses are projections or interpretations; preserve the full body and their source revision/fingerprint.',
+      'When direct obligations and concrete repair are empty, get_agent_pulse may surface one bounded synthesis opportunity. Follow wiki.synthesis_candidates only across an authored MOC, project, domain, or subject boundary; folder or vector similarity never creates a synthesis unit.',
     ],
     routes: ['mcp.publish_knowledge', 'wiki.note_template', 'wiki.projection_update', 'wiki.relation_set', 'wiki.reciprocal_link', 'notes.move_preview', 'notes.move', 'wiki.synthesis_candidates', 'wiki.decision_record'],
     avoid: ['copying one concept into several folders', 'treating a summary or relation as truth', 'merging from similarity alone'],

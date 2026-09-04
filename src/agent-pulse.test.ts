@@ -45,6 +45,7 @@ function unitPulseService(options: {
   onNotificationList?: (params: Record<string, unknown>) => void;
   maintenanceGeneration?: () => number;
   reviewPacket: () => Promise<Record<string, unknown>>;
+  synthesisCandidates?: (...args: any[]) => Promise<Record<string, unknown>>;
 }) {
   const activePosts = options.activePosts || [];
   const notifications = options.notifications || [];
@@ -64,6 +65,7 @@ function unitPulseService(options: {
       inbox: async () => ({ items: [], total: 0, truncated: false }),
       readModelGeneration: options.maintenanceGeneration || (() => 0),
       reviewPacket: options.reviewPacket,
+      synthesisCandidates: options.synthesisCandidates || (async () => ({ items: [], total: 0, truncated: false })),
     } as any,
   );
 }
@@ -761,6 +763,132 @@ test('sequential idle pulses reuse one cached maintenance plan', async () => {
 
   expect(reviewPacketCalls).toBe(1);
   expect(second.nextAction).toEqual(first.nextAction);
+});
+
+test('a clean idle pulse surfaces one bounded authored synthesis opportunity and caches it', async () => {
+  const path = 'Knowledge/Synthesis input.md';
+  const revision = '8'.repeat(64);
+  let synthesisCalls = 0;
+  const pulse = unitPulseService({
+    reviewPacket: async () => ({}),
+    synthesisCandidates: async (_principal, limit, maxChars, options) => {
+      synthesisCalls += 1;
+      expect(limit).toBe(8);
+      expect(maxChars).toBe(4000);
+      expect(options.attentionKey).toContain('synthesis-pulse');
+      return {
+        items: [{
+          basis: { kind: 'moc', value: 'Knowledge/MOCs/Retrieval' },
+          score: 12,
+          mode: 'create_synthesis',
+          readOrder: [{ path, revision }],
+        }],
+        total: 1,
+        truncated: false,
+        attentionRouting: { mode: 'stateless_rendezvous', candidateBand: 1, exclusive: false },
+      };
+    },
+  });
+  const principal = { accountId: 'synthesis-pulse', modelId: 'codex', agentId: 'synthesis-worker', commandCenterId: 'local', role: 'agent' } as any;
+
+  const first = await pulse.get({ principal });
+  const second = await pulse.get({ principal });
+
+  expect(synthesisCalls).toBe(1);
+  expect(first).toMatchObject({
+    nextAction: {
+      tool: 'wiki.synthesis_candidates',
+      arguments: { focusPath: path, limit: 1, maxChars: 4000 },
+      target: path,
+      selectedRevision: revision,
+    },
+    signals: { maintenanceAvailable: false, synthesisAvailable: true, synthesisRouting: 'stateless_rendezvous' },
+    context: [expect.objectContaining({ kind: 'wiki_synthesis', selected: { path, revision, reason: 'knowledge_cluster_needs_synthesis' } })],
+  });
+  expect(second.nextAction).toEqual(first.nextAction);
+});
+
+test('a Wiki generation change invalidates a cached synthesis opportunity immediately', async () => {
+  let generation = 10;
+  let synthesisCalls = 0;
+  const revision = '6'.repeat(64);
+  const pulse = unitPulseService({
+    maintenanceGeneration: () => generation,
+    reviewPacket: async () => ({}),
+    synthesisCandidates: async () => {
+      synthesisCalls += 1;
+      return {
+        items: [{
+          basis: { kind: 'domain', value: `generation-${generation}` },
+          score: 12,
+          mode: 'create_synthesis',
+          readOrder: [{ path: `Knowledge/Synthesis generation ${generation}.md`, revision }],
+        }],
+        total: 1,
+      };
+    },
+  });
+  const principal = { accountId: 'synthesis-generation', modelId: 'codex', role: 'model' } as any;
+
+  const first = await pulse.get({ principal });
+  generation += 1;
+  const second = await pulse.get({ principal });
+
+  expect(synthesisCalls).toBe(2);
+  expect(first.nextAction).toMatchObject({ target: 'Knowledge/Synthesis generation 10.md' });
+  expect(second.nextAction).toMatchObject({ target: 'Knowledge/Synthesis generation 11.md' });
+});
+
+test('concrete maintenance still outranks and suppresses synthesis projection work', async () => {
+  let synthesisCalls = 0;
+  const path = 'Knowledge/Maintenance first.md';
+  const revision = '7'.repeat(64);
+  const pulse = unitPulseService({
+    reviewPacket: async () => ({
+      curationPlan: {
+        selected: { path, revision, reason: 'broken_link' },
+        inspect: { endpointId: 'notes.read', arguments: { path } },
+      },
+    }),
+    synthesisCandidates: async () => {
+      synthesisCalls += 1;
+      return { items: [], total: 0 };
+    },
+  });
+
+  const result = await pulse.get({ principal: { accountId: 'maintenance-first', modelId: 'codex', role: 'model' } as any });
+
+  expect(synthesisCalls).toBe(0);
+  expect(result).toMatchObject({
+    nextAction: { tool: 'notes.read', target: path, selectedRevision: revision },
+    signals: { maintenanceAvailable: true },
+    context: [expect.objectContaining({ kind: 'wiki_maintenance' })],
+  });
+});
+
+test('a malformed synthesis projection is ignored and idle routing falls through safely', async () => {
+  const pulse = unitPulseService({
+    activePosts: [{ slug: 'safe-synthesis-fallback', category: 'discussion' }],
+    reviewPacket: async () => ({}),
+    synthesisCandidates: async () => ({
+      items: [{
+        basis: { kind: 'domain', value: 'retrieval' },
+        score: 12,
+        mode: 'create_synthesis',
+        readOrder: [{ path: 'Knowledge/Missing revision.md' }],
+      }],
+      total: 1,
+    }),
+  });
+
+  const result = await pulse.get({ principal: { accountId: 'malformed-synthesis', modelId: 'codex', role: 'model' } as any });
+
+  expect(result).toMatchObject({
+    nextAction: { tool: 'community.post_read', arguments: { slug: 'safe-synthesis-fallback' } },
+    signals: { maintenanceAvailable: false },
+  });
+  expect(result.signals).not.toHaveProperty('synthesisAvailable');
+  expect(result.context).not.toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'wiki_synthesis' })]));
 });
 
 test('a Wiki read-model generation change invalidates the cached maintenance plan immediately', async () => {

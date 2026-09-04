@@ -20,7 +20,7 @@ describe('progressive Wiki policy', () => {
   });
 
   test('teaches bounded authority shelves and distinct relation strengths progressively', () => {
-    expect(WIKI_POLICY_VERSION).toBe(12);
+    expect(WIKI_POLICY_VERSION).toBe(13);
     const retrieval = getWikiPolicyTopic('retrieval', 2000);
     const knowledge = getWikiPolicyTopic('knowledge', 2000);
     expect(retrieval.routes).toEqual(expect.arrayContaining(['wiki.authority_map']));
@@ -39,6 +39,15 @@ describe('progressive Wiki policy', () => {
     expect(guidance).toContain('open Markdown task');
     expect(guidance).toContain('automatically');
     expect(work.routes).toEqual(expect.arrayContaining(['mcp.list_tasks', 'wiki.review_packet']));
+  });
+
+  test('surfaces authored synthesis as bounded idle pull work', () => {
+    const knowledge = getWikiPolicyTopic('knowledge', 2400);
+    const rules = (knowledge.rules as string[]).join(' ');
+    expect(rules).toContain('get_agent_pulse');
+    expect(rules).toContain('synthesis');
+    expect(rules).toContain('vector');
+    expect(knowledge.routes).toEqual(expect.arrayContaining(['wiki.synthesis_candidates']));
   });
 
   test('advertises topics and rejects guesses', () => {

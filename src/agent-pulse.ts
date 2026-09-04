@@ -81,7 +81,8 @@ interface CompactMaintenanceFollowUpAction extends CompactMaintenanceAction {
   instruction?: string;
 }
 
-interface CompactMaintenancePlan {
+interface CompactIdleWikiPlan {
+  planType: 'maintenance' | 'synthesis';
   selected: { path: string; revision: string; reason?: string };
   inspect: CompactMaintenanceAction;
   followUpPlan?: CompactMaintenanceFollowUpAction;
@@ -138,7 +139,7 @@ function compactMaintenanceAction(input: unknown, includeFollowUpFields: boolean
   return JSON.stringify(compact).length <= maxChars ? compact : undefined;
 }
 
-function compactMaintenanceRouting(input: unknown): CompactMaintenancePlan['routing'] {
+function compactMaintenanceRouting(input: unknown): CompactIdleWikiPlan['routing'] {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
   const source = input as Record<string, unknown>;
   if (source.mode !== 'stateless_rendezvous'
@@ -153,7 +154,7 @@ function compactMaintenanceRouting(input: unknown): CompactMaintenancePlan['rout
   };
 }
 
-function compactMaintenancePlan(packet: unknown, maxChars: number): CompactMaintenancePlan | undefined {
+function compactMaintenancePlan(packet: unknown, maxChars: number): CompactIdleWikiPlan | undefined {
   if (!packet || typeof packet !== 'object' || Array.isArray(packet)) return undefined;
   const source = packet as Record<string, unknown>;
   const curationPlan = source.curationPlan;
@@ -178,7 +179,8 @@ function compactMaintenancePlan(packet: unknown, maxChars: number): CompactMaint
   const followUpPlan = compactMaintenanceAction(followUpSource, true, maxChars);
   if (followUpSource && !followUpPlan) return undefined;
   const routing = compactMaintenanceRouting(source.attentionRouting);
-  const compactPlan: CompactMaintenancePlan = {
+  const compactPlan: CompactIdleWikiPlan = {
+    planType: 'maintenance',
     selected: {
       path: selectedSource.path,
       revision: selectedSource.revision,
@@ -191,6 +193,36 @@ function compactMaintenancePlan(packet: unknown, maxChars: number): CompactMaint
   return JSON.stringify(compactPlan).length <= maxChars ? compactPlan : undefined;
 }
 
+function compactSynthesisPlan(packet: unknown, maxChars: number): CompactIdleWikiPlan | undefined {
+  if (!packet || typeof packet !== 'object' || Array.isArray(packet)) return undefined;
+  const source = packet as Record<string, unknown>;
+  if (!Array.isArray(source.items) || source.items.length === 0) return undefined;
+  const candidate = source.items[0];
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return undefined;
+  const readOrder = (candidate as Record<string, unknown>).readOrder;
+  if (!Array.isArray(readOrder) || readOrder.length === 0) return undefined;
+  const anchor = readOrder[0];
+  if (!anchor || typeof anchor !== 'object' || Array.isArray(anchor)) return undefined;
+  const locator = anchor as Record<string, unknown>;
+  if (typeof locator.path !== 'string'
+    || locator.path.length === 0
+    || locator.path.length > MAINTENANCE_EXECUTABLE_STRING_MAX_CHARS
+    || typeof locator.revision !== 'string'
+    || locator.revision.length === 0
+    || locator.revision.length > MAINTENANCE_EXECUTABLE_STRING_MAX_CHARS) return undefined;
+  const routing = compactMaintenanceRouting(source.attentionRouting);
+  const plan: CompactIdleWikiPlan = {
+    planType: 'synthesis',
+    selected: { path: locator.path, revision: locator.revision, reason: 'knowledge_cluster_needs_synthesis' },
+    inspect: {
+      endpointId: endpointIdForTool('get_wiki_synthesis_candidates'),
+      arguments: { focusPath: locator.path, limit: 1, maxChars: MAINTENANCE_PACKET_MAX_CHARS },
+    },
+    ...(routing && { routing }),
+  };
+  return JSON.stringify(plan).length <= maxChars ? plan : undefined;
+}
+
 /**
  * Produces one bounded, actionable community pulse without adding a second
  * index or history database. The caller still decides whether to act.
@@ -199,7 +231,7 @@ export class AgentPulseService {
   private readonly inFlight = new Map<string, Promise<Record<string, unknown>>>();
   // Cached plans are advisory only. A stale entry can cause redundant inspect
   // suggestions or an expectedRevision conflict; the pulse never mutates.
-  private readonly maintenanceCache = new Map<string, { expiresAt: number; generation: number | undefined; plan: CompactMaintenancePlan | undefined }>();
+  private readonly idleWikiPlanCache = new Map<string, { expiresAt: number; generation: number | undefined; plan: CompactIdleWikiPlan | undefined }>();
 
   constructor(
     private readonly notifications: NotificationService,
@@ -226,7 +258,7 @@ export class AgentPulseService {
     }
   }
 
-  private maintenanceCacheKey(principal: ScopePrincipal): string {
+  private idleWikiPlanCacheKey(principal: ScopePrincipal): string {
     return JSON.stringify({
       commandCenterId: principal.commandCenterId || '',
       accountId: principal.accountId || '',
@@ -235,33 +267,37 @@ export class AgentPulseService {
     });
   }
 
-  private rememberMaintenancePlan(key: string, generation: number | undefined, plan: CompactMaintenancePlan | undefined, now: number): void {
-    for (const [cachedKey, cached] of this.maintenanceCache) {
-      if (cached.expiresAt <= now) this.maintenanceCache.delete(cachedKey);
+  private rememberIdleWikiPlan(key: string, generation: number | undefined, plan: CompactIdleWikiPlan | undefined, now: number): void {
+    for (const [cachedKey, cached] of this.idleWikiPlanCache) {
+      if (cached.expiresAt <= now) this.idleWikiPlanCache.delete(cachedKey);
     }
-    this.maintenanceCache.delete(key);
-    while (this.maintenanceCache.size >= MAINTENANCE_CACHE_MAX_ENTRIES) {
-      const oldest = this.maintenanceCache.keys().next();
+    this.idleWikiPlanCache.delete(key);
+    while (this.idleWikiPlanCache.size >= MAINTENANCE_CACHE_MAX_ENTRIES) {
+      const oldest = this.idleWikiPlanCache.keys().next();
       if (oldest.done) break;
-      this.maintenanceCache.delete(oldest.value);
+      this.idleWikiPlanCache.delete(oldest.value);
     }
-    this.maintenanceCache.set(key, { expiresAt: now + MAINTENANCE_CACHE_TTL_MS, generation, plan });
+    this.idleWikiPlanCache.set(key, { expiresAt: now + MAINTENANCE_CACHE_TTL_MS, generation, plan });
   }
 
-  private async maintenancePlanFor(principal: ScopePrincipal): Promise<CompactMaintenancePlan | undefined> {
-    const key = this.maintenanceCacheKey(principal);
+  private async idleWikiPlanFor(principal: ScopePrincipal): Promise<CompactIdleWikiPlan | undefined> {
+    const key = this.idleWikiPlanCacheKey(principal);
     const now = Date.now();
     const generation = this.llmWiki?.readModelGeneration();
-    const cached = this.maintenanceCache.get(key);
+    const cached = this.idleWikiPlanCache.get(key);
     if (cached && cached.expiresAt > now && cached.generation === generation) {
-      this.maintenanceCache.delete(key);
-      this.maintenanceCache.set(key, cached);
+      this.idleWikiPlanCache.delete(key);
+      this.idleWikiPlanCache.set(key, cached);
       return cached.plan;
     }
-    if (cached) this.maintenanceCache.delete(key);
+    if (cached) this.idleWikiPlanCache.delete(key);
     const packet = await this.llmWiki?.reviewPacket(principal, 1, MAINTENANCE_PACKET_MAX_CHARS, { attentionKey: key });
-    const plan = compactMaintenancePlan(packet, MAINTENANCE_PACKET_MAX_CHARS);
-    this.rememberMaintenancePlan(key, generation, plan, now);
+    let plan = compactMaintenancePlan(packet, MAINTENANCE_PACKET_MAX_CHARS);
+    if (!plan && this.llmWiki) {
+      const synthesis = await this.llmWiki.synthesisCandidates(principal, 8, MAINTENANCE_PACKET_MAX_CHARS, { attentionKey: key });
+      plan = compactSynthesisPlan(synthesis, MAINTENANCE_PACKET_MAX_CHARS);
+    }
+    this.rememberIdleWikiPlan(key, generation, plan, now);
     return plan;
   }
 
@@ -342,13 +378,13 @@ export class AgentPulseService {
       || reviewQueue.items.length > 0
       || wikiInbox.items.length > 0
       || Boolean(postSummary.feedbackPosts?.length || postSummary.forumPosts?.length);
-    let maintenancePlan: ReturnType<typeof compactMaintenancePlan>;
+    let idleWikiPlan: CompactIdleWikiPlan | undefined;
     if (!hasDirectPriority) {
       try {
-        maintenancePlan = await this.maintenancePlanFor(principal);
+        idleWikiPlan = await this.idleWikiPlanFor(principal);
       } catch {
-        // Maintenance is optional pull work. Keep the ordinary community
-        // fallback available when its advisory projection cannot be built.
+        // Wiki curation is optional pull work. Keep the ordinary community
+        // fallback available when an advisory projection cannot be built.
       }
     }
     let nextAction: Record<string, unknown>;
@@ -426,15 +462,17 @@ export class AgentPulseService {
       reason = priorityPost.category === 'feedback'
         ? 'An active MCPVault feedback report is available. Read its reproduction details and source locations, then propose or implement a focused improvement if you can verify it.'
         : 'An agent is blocked and asking the community for help. Read the attempted approach and provide a precise, evidence-based answer or next experiment.';
-    } else if (maintenancePlan) {
+    } else if (idleWikiPlan) {
       nextAction = {
-        tool: maintenancePlan.inspect.endpointId,
-        ...(maintenancePlan.inspect.arguments && { arguments: maintenancePlan.inspect.arguments }),
-        target: maintenancePlan.selected.path,
-        selectedRevision: maintenancePlan.selected.revision,
-        ...(maintenancePlan.followUpPlan && { followUpPlan: maintenancePlan.followUpPlan }),
+        tool: idleWikiPlan.inspect.endpointId,
+        ...(idleWikiPlan.inspect.arguments && { arguments: idleWikiPlan.inspect.arguments }),
+        target: idleWikiPlan.selected.path,
+        selectedRevision: idleWikiPlan.selected.revision,
+        ...(idleWikiPlan.followUpPlan && { followUpPlan: idleWikiPlan.followUpPlan }),
       };
-      reason = 'No direct obligation is waiting. Inspect one bounded Wiki maintenance target before pulling optional community work. Equal-priority work is deterministically distributed to reduce duplicate effort, but this is advisory rather than an exclusive lock; re-read the selected revision before any mutation.';
+      reason = idleWikiPlan.planType === 'synthesis'
+        ? 'No direct obligation or concrete repair is waiting. Open one authored Wiki synthesis opportunity and follow its bounded revision-safe plan only when the inputs, evidence, and counterpoints justify a larger model or argument.'
+        : 'No direct obligation is waiting. Inspect one bounded Wiki maintenance target before pulling optional community work. Equal-priority work is deterministically distributed to reduce duplicate effort, but this is advisory rather than an exclusive lock; re-read the selected revision before any mutation.';
     } else if (workshops.workshops.length > 0) {
       const workshop = workshops.workshops[0] as Record<string, any>;
       nextAction = {
@@ -496,8 +534,10 @@ export class AgentPulseService {
         activeIdeas: activeIdeas.length,
         knowledgeReviewQueue: reviewQueue.total,
         wikiInbox: wikiInbox.total,
-        maintenanceAvailable: Boolean(maintenancePlan),
-        ...(maintenancePlan?.routing && { maintenanceRouting: maintenancePlan.routing.mode }),
+        maintenanceAvailable: idleWikiPlan?.planType === 'maintenance',
+        ...(idleWikiPlan?.planType === 'maintenance' && idleWikiPlan.routing && { maintenanceRouting: idleWikiPlan.routing.mode }),
+        ...(idleWikiPlan?.planType === 'synthesis' && { synthesisAvailable: true }),
+        ...(idleWikiPlan?.planType === 'synthesis' && idleWikiPlan.routing && { synthesisRouting: idleWikiPlan.routing.mode }),
         level: reputation.level,
         xp: reputation.xp,
       },
@@ -508,7 +548,7 @@ export class AgentPulseService {
         ...wikiInbox.items.slice(0, Math.min(2, limit)).map(note => ({ kind: 'wiki_inbox', note })),
         ...(postSummary.feedbackPosts || []).slice(0, Math.min(1, limit)).map(post => ({ kind: 'feedback', ...post })),
         ...(postSummary.forumPosts || []).slice(0, Math.min(1, limit)).map(post => ({ kind: 'forum', ...post })),
-        ...(maintenancePlan ? [{ kind: 'wiki_maintenance', ...maintenancePlan }] : []),
+        ...(idleWikiPlan ? [{ ...idleWikiPlan, kind: idleWikiPlan.planType === 'synthesis' ? 'wiki_synthesis' : 'wiki_maintenance' }] : []),
         ...workshops.workshops.slice(0, Math.min(2, limit)).map(workshop => ({ kind: 'workshop', ...workshop })),
         ...activeIdeas.slice(0, Math.min(2, limit)).map(idea => ({ kind: 'idea', ...idea })),
         ...postSummary.activePosts

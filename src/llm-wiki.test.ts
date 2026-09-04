@@ -6,6 +6,10 @@ import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createServer, getServerRuntime } from './createServer.js';
 import { createHash } from 'node:crypto';
 import { getWikiPolicyTopic, WIKI_POLICY_TOPICS, WIKI_POLICY_VERSION } from './wiki-policy.js';
+import { FileSystemService } from './filesystem.js';
+import { ScopeAccessPolicy } from './scope-access.js';
+import { ReferenceService } from './references.js';
+import { LlmWikiService } from './llm-wiki.js';
 
 let vault: string;
 
@@ -847,6 +851,46 @@ test('drillable facets and synthesis candidates close the authored Distill to Ex
     await client.close();
     await server.close();
   }
+});
+
+test('idle synthesis routing distributes tied authored clusters and focusPath reopens the exact candidate', async () => {
+  await mkdir(join(vault, 'Knowledge'), { recursive: true });
+  for (const [name, domain] of [
+    ['Alpha one', 'Alpha'], ['Alpha two', 'Alpha'],
+    ['Beta one', 'Beta'], ['Beta two', 'Beta'],
+  ]) {
+    await writeFile(join(vault, 'Knowledge', `${name}.md`), [
+      '---', 'llm_wiki_type: knowledge', 'note_kind: atomic', 'lifecycle: evergreen',
+      `domain: ${domain}`, '---', `# ${name}`, '', 'A compact authored input.',
+    ].join('\n'));
+  }
+  const fileSystem = new FileSystemService(vault);
+  const access = new ScopeAccessPolicy();
+  const service = new LlmWikiService(fileSystem, access, new ReferenceService(fileSystem, access));
+  const groupKeys = ['domain:alpha', 'domain:beta'];
+  const keyFor = (wanted: string) => {
+    for (let index = 0; index < 100; index += 1) {
+      const key = `agent-${index}`;
+      const winner = [...groupKeys].sort((left, right) => {
+        const leftScore = createHash('sha256').update(`${key}\0${left}`).digest('hex');
+        const rightScore = createHash('sha256').update(`${key}\0${right}`).digest('hex');
+        return rightScore.localeCompare(leftScore) || left.localeCompare(right);
+      })[0];
+      if (winner === wanted) return key;
+    }
+    throw new Error(`No deterministic rendezvous key found for ${wanted}`);
+  };
+
+  const alpha = await service.synthesisCandidates(undefined, 8, 12000, { attentionKey: keyFor('domain:alpha') });
+  const beta = await service.synthesisCandidates(undefined, 8, 12000, { attentionKey: keyFor('domain:beta') });
+
+  expect(alpha).toMatchObject({ attentionRouting: { mode: 'stateless_rendezvous', candidateBand: 2, exclusive: false } });
+  expect(beta).toMatchObject({ attentionRouting: { mode: 'stateless_rendezvous', candidateBand: 2, exclusive: false } });
+  expect((alpha.items as any[])[0].basis).toEqual({ kind: 'domain', value: 'Alpha' });
+  expect((beta.items as any[])[0].basis).toEqual({ kind: 'domain', value: 'Beta' });
+
+  const focused = await service.synthesisCandidates(undefined, 1, 12000, { focusPath: 'Knowledge/Beta one.md' });
+  expect((focused.items as any[])[0]).toMatchObject({ basis: { kind: 'domain', value: 'Beta' } });
 });
 
 test('dependency-aware MOC learning paths preserve authorship and diagnose prerequisite order safely', async () => {

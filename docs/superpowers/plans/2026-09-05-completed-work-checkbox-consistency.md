@@ -274,7 +274,7 @@ and `.mcpvault/` remain untracked and unstaged.
 Commit the tracked build output and checked plan without staging local runtime
 directories.
 
-- [ ] **Step 6: Push and verify only the user fork**
+- [x] **Step 6: Push and verify only the user fork**
 
 Verify `origin` is `https://github.com/Song-Seng-Hun/mcpvault.git`, push
 `main`, and compare `git ls-remote origin refs/heads/main` with `git rev-parse

@@ -13392,7 +13392,7 @@ export class LlmWikiService {
      * semantic clustering endpoint: MOC/project/domain/subject metadata is the
      * authored boundary, and the returned plan preserves every input note.
      */
-    async synthesisCandidates(principal, limit = 10, maxChars = 7000) {
+    async synthesisCandidates(principal, limit = 10, maxChars = 7000, options = {}) {
         const boundedLimit = Math.min(Math.max(Number(limit) || 10, 1), 30);
         const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 768), 16000);
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
@@ -13470,7 +13470,7 @@ export class LlmWikiService {
             else
                 group.truncated = true;
         }
-        const ranked = [...groups.values()].flatMap(group => {
+        let ranked = [...groups.values()].flatMap(group => {
             if (group.inputTotal < 2 || group.inputs.length < 2)
                 return [];
             const inputByPhysical = new Map(group.inputs.map(item => [normalizePath(item.physicalPath).toLocaleLowerCase(), item]));
@@ -13523,6 +13523,31 @@ export class LlmWikiService {
                 + (existing ? 1 : 3);
             return [{ group, existing, uncovered, tensionPairs: [...tensionPairs], counterpoints, openQuestionCount, evidenceReadyInputs, score }];
         }).sort((left, right) => right.score - left.score || right.uncovered.length - left.uncovered.length || left.group.key.localeCompare(right.group.key));
+        const focusPath = typeof options.focusPath === 'string' && options.focusPath.trim()
+            ? options.focusPath.trim().toLocaleLowerCase()
+            : undefined;
+        const focusedCandidate = focusPath
+            ? ranked.find(candidate => candidate.group.inputs.some(input => input.path.toLocaleLowerCase() === focusPath))
+            : undefined;
+        if (focusedCandidate)
+            ranked = [focusedCandidate, ...ranked.filter(candidate => candidate !== focusedCandidate)];
+        const attentionKey = !focusedCandidate && typeof options.attentionKey === 'string' && options.attentionKey.length > 0
+            ? options.attentionKey
+            : undefined;
+        const topScore = ranked[0]?.score;
+        const candidateBand = topScore === undefined ? [] : ranked.filter(candidate => candidate.score === topScore);
+        if (attentionKey && candidateBand.length > 1) {
+            let selected = candidateBand[0];
+            let selectedScore = hash(`${attentionKey}\0${selected.group.key}`);
+            for (const candidate of candidateBand.slice(1)) {
+                const score = hash(`${attentionKey}\0${candidate.group.key}`);
+                if (score > selectedScore || (score === selectedScore && candidate.group.key.localeCompare(selected.group.key) < 0)) {
+                    selected = candidate;
+                    selectedScore = score;
+                }
+            }
+            ranked = [selected, ...ranked.filter(candidate => candidate !== selected)];
+        }
         const items = [];
         for (const candidate of ranked.slice(0, boundedLimit)) {
             const materialize = async (member) => {
@@ -13618,6 +13643,7 @@ export class LlmWikiService {
             total: ranked.length,
             truncated: scanTruncated || ranked.length > items.length,
             groupingRule: 'One primary authored cue per note: primary MOC/moc, then project, domain, or subject term. Folder proximity and vector similarity never create a synthesis candidate.',
+            ...(attentionKey && candidateBand.length > 0 && { attentionRouting: { mode: 'stateless_rendezvous', candidateBand: candidateBand.length, exclusive: false } }),
             generatedAt: now(),
         };
     }
