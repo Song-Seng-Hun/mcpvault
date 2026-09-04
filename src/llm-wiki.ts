@@ -1195,7 +1195,7 @@ recompute its fingerprint; read \`get_wiki_property_contract\` for prose guidanc
 4. Mark uncertainty explicitly with \`confidence\` and \`knowledge_status\`.
 5. Record contradictions and unsupported claims as Wiki issues; resolve them only with a reason.
 6. Use \`get_wiki_catalog\` as the live index and \`lint_wiki\` as the deterministic quality gate.
-7. Use discussions for peer argument and Git commits for coherent accepted changes.
+7. Use \`community.post\` for new peer arguments, \`community.comment\` for replies, and \`community.status\` for workflow status; use Git commits for coherent accepted changes. Legacy \`_collaboration/discussions/*.md\` remains read-only history through \`notes.read\` and explicit knowledge promotion; never migrate or mutate it automatically.
 8. Start a new session with \`orient_wiki\`, execute exactly its one primary action, then stop tool use and answer unless the current task explicitly needs another step. The public welcome and schema are progressive resources, not a preload checklist.
 9. Write claims as Obsidian Markdown; resolvable body wikilinks are automatically added to \`references\`. Use \`read_references\` to follow them without loading unrelated context.
 
@@ -13444,6 +13444,10 @@ export class LlmWikiService {
     const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 16000);
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
     const candidates: Array<Record<string, any> & { score: number; excerpt: string }> = [];
+    const legacyStatuses = new Set(['open', 'resolved', 'rejected', 'superseded']);
+    const isLegacyDiscussion = (frontmatter: Record<string, unknown>) => frontmatter.mcpvault_type === 'discussion'
+      && legacyStatuses.has(String(frontmatter.status || '').toLowerCase())
+      && !isModerationHidden(frontmatter);
     let total = 0;
     const addCandidate = (candidate: Record<string, any> & { score: number; excerpt: string }) => {
       candidates.push(candidate);
@@ -13489,7 +13493,7 @@ export class LlmWikiService {
       };
       // Keep the ranking pass metadata-only; hydrate bodies only for the
       // bounded winning page below.
-      addCandidate({ ...item, score, excerpt: '' });
+      addCandidate({ ...item, score, excerpt: '', metadataFingerprint: hash(JSON.stringify(note.frontmatter)) });
     }
     for await (const note of iterateNotes(this.fileSystem, { pathPrefix: 'Community/Tasks' }, canAccess)) {
       if (note.frontmatter.mcpvault_type !== 'agent_task' || String(note.frontmatter.status || '').toLowerCase() !== 'completed' || isModerationHidden(note.frontmatter)) continue;
@@ -13503,6 +13507,7 @@ export class LlmWikiService {
       addCandidate({
         path: this.access.toPublicPath(note.path),
         sourceType: 'completed_task',
+        metadataFingerprint: hash(JSON.stringify(note.frontmatter)),
         taskId,
         title: note.frontmatter.title || taskId,
         suggestedPath: `Knowledge/Task Lessons/${taskId}.md`,
@@ -13524,15 +13529,77 @@ export class LlmWikiService {
         },
       });
     }
+    for await (const note of iterateNotes(this.fileSystem, { pathPrefix: '_collaboration/discussions' }, canAccess)) {
+      if (!isLegacyDiscussion(note.frontmatter) || !this.access.canAccessPhysicalPath(note.path)) continue;
+      total += 1;
+      const status = String(note.frontmatter.status).toLowerCase();
+      // Retain only bounded metadata winners, including failed/superseded arguments.
+      addCandidate({
+        path: this.access.toPublicPath(note.path), sourceType: 'legacy_discussion',
+        score: 7 + (status === 'resolved' ? 2 : status === 'open' ? 0 : 1), excerpt: '',
+      });
+    }
     const items: Array<Record<string, unknown>> = [];
     let firstCompact: Record<string, unknown> | undefined;
-    for (const candidate of candidates) {
-      const source = await this.fileSystem.readNote(String(candidate.path));
+    for (let candidate of candidates) {
+      let physicalPath: string;
+      let source;
+      try {
+        physicalPath = this.access.resolveExternalPath(String(candidate.path), principal);
+        if (!canAccess(physicalPath)) { total -= 1; continue; }
+        source = await this.fileSystem.readNote(physicalPath);
+      } catch { total -= 1; continue; }
+      if (!canAccess(physicalPath) || isModerationHidden(source.frontmatter)) { total -= 1; continue; }
+      // Existing Community/task plans were constructed from the scan metadata.
+      // If that metadata changed, omit the stale plan until the next request.
+      if (candidate.metadataFingerprint && candidate.metadataFingerprint !== hash(JSON.stringify(source.frontmatter))) { total -= 1; continue; }
+      if (candidate.sourceType === 'legacy_discussion') {
+        if (!this.access.canAccessPhysicalPath(physicalPath) || !isLegacyDiscussion(source.frontmatter)) { total -= 1; continue; }
+        const fm = source.frontmatter;
+        const status = String(fm.status).toLowerCase();
+        const discussionId = boundedText(String(fm.discussion_id || posix.basename(physicalPath, '.md')), 120);
+        const title = boundedText(String(fm.title || discussionId), 200);
+        const stem = discussionId.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').replace(/^\.+$/, 'discussion');
+        const suggestedPath = `Knowledge/Community/${stem}.md`;
+        const referencePaths: string[] = [];
+        for (const raw of [
+          ...(typeof fm.subject_path === 'string' ? [fm.subject_path] : []),
+          ...manifestStringList(fm.evidence_paths, 20), ...manifestStringList(fm.references, 20),
+        ]) {
+          try {
+            const path = this.access.resolveExternalPath(raw, principal).replace(/\\/g, '/');
+            if (!path || path.length > 500 || path.startsWith('/') || path.includes(':') || path.split('/').some(part => part === '..' || part === '.')
+              || !canAccess(path) || !this.access.canAccessPhysicalPath(path)) continue;
+            if (!referencePaths.includes(path)) referencePaths.push(path);
+          } catch { /* Invalid or private references are not public navigation. */ }
+        }
+        // Only winning discussions reach this bounded lookup. Watcher lag must
+        // not expose references that have since been deleted or moderated.
+        const references = (await this.fileSystem.readNoteMetadata(referencePaths, path => canAccess(path) && this.access.canAccessPhysicalPath(path), { fresh: true }))
+          .filter(note => !isModerationHidden(note.frontmatter))
+          .slice(0, 20).map(note => this.access.toPublicPath(note.path));
+        candidate = {
+          ...candidate, discussionId, title, status, suggestedPath,
+          participants: manifestOrderedStringList(fm.participants, 20).map(value => boundedText(value, 120)),
+          references,
+          reasons: ['legacy_discussion_history', `discussion_${status}`, ...(references.length ? ['has_references'] : [])],
+          promotionPlan: {
+            inspect: { endpointId: endpointIdForTool('read_note'), arguments: { path: candidate.path, maxChars: 7000 } },
+            evidenceRule: 'A legacy discussion preserves arguments and attribution, not immutable factual evidence. Inspect original body Evidence lines; references here come only from safe frontmatter.',
+            then: [
+              { endpointId: endpointIdForTool('ingest_source'), requiredWhen: 'A factual claim lacks an existing immutable source snapshot.' },
+              { endpointId: endpointIdForTool('preflight_wiki_publish'), arguments: { path: suggestedPath, title } },
+              { endpointId: endpointIdForTool('publish_knowledge'), arguments: { path: suggestedPath, references: [candidate.path], expectedRevision: 'missing' }, requiredArguments: ['content', 'evidencePaths'] },
+            ],
+            verification: 'Re-read this revision, preserve disagreement and attribution, and verify claims against immutable evidence. Keep the legacy discussion unchanged as historical knowledge; never migrate it automatically.',
+          },
+        };
+      }
       let excerpt = candidate.excerpt;
-      if (!excerpt && candidate.sourceType === 'community_discussion') {
+      if (!excerpt && (candidate.sourceType === 'community_discussion' || candidate.sourceType === 'legacy_discussion')) {
         excerpt = boundedText(source.content, 360);
       }
-      const { score: _score, excerpt: _excerpt, ...item } = candidate;
+      const { score: _score, excerpt: _excerpt, metadataFingerprint: _metadataFingerprint, ...item } = candidate;
       const bounded = { ...item, revision: source.revision, excerpt };
       firstCompact ||= {
         path: item.path,
@@ -13540,6 +13607,7 @@ export class LlmWikiService {
         sourceType: item.sourceType,
         ...(item.slug && { slug: item.slug }),
         ...(item.taskId && { taskId: item.taskId }),
+        ...(item.discussionId && { discussionId: item.discussionId, status: item.status }),
         title: item.title,
         reasons: Array.isArray(item.reasons) ? item.reasons.slice(0, 4) : [],
         nextAction: item.promotionPlan?.inspect,
@@ -13553,7 +13621,14 @@ export class LlmWikiService {
     if (JSON.stringify(result).length <= boundedChars && (items.length > 0 || !firstCompact)) return result;
     const compact = { items: firstCompact ? [firstCompact] : [], total, truncated: true };
     if (JSON.stringify(compact).length <= boundedChars) return compact;
-    return { total, ...(firstCompact && { path: firstCompact.path, revision: firstCompact.revision, nextAction: firstCompact.nextAction }), truncated: true };
+    const fallback = { total, ...(firstCompact && { path: firstCompact.path, revision: firstCompact.revision, nextAction: firstCompact.nextAction }), truncated: true };
+    if (JSON.stringify(fallback).length <= boundedChars) return fallback;
+    // Avoid duplicating a long path when only the executable continuation fits.
+    const continuation = { total, ...(firstCompact && { revision: firstCompact.revision, nextAction: firstCompact.nextAction }), truncated: true };
+    if (JSON.stringify(continuation).length <= boundedChars) return continuation;
+    const actionOnly = { total, ...(firstCompact && { nextAction: firstCompact.nextAction }), truncated: true };
+    if (JSON.stringify(actionOnly).length <= boundedChars) return actionOnly;
+    return { total, truncated: true };
   }
 
   async summaryCandidates(principal?: ScopePrincipal, limit = 10, maxChars = 6000) {

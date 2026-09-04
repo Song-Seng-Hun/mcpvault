@@ -8,6 +8,40 @@
 
 **Tech Stack:** TypeScript, Node.js, MCP TypeScript SDK, Vitest, Obsidian Markdown/YAML, Git
 
+## Execution record (2026-09-05)
+
+The checklist below is the original implementation sketch. The actual
+integration uses these refinements:
+
+- Endpoint consolidation is committed in `2377f7c`; exact legacy vocabulary
+  routing was corrected in `391c931` so ordinary status/comment/post searches
+  keep broad results. The intermediate `86d8278` behavior is superseded.
+- The dispatcher alone does not cover indirect service writes or backlink
+  rewrites. `scope-access.ts` shares a legacy-only predicate with the canonical
+  filesystem mutation boundary. Ancestor moves and batch destinations are
+  preflighted, and backlink-updating moves abort before any dependent write.
+  Immutable source ingestion remains supported.
+- Boundary tests live in `src/legacy-discussion.test.ts`, using the fixed
+  `call_endpoint` executor rather than the illustrative old tool calls below.
+- Promotion revalidates winners, drops stale Community/task plans, preserves
+  legacy bytes and attribution, filters unsafe references, and bounds even
+  long-path fallback responses. It never turns arguments into factual evidence.
+- `src/rest-api.test.ts` verifies status changes and reads across both adapters,
+  including unauthenticated and stale-revision rejection.
+- Build passed. Focused integration: 5 files / 150 tests passed. The first full
+  run found only an AGENTS.md budget excess (9,224 characters versus 9,000);
+  guidance was compacted without raising the limit, and its regression passed.
+- Final full-suite verification passed: 50 files, 700 tests passed, one existing
+  Windows-only unsupported pipe-filename test skipped. `git diff --check` passed.
+  Independent Sol security review found one disclosure gap: referenced targets
+  used possibly stale indexed metadata. A failing regression reproduced hidden
+  and deleted references leaking; fresh exact-path metadata reads now bypass the
+  index only for these bounded winning-candidate references. All 13 focused
+  promotion cases and the rebuilt runtime pass. Final full-suite recheck passed:
+  50 files, 701 tests passed, one existing Windows-only skip. Delivery is a
+  source/test/documentation/dist commit to the user's origin/main only; no
+  historical Vault rewrite, upstream PR, package release, or new client setup.
+
 ---
 
 ### Task 1: Make Community the only discoverable discussion API
@@ -165,8 +199,10 @@ if (this.isLegacyDiscussionPath(normalized)) {
 }
 ```
 
-Because every generic path mutation already passes through
-`assertImmutableSourceBoundary`, no second policy implementation is added.
+Implementation correction: this assumption did not hold for indirect service
+writes and automatic backlink updates. Use the shared legacy-only predicate at
+the canonical filesystem mutation boundary as recorded above; do not duplicate
+the immutable-source rule there, because source ingestion legitimately writes.
 
 - [ ] **Step 4: Run the boundary and security tests**
 

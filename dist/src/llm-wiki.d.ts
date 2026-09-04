@@ -4603,8 +4603,6 @@ export declare class LlmWikiService {
         truncated: boolean;
     } | {
         total: number;
-        path?: unknown;
-        revision?: unknown;
         nextAction?: unknown;
         truncated: boolean;
     }>;

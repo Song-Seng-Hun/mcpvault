@@ -2664,17 +2664,27 @@ function trimPaths(args, access, principal) {
 }
 function assertImmutableSourceBoundary(toolName, args, access) {
     const paths = [];
-    if (['write_note', 'patch_note', 'delete_note', 'update_frontmatter', 'restore_note_revision', 'publish_knowledge', 'triage_wiki_note', 'clarify_wiki_note', 'distill_wiki_source', 'review_wiki_note', 'review_wiki_claim', 'record_wiki_recall'].includes(toolName)) {
+    if (['write_note', 'patch_note', 'delete_note', 'update_frontmatter', 'restore_note_revision', 'publish_knowledge', 'triage_wiki_note', 'clarify_wiki_note', 'distill_wiki_source', 'review_wiki_note', 'review_wiki_claim', 'record_wiki_recall', 'update_task', 'capture_wiki_note', 'publish_decision_record', 'update_wiki_projection', 'resolve_wiki_issue', 'export_wiki_base'].includes(toolName)) {
         if (typeof args.path === 'string')
             paths.push(args.path);
     }
     if (toolName === 'manage_tags' && args.operation !== 'list' && typeof args.path === 'string')
         paths.push(args.path);
     if (['move_note', 'move_file'].includes(toolName)) {
-        if (typeof args.oldPath === 'string')
-            paths.push(args.oldPath);
-        if (typeof args.newPath === 'string')
-            paths.push(args.newPath);
+        for (const path of [args.oldPath, args.newPath]) {
+            if (typeof path !== 'string')
+                continue;
+            access.assertLegacyDiscussionMutationAllowed(path, toolName, true);
+            paths.push(path);
+        }
+    }
+    // Canvas path is a read target; only outputPath is a mutation target.
+    if (toolName === 'export_wiki_canvas' && typeof args.outputPath === 'string')
+        paths.push(args.outputPath);
+    // These workflows derive their actual write paths beneath scopeUri. The
+    // filesystem guard also checks the resolved target, including default paths.
+    if (['initialize_llm_wiki', 'ingest_source', 'report_wiki_issue', 'propose_wiki_term_change'].includes(toolName) && typeof args.scopeUri === 'string') {
+        access.assertLegacyDiscussionMutationAllowed(args.scopeUri, toolName);
     }
     if (toolName === 'daily_note' && typeof args.folder === 'string')
         paths.push(args.folder);

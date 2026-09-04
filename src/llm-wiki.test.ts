@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -851,6 +851,199 @@ test('drillable facets and synthesis candidates close the authored Distill to Ex
     await client.close();
     await server.close();
   }
+});
+
+test('generated operating model directs peer argument to Community and preserves legacy discussion history', async () => {
+  const fileSystem = new FileSystemService(vault);
+  const access = new ScopeAccessPolicy();
+  const service = new LlmWikiService(fileSystem, access, new ReferenceService(fileSystem, access));
+  await service.initialize('', 'human');
+  const schema = await readFile(join(vault, '_wiki/SCHEMA.md'), 'utf8');
+  const rule = schema.split('\n').find(line => line.startsWith('7. '));
+  expect(rule).toContain('community.post');
+  expect(rule).toContain('community.comment');
+  expect(rule).toContain('community.status');
+  expect(rule).toContain('notes.read');
+  expect(rule).toContain('read-only');
+  expect(rule).toContain('promotion');
+});
+
+test('legacy discussion promotion preserves history and exposes safe metadata, current revisions, and normal publish plans', async () => {
+  const fileSystem = new FileSystemService(vault);
+  const access = new ScopeAccessPolicy();
+  const service = new LlmWikiService(fileSystem, access, new ReferenceService(fileSystem, access));
+  await mkdir(join(vault, '_collaboration/discussions'), { recursive: true });
+  await mkdir(join(vault, 'Knowledge'), { recursive: true });
+  await writeFile(join(vault, 'Knowledge/Subject.md'), '# Subject');
+  await writeFile(join(vault, 'Knowledge/Evidence.md'), '# Evidence');
+  await writeFile(join(vault, 'Knowledge/Hidden.md'), '---\nmoderation_status: quarantined\n---\nHidden');
+  const originals = new Map<string, string>();
+  for (const status of ['open', 'resolved', 'rejected', 'superseded']) {
+    const path = `_collaboration/discussions/${status}.md`;
+    const raw = [
+      '---', 'mcpvault_type: discussion', `discussion_id: ${status}`, `status: ${status}`, `title: Historical ${status}`,
+      `participants: ${JSON.stringify(Array.from({ length: 35 }, (_, i) => `worker-${i}`))}`,
+      'subject_path: Knowledge/Subject.md',
+      'evidence_paths: [Knowledge/Evidence.md, Knowledge/Hidden.md]',
+      'references: [Knowledge/Subject.md, Knowledge/Missing.md, "scope://model/other/Secret.md", "../escape.md", ".git/config"]',
+      '---', `# Historical ${status}`, '', 'Preserve disagreement and failed approaches.', '',
+      'Evidence: [[Knowledge/Body only.md]]',
+    ].join('\n');
+    originals.set(path, raw);
+    await writeFile(join(vault, path), raw);
+  }
+  for (const [name, fields] of [
+    ['hidden', 'mcpvault_type: discussion\nstatus: resolved\nmoderation_status: hidden'],
+    ['quarantined', 'mcpvault_type: discussion\nstatus: open\nmoderation_status: quarantined'],
+    ['wrong-type', 'mcpvault_type: blog_post\nstatus: open'],
+    ['wrong-status', 'mcpvault_type: discussion\nstatus: draft'],
+  ]) await writeFile(join(vault, `_collaboration/discussions/${name}.md`), `---\n${fields}\n---\nExcluded`);
+  const reads = vi.spyOn(fileSystem, 'readNote');
+  const scans = vi.spyOn(fileSystem, 'queryNotes');
+  try {
+    const result: any = await service.promotionCandidates(undefined, 10, 16000);
+    expect(result.total).toBe(4);
+    expect(result.items).toHaveLength(4);
+    expect(reads.mock.calls).toHaveLength(4);
+    expect(scans.mock.calls.every(([params]) => params.includeContent === false)).toBe(true);
+    for (const item of result.items) {
+      expect(item).toMatchObject({
+        sourceType: 'legacy_discussion', discussionId: item.status,
+        path: `_collaboration/discussions/${item.status}.md`,
+        revision: createHash('sha256').update(originals.get(item.path)!).digest('hex'),
+        references: ['Knowledge/Subject.md', 'Knowledge/Evidence.md'],
+        promotionPlan: {
+          inspect: { endpointId: 'notes.read', arguments: { path: item.path, maxChars: 7000 } },
+          then: expect.arrayContaining([
+            expect.objectContaining({ endpointId: 'wiki.preflight' }),
+            expect.objectContaining({ endpointId: 'mcp.publish_knowledge', arguments: expect.objectContaining({ references: [item.path], expectedRevision: 'missing' }) }),
+          ]),
+        },
+      });
+      expect(item.participants.length).toBeLessThanOrEqual(20);
+      expect(item.excerpt).toContain('Preserve disagreement');
+      expect(item.promotionPlan.evidenceRule).toMatch(/not .*factual evidence/i);
+      expect(item.references).not.toContain('Knowledge/Body only.md');
+      expect(await readFile(join(vault, item.path), 'utf8')).toBe(originals.get(item.path));
+    }
+    expect(JSON.stringify(result)).not.toMatch(/Hidden\.md|Secret\.md|Missing\.md|escape\.md|\.git\/config/);
+    for (const maxChars of [512, 700, 1200]) {
+      reads.mockClear();
+      const compact: any = await service.promotionCandidates(undefined, 1, maxChars);
+      expect(JSON.stringify(compact).length).toBeLessThanOrEqual(maxChars);
+      expect(compact.truncated).toBe(true);
+      expect(compact.items?.[0]?.nextAction || compact.nextAction).toMatchObject({ endpointId: 'notes.read', arguments: { maxChars: 7000 } });
+      expect(reads.mock.calls).toHaveLength(1);
+    }
+  } finally { reads.mockRestore(); scans.mockRestore(); }
+});
+
+test('legacy promotion rechecks reference files despite stale indexed metadata', async () => {
+  const fileSystem = new FileSystemService(vault);
+  const access = new ScopeAccessPolicy();
+  const service = new LlmWikiService(fileSystem, access, new ReferenceService(fileSystem, access));
+  await mkdir(join(vault, '_collaboration/discussions'), { recursive: true });
+  await writeFile(join(vault, '_collaboration/discussions/history.md'), '---\nmcpvault_type: discussion\nstatus: resolved\nreferences: [Hidden.md, Deleted.md, Visible.md]\n---\nHistorical argument');
+  await writeFile(join(vault, 'Hidden.md'), '---\nmoderation_status: hidden\n---\nNo longer public');
+  await writeFile(join(vault, 'Visible.md'), '# Still public');
+  // The watcher's index still believes all three references exist and are public.
+  // Install it only at reference hydration so discovery uses the real fixture.
+  const staleIndex = { getMany: vi.fn(async () => ['Hidden.md', 'Deleted.md', 'Visible.md'].map(path => ({ path, frontmatter: {}, revision: 'old' }))) };
+  const readMetadata = fileSystem.readNoteMetadata.bind(fileSystem);
+  const lookup = vi.spyOn(fileSystem, 'readNoteMetadata').mockImplementation(async (...args) => {
+    (fileSystem as any).metadataIndex = staleIndex;
+    return readMetadata(...args);
+  });
+  try {
+    const result: any = await service.promotionCandidates(undefined, 1, 6000);
+    expect(result.items[0].references).toEqual(['Visible.md']);
+    expect(JSON.stringify(result)).not.toMatch(/Hidden\.md|Deleted\.md/);
+    expect(staleIndex.getMany).not.toHaveBeenCalled();
+  } finally { lookup.mockRestore(); }
+});
+
+test.each(['deleted', 'hidden', 'wrong-type', 'wrong-status', 'changed', 'access-revoked'])(
+  'legacy discussion promotion revalidates a selected note when %s before hydration', async change => {
+    const fileSystem = new FileSystemService(vault);
+    const access = new ScopeAccessPolicy();
+    const service = new LlmWikiService(fileSystem, access, new ReferenceService(fileSystem, access));
+    const path = '_collaboration/discussions/racing.md';
+    await mkdir(join(vault, '_collaboration/discussions'), { recursive: true });
+    await writeFile(join(vault, path), '---\nmcpvault_type: discussion\nstatus: open\ntitle: Old title\n---\nOld excerpt');
+    const read = fileSystem.readNote.bind(fileSystem);
+    const hydration = vi.spyOn(fileSystem, 'readNote').mockImplementation(async target => {
+      if (target === path) {
+        if (change === 'deleted') await rm(join(vault, path));
+        else if (change === 'access-revoked') vi.spyOn(access, 'canAccessPhysicalPath').mockImplementation(target => target !== path);
+        else await writeFile(join(vault, path), [
+          '---', `mcpvault_type: ${change === 'wrong-type' ? 'knowledge' : 'discussion'}`,
+          `status: ${change === 'wrong-status' ? 'draft' : 'superseded'}`, 'title: Current title',
+          ...(change === 'hidden' ? ['moderation_status: hidden'] : []),
+          'participants: [current-worker]', 'references: ["scope://model/other/Secret.md"]',
+          '---', 'Current excerpt',
+        ].join('\n'));
+      }
+      return read(target);
+    });
+    try {
+      const result: any = await service.promotionCandidates(undefined, 1, 6000);
+      expect(hydration).toHaveBeenCalledWith(path);
+      if (change === 'changed') {
+        expect(result.items).toHaveLength(1);
+        expect(result.items[0]).toMatchObject({
+          title: 'Current title', status: 'superseded', participants: ['current-worker'], references: [],
+          excerpt: 'Current excerpt', revision: createHash('sha256').update(await readFile(join(vault, path), 'utf8')).digest('hex'),
+        });
+      } else {
+        expect(result.items).toEqual([]);
+        expect(result.total).toBe(0);
+      }
+      expect(JSON.stringify(result)).not.toMatch(/Old title|Old excerpt|Secret\.md/);
+    } finally { hydration.mockRestore(); vi.restoreAllMocks(); }
+  },
+);
+
+test.each([180, 300, 420])('legacy discussion promotion bounds a long path and title (%i characters)', async length => {
+  const fileSystem = new FileSystemService(vault);
+  const access = new ScopeAccessPolicy();
+  const service = new LlmWikiService(fileSystem, access, new ReferenceService(fileSystem, access));
+  // Nested components keep the fixture valid on Windows even when the full path is long.
+  const path = `_collaboration/discussions/${'long-segment/'.repeat(Math.ceil(length / 13))}historical.md`;
+  await mkdir(join(vault, path, '..'), { recursive: true });
+  await writeFile(join(vault, path), `---\nmcpvault_type: discussion\nstatus: resolved\ntitle: ${'Long title '.repeat(100)}\n---\nHistorical argument`);
+  const result: any = await service.promotionCandidates(undefined, 1, 512);
+  expect(JSON.stringify(result).length).toBeLessThanOrEqual(512);
+  expect(result).toMatchObject({ total: 1, truncated: true });
+  if (length < 420) {
+    expect(result.nextAction).toMatchObject({ endpointId: 'notes.read', arguments: { path, maxChars: 7000 } });
+  } else expect(result).not.toHaveProperty('nextAction');
+});
+
+test.each(['community_discussion', 'completed_task'])('promotion excludes stale %s metadata after hydration', async sourceType => {
+  const fileSystem = new FileSystemService(vault);
+  const access = new ScopeAccessPolicy();
+  const service = new LlmWikiService(fileSystem, access, new ReferenceService(fileSystem, access));
+  const prefix = sourceType === 'community_discussion' ? 'Community/Posts' : 'Community/Tasks';
+  const path = `${prefix}/racing.md`;
+  const fields = sourceType === 'community_discussion'
+    ? 'mcpvault_type: blog_post\nstatus: published\ncategory: research\npost_id: racing'
+    : 'mcpvault_type: agent_task\nstatus: completed\ntask_id: racing\nretrospective: Old lesson';
+  await mkdir(join(vault, prefix), { recursive: true });
+  await writeFile(join(vault, path), `---\n${fields}\ntitle: Old title\n---\nOriginal body`);
+  const before: any = await service.promotionCandidates(undefined, 1, 6000);
+  expect(before.items).toHaveLength(1);
+  expect(before.items[0].sourceType).toBe(sourceType);
+  const query = fileSystem.queryNotes.bind(fileSystem);
+  const scan = vi.spyOn(fileSystem, 'queryNotes').mockImplementation(async (params, predicate) => {
+    const result = await query(params, predicate);
+    if (params.pathPrefix === prefix) await writeFile(join(vault, path), `---\n${fields}\ntitle: Updated title\nreferences: ["scope://model/other/Secret.md"]\n---\nCurrent body`);
+    return result;
+  });
+  try {
+    const result: any = await service.promotionCandidates(undefined, 1, 6000);
+    expect(result).toMatchObject({ items: [], total: 0 });
+    expect(JSON.stringify(result)).not.toMatch(/Old title|Old lesson|Secret\.md/);
+  } finally { scan.mockRestore(); }
 });
 
 test('idle synthesis routing distributes tied authored clusters and focusPath reopens the exact candidate', async () => {

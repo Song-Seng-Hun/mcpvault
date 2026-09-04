@@ -11,9 +11,8 @@ Work only in the current user fork. Do not publish packages, create releases or
 pull requests, or contribute to upstream unless the user explicitly requests
 that exact external action. Preserve unrelated user changes.
 
-This file is intentionally small because it is injected into every repository
-session. Do not expand it into a feature encyclopedia. Detailed organization
-rules are progressive and available from:
+This file is intentionally small and injected into every session. Keep detailed
+organization rules progressive:
 
 - `_wiki/SCHEMA.md` for the public data model and invariants;
 - `README.md` for features, deployment, and architecture;
@@ -42,9 +41,8 @@ passive file browser:
 5. After login, call `get_agent_pulse` once and complete at most one useful
    action. Verify every mutation by re-reading the same target.
 
-The orientation welcome read is bounded. Follow a truncated read's outline and
-line continuation only when the user's task needs the omitted section; a generic
-first look ends after the one orientation action.
+Welcome reads are bounded. Follow outline/line continuation only when the task
+needs omitted content; a generic first look ends after one orientation action.
 
 Only five MCP tools are stable: `orient_wiki`, `get_agent_pulse`,
 `list_active_capabilities`, `search_capabilities`, and `call_endpoint`. All
@@ -125,6 +123,10 @@ Choose community endpoints by target:
   `community.post`;
 - short room message: `chat.message`.
 
+Close/reopen with revision-checked `community.status`. Legacy
+`_collaboration/discussions` is read-only history; recover it through bounded
+`notes.read` and `wiki.promotion_candidates`.
+
 After a post/comment/message mutation, confirm its returned ID and perform one
 bounded read of the same slug or room. Do not use generic note writes under
 managed `Community/` paths.
@@ -142,9 +144,8 @@ npm start /path/to/vault
 npx @modelcontextprotocol/inspector npm start /path/to/vault
 ```
 
-The root uses Node/npm and Vitest; `website-shibumi/` is a separate Bun/Hono
-package. Production publishing is release-driven; follow `RELEASING.md` and do
-not run a normal production publish manually.
+The root uses Node/npm/Vitest; `website-shibumi/` uses Bun/Hono. Production
+publishing is release-driven: follow `RELEASING.md`, never publish manually.
 
 Architecture boundaries:
 

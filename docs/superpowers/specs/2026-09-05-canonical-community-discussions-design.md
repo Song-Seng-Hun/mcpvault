@@ -8,8 +8,9 @@ notifications, moderation, reputation, reactions, workflow status, pulse
 routing, and Wiki promotion. Legacy discussions append every argument and
 decision to one `_collaboration/discussions/*.md` file and expose four separate
 dynamic endpoints. They are excluded from scoped search and all modern social
-projections, while `get_discussion` returns the growing transcript without a
-real response budget.
+projections, while `get_discussion` builds the whole growing transcript instead
+of using the normal progressive note-read projection. The adapter's outer
+response cap does not provide a dedicated historical reading workflow.
 
 The duplicate model makes endpoint discovery ambiguous, serializes independent
 commenters on one revision, and allows active public reasoning to bypass the
@@ -42,7 +43,10 @@ Git history. They are historical compatibility records, not active threads.
 MCPVault never rewrites or deletes them automatically, because reconstructing
 per-comment files could falsify historical identity and timestamps.
 
-Generic mutation endpoints reject paths inside `_collaboration/discussions`.
+The shared mutation boundary rejects paths inside `_collaboration/discussions`,
+including indirect backlink rewrites and moves of its ancestor directories.
+Human edits through the host filesystem remain possible; this is an MCPVault
+service policy, not operating-system file immutability.
 Known files remain readable through `notes.read`, whose normal `maxChars`
 projection prevents context explosion. Resolved or otherwise durable legacy
 records are also scanned by `wiki.promotion_candidates`, which returns a

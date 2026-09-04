@@ -14,6 +14,7 @@ import { buildNoteReferenceIndex, resolveNoteReference } from './note-reference.
 import { validateJsonCanvasDocument } from './json-canvas.js';
 import { acceptsPlainReference, collectPlainFrontmatterReferences, isNavigationalFrontmatterReference, propertyPathText } from './property-references.js';
 import { RELATION_FIELDS } from './organization.js';
+import { assertLegacyDiscussionMutationAllowed } from './scope-access.js';
 import { extractMarkdownTasks } from './markdown-tasks.js';
 /** Hard per-note write limit so stdio callers cannot exhaust the vault disk. */
 export const MAX_NOTE_CONTENT_BYTES = 8 * 1024 * 1024;
@@ -597,6 +598,11 @@ export class FileSystemService {
     resolveWritablePath(relativePath) {
         const fullPath = this.resolvePath(relativePath);
         const relativePathToVault = relative(this.vaultPath, fullPath);
+        // Guard the canonical vault-relative destination for every service write,
+        // including absolute input paths and indirectly rewritten backlinks. This
+        // is legacy-only: immutable source ingestion still needs filesystem writes.
+        // Ancestors are protected too so moves cannot relocate the historical tree.
+        assertLegacyDiscussionMutationAllowed(relativePathToVault, 'Filesystem mutation', true);
         let current = this.vaultPath;
         for (const component of relativePathToVault.split(/[\\/]+/).filter(Boolean)) {
             current = join(current, component);
@@ -1102,6 +1108,9 @@ export class FileSystemService {
             const path = this.normalizePath(change.path);
             if (!path || !this.pathFilter.isAllowed(path))
                 throw new Error(`Access denied: ${path || '(empty path)'}`);
+            // Preflight every destination, including dry runs, before any member of
+            // this batch can be written. Absolute inputs must use the same guard.
+            assertLegacyDiscussionMutationAllowed(relative(this.vaultPath, this.resolvePath(path)), 'Change set', true);
             if (!/^[a-f0-9]{64}$/i.test(String(change.expectedRevision || '')))
                 throw new Error(`Each change requires the current SHA-256 revision of an existing note: ${path}`);
             const patches = change.patches;
@@ -1649,6 +1658,11 @@ export class FileSystemService {
                     };
                 }
                 assertNoteContentSize(content, newPath);
+                // Reject a protected dependent before writing ANY backlink or moving
+                // the source. Checking only inside the write loop would mutate earlier
+                // dependents and rely on rollback to restore them.
+                for (const backup of linkBackups)
+                    this.resolveWritablePath(backup.path);
                 for (const backup of linkBackups) {
                     const current = await this.readNote(backup.path);
                     if (current.originalContent !== backup.original)
@@ -2983,8 +2997,8 @@ export class FileSystemService {
             throw new Error('Authority shelf queries require the metadata index');
         return this.metadataIndex.queryAuthorityShelf(params, canAccessPath);
     }
-    /** Read bounded frontmatter and revisions for exact physical note paths. */
-    async readNoteMetadata(paths, canAccessPath = () => true) {
+    /** Read exact-path metadata; fresh bypasses the index for disclosure checks. */
+    async readNoteMetadata(paths, canAccessPath = () => true, options = {}) {
         if (paths.length > 500)
             throw new Error('note metadata lookup supports at most 500 paths');
         const normalizedPaths = [];
@@ -2999,7 +3013,7 @@ export class FileSystemService {
                 continue;
             normalizedPaths.push(path);
         }
-        if (this.metadataIndex) {
+        if (this.metadataIndex && !options.fresh) {
             return (await this.metadataIndex.getMany(normalizedPaths, canAccessPath))
                 .map(entry => ({ path: entry.path, frontmatter: entry.frontmatter, revision: entry.revision }));
         }
@@ -3008,6 +3022,8 @@ export class FileSystemService {
             try {
                 const raw = await this.vaultIo.readUtf8(this.resolvePath(path));
                 const parsed = this.frontmatterHandler.parse(raw);
+                if (!canAccessPath(path))
+                    continue;
                 notes.push({ path, frontmatter: parsed.frontmatter, revision: this.revision(raw) });
             }
             catch {

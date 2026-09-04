@@ -1,8 +1,25 @@
 import { expandScopePath, parseScopePath } from './scopes.js';
+import { posix } from 'node:path';
 const PRIVATE_ROOT = '_scopes';
 const SOURCE_SEGMENT = '_sources';
 const WHISPER_ROOT = '_whispers';
 const COMMUNITY_ROOT = 'Community';
+const LEGACY_DISCUSSION_ROOT = '_collaboration/discussions';
+/** Accept vault-relative physical paths; filesystem callers must resolve first. */
+export function isLegacyDiscussionPath(path, includeAncestors = false) {
+    // Collapse dot segments and duplicate separators, and account for Windows
+    // trailing-dot/space aliases without confusing siblings with descendants.
+    const segments = normalizePhysicalPath(path).split('/').map(segment => segment === '.' || segment === '..' ? segment : segment.replace(/[. ]+$/, ''));
+    const normalized = posix.normalize(segments.join('/')).replace(/\/$/, '').toLowerCase();
+    return normalized === LEGACY_DISCUSSION_ROOT
+        || normalized.startsWith(`${LEGACY_DISCUSSION_ROOT}/`)
+        || (includeAncestors && (normalized === '.' || LEGACY_DISCUSSION_ROOT.startsWith(`${normalized}/`)));
+}
+export function assertLegacyDiscussionMutationAllowed(path, operation, includeAncestors = false) {
+    if (isLegacyDiscussionPath(path, includeAncestors)) {
+        throw new Error(`${operation} cannot mutate _collaboration/discussions: historical read-only content. Use community.post, community.comment, or community.status for current discussions; use notes.read for bounded historical reads.`);
+    }
+}
 function normalizePhysicalPath(value) {
     return String(value || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
 }
@@ -22,6 +39,12 @@ export class ScopeAccessPolicy {
         this.commandCenterId = configured.trim().toLowerCase();
     }
     getCommandCenterId() { return this.commandCenterId; }
+    isLegacyDiscussionPath(path, includeAncestors = false) {
+        return isLegacyDiscussionPath(path, includeAncestors);
+    }
+    assertLegacyDiscussionMutationAllowed(path, operation, includeAncestors = false) {
+        assertLegacyDiscussionMutationAllowed(path, operation, includeAncestors);
+    }
     isCommunityPath(path) {
         const normalized = normalizePhysicalPath(path).toLowerCase();
         return normalized === COMMUNITY_ROOT.toLowerCase() || normalized.startsWith(`${COMMUNITY_ROOT.toLowerCase()}/`);
@@ -102,6 +125,7 @@ export class ScopeAccessPolicy {
         if (isGlobalSource || isPrivateSource) {
             throw new Error(`${operation} cannot mutate immutable LLM Wiki sources; use ingest_source to add a new source snapshot`);
         }
+        this.assertLegacyDiscussionMutationAllowed(path, operation);
     }
     canReferenceFrom(containerPath, referencedPath) {
         const container = privateOwner(containerPath);

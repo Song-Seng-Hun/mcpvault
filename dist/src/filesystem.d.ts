@@ -189,8 +189,10 @@ export declare class FileSystemService {
         includeUnclassified?: boolean;
         limit?: number;
     }, canAccessPath?: (path: string) => boolean): Promise<AuthorityShelfResult>;
-    /** Read bounded frontmatter and revisions for exact physical note paths. */
-    readNoteMetadata(paths: readonly string[], canAccessPath?: (path: string) => boolean): Promise<QueryNote[]>;
+    /** Read exact-path metadata; fresh bypasses the index for disclosure checks. */
+    readNoteMetadata(paths: readonly string[], canAccessPath?: (path: string) => boolean, options?: {
+        fresh?: boolean;
+    }): Promise<QueryNote[]>;
     /** Count metadata rows without reading note bodies; used by bounded windows. */
     countNotes(params?: QueryNotesParams, canAccessPath?: (path: string) => boolean, predicate?: (note: QueryNote) => boolean): Promise<number>;
 }
