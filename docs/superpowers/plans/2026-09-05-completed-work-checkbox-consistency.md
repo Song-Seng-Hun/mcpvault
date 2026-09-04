@@ -24,7 +24,7 @@
 
 ### Task 1: Share the existing Markdown task parser
 
-- [ ] **Step 1: Add a failing parser characterization test**
+- [x] **Step 1: Add a failing parser characterization test**
 
 Create `src/markdown-tasks.test.ts` with a note containing YAML, `- [ ]`,
 `* [x]`, matching backtick/tilde fenced examples, and a `^block-id`. Assert that
@@ -51,12 +51,12 @@ describe('extractMarkdownTasks', () => {
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `npm test -- src/markdown-tasks.test.ts`.
 Expected: fail because `src/markdown-tasks.ts` does not exist.
 
-- [ ] **Step 3: Extract the parser**
+- [x] **Step 3: Extract the parser**
 
 Create `src/markdown-tasks.ts` by moving `taskIdentity` and `extractTasks` from
 `src/filesystem.ts`. Export the parser as:
@@ -68,15 +68,15 @@ export function extractMarkdownTasks(content: string, path: string): TaskItem[]
 Keep the current SHA-256 identity input, frontmatter handling, matching fence
 rules, list marker rules, line numbering, status values, and occurrence logic
 byte-for-byte equivalent. Import `extractMarkdownTasks` in `filesystem.ts` and
-replace both `extractTasks(...)` call sites. Remove the old private functions
-and the now-unused `createHash` import from `filesystem.ts`.
+replace all three `extractTasks(...)` call sites. Remove only the old private
+functions; retain `createHash`, which also computes note revisions.
 
-- [ ] **Step 4: Run parser and filesystem tests**
+- [x] **Step 4: Run parser and filesystem tests**
 
 Run `npm test -- src/markdown-tasks.test.ts src/filesystem.test.ts`.
 Expected: both files pass and the existing stable-task relocation test remains green.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Commit `src/markdown-tasks.ts`, `src/markdown-tasks.test.ts`, and
 `src/filesystem.ts` as `refactor: share fence-aware markdown task parsing`.
