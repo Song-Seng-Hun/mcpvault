@@ -34,9 +34,10 @@ supported literal boundaries rather than claiming complete Markdown parsing.
 
 An unmatched backtick run remains ordinary text, matching Markdown rendering;
 it must not hide the rest of the note. Matching delimiters mask only their
-closed span. The scanner is linear in note length after collecting delimiter
-runs and allocates at most one byte per source character, bounded by the note
-already held in memory. It never evaluates code or changes note content.
+closed span and do not cross a detected paragraph-interrupting block boundary.
+The scanner is linear in note length and uses one byte per UTF-16 code unit for
+the mask plus linear delimiter metadata, all bounded by the note already held
+in memory. It never evaluates code or changes note content.
 
 ## Workflow closure
 

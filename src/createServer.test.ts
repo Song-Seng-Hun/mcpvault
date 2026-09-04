@@ -64,6 +64,19 @@ test("server exposes only the dynamic control plane", async () => {
   const neighborhoodCatalog = JSON.parse((neighborhoodCapabilities.content as any)[0].text);
   expect(neighborhoodCatalog.endpoints.some((endpoint: any) => endpoint.endpointId === "wiki.neighborhood")).toBe(true);
 
+  for (const endpointId of ["mcp.find_unresolved_links", "mcp.get_outlinks", "mcp.get_backlinks"]) {
+    const linkCapabilities = await client.callTool({
+      name: "search_capabilities",
+      arguments: { query: endpointId, limit: 3, maxChars: 6000 },
+    });
+    const linkCatalog = JSON.parse((linkCapabilities.content as any)[0].text);
+    const linkEndpoint = linkCatalog.endpoints.find((endpoint: any) => endpoint.endpointId === endpointId);
+    expect(linkEndpoint?.description).toContain("relative Markdown");
+    expect(linkEndpoint?.description).toContain("inline backtick");
+    expect(linkEndpoint?.description).toContain("escaped");
+    expect(linkEndpoint?.description).toContain("indented code");
+  }
+
   const anonymousWrite = await client.callTool({
     name: "call_endpoint",
     arguments: {
@@ -984,7 +997,7 @@ test("find_orphan_notes excludes linked notes and self-links", async () => {
   }
 });
 
-test("find_unresolved_links reports only broken wikilinks", async () => {
+test("find_unresolved_links reports only real broken internal links", async () => {
   const { server, client } = await connectClient();
   try {
     await writeFile(join(testVaultPath, "Target.md"), "target");
@@ -993,6 +1006,8 @@ test("find_unresolved_links reports only broken wikilinks", async () => {
       "Valid: [[Target]].",
       "Attachment: ![[asset.png]].",
       "Broken: [[Missing#Heading|display]].",
+      "Inline example: `[[InlineIgnored]]`.",
+      "Escaped example: \\[[EscapedIgnored]].",
       "```md",
       "[[Ignored]]",
       "```",
@@ -1018,12 +1033,14 @@ test("find_unresolved_links reports only broken wikilinks", async () => {
   }
 });
 
-test("get_outlinks returns destinations and ignores fenced examples", async () => {
+test("get_outlinks returns destinations and ignores literal examples", async () => {
   const { server, client } = await connectClient();
   try {
     await writeFile(join(testVaultPath, "Source.md"), [
       "See [[Target|the target]].",
       "Embed: ![[folder/Other#Details]].",
+      "Inline example: `[[InlineIgnored]]`.",
+      "Escaped example: \\[[EscapedIgnored]].",
       "```md",
       "[[Ignored]]",
       "```",
@@ -1076,7 +1093,7 @@ test("get_outlinks hides private note targets from public callers", async () => 
   }
 });
 
-test("get_backlinks returns wikilink occurrences with line context", async () => {
+test("get_backlinks returns real internal-link occurrences with line context", async () => {
   const { server, client } = await connectClient();
   try {
     await mkdir(join(testVaultPath, "Projects"), { recursive: true });
@@ -1086,6 +1103,8 @@ test("get_backlinks returns wikilink occurrences with line context", async () =>
       "",
       "See [[Target|the target]].",
       "Embed: ![[Target#Details]].",
+      "Inline example: `[[Target]]`.",
+      "Escaped example: \\[[Target]].",
       "```md",
       "[[Target]]",
       "```",

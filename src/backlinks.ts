@@ -6,15 +6,31 @@ const WIKI_LINK_PATTERN = /!?(\[\[[^\]]+\]\])/g;
 // are not vault graph edges.
 const MARKDOWN_LINK_PATTERN = /(?<!!)(?:\[([^\]]*)\])\(\s*(<[^>]+>|[^\s)]+)(?:\s+['"][^)]*['"])?\s*\)/g;
 const FENCE_PATTERN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+const ATX_HEADING_PATTERN = /^ {0,3}#{1,6}(?:[ \t]+|$)/;
+const BLOCK_QUOTE_PATTERN = /^ {0,3}>/;
+const INTERRUPTING_LIST_PATTERN = /^ {0,3}(?:[*+-][ \t]+\S|1[.)][ \t]+\S)/;
+const THEMATIC_BREAK_PATTERN = /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}|(?:-[ \t]*){3,})$/;
+const SETEXT_UNDERLINE_PATTERN = /^ {0,3}(?:=+|-+)[ \t]*$/;
+const HTML_BLOCK_START_PATTERN = /^ {0,3}(?:<(?:script|pre|style|textarea)(?:[ \t>]|$)|<!--|<\?|<!\[CDATA\[|<![A-Z]|<\/?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:[ \t/>]|$))/i;
 
 interface LiteralRun {
   start: number;
   length: number;
   segment: number;
+  escaped: boolean;
 }
 
 function markRange(mask: Uint8Array, start: number, end: number): void {
   mask.fill(1, start, end);
+}
+
+function startsParagraphInterruptingBlock(line: string): boolean {
+  return ATX_HEADING_PATTERN.test(line)
+    || BLOCK_QUOTE_PATTERN.test(line)
+    || INTERRUPTING_LIST_PATTERN.test(line)
+    || THEMATIC_BREAK_PATTERN.test(line)
+    || SETEXT_UNDERLINE_PATTERN.test(line)
+    || HTML_BLOCK_START_PATTERN.test(line);
 }
 
 /**
@@ -55,21 +71,23 @@ function buildLinkLiteralMask(content: string): Uint8Array {
         }
       }
     } else {
+      const interruptsParagraph = startsParagraphInterruptingBlock(line);
+      if (interruptsParagraph) segment += 1;
       let precedingBackslashes = 0;
       for (let offset = lineStart; offset < lineEnd; offset += 1) {
         const char = content[offset]!;
         const escaped = precedingBackslashes % 2 === 1;
         if (char === '[' && escaped) mask[offset] = 1;
-        if (char === '`' && !escaped) {
+        if (char === '`') {
           const start = offset;
           while (offset + 1 < lineEnd && content[offset + 1] === '`') offset += 1;
-          backtickRuns.push({ start, length: offset - start + 1, segment });
+          backtickRuns.push({ start, length: offset - start + 1, segment, escaped });
           precedingBackslashes = 0;
           continue;
         }
         precedingBackslashes = char === '\\' ? precedingBackslashes + 1 : 0;
       }
-      if (line.trim() === '') segment += 1;
+      if (interruptsParagraph || line.trim() === '') segment += 1;
     }
 
     if (newline === -1) break;
@@ -86,6 +104,10 @@ function buildLinkLiteralMask(content: string): Uint8Array {
   }
 
   for (let index = 0; index < backtickRuns.length;) {
+    if (backtickRuns[index]!.escaped) {
+      index += 1;
+      continue;
+    }
     const closerIndex = nextMatchingRun[index]!;
     if (closerIndex === -1) {
       index += 1;
@@ -108,7 +130,7 @@ function applyLineMask(line: string, lineOffset: number, mask: Uint8Array): stri
 }
 
 /**
- * Find Obsidian wikilinks in a note that refer to a target note.
+ * Find Obsidian internal links in a note that refer to a target note.
  *
  * This deliberately works on raw lines so the result can point an agent to
  * an exact line without returning the source note's full content. Matching
@@ -160,8 +182,10 @@ function extractLinkOccurrences(content: string, includeMarkdown: boolean, limit
     const line = rawLine.replace(/\r$/, '');
     const searchableLine = applyLineMask(line, lineOffset, literalMask);
 
-    const heading = searchableLine.match(/^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/);
-    if (heading) currentHeading = heading[1]!.trim();
+    if (ATX_HEADING_PATTERN.test(searchableLine)) {
+      const heading = line.match(/^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/);
+      if (heading) currentHeading = heading[1]!.trim();
+    }
 
     WIKI_LINK_PATTERN.lastIndex = 0;
     const lineMatches: Array<{ offset: number; item: OutlinkMatch }> = [];

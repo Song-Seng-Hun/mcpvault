@@ -86,4 +86,39 @@ describe('Obsidian link extraction', () => {
     expect(findBacklinkMatches(content, 'Target.md')).toHaveLength(1);
     expect(findUnresolvedLinkMatches(content, ['Target.md']).map(match => match.target)).toEqual(['Missing.md']);
   });
+
+  test('treats backslashes inside an open code span as literal text', () => {
+    const single = '`[[SingleHidden]] \\` [[SingleVisible]]';
+    const multiple = '``[[MultiHidden]] \\`` [[MultiVisible]]';
+
+    expect(extractObsidianLinkOccurrences(single).map(match => match.target)).toEqual(['SingleVisible']);
+    expect(extractObsidianLinkOccurrences(multiple).map(match => match.target)).toEqual(['MultiVisible']);
+  });
+
+  test.each([
+    ['ATX heading', '`unclosed\n# Real Heading\n[[HeadingTarget]]\nclosing`', 'HeadingTarget'],
+    ['block quote', '`unclosed\n> [[QuoteTarget]]\nclosing`', 'QuoteTarget'],
+    ['bullet list', '`unclosed\n- [[ListTarget]]\nclosing`', 'ListTarget'],
+    ['ordered list', '`unclosed\n1. [[OrderedTarget]]\nclosing`', 'OrderedTarget'],
+    ['thematic break', '`unclosed\n---\n[[BreakTarget]]\nclosing`', 'BreakTarget'],
+    ['Setext heading', '`unclosed\nHeading\n===\n[[SetextTarget]]\nclosing`', 'SetextTarget'],
+    ['HTML block', '`unclosed\n<div></div>\n[[HtmlTarget]]\nclosing`', 'HtmlTarget'],
+  ])('does not pair unmatched code delimiters across an interrupting %s', (_kind, content, target) => {
+    expect(extractObsidianLinkOccurrences(content).map(match => match.target)).toContain(target);
+  });
+
+  test('preserves original inline markup in source heading locators', () => {
+    const content = '## API `v1`\n[[Versioned]]\n## `Only code`\n[[CodeHeading]]';
+    expect(extractObsidianLinkOccurrences(content)).toEqual([
+      expect.objectContaining({ target: 'Versioned', heading: 'API `v1`' }),
+      expect.objectContaining({ target: 'CodeHeading', heading: '`Only code`' }),
+    ]);
+  });
+
+  test('preserves CRLF offsets and ignores mismatched fence-looking lines', () => {
+    const content = '## Windows\r\n~~~~md\r\n[[Hidden]]\r\n~~~\r\n[[StillHidden]]\r\n```\r\n[[AlsoHidden]]\r\n~~~~\r\n`[[InlineHidden]]` [[Visible#Part]]';
+    expect(extractObsidianLinkOccurrences(content)).toEqual([
+      expect.objectContaining({ target: 'Visible', line: 9, heading: 'Windows', targetHeading: 'Part' }),
+    ]);
+  });
 });
