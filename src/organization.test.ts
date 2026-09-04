@@ -148,6 +148,9 @@ describe('knowledge organization focus and summary metadata', () => {
       expect.objectContaining({ name: 'knowledge_status', type: 'text', allowed: [...KNOWLEDGE_STATUSES] }),
       expect.objectContaining({ name: 'confidence', type: 'text', allowed: [...CONFIDENCE_LEVELS] }),
       expect.objectContaining({ name: 'trust_level', type: 'text', allowed: [...SOURCE_TRUST_LEVELS], appliesTo: ['source'] }),
+      expect.objectContaining({ name: 'knowledge_polarity', type: 'text' }),
+      expect.objectContaining({ name: 'negative_type', type: 'text' }),
+      expect.objectContaining({ name: 'triage_disposition', type: 'text', appliesTo: ['fleeting'] }),
     ]));
     expect(knowledgeOrganization({ status: 'draft', noteKind: 'atomic', reviewIntervalDays: 30 })).toMatchObject({ review_interval_days: 30 });
     expect(organizationLintIssues('Knowledge/Drift.md', {
@@ -156,6 +159,9 @@ describe('knowledge organization focus and summary metadata', () => {
     expect(organizationLintIssues('Knowledge/InvalidState.md', {
       llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'evergreen', knowledge_status: 'accepted', confidence: 'absolute',
     }, '# Invalid state\n').filter(issue => issue.code === 'property_contract_violation')).toHaveLength(2);
+    expect(organizationLintIssues('Knowledge/InvalidNegative.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'review', knowledge_polarity: 'uncertain', negative_type: 'mistake',
+    }, '# Invalid negative\n').filter(issue => issue.code === 'property_contract_violation')).toHaveLength(2);
   });
 
   test('keeps archival arrangement on immutable source records only', () => {

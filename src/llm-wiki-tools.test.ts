@@ -32,10 +32,13 @@ import {
   TEMPORAL_VALIDITY_STATES,
   TERM_STATUSES,
   WIKI_PROJECTION_VIEWS,
+  getOrganizationPropertyContract,
 } from './organization.js';
 import { getLlmWikiTools } from './llm-wiki-tools.js';
 
 interface SchemaProperty {
+  type?: string;
+  description?: string;
   enum?: unknown[];
   items?: SchemaProperty;
   properties?: SchemaProperties;
@@ -118,5 +121,33 @@ describe('LLM Wiki organization vocabulary contracts', () => {
     const nextActions = properties('get_wiki_next_actions');
     expectEnum(nextActions, 'energy', EXECUTION_LEVELS);
     expectEnum(nextActions, 'effort', EXECUTION_LEVELS);
+  });
+
+  test('derives managed Property schemas from the public contract', () => {
+    const contracts = new Map(getOrganizationPropertyContract().map(contract => [contract.name, contract]));
+    const bindings = [
+      ['ingest_source', 'trustLevel', 'trust_level'],
+      ['capture_wiki_note', 'capturedFrom', 'captured_from'],
+      ['clarify_wiki_note', 'disposition', 'triage_disposition'],
+      ['publish_knowledge', 'status', 'knowledge_status'],
+      ['publish_knowledge', 'noteKind', 'note_kind'],
+      ['publish_knowledge', 'polarity', 'knowledge_polarity'],
+      ['publish_knowledge', 'negativeType', 'negative_type'],
+      ['review_wiki_note', 'reviewChecks', 'review_checks'],
+      ['record_wiki_recall', 'repairStatus', 'recall_repair_status'],
+      ['resolve_wiki_issue', 'resolutionStatus', 'issue_resolution_status'],
+    ] as const;
+    const schemaType = { text: 'string', list: 'array', number: 'number', boolean: 'boolean', object: 'object' } as const;
+
+    for (const [toolName, field, contractName] of bindings) {
+      const contract = contracts.get(contractName)!;
+      const schema = properties(toolName)[field]!;
+      expect(schema.type, `${toolName}.${field}`).toBe(schemaType[contract.type]);
+      expect(String(schema.description), `${toolName}.${field}`).toContain(contract.description);
+      if (contract.allowed) {
+        const actual = contract.type === 'list' ? schema.items?.enum : schema.enum;
+        expect(actual, `${toolName}.${field}`).toEqual([...contract.allowed]);
+      }
+    }
   });
 });

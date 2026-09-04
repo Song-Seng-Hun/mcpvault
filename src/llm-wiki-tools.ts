@@ -1,16 +1,43 @@
 import type { Tool } from '@modelcontextprotocol/server';
 import {
-  ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS,
-  CLAIM_ROLES, CLAIM_STATUSES, CLARIFY_DISPOSITIONS, CONFIDENCE_LEVELS,
-  DECISION_STATUSES, EXECUTION_LEVELS, FOCUS_HORIZONS, INTERPRETATION_STATUSES,
-  ISSUE_KINDS, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES,
-  KNOWLEDGE_POLARITIES, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, LIFECYCLES,
-  NEGATIVE_KINDS, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_QUALITIES,
-  RECALL_REPAIR_STATUSES, RETENTION_EVENTS, RETENTION_POLICIES, REVIEW_CHECKS,
-  REVIEW_OUTCOMES, REVIEW_POLICIES, SERVICE_CLASSES, SOURCE_TRUST_LEVELS,
-  TASK_STATUSES, TEMPORAL_VALIDITY_STATES, TERM_STATUSES, WIKI_PROJECTION_VIEWS,
+  ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CATALOG_ORDERS, CLAIM_ROLES,
+  CLAIM_STATUSES, CONFIDENCE_LEVELS, ISSUE_KINDS, NOTE_TEMPLATE_IDS,
+  TEMPORAL_VALIDITY_STATES, WIKI_PROJECTION_VIEWS,
+  getOrganizationPropertyContract,
 } from './organization.js';
 import { WIKI_POLICY_TOPICS } from './wiki-policy.js';
+
+type ToolPropertySchema = Record<string, any>;
+
+const organizationPropertyContracts = new Map(
+  getOrganizationPropertyContract().map(contract => [contract.name, contract]),
+);
+
+/** Adapt the public Obsidian Properties contract into MCP JSON Schema. Endpoint
+ * details may narrow lengths/defaults, but the type, base meaning, and allowed
+ * vocabulary always originate from the same contract used by lint. */
+function organizationPropertySchema(
+  propertyName: string,
+  overrides: ToolPropertySchema = {},
+): ToolPropertySchema {
+  const contract = organizationPropertyContracts.get(propertyName);
+  if (!contract) throw new Error(`Unknown organization property contract: ${propertyName}`);
+  const type = contract.type === 'text' ? 'string' : contract.type === 'list' ? 'array' : contract.type;
+  const base: ToolPropertySchema = { type, description: contract.description };
+  if (contract.allowed?.length) {
+    if (contract.type === 'list') base.items = { type: 'string', enum: [...contract.allowed] };
+    else base.enum = [...contract.allowed];
+  } else if (contract.type === 'list') {
+    base.items = { type: 'string' };
+  }
+  const { description, items, ...rest } = overrides;
+  return {
+    ...base,
+    ...rest,
+    ...(items && { items: { ...(base.items || {}), ...items } }),
+    ...(description && { description: `${contract.description}. ${description}` }),
+  };
+}
 
 const prettyPrint = { type: 'boolean', description: 'Format JSON response with indentation', default: false } as const;
 const accessToken = { type: 'string', description: 'Token from login_scope. Omit for public global scope only.' } as const;
@@ -18,8 +45,8 @@ const scopeUri = { type: 'string', description: 'Target scope root; defaults to 
 const executionProperties = {
   tags: { type: 'array', items: { type: 'string', maxLength: 100 }, maxItems: 30, description: 'Native Obsidian tag list; [] clears tags without changing the body' },
   timeEstimateMinutes: { type: 'integer', minimum: 1, maximum: 1440, description: 'Estimated minutes for one next action; used by wiki.next_actions maxMinutes' },
-  energy: { type: 'string', enum: [...EXECUTION_LEVELS], description: 'Execution energy needed by the next action' },
-  effort: { type: 'string', enum: [...EXECUTION_LEVELS], description: 'Execution effort needed by the next action' },
+  energy: organizationPropertySchema('energy', { description: 'Used by wiki.next_actions to match the current execution capacity' }),
+  effort: organizationPropertySchema('effort', { description: 'Used by wiki.next_actions to match the current execution capacity' }),
 };
 const temporalProperties = {
   validFrom: { type: 'string', description: 'Inclusive ISO date/time from which this knowledge applies; distinct from file/source/task dates' },
@@ -51,22 +78,22 @@ export function getLlmWikiTools(): Tool[] {
         scopeUri, sourceId: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' },
         sourceUrl: { type: 'string' }, capturedBy: { type: 'string' }, capturedAt: { type: 'string' }, mediaType: { type: 'string' }, sourceType: { type: 'string', maxLength: 80, description: 'Optional source kind such as paper, web, book, dataset, or code' }, citationKey: { type: 'string', maxLength: 120, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]*$' }, author: { type: 'string', maxLength: 300 }, publishedAt: { type: 'string' }, retrievedAt: { type: 'string' }, sourceFamily: { type: 'string', maxLength: 160, description: 'Legacy-compatible stable family key connecting immutable versions of the same source' }, sourceVersion: { type: 'string', maxLength: 120, description: 'Legacy-compatible version, edition, or retrieval label' }, sourceWorkId: { type: 'string', maxLength: 160, description: 'Stable work identifier; defaults to sourceFamily' }, sourceEditionId: { type: 'string', maxLength: 160, description: 'Stable edition identifier; defaults to sourceVersion' }, supersedesSource: { type: 'string', maxLength: 500, description: 'Previous source ID or scope-safe source path' },
         archiveCollectionId: { type: 'string', maxLength: 160, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]*$', description: 'Stable provenance-group identifier for an archival source collection' }, archiveSeries: { type: 'array', minItems: 1, maxItems: 8, items: { type: 'string', minLength: 1, maxLength: 160 }, description: 'Broad-to-narrow archival series path; does not replace folders or MOCs' }, archiveSequence: { type: 'integer', minimum: 0, maximum: 1000000000, description: 'Original-order position within one exact archival series' }, accessionId: { type: 'string', maxLength: 160, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]*$', description: 'Optional ingestion or transfer batch identifier' }, custodialHistory: { type: 'string', maxLength: 1000, description: 'Bounded custody/provenance note' }, originalOrderNote: { type: 'string', maxLength: 1000, description: 'How original order was preserved or reconstructed' },
-        trustLevel: { type: 'string', enum: [...SOURCE_TRUST_LEVELS], default: 'unrated' }, trustReason: { type: 'string', maxLength: 500 }, accessToken, prettyPrint,
+        trustLevel: organizationPropertySchema('trust_level', { default: 'unrated' }), trustReason: { type: 'string', maxLength: 500 }, accessToken, prettyPrint,
       }, required: ['title', 'content'] },
     },
     {
       name: 'capture_wiki_note',
       description: 'Capture a rough observation in Inbox with one call. It defaults to note_kind=fleeting and lifecycle=inbox and returns its revision plus an executable wiki.clarify next action. Optionally preserve bounded origin, reason, context, and one related task so a later agent can understand why the capture exists; never put raw prompts, credentials, or secrets in these fields.',
       inputSchema: { type: 'object', properties: {
-        path: { type: 'string', description: 'Optional path inside Inbox/. Omit to generate a unique Inbox path.' }, title: { type: 'string', maxLength: 300 }, content: { type: 'string' }, references: { type: 'array', items: { type: 'string' }, maxItems: 20 }, capturedBy: { type: 'string' }, capturedFrom: { type: 'string', enum: [...CAPTURE_SOURCES], description: 'Bounded origin label for the observation' }, captureReason: { type: 'string', maxLength: 500, description: 'Why this observation was captured; do not include secrets or raw prompt text' }, captureContext: { type: 'string', maxLength: 1000, description: 'Short surrounding context another agent needs to interpret the capture' }, relatedTask: { type: 'string', maxLength: 500, description: 'One existing task/project path or Obsidian wikilink related to this capture' }, expectedRevision: { type: 'string', description: "Optional; use 'missing' for a new capture" }, accessToken, prettyPrint,
+        path: { type: 'string', description: 'Optional path inside Inbox/. Omit to generate a unique Inbox path.' }, title: { type: 'string', maxLength: 300 }, content: { type: 'string' }, references: { type: 'array', items: { type: 'string' }, maxItems: 20 }, capturedBy: { type: 'string' }, capturedFrom: organizationPropertySchema('captured_from'), captureReason: { type: 'string', maxLength: 500, description: 'Why this observation was captured; do not include secrets or raw prompt text' }, captureContext: { type: 'string', maxLength: 1000, description: 'Short surrounding context another agent needs to interpret the capture' }, relatedTask: { type: 'string', maxLength: 500, description: 'One existing task/project path or Obsidian wikilink related to this capture' }, expectedRevision: { type: 'string', description: "Optional; use 'missing' for a new capture" }, accessToken, prettyPrint,
       }, required: ['content'] },
     },
     {
       name: 'clarify_wiki_note',
       description: 'Complete the GTD Clarify step for one Inbox capture. Applies the disposition lifecycle, detects an existing proposed destination, and returns a revision-safe move-preview or merge-preview action without deleting, overwriting, or silently moving the note.',
       inputSchema: { type: 'object', properties: {
-        path: { type: 'string' }, disposition: { type: 'string', enum: [...CLARIFY_DISPOSITIONS] }, clarifiedBy: { type: 'string' }, clarifyNote: { type: 'string', maxLength: 1000 }, targetPath: { type: 'string', description: 'Optional vault-relative destination suggestion; the note is not moved automatically' },
-        noteKind: { type: 'string', enum: [...NOTE_KINDS] }, lifecycle: { type: 'string', enum: [...LIFECYCLES] }, epistemicStatus: { type: 'string', description: 'Required when clarifying as question, hypothesis, experiment, or assumption; experiment uses planned/running/completed/failed/inconclusive/reproduced' }, taskStatus: { type: 'string', enum: [...TASK_STATUSES] }, project: { type: 'string' }, nextAction: { type: 'string', maxLength: 500 }, waitingFor: { type: 'string', maxLength: 500 }, desiredOutcome: { type: 'string', maxLength: 1000 }, projectPurpose: { type: 'string', maxLength: 1000 }, projectSupport: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 30 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
+        path: { type: 'string' }, disposition: organizationPropertySchema('triage_disposition'), clarifiedBy: { type: 'string' }, clarifyNote: { type: 'string', maxLength: 1000 }, targetPath: { type: 'string', description: 'Optional vault-relative destination suggestion; the note is not moved automatically' },
+        noteKind: organizationPropertySchema('note_kind'), lifecycle: organizationPropertySchema('lifecycle'), epistemicStatus: { type: 'string', description: 'Required when clarifying as question, hypothesis, experiment, or assumption; experiment uses planned/running/completed/failed/inconclusive/reproduced' }, taskStatus: organizationPropertySchema('task_status'), project: { type: 'string' }, nextAction: { type: 'string', maxLength: 500 }, waitingFor: { type: 'string', maxLength: 500 }, desiredOutcome: { type: 'string', maxLength: 1000 }, projectPurpose: { type: 'string', maxLength: 1000 }, projectSupport: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 30 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
       }, required: ['path', 'disposition', 'expectedRevision'] },
     },
     {
@@ -82,7 +109,7 @@ export function getLlmWikiTools(): Tool[] {
       inputSchema: { type: 'object', properties: {
         path: { type: 'string' }, title: { type: 'string' }, context: { type: 'string', maxLength: 4000 }, decision: { type: 'string', maxLength: 4000 },
         alternatives: { type: 'array', items: { type: 'string', maxLength: 1000 }, maxItems: 12 }, consequences: { type: 'array', items: { type: 'string', maxLength: 1000 }, maxItems: 12 },
-        status: { type: 'string', enum: [...DECISION_STATUSES], default: 'proposed' }, supersedes: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 30, description: 'Older Decision Records replaced by this one; direction is new -> old.' }, replacedBy: { type: 'string', maxLength: 500, description: 'Successor path when explicitly retiring this record.' }, evidencePaths: { type: 'array', items: { type: 'string' }, maxItems: 20 }, references: { type: 'array', items: { type: 'string' } },
+        status: organizationPropertySchema('decision_status', { default: 'proposed' }), supersedes: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 30, description: 'Older Decision Records replaced by this one; direction is new -> old.' }, replacedBy: { type: 'string', maxLength: 500, description: 'Successor path when explicitly retiring this record.' }, evidencePaths: { type: 'array', items: { type: 'string' }, maxItems: 20 }, references: { type: 'array', items: { type: 'string' } },
         author: { type: 'string' }, reviewAt: { type: 'string' }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
       }, required: ['path', 'title', 'context', 'decision', 'evidencePaths', 'expectedRevision'] },
     },
@@ -100,18 +127,18 @@ export function getLlmWikiTools(): Tool[] {
         ...executionProperties,
         ...temporalProperties,
         path: { type: 'string' }, content: { type: 'string', description: 'Obsidian Markdown; resolvable [[Note]] links are automatically recorded as references' }, evidencePaths: { type: 'array', items: { type: 'string' } }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths or Obsidian [[Note]] references' },
-        author: { type: 'string' }, confidence: { type: 'string', enum: [...CONFIDENCE_LEVELS], default: 'medium' },
-        status: { type: 'string', enum: [...KNOWLEDGE_STATUSES], default: 'draft' },
-        noteKind: { type: 'string', enum: [...NOTE_KINDS], default: 'knowledge' },
-        lifecycle: { type: 'string', enum: [...LIFECYCLES] },
-        decisionStatus: { type: 'string', enum: [...DECISION_STATUSES], description: 'Structured state for noteKind=decision. Prefer wiki.decision_record for creation and state transitions.' },
+        author: { type: 'string' }, confidence: organizationPropertySchema('confidence', { default: 'medium' }),
+        status: organizationPropertySchema('knowledge_status', { default: 'draft' }),
+        noteKind: organizationPropertySchema('note_kind', { default: 'knowledge' }),
+        lifecycle: organizationPropertySchema('lifecycle'),
+        decisionStatus: organizationPropertySchema('decision_status', { description: 'For noteKind=decision, prefer wiki.decision_record for creation and state transitions' }),
         moc: { type: 'string', description: 'Optional legacy single Obsidian [[MOC]] link or path' }, mocs: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'Additional Obsidian [[MOC]] links for multi-context discovery; navigation only' }, primaryMoc: { type: 'string', maxLength: 500, description: 'Preferred Obsidian MOC entry point for this note; navigation only' }, navOrder: { type: 'integer', minimum: 0, maximum: 1000000, description: 'Optional order among sibling MOCs; lower numbers appear first' }, project: { type: 'string', description: 'Optional Obsidian [[Project]] link or path' },
         reviewAt: { type: 'string', description: 'Optional ISO date/time for evidence review' }, reviewIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: 'Optional cadence in days; review_wiki_note schedules the next review after completion' }, reviewSnoozedUntil: { type: 'string', description: 'Temporarily omit this note from review queues until an ISO date/time' }, reviewSnoozeReason: { type: 'string', maxLength: 500 },
-        aliases: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 30, description: 'Optional Obsidian aliases for stable navigation' }, knowledgeRole: { type: 'string', enum: [...KNOWLEDGE_ROLES], description: 'Atomic-note role; use counterargument for an explicit rebuttal or limitation' }, seeAlso: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20, description: 'Adjacent Obsidian links, not evidence' },
+        aliases: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 30, description: 'Optional Obsidian aliases for stable navigation' }, knowledgeRole: organizationPropertySchema('knowledge_role', { description: 'Use counterargument for an explicit rebuttal or limitation' }), seeAlso: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20, description: 'Adjacent Obsidian links, not evidence' },
         canonicalPath: { type: 'string', maxLength: 500, description: 'Optional visible canonical note path for a redirect or duplicate; never an access boundary' },
         recallPrompt: { type: 'string', maxLength: 1000, description: 'Optional active-recall question for high-value knowledge; separate from evidence review' },
         recallIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: 'Optional active-recall cadence in days' },
-        retentionPolicy: { type: 'string', enum: [...RETENTION_POLICIES], description: 'Preservation hint only; never an automatic deletion command' }, retentionEvent: { type: 'string', enum: [...RETENTION_EVENTS], description: 'Event from which the retention window is interpreted' }, retentionAt: { type: 'string', description: 'Optional ISO date/time for preservation review or archival consideration' }, preserveUntil: { type: 'string', description: 'Do not propose archival or tombstoning before this ISO date/time' }, legalHold: { type: 'boolean', description: 'Keep the note and history until an authorized human releases the hold' }, retentionReason: { type: 'string', maxLength: 1000 }, replacedBy: { type: 'string', maxLength: 500, description: 'Visible replacement note for superseded or tombstoned knowledge' },
+        retentionPolicy: organizationPropertySchema('retention_policy'), retentionEvent: organizationPropertySchema('retention_event'), retentionAt: { type: 'string', description: 'Optional ISO date/time for preservation review or archival consideration' }, preserveUntil: { type: 'string', description: 'Do not propose archival or tombstoning before this ISO date/time' }, legalHold: { type: 'boolean', description: 'Keep the note and history until an authorized human releases the hold' }, retentionReason: { type: 'string', maxLength: 1000 }, replacedBy: { type: 'string', maxLength: 500, description: 'Visible replacement note for superseded or tombstoned knowledge' },
         summary: { type: 'string', maxLength: 2000, description: 'Optional compact projection; preserve the full Markdown body' },
         summaryLayer: { type: 'integer', minimum: 0, maximum: 4, description: 'Optional Progressive Summarization layer: 0 original, 1 capture, 2 bold, 3 highlight, 4 executive summary/remix' },
         summaryHighlights: { type: 'array', maxItems: 12, description: 'Optional selected passages for progressive reading; each item may include text, startLine/endLine, and quoteHash', items: { type: 'object', properties: { text: { type: 'string', maxLength: 600 }, startLine: { type: 'integer', minimum: 1 }, endLine: { type: 'integer', minimum: 1 }, quoteHash: { type: 'string', pattern: '^[a-fA-F0-9]{64}$' } }, required: ['text'] } },
@@ -127,26 +154,26 @@ export function getLlmWikiTools(): Tool[] {
         dueAt: { type: 'string', description: 'Optional ISO deadline; it is not a calendar appointment' },
         scheduledAt: { type: 'string', description: 'Optional ISO date/time when the work should be performed' },
         deferUntil: { type: 'string', description: 'Optional ISO date/time before which this action should not be revisited' },
-        serviceClass: { type: 'string', enum: [...SERVICE_CLASSES], description: 'Optional Kanban class of service for prioritization, not access control' },
+        serviceClass: organizationPropertySchema('service_class'),
         completionCriteria: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'Observable conditions that define done for project/task work' },
         startedAt: { type: 'string', description: 'Optional ISO time when work entered progress' }, blockedSince: { type: 'string', description: 'Optional ISO time when work became blocked' }, waitingSince: { type: 'string', description: 'Optional ISO time when work began waiting' }, completedAt: { type: 'string', description: 'Optional ISO time when work completed' },
-        taskStatus: { type: 'string', enum: [...TASK_STATUSES], description: 'Workflow state for project/task notes; separate from knowledge lifecycle' },
-        reviewPolicy: { type: 'string', enum: [...REVIEW_POLICIES], description: 'When a knowledge note should re-enter review; upstream compares typed dependency/support revisions and states with the last publish/review baseline, not nearby links' },
-        reviewOutcome: { type: 'string', enum: [...REVIEW_OUTCOMES], description: 'Outcome of the latest evidence review; records completion without duplicating Git history' },
-        interpretationStatus: { type: 'string', enum: [...INTERPRETATION_STATUSES], description: 'Source-processing stage: raw literature, interpreted notes, or synthesized reusable knowledge' },
+        taskStatus: organizationPropertySchema('task_status', { description: 'Separate from knowledge lifecycle' }),
+        reviewPolicy: organizationPropertySchema('review_policy', { description: 'Upstream compares typed dependency/support revisions and states with the last publish/review baseline, not nearby links' }),
+        reviewOutcome: organizationPropertySchema('last_review_outcome', { description: 'Records completion without duplicating Git history' }),
+        interpretationStatus: organizationPropertySchema('interpretation_status'),
         reviewedBy: { type: 'string', maxLength: 200 }, reviewedAt: { type: 'string' }, reviewNote: { type: 'string', maxLength: 1000 },
         epistemicStatus: { type: 'string', description: 'Question: open/answered/blocked/abandoned; hypothesis: proposed/supported/refuted/inconclusive; experiment: planned/running/completed/failed/inconclusive/reproduced; assumption: active/verified/invalidated/replaced' },
-        polarity: { type: 'string', enum: [...KNOWLEDGE_POLARITIES], description: 'Use negative for failures, rejected approaches, counterexamples, or non-reproducible results that should remain searchable' },
-        negativeType: { type: 'string', enum: [...NEGATIVE_KINDS] },
+        polarity: organizationPropertySchema('knowledge_polarity', { description: 'Use negative for failures, rejected approaches, counterexamples, or non-reproducible results that should remain searchable' }),
+        negativeType: organizationPropertySchema('negative_type'),
         attempted: { type: 'string', maxLength: 1200 }, observed: { type: 'string', maxLength: 1200 }, failureCondition: { type: 'string', maxLength: 1200 }, affectedScope: { type: 'string', maxLength: 500 }, reproduction: { type: 'string', maxLength: 1200 }, whyRejected: { type: 'string', maxLength: 1200 }, reusableLesson: { type: 'string', maxLength: 1200 }, replacementPath: { type: 'string', maxLength: 500 },
         evidence: { type: 'array', maxItems: 30, description: 'Optional evidence locators; add heading/blockId and, when precise citation matters, 1-based startLine/endLine plus quoteHash (SHA-256 of the selected source lines)', items: { type: 'object', properties: { path: { type: 'string' }, heading: { type: 'string', maxLength: 300 }, blockId: { type: 'string', maxLength: 100 }, revision: { type: 'string', maxLength: 160 }, startLine: { type: 'integer', minimum: 1 }, endLine: { type: 'integer', minimum: 1 }, quoteHash: { type: 'string', pattern: '^[a-fA-F0-9]{64}$' } }, required: ['path'] } },
         stableId: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', maxLength: 80, description: 'Optional stable identity for durable notes; not a security boundary' },
-        termStatus: { type: 'string', enum: [...TERM_STATUSES], description: 'Optional controlled-vocabulary state for the note title' }, termReplacedBy: { type: 'string', maxLength: 500, description: 'Preferred term or Obsidian link replacing a deprecated term' }, preferredTerm: { type: 'string', maxLength: 300, description: 'Preferred authority display term; defaults to the note title' }, disambiguation: { type: 'string', maxLength: 300, description: 'Short qualifier for homonymous terms' }, broaderTerms: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 }, relatedTerms: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 }, subjectTerms: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 20, description: 'Bounded subject access terms for faceted retrieval' }, domain: { type: 'string', maxLength: 200, description: 'Primary domain for faceted retrieval' }, methods: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 20 }, audience: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 12 }, retrievalCues: { type: 'array', items: { type: 'string', maxLength: 300 }, maxItems: 8, description: 'Situations or problem signals that should surface this note' }, useWhen: { type: 'string', maxLength: 1000, description: 'Compact description of when this note is useful' },
+        termStatus: organizationPropertySchema('term_status'), termReplacedBy: { type: 'string', maxLength: 500, description: 'Preferred term or Obsidian link replacing a deprecated term' }, preferredTerm: { type: 'string', maxLength: 300, description: 'Preferred authority display term; defaults to the note title' }, disambiguation: { type: 'string', maxLength: 300, description: 'Short qualifier for homonymous terms' }, broaderTerms: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 }, relatedTerms: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 }, subjectTerms: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 20, description: 'Bounded subject access terms for faceted retrieval' }, domain: { type: 'string', maxLength: 200, description: 'Primary domain for faceted retrieval' }, methods: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 20 }, audience: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 12 }, retrievalCues: { type: 'array', items: { type: 'string', maxLength: 300 }, maxItems: 8, description: 'Situations or problem signals that should surface this note' }, useWhen: { type: 'string', maxLength: 1000, description: 'Compact description of when this note is useful' },
         termScopeNote: { type: 'string', maxLength: 1000, description: 'Short definition that prevents a term from being used too broadly' },
         termLanguage: { type: 'string', maxLength: 40, description: 'Optional language/script tag such as ko or en-US' }, authorityScheme: { type: 'string', maxLength: 120, description: 'Optional vocabulary or authority source name' }, authorityId: { type: 'string', maxLength: 200, description: 'Optional stable identifier in that authority scheme' },
         relations: { type: 'object', description: 'Typed Obsidian link arrays: supports, contradicts, supersedes, derived_from, depends_on, implements, blocked_by, answers_questions, tests, related, same_as, version_of, refines' }, relationNotes: { type: 'object', description: 'Short rationale keyed by relation field' }, relationEvidence: { type: 'object', description: 'Up to four scope-safe evidence paths keyed by relation field' },
         mocPurpose: { type: 'string', maxLength: 1000, description: 'For MOCs: the navigation purpose' }, mocScope: { type: 'string', maxLength: 500, description: 'For MOCs: the knowledge boundary or topic scope' }, mocQuestions: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'For MOCs: representative questions the map should answer' }, mocParent: { type: 'string', maxLength: 500, description: 'Optional parent MOC wikilink' },
-        focusHorizon: { type: 'string', enum: [...FOCUS_HORIZONS], description: 'Optional GTD horizon: concrete action, project, area, goal, vision, or purpose/principles' }, focusParent: { type: 'string', maxLength: 500, description: 'Optional Obsidian link/path to the higher-level outcome this note serves' }, focusSupports: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20, description: 'Optional bounded links/paths to outcomes supported by this note; navigation metadata only' },
+        focusHorizon: organizationPropertySchema('focus_horizon', { description: 'Optional GTD horizon for connecting concrete action to purpose/principles' }), focusParent: { type: 'string', maxLength: 500, description: 'Optional Obsidian link/path to the higher-level outcome this note serves' }, focusSupports: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20, description: 'Optional bounded links/paths to outcomes supported by this note; navigation metadata only' },
         claims: { type: 'array', maxItems: 100, description: 'Optional claim-level provenance and argument structure. Every claim needs text and at least one intact immutable evidence path. Put ^claim-id on the corresponding Markdown block; claim relations use [[Note#^claim-id]] or local [[#^claim-id]] links.', items: { type: 'object', properties: {
           id: { type: 'string' }, text: { type: 'string' }, evidencePaths: { type: 'array', items: { type: 'string' }, maxItems: 20 }, evidence: { type: 'array', maxItems: 30, items: { type: 'object', properties: { path: { type: 'string' }, heading: { type: 'string', maxLength: 300 }, blockId: { type: 'string', maxLength: 100 }, revision: { type: 'string', maxLength: 160 }, startLine: { type: 'integer', minimum: 1 }, endLine: { type: 'integer', minimum: 1 }, quoteHash: { type: 'string', pattern: '^[a-fA-F0-9]{64}$' } }, required: ['path'] } },
           confidence: { type: 'string', enum: [...CONFIDENCE_LEVELS] }, status: { type: 'string', enum: [...CLAIM_STATUSES] },
@@ -162,14 +189,14 @@ export function getLlmWikiTools(): Tool[] {
       name: 'get_wiki_catalog',
       description: 'Build a live scope-aware catalog from frontmatter instead of maintaining a stale hand-written index. Set includeFacets=true for bounded metadata-only counts across note kind, lifecycle, knowledge role, epistemic/task state, review policy, source type, polarity, MOC, project, domain, subject terms, tags, and temporal validity. Optional facet filters narrow the same metadata pass without loading note bodies; validity can be evaluated at validAt. Use orderBy for LATCH-style location, alphabet, time, category, or hierarchy browsing without duplicating notes.',
       inputSchema: { type: 'object', properties: {
-        noteKind: { type: 'string', enum: [...NOTE_KINDS] },
-        lifecycle: { type: 'string', enum: [...LIFECYCLES] },
+        noteKind: organizationPropertySchema('note_kind'),
+        lifecycle: organizationPropertySchema('lifecycle'),
         epistemicStatus: { type: 'string', maxLength: 80, description: 'Optional exact epistemic state filter for question/hypothesis/experiment/assumption notes' },
-        taskStatus: { type: 'string', enum: [...TASK_STATUSES] },
-        reviewPolicy: { type: 'string', enum: [...REVIEW_POLICIES] },
+        taskStatus: organizationPropertySchema('task_status'),
+        reviewPolicy: organizationPropertySchema('review_policy'),
         sourceType: { type: 'string', maxLength: 80, description: 'Optional source kind filter such as paper, web, book, dataset, or code' },
-        polarity: { type: 'string', enum: [...KNOWLEDGE_POLARITIES], description: 'Filter preserved knowledge by positive or negative/failed-path polarity' },
-        knowledgeRole: { type: 'string', enum: [...KNOWLEDGE_ROLES], description: 'Optional exact durable-knowledge role filter' },
+        polarity: organizationPropertySchema('knowledge_polarity', { description: 'Filter preserved knowledge by positive or negative/failed-path polarity' }),
+        knowledgeRole: organizationPropertySchema('knowledge_role', { description: 'Optional exact durable-knowledge role filter' }),
         moc: { type: 'string', maxLength: 500, description: 'Case-insensitive exact match against primary_moc, moc, or one mocs value' },
         project: { type: 'string', maxLength: 500, description: 'Case-insensitive exact project match' },
         domain: { type: 'string', maxLength: 200 },
@@ -350,7 +377,7 @@ export function getLlmWikiTools(): Tool[] {
       name: 'review_wiki_note',
       description: 'Record completion of an evidence review without resubmitting the Markdown body. Refreshes the body/link review baseline, records the reviewer and outcome, and can schedule the next review; non-manual policies without an explicit interval use a bounded adaptive cadence.',
       inputSchema: { type: 'object', properties: {
-        path: { type: 'string' }, reviewOutcome: { type: 'string', enum: [...REVIEW_OUTCOMES] }, reviewedBy: { type: 'string' }, reviewAt: { type: 'string', description: 'Optional next review ISO date/time; if omitted, reviewIntervalDays is used when present' }, reviewIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: 'Optional cadence in days; completed reviews schedule the next review automatically' }, nextLifecycle: { type: 'string', enum: [...LIFECYCLES], description: 'Optional explicit lifecycle after review; omit to keep the current lifecycle and receive follow-up guidance' }, reviewReason: { type: 'string', maxLength: 120, description: 'Why this review was entered, such as source_changed, link_changed, note_edited, or manual_review' }, reviewChecks: { type: 'array', items: { type: 'string', enum: [...REVIEW_CHECKS] }, maxItems: 7, description: 'Quality dimensions actually checked during this review' }, reviewOpenItems: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 8, description: 'Bounded follow-up items left by the review' }, reviewNote: { type: 'string', maxLength: 1000 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
+        path: { type: 'string' }, reviewOutcome: organizationPropertySchema('last_review_outcome'), reviewedBy: { type: 'string' }, reviewAt: { type: 'string', description: 'Optional next review ISO date/time; if omitted, reviewIntervalDays is used when present' }, reviewIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: 'Optional cadence in days; completed reviews schedule the next review automatically' }, nextLifecycle: organizationPropertySchema('lifecycle', { description: 'Optional explicit lifecycle after review; omit to keep the current lifecycle and receive follow-up guidance' }), reviewReason: { type: 'string', maxLength: 120, description: 'Why this review was entered, such as source_changed, link_changed, note_edited, or manual_review' }, reviewChecks: organizationPropertySchema('review_checks', { maxItems: 7, description: 'Quality dimensions actually checked during this review' }), reviewOpenItems: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 8, description: 'Bounded follow-up items left by the review' }, reviewNote: { type: 'string', maxLength: 1000 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
       }, required: ['path', 'reviewOutcome', 'expectedRevision'] },
     },
     {
@@ -389,7 +416,7 @@ export function getLlmWikiTools(): Tool[] {
       name: 'record_wiki_recall',
       description: 'Record an optional active-recall attempt for a high-value Wiki note without rewriting its Markdown body. Attempt the recallPrompt before opening the note, then record failed, partial, or good; this is separate from evidence review and never changes truth status.',
       inputSchema: { type: 'object', properties: {
-        path: { type: 'string' }, recallQuality: { type: 'string', enum: [...RECALL_QUALITIES] }, recallPrompt: { type: 'string', maxLength: 1000, description: 'Optional replacement prompt; otherwise use the note property' }, recallIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: 'Optional next-recall cadence; otherwise a bounded quality-based cadence is chosen' }, confusion: { type: 'string', maxLength: 600, description: 'What was forgotten or confused; do not include secrets' }, repairPath: { type: 'string', maxLength: 500, description: 'Optional note/task created to repair the recall failure' }, repairStatus: { type: 'string', enum: [...RECALL_REPAIR_STATUSES] }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
+        path: { type: 'string' }, recallQuality: organizationPropertySchema('recall_quality'), recallPrompt: { type: 'string', maxLength: 1000, description: 'Optional replacement prompt; otherwise use the note property' }, recallIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: 'Optional next-recall cadence; otherwise a bounded quality-based cadence is chosen' }, confusion: { type: 'string', maxLength: 600, description: 'What was forgotten or confused; do not include secrets' }, repairPath: { type: 'string', maxLength: 500, description: 'Optional note/task created to repair the recall failure' }, repairStatus: organizationPropertySchema('recall_repair_status'), expectedRevision: { type: 'string' }, accessToken, prettyPrint,
       }, required: ['path', 'recallQuality', 'expectedRevision'] },
     },
     {
@@ -418,8 +445,8 @@ export function getLlmWikiTools(): Tool[] {
       inputSchema: { type: 'object', properties: {
         context: { type: 'string', description: 'Optional exact task_context filter' },
         maxMinutes: { type: 'integer', minimum: 1, maximum: 1440, description: 'Optional maximum estimated duration in minutes. Reads time_estimate_minutes, estimated_minutes, duration_minutes, or time_minutes.' },
-        energy: { type: 'string', enum: [...EXECUTION_LEVELS], description: 'Optional exact energy filter; reads energy or energy_level.' },
-        effort: { type: 'string', enum: [...EXECUTION_LEVELS], description: 'Optional exact effort filter; reads effort or effort_level.' },
+        energy: organizationPropertySchema('energy', { description: 'Optional exact filter; reads energy or energy_level' }),
+        effort: organizationPropertySchema('effort', { description: 'Optional exact filter; reads effort or effort_level' }),
         limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 },
         maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 },
         accessToken, prettyPrint,
@@ -457,9 +484,9 @@ export function getLlmWikiTools(): Tool[] {
       inputSchema: { type: 'object', properties: {
         ...executionProperties,
         ...temporalProperties,
-        path: { type: 'string' }, noteKind: { type: 'string', enum: [...NOTE_KINDS] },
-        lifecycle: { type: 'string', enum: [...LIFECYCLES] },
-        decisionStatus: { type: 'string', enum: [...DECISION_STATUSES], description: 'Metadata-only migration/repair for an existing Decision Record; use wiki.decision_record for an actual state transition.' },
+        path: { type: 'string' }, noteKind: organizationPropertySchema('note_kind'),
+        lifecycle: organizationPropertySchema('lifecycle'),
+        decisionStatus: organizationPropertySchema('decision_status', { description: 'Metadata-only migration/repair for an existing Decision Record; use wiki.decision_record for an actual state transition' }),
         moc: { type: 'string' }, mocs: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'Additional Obsidian [[MOC]] links for multi-context discovery; navigation only' }, primaryMoc: { type: 'string', maxLength: 500, description: 'Preferred Obsidian MOC entry point for this note; navigation only' }, navOrder: { type: 'integer', minimum: 0, maximum: 1000000, description: 'Optional order among sibling MOCs; lower numbers appear first' }, project: { type: 'string' }, reviewAt: { type: 'string' },
         aliases: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 30 }, reviewIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: 'Optional review cadence in days; review_wiki_note advances review_at after a completed review' },
         summary: { type: 'string', maxLength: 2000 },
@@ -468,20 +495,20 @@ export function getLlmWikiTools(): Tool[] {
         keyPoints: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
         openQuestions: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
         nextActions: { type: 'array', items: { type: 'string', maxLength: 600 }, maxItems: 20 },
-        desiredOutcome: { type: 'string', maxLength: 1000 }, projectPurpose: { type: 'string', maxLength: 1000 }, projectSupport: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 30 }, taskContext: { type: 'string', maxLength: 300 }, dueAt: { type: 'string', description: 'ISO deadline, distinct from scheduledAt' }, scheduledAt: { type: 'string', description: 'ISO execution/calendar time' }, deferUntil: { type: 'string' }, serviceClass: { type: 'string', enum: [...SERVICE_CLASSES], description: 'Optional Kanban class of service' }, completionCriteria: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'Observable conditions for considering project/task work complete' }, startedAt: { type: 'string', description: 'Optional ISO time when work entered progress' }, blockedSince: { type: 'string', description: 'Optional ISO time when work became blocked' }, waitingSince: { type: 'string', description: 'Optional ISO time when work began waiting' }, completedAt: { type: 'string', description: 'Optional ISO time when work completed' },
-        stableId: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', maxLength: 80 }, canonicalPath: { type: 'string', maxLength: 500 }, recallPrompt: { type: 'string', maxLength: 1000 }, recallIntervalDays: { type: 'integer', minimum: 1, maximum: 3650 }, lastRecalledAt: { type: 'string' }, recallQuality: { type: 'string', enum: [...RECALL_QUALITIES] },
-        retentionPolicy: { type: 'string', enum: [...RETENTION_POLICIES] }, retentionEvent: { type: 'string', enum: [...RETENTION_EVENTS] }, retentionAt: { type: 'string' }, preserveUntil: { type: 'string' }, legalHold: { type: 'boolean' }, retentionReason: { type: 'string', maxLength: 1000 }, replacedBy: { type: 'string', maxLength: 500 },
-        termStatus: { type: 'string', enum: [...TERM_STATUSES] }, termReplacedBy: { type: 'string', maxLength: 500 }, preferredTerm: { type: 'string', maxLength: 300 }, disambiguation: { type: 'string', maxLength: 300 }, broaderTerms: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 }, relatedTerms: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 }, subjectTerms: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 20 }, domain: { type: 'string', maxLength: 200 }, methods: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 20 }, audience: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 12 }, retrievalCues: { type: 'array', items: { type: 'string', maxLength: 300 }, maxItems: 8 }, useWhen: { type: 'string', maxLength: 1000 },
-        reviewSnoozedUntil: { type: 'string', description: 'Temporarily omit this note from review queues until an ISO date/time' }, reviewSnoozeReason: { type: 'string', maxLength: 500 }, knowledgeRole: { type: 'string', enum: [...KNOWLEDGE_ROLES] }, seeAlso: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 }, termScopeNote: { type: 'string', maxLength: 1000 }, termLanguage: { type: 'string', maxLength: 40 }, authorityScheme: { type: 'string', maxLength: 120 }, authorityId: { type: 'string', maxLength: 200 },
-        taskStatus: { type: 'string', enum: [...TASK_STATUSES], description: 'Workflow state for project/task notes' },
-        reviewPolicy: { type: 'string', enum: [...REVIEW_POLICIES] },
-        reviewOutcome: { type: 'string', enum: [...REVIEW_OUTCOMES] }, reviewedBy: { type: 'string', maxLength: 200 }, reviewedAt: { type: 'string' }, reviewChecks: { type: 'array', items: { type: 'string', enum: [...REVIEW_CHECKS] }, maxItems: 7 }, reviewOpenItems: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 8 }, reviewNote: { type: 'string', maxLength: 1000 }, interpretationStatus: { type: 'string', enum: [...INTERPRETATION_STATUSES], description: 'Source-processing stage' }, epistemicStatus: { type: 'string', description: 'Kind-specific state, including planned/running/completed/failed/inconclusive/reproduced for experiment notes' },
-        polarity: { type: 'string', enum: [...KNOWLEDGE_POLARITIES] },
-        negativeType: { type: 'string', enum: [...NEGATIVE_KINDS] },
+        desiredOutcome: { type: 'string', maxLength: 1000 }, projectPurpose: { type: 'string', maxLength: 1000 }, projectSupport: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 30 }, taskContext: { type: 'string', maxLength: 300 }, dueAt: { type: 'string', description: 'ISO deadline, distinct from scheduledAt' }, scheduledAt: { type: 'string', description: 'ISO execution/calendar time' }, deferUntil: { type: 'string' }, serviceClass: organizationPropertySchema('service_class'), completionCriteria: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'Observable conditions for considering project/task work complete' }, startedAt: { type: 'string', description: 'Optional ISO time when work entered progress' }, blockedSince: { type: 'string', description: 'Optional ISO time when work became blocked' }, waitingSince: { type: 'string', description: 'Optional ISO time when work began waiting' }, completedAt: { type: 'string', description: 'Optional ISO time when work completed' },
+        stableId: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', maxLength: 80 }, canonicalPath: { type: 'string', maxLength: 500 }, recallPrompt: { type: 'string', maxLength: 1000 }, recallIntervalDays: { type: 'integer', minimum: 1, maximum: 3650 }, lastRecalledAt: { type: 'string' }, recallQuality: organizationPropertySchema('recall_quality'),
+        retentionPolicy: organizationPropertySchema('retention_policy'), retentionEvent: organizationPropertySchema('retention_event'), retentionAt: { type: 'string' }, preserveUntil: { type: 'string' }, legalHold: { type: 'boolean' }, retentionReason: { type: 'string', maxLength: 1000 }, replacedBy: { type: 'string', maxLength: 500 },
+        termStatus: organizationPropertySchema('term_status'), termReplacedBy: { type: 'string', maxLength: 500 }, preferredTerm: { type: 'string', maxLength: 300 }, disambiguation: { type: 'string', maxLength: 300 }, broaderTerms: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 }, relatedTerms: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 }, subjectTerms: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 20 }, domain: { type: 'string', maxLength: 200 }, methods: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 20 }, audience: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 12 }, retrievalCues: { type: 'array', items: { type: 'string', maxLength: 300 }, maxItems: 8 }, useWhen: { type: 'string', maxLength: 1000 },
+        reviewSnoozedUntil: { type: 'string', description: 'Temporarily omit this note from review queues until an ISO date/time' }, reviewSnoozeReason: { type: 'string', maxLength: 500 }, knowledgeRole: organizationPropertySchema('knowledge_role'), seeAlso: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 }, termScopeNote: { type: 'string', maxLength: 1000 }, termLanguage: { type: 'string', maxLength: 40 }, authorityScheme: { type: 'string', maxLength: 120 }, authorityId: { type: 'string', maxLength: 200 },
+        taskStatus: organizationPropertySchema('task_status'),
+        reviewPolicy: organizationPropertySchema('review_policy'),
+        reviewOutcome: organizationPropertySchema('last_review_outcome'), reviewedBy: { type: 'string', maxLength: 200 }, reviewedAt: { type: 'string' }, reviewChecks: organizationPropertySchema('review_checks', { maxItems: 7 }), reviewOpenItems: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 8 }, reviewNote: { type: 'string', maxLength: 1000 }, interpretationStatus: organizationPropertySchema('interpretation_status'), epistemicStatus: { type: 'string', description: 'Kind-specific state, including planned/running/completed/failed/inconclusive/reproduced for experiment notes' },
+        polarity: organizationPropertySchema('knowledge_polarity'),
+        negativeType: organizationPropertySchema('negative_type'),
         attempted: { type: 'string', maxLength: 1200 }, observed: { type: 'string', maxLength: 1200 }, failureCondition: { type: 'string', maxLength: 1200 }, affectedScope: { type: 'string', maxLength: 500 }, reproduction: { type: 'string', maxLength: 1200 }, whyRejected: { type: 'string', maxLength: 1200 }, reusableLesson: { type: 'string', maxLength: 1200 }, replacementPath: { type: 'string', maxLength: 500 },
-        relations: { type: 'object', description: 'Typed Obsidian link arrays, including tests, same_as, version_of, and refines' }, relationNotes: { type: 'object', description: 'Short rationale keyed by relation field' }, relationEvidence: { type: 'object', description: 'Up to four scope-safe evidence paths keyed by relation field' }, disposition: { type: 'string', enum: [...CLARIFY_DISPOSITIONS] }, clarifiedBy: { type: 'string' }, clarifiedAt: { type: 'string' }, clarifyNote: { type: 'string', maxLength: 1000 }, targetPath: { type: 'string' },
+        relations: { type: 'object', description: 'Typed Obsidian link arrays, including tests, same_as, version_of, and refines' }, relationNotes: { type: 'object', description: 'Short rationale keyed by relation field' }, relationEvidence: { type: 'object', description: 'Up to four scope-safe evidence paths keyed by relation field' }, disposition: organizationPropertySchema('triage_disposition'), clarifiedBy: { type: 'string' }, clarifiedAt: { type: 'string' }, clarifyNote: { type: 'string', maxLength: 1000 }, targetPath: { type: 'string' },
         mocPurpose: { type: 'string', maxLength: 1000 }, mocScope: { type: 'string', maxLength: 500 }, mocQuestions: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12 }, mocParent: { type: 'string', maxLength: 500 },
-        focusHorizon: { type: 'string', enum: [...FOCUS_HORIZONS] }, focusParent: { type: 'string', maxLength: 500 }, focusSupports: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 },
+        focusHorizon: organizationPropertySchema('focus_horizon'), focusParent: { type: 'string', maxLength: 500 }, focusSupports: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 },
         waitingFor: { type: 'string', description: 'Optional person/event/resource this project is waiting for' },
         expectedRevision: { type: 'string' }, accessToken, prettyPrint,
       }, required: ['path', 'expectedRevision'] },
@@ -684,7 +711,7 @@ export function getLlmWikiTools(): Tool[] {
       name: 'resolve_wiki_issue',
       description: 'Resolve an Error Book entry with attribution, reason, and optimistic concurrency protection.',
       inputSchema: { type: 'object', properties: {
-        path: { type: 'string' }, actor: { type: 'string' }, resolution: { type: 'string' }, resolutionStatus: { type: 'string', enum: [...ISSUE_RESOLUTION_STATUSES] }, retrospectiveStatus: { type: 'string', enum: [...ISSUE_RETROSPECTIVE_STATUSES] }, retrospective: { type: 'string', maxLength: 1200 }, followUpPaths: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
+        path: { type: 'string' }, actor: { type: 'string' }, resolution: { type: 'string' }, resolutionStatus: organizationPropertySchema('issue_resolution_status'), retrospectiveStatus: organizationPropertySchema('issue_retrospective_status'), retrospective: { type: 'string', maxLength: 1200 }, followUpPaths: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
       }, required: ['path', 'resolution', 'expectedRevision'] },
     },
   ];
