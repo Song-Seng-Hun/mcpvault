@@ -7,15 +7,116 @@ const WIKI_LINK_PATTERN = /!?(\[\[[^\]]+\]\])/g;
 const MARKDOWN_LINK_PATTERN = /(?<!!)(?:\[([^\]]*)\])\(\s*(<[^>]+>|[^\s)]+)(?:\s+['"][^)]*['"])?\s*\)/g;
 const FENCE_PATTERN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 
+interface LiteralRun {
+  start: number;
+  length: number;
+  segment: number;
+}
+
+function markRange(mask: Uint8Array, start: number, end: number): void {
+  mask.fill(1, start, end);
+}
+
+/**
+ * Build an offset-preserving mask for Markdown regions that cannot create an
+ * Obsidian graph edge. The scan is deliberately smaller than a full Markdown
+ * parser, but it handles the literal forms used in notes and examples:
+ * matching fences, closed backtick code spans, and escaped link openers.
+ */
+function buildLinkLiteralMask(content: string): Uint8Array {
+  const mask = new Uint8Array(content.length);
+  const backtickRuns: LiteralRun[] = [];
+  let fenceChar = '';
+  let fenceLength = 0;
+  let segment = 0;
+  let lineStart = 0;
+
+  while (lineStart <= content.length) {
+    const newline = content.indexOf('\n', lineStart);
+    const lineEnd = newline === -1 ? content.length : newline;
+    const rawLine = content.slice(lineStart, lineEnd);
+    const line = rawLine.replace(/\r$/, '');
+    const fence = FENCE_PATTERN.exec(line);
+
+    if (fenceChar || fence) {
+      markRange(mask, lineStart, lineEnd);
+      if (fence) {
+        const markers = fence[1]!;
+        const trailing = fence[2]!;
+        const char = markers[0]!;
+        if (!fenceChar) {
+          fenceChar = char;
+          fenceLength = markers.length;
+          segment += 1;
+        } else if (char === fenceChar && markers.length >= fenceLength && trailing.trim() === '') {
+          fenceChar = '';
+          fenceLength = 0;
+          segment += 1;
+        }
+      }
+    } else {
+      let precedingBackslashes = 0;
+      for (let offset = lineStart; offset < lineEnd; offset += 1) {
+        const char = content[offset]!;
+        const escaped = precedingBackslashes % 2 === 1;
+        if (char === '[' && escaped) mask[offset] = 1;
+        if (char === '`' && !escaped) {
+          const start = offset;
+          while (offset + 1 < lineEnd && content[offset + 1] === '`') offset += 1;
+          backtickRuns.push({ start, length: offset - start + 1, segment });
+          precedingBackslashes = 0;
+          continue;
+        }
+        precedingBackslashes = char === '\\' ? precedingBackslashes + 1 : 0;
+      }
+      if (line.trim() === '') segment += 1;
+    }
+
+    if (newline === -1) break;
+    lineStart = newline + 1;
+  }
+
+  const nextMatchingRun = new Int32Array(backtickRuns.length).fill(-1);
+  const lastByDelimiter = new Map<string, number>();
+  for (let index = backtickRuns.length - 1; index >= 0; index -= 1) {
+    const run = backtickRuns[index]!;
+    const key = `${run.segment}:${run.length}`;
+    nextMatchingRun[index] = lastByDelimiter.get(key) ?? -1;
+    lastByDelimiter.set(key, index);
+  }
+
+  for (let index = 0; index < backtickRuns.length;) {
+    const closerIndex = nextMatchingRun[index]!;
+    if (closerIndex === -1) {
+      index += 1;
+      continue;
+    }
+    const opening = backtickRuns[index]!;
+    const closing = backtickRuns[closerIndex]!;
+    markRange(mask, opening.start, closing.start + closing.length);
+    index = closerIndex + 1;
+  }
+  return mask;
+}
+
+function applyLineMask(line: string, lineOffset: number, mask: Uint8Array): string {
+  const projected = line.split('');
+  for (let index = 0; index < projected.length; index += 1) {
+    if (mask[lineOffset + index]) projected[index] = ' ';
+  }
+  return projected.join('');
+}
+
 /**
  * Find Obsidian wikilinks in a note that refer to a target note.
  *
  * This deliberately works on raw lines so the result can point an agent to
- * an exact line without returning the source note's full content. Fenced code
- * blocks are ignored because links shown as examples there are not graph
- * edges. Inline code is left alone: Obsidian can still index a wikilink that
- * appears in inline code, and deciding otherwise would require a Markdown
- * parser with different semantics from Obsidian.
+ * an exact line without returning the source note's full content. Matching
+ * fenced blocks, closed inline backtick spans, and escaped link openers are
+ * ignored because literal examples are not graph edges. Unmatched backticks
+ * remain ordinary text. Top-level indented-code parsing is intentionally out
+ * of scope because it requires complete block semantics to distinguish nested
+ * list content without hiding valid links.
  */
 export function findBacklinkMatches(content: string, targetPath: string): BacklinkMatch[] {
   const normalizedTarget = normalizeTarget(targetPath);
@@ -50,36 +151,23 @@ export function extractObsidianLinkOccurrences(content: string, limit = Number.P
 function extractLinkOccurrences(content: string, includeMarkdown: boolean, limit = Number.POSITIVE_INFINITY): Array<OutlinkMatch> {
   const matches: OutlinkMatch[] = [];
   const lines = content.split('\n');
-  let fenceChar = '';
-  let fenceLength = 0;
+  const literalMask = buildLinkLiteralMask(content);
+  let lineOffset = 0;
   let currentHeading: string | undefined;
 
   for (let index = 0; index < lines.length && matches.length < limit; index += 1) {
-    const line = lines[index]!.replace(/\r$/, '');
-    const fence = FENCE_PATTERN.exec(line);
-    if (fence) {
-      const markers = fence[1]!;
-      const trailing = fence[2]!;
-      const char = markers[0]!;
-      if (!fenceChar) {
-        fenceChar = char;
-        fenceLength = markers.length;
-      } else if (char === fenceChar && markers.length >= fenceLength && trailing.trim() === '') {
-        fenceChar = '';
-        fenceLength = 0;
-      }
-      continue;
-    }
-    if (fenceChar) continue;
+    const rawLine = lines[index]!;
+    const line = rawLine.replace(/\r$/, '');
+    const searchableLine = applyLineMask(line, lineOffset, literalMask);
 
-    const heading = line.match(/^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/);
+    const heading = searchableLine.match(/^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/);
     if (heading) currentHeading = heading[1]!.trim();
 
     WIKI_LINK_PATTERN.lastIndex = 0;
     const lineMatches: Array<{ offset: number; item: OutlinkMatch }> = [];
     let match: RegExpExecArray | null;
-    while ((match = WIKI_LINK_PATTERN.exec(line)) !== null) {
-      const link = match[0]!;
+    while ((match = WIKI_LINK_PATTERN.exec(searchableLine)) !== null) {
+      const link = line.slice(match.index, match.index + match[0]!.length);
       const parsed = linkDocument(link);
       if (!parsed.document) continue;
 
@@ -96,8 +184,8 @@ function extractLinkOccurrences(content: string, includeMarkdown: boolean, limit
 
     if (includeMarkdown) {
       MARKDOWN_LINK_PATTERN.lastIndex = 0;
-      while ((match = MARKDOWN_LINK_PATTERN.exec(line)) !== null) {
-        const link = match[0]!;
+      while ((match = MARKDOWN_LINK_PATTERN.exec(searchableLine)) !== null) {
+        const link = line.slice(match.index, match.index + match[0]!.length);
         const parsed = markdownLinkDocument(match[2]!);
         if (!parsed.document) continue;
         lineMatches.push({ offset: match.index, item: {
@@ -116,6 +204,7 @@ function extractLinkOccurrences(content: string, includeMarkdown: boolean, limit
       if (matches.length >= limit) break;
       matches.push(match.item);
     }
+    lineOffset += rawLine.length + 1;
   }
 
   return matches;

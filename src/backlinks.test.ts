@@ -45,4 +45,45 @@ describe('Obsidian link extraction', () => {
       expect.objectContaining({ targetBlockId: 'decision-1' }),
     ]);
   });
+
+  test('ignores closed inline code while preserving adjacent real links and exact locators', () => {
+    const content = '## References\n`[[Fake]]` [[Real#Section]] and `[bad](Missing.md)` [real](Real.md#^proof)';
+
+    expect(extractObsidianLinkOccurrences(content)).toEqual([
+      expect.objectContaining({ target: 'Real', line: 2, heading: 'References', targetHeading: 'Section' }),
+      expect.objectContaining({ target: 'Real.md', line: 2, heading: 'References', targetBlockId: 'proof' }),
+    ]);
+  });
+
+  test('handles multi-backtick and multiline code spans without hiding links after unmatched runs', () => {
+    const closed = [
+      '``code with ` and [[Hidden]]`` [[Visible]]',
+      '`multiline',
+      '[[AlsoHidden]]',
+      'continues` [shown](Shown.md)',
+    ].join('\n');
+    expect(extractObsidianLinkOccurrences(closed).map(match => ({ target: match.target, line: match.line }))).toEqual([
+      { target: 'Visible', line: 1 },
+      { target: 'Shown.md', line: 4 },
+    ]);
+
+    expect(extractObsidianLinkOccurrences('`unclosed [[StillVisible]]\n[also](Still.md)').map(match => match.target)).toEqual([
+      'StillVisible',
+      'Still.md',
+    ]);
+  });
+
+  test('ignores escaped link openers but keeps links after an even backslash run', () => {
+    const content = String.raw`\[[EscapedWiki]] \[escaped](Missing.md) \\[[VisibleWiki]] [visible](Visible.md)`;
+    expect(extractObsidianLinkOccurrences(content).map(match => match.target)).toEqual([
+      'VisibleWiki',
+      'Visible.md',
+    ]);
+  });
+
+  test('keeps literal examples out of backlink and unresolved projections', () => {
+    const content = '`[[Target]]` [[Target]] \n\\[[EscapedMissing]] [missing](Missing.md)';
+    expect(findBacklinkMatches(content, 'Target.md')).toHaveLength(1);
+    expect(findUnresolvedLinkMatches(content, ['Target.md']).map(match => match.target)).toEqual(['Missing.md']);
+  });
 });
