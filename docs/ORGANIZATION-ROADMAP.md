@@ -168,6 +168,16 @@ tools; new behaviors belong in the endpoint catalog.
   missing reverse edge and the hierarchy planner for MOC/focus parent defects;
   the suggested tool is therefore executable rather than a label followed by
   a generic manual triage operation.
+- Directional typed links and `focus_supports` now have a read-only
+  `wiki.relation_set` planner. It requires the complete desired exact target
+  set, canonicalizes Obsidian links, rejects self/scope/kind/horizon defects,
+  preserves relation rationale as an explicit review warning, and emits one
+  revision-stamped change. Graph health attaches this route to unresolved,
+  ambiguous, self, kind, and focus-support defects; review and maintenance
+  packets no longer send those cases through the full generic triage schema.
+  Under a tight response budget, graph compaction preserves epistemic,
+  provenance, focus, and typed-relation defects before low-value inventory
+  samples, so adding a repair hint cannot hide a more serious diagnosis.
 
 Evidence: `moc-navigation.test.ts`, `backlinks.test.ts`, `organization.test.ts`,
 `filesystem.test.ts`, `json-canvas.test.ts`, `continuity.test.ts`,

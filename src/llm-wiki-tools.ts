@@ -2,7 +2,7 @@ import type { Tool } from '@modelcontextprotocol/server';
 import {
   ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CATALOG_ORDERS, CLAIM_ROLES,
   CLAIM_STATUSES, CONFIDENCE_LEVELS, ISSUE_KINDS, NOTE_TEMPLATE_IDS,
-  TEMPORAL_VALIDITY_STATES, WIKI_PROJECTION_VIEWS,
+  RECIPROCAL_RELATIONS, RELATION_FIELDS, TEMPORAL_VALIDITY_STATES, WIKI_PROJECTION_VIEWS,
   getOrganizationPropertyContract,
 } from './organization.js';
 import { WIKI_POLICY_TOPICS } from './wiki-policy.js';
@@ -610,6 +610,16 @@ export function getLlmWikiTools(): Tool[] {
         additionalMocPaths: { type: 'array', maxItems: 12, items: { type: 'string', minLength: 1 }, description: 'Complete ordered contextual MOC set, excluding the primary MOC' },
         maxChars: { type: 'integer', minimum: 4096, maximum: 20000, default: 9000 }, accessToken, prettyPrint,
       }, required: ['notePath', 'primaryMocPath'] },
+    },
+    {
+      name: 'get_wiki_relation_set_preview',
+      description: 'Preview replacing one directional typed-relation or focus_supports Property with a complete exact target set. It resolves and canonicalizes every visible target, rejects self/scope/kind/horizon errors, and returns one revision-stamped notes.change_set edit. Use wiki.reciprocal_link for related or same_as.',
+      inputSchema: { type: 'object', properties: {
+        sourcePath: { type: 'string', description: 'Exact visible ordinary note whose relation list is being replaced' },
+        relation: { type: 'string', enum: [...RELATION_FIELDS.filter(field => !(RECIPROCAL_RELATIONS as readonly string[]).includes(field)), 'focus_supports'], description: 'Directional typed relation or focus_supports; use the reciprocal planner for related/same_as' },
+        targetPaths: { type: 'array', maxItems: 30, items: { type: 'string', minLength: 1 }, description: 'Complete ordered exact target-note set; pass [] to clear the Property' },
+        maxChars: { type: 'integer', minimum: 4096, maximum: 20000, default: 9000 }, accessToken, prettyPrint,
+      }, required: ['sourcePath', 'relation', 'targetPaths'] },
     },
     {
       name: 'get_wiki_reciprocal_link_preview',

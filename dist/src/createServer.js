@@ -1605,6 +1605,14 @@ export function createServer(vaultPath, options = {}) {
                             ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
                         }), trimmedArgs.prettyPrint);
                     }
+                    case "get_wiki_relation_set_preview": {
+                        return jsonResult(await llmWiki.relationSetPreview(principal, {
+                            sourcePath: trimmedArgs.sourcePath,
+                            relation: trimmedArgs.relation,
+                            targetPaths: trimmedArgs.targetPaths,
+                            ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
+                        }), trimmedArgs.prettyPrint);
+                    }
                     case "get_wiki_reciprocal_link_preview": {
                         return jsonResult(await llmWiki.reciprocalLinkPreview(principal, {
                             leftPath: trimmedArgs.leftPath,
@@ -2564,7 +2572,7 @@ export function createServer(vaultPath, options = {}) {
 }
 function trimPaths(args, access, principal) {
     const trimmed = { ...args };
-    for (const key of ['path', 'oldPath', 'newPath', 'targetPath', 'confirmPath', 'confirmOldPath', 'confirmNewPath', 'folder', 'pathPrefix', 'scopeUri', 'subjectPath', 'outputPath', 'parentPath', 'childPath', 'notePath', 'primaryMocPath', 'leftPath', 'rightPath']) {
+    for (const key of ['path', 'oldPath', 'newPath', 'targetPath', 'confirmPath', 'confirmOldPath', 'confirmNewPath', 'folder', 'pathPrefix', 'scopeUri', 'subjectPath', 'outputPath', 'parentPath', 'childPath', 'notePath', 'primaryMocPath', 'sourcePath', 'leftPath', 'rightPath']) {
         if (trimmed[key] && typeof trimmed[key] === 'string')
             trimmed[key] = access.resolveExternalPath(trimmed[key], principal);
     }
@@ -2578,6 +2586,9 @@ function trimPaths(args, access, principal) {
     }
     if (trimmed.additionalMocPaths && Array.isArray(trimmed.additionalMocPaths)) {
         trimmed.additionalMocPaths = trimmed.additionalMocPaths.map((p) => typeof p === 'string' ? access.resolveExternalPath(p, principal) : p);
+    }
+    if (trimmed.targetPaths && Array.isArray(trimmed.targetPaths)) {
+        trimmed.targetPaths = trimmed.targetPaths.map((p) => typeof p === 'string' ? access.resolveExternalPath(p, principal) : p);
     }
     if (trimmed.changes && Array.isArray(trimmed.changes)) {
         trimmed.changes = trimmed.changes.map((change) => change && typeof change === 'object' && typeof change.path === 'string'

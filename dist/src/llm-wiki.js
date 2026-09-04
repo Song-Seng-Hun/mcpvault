@@ -763,6 +763,13 @@ function organizationRoleBoundaryReason(path) {
         return 'Managed Community records must be changed and organized through their dedicated endpoint.';
     return undefined;
 }
+function typedRelationTargetKindReason(relation, targetKind) {
+    if (relation === 'answers_questions' && targetKind !== 'question')
+        return 'answers_questions targets must have note_kind: question.';
+    if (relation === 'tests' && !['question', 'hypothesis', 'assumption'].includes(targetKind))
+        return 'tests targets must have note_kind: question, hypothesis, or assumption.';
+    return undefined;
+}
 const DEFAULT_SCHEMA = `# LLM Wiki schema
 
 This vault uses ordinary Markdown, YAML frontmatter, Obsidian links, and Git as one coherent knowledge system.
@@ -4612,26 +4619,35 @@ export class LlmWikiService {
                 ? { ...item, path: item.nodes[0] }
                 : item)
             : [];
+        const itemsWithField = (items, field) => Array.isArray(items) ? items.filter(item => item && typeof item === 'object' && item.field === field) : [];
+        const directionalRelationItems = (items) => Array.isArray(items) ? items.filter(item => item && typeof item === 'object' && typeof item.relation === 'string' && !RECIPROCAL_RELATIONS.includes(item.relation)) : [];
+        const reciprocalRelationItems = (items) => Array.isArray(items) ? items.filter(item => item && typeof item === 'object' && typeof item.relation === 'string' && RECIPROCAL_RELATIONS.includes(item.relation)) : [];
         add(graph.epistemicConsistency?.items, 'epistemic_state_needs_evidence', 'wiki.answer_packet', 1);
         add(graph.knowledgeFlow?.literatureWithoutSource?.items, 'literature_source_missing', 'wiki.answer_packet', 1);
         add(graph.knowledgeFlow?.synthesisWithoutInputs?.items, 'synthesis_inputs_missing', 'wiki.answer_packet', 1);
         add(cycleRepresentatives(graph.mocHierarchy?.cycles?.items), 'moc_hierarchy_cycle', 'wiki.hierarchy_change', 2);
-        add(cycleRepresentatives(graph.focusHealth?.cycles?.items), 'focus_hierarchy_cycle', 'wiki.graph_health', 2);
-        add(graph.typedRelations?.self?.items, 'typed_relation_self_link', 'wiki.neighborhood', 2);
-        add(graph.typedRelations?.kindMismatches?.items, 'typed_relation_kind_mismatch', 'wiki.neighborhood', 2);
+        add(cycleRepresentatives(graph.focusHealth?.cycles?.items), 'focus_hierarchy_cycle', 'wiki.hierarchy_change', 2);
+        add(directionalRelationItems(graph.typedRelations?.self?.items), 'typed_relation_self_link', 'wiki.relation_set', 2);
+        add(reciprocalRelationItems(graph.typedRelations?.self?.items), 'typed_relation_self_link', 'wiki.neighborhood', 2);
+        add(graph.typedRelations?.kindMismatches?.items, 'typed_relation_kind_mismatch', 'wiki.relation_set', 2);
         add(graph.mocSequenceHealth?.items, 'moc_sequence_needs_repair', 'wiki.learning_path', 3);
         add(graph.mocHierarchy?.missingParents?.items, 'moc_parent_unresolved', 'wiki.hierarchy_change', 3);
         add(graph.mocHierarchy?.ambiguousParents?.items, 'moc_parent_ambiguous', 'wiki.hierarchy_change', 3);
-        add(graph.focusHealth?.unresolved?.items, 'focus_relation_unresolved', 'wiki.graph_health', 3);
-        add(graph.focusHealth?.ambiguous?.items, 'focus_relation_ambiguous', 'wiki.graph_health', 3);
-        add(graph.focusHealth?.horizonMismatches?.items, 'focus_horizon_mismatch', 'wiki.hierarchy_change', 3);
-        add(graph.typedRelations?.unresolved?.items, 'typed_relation_unresolved', 'wiki.neighborhood', 3);
-        add(graph.typedRelations?.ambiguous?.items, 'typed_relation_ambiguous', 'wiki.neighborhood', 3);
+        add(itemsWithField(graph.focusHealth?.unresolved?.items, 'focus_parent'), 'focus_relation_unresolved', 'wiki.hierarchy_change', 3);
+        add(itemsWithField(graph.focusHealth?.unresolved?.items, 'focus_supports'), 'focus_relation_unresolved', 'wiki.relation_set', 3);
+        add(itemsWithField(graph.focusHealth?.ambiguous?.items, 'focus_parent'), 'focus_relation_ambiguous', 'wiki.hierarchy_change', 3);
+        add(itemsWithField(graph.focusHealth?.ambiguous?.items, 'focus_supports'), 'focus_relation_ambiguous', 'wiki.relation_set', 3);
+        add(itemsWithField(graph.focusHealth?.horizonMismatches?.items, 'focus_parent'), 'focus_horizon_mismatch', 'wiki.hierarchy_change', 3);
+        add(itemsWithField(graph.focusHealth?.horizonMismatches?.items, 'focus_supports'), 'focus_horizon_mismatch', 'wiki.relation_set', 3);
+        add(directionalRelationItems(graph.typedRelations?.unresolved?.items), 'typed_relation_unresolved', 'wiki.relation_set', 3);
+        add(reciprocalRelationItems(graph.typedRelations?.unresolved?.items), 'typed_relation_unresolved', 'wiki.neighborhood', 3);
+        add(directionalRelationItems(graph.typedRelations?.ambiguous?.items), 'typed_relation_ambiguous', 'wiki.relation_set', 3);
+        add(reciprocalRelationItems(graph.typedRelations?.ambiguous?.items), 'typed_relation_ambiguous', 'wiki.neighborhood', 3);
         add(graph.mocQuestionCoverage?.unlinked?.items, 'moc_question_has_no_linked_answer', 'wiki.graph_health', 4);
         add(graph.knowledgeConnectivity?.atomicWithoutProjection?.items, 'atomic_projection_missing', 'wiki.read_projection', 4);
         add(graph.knowledgeConnectivity?.literatureWithoutPermanent?.items, 'literature_permanent_note_missing', 'wiki.answer_packet', 4);
         add(graph.knowledgeConnectivity?.literatureWithoutInterpretation?.items, 'literature_interpretation_missing', 'wiki.answer_packet', 4);
-        add(graph.focusHealth?.unparented?.items, 'focus_parent_missing', 'wiki.graph_health', 5);
+        add(graph.focusHealth?.unparented?.items, 'focus_parent_missing', 'wiki.hierarchy_change', 5);
         add(graph.knowledgeConnectivity?.isolated?.items, 'isolated_knowledge', 'wiki.neighborhood', 5);
         add(graph.typedRelations?.reciprocityMissing?.items, 'typed_relation_reciprocity_missing', 'wiki.reciprocal_link', 6);
         add(graph.evergreenQuality?.items?.filter((item) => item?.state === 'needs_attention'), 'evergreen_quality_hint', 'wiki.graph_health', 5);
@@ -4717,25 +4733,25 @@ export class LlmWikiService {
                             instruction: 'Preview both directions, then dry-run and confirm the returned complete notes.change_set; never repair only one side.',
                         };
                     }
-                    else if (reason.startsWith('typed_relation_')) {
+                    else if (reason.startsWith('typed_relation_') && typeof selectedPriority.relation === 'string' && !RECIPROCAL_RELATIONS.includes(selectedPriority.relation)) {
                         inspect = { endpointId: endpointIdForTool('get_wiki_neighborhood'), arguments: { path: selectedPriority.path, includeSemantic: false, limit: Math.min(12, boundedLimit), maxChars: 5000 } };
-                        mutation = { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['the exact typed relation repair'], instruction: 'Preserve directional meaning and verify both visible endpoints; never infer a relation from similarity alone.' };
+                        mutation = { endpointId: endpointIdForTool('get_wiki_relation_set_preview'), arguments: { sourcePath: selectedPriority.path, relation: selectedPriority.relation }, requiredArguments: ['targetPaths: the complete desired exact target set; use [] to clear'], instruction: 'Replace the complete directional relation set after verifying every target; never infer a relation from similarity alone.' };
                     }
                     else if (reason.startsWith('moc_parent_') || reason === 'moc_hierarchy_cycle') {
                         inspect = { endpointId: endpointIdForTool('read_wiki_projection'), arguments: { path: selectedPriority.path, view: 'metadata', maxChars: 4000 } };
                         mutation = { endpointId: endpointIdForTool('get_wiki_hierarchy_change_preview'), arguments: { hierarchy: 'moc', childPath: selectedPriority.path }, requiredArguments: ['operation; parentPath when operation=set'], instruction: 'Choose set or clear after inspecting the branch. The planner simulates the hierarchy before returning a change set.' };
                     }
-                    else if (reason === 'focus_horizon_mismatch' && selectedPriority.field === 'focus_parent') {
+                    else if ((reason === 'focus_horizon_mismatch' || reason === 'focus_relation_unresolved' || reason === 'focus_relation_ambiguous' || reason === 'focus_parent_missing' || reason === 'focus_hierarchy_cycle') && selectedPriority.field !== 'focus_supports') {
                         inspect = { endpointId: endpointIdForTool('read_wiki_projection'), arguments: { path: selectedPriority.path, view: 'metadata', maxChars: 4000 } };
                         mutation = { endpointId: endpointIdForTool('get_wiki_hierarchy_change_preview'), arguments: { hierarchy: 'focus', childPath: selectedPriority.path }, requiredArguments: ['operation; a strictly higher-horizon parentPath when operation=set'], instruction: 'Choose a genuinely higher outcome or clear the invalid parent; the planner blocks equal/lower horizons and cycles.' };
                     }
-                    else if (reason.startsWith('focus_')) {
+                    else if ((reason.startsWith('focus_') || reason === 'focus_horizon_mismatch') && selectedPriority.field === 'focus_supports') {
                         inspect = { endpointId: endpointIdForTool('read_wiki_projection'), arguments: { path: selectedPriority.path, view: 'metadata', maxChars: 4000 } };
-                        mutation = { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['focusParent or focusSupports'], instruction: 'Repair the smallest focus edge without inventing hierarchy from folder placement.' };
+                        mutation = { endpointId: endpointIdForTool('get_wiki_relation_set_preview'), arguments: { sourcePath: selectedPriority.path, relation: 'focus_supports' }, requiredArguments: ['targetPaths: the complete desired exact higher-horizon target set'], instruction: 'Replace the complete focus_supports set after verifying every target horizon; folder placement is not hierarchy.' };
                     }
                     else if (reason === 'isolated_knowledge') {
                         inspect = { endpointId: endpointIdForTool('get_wiki_neighborhood'), arguments: { path: selectedPriority.path, includeSemantic: true, limit: Math.min(12, boundedLimit), maxChars: 5000 } };
-                        mutation = { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['primaryMoc, mocs, seeAlso, or another verified link'], instruction: 'Use semantic candidates only for discovery; add a link only after reading the target.' };
+                        mutation = { endpointId: endpointIdForTool('get_wiki_moc_membership_preview'), arguments: { notePath: selectedPriority.path }, requiredArguments: ['primaryMocPath and optional complete additionalMocPaths'], instruction: 'Use semantic candidates only for discovery; choose a real visible map only after reading it.' };
                     }
                     else if (reason.startsWith('literature_')) {
                         inspect = { endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path: selectedPriority.path, intent: 'review', maxChars: 5000 } };
@@ -5697,6 +5713,128 @@ export class LlmWikiService {
         };
         if (JSON.stringify(result).length > boundedChars)
             throw new Error('maxChars is too small to preserve the MOC-membership plan; increase maxChars');
+        return result;
+    }
+    /** Replace one directional typed-relation or focus_supports list as a
+     * complete, canonical set. Requiring the complete target set makes removal
+     * of broken raw links explicit and avoids read-modify-write races hidden in
+     * a generic metadata editor. */
+    async relationSetPreview(principal, options) {
+        const sourcePath = normalizePath(options.sourcePath);
+        if (!sourcePath)
+            throw new Error('sourcePath is required');
+        const relation = String(options.relation || '').trim().toLowerCase();
+        if (RECIPROCAL_RELATIONS.includes(relation)) {
+            throw new Error(`${relation} is reciprocal; use wiki.reciprocal_link so both notes change coherently`);
+        }
+        const allowed = [...RELATION_FIELDS.filter(field => !RECIPROCAL_RELATIONS.includes(field)), 'focus_supports'];
+        if (!allowed.includes(relation))
+            throw new Error(`relation must be one of: ${allowed.join(', ')}`);
+        if (!Array.isArray(options.targetPaths))
+            throw new Error('targetPaths must be a complete array, including [] to clear the relation');
+        const maximumTargets = relation === 'focus_supports' ? 20 : 30;
+        if (options.targetPaths.length > maximumTargets)
+            throw new Error(`targetPaths is limited to ${maximumTargets} notes for ${relation}`);
+        const targetPaths = options.targetPaths.map((value, index) => {
+            if (typeof value !== 'string' || !value.trim())
+                throw new Error(`targetPaths[${index}] must be a non-empty exact note path`);
+            const path = normalizePath(value);
+            if (path.length > 1000)
+                throw new Error(`targetPaths[${index}] is too long`);
+            return path;
+        });
+        const targetKeys = targetPaths.map(path => path.toLowerCase());
+        if (new Set(targetKeys).size !== targetKeys.length)
+            throw new Error('targetPaths must not contain duplicate notes');
+        if (targetKeys.includes(sourcePath.toLowerCase()))
+            throw new Error('A relation cannot target its source note');
+        const boundedChars = Math.min(Math.max(Number(options.maxChars) || 9000, 4096), 20000);
+        const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        if (!canAccess(sourcePath) || targetPaths.some(path => !canAccess(path)))
+            throw new Error('The source and every target must be exact notes visible in the current scope');
+        const source = await this.fileSystem.readNote(sourcePath);
+        const targets = await Promise.all(targetPaths.map(path => this.fileSystem.readNote(path)));
+        if (isModerationHidden(source.frontmatter) || targets.some(target => isModerationHidden(target.frontmatter)))
+            throw new Error('Moderation-hidden notes cannot participate in a relation-set plan');
+        const publicSource = this.access.toPublicPath(sourcePath);
+        const blockers = [];
+        const warnings = [];
+        try {
+            this.access.assertMutationAllowed(sourcePath, 'wiki.relation_set');
+        }
+        catch (error) {
+            blockers.push({ path: publicSource, reason: error instanceof Error ? error.message : 'The source note cannot be mutated.' });
+        }
+        const sourceBoundary = organizationRoleBoundaryReason(sourcePath);
+        if (sourceBoundary)
+            blockers.push({ path: publicSource, reason: sourceBoundary });
+        const horizonRank = new Map(FOCUS_HORIZONS.map((value, index) => [value, index]));
+        const sourceHorizon = String(source.frontmatter.focus_horizon || '').trim().toLowerCase();
+        if (relation === 'focus_supports' && targetPaths.length > 0 && !horizonRank.has(sourceHorizon)) {
+            blockers.push({ path: publicSource, reason: 'A focus_supports source needs a valid focus_horizon.' });
+        }
+        const links = [];
+        for (let index = 0; index < targetPaths.length; index += 1) {
+            const path = targetPaths[index];
+            const target = targets[index];
+            const publicTarget = this.access.toPublicPath(path);
+            if (!this.access.canReferenceFrom(sourcePath, path))
+                blockers.push({ path: publicTarget, reason: 'This relation would cross a scope privacy boundary.' });
+            const kindReason = typedRelationTargetKindReason(relation, String(target.frontmatter.note_kind || '').trim().toLowerCase());
+            if (kindReason)
+                blockers.push({ path: publicTarget, reason: kindReason });
+            if (relation === 'focus_supports') {
+                const targetHorizon = String(target.frontmatter.focus_horizon || '').trim().toLowerCase();
+                const sourceRank = horizonRank.get(sourceHorizon);
+                const targetRank = horizonRank.get(targetHorizon);
+                if (targetRank === undefined)
+                    blockers.push({ path: publicTarget, reason: 'Every focus_supports target needs a valid focus_horizon.' });
+                else if (sourceRank !== undefined && targetRank <= sourceRank)
+                    blockers.push({ path: publicTarget, reason: `focus_supports must point upward to a higher horizon; ${sourceHorizon} cannot support ${targetHorizon}.` });
+            }
+            try {
+                links.push(canonicalRelationWikiLink(path));
+            }
+            catch (error) {
+                blockers.push({ path: publicTarget, reason: error instanceof Error ? error.message : 'The target path cannot be encoded as an Obsidian wikilink.' });
+            }
+        }
+        const currentValue = source.frontmatter[relation];
+        if (currentValue !== undefined && (!Array.isArray(currentValue) || currentValue.some(value => typeof value !== 'string' || !value.trim()))) {
+            warnings.push({ path: publicSource, reason: `Malformed ${relation} will be replaced by the explicit complete target set.` });
+        }
+        if (relation !== 'focus_supports' && source.frontmatter.relation_notes?.[relation] !== undefined) {
+            warnings.push({ path: publicSource, reason: `relation_notes.${relation} is preserved; verify that its rationale still describes the replacement set.` });
+        }
+        if (relation !== 'focus_supports' && source.frontmatter.relation_evidence?.[relation] !== undefined) {
+            warnings.push({ path: publicSource, reason: `relation_evidence.${relation} is preserved; verify that its evidence still supports the replacement set.` });
+        }
+        const currentEqual = Array.isArray(currentValue)
+            && currentValue.length === links.length
+            && currentValue.every((value, index) => value === links[index]);
+        const needsChange = links.length > 0 ? !currentEqual : Object.hasOwn(source.frontmatter, relation);
+        const candidateChanges = needsChange ? [{
+                path: publicSource,
+                expectedRevision: source.revision,
+                frontmatter: links.length > 0 ? { set: { [relation]: links } } : { remove: [relation] },
+            }] : [];
+        const changes = blockers.length === 0 ? candidateChanges : [];
+        const result = {
+            purpose: 'Read-only complete-set preflight for one directional typed relation or focus_supports. It canonicalizes exact visible targets and emits at most one revision-stamped notes.change_set edit.',
+            relation,
+            source: { path: publicSource, revision: source.revision, ...(sourceHorizon && { focusHorizon: sourceHorizon }) },
+            current: { present: Object.hasOwn(source.frontmatter, relation), count: Array.isArray(currentValue) ? currentValue.length : currentValue === undefined ? 0 : 1, items: Array.isArray(currentValue) ? currentValue.slice(0, 6).map(value => boundedText(String(value), 300)) : currentValue === undefined ? [] : [boundedText(String(currentValue), 300)], truncated: Array.isArray(currentValue) && currentValue.length > 6 },
+            desired: { count: targetPaths.length, items: targetPaths.slice(0, 6).map((path, index) => ({ path: this.access.toPublicPath(path), link: links[index], revision: targets[index].revision })), truncated: targetPaths.length > 6 },
+            changes,
+            blockers,
+            warnings,
+            valid: blockers.length === 0,
+            alreadyApplied: blockers.length === 0 && candidateChanges.length === 0,
+            nextAction: changes.length ? { endpointId: endpointIdForTool('patch_multiple_notes'), instruction: 'Dry-run this exact complete-set change, inspect the source revision and canonical links, then confirm the returned plan fingerprint.' } : undefined,
+            generatedAt: now(),
+        };
+        if (JSON.stringify(result).length > boundedChars)
+            throw new Error('maxChars is too small to preserve the complete relation-set plan; increase maxChars or use fewer targets');
         return result;
     }
     /** Build a two-note reciprocal related/same_as repair without risking a
@@ -7594,6 +7732,7 @@ export class LlmWikiService {
             mocOrderPlanner: { endpointId: endpointIdForTool('get_wiki_moc_order_preview'), requirement: 'Pass the complete current root or child sibling set; then dry-run and confirm its notes.change_set.' },
             hierarchyPlanner: endpointIdForTool('get_wiki_hierarchy_change_preview'),
             mocMembershipPlanner: endpointIdForTool('get_wiki_moc_membership_preview'),
+            relationSetPlanner: endpointIdForTool('get_wiki_relation_set_preview'),
             projects,
             inbox,
             review,
@@ -7751,31 +7890,38 @@ export class LlmWikiService {
         const typedSelf = [];
         const typedKindMismatches = [];
         const typedEdges = [];
+        const relationSetRepair = (path, relation) => RECIPROCAL_RELATIONS.includes(relation) ? {} : ({
+            endpointId: endpointIdForTool('get_wiki_relation_set_preview'),
+            arguments: { sourcePath: this.access.toPublicPath(path), relation },
+        });
         for (const note of graphNotes) {
             for (const relation of RELATION_FIELDS) {
                 for (const rawTarget of note.relations[relation] || []) {
                     const targets = resolveGraphDocument(note.path, rawTarget);
                     if (targets.length === 0) {
-                        typedUnresolved.push({ path: this.access.toPublicPath(note.path), relation, target: rawTarget });
+                        const repair = relationSetRepair(note.path, relation);
+                        typedUnresolved.push({ path: this.access.toPublicPath(note.path), relation, target: rawTarget, ...(Object.keys(repair).length > 0 && { repair }) });
                         continue;
                     }
                     if (targets.length > 1) {
-                        typedAmbiguous.push({ path: this.access.toPublicPath(note.path), relation, target: rawTarget, matches: targets.slice(0, boundedLimit).map(path => this.access.toPublicPath(path)) });
+                        const repair = relationSetRepair(note.path, relation);
+                        typedAmbiguous.push({ path: this.access.toPublicPath(note.path), relation, target: rawTarget, matches: targets.slice(0, boundedLimit).map(path => this.access.toPublicPath(path)), ...(Object.keys(repair).length > 0 && { repair }) });
                         continue;
                     }
                     for (const target of targets) {
                         const normalizedTarget = normalizePath(target).toLowerCase();
                         const sourcePath = normalizePath(note.path).toLowerCase();
                         if (normalizedTarget === sourcePath) {
-                            typedSelf.push({ path: this.access.toPublicPath(note.path), relation, target: rawTarget, reason: 'typed_relation_points_to_itself' });
+                            const repair = relationSetRepair(note.path, relation);
+                            typedSelf.push({ path: this.access.toPublicPath(note.path), relation, target: rawTarget, reason: 'typed_relation_points_to_itself', ...(Object.keys(repair).length > 0 && { repair }) });
                             continue;
                         }
                         const targetNote = graphByPath.get(normalizedTarget);
-                        if (relation === 'answers_questions' && targetNote?.kind !== 'question') {
-                            typedKindMismatches.push({ path: this.access.toPublicPath(note.path), relation, target: this.access.toPublicPath(target), targetKind: targetNote?.kind || 'unknown', reason: 'answers_questions_target_is_not_a_question_note' });
-                        }
-                        if (relation === 'tests' && !['question', 'hypothesis', 'assumption'].includes(targetNote?.kind || '')) {
-                            typedKindMismatches.push({ path: this.access.toPublicPath(note.path), relation, target: this.access.toPublicPath(target), targetKind: targetNote?.kind || 'unknown', reason: 'tests_target_is_not_a_question_hypothesis_or_assumption' });
+                        const targetKind = targetNote?.kind || 'unknown';
+                        const kindReason = typedRelationTargetKindReason(relation, targetKind);
+                        if (kindReason) {
+                            const repair = relationSetRepair(note.path, relation);
+                            typedKindMismatches.push({ path: this.access.toPublicPath(note.path), relation, target: this.access.toPublicPath(target), targetKind, reason: kindReason, ...(Object.keys(repair).length > 0 && { repair }) });
                         }
                         typedEdges.push({ source: note.path, target, relation, raw: rawTarget });
                         const sourceKey = normalizePath(note.path).toLowerCase();
@@ -7932,9 +8078,9 @@ export class LlmWikiService {
             const parent = note.focusParent?.trim();
             const parentTargets = parent ? resolveFocus(note.path, parent) : [];
             if (parent && parentTargets.length === 0)
-                focusUnresolved.push({ path: publicPath, field: 'focus_parent', target: parent });
+                focusUnresolved.push({ path: publicPath, field: 'focus_parent', target: parent, repair: { endpointId: endpointIdForTool('get_wiki_hierarchy_change_preview'), arguments: { hierarchy: 'focus', childPath: publicPath } } });
             if (parentTargets.length > 1)
-                focusAmbiguous.push({ path: publicPath, field: 'focus_parent', target: parent, matches: parentTargets.slice(0, boundedLimit).map(path => this.access.toPublicPath(path)) });
+                focusAmbiguous.push({ path: publicPath, field: 'focus_parent', target: parent, matches: parentTargets.slice(0, boundedLimit).map(path => this.access.toPublicPath(path)), repair: { endpointId: endpointIdForTool('get_wiki_hierarchy_change_preview'), arguments: { hierarchy: 'focus', childPath: publicPath } } });
             if (parentTargets.length === 1) {
                 const source = normalizePath(note.path).toLowerCase();
                 const target = parentTargets[0];
@@ -7959,15 +8105,15 @@ export class LlmWikiService {
                 }
             }
             if (note.horizon && !['ground', 'purpose'].includes(note.horizon) && !parent) {
-                focusUnparented.push({ path: publicPath, title: note.title, focusHorizon: note.horizon, reason: 'higher-horizon-note-has-no-focus_parent' });
+                focusUnparented.push({ path: publicPath, title: note.title, focusHorizon: note.horizon, reason: 'higher-horizon-note-has-no-focus_parent', repair: { endpointId: endpointIdForTool('get_wiki_hierarchy_change_preview'), arguments: { hierarchy: 'focus', operation: 'set', childPath: publicPath } } });
             }
             const supports = [];
             for (const rawSupport of note.focusSupports) {
                 const targets = resolveFocus(note.path, rawSupport);
                 if (targets.length === 0)
-                    focusUnresolved.push({ path: publicPath, field: 'focus_supports', target: rawSupport });
+                    focusUnresolved.push({ path: publicPath, field: 'focus_supports', target: rawSupport, repair: { endpointId: endpointIdForTool('get_wiki_relation_set_preview'), arguments: { sourcePath: publicPath, relation: 'focus_supports' } } });
                 else if (targets.length > 1)
-                    focusAmbiguous.push({ path: publicPath, field: 'focus_supports', target: rawSupport, matches: targets.slice(0, boundedLimit).map(path => this.access.toPublicPath(path)) });
+                    focusAmbiguous.push({ path: publicPath, field: 'focus_supports', target: rawSupport, matches: targets.slice(0, boundedLimit).map(path => this.access.toPublicPath(path)), repair: { endpointId: endpointIdForTool('get_wiki_relation_set_preview'), arguments: { sourcePath: publicPath, relation: 'focus_supports' } } });
                 else {
                     const target = targets[0];
                     const targetNote = graphByPath.get(target);
@@ -7981,6 +8127,7 @@ export class LlmWikiService {
                             sourceHorizon: note.horizon || undefined,
                             targetHorizon: targetNote?.horizon || undefined,
                             reason: sourceRank === undefined || targetRank === undefined ? 'focus_horizon_missing_on_relation_endpoint' : 'focus_supports_must_point_to_higher_horizon',
+                            repair: { endpointId: endpointIdForTool('get_wiki_relation_set_preview'), arguments: { sourcePath: publicPath, relation: 'focus_supports' } },
                         });
                     }
                     else
@@ -8574,7 +8721,26 @@ export class LlmWikiService {
                 report.typedRelations.reciprocityMissing.items,
                 ...(includeExtendedGraph ? [report.relationNavigation.targets] : []),
             ];
-            const largest = arrays.sort((left, right) => right.length - left.length)[0];
+            // Preserve truth/safety and executable graph defects before low-value
+            // inventories such as least-used notes or broad coverage samples. A new
+            // repair hint must not evict an epistemic inconsistency merely because
+            // it is a few bytes larger.
+            const protectedArrays = new Set([
+                report.epistemicConsistency.items,
+                report.knowledgeFlow.literatureWithoutSource.items,
+                report.knowledgeFlow.synthesisWithoutInputs.items,
+                report.focusHealth.unresolved.items,
+                report.focusHealth.ambiguous.items,
+                ...(report.focusHealth.horizonMismatches ? [report.focusHealth.horizonMismatches.items] : []),
+                report.focusHealth.cycles.items,
+                report.typedRelations.unresolved.items,
+                report.typedRelations.ambiguous.items,
+                report.typedRelations.self.items,
+                report.typedRelations.kindMismatches.items,
+            ]);
+            const ordinary = arrays.filter(items => items.length > 0 && !protectedArrays.has(items));
+            const candidates = ordinary.length > 0 ? ordinary : arrays.filter(items => items.length > 0);
+            const largest = candidates.sort((left, right) => right.length - left.length)[0];
             if (!largest || largest.length === 0)
                 break;
             largest.pop();
@@ -9006,6 +9172,16 @@ export class LlmWikiService {
                 return {
                     inspect,
                     then: { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path, expectedRevision: revision, interpretationStatus: 'interpreted' }, requiredBeforeCall: ['Write a checked interpretation and link any derived atomic note; do not change status merely to clear the queue.'] },
+                };
+            if (reasons.includes('no_primary_moc'))
+                return {
+                    inspect,
+                    then: { endpointId: endpointIdForTool('get_wiki_moc_membership_preview'), arguments: { notePath: path }, requiredArguments: ['primaryMocPath and optional complete additionalMocPaths'] },
+                };
+            if (reasons.includes('empty_moc'))
+                return {
+                    inspect: { endpointId: endpointIdForTool('read_wiki_projection'), arguments: { path, view: 'full', maxChars: 5000 } },
+                    then: { endpointId: endpointIdForTool('patch_note'), arguments: { path, expectedRevision: revision, dryRun: true }, requiredArguments: ['oldString and newString, or patches'], instruction: 'Add only verified [[wikilinks]] in deliberate reading order; preview the exact Markdown edit before applying it.' },
                 };
             return {
                 inspect,

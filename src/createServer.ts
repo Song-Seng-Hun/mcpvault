@@ -1744,6 +1744,15 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           }), trimmedArgs.prettyPrint);
         }
 
+        case "get_wiki_relation_set_preview": {
+          return jsonResult(await llmWiki.relationSetPreview(principal, {
+            sourcePath: trimmedArgs.sourcePath,
+            relation: trimmedArgs.relation,
+            targetPaths: trimmedArgs.targetPaths,
+            ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
+          }), trimmedArgs.prettyPrint);
+        }
+
         case "get_wiki_reciprocal_link_preview": {
           return jsonResult(await llmWiki.reciprocalLinkPreview(principal, {
             leftPath: trimmedArgs.leftPath,
@@ -2830,7 +2839,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 function trimPaths(args: any, access: ScopeAccessPolicy, principal?: ScopePrincipal): any {
   const trimmed = { ...args };
 
-  for (const key of ['path', 'oldPath', 'newPath', 'targetPath', 'confirmPath', 'confirmOldPath', 'confirmNewPath', 'folder', 'pathPrefix', 'scopeUri', 'subjectPath', 'outputPath', 'parentPath', 'childPath', 'notePath', 'primaryMocPath', 'leftPath', 'rightPath']) {
+  for (const key of ['path', 'oldPath', 'newPath', 'targetPath', 'confirmPath', 'confirmOldPath', 'confirmNewPath', 'folder', 'pathPrefix', 'scopeUri', 'subjectPath', 'outputPath', 'parentPath', 'childPath', 'notePath', 'primaryMocPath', 'sourcePath', 'leftPath', 'rightPath']) {
     if (trimmed[key] && typeof trimmed[key] === 'string') trimmed[key] = access.resolveExternalPath(trimmed[key], principal);
   }
   if (trimmed.sortBy && typeof trimmed.sortBy === 'string') trimmed.sortBy = trimmed.sortBy.trim();
@@ -2845,6 +2854,10 @@ function trimPaths(args: any, access: ScopeAccessPolicy, principal?: ScopePrinci
 
   if (trimmed.additionalMocPaths && Array.isArray(trimmed.additionalMocPaths)) {
     trimmed.additionalMocPaths = trimmed.additionalMocPaths.map((p: any) => typeof p === 'string' ? access.resolveExternalPath(p, principal) : p);
+  }
+
+  if (trimmed.targetPaths && Array.isArray(trimmed.targetPaths)) {
+    trimmed.targetPaths = trimmed.targetPaths.map((p: any) => typeof p === 'string' ? access.resolveExternalPath(p, principal) : p);
   }
 
   if (trimmed.changes && Array.isArray(trimmed.changes)) {

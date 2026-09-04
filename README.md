@@ -354,6 +354,16 @@ Every target must be a visible `note_kind: moc`, and the planner emits canonical
 path-qualified Obsidian links. It replaces only `primary_moc` and `mocs`; an
 old legacy `moc` value remains visible as an explicit migration decision.
 
+For a directional typed relation or `focus_supports`, call
+`wiki.relation_set` with the source note, relation name, and the complete
+desired `targetPaths` set. Passing `[]` explicitly clears the Property. The
+planner resolves every target, emits canonical path-qualified Obsidian links,
+and rejects self-links, scope leaks, invalid question/test targets, and
+equal/downward focus horizons. Existing `relation_notes` and
+`relation_evidence` stay visible with a warning so their rationale is reviewed
+rather than silently discarded. Use the reciprocal planner below instead for
+`related` and `same_as`.
+
 For mutual `related` or `same_as` edges, call `wiki.reciprocal_link` with the
 two exact note paths. It resolves all existing values first and refuses a
 malformed, ambiguous, full, hidden, immutable, managed-Community, or
@@ -1648,8 +1658,10 @@ the durable audit and recovery layer.
 
 Prefer a purpose-built read-only planner when the coupled edit represents a
 known organization invariant: `wiki.moc_order` for one complete sibling order,
-`wiki.reciprocal_link` for `related`/`same_as`, and
-`wiki.property_migration` for one bounded Property migration. Each returns the
+`wiki.hierarchy_change` for parent edges, `wiki.moc_membership` for map entry
+points, `wiki.relation_set` for a complete directional relation list,
+`wiki.reciprocal_link` for `related`/`same_as`, and `wiki.property_migration`
+for one bounded Property migration. Each returns the
 same revision-stamped `notes.change_set` shape; the planner does not write.
 
 **Response (multiple matches with replaceAll=false):**

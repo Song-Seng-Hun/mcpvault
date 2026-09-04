@@ -21,6 +21,8 @@ import {
   NOTE_KINDS,
   RECALL_QUALITIES,
   RECALL_REPAIR_STATUSES,
+  RECIPROCAL_RELATIONS,
+  RELATION_FIELDS,
   RETENTION_EVENTS,
   RETENTION_POLICIES,
   REVIEW_CHECKS,
@@ -132,6 +134,13 @@ describe('LLM Wiki organization vocabulary contracts', () => {
     expect(properties('get_wiki_canvas_health').maxChars?.type).toBe('integer');
     const canvasExport = tools.get('export_wiki_canvas')!.inputSchema as { required?: string[] };
     expect(canvasExport.required).toEqual(expect.arrayContaining(['path', 'expectedRevision']));
+
+    expectEnum(properties('get_wiki_relation_set_preview'), 'relation', [
+      ...RELATION_FIELDS.filter(field => !(RECIPROCAL_RELATIONS as readonly string[]).includes(field)),
+      'focus_supports',
+    ]);
+    const relationSet = tools.get('get_wiki_relation_set_preview')!.inputSchema as { required?: string[] };
+    expect(relationSet.required).toEqual(['sourcePath', 'relation', 'targetPaths']);
   });
 
   test('derives managed Property schemas from the public contract', () => {

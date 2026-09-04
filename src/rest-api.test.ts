@@ -158,6 +158,13 @@ test('REST adapter uses the same dynamic endpoint registry and dispatcher', asyn
   });
   expect(membershipPreview.status).toBe(200);
   expect(await membershipPreview.json()).toMatchObject({ valid: true, primaryMoc: { link: '[[nested/moc-a]]' }, nextAction: { endpointId: 'notes.change_set' } });
+
+  const relationSetPreview = await fetch(`http://127.0.0.1:${api.port}/api/wiki/relation-set`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sourcePath: 'nested/route.md', relation: 'supports', targetPaths: ['nested/migrate.md'], accessToken }),
+  });
+  expect(relationSetPreview.status).toBe(200);
+  expect(await relationSetPreview.json()).toMatchObject({ valid: true, relation: 'supports', desired: { count: 1 }, changes: [expect.objectContaining({ path: 'nested/route.md' })], nextAction: { endpointId: 'notes.change_set' } });
 });
 
 test('REST adapter rate-limits anonymous account registration per client address', async () => {

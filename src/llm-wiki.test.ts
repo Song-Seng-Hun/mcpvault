@@ -1624,6 +1624,79 @@ test('MOC-membership previews validate real maps and replace canonical navigatio
   } finally { await client.close(); await server.close(); }
 });
 
+test('relation-set previews replace complete directional and focus-support sets with graph repair routes', async () => {
+  await mkdir(join(vault, 'Knowledge'), { recursive: true });
+  await mkdir(join(vault, 'Projects'), { recursive: true });
+  await mkdir(join(vault, 'Goals'), { recursive: true });
+  await writeFile(join(vault, 'Knowledge', 'Answer.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nanswers_questions:\n  - "[[Missing Question]]"\n---\n# Answer\n');
+  await writeFile(join(vault, 'Knowledge', 'Question.md'), '---\nllm_wiki_type: knowledge\nnote_kind: question\nepistemic_status: open\n---\n# Question\n');
+  await writeFile(join(vault, 'Knowledge', 'Not Question.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\n---\n# Not Question\n');
+  await writeFile(join(vault, 'Knowledge', 'Map.md'), '---\nllm_wiki_type: knowledge\nnote_kind: moc\n---\n# Map\n\n[[Knowledge/Answer]]\n');
+  await writeFile(join(vault, 'Projects', 'Project.md'), '---\nllm_wiki_type: knowledge\nnote_kind: project\nfocus_horizon: project\nfocus_supports:\n  - "[[Projects/Peer]]"\n---\n# Project\n');
+  await writeFile(join(vault, 'Projects', 'Peer.md'), '---\nllm_wiki_type: knowledge\nnote_kind: project\nfocus_horizon: project\n---\n# Peer\n');
+  await writeFile(join(vault, 'Goals', 'Goal.md'), '---\nllm_wiki_type: knowledge\nnote_kind: knowledge\nfocus_horizon: goal\n---\n# Goal\n');
+  const { server, client } = await setup();
+  try {
+    const registration = await callJson(client, 'register_scope_account', { accountId: 'relation-set-owner', modelId: 'codex', password: 'relation-set-owner-password' });
+    const accessToken = registration.value.accessToken;
+    const discovery = await callJson(client, 'search_capabilities', { query: 'replace complete typed relation broken ambiguous link focus supports', limit: 8, maxChars: 9000, accessToken });
+    expect(discovery.value.endpoints).toEqual(expect.arrayContaining([expect.objectContaining({ endpointId: 'wiki.relation_set', method: 'POST' })]));
+    const graph = await callJson(client, 'call_endpoint', { endpointId: 'wiki.graph_health', arguments: { limit: 20, maxChars: 14000, accessToken } });
+    expect(graph.value.typedRelations.unresolved.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Knowledge/Answer.md', relation: 'answers_questions', repair: expect.objectContaining({ endpointId: 'wiki.relation_set' }) }),
+    ]));
+    expect(graph.value.focusHealth.horizonMismatches.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Projects/Project.md', field: 'focus_supports', repair: expect.objectContaining({ endpointId: 'wiki.relation_set' }) }),
+    ]));
+    const review = await callJson(client, 'call_endpoint', { endpointId: 'wiki.review_packet', arguments: { limit: 10, maxChars: 14000, accessToken } });
+    expect(review.value.curationPlan.then).toMatchObject({ endpointId: 'wiki.relation_set', arguments: expect.objectContaining({ relation: 'focus_supports' }) });
+
+    const plan = await callJson(client, 'call_endpoint', { endpointId: 'wiki.relation_set', arguments: {
+      sourcePath: 'Knowledge/Answer.md', relation: 'answers_questions', targetPaths: ['Knowledge/Question.md'], accessToken,
+    } });
+    expect(plan.value).toMatchObject({ valid: true, alreadyApplied: false, relation: 'answers_questions', desired: { count: 1 }, changes: [expect.objectContaining({ path: 'Knowledge/Answer.md', frontmatter: { set: { answers_questions: ['[[Knowledge/Question]]'] } } })], nextAction: { endpointId: 'notes.change_set' } });
+    const dryRun = await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: { changes: plan.value.changes, dryRun: true, accessToken } });
+    await callJson(client, 'call_endpoint', { endpointId: 'notes.change_set', arguments: { changes: plan.value.changes, dryRun: false, confirmPlanFingerprint: dryRun.value.planFingerprint, accessToken } });
+    const confirmed = await callJson(client, 'call_endpoint', { endpointId: 'wiki.relation_set', arguments: {
+      sourcePath: 'Knowledge/Answer.md', relation: 'answers_questions', targetPaths: ['Knowledge/Question.md'], accessToken,
+    } });
+    expect(confirmed.value).toMatchObject({ valid: true, alreadyApplied: true, changes: [] });
+    const clear = await callJson(client, 'call_endpoint', { endpointId: 'wiki.relation_set', arguments: {
+      sourcePath: 'Knowledge/Answer.md', relation: 'answers_questions', targetPaths: [], accessToken,
+    } });
+    expect(clear.value).toMatchObject({ valid: true, desired: { count: 0 }, changes: [expect.objectContaining({ frontmatter: { remove: ['answers_questions'] } })] });
+    const maintenance = await callJson(client, 'call_endpoint', { endpointId: 'wiki.maintenance_debt', arguments: { limit: 20, maxChars: 14000, accessToken } });
+    expect(maintenance.value.items.find((item: any) => item.path === 'Knowledge/Answer.md')?.curationPlan?.then).toMatchObject({ endpointId: 'wiki.moc_membership', arguments: { notePath: 'Knowledge/Answer.md' } });
+
+    const wrongKind = await callJson(client, 'call_endpoint', { endpointId: 'wiki.relation_set', arguments: {
+      sourcePath: 'Knowledge/Answer.md', relation: 'answers_questions', targetPaths: ['Knowledge/Not Question.md'], accessToken,
+    } });
+    expect(wrongKind.value).toMatchObject({ valid: false, changes: [], blockers: expect.arrayContaining([expect.objectContaining({ reason: expect.stringContaining('note_kind: question') })]) });
+    const focusPlan = await callJson(client, 'call_endpoint', { endpointId: 'wiki.relation_set', arguments: {
+      sourcePath: 'Projects/Project.md', relation: 'focus_supports', targetPaths: ['Goals/Goal.md'], accessToken,
+    } });
+    expect(focusPlan.value).toMatchObject({ valid: true, changes: [expect.objectContaining({ frontmatter: { set: { focus_supports: ['[[Goals/Goal]]'] } } })] });
+    const horizontalFocus = await callJson(client, 'call_endpoint', { endpointId: 'wiki.relation_set', arguments: {
+      sourcePath: 'Projects/Project.md', relation: 'focus_supports', targetPaths: ['Projects/Peer.md'], accessToken,
+    } });
+    expect(horizontalFocus.value).toMatchObject({ valid: false, changes: [], blockers: expect.arrayContaining([expect.objectContaining({ reason: expect.stringContaining('higher horizon') })]) });
+
+    const privateTarget = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'notes.write', arguments: {
+      path: 'scope://model/codex/Private question.md', content: '# Private question\n', frontmatter: { note_kind: 'question' }, expectedRevision: 'missing', accessToken,
+    } } });
+    expect(privateTarget.isError).toBeFalsy();
+    const scopeBlocked = await callJson(client, 'call_endpoint', { endpointId: 'wiki.relation_set', arguments: {
+      sourcePath: 'Knowledge/Answer.md', relation: 'answers_questions', targetPaths: ['scope://model/codex/Private question.md'], accessToken,
+    } });
+    expect(scopeBlocked.value).toMatchObject({ valid: false, changes: [], blockers: expect.arrayContaining([expect.objectContaining({ reason: expect.stringContaining('privacy boundary') })]) });
+    const reciprocal = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'wiki.relation_set', arguments: {
+      sourcePath: 'Knowledge/Answer.md', relation: 'related', targetPaths: ['Knowledge/Question.md'], accessToken,
+    } } });
+    expect(reciprocal.isError).toBe(true);
+    expect(String((reciprocal.content as any)[0].text)).toContain('wiki.reciprocal_link');
+  } finally { await client.close(); await server.close(); }
+});
+
 async function setup() {
   const server = createServer(vault, { version: '1.0.0' });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();

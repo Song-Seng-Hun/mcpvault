@@ -2477,6 +2477,67 @@ export declare class LlmWikiService {
         } | undefined;
         generatedAt: string;
     }>;
+    /** Replace one directional typed-relation or focus_supports list as a
+     * complete, canonical set. Requiring the complete target set makes removal
+     * of broken raw links explicit and avoids read-modify-write races hidden in
+     * a generic metadata editor. */
+    relationSetPreview(principal: ScopePrincipal | undefined, options: {
+        sourcePath: string;
+        relation: unknown;
+        targetPaths: unknown;
+        maxChars?: number;
+    }): Promise<{
+        purpose: string;
+        relation: string;
+        source: {
+            path: string;
+            revision: string;
+            focusHorizon?: string;
+        };
+        current: {
+            present: boolean;
+            count: number;
+            items: string[];
+            truncated: boolean;
+        };
+        desired: {
+            count: number;
+            items: {
+                path: string;
+                link: string | undefined;
+                revision: string;
+            }[];
+            truncated: boolean;
+        };
+        changes: {
+            path: string;
+            expectedRevision: string;
+            frontmatter: {
+                remove?: never;
+                set: {
+                    [x: string]: string[];
+                };
+            } | {
+                set?: never;
+                remove: string[];
+            };
+        }[];
+        blockers: {
+            path?: string;
+            reason: string;
+        }[];
+        warnings: {
+            path?: string;
+            reason: string;
+        }[];
+        valid: boolean;
+        alreadyApplied: boolean;
+        nextAction: {
+            endpointId: string;
+            instruction: string;
+        } | undefined;
+        generatedAt: string;
+    }>;
     /** Build a two-note reciprocal related/same_as repair without risking a
      * half-written graph edge. Existing malformed or ambiguous relation values
      * are blockers rather than data this planner silently normalizes. */
@@ -3309,6 +3370,7 @@ export declare class LlmWikiService {
         };
         hierarchyPlanner: string;
         mocMembershipPlanner: string;
+        relationSetPlanner: string;
         projects: Record<string, unknown>[];
         inbox: Record<string, unknown>[];
         review: Record<string, unknown>[];
