@@ -155,6 +155,11 @@ are also excluded and returned as bounded diagnostics with revisions. A
 `depends_on` link to ordinary knowledge is informational. The flow dashboard,
 project packet, Reflect dashboard, and next-action view share this request-local
 interpretation and never persist a second task graph.
+When `task_status` is `completed`, real open Markdown tasks outside frontmatter
+and matching code fences are inconsistent with that state. Lint emits
+`completed_work_with_open_checkboxes`; the review packet proposes one bounded,
+revision-safe inspection and repair, but never reopens work or changes a
+checkbox automatically.
 `get_wiki_flow_health.dependencyPlan` topologically groups dependency-safe work:
 stage 0 is executable now and later stages assume all earlier prerequisites
 complete. It reports immediate unlock points, one deepest dependency chain,
@@ -569,7 +574,9 @@ replacement for reading the selected note. For classification browsing, pass
 below direct body, title, or alias matches.
 
 `list_tasks` returns ordinary Markdown checkbox locations plus a content-derived
-`taskId`. After reading the note, `update_task` preferably changes one checkbox
+`taskId`. Its `maxChars` bounds the full response; long task text is a marked
+preview and `total`, `returned`, and `truncated` expose omitted context. After
+reading the note, `update_task` preferably changes one checkbox
 using `taskId`, `status`, and the current `expectedRevision`; `path` plus `line`
 remains a compatible fallback. The ID survives surrounding line insertions when
 the task text is unchanged, stale edits are rejected, and no second task

@@ -221,29 +221,29 @@ Commit `src/createServer.ts`, `src/createServer.test.ts`, `src/llm-wiki.ts`,
 
 ### Task 4: Teach the invariant progressively
 
-- [ ] **Step 1: Add failing policy assertions**
+- [x] **Step 1: Add failing policy assertions**
 
 Update `src/wiki-policy.test.ts` to expect policy version 12 and require the
 `work` topic to mention `open Markdown task` and `task_status: completed`.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `npm test -- src/wiki-policy.test.ts`.
 Expected: version and guidance assertions fail.
 
-- [ ] **Step 3: Update bounded guidance**
+- [x] **Step 3: Update bounded guidance**
 
 Bump `WIKI_POLICY_VERSION` from 11 to 12. Add one `work` rule explaining that
 completed structured work should contain no live Markdown checkbox tasks;
 unfinished work should be reopened or moved explicitly and no checkbox is
 changed automatically. Add matching concise paragraphs to README and schema.
 
-- [ ] **Step 4: Run guidance budgets**
+- [x] **Step 4: Run guidance budgets**
 
 Run `npm test -- src/wiki-policy.test.ts src/instruction-budget.test.ts`.
 Expected: guidance and eager-instruction budgets pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Commit policy, tests, README, and schema as
 `docs: explain completed checkbox consistency`.
