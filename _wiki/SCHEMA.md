@@ -109,8 +109,10 @@ freshness, typed evidence, alias/ID collision, and typed-link problems.
 `get_wiki_review_packet` returns a smaller priority-ordered maintenance view
 for the next agent. `get_wiki_bases_view` returns an
 optional local Obsidian Bases YAML view; a `.base` view is not a security
-boundary. `get_wiki_property_contract` returns the canonical shape and allowed
-values for MCP-managed Properties without disallowing custom fields. An
+boundary. `get_wiki_property_contract` returns a compact complete overview;
+use its `names` or `query` input for paged full descriptions, allowed values,
+and applicability of selected MCP-managed Properties without disallowing
+custom fields. An
 `appliesTo` list limits only that managed field to the stated note role;
 `lint_wiki` reports misplaced managed metadata while leaving unrelated custom
 Properties alone. An

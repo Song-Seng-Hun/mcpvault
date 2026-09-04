@@ -556,8 +556,14 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_property_contract',
-      description: 'Return the bounded MCPVault frontmatter contract before writing or repairing a note. It documents canonical Obsidian Property types, allowed values, and note-kind guidance; custom Properties remain allowed and this never scans or mutates notes.',
-      inputSchema: { type: 'object', properties: { maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
+      description: 'Return the bounded MCPVault frontmatter contract before writing or repairing a note. The unfiltered response is a compact complete overview; pass exact names or one query to page through full descriptions, allowed values, and note-role applicability. Custom Properties remain allowed and this never scans or mutates notes.',
+      inputSchema: { type: 'object', properties: {
+        names: { type: 'array', maxItems: 40, items: { type: 'string', minLength: 1, maxLength: 100 }, description: 'Exact managed Property names for a focused full-detail response; do not combine with query' },
+        query: { type: 'string', maxLength: 100, description: 'Case-insensitive match over Property name, description, allowed values, and appliesTo roles; do not combine with names' },
+        offset: { type: 'integer', minimum: 0, maximum: 500, default: 0 },
+        limit: { type: 'integer', minimum: 1, maximum: 40, default: 12 },
+        maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint,
+      } },
     },
     {
       name: 'get_wiki_note_template',

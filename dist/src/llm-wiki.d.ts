@@ -1934,7 +1934,53 @@ export declare class LlmWikiService {
      * is intentionally read-only: agents can inspect the vocabulary before
      * writing, while custom Properties remain valid outside this contract.
      */
-    propertyContract(maxChars?: number): {
+    propertyContract(options?: {
+        maxChars?: number;
+        names?: unknown;
+        query?: string;
+        offset?: number;
+        limit?: number;
+    }): {
+        purpose: string;
+        contractFingerprint: string;
+        fields: import("./organization.js").OrganizationPropertyContractEntry[];
+        totalFields: number;
+        totalRelations: number;
+        selection: {
+            mode: string;
+            names: string[];
+            matches: number;
+            offset: number;
+            returned: number;
+            unknownNames?: string[];
+            nextOffset?: number;
+        } | {
+            mode: string;
+            query: string;
+            matches: number;
+            offset: number;
+            returned: number;
+            unknownNames?: string[];
+            nextOffset?: number;
+        } | undefined;
+        nextAction?: {
+            endpointId: string;
+            arguments: {
+                names: string[];
+                offset: number;
+                limit: number;
+                maxChars: number;
+            } | {
+                query: string;
+                offset: number;
+                limit: number;
+                maxChars: number;
+            };
+        };
+        generatedAt: string;
+        relations?: never;
+        conventions?: never;
+    } | {
         purpose: string;
         contractFingerprint: string;
         fields: import("./organization.js").OrganizationPropertyContractEntry[];
@@ -2023,6 +2069,8 @@ export declare class LlmWikiService {
         fields: {
             name: string;
             type: "boolean" | "list" | "number" | "object" | "text";
+            allowed?: readonly string[];
+            appliesTo?: readonly string[];
         }[];
         relations: {
             field: "answers_questions" | "blocked_by" | "contradicts" | "depends_on" | "derived_from" | "implements" | "refines" | "related" | "same_as" | "supersedes" | "supports" | "tests" | "version_of";
@@ -2037,6 +2085,37 @@ export declare class LlmWikiService {
         };
         totalFields: number;
         totalRelations: number;
+        selection?: {
+            mode: string;
+            names: string[];
+            matches: number;
+            offset: number;
+            returned: number;
+            unknownNames?: string[];
+            nextOffset?: number;
+        } | {
+            mode: string;
+            query: string;
+            matches: number;
+            offset: number;
+            returned: number;
+            unknownNames?: string[];
+            nextOffset?: number;
+        };
+        nextAction?: {
+            endpointId: string;
+            arguments: {
+                names: string[];
+                offset: number;
+                limit: number;
+                maxChars: number;
+            } | {
+                query: string;
+                offset: number;
+                limit: number;
+                maxChars: number;
+            };
+        };
         truncated: boolean;
     } | {
         purpose: string;
@@ -2055,13 +2134,74 @@ export declare class LlmWikiService {
         };
         totalFields: number;
         totalRelations: number;
+        selection?: {
+            mode: string;
+            names: string[];
+            matches: number;
+            offset: number;
+            returned: number;
+            unknownNames?: string[];
+            nextOffset?: number;
+        } | {
+            mode: string;
+            query: string;
+            matches: number;
+            offset: number;
+            returned: number;
+            unknownNames?: string[];
+            nextOffset?: number;
+        };
+        nextAction?: {
+            endpointId: string;
+            arguments: {
+                names: string[];
+                offset: number;
+                limit: number;
+                maxChars: number;
+            } | {
+                query: string;
+                offset: number;
+                limit: number;
+                maxChars: number;
+            };
+        };
         truncated: boolean;
     } | {
         contractFingerprint: string;
         totalFields: number;
         totalRelations: number;
+        selection?: {
+            mode: string;
+            names: string[];
+            matches: number;
+            offset: number;
+            returned: number;
+            unknownNames?: string[];
+            nextOffset?: number;
+        } | {
+            mode: string;
+            query: string;
+            matches: number;
+            offset: number;
+            returned: number;
+            unknownNames?: string[];
+            nextOffset?: number;
+        };
         truncated: boolean;
         nextAction: {
+            endpointId: string;
+            arguments: {
+                names: string[];
+                offset: number;
+                limit: number;
+                maxChars: number;
+            } | {
+                query: string;
+                offset: number;
+                limit: number;
+                maxChars: number;
+            };
+        } | {
             endpointId: string;
             arguments: {
                 maxChars: number;

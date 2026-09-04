@@ -2162,6 +2162,24 @@ test('Property contract is discoverable and review cadence schedules the next re
     ]));
     expect(JSON.stringify(contract.value).length).toBeLessThanOrEqual(12000);
 
+    const focusedContract = await callJson(client, 'get_wiki_property_contract', {
+      names: ['task_status', 'moc_purpose', 'not_a_managed_property'], maxChars: 6000,
+    });
+    expect(focusedContract.value).toMatchObject({
+      totalFields: expect.any(Number),
+      selection: { mode: 'names', matches: 2, offset: 0, returned: 2, unknownNames: ['not_a_managed_property'] },
+      fields: expect.arrayContaining([
+        expect.objectContaining({ name: 'task_status', allowed: expect.arrayContaining(['open', 'completed']), appliesTo: ['project', 'task'], description: expect.any(String) }),
+        expect.objectContaining({ name: 'moc_purpose', appliesTo: ['moc'], description: expect.any(String) }),
+      ]),
+    });
+    const contractPage = await callJson(client, 'get_wiki_property_contract', { query: 'review', limit: 2, maxChars: 5000 });
+    expect(contractPage.value.selection).toMatchObject({ mode: 'query', query: 'review', offset: 0, returned: 2, nextOffset: 2 });
+    expect(contractPage.value.nextAction).toMatchObject({ endpointId: 'wiki.property_contract', arguments: { query: 'review', offset: 2, limit: 2, maxChars: 5000 } });
+    expect(contractPage.value.fields.every((field: any) => typeof field.description === 'string')).toBe(true);
+    const ambiguousContractRequest = await client.callTool({ name: 'get_wiki_property_contract', arguments: { names: ['task_status'], query: 'review' } });
+    expect(ambiguousContractRequest.isError).toBe(true);
+
     const namedContract = await callJson(client, 'get_wiki_property_contract', { maxChars: 4000 });
     expect(namedContract.value.fields).toEqual(expect.arrayContaining(['note_kind', 'review_interval_days']));
     expect(namedContract.value.conventions.nativeCompatibility).toMatchObject({

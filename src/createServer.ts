@@ -1660,7 +1660,13 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "get_wiki_property_contract": {
-          return jsonResult(llmWiki.propertyContract(trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+          return jsonResult(llmWiki.propertyContract({
+            ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
+            ...(trimmedArgs.names !== undefined && { names: trimmedArgs.names }),
+            ...(typeof trimmedArgs.query === 'string' && { query: trimmedArgs.query }),
+            ...(trimmedArgs.offset !== undefined && { offset: trimmedArgs.offset }),
+            ...(trimmedArgs.limit !== undefined && { limit: trimmedArgs.limit }),
+          }), trimmedArgs.prettyPrint);
         }
 
         case "get_wiki_note_template": {

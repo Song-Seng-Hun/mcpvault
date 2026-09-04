@@ -297,8 +297,11 @@ see bounded incoming wikilinks/Markdown links and destination collisions;
 `move_note` intentionally does not rewrite links automatically.
 
 Call `get_wiki_property_contract` before creating or repairing a managed note
-to see the canonical field types and allowed values. It is a read-only guide;
-custom Properties remain valid. `appliesTo` is meaningful: `lint_wiki` reports
+to see the canonical field types and allowed values. The unfiltered response is
+a complete compact overview; pass `names` for exact fields or `query` to page
+through full descriptions, allowed values, and `appliesTo` guidance without
+loading the entire contract. It is a read-only guide; custom Properties remain
+valid. `appliesTo` is meaningful: `lint_wiki` reports
 MCP-managed fields placed on the wrong note role (for example source trust on
 an atomic note or execution state on a literature note) without forbidding
 unrelated custom Properties. When a note declares `review_interval_days`,

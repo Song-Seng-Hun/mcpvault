@@ -881,7 +881,7 @@ Use YAML properties and Obsidian links together:
 
 - \`note_kind\`: fleeting, literature, atomic, moc, knowledge, question, hypothesis, experiment, assumption, decision, project, area, resource, journal, or task.
 - \`lifecycle\`: inbox, active, review, evergreen, superseded, or archived.
-- Call \`get_wiki_property_contract\` for the live type, vocabulary, and \`appliesTo\` contract before repairing managed Properties. Lint reports a managed field placed on the wrong note role while leaving unrelated custom Properties valid.
+- Call \`get_wiki_property_contract\` for the live type and vocabulary overview; use \`names\` or \`query\` for bounded full descriptions and \`appliesTo\` details before repairing selected managed Properties. Lint reports a managed field placed on the wrong note role while leaving unrelated custom Properties valid.
 - \`project\`, \`moc\`, and \`review_at\`: optional navigation and review hints.
 - A knowledge note remains grounded by \`evidence_paths\`; links are not evidence by themselves. In answer packets, source-work diversity groups snapshots by \`source_work_id\`, \`source_family\`, or \`source_id\`; multiple snapshots of one work are not independent corroboration, and multiple works still do not establish truth.
 - For structured \`claims\`, use the bounded claim matrix to preserve authored order while separately prioritizing missing, unavailable, altered, stale-locator, or single-source-work evidence. Optional \`claim_role\` values are premise, warrant, conclusion, objection, rebuttal, and observation. Put \`^claim-id\` on the corresponding Markdown block and use \`supports_claims\`, \`contradicts_claims\`, or \`depends_on_claims\` with Obsidian block links such as \`[[Knowledge/Note#^claim-id]]\` or local \`[[#^claim-id]]\`. Use \`wiki.argument_map\` to verify targets, anchors, roles, and cycles; the map is navigation, not proof. With \`review_policy: on_upstream_change\`, external claim dependencies and incoming support are tracked by claim digest and anchor so unrelated edits in the same note do not reopen review. A disputed or superseded claim returns bounded downstream notes for explicit re-review and never changes them automatically. Inspect current sources before recording a claim review.
@@ -4910,46 +4910,95 @@ export class LlmWikiService {
    * is intentionally read-only: agents can inspect the vocabulary before
    * writing, while custom Properties remain valid outside this contract.
    */
-  propertyContract(maxChars = 7000) {
-    const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
-    const fields = getOrganizationPropertyContract();
+  propertyContract(options: { maxChars?: number; names?: unknown; query?: string; offset?: number; limit?: number } = {}) {
+    const boundedChars = Math.min(Math.max(Number(options.maxChars) || 7000, 512), 16000);
+    const allFields = getOrganizationPropertyContract();
     const relations = getOrganizationRelationContract();
-    const contractFingerprint = hash(JSON.stringify({ fields, relations }));
-    const result = {
+    const contractFingerprint = hash(JSON.stringify({ fields: allFields, relations }));
+    if (options.names !== undefined && !Array.isArray(options.names)) throw new Error('names must be an array of Property names');
+    const requestedNames = Array.isArray(options.names)
+      ? [...new Set(options.names.map(value => String(value || '').trim().toLowerCase()).filter(Boolean))].slice(0, 40)
+      : [];
+    const query = String(options.query || '').trim().toLowerCase();
+    if (Array.from(query).length > 100) throw new Error('query must be 100 Unicode characters or fewer');
+    if (requestedNames.length && query) throw new Error('Use either names or query, not both');
+    const filtered = requestedNames.length > 0 || Boolean(query);
+    const byName = new Map(allFields.map(field => [field.name.toLowerCase(), field]));
+    const unknownNames = requestedNames.filter(name => !byName.has(name));
+    const candidates = requestedNames.length
+      ? requestedNames.map(name => byName.get(name)).filter((field): field is typeof allFields[number] => Boolean(field))
+      : query
+        ? allFields.filter(field => [field.name, field.description, ...(field.allowed || []), ...(field.appliesTo || [])].some(value => String(value).toLowerCase().includes(query)))
+        : allFields;
+    const offset = filtered ? Math.min(Math.max(Number(options.offset) || 0, 0), candidates.length) : 0;
+    const limit = filtered ? Math.min(Math.max(Number(options.limit) || 12, 1), 40) : candidates.length;
+    const fields = filtered ? candidates.slice(offset, offset + limit) : candidates;
+    const nextOffset = filtered && offset + fields.length < candidates.length ? offset + fields.length : undefined;
+    const selection = filtered ? {
+      mode: requestedNames.length ? 'names' : 'query',
+      ...(requestedNames.length ? { names: requestedNames } : { query }),
+      matches: candidates.length,
+      offset,
+      returned: fields.length,
+      ...(unknownNames.length && { unknownNames }),
+      ...(nextOffset !== undefined && { nextOffset }),
+    } : undefined;
+    const nextAction = nextOffset !== undefined ? {
+      endpointId: endpointIdForTool('get_wiki_property_contract'),
+      arguments: {
+        ...(requestedNames.length ? { names: requestedNames } : { query }),
+        offset: nextOffset,
+        limit,
+        maxChars: boundedChars,
+      },
+    } : undefined;
+    const conventions = {
+      scalar: 'Use text, number, or ISO date-time values for status, identity, and schedule fields.',
+      lists: 'Use lists for aliases, links, tags, key points, questions, and actions; avoid mixing a scalar and list under one property name.',
+      nested: 'claims, evidence, and summary_highlights may contain objects; maintain them in Source mode or through MCP because native Properties editing is limited.',
+      nativeCompatibility: {
+        safeTypes: ['text', 'list', 'number', 'checkbox', 'date', 'date-time', 'tags'],
+        mcpManagedComplexFields: ['claims', 'evidence', 'summary_highlights'],
+        rule: 'Keep searchable status and navigation in native scalar/list Properties; keep detailed provenance in MCP-managed complex fields and the Markdown body. Do not flatten evidence into a second authoritative database.',
+      },
+      lifecycle: 'PARA folders are filing aids. note_kind/lifecycle describe knowledge; task_status describes execution and is intentionally separate.',
+      review: 'review_at is the next review date. review_interval_days is an optional interval used to calculate the next date after review_wiki_note.',
+    };
+    const result = filtered ? {
+      purpose: 'Selected MCP-managed Obsidian Property contracts with full descriptions, allowed values, and note-role applicability.',
+      contractFingerprint,
+      fields,
+      totalFields: allFields.length,
+      totalRelations: relations.length,
+      selection,
+      ...(nextAction && { nextAction }),
+      generatedAt: now(),
+    } : {
       purpose: 'A bounded MCPVault/Obsidian Properties contract. It standardizes only MCP-managed fields; custom Properties remain allowed. It is advisory metadata, not an access boundary.',
       contractFingerprint,
       fields,
       relations,
-      conventions: {
-        scalar: 'Use text, number, or ISO date-time values for status, identity, and schedule fields.',
-        lists: 'Use lists for aliases, links, tags, key points, questions, and actions; avoid mixing a scalar and list under one property name.',
-        nested: 'claims, evidence, and summary_highlights may contain objects; maintain them in Source mode or through MCP because native Properties editing is limited.',
-        nativeCompatibility: {
-          safeTypes: ['text', 'list', 'number', 'checkbox', 'date', 'date-time', 'tags'],
-          mcpManagedComplexFields: ['claims', 'evidence', 'summary_highlights'],
-          rule: 'Keep searchable status and navigation in native scalar/list Properties; keep detailed provenance in MCP-managed complex fields and the Markdown body. Do not flatten evidence into a second authoritative database.',
-        },
-        lifecycle: 'PARA folders are filing aids. note_kind/lifecycle describe knowledge; task_status describes execution and is intentionally separate.',
-        review: 'review_at is the next review date. review_interval_days is an optional interval used to calculate the next date after review_wiki_note.',
-      },
+      conventions,
       generatedAt: now(),
     };
     if (JSON.stringify(result).length <= boundedChars) return result;
     const compactConventions = {
       nativeCompatibility: {
-        safeTypes: result.conventions.nativeCompatibility.safeTypes,
-        mcpManagedComplexFields: result.conventions.nativeCompatibility.mcpManagedComplexFields,
+        safeTypes: conventions.nativeCompatibility.safeTypes,
+        mcpManagedComplexFields: conventions.nativeCompatibility.mcpManagedComplexFields,
       },
       lifecycle: 'Knowledge lifecycle and task execution state are separate.',
     };
     const typed = {
       purpose: 'MCP-managed Obsidian Properties contract; custom fields remain allowed.',
       contractFingerprint,
-      fields: fields.map(field => ({ name: field.name, type: field.type })),
+      fields: fields.map(field => ({ name: field.name, type: field.type, ...(field.allowed && { allowed: field.allowed }), ...(field.appliesTo && { appliesTo: field.appliesTo }) })),
       relations: relations.map(relation => ({ field: relation.field, direction: relation.direction })),
       conventions: compactConventions,
-      totalFields: fields.length,
+      totalFields: allFields.length,
       totalRelations: relations.length,
+      ...(selection && { selection }),
+      ...(nextAction && { nextAction }),
       truncated: true,
     };
     if (JSON.stringify(typed).length <= boundedChars) return typed;
@@ -4962,17 +5011,20 @@ export class LlmWikiService {
       fields: fields.map(field => field.name),
       relations: typed.relations,
       conventions: compactConventions,
-      totalFields: fields.length,
+      totalFields: allFields.length,
       totalRelations: relations.length,
+      ...(selection && { selection }),
+      ...(nextAction && { nextAction }),
       truncated: true,
     };
     if (JSON.stringify(names).length <= boundedChars) return names;
     return {
       contractFingerprint,
-      totalFields: fields.length,
+      totalFields: allFields.length,
       totalRelations: relations.length,
+      ...(selection && { selection }),
       truncated: true,
-      nextAction: { endpointId: endpointIdForTool('get_wiki_property_contract'), arguments: { maxChars: 4000 } },
+      nextAction: nextAction || { endpointId: endpointIdForTool('get_wiki_property_contract'), arguments: { maxChars: 4000 } },
     };
   }
 
