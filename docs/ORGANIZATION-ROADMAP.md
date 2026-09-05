@@ -391,12 +391,16 @@ do not prove a current, bounded, actionable response through its public adapter.
   edits/deletion and controlled storage failures; unindexed mode and large-offset
   predicate/cache isolation are covered separately. Metadata-only views remain
   advisory and independent pages do not retain a vault-wide snapshot.
-- **Open: query response packing.** Dedicated budget-aware page packing must
-  verify that generic JSON compaction cannot drop delivered rows while keeping
-  a cursor beyond them. Large `includeContent` pages can also hydrate more text
-  than ultimately fits the response. Audit delivered-row cursor provenance,
-  oversized-row recovery and source-read budgets; do not infer these guarantees
-  from small-row pagination tests. Prefer metadata and bounded follow-up reads.
+- Public query response packing now delivers a contiguous prefix and builds the
+  cursor from its last original row, including sort values omitted in the
+  projection. Oversized rows have explicit field-omission flags and guarded
+  recovery; impossible exact locators return a bounded no-cursor error. Body
+  hydration stops at the output boundary and uses bounded reads through the
+  shared coordinator (256 KiB/source plus probe, 1 MiB/query). Real 512-character
+  pagination, nested descending sort, source budget and follow-up drift tests
+  cover this contract. Metadata-index construction, large Properties parsing,
+  internal service scans and follow-up line/outline IO remain outside these
+  limits; global memory/CPU and cross-process consistency are not certified.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

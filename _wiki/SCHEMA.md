@@ -487,14 +487,28 @@ moderation visibility before totals, offsets, top-K and cursor selection. The
 predicate is request-local; shared metadata caches keep caller-independent rows.
 Internal query consumers retain their own explicit/default policy. Metadata-only
 rows are refreshed-index projections, not locked file snapshots. With
-`includeContent: true`, each selected raw source must match its selected revision
+`includeContent: true`, each attempted raw source read must match its selected revision
 and visibility. Changed/deleted sources reject the whole page with a path-free
 `Query snapshot changed` error: discard previous pages and restart without
 `after`/`offset`. IO failure returns `Vault read unavailable`, not an empty success.
 `includeTotal: false` consistently returns `total: -1, totalKnown: false`, even
 without an index (where candidate reads/sorting may still be required). Keyset
-cursors do not retain a vault-wide snapshot across requests. Prefer small pages
-and bounded follow-up reads; response compaction is not complete-page evidence.
+cursors do not retain a vault-wide snapshot across requests.
+
+Public query output is packed as a contiguous delivered-row prefix within
+`maxChars` (512..20000). Its cursor comes from the last delivered original row,
+not the last preselected candidate or an omitted sort field. An oversized row
+may return `frontmatterOmitted`/`contentOmitted` with exact identity/revision and
+a guarded `nextAction`; omitted fields are not empty authoritative values.
+`truncated` indicates more rows independently of field omissions. If no exact
+row/cursor fits, an error returns no cursor; merge `retryArguments` into the same
+query. Impossible maximum-budget cursors require narrowing or a bounded sort.
+Hydration is sequential through the shared IO coordinator, at most 256 KiB per
+source plus an overflow byte and at most 1 MiB attempted bytes per public query.
+Oversized/exhausted sources use advisory metadata and explicit omission/recovery,
+never partial Markdown parsing. Index startup/internal service queries and
+independent follow-up reads are outside these limits. No new fixed MCP tool or
+client worker is required.
 
 Optional snapshot readers require regular files and enforce stored-byte ceilings
 while reading, not only via a prior stat. Gzip decoding enforces its output limit

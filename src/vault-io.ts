@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { readBoundedSource, SourceReadLimitError } from './bounded-source-read.js';
 
 export type VaultIoPriority = 'foreground' | 'background';
 const BACKGROUND_MAX_WAIT_MS = 500;
@@ -18,6 +19,7 @@ export interface VaultIoCoordinatorOptions {
   maxConcurrency?: number;
   initialConcurrency?: number;
   reader?: (path: string) => Promise<string>;
+  boundedReader?: (path: string, maxBytes: number) => Promise<string>;
 }
 
 /**
@@ -27,6 +29,7 @@ export interface VaultIoCoordinatorOptions {
  */
 export class VaultIoCoordinator {
   private readonly reader: (path: string) => Promise<string>;
+  private readonly boundedReader: (path: string, maxBytes: number) => Promise<string>;
   private readonly minConcurrency: number;
   private readonly maxConcurrency: number;
   private targetConcurrency: number;
@@ -37,6 +40,7 @@ export class VaultIoCoordinator {
 
   constructor(options: VaultIoCoordinatorOptions = {}) {
     this.reader = options.reader || (path => readFile(path, 'utf8'));
+    this.boundedReader = options.boundedReader || readBoundedSource;
     this.minConcurrency = Math.max(1, Math.floor(options.minConcurrency || 2));
     this.maxConcurrency = Math.max(this.minConcurrency, Math.floor(options.maxConcurrency || 32));
     this.targetConcurrency = Math.min(
@@ -46,11 +50,19 @@ export class VaultIoCoordinator {
   }
 
   readUtf8(path: string, priority: VaultIoPriority = 'foreground'): Promise<string> {
+    return this.schedule(JSON.stringify(['full', path]), () => this.reader(path), priority);
+  }
+
+  readUtf8Bounded(path: string, maxBytes: number, priority: VaultIoPriority = 'foreground'): Promise<string> {
+    return this.schedule(JSON.stringify(['bounded', maxBytes, path]), () => this.boundedReader(path, maxBytes), priority);
+  }
+
+  private schedule(path: string, run: () => Promise<string>, priority: VaultIoPriority): Promise<string> {
     const existing = this.inFlight.get(path);
     if (existing) return existing;
 
     const promise = new Promise<string>((resolve, reject) => {
-      this.queue.push({ path, priority, run: () => this.reader(path), resolve, reject, queuedAt: Date.now() });
+      this.queue.push({ path, priority, run, resolve, reject, queuedAt: Date.now() });
       this.pump();
     });
     this.inFlight.set(path, promise);
@@ -83,7 +95,7 @@ export class VaultIoCoordinator {
         .then(() => job.run())
         .then(
           value => { job.resolve(value); this.finish(job, false); },
-          error => { job.reject(error); this.finish(job, true); },
+          error => { job.reject(error); this.finish(job, !(error instanceof SourceReadLimitError)); },
         );
     }
   }

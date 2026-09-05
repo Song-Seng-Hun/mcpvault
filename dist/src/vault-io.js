@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { readBoundedSource, SourceReadLimitError } from './bounded-source-read.js';
 const BACKGROUND_MAX_WAIT_MS = 500;
 /**
  * Deduplicates concurrent note reads and applies adaptive backpressure to
@@ -7,6 +8,7 @@ const BACKGROUND_MAX_WAIT_MS = 500;
  */
 export class VaultIoCoordinator {
     reader;
+    boundedReader;
     minConcurrency;
     maxConcurrency;
     targetConcurrency;
@@ -16,16 +18,23 @@ export class VaultIoCoordinator {
     latencyEmaMs = 0;
     constructor(options = {}) {
         this.reader = options.reader || (path => readFile(path, 'utf8'));
+        this.boundedReader = options.boundedReader || readBoundedSource;
         this.minConcurrency = Math.max(1, Math.floor(options.minConcurrency || 2));
         this.maxConcurrency = Math.max(this.minConcurrency, Math.floor(options.maxConcurrency || 32));
         this.targetConcurrency = Math.min(this.maxConcurrency, Math.max(this.minConcurrency, Math.floor(options.initialConcurrency || 8)));
     }
     readUtf8(path, priority = 'foreground') {
+        return this.schedule(JSON.stringify(['full', path]), () => this.reader(path), priority);
+    }
+    readUtf8Bounded(path, maxBytes, priority = 'foreground') {
+        return this.schedule(JSON.stringify(['bounded', maxBytes, path]), () => this.boundedReader(path, maxBytes), priority);
+    }
+    schedule(path, run, priority) {
         const existing = this.inFlight.get(path);
         if (existing)
             return existing;
         const promise = new Promise((resolve, reject) => {
-            this.queue.push({ path, priority, run: () => this.reader(path), resolve, reject, queuedAt: Date.now() });
+            this.queue.push({ path, priority, run, resolve, reject, queuedAt: Date.now() });
             this.pump();
         });
         this.inFlight.set(path, promise);
@@ -53,7 +62,7 @@ export class VaultIoCoordinator {
             job.startedAt = Date.now();
             void Promise.resolve()
                 .then(() => job.run())
-                .then(value => { job.resolve(value); this.finish(job, false); }, error => { job.reject(error); this.finish(job, true); });
+                .then(value => { job.resolve(value); this.finish(job, false); }, error => { job.reject(error); this.finish(job, !(error instanceof SourceReadLimitError)); });
         }
     }
     finish(job, failed) {

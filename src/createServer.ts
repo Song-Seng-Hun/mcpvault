@@ -831,7 +831,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "query_notes",
-          description: "Filter notes by structured YAML frontmatter and optionally sort by a frontmatter property. Filters use exact values; arrays match contained value(s). Public rows, counts and page selection exclude inaccessible or moderation-hidden notes. Metadata-only rows are advisory refreshed-index revisions, not locked snapshots; use their revision for guarded follow-up reads/edits. includeContent validates each selected source against its revision and rejects the whole page on drift.",
+          description: "Query exact YAML values (arrays match contained values), excluding inaccessible/hidden rows before pagination. Bounded pages deliver a contiguous prefix; nextCursor belongs to the last delivered row. Metadata is advisory. Omitted Properties/body are marked explicitly with a revision-guarded nextAction: follow it, never treat omission as empty content. Attempted body reads reject the whole page on revision drift. Budget errors deliver no rows: merge retryArguments into the same query.",
           inputSchema: {
             type: "object",
             properties: {
@@ -841,8 +841,9 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
               sortOrder: { type: "string", enum: ["asc", "desc"], description: "Sort direction (default: asc)", default: "asc" },
               limit: { type: "number", description: "Maximum notes to return (default: 100, max: 500)", default: 100 },
               after: { type: "object", description: "Use the previous nextCursor with unchanged filters/sort. Keyset position does not retain a cross-request snapshot; after a Query snapshot changed error, discard old pages and restart without after/offset." },
-              includeContent: { type: "boolean", description: "Include selected bodies after matching raw revision and visibility (default: false). Changed/deleted sources reject the whole page; storage failures return unavailable, never an empty success. Prefer a small limit or metadata followed by bounded reads.", default: false },
+              includeContent: { type: "boolean", description: "Request bodies after revision/visibility checks (default: false). Read only until the output page fills; raw hydration is capped at 256KiB/source plus an overflow byte and 1MiB/query. Oversized/exhausted sources return contentOmitted and guarded nextAction; index construction is outside this cap. Other read failures reject the whole page.", default: false },
               includeTotal: { type: "boolean", description: "Return the exact visible matching count from this read model (default: true); false returns total=-1,totalKnown=false and uses indexed page selection. Candidate scanning may still be required.", default: true },
+              maxChars: { type: "integer", minimum: 512, maximum: 20000, default: 12000, description: "Total serialized response budget. limit is an upper bound; truncated/nextCursor describe more rows, while field-omission flags require the row's nextAction. Exact identifiers are never clipped." },
               prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
             }
           }
@@ -2650,7 +2651,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
             throw new Error('limit must be a positive integer');
           }
-          const result = await fileSystem.queryNotes({
+          const result = await fileSystem.queryNotesBounded({
             filters: trimmedArgs.filters,
             pathPrefix: trimmedArgs.pathPrefix,
             sortBy: trimmedArgs.sortBy,
@@ -2659,10 +2660,10 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             after: trimmedArgs.after,
             includeContent: trimmedArgs.includeContent,
             includeTotal: trimmedArgs.includeTotal,
-          }, canAccessPath, note => !isModerationHidden(note.frontmatter));
-          const indent = trimmedArgs.prettyPrint ? 2 : undefined;
+          }, normalizedResponseBudget(trimmedArgs.maxChars), canAccessPath, note => !isModerationHidden(note.frontmatter), trimmedArgs.prettyPrint === true);
           return {
-            content: [{ type: "text", text: JSON.stringify(result, null, indent) }]
+            content: [{ type: "text", text: result.text }],
+            ...(result.isError && { isError: true }),
           };
         }
 

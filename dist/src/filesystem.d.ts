@@ -5,6 +5,7 @@ import { type DailyDateInput } from './daily.js';
 import type { VaultMetadataIndex } from './vault-index.js';
 import type { VaultGraphIndex } from './vault-graph.js';
 import { VaultIoCoordinator } from './vault-io.js';
+import { type PackedQueryPage } from './query-page.js';
 /** Hard per-note write limit so stdio callers cannot exhaust the vault disk. */
 export declare const MAX_NOTE_CONTENT_BYTES: number;
 /** Health scans never load arbitrarily large derived views into memory. */
@@ -184,6 +185,8 @@ export declare class FileSystemService {
     private resolvePathPrefix;
     listTasks(params?: ListTasksParams, canAccessPath?: (path: string) => boolean): Promise<ListTasksResult>;
     updateTask(params: UpdateTaskParams): Promise<UpdateTaskResult>;
+    private hydrateQueryNote;
+    queryNotesBounded(params: QueryNotesParams, maxChars: number, canAccessPath: (path: string) => boolean, canReadNote: (note: QueryNote) => boolean, prettyPrint?: boolean): Promise<PackedQueryPage>;
     queryNotes(params?: QueryNotesParams, canAccessPath?: (path: string) => boolean, canReadNote?: (note: QueryNote) => boolean): Promise<QueryNotesResult>;
     queryAuthorityShelf(params: {
         scheme: string;

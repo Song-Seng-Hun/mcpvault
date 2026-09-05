@@ -1,7 +1,25 @@
 import { describe, expect, test } from 'vitest';
 import { VaultIoCoordinator } from './vault-io.js';
+import { SourceReadLimitError } from './bounded-source-read.js';
 
 describe('VaultIoCoordinator', () => {
+  test('expected query size limits do not throttle unrelated IO as storage failures', async () => {
+    const io = new VaultIoCoordinator({ boundedReader: async () => { throw new SourceReadLimitError(); } });
+    const before = io.status().targetConcurrency;
+    await expect(io.readUtf8Bounded('large.md', 64)).rejects.toBeInstanceOf(SourceReadLimitError);
+    expect(io.status().targetConcurrency).toBe(before);
+  });
+  test('bounded reads share only matching limits and use the same scheduler', async () => {
+    const calls: string[] = [];
+    const io = new VaultIoCoordinator({ minConcurrency: 1, maxConcurrency: 1,
+      reader: async path => { calls.push(`full:${path}`); return 'full'; },
+      boundedReader: async (path, limit) => { calls.push(`${limit}:${path}`); return String(limit); },
+    });
+    const values = await Promise.all([io.readUtf8('same'), io.readUtf8Bounded('same', 64), io.readUtf8Bounded('same', 64), io.readUtf8Bounded('same', 128)]);
+    expect(values).toEqual(['full', '64', '64', '128']);
+    expect(calls).toEqual(['full:same', '64:same', '128:same']);
+    expect(io.status()).toMatchObject({ active: 0, queued: 0 });
+  });
   test('deduplicates concurrent reads of the same path', async () => {
     let reads = 0;
     const io = new VaultIoCoordinator({

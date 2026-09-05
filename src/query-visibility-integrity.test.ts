@@ -84,10 +84,10 @@ test.each([true, false])('hydration rejects changed/hidden sources instead of at
 test.each([true, false])('hydration preserves storage failure instead of returning an empty success (includeTotal=%s)', async includeTotal => {
   let selected = false;
   await afterSelection(includeTotal, async () => { selected = true; });
-  const original = VaultIoCoordinator.prototype.readUtf8;
-  vi.spyOn(VaultIoCoordinator.prototype, 'readUtf8').mockImplementation(async function(this: VaultIoCoordinator, path: string) {
+  const original = VaultIoCoordinator.prototype.readUtf8Bounded;
+  vi.spyOn(VaultIoCoordinator.prototype, 'readUtf8Bounded').mockImplementation(async function(this: VaultIoCoordinator, path: string, maxBytes: number) {
     if (selected && path.endsWith('01-visible.md')) throw Object.assign(new Error('DriverSecretPath'), { code: 'EACCES' });
-    return original.call(this, path);
+    return original.call(this, path, maxBytes);
   });
   const failure = await query({ includeTotal, includeContent: true, pathPrefix: 'Knowledge/01-visible.md' });
   expect(failure.result.isError).toBe(true);

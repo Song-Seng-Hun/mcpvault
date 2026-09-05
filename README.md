@@ -2392,14 +2392,37 @@ fallback still reads and selects from matching notes.
 
 Metadata-only rows carry refreshed-index revisions, not locked snapshots. Use
 the returned revision for a guarded follow-up read/edit. `includeContent: true`
-checks each selected raw source against its selected revision and visibility:
+checks attempted raw source reads against their selected revision and visibility:
 a changed/deleted source rejects the **whole page** with `Query snapshot changed`.
 Discard prior pages and restart the query without `after`/`offset`; do not append
 retries to stale results. Storage failures return `Vault read unavailable`, not
 an empty successful page. Keyset requests do not retain a vault-wide snapshot,
-and metadata-only queries do not reread every body. Prefer small limits or
-metadata followed by bounded line/section reads; generic response compaction is
-not proof that an oversized query page was delivered completely.
+and metadata-only queries do not reread every body.
+
+Public `mcp.query_notes` packs its own response within `maxChars` (512..20000,
+default 12000), rather than losing rows through generic JSON compaction.
+`limit` is an upper bound: a page delivers a contiguous prefix and constructs
+`nextCursor` from the last **actually delivered** original row, including its
+unabridged sort value. Keep filters/sort unchanged when following the cursor.
+`truncated` means more rows; it does not mean the returned fields are complete.
+
+One oversized row can omit Properties/body with `frontmatterOmitted` and/or
+`contentOmitted`, retaining exact identity/revision and a guarded `nextAction`.
+Missing fields are not empty authoritative values. Follow that action and any
+subsequent bounded line reads before reasoning from the omitted material.
+If identity/cursor cannot fit, the response is an error with no rows or cursor;
+merge `retryArguments` into the **same** query. When even the maximum budget
+cannot hold the exact cursor, narrow filters or choose a bounded sort property.
+Pretty printing is used only when the serialized result still fits.
+
+Body hydration stops when the output prefix fills and uses the shared server
+IO queue. Each raw read caps at 256 KiB plus one overflow-detection byte; attempted
+bytes across one public query cap at 1 MiB. Oversized or budget-exhausted sources
+return `contentOmitted` and `sourceState: index_advisory`, not partial Markdown.
+Their guarded follow-up reads validate current content; the query did not hydrate
+them. These limits do not cover metadata index construction, internal unbounded
+service queries, or separately requested outline/line reads. Small pages and
+progressive follow-up remain preferable to fetching every body.
 
 ```json
 {

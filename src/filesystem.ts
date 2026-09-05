@@ -22,6 +22,8 @@ import { extractMarkdownTasks } from './markdown-tasks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { projectNoteOutline, projectNoteLineWindow } from './note-projections.js';
 import { isMissingVaultPath, QuerySnapshotChangedError, VaultReadUnavailableError } from './vault-read-errors.js';
+import { SourceReadLimitError } from './bounded-source-read.js';
+import { packQueryPage, type PackedQueryPage } from './query-page.js';
 
 /** Hard per-note write limit so stdio callers cannot exhaust the vault disk. */
 export const MAX_NOTE_CONTENT_BYTES = 8 * 1024 * 1024;
@@ -2830,6 +2832,47 @@ export class FileSystemService {
     });
   }
 
+  private async hydrateQueryNote(note: QueryNote, canAccessPath: (path: string) => boolean, canReadNote: (note: QueryNote) => boolean, read: (path: string) => Promise<string>): Promise<QueryNote> {
+    let raw: string;
+    try { raw = await read(this.resolvePath(note.path)); }
+    catch (error) {
+      if (error instanceof SourceReadLimitError) throw error;
+      if (isMissingVaultPath(error)) throw new QuerySnapshotChangedError();
+      throw new VaultReadUnavailableError();
+    }
+    if (this.revision(raw) !== note.revision || !canAccessPath(note.path)) throw new QuerySnapshotChangedError();
+    const parsed = this.frontmatterHandler.parse(raw);
+    const current = { path: note.path, revision: note.revision, frontmatter: parsed.frontmatter, content: parsed.content };
+    if (!canReadNote(current)) throw new QuerySnapshotChangedError();
+    return current;
+  }
+
+  async queryNotesBounded(params: QueryNotesParams, maxChars: number, canAccessPath: (path: string) => boolean, canReadNote: (note: QueryNote) => boolean, prettyPrint = false): Promise<PackedQueryPage> {
+    if (!Number.isInteger(maxChars) || maxChars < 512 || maxChars > 20000) throw new Error('maxChars must be an integer between 512 and 20000');
+    const page = await this.queryNotes({ ...params, includeContent: false }, canAccessPath, canReadNote);
+    let remainingBytes = 1024 * 1024;
+    return packQueryPage(page, {
+      maxChars, prettyPrint, includeContent: params.includeContent === true,
+      cursorFor: note => cursorForQueryNote(note, params.sortBy || 'path'),
+      hydrate: async note => {
+        if (remainingBytes <= 1) return undefined;
+        const allowance = Math.min(256 * 1024, remainingBytes - 1);
+        try {
+          return await this.hydrateQueryNote(note, canAccessPath, canReadNote, async path => {
+            const raw = await this.vaultIo.readUtf8Bounded(path, allowance);
+            remainingBytes -= Buffer.byteLength(raw, 'utf8');
+            return raw;
+          });
+        } catch (error) {
+          if (!(error instanceof SourceReadLimitError)) throw error;
+          // Conservative charge also covers growth detected after the initial stat.
+          remainingBytes -= allowance + 1;
+          return undefined;
+        }
+      },
+    });
+  }
+
   async queryNotes(params: QueryNotesParams = {}, canAccessPath: (path: string) => boolean = () => true, canReadNote: (note: QueryNote) => boolean = () => true): Promise<QueryNotesResult> {
     const requestedLimit = params.limit ?? 100;
     if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
@@ -2858,20 +2901,8 @@ export class FileSystemService {
     const sortBy = params.sortBy || 'path';
     const notes: QueryNote[] = [];
     const filters = params.filters || {};
-    const hydrate = (selected: QueryNote[]) => Promise.all(selected.map(async note => {
-      let raw: string;
-      try {
-        raw = await this.vaultIo.readUtf8(this.resolvePath(note.path));
-      } catch (error) {
-        if (isMissingVaultPath(error)) throw new QuerySnapshotChangedError();
-        throw new VaultReadUnavailableError();
-      }
-      if (this.revision(raw) !== note.revision || !canAccessPath(note.path)) throw new QuerySnapshotChangedError();
-      const parsed = this.frontmatterHandler.parse(raw);
-      const current = { path: note.path, revision: note.revision, frontmatter: parsed.frontmatter, content: parsed.content };
-      if (!canReadNote(current)) throw new QuerySnapshotChangedError();
-      return current;
-    }));
+    const hydrate = (selected: QueryNote[]) => Promise.all(selected.map(note =>
+      this.hydrateQueryNote(note, canAccessPath, canReadNote, path => this.vaultIo.readUtf8(path))));
     if (this.metadataIndex && params.includeTotal === false) {
       const page = await this.metadataIndex.listSortedPage({
         filters,
