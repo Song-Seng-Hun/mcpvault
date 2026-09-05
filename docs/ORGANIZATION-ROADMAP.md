@@ -356,6 +356,14 @@ do not prove a current, bounded, actionable response through its public adapter.
   body/Properties field origins now use the same physical line convention,
   including lazy text restoration. Public MCP search-to-line-read tests cover
   navigation. This does not make a later read/edit atomic with the search.
+- Bounded line-window/outline adapters now use the same raw ParsedNote snapshot
+  for moderation, returned body/headings and revision. Real-file races previously
+  reproduced revision-A/body-B replies and new hidden content after a public
+  precheck; both routes now retain the authorized snapshot and deny later hidden
+  reads. Shared pure projections preserve fence and clamping behavior. Automatic
+  revision-pinned continuation across requests and consistency audits of other
+  independent multi-read adapters remain open; current guidance requires revision
+  comparison and restarting a changed sequence.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

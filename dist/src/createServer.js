@@ -1,5 +1,6 @@
 import { Server } from "@modelcontextprotocol/server";
 import { FileSystemService } from "./filesystem.js";
+import { projectNoteOutline, projectNoteLineWindow } from './note-projections.js';
 import { FrontmatterHandler, parseFrontmatter } from "./frontmatter.js";
 import { PathFilter } from "./pathfilter.js";
 import { SearchService } from "./search.js";
@@ -988,7 +989,7 @@ export function createServer(vaultPath, options = {}) {
         },
         {
             name: "get_note_outline",
-            description: "Get a bounded, revision-stamped heading page without reading the full note. Continue with the returned cursor or read only the selected line range.",
+            description: "Get a bounded heading page without returning the full note. Headings, visibility and revision use one snapshot. Continue with the returned cursor; compare revisions and restart if the source changed.",
             inputSchema: {
                 type: "object",
                 properties: {
@@ -1003,7 +1004,7 @@ export function createServer(vaultPath, options = {}) {
         },
         {
             name: "read_note_lines",
-            description: "Read a bounded, revision-stamped line window. If the response is truncated, continue from the returned line/column cursor instead of retrying the whole range.",
+            description: "Read a bounded line window whose content, visibility and revision use one snapshot. Continue truncated responses with the returned line/column cursor; compare revisions and restart if the source changed.",
             inputSchema: {
                 type: "object",
                 properties: {
@@ -2536,14 +2537,13 @@ export function createServer(vaultPath, options = {}) {
                     case "get_note_outline": {
                         const note = await fileSystem.readNote(trimmedArgs.path);
                         assertReadableCommunityNote(note.frontmatter, trimmedArgs.path);
-                        const headings = await fileSystem.getNoteOutline(trimmedArgs.path);
+                        const headings = projectNoteOutline(note.originalContent);
                         return boundedOutlineResult(trimmedArgs.path, note.revision, headings, trimmedArgs);
                     }
                     case "read_note_lines": {
                         const note = await fileSystem.readNote(trimmedArgs.path);
                         assertReadableCommunityNote(note.frontmatter, trimmedArgs.path);
-                        const window = await fileSystem.readNoteLineWindow({
-                            path: trimmedArgs.path,
+                        const window = projectNoteLineWindow(note.originalContent, {
                             startLine: trimmedArgs.startLine,
                             endLine: trimmedArgs.endLine
                         });

@@ -20,6 +20,7 @@ import { RELATION_FIELDS } from './organization.js';
 import { assertLegacyDiscussionMutationAllowed } from './scope-access.js';
 import { extractMarkdownTasks } from './markdown-tasks.js';
 import { isModerationHidden } from './moderation-policy.js';
+import { projectNoteOutline, projectNoteLineWindow } from './note-projections.js';
 
 /** Hard per-note write limit so stdio callers cannot exhaust the vault disk. */
 export const MAX_NOTE_CONTENT_BYTES = 8 * 1024 * 1024;
@@ -483,24 +484,6 @@ export function classifyWriteError(error: unknown, path: string): Error {
     return error;
   }
   return new Error(`Failed to write file: ${path} - ${error instanceof Error ? error.message : 'Unknown error'}`);
-}
-
-/**
- * Strip an ATX heading's optional closing sequence of #s per CommonMark: it
- * must be preceded by a space (or the text is nothing but #s, i.e. an empty
- * heading with a closer and no content) and followed only by trailing spaces
- * (already removed by the caller's trim). A closer with no preceding space
- * (e.g. "Heading###") is not a valid closer and stays as literal text.
- */
-function stripAtxClosingSequence(text: string): string {
-  const withPrecedingSpace = /^(.*[ \t])#+$/.exec(text);
-  if (withPrecedingSpace) {
-    return withPrecedingSpace[1]!.replace(/[ \t]+$/, '');
-  }
-  if (/^#+$/.test(text)) {
-    return '';
-  }
-  return text;
 }
 
 export class FileSystemService {
@@ -2604,78 +2587,7 @@ export class FileSystemService {
     }
     const fullPath = this.resolvePath(path);
     const raw = await readFile(fullPath, 'utf-8');
-    const lines = raw.split('\n');
-    const headings: NoteHeading[] = [];
-    // Per CommonMark ATX headings: up to 3 leading spaces are allowed before
-    // the #s; the heading may have no text at all (bare `#`); and an optional
-    // closing sequence of #s (preceded by a space, followed only by trailing
-    // spaces) is stripped from the returned text rather than kept literally.
-    const headingRegex = /^ {0,3}(#{1,6})(?:[ \t]+(.*))?$/;
-    // Frontmatter delimiters (---) can themselves look like content but never
-    // contain real headings; skip the block so YAML comments (# ...) inside it
-    // can't be misdetected as headings. Handles both LF and CRLF line endings,
-    // since split('\n') leaves a trailing \r on each line for CRLF files.
-    let inFrontmatter = false;
-    let frontmatterEnded = false;
-    // Fenced code blocks (``` or ~~~) can contain lines that look like
-    // headings (e.g. a shell comment or markdown example) but aren't real
-    // structure; track fence state and skip everything inside one.
-    // Per CommonMark: a fence marker may be indented up to 3 spaces; the
-    // opener records both its character and its length, and only a line
-    // with the *same* character, at least as many markers, and nothing but
-    // trailing whitespace after them closes it (mismatched length, a
-    // different character, or trailing content like a language tag on a
-    // would-be closer must NOT end the block).
-    let inFence = false;
-    let fenceChar = '';
-    let fenceLength = 0;
-    const fenceRegex = /^ {0,3}(`{3,}|~{3,})(.*)$/;
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i]!;
-      const trimmed = line.replace(/\r$/, '');
-
-      if (!frontmatterEnded && i === 0 && trimmed === '---') {
-        inFrontmatter = true;
-        continue;
-      }
-      if (inFrontmatter) {
-        if (trimmed === '---') {
-          inFrontmatter = false;
-          frontmatterEnded = true;
-        }
-        continue;
-      }
-      frontmatterEnded = true;
-
-      const fenceMatch = fenceRegex.exec(trimmed);
-      if (fenceMatch) {
-        const markers = fenceMatch[1]!;
-        const trailing = fenceMatch[2]!;
-        const char = markers.charAt(0);
-        if (!inFence) {
-          inFence = true;
-          fenceChar = char;
-          fenceLength = markers.length;
-        } else if (char === fenceChar && markers.length >= fenceLength && trailing.trim() === '') {
-          inFence = false;
-          fenceChar = '';
-          fenceLength = 0;
-        }
-        // Any other fence-like line while inFence (mismatched char, too
-        // short, or has trailing content) is just code-block content.
-        continue;
-      }
-      if (inFence) {
-        continue;
-      }
-
-      const match = headingRegex.exec(trimmed);
-      if (match) {
-        const rawText = (match[2] ?? '').trim();
-        headings.push({ level: match[1]!.length, text: stripAtxClosingSequence(rawText), line: i + 1 });
-      }
-    }
-    return headings;
+    return projectNoteOutline(raw);
   }
 
   async readNoteLineWindow(params: ReadNoteLinesParams): Promise<{ content: string; startLine: number; endLine: number; totalLines: number }> {
@@ -2685,19 +2597,7 @@ export class FileSystemService {
     }
     const fullPath = this.resolvePath(path);
     const raw = await readFile(fullPath, 'utf-8');
-    const lines = raw.split('\n');
-    // Both bounds are clamped into [1, lines.length] rather than trusting
-    // caller-supplied indices directly - out-of-range start/end (0, negative,
-    // or past EOF) previously either threw or silently wrapped via
-    // Array.slice's negative-index behavior instead of clamping like end did.
-    const clampedStart = Math.min(Math.max(params.startLine, 1), lines.length);
-    const clampedEnd = Math.min(Math.max(params.endLine, clampedStart), lines.length);
-    return {
-      content: lines.slice(clampedStart - 1, clampedEnd).join('\n'),
-      startLine: clampedStart,
-      endLine: clampedEnd,
-      totalLines: lines.length,
-    };
+    return projectNoteLineWindow(raw, params);
   }
 
   async readNoteLines(params: ReadNoteLinesParams): Promise<string> {

@@ -1,6 +1,6 @@
 export declare const WIKI_POLICY_TOPICS: readonly ['overview', 'onboarding', 'capture', 'retrieval', 'knowledge', 'evidence', 'review', 'work', 'moc', 'memory', 'maintenance', 'ideation', 'community', 'portability', 'safety'];
 export type WikiPolicyTopicId = typeof WIKI_POLICY_TOPICS[number];
-export declare const WIKI_POLICY_VERSION = 20;
+export declare const WIKI_POLICY_VERSION = 21;
 /**
  * The only policy that every MCP client must receive eagerly. Detailed
  * organization guidance is selected through wiki.policy so a rich Wiki does

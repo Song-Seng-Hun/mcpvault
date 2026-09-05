@@ -427,6 +427,16 @@ preserve valid text. If identifiers alone exceed a budget, an item may still not
 fit. Re-read the source/revision before any edit; concurrent later changes remain
 possible, and none of these locators certify exhaustive semantic coverage.
 
+Bounded `mcp.read_note_lines` and `mcp.get_note_outline` replies derive their
+window/headings from the same ParsedNote `originalContent` whose frontmatter
+was checked and whose hash is returned. There is no second file read between
+moderation validation and projection. A concurrent edit may make that snapshot
+older than disk by response time; it cannot replace its body while retaining
+the old revision. A subsequent read performs a fresh visibility check. Returned
+cursors are not revision locks: compare revisions between pages and restart
+instead of combining different versions. Automatic revision-pinned continuation
+and other independent multi-read adapters still require separate work.
+
 Optional snapshot readers require regular files and enforce stored-byte ceilings
 while reading, not only via a prior stat. Gzip decoding enforces its output limit
 before text/JSON parsing. Lexical binary/decoded and public-discovery decoded
