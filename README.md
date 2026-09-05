@@ -1621,6 +1621,15 @@ notes, without certifying the dependencies. Public learning diagnostics retain
 cycle entries for inspection. If a saved route becomes unsafe or truncated,
 resume returns `stale`, withholds the next read, and provides a learning-path
 repair action without rewriting the historical checkpoint.
+Resolved prerequisites outside the reading list are tracked through one
+64-character source revision fingerprint, not by copying their bodies or
+expanding the reading list. Changes to those sources (including loss or
+ambiguity of their resolution) make resume stale even if the MOC and all
+reading entries are unchanged: `drift.sourceSnapshotChanged` explains this
+case. Review the current `wiki.learning_path` and explicitly save a new
+checkpoint after checking the changed prerequisites. Older checkpoints without
+this source snapshot remain readable but require that same recapture step
+(`drift.sourceSnapshotMissing`); ordinary work notes need no migration.
 `navigationComplete` separately reports whether the requested-depth authored
 route was fully scanned without unresolved, ambiguous or inaccessible entries;
 it remains visible even in compact learning responses. Both authored and

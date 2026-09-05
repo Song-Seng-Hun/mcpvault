@@ -170,6 +170,19 @@ checkpoint writes must not occur after that failure. Deduplicate source checks
 and run them in batches of four. This is not an atomic multi-file snapshot and
 does not guarantee detection of changes after validation or to unselected
 reference candidates. Unrelated files are not part of this revalidation pass.
+Learning checkpoints also save `source_revision_fingerprint`, a fixed-size
+SHA-256 over the sorted identities/revisions of the visible selected sources
+used by the path, including resolved prerequisites outside the reading list.
+The digest also covers each scanned prerequisite's resolution cardinality and
+unique target, so a shared source cannot mask a newly ambiguous reference.
+It is advisory drift detection, not evidence, a credential, or an access grant.
+It does not copy prerequisite bodies or add prerequisite entries to the reading
+order. On resume, a changed source set/revision yields `state: stale`,
+`drift.sourceSnapshotChanged: true`, and no next-read command, even when every
+reading entry is unchanged. Review the current `wiki.learning_path`, then
+explicitly save a new checkpoint; resume never silently updates history.
+Old checkpoints missing this digest remain readable but require recapture
+(`drift.sourceSnapshotMissing: true`). Ordinary work state is unaffected.
 Move rewrites never update their captured revisions or certify summary/review
 digests. Resolved upstream entries compare their actual path, not display
 target spelling; unresolved entries still compare the authored target.

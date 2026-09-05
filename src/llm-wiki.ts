@@ -11248,6 +11248,7 @@ export class LlmWikiService {
     const orderIssues: Array<Record<string, unknown>> = [];
     const externalPrerequisites: Array<Record<string, unknown>> = [];
     const externalSeen = new Set<string>();
+    const resolutionSnapshot = checkpointOnly ? createHash('sha256') : undefined;
     for (const entry of entries) {
       const dependentKey = normalizePath(entry.internalPath).toLowerCase();
       const metadata = visibleByPath.get(dependentKey);
@@ -11279,6 +11280,11 @@ export class LlmWikiService {
               sourcePath: entry.internalPath,
               canReference: (source, target) => this.access.canReferenceFrom(source, target),
             });
+        // A shared source may remain captured through another entry even when
+        // this reference becomes ambiguous. Track each bounded resolution too,
+        // without retaining candidate lists or depending on their enumeration.
+        resolutionSnapshot?.update(JSON.stringify([entry.path, prerequisite.dependencyType,
+          rawDependency, matches.length, matches.length === 1 ? this.access.toPublicPath(matches[0]!) : null])).update('\n');
         if (matches.length === 0) {
           orderIssues.push({ type: 'unresolved_or_inaccessible_prerequisite', path: entry.path, prerequisite: boundedText(rawDependency, 200), dependencyType: prerequisite.dependencyType, ...(prerequisite.dependencyType === 'claim' && { sourceClaimId: prerequisite.reference.sourceClaimId, targetClaimId: prerequisite.reference.targetClaimId }) });
           continue;
@@ -11548,6 +11554,11 @@ export class LlmWikiService {
       return {
         mode: 'learning_path_checkpoint_source',
         root: { path: this.access.toPublicPath(path), revision: rootNote.revision },
+        // Persist one bounded digest, not thousands of prerequisite paths.
+        // Sorting makes metadata enumeration order irrelevant to continuity.
+        sourceRevisionFingerprint: hash(JSON.stringify({ version: 1, resolutions: resolutionSnapshot!.digest('hex'), sources: capturedSources
+          .map(([target, revision]) => [this.access.toPublicPath(target), revision])
+          .sort((left, right) => left[0]! < right[0]! ? -1 : left[0]! > right[0]! ? 1 : 0) })),
         authoredOrder,
         // Public diagnostics retain cyclic entries for inspection. A durable
         // recommended checkpoint must contain only the prerequisite-safe path.

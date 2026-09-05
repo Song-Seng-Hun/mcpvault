@@ -3327,6 +3327,7 @@ export declare class LlmWikiService {
             path: string;
             revision: string;
         };
+        sourceRevisionFingerprint: string;
         authoredOrder: {
             path: string;
             revision: string;

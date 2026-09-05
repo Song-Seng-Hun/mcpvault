@@ -44,6 +44,8 @@ type LearningProgress = {
   entries: LearningEntry[];
   structure_fingerprint: string;
   revision_fingerprint: string;
+  // Optional only when reading a legacy checkpoint; new saves require it.
+  source_revision_fingerprint?: string;
   saved_at: string;
 };
 
@@ -210,6 +212,10 @@ export class ContinuityService {
     if (order === 'recommended' && authoredEntries.length > 0 && entries.length !== authoredEntries.length) {
       throw new Error('The recommended path omits cyclic or blocked entries; use authored order or repair the MOC before saving progress');
     }
+    const sourceRevisionFingerprint = typeof projection.sourceRevisionFingerprint === 'string' ? projection.sourceRevisionFingerprint.toLowerCase() : '';
+    if (!REVISION_PATTERN.test(sourceRevisionFingerprint)) {
+      throw new Error('The learning path did not return a valid source revision fingerprint; rebuild it before saving progress');
+    }
 
     let completedThrough: string | undefined;
     if (input.completedThrough !== undefined && String(input.completedThrough).trim()) {
@@ -227,7 +233,8 @@ export class ContinuityService {
       ...(completedThrough && { completed_through: completedThrough }),
       entries,
       structure_fingerprint: fingerprint({ root: publicRoot, order, maxDepth, paths: entries.map(item => item.path) }),
-      revision_fingerprint: fingerprint({ root: [publicRoot, rootRevision], entries }),
+      revision_fingerprint: fingerprint({ root: [publicRoot, rootRevision], entries, sources: sourceRevisionFingerprint }),
+      source_revision_fingerprint: sourceRevisionFingerprint,
       saved_at: savedAt,
     };
   }
@@ -272,10 +279,12 @@ export class ContinuityService {
       && entries.length === candidateEntries.length
       && REVISION_PATTERN.test(String(candidate.structure_fingerprint || '').toLowerCase())
       && REVISION_PATTERN.test(String(candidate.revision_fingerprint || '').toLowerCase())
+      && (candidate.source_revision_fingerprint === undefined || (typeof candidate.source_revision_fingerprint === 'string' && REVISION_PATTERN.test(candidate.source_revision_fingerprint.toLowerCase())))
       ? {
         root_path: String(candidate.root_path), root_revision: String(candidate.root_revision).toLowerCase(), order, max_depth: maxDepth,
         ...(candidate.completed_through && { completed_through: String(candidate.completed_through) }), entries,
         structure_fingerprint: String(candidate.structure_fingerprint).toLowerCase(), revision_fingerprint: String(candidate.revision_fingerprint).toLowerCase(),
+        ...(candidate.source_revision_fingerprint !== undefined && { source_revision_fingerprint: String(candidate.source_revision_fingerprint).toLowerCase() }),
         saved_at: String(candidate.saved_at || ''),
       } satisfies LearningProgress
       : undefined;
@@ -301,11 +310,14 @@ export class ContinuityService {
       });
       const structureChanged = current.structure_fingerprint !== stored.structure_fingerprint;
       const revisionsChanged = current.revision_fingerprint !== stored.revision_fingerprint;
-      if (structureChanged || revisionsChanged) {
+      const sourceSnapshotChanged = current.source_revision_fingerprint !== stored.source_revision_fingerprint;
+      if (structureChanged || revisionsChanged || sourceSnapshotChanged) {
         return this.compactLearningProgress(stored, 'stale', {
           rootChanged: current.root_revision !== stored.root_revision,
           structureChanged,
           revisionsChanged,
+          sourceSnapshotChanged,
+          ...(stored.source_revision_fingerprint === undefined && { sourceSnapshotMissing: true }),
           changedEntries: changedEntries.slice(0, 8),
           changedEntriesTotal: changedEntries.length,
         });

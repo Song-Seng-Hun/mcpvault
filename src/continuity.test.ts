@@ -63,6 +63,7 @@ test('learning progress resumes at the next MOC entry and blocks stale paths', a
     { path: 'Knowledge/C.md', revision: 'd'.repeat(64) },
   ];
   const buildLearningPath = vi.fn(async () => ({
+    sourceRevisionFingerprint: 'e'.repeat(64),
     root: { path: 'Knowledge/MOC.md', revision: rootRevision },
     authoredOrder: entries,
     recommendedOrder: entries.map(item => item.path),
@@ -213,6 +214,7 @@ test('learning progress rejects inaccessible, incomplete, and unsafe sequences',
   const fs = new FileSystemService(vault, new PathFilter(), new FrontmatterHandler());
   const principal = { accountId: 'codex-account', modelId: 'codex', agentId: 'codex-worker', role: 'agent' as const, capabilities: ['journal'] as const };
   let projection: Record<string, any> = {
+    sourceRevisionFingerprint: 'e'.repeat(64),
     root: { path: 'Knowledge/MOC.md', revision: 'a'.repeat(64) },
     authoredOrder: [{ path: 'Knowledge/A.md', revision: 'b'.repeat(64) }],
     recommendedOrder: ['Knowledge/A.md'],
