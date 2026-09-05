@@ -368,6 +368,20 @@ do not prove a current, bounded, actionable response through its public adapter.
   512-character reconstruction, source edits, hidden changes and Unicode titles.
   This does not retain historical snapshots or guard manually unpinned reads;
   consistency audits of other independent multi-read adapters remain open.
+- Progressive Wiki reads and split previews now use one moderation-checked raw
+  snapshot for headings/ranges/content/revision. Exact/unique heading selection
+  and terminal block anchors prevent wrong extraction from duplicate headings,
+  Properties, fenced examples or ID prefixes. Context no longer repeats boundary
+  lines. Compact public replies keep source revision/range and guarded recovery
+  instead of dropping provenance. Split remains preview-only; block reads still
+  project an anchor line rather than an entire multiline Obsidian block. Graph,
+  work-inventory and multi-file transaction audits remain separate open work.
+- Direct note/Properties/outline/line fallback reads now enforce moderation
+  independent of folder. Batch response shaping cannot omit Properties before
+  authorization or accept cached unchanged metadata as an access grant; it
+  checks at most ten current snapshots, then suppresses unchanged visible bodies.
+  Generic query/aggregate moderation, hidden-row counts and graph inventory
+  freshness still need dedicated audits; this batch does not certify them.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

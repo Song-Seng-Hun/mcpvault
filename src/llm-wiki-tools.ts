@@ -472,10 +472,10 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'preview_wiki_split',
-      description: 'Preview splitting one Markdown heading section into a separate note. Returns the exact source revision, bounded extracted content, links, and target collision status; it never mutates files. Use this before a revision-checked write_note and patch_note sequence.',
+      description: 'Preview a visible Markdown section from one checked source snapshot, with revision and range. Exact headings take priority; partial headings must be unique. Never copy/publish truncated content: follow its guarded range read and replace the preview with the complete range before revision-checked writes. This endpoint never mutates files.',
       inputSchema: { type: 'object', properties: {
         path: { type: 'string', description: 'Existing accessible Markdown note' },
-        heading: { type: 'string', description: 'Exact or partial heading text to extract' },
+        heading: { type: 'string', description: 'Unique exact heading, or unique partial match. Ambiguity requires outline/line selection; never guess the first match.' },
         targetPath: { type: 'string', description: 'Optional proposed destination path for the new note' },
         maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 },
         accessToken, prettyPrint,
@@ -530,10 +530,10 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'read_wiki_projection',
-      description: 'Read one Wiki note progressively. Start with summary or key_points, then request outline or one section/block with bounded nearby line context; full content is explicit and bounded. Returns the current revision so edits can use optimistic concurrency.',
+      description: 'Read one Wiki note progressively from one checked source snapshot. Start with summary/key_points, then outline or a unique section/block with bounded nearby context. Exact headings take priority; ambiguous locators require outline/line selection. Full reads are explicit and bounded. If truncated, nextAction re-reads the range or outline with a revision guard; replace rather than append the preview.',
       inputSchema: { type: 'object', properties: {
         path: { type: 'string' }, view: { type: 'string', enum: [...WIKI_PROJECTION_VIEWS], default: 'summary', description: 'Use progressive for one bounded packet containing summary, selected passages, claims, and open questions.' },
-        section: { type: 'string', description: 'Heading text when view=section' }, blockId: { type: 'string', maxLength: 100, description: 'Obsidian block ID (without the leading ^) when view=section' }, contextBefore: { type: 'integer', minimum: 0, maximum: 3, default: 1, description: 'Nearby lines before the selected heading/block' }, contextAfter: { type: 'integer', minimum: 0, maximum: 3, default: 1, description: 'Nearby lines after the selected heading/block' }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, accessToken, prettyPrint,
+        section: { type: 'string', description: 'Unique heading text when view=section; exact matches take priority over partial matches' }, blockId: { type: 'string', maxLength: 100, description: 'Unique terminal Obsidian block ID (without ^) when view=section. Returns its physical anchor line plus nearby context; ignores Properties and fenced examples.' }, contextBefore: { type: 'integer', minimum: 0, maximum: 3, default: 1, description: 'Nearby lines before the selected heading/block' }, contextAfter: { type: 'integer', minimum: 0, maximum: 3, default: 1, description: 'Nearby lines after the selected heading/block' }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, accessToken, prettyPrint,
       }, required: ['path'] },
     },
     {

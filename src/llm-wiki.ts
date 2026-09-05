@@ -16,6 +16,7 @@ import { packExceptionBoard, type ExceptionBoardItem } from './exception-board.j
 import { packLintReport } from './lint-report.js';
 import { CollectionHealthProjection } from './collection-health.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
+import { projectNoteOutline, projectNoteBlockLines, selectNoteHeading } from './note-projections.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
 import { buildNoteReferenceIndex, normalizeNoteReferenceTerm, resolveNoteReference, type NoteReferenceIndex } from './note-reference.js';
@@ -7111,10 +7112,9 @@ export class LlmWikiService {
     if (!requestedHeading) throw new Error('heading is required');
     const maxChars = Math.min(Math.max(Number(params.maxChars) || 6000, 512), 16000);
     const note = await this.fileSystem.readNote(params.path);
-    const headings = await this.fileSystem.getNoteOutline(params.path);
-    const selected = headings.find(item => item.text.trim().toLowerCase() === requestedHeading)
-      || headings.find(item => item.text.trim().toLowerCase().includes(requestedHeading));
-    if (!selected) throw new Error(`Section not found: ${params.heading}`);
+    if (isModerationHidden(note.frontmatter)) throw new Error('The source note is unavailable');
+    const headings = projectNoteOutline(note.originalContent);
+    const selected = selectNoteHeading(headings, requestedHeading);
     const lines = note.originalContent.split('\n');
     const next = headings.find(item => item.line > selected.line && item.level <= selected.level);
     const endLine = (next?.line || lines.length + 1) - 1;
@@ -7144,7 +7144,9 @@ export class LlmWikiService {
         collision: targetExists === true ? 'target_exists' : targetUsable ? 'none' : 'inaccessible',
       }),
       nextSteps: [
-        'Write the preview content to a new target with expectedRevision="missing".',
+        ...(content.length > maxChars
+          ? ['Do not write truncated preview content. Read the complete returned range with mcp.read_note_lines and expectedRevision equal to sourceRevision, following its guarded continuations; restart if the source changed.']
+          : ['Write the complete preview content to a new target with expectedRevision="missing".']),
         `Patch the source section using expectedRevision="${note.revision}" after re-reading it.`,
         'Add or preserve a [[wikilink]] from the source to the new note, then lint the result.',
       ],
@@ -7605,7 +7607,7 @@ export class LlmWikiService {
     const note = await this.fileSystem.readNote(params.path);
     if (isModerationHidden(note.frontmatter)) throw new Error('The source note is unavailable');
     const title = String(note.frontmatter.title || params.path.split('/').at(-1) || params.path);
-    const headings = await this.fileSystem.getNoteOutline(params.path);
+    const headings = projectNoteOutline(note.originalContent);
     const lines = note.originalContent.split('\n');
     let content = '';
     let sectionRange: { startLine: number; endLine: number } | undefined;
@@ -7618,14 +7620,14 @@ export class LlmWikiService {
       if (params.blockId?.trim()) {
         const blockId = params.blockId.trim().replace(/^\^/, '');
         if (!/^[A-Za-z0-9_-]+$/.test(blockId)) throw new Error('blockId must contain only letters, numbers, underscores, and hyphens');
-        const blockLine = lines.findIndex(line => line.includes(`^${blockId}`));
-        if (blockLine < 0) throw new Error(`Block not found: ${params.blockId}`);
-        sectionRange = { startLine: blockLine + 1, endLine: blockLine + 1 };
-        content = (lines[blockLine] || '').trim();
+        const blockLines = projectNoteBlockLines(note.originalContent, blockId);
+        if (!blockLines.length) throw new Error('Block not found');
+        if (blockLines.length > 1) throw new Error('Block ID is ambiguous. Use mcp.get_note_outline, then mcp.read_note_lines with the selected range and expectedRevision.');
+        const blockLine = blockLines[0]!;
+        sectionRange = { startLine: blockLine, endLine: blockLine };
+        content = (lines[blockLine - 1] || '').trim();
       } else {
-        const requested = params.section!.trim().replace(/^#+\s*/, '').toLowerCase();
-        const selected = headings.find(heading => heading.text.toLowerCase() === requested || heading.text.toLowerCase().includes(requested));
-        if (!selected) throw new Error(`Section not found: ${params.section}`);
+        const selected = selectNoteHeading(headings, params.section!);
         const next = headings.find(heading => heading.line > selected.line && heading.level <= selected.level);
         sectionRange = { startLine: selected.line, endLine: (next?.line || lines.length + 1) - 1 };
         content = lines.slice(sectionRange!.startLine - 1, sectionRange!.endLine).join('\n').trim();
@@ -7647,9 +7649,9 @@ export class LlmWikiService {
         return taken;
       };
       sectionContext = {
-        before: takeContext(Array.from({ length: beforeCount }, (_, index) => Math.max(1, sectionRange!.startLine - beforeCount + index))),
+        before: takeContext(Array.from({ length: beforeCount }, (_, index) => sectionRange!.startLine - beforeCount + index).filter(line => line >= 1)),
         target: sectionRange,
-        after: takeContext(Array.from({ length: afterCount }, (_, index) => Math.min(lines.length, sectionRange!.endLine + index + 1))),
+        after: takeContext(Array.from({ length: afterCount }, (_, index) => sectionRange!.endLine + index + 1).filter(line => line <= lines.length)),
       };
     } else {
       const claims = Array.isArray(note.frontmatter.claims) ? note.frontmatter.claims : [];

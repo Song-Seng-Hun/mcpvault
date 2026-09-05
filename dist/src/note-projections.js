@@ -6,11 +6,9 @@ function stripAtxClosingSequence(text) {
         return '';
     return text;
 }
-/** Pure projection of one already-authorized raw Markdown snapshot. */
-export function projectNoteOutline(raw) {
+/** Physical body lines outside Properties and matching fenced examples. */
+function* visibleNoteLines(raw) {
     const lines = raw.split('\n');
-    const headings = [];
-    const headingRegex = /^ {0,3}(#{1,6})(?:[ \t]+(.*))?$/;
     let inFrontmatter = false;
     let frontmatterEnded = false;
     let inFence = false;
@@ -51,11 +49,42 @@ export function projectNoteOutline(raw) {
         }
         if (inFence)
             continue;
-        const match = headingRegex.exec(trimmed);
+        yield { text: trimmed, line: i + 1 };
+    }
+}
+/** Pure projection of one already-authorized raw Markdown snapshot. */
+export function projectNoteOutline(raw) {
+    const headings = [];
+    const headingRegex = /^ {0,3}(#{1,6})(?:[ \t]+(.*))?$/;
+    for (const { text, line } of visibleNoteLines(raw)) {
+        const match = headingRegex.exec(text);
         if (match)
-            headings.push({ level: match[1].length, text: stripAtxClosingSequence((match[2] ?? '').trim()), line: i + 1 });
+            headings.push({ level: match[1].length, text: stripAtxClosingSequence((match[2] ?? '').trim()), line });
     }
     return headings;
+}
+/** Exact terminal block anchors, not ID prefixes, mentions or code examples. */
+export function projectNoteBlockLines(raw, blockId) {
+    const result = [];
+    for (const { text, line } of visibleNoteLines(raw)) {
+        const anchor = /(?:^|\s)\^([A-Za-z0-9_-]+)\s*$/.exec(text);
+        if (anchor?.[1]?.toLowerCase() === blockId.toLowerCase())
+            result.push(line);
+    }
+    return result;
+}
+/** Prefer an exact heading; a partial match is useful only when unambiguous. */
+export function selectNoteHeading(headings, requested) {
+    const query = requested.trim().replace(/^#+\s*/, '').trim().toLowerCase();
+    if (!query)
+        throw new Error('A non-empty heading is required');
+    const exact = headings.filter(heading => heading.text.trim().toLowerCase() === query);
+    const matches = exact.length ? exact : headings.filter(heading => heading.text.trim().toLowerCase().includes(query));
+    if (!matches.length)
+        throw new Error('Section not found');
+    if (matches.length > 1)
+        throw new Error('Section is ambiguous. Use mcp.get_note_outline, then mcp.read_note_lines with the selected range and expectedRevision.');
+    return matches[0];
 }
 /** Raw physical-line window; response serialization applies its character budget. */
 export function projectNoteLineWindow(raw, params) {

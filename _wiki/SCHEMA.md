@@ -453,6 +453,35 @@ retryArguments to obtain its full restart action; this remains a conflict, not
 permission to splice new text into old pages. Never truncate executable paths.
 Other independent multi-read adapters still require separate consistency audits.
 
+`wiki.read_projection` and `wiki.split_preview` use the same authorized ParsedNote
+for revision, headings and extracted range. Both reject moderation-hidden source
+snapshots. Heading selection prefers unique exact matches, then unique partial
+matches; duplicate or ambiguous headings require `mcp.get_note_outline` followed
+by revision-checked `mcp.read_note_lines`, not a guessed first match. Block reads
+resolve a unique terminal `^block-id` outside Properties and matching backtick/
+tilde fences (case-insensitive ASCII ID matching); prefixes and inline mentions
+are not anchors. Their existing one-line block projection remains an anchor-line
+view, not automatic expansion of an entire preceding multiline block. Nearby
+context is strictly outside the target range and within actual file boundaries.
+
+If total serialized Wiki projection/preview output exceeds its budget, its compact
+envelope retains source revision, selected range and a guarded read action. That
+action starts at the beginning of the selected range (or returns an outline when
+no section was selected); replace the preview, do not append overlapping text.
+Never publish truncated extraction content. Extra metadata/context can be omitted
+in this compact view. Oversized identifiers produce a same-request budget retry,
+not shortened executable paths. Repeating a Wiki projection after such an error
+reads a fresh snapshot; it does not promise retention of the original snapshot.
+
+Direct note/Properties/outline/line reads reject moderation-hidden source
+snapshots regardless of folder. Public batch reads always retain current
+Properties internally until moderation is checked, then omit them if requested;
+`knownRevisions` suppresses unchanged response bodies only after that check.
+Cached metadata is not sufficient to authorize a batch snapshot. The maximum
+ten-file batch bound remains; this is a response-token optimization, not a
+promise to skip source reads. Other aggregate/index visibility and freshness
+contracts still require their own audits.
+
 Optional snapshot readers require regular files and enforce stored-byte ceilings
 while reading, not only via a prior stat. Gzip decoding enforces its output limit
 before text/JSON parsing. Lexical binary/decoded and public-discovery decoded
