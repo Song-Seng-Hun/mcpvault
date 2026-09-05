@@ -1,9 +1,7 @@
 import { join, resolve } from 'path';
 import { watch, type FSWatcher } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { gunzip } from 'node:zlib';
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
-import { promisify } from 'node:util';
 import type { PathFilter } from './pathfilter.js';
 import type { RankCandidate, SearchParams, SearchResult } from './types.js';
 import { generateObsidianUri } from './uri.js';
@@ -13,6 +11,7 @@ import type { VaultCatalogChange, VaultCatalogFileStat, VaultFileCatalog } from 
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import { isMissingVaultPath, VaultReadUnavailableError } from './vault-read-errors.js';
+import { readSnapshotBytes } from './snapshot-read.js';
 import { parse as parseYaml } from 'yaml';
 
 const WIKI_TYPES = new Set(['schema', 'source', 'knowledge', 'issue']);
@@ -33,7 +32,7 @@ const CORPUS_STATS_CACHE_MAX_ENTRIES = 64;
 const GRAM_COMPACTION_MIN_ENTRIES = 4_096;
 const GRAM_COMPACTION_MIN_STALE_ENTRIES = 1_024;
 const GRAM_COMPACTION_STALE_RATIO = 0.25;
-const gunzipAsync = promisify(gunzip);
+const MAX_SNAPSHOT_BYTES = 128 * 1024 * 1024;
 const SNAPSHOT_MAGIC = Buffer.from('MCPVSRCH', 'ascii');
 const MAX_SNAPSHOT_ENTRIES = 1_000_000;
 
@@ -845,7 +844,7 @@ export class SearchService {
 
   private async loadSnapshot(): Promise<void> {
     try {
-      const binary = await readFile(join(this.vaultPath, SEARCH_SNAPSHOT_FILE));
+      const binary = await readSnapshotBytes(join(this.vaultPath, SEARCH_SNAPSHOT_FILE), { maxBytes: MAX_SNAPSHOT_BYTES });
       const parsed = decodeSnapshot(binary);
       if (parsed) this.restoreSnapshot(parsed);
       return;
@@ -853,7 +852,9 @@ export class SearchService {
       // Try the previous compressed-JSON format for a one-release migration.
     }
     try {
-      const raw = await gunzipAsync(await readFile(join(this.vaultPath, LEGACY_SEARCH_SNAPSHOT_FILE)));
+      const raw = await readSnapshotBytes(join(this.vaultPath, LEGACY_SEARCH_SNAPSHOT_FILE), {
+        maxBytes: 32 * 1024 * 1024, maxDecodedBytes: MAX_SNAPSHOT_BYTES,
+      });
       const parsed = JSON.parse(raw.toString('utf8')) as Partial<SearchSnapshot>;
       if (parsed.version === SEARCH_SNAPSHOT_VERSION && Array.isArray(parsed.documents)) this.restoreSnapshot(parsed as SearchSnapshot);
     } catch {

@@ -1,13 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { mkdir, open, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
-import { gzip, gunzip } from 'node:zlib';
+import { gzip } from 'node:zlib';
 import { promisify } from 'node:util';
 import { ScopeAccessPolicy } from './scope-access.js';
 import { boundSearchResults, normalizeSearchLimit, normalizeSearchMaxChars } from './search-limits.js';
 import { generateObsidianUri } from './uri.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import { isMissingVaultPath, VaultReadUnavailableError } from './vault-read-errors.js';
+import { readSnapshotBytes } from './snapshot-read.js';
 import { isMarkdownModerationHidden } from './moderation-policy.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 const MODEL_ID = 'Xenova/multilingual-e5-small';
@@ -34,7 +35,9 @@ const TABLE_CACHE_MAX_ENTRIES = 32;
 const FALLBACK_SCAN_BATCH_SIZE = 8;
 const PENDING_SNAPSHOT_DEBOUNCE_MS = 1_000;
 const gzipAsync = promisify(gzip);
-const gunzipAsync = promisify(gunzip);
+const MANIFEST_MAX_BYTES = 64 * 1024 * 1024;
+const SNAPSHOT_COMPRESSED_MAX_BYTES = 32 * 1024 * 1024;
+const PENDING_MAX_BYTES = 8 * 1024 * 1024;
 // One model per Node process, regardless of how many vault/server instances or
 // agent sessions share that process.
 const EMBEDDER_POOL = new Map();
@@ -521,8 +524,7 @@ export class SemanticSearchService {
     }
     async loadManifest() {
         try {
-            const compressed = await readFile(this.manifestPath);
-            const raw = await gunzipAsync(compressed);
+            const raw = await readSnapshotBytes(this.manifestPath, { maxBytes: SNAPSHOT_COMPRESSED_MAX_BYTES, maxDecodedBytes: MANIFEST_MAX_BYTES });
             const parsed = JSON.parse(raw.toString('utf8'));
             this.manifest = this.validatedManifest(parsed);
         }
@@ -530,8 +532,8 @@ export class SemanticSearchService {
             try {
                 // Read manifests written by older releases once; the next successful
                 // index update stores the compact binary form.
-                const raw = await readFile(join(this.indexPath, LEGACY_MANIFEST_FILE), 'utf8');
-                const parsed = JSON.parse(raw);
+                const raw = await readSnapshotBytes(join(this.indexPath, LEGACY_MANIFEST_FILE), { maxBytes: MANIFEST_MAX_BYTES });
+                const parsed = JSON.parse(raw.toString('utf8'));
                 this.manifest = this.validatedManifest(parsed);
             }
             catch {
@@ -564,7 +566,7 @@ export class SemanticSearchService {
     }
     async loadPendingSnapshot() {
         try {
-            const raw = await gunzipAsync(await readFile(join(this.indexPath, PENDING_FILE)));
+            const raw = await readSnapshotBytes(join(this.indexPath, PENDING_FILE), { maxBytes: PENDING_MAX_BYTES, maxDecodedBytes: PENDING_MAX_BYTES });
             const parsed = JSON.parse(raw.toString('utf8'));
             if (!Array.isArray(parsed))
                 return;

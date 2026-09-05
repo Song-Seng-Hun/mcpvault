@@ -338,11 +338,22 @@ do not prove a current, bounded, actionable response through its public adapter.
   Tests cover these service workflows and the public lexical-fallback adapter
   with controlled vector/model doubles; real model relevance is not established.
 - **Open: semantic storage completeness.** Cross-process manifest refresh,
-  compressed snapshot size/decompression limits, exact body line locators,
+  exact body line locators,
   operational counts, scope-table partitioning and orphan-row reconciliation
   still need dedicated audits. Multi-table vector writes are retryable, not
   atomic; do not treat candidate revalidation as a proof of complete disk cleanup
   or exhaustive nearest-neighbor recall.
+- Snapshot reads now bound on-disk bytes (including growth after stat) and gzip
+  decoded output before parsing across lexical, semantic and public discovery
+  caches, including legacy formats. Public v2 header decoding now round-trips
+  actual saved snapshots; restored rows require current public membership and
+  collection/type consistency. Real gzip boundary, growth, restore and fallback
+  tests cover the contract. Limits are per read: streaming parse/restore, aggregate
+  memory/CPU budgets, and avoiding repeated oversized snapshot writes remain open.
+- **Confirmed open: semantic raw locators.** Existing chunks calculate lines in
+  title-prefixed, frontmatter-stripped text and assume two-character paragraph
+  separators. Raw Markdown offsets, CRLF/blank runs, long-paragraph excerpts and
+  legacy vector-row compatibility need one coherent fix, not a fixed line shift.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

@@ -414,6 +414,19 @@ Vector/manifest/pending paths must be canonical relative Markdown paths, without
 dot traversal or platform stream syntax. Scope is reconstructed from the path;
 User, whisper and unknown private-root paths cannot enter the semantic worker.
 
+Optional snapshot readers require regular files and enforce stored-byte ceilings
+while reading, not only via a prior stat. Gzip decoding enforces its output limit
+before text/JSON parsing. Lexical binary/decoded and public-discovery decoded
+snapshots cap at 128 MiB; semantic manifest decoded/legacy JSON at 64 MiB;
+pending work at 8 MiB. Compressed input caps at 32 MiB except pending at 8 MiB.
+Rejected snapshots use the existing cold reconstruction/legacy fallback paths;
+they do not prove source deletion, trigger automatic cleanup, or silently return
+a sliced partial index. Limits are per read, not a global RAM/CPU budget.
+Public discovery v1/v2 restoration also requires every row to match an exact
+current public manifest path, its collection/type, and a unique path. Serialized
+row membership cannot grant private access. Only public projection fields are
+restored. This is not cryptographic authentication of cache metadata.
+
 `wiki.organization_health.collectionHealth` is an optional derived child, not a
 separate endpoint. It accumulates the same visible coherent notes as lint and
 shares their private source guards. Its earliest future `review_at` deadline

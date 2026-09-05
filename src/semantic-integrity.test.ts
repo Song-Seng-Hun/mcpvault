@@ -191,6 +191,19 @@ test('persisted manifests and queues discard unsafe paths and reconstruct scope 
   } finally { await isolated.close(); }
 });
 
+test('an over-expanded pending snapshot is ignored before queued work is restored', async () => {
+  const indexPath = join(vault, '.mcpvault/semantic-index');
+  await mkdir(indexPath, { recursive: true });
+  const snapshot = ' '.repeat(8 * 1024 * 1024) + JSON.stringify([{ path: 'Area/Note.md', kind: 'delete' }]);
+  await writeFile(join(indexPath, 'pending.snapshot.gz'), gzipSync(snapshot));
+  const isolated = new SemanticSearchService(vault, new PathFilter());
+  try {
+    await (isolated as any).pendingReady;
+    expect((isolated as any).pending.size).toBe(0);
+    expect(await stat(join(vault, 'Area/Note.md'))).toBeDefined();
+  } finally { await isolated.close(); }
+});
+
 test('a saturated queue cannot advance metadata for an old hash and lose future indexing', async () => {
   const original = { ...(service as any).manifest['Area/Note.md'] };
   await writeFile(join(vault, 'Area/Note.md'), '# A longer changed document requiring a new embedding');

@@ -1,14 +1,14 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { gzip, gunzip } from 'node:zlib';
+import { gzip } from 'node:zlib';
 import { promisify } from 'node:util';
 import { normalizeScopeId } from './scopes.js';
 import { iterateNotes } from './paged-query.js';
 import { isClosedWorkflowStatus } from './community-status.js';
 import { isModerationHidden } from './moderation-policy.js';
+import { readSnapshotBytes } from './snapshot-read.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 const gzipAsync = promisify(gzip);
-const gunzipAsync = promisify(gunzip);
 const READ_STATE_ROOT = '_notifications';
 const EVENT_CACHE_TTL_MS = 2_000;
 const EVENT_CACHE_MAX_ENTRIES = 64;
@@ -145,6 +145,8 @@ function decodePublicSnapshot(buffer) {
         }
         return { manifest, notes };
     }
+    // The common version/manifest/note header precedes v2's string count.
+    offset += 12;
     if (version !== PUBLIC_SNAPSHOT_VERSION || offset + 4 > buffer.length || manifestCount > PUBLIC_SNAPSHOT_MAX_ENTRIES || noteCount > PUBLIC_SNAPSHOT_MAX_ENTRIES) {
         throw new Error('unsupported public discovery snapshot');
     }
@@ -562,10 +564,9 @@ export class NotificationService {
         if (!this.vaultPath || !this.fileCatalog)
             return undefined;
         try {
-            const compressed = await readFile(join(this.vaultPath, PUBLIC_SNAPSHOT_FILE));
-            const raw = await gunzipAsync(compressed);
-            if (raw.length > PUBLIC_SNAPSHOT_MAX_BYTES)
-                return undefined;
+            const raw = await readSnapshotBytes(join(this.vaultPath, PUBLIC_SNAPSHOT_FILE), {
+                maxBytes: 32 * 1024 * 1024, maxDecodedBytes: PUBLIC_SNAPSHOT_MAX_BYTES,
+            });
             const disk = decodePublicSnapshot(raw);
             const currentManifest = await this.publicManifest();
             if (!currentManifest || currentManifest.length !== disk.manifest.length)
@@ -577,8 +578,18 @@ export class NotificationService {
                     return undefined;
             }
             const snapshot = { posts: [], comments: [], messages: [], rooms: [] };
-            for (const note of disk.notes)
-                snapshot[note.collection].push({ path: normalizePath(note.path), frontmatter: note.frontmatter });
+            const currentPaths = new Set(currentManifest.map(entry => entry.path));
+            const restoredPaths = new Set();
+            for (const note of disk.notes) {
+                // A matching manifest does not authenticate arbitrary rows beside it.
+                // Restore only exact current public paths in their proper collection.
+                if (!currentPaths.has(note.path) || restoredPaths.has(note.path)
+                    || publicCollectionForPath(note.path) !== note.collection
+                    || !belongsInPublicCollection(note, note.collection))
+                    return undefined;
+                restoredPaths.add(note.path);
+                snapshot[note.collection].push(compactPublicNote(note, note.collection));
+            }
             for (const collection of ['posts', 'comments', 'messages', 'rooms'])
                 sortPublicCollection(snapshot[collection], collection);
             return buildPublicSnapshotIndex(snapshot);
