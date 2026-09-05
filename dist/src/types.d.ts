@@ -90,6 +90,8 @@ export interface PatchMultipleNotesParams {
     confirmPlanFingerprint?: string;
     previewMaxChars?: number;
     maxChars?: number;
+    /** Include requested JSON indentation in response admission before writes. */
+    prettyPrint?: boolean;
 }
 export interface NoteChangeSetResultItem {
     path: string;

@@ -1120,7 +1120,7 @@ export class FileSystemService {
    * transaction. Filesystem writes are not globally atomic, so a failed write
    * is restored from the in-memory originals and reported explicitly.
    */
-  async patchMultipleNotes(params: PatchMultipleNotesParams): Promise<PatchMultipleNotesResult> {
+  async patchMultipleNotes(params: PatchMultipleNotesParams, projectPath: (path: string) => string = path => path): Promise<PatchMultipleNotesResult> {
     if (!params || !Array.isArray(params.changes)) throw new Error('changes must be an array');
     if (params.changes.length < 1 || params.changes.length > 10) throw new Error('A note change set must contain between 1 and 10 changes');
     const previewMaxChars = Math.min(Math.max(Number(params.previewMaxChars ?? 400), 200), 1000);
@@ -1205,6 +1205,28 @@ export class FileSystemService {
         throw new Error('Change-set confirmation mismatch. Dry-run this exact request, inspect the previews, and pass its returned confirmPlanFingerprint before applying it.');
       }
 
+      // Admit the success response before side effects. Otherwise an applied
+      // transaction could be reported as failed solely because its receipt
+      // cannot fit, prompting a caller to repeat an already completed edit.
+      const result: PatchMultipleNotesResult = {
+        success: true,
+        dryRun,
+        applied: !dryRun,
+        planFingerprint,
+        changeCount: plans.length,
+        changedCount: plans.filter(plan => plan.item.wouldChange).length,
+        changes: plans.map(plan => ({ ...plan.item, path: projectPath(plan.path) })),
+        message: dryRun
+          ? 'Preflight complete. Re-submit the same changes with dryRun=false and confirmPlanFingerprint to apply them.'
+          : 'The complete revision-checked change set was applied.',
+      };
+      let response = result;
+      const indent = params.prettyPrint ? 2 : undefined;
+      if (JSON.stringify(response, null, indent).length > maxChars) {
+        response = { ...result, changes: result.changes.map(({ preview: _preview, ...item }) => item), truncated: true };
+        if (JSON.stringify(response, null, indent).length > maxChars) throw new Error('maxChars is too small to preserve all change paths and revisions; no files were written. Increase maxChars, disable prettyPrint, or reduce the change count.');
+      }
+
       if (!dryRun) {
         // Recheck all inputs immediately before the first write. This catches
         // external Obsidian/editor changes that do not participate in our lock.
@@ -1234,22 +1256,7 @@ export class FileSystemService {
         for (const plan of plans.filter(candidate => candidate.item.wouldChange)) this.notifyNoteChanged(plan.path, 'upsert');
       }
 
-      const result: PatchMultipleNotesResult = {
-        success: true,
-        dryRun,
-        applied: !dryRun,
-        planFingerprint,
-        changeCount: plans.length,
-        changedCount: plans.filter(plan => plan.item.wouldChange).length,
-        changes: plans.map(plan => plan.item),
-        message: dryRun
-          ? 'Preflight complete. Re-submit the same changes with dryRun=false and confirmPlanFingerprint to apply them.'
-          : 'The complete revision-checked change set was applied.',
-      };
-      if (JSON.stringify(result).length <= maxChars) return result;
-      const compact: PatchMultipleNotesResult = { ...result, changes: result.changes.map(({ preview: _preview, ...item }) => item), truncated: true };
-      if (JSON.stringify(compact).length > maxChars) throw new Error('maxChars is too small to preserve all change paths and revisions; reduce the change count or increase maxChars');
-      return compact;
+      return response;
     });
   }
 

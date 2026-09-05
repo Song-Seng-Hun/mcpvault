@@ -109,7 +109,7 @@ export declare class FileSystemService {
      * transaction. Filesystem writes are not globally atomic, so a failed write
      * is restored from the in-memory originals and reported explicitly.
      */
-    patchMultipleNotes(params: PatchMultipleNotesParams): Promise<PatchMultipleNotesResult>;
+    patchMultipleNotes(params: PatchMultipleNotesParams, projectPath?: (path: string) => string): Promise<PatchMultipleNotesResult>;
     listDirectory(path?: string): Promise<DirectoryListing>;
     exists(path: string): Promise<boolean>;
     isDirectory(path: string): Promise<boolean>;

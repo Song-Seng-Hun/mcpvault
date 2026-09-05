@@ -2156,8 +2156,9 @@ export function createServer(vaultPath, options = {}) {
                             ...(trimmedArgs.confirmPlanFingerprint !== undefined && { confirmPlanFingerprint: trimmedArgs.confirmPlanFingerprint }),
                             ...(trimmedArgs.previewMaxChars !== undefined && { previewMaxChars: trimmedArgs.previewMaxChars }),
                             ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
-                        });
-                        return jsonResult({ ...result, changes: result.changes.map(change => ({ ...change, path: scopeAccess.toPublicPath(change.path) })) }, trimmedArgs.prettyPrint);
+                            ...(trimmedArgs.prettyPrint !== undefined && { prettyPrint: trimmedArgs.prettyPrint }),
+                        }, path => scopeAccess.toPublicPath(path));
+                        return jsonResult(result, trimmedArgs.prettyPrint);
                     }
                     case "semantic_search_status": {
                         return jsonResult(semanticSearch.status(), trimmedArgs.prettyPrint);

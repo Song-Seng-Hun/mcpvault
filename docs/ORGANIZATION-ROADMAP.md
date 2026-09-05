@@ -450,6 +450,13 @@ do not prove a current, bounded, actionable response through its public adapter.
   remain unchanged; resolved host paths stay internal. Tests cover duplicate
   rejection before any write/event and successful distinct-note transactions.
   This is not complete hard-link/symlink/Unicode identity or cross-process CAS.
+- Change-set success receipts now undergo response admission before writes or
+  mutation notifications. Final projected paths and JSON indentation count;
+  previews may be omitted but all path/revision receipts must fit. Real-file
+  tests reproduced edits already applied despite a response-budget error; now
+  rejection preserves original revisions and larger-budget retry succeeds.
+  This does not certify other mutation adapters' post-write formatting, network
+  delivery, cross-process races or rollback atomicity; those remain separate.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

@@ -722,6 +722,13 @@ path validation is separate from locking, and does not claim hard-link, symlink
 or Unicode filesystem identity completeness. Actual request paths/fingerprints
 are not silently rewritten; resolved host paths are not returned in diagnostics.
 
+Before a change set writes anything, its receipt must fit `maxChars` with final
+public paths and requested indentation. Previews are optional; affected paths
+and revisions are not. A response-size rejection leaves files untouched and
+permits a larger-budget/non-pretty retry after checking revisions. The prepared
+success receipt is returned only after successful apply; actual write failures
+still use the rollback/error path. Network delivery remains outside this check.
+
 Heading and block targets are preserved by graph reads, so
 `[[folder/Source#Heading]]` and `[[folder/Source#^block-id]]` can take an agent
 directly to the intended passage without rereading the entire source note.

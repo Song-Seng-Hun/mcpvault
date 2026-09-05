@@ -1906,6 +1906,14 @@ revision guards similarly cannot name their own target or repeat another guard
 through these aliases. Validation keeps host-resolved paths private and does
 not claim complete hard-link/symlink/Unicode filesystem identity detection.
 
+Change-set response admission happens before writes, using the final public
+paths and requested JSON indentation. Optional previews may be omitted, but
+every affected path and revision must fit. A response-budget rejection means
+no files were written; increase `maxChars`, disable `prettyPrint`, or use fewer
+changes, then retry with still-current revisions. This prevents a successful
+disk edit from being reported as failed merely because its receipt is too long.
+It does not remove network-delivery uncertainty or filesystem rollback risks.
+
 Prefer a purpose-built read-only planner when the coupled edit represents a
 known organization invariant: `wiki.moc_order` for one complete sibling order,
 `wiki.hierarchy_change` for parent edges, `wiki.moc_membership` for map entry
