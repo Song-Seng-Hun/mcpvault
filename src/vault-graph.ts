@@ -12,6 +12,7 @@ import { isMissingVaultPath, VaultReadUnavailableError } from './vault-read-erro
 import { RELATION_FIELDS } from './organization.js';
 import { noteReferenceDocument, noteReferenceTermKeys } from './note-reference.js';
 import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference } from './property-references.js';
+import { isModerationHidden } from './moderation-policy.js';
 
 const GRAPH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
@@ -21,6 +22,7 @@ const INLINE_TAG_PATTERN = /(?:^|\s)#([a-zA-Z][a-zA-Z0-9_\/\-]*)/g;
 
 interface GraphEntry {
   path: string;
+  moderationHidden: boolean;
   revision: string;
   size: number;
   mtimeMs: number;
@@ -236,9 +238,11 @@ export class VaultGraphIndex {
       }
     }
     if (!targetEntry) throw new Error(`File not found: ${target}`);
-    if (!canAccessPath(targetEntry.path)) throw new Error(`Access denied: ${target}`);
+    if (!canAccessPath(targetEntry.path) || targetEntry.moderationHidden) throw new Error(`Access denied: ${target}`);
     const visible = this.visibilityContext(canAccessPath);
+    const project = this.linkProjector(visible.resolver, buildResolver([...this.allPaths], this.entries));
     const backlinks: BacklinkMatch[] = [];
+    const sourceEntries = new Map<string, GraphEntry>();
     let total = 0;
     const compare = (a: BacklinkMatch, b: BacklinkMatch) => a.path.localeCompare(b.path) || a.line - b.line;
     const incoming = this.incomingBacklinks(visible);
@@ -253,6 +257,7 @@ export class VaultGraphIndex {
           checkedSources.set(entry.path, canAccessPath(entry.path) && (!canIncludeSource || await canIncludeSource(entry.path)));
         }
         if (!checkedSources.get(entry.path)) continue;
+        sourceEntries.set(entry.path, entry);
         total += 1;
         const backlink: BacklinkMatch = {
           path: entry.path,
@@ -270,7 +275,7 @@ export class VaultGraphIndex {
         addTopMatch(backlinks, backlink, offset + limit, compare);
     }
     backlinks.sort(compare);
-    const page = backlinks.slice(offset, offset + limit);
+    const page = backlinks.slice(offset, offset + limit).map(link => project(sourceEntries.get(link.path)!, link));
     return { target, ...(includeSourceRevision && { targetRevision: targetEntry.revision }), backlinks: page, total, truncated: total > offset + page.length };
   }
 
@@ -279,10 +284,11 @@ export class VaultGraphIndex {
     const source = normalizePath(path);
     const entry = this.entries.get(source);
     if (!entry) throw new Error(`File not found: ${source}`);
-    if (!canAccessPath(source)) throw new Error(`Access denied: ${source}`);
+    if (!canAccessPath(source) || entry.moderationHidden) throw new Error(`Access denied: ${source}`);
 
     const visible = this.visibilityContext(canAccessPath);
     const allResolver = buildResolver([...this.allPaths], this.entries);
+    const project = this.linkProjector(visible.resolver, allResolver);
     const outlinks = entry.links.filter(link => {
       if (/^scope:\/\/(?:model|agent|user)\//i.test(link.target.trim())) return false;
       const anyMatches = resolveTargets(link.target, allResolver, entry.path);
@@ -291,7 +297,7 @@ export class VaultGraphIndex {
     });
     return {
       source,
-      outlinks: outlinks.slice(offset, offset + limit),
+      outlinks: outlinks.slice(offset, offset + limit).map(link => project(entry, link)),
       total: outlinks.length,
       truncated: outlinks.length > offset + limit,
     };
@@ -300,6 +306,8 @@ export class VaultGraphIndex {
   async findUnresolvedLinks(limit: number, canAccessPath: (path: string) => boolean, offset = 0): Promise<UnresolvedLinksResult> {
     await this.ensure();
     const { paths: visiblePaths, pathSet: visible, resolver } = this.visibilityContext(canAccessPath);
+    const allResolver = buildResolver([...this.allPaths], this.entries);
+    const project = this.linkProjector(resolver, allResolver);
     const unresolved: UnresolvedLinksResult['unresolved'] = [];
     let total = 0;
     for (const path of visiblePaths) {
@@ -307,9 +315,13 @@ export class VaultGraphIndex {
       const entry = this.entries.get(path);
       if (!entry) continue;
       for (const link of entry.links) {
+        if (/^scope:\/\/(?:model|agent|user)\//i.test(link.target.trim())) continue;
         if (resolveTargets(link.target, resolver, entry.path).some(path => visible.has(path))) continue;
+        // A known invisible target is not an actionable broken-link repair.
+        // Never return its resolution candidates or count its hidden edges.
+        if (resolveTargets(link.target, allResolver, entry.path).length > 0) continue;
         total += 1;
-        if (total > offset && unresolved.length < limit) unresolved.push({ ...link, path: entry.path });
+        if (total > offset && unresolved.length < limit) unresolved.push({ ...project(entry, link), path: entry.path });
       }
     }
     return { unresolved, total, truncated: total > offset + unresolved.length };
@@ -344,7 +356,7 @@ export class VaultGraphIndex {
     await this.ensure();
     const counts = new Map<string, number>();
     for (const entry of this.entries.values()) {
-      if (!canAccessPath(entry.path)) continue;
+      if (!canAccessPath(entry.path) || entry.moderationHidden) continue;
       for (const tag of entry.tags) counts.set(tag, (counts.get(tag) || 0) + 1);
     }
     return [...counts.entries()]
@@ -361,10 +373,48 @@ export class VaultGraphIndex {
     if (this.dirty.size > 0) await this.refreshDirty();
   }
 
+  /** Caller-local excerpts; never mutate shared source edges or headings. */
+  private linkProjector(visible: Resolver, all: Resolver) {
+    const byEntry = new WeakMap<GraphEntry, Map<number, OutlinkMatch[]>>();
+    const invisible = (target: string, source: string) => /^scope:\/\/(?:model|agent|user)\//i.test(target.trim())
+      || (resolveTargets(target, all, source).length > 0 && resolveTargets(target, visible, source).length === 0);
+    return <T extends { context: string; link: string; line: number; heading?: string }>(entry: GraphEntry, link: T): T => {
+      let hiddenLines = byEntry.get(entry);
+      if (!hiddenLines) {
+        hiddenLines = new Map();
+        for (const other of entry.links) {
+          if (!invisible(other.target, entry.path)) continue;
+          const line = hiddenLines.get(other.line) || [];
+          line.push(other); hiddenLines.set(other.line, line);
+        }
+        byEntry.set(entry, hiddenLines);
+      }
+      let context = link.context;
+      for (const other of hiddenLines.get(link.line) || []) {
+        if (context.includes(other.link)) context = context.split(other.link).join('[unavailable link]');
+        else if (!link.context.includes(other.link) && link.context === other.context) {
+          // The stored excerpt may end partway through this reference. Its
+          // visible prefix is not safe to publish as neighboring context.
+          context = `[context omitted] ${link.link}`;
+          break;
+        }
+      }
+      let heading = link.heading;
+      if (heading) {
+        for (const occurrence of extractObsidianLinkOccurrences(heading)) {
+          if (invisible(occurrence.target, entry.path)) heading = heading.split(occurrence.link).join('[unavailable link]');
+        }
+      }
+      return { ...link, context, ...(heading !== undefined && { heading }) };
+    };
+  }
+
   private visibilityContext(canAccessPath: (path: string) => boolean): VisibilityContext {
     const cached = this.visibilityCache.get(canAccessPath);
     if (cached && cached.generation === this.changeGeneration) return cached;
-    const paths = [...this.allPaths].filter(canAccessPath).sort((a, b) => a.localeCompare(b));
+    const paths = [...this.allPaths].filter(path => canAccessPath(path)
+      && (!isNote(path) || (this.entries.has(path) && !this.entries.get(path)!.moderationHidden)))
+      .sort((a, b) => a.localeCompare(b));
     const context: VisibilityContext = {
       generation: this.changeGeneration,
       paths,
@@ -594,7 +644,7 @@ export class VaultGraphIndex {
           }
         }
       }
-      return { path: normalized, revision: createHash('sha256').update(raw).digest('hex'), size: info.size, mtimeMs: info.mtimeMs, links, tags, identityTerms };
+      return { path: normalized, moderationHidden: isModerationHidden(parsed.frontmatter), revision: createHash('sha256').update(raw).digest('hex'), size: info.size, mtimeMs: info.mtimeMs, links, tags, identityTerms };
     } catch (error) {
       if (isMissingVaultPath(error)) return undefined;
       throw new VaultReadUnavailableError();

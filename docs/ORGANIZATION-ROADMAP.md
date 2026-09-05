@@ -401,6 +401,19 @@ do not prove a current, bounded, actionable response through its public adapter.
   cover this contract. Metadata-index construction, large Properties parsing,
   internal service scans and follow-up line/outline IO remain outside these
   limits; global memory/CPU and cross-process consistency are not certified.
+- Graph entries now capture moderation with links/tags/identity terms from the
+  same raw revision. Caller-visible resolvers exclude hidden notes before
+  counts/pages; hidden incoming edges do not mask visible orphans. Known
+  invisible-only references are not public unresolved repair tasks. Backlink,
+  outlink and repair excerpts mask recognized hidden neighbors/headings, with
+  a conservative fallback for clipped references while preserving unrelated
+  Property context. All five indexed/unindexed navigation routes share the
+  graph parser; temporary graphs close even on failure. Public MCP and direct
+  tests cover folder-independent hiding, aliases, attachments, pagination,
+  hide/unhide caches, and received events with equal size/mtime. This does not
+  certify every edge against current raw content, arbitrary prose redaction,
+  a vault-wide snapshot, inline-tag fence parsing, vault-stat moderation or
+  aggregate memory budgets; these remain separate audits.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

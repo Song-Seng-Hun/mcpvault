@@ -44,6 +44,8 @@ export declare class VaultGraphIndex {
         count: number;
     }>>;
     private ensure;
+    /** Caller-local excerpts; never mutate shared source edges or headings. */
+    private linkProjector;
     private visibilityContext;
     /** Lazily reuse resolved edges only within this predicate/generation view. */
     private incomingBacklinks;

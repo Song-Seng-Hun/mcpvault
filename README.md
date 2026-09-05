@@ -2164,6 +2164,16 @@ Links in matching fenced blocks or closed inline backtick spans, and links with
 escaped openers, are ignored. The result is capped at 500 occurrences;
 `truncated` indicates when more matches exist.
 
+Navigation uses the caller-visible graph: moderation-hidden notes are excluded
+independently of folder before counts and pagination. Known invisible references
+in neighboring excerpts/headings are replaced with `[unavailable link]`; a clipped
+reference can require `[context omitted]`. These are projection markers, not
+source text to quote or patch. Read the current source with its revision first.
+Backlinks, outlinks, unresolved links, orphan discovery and tag discovery share
+the same graph parser even without an injected index. Tags count occurrences,
+not distinct notes. Graph refresh follows received changes/reconciliation; this
+is not an atomic whole-vault snapshot or a general redactor of public prose.
+
 **Request:**
 
 ```json
@@ -2237,6 +2247,9 @@ are ignored.
 
 Scan the vault for Obsidian internal links whose destination does not exist.
 Explicit links to attachments are resolved against all visible vault files.
+Known destinations that resolve only to invisible notes, and explicit private
+scope URIs, are excluded from public repair candidates rather than mislabeled
+as missing knowledge. Invisible source notes do not contribute to totals.
 Links in matching fenced blocks or closed inline backtick spans, and links with
 escaped openers, are ignored. Results include the source path, line number, raw
 link, parsed target, and compact context.
@@ -2275,6 +2288,9 @@ link, parsed target, and compact context.
 Find notes that have no incoming wikilinks from another note. Self-links do not
 count as incoming links, so a note that only links to itself remains an orphan.
 Attachment links are ignored for this note graph check.
+Incoming links from invisible or moderation-hidden notes do not prevent orphan
+status. This caller-local suggestion is not evidence that a note is globally
+unused and never authorizes deletion.
 
 **Request:**
 

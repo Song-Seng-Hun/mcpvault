@@ -7,13 +7,13 @@ import trash from 'trash';
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
 import { generateObsidianUri } from './uri.js';
-import { extractObsidianLinkOccurrences, findBacklinkMatches, findUnresolvedLinkMatches, resolveWikiLinkTargets } from './backlinks.js';
+import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { buildDailyNotePath, resolveDailyDate } from './daily.js';
+import { VaultGraphIndex } from './vault-graph.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import { buildNoteReferenceIndex, resolveNoteReference } from './note-reference.js';
 import { validateJsonCanvasDocument } from './json-canvas.js';
-import { acceptsPlainReference, collectPlainFrontmatterReferences, isNavigationalFrontmatterReference, propertyPathText } from './property-references.js';
-import { RELATION_FIELDS } from './organization.js';
+import { acceptsPlainReference, propertyPathText } from './property-references.js';
 import { assertLegacyDiscussionMutationAllowed } from './scope-access.js';
 import { extractMarkdownTasks } from './markdown-tasks.js';
 import { isModerationHidden } from './moderation-policy.js';
@@ -64,19 +64,6 @@ function compareQueryValues(a, b) {
     return String(a ?? '').localeCompare(String(b ?? ''), undefined, { numeric: true, sensitivity: 'base' });
 }
 const TOP_K_MAX = 1_024;
-function addBoundedSorted(items, item, limit, compare) {
-    if (items.length < limit) {
-        items.push(item);
-        return;
-    }
-    let worst = 0;
-    for (let index = 1; index < items.length; index += 1) {
-        if (compare(items[index], items[worst]) > 0)
-            worst = index;
-    }
-    if (compare(item, items[worst]) < 0)
-        items[worst] = item;
-}
 function compareQueryNotes(a, b, sortBy, sortOrder) {
     const aValue = sortBy === 'path' ? a.path : getFrontmatterValue(a.frontmatter, sortBy).value;
     const bValue = sortBy === 'path' ? b.path : getFrontmatterValue(b.frontmatter, sortBy).value;
@@ -2191,182 +2178,41 @@ export class FileSystemService {
     }
     async getBacklinks(path, limit = 100, canAccessPath = () => true, offset = 0, options = {}) {
         const target = this.normalizePath(path);
-        if (!this.pathFilter.isAllowed(target)) {
-            throw new Error(`Access denied: ${target}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
-        }
-        if (this.graphIndex) {
-            if (!canAccessPath(target))
-                throw new Error(`Access denied: ${target}`);
-            await this.readNote(target);
-            return this.graphIndex.getBacklinks(target, limit, canAccessPath, offset, async (sourcePath) => {
-                const current = await this.readNoteMetadata([sourcePath], canAccessPath, { fresh: true, strict: true });
-                return current.length > 0 && !isModerationHidden(current[0].frontmatter);
-            }, options.includeSourceRevision);
-        }
-        // Validate that the requested target is an existing readable note before
-        // scanning the vault. This also applies the same symlink boundary checks
-        // as read_note.
+        if (!this.pathFilter.isAllowed(target) || !canAccessPath(target))
+            throw new Error(`Access denied: ${target}`);
         const targetNote = await this.readNote(target);
-        const visiblePaths = (await this.collectVaultFiles())
-            .filter(candidate => this.pathFilter.isAllowed(candidate) && canAccessPath(candidate) && /\.(?:md|markdown|txt)$/i.test(candidate));
-        const referenceIndex = buildNoteReferenceIndex(visiblePaths.map(candidate => ({ path: candidate })));
-        const backlinks = [];
-        let total = 0;
-        const scanDirectory = async (dirPath, relativePath = '') => {
-            const entries = await readdir(dirPath, { withFileTypes: true });
-            for (const entry of entries) {
-                const entryRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
-                const fullEntryPath = join(dirPath, entry.name);
-                if (entry.isDirectory()) {
-                    if (this.pathFilter.isAllowedForListing(entryRelativePath)) {
-                        await scanDirectory(fullEntryPath, entryRelativePath);
-                    }
-                    continue;
-                }
-                if (!entry.isFile() || entryRelativePath === target || !this.pathFilter.isAllowed(entryRelativePath) || !canAccessPath(entryRelativePath)) {
-                    continue;
-                }
-                try {
-                    const content = await readFile(fullEntryPath, 'utf-8');
-                    const found = findBacklinkMatches(content, target);
-                    const parsed = this.frontmatterHandler.parse(content);
-                    if (isModerationHidden(parsed.frontmatter))
-                        continue;
-                    const sourceRevision = options.includeSourceRevision ? this.revision(content) : undefined;
-                    for (const reference of collectPlainFrontmatterReferences(parsed.frontmatter)) {
-                        if (!isNavigationalFrontmatterReference(reference))
-                            continue;
-                        const targets = resolveNoteReference(reference.value, referenceIndex);
-                        if (targets.length !== 1 || normalizeNoteTarget(targets[0]) !== normalizeNoteTarget(target))
-                            continue;
-                        found.push({
-                            path: '',
-                            line: 1,
-                            link: reference.value,
-                            context: `${reference.propertyPath}: ${reference.value}`,
-                            propertyPath: reference.propertyPath,
-                            ...(RELATION_FIELDS.includes(reference.root) && { relation: reference.root }),
-                        });
-                    }
-                    for (const backlink of found) {
-                        total += 1;
-                        addBoundedSorted(backlinks, { ...backlink, path: entryRelativePath, ...(sourceRevision && { sourceRevision }) }, offset + limit, (left, right) => left.path.localeCompare(right.path) || left.line - right.line);
-                    }
-                }
-                catch {
-                    // A single unreadable or concurrently removed note should not make
-                    // a vault-wide read operation fail.
-                }
-            }
-        };
-        await scanDirectory(this.vaultPath);
-        backlinks.sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line);
-        const page = backlinks.slice(offset, offset + limit);
-        return {
-            target,
-            ...(options.includeSourceRevision && { targetRevision: targetNote.revision }),
-            backlinks: page,
-            total,
-            truncated: total > offset + page.length,
-        };
+        if (isModerationHidden(targetNote.frontmatter))
+            throw new Error(`Access denied: ${target}`);
+        return this.withGraphRead(graph => graph.getBacklinks(target, limit, canAccessPath, offset, async (sourcePath) => {
+            const current = await this.readNoteMetadata([sourcePath], canAccessPath, { fresh: true, strict: true });
+            return current.length > 0 && !isModerationHidden(current[0].frontmatter);
+        }, options.includeSourceRevision));
+    }
+    async withGraphRead(read) {
+        if (this.graphIndex)
+            return read(this.graphIndex);
+        const graph = new VaultGraphIndex(this.vaultPath, this.pathFilter, this.frontmatterHandler, undefined, this.vaultIo);
+        try {
+            return await read(graph);
+        }
+        finally {
+            graph.close();
+        }
     }
     async getOutlinks(path, limit = 100, canAccessPath = () => true, offset = 0) {
         const source = this.normalizePath(path);
-        if (!this.pathFilter.isAllowed(source)) {
-            throw new Error(`Access denied: ${source}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
-        }
-        if (!canAccessPath(source))
+        if (!this.pathFilter.isAllowed(source) || !canAccessPath(source))
             throw new Error(`Access denied: ${source}`);
-        if (this.graphIndex)
-            return this.graphIndex.getOutlinks(source, limit, canAccessPath, offset);
         const note = await this.readNote(source);
-        const allOutlinks = extractObsidianLinkOccurrences(note.originalContent);
-        // Outlinks are raw authoring data, but a public note must not disclose
-        // the names or paths of private notes it happens to mention. Keep links
-        // that are unresolved in the caller's visible view (they are useful
-        // authoring diagnostics), while suppressing links that resolve only to
-        // inaccessible notes and explicit private scope URIs.
-        const allPaths = await this.collectVaultFiles();
-        const allVisiblePaths = allPaths.filter(canAccessPath);
-        const visibleOutlinks = allOutlinks.filter(link => {
-            if (/^scope:\/\/(?:model|agent|user)\//i.test(link.target.trim()))
-                return false;
-            const anyMatches = resolveWikiLinkTargets(link.target, allPaths);
-            if (anyMatches.length === 0)
-                return true;
-            return resolveWikiLinkTargets(link.target, allVisiblePaths).length > 0;
-        });
-        const outlinks = visibleOutlinks.slice(offset, offset + limit);
-        const total = visibleOutlinks.length;
-        return {
-            source,
-            outlinks,
-            total,
-            truncated: total > offset + outlinks.length,
-        };
+        if (isModerationHidden(note.frontmatter))
+            throw new Error(`Access denied: ${source}`);
+        return this.withGraphRead(graph => graph.getOutlinks(source, limit, canAccessPath, offset));
     }
     async findUnresolvedLinks(limit = 100, canAccessPath = () => true, offset = 0) {
-        if (this.graphIndex)
-            return this.graphIndex.findUnresolvedLinks(limit, canAccessPath, offset);
-        const vaultFiles = (await this.collectVaultFiles()).filter(canAccessPath);
-        const noteFiles = vaultFiles.filter((path) => this.isNotePath(path));
-        const unresolved = [];
-        let total = 0;
-        for (const source of noteFiles) {
-            try {
-                const content = await readFile(this.resolvePath(source), 'utf-8');
-                const found = findUnresolvedLinkMatches(content, vaultFiles);
-                for (const link of found) {
-                    total += 1;
-                    addBoundedSorted(unresolved, { ...link, path: source }, offset + limit, (left, right) => left.path.localeCompare(right.path) || left.line - right.line);
-                }
-            }
-            catch {
-                // Skip files that are unreadable or disappear during the scan.
-            }
-        }
-        unresolved.sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line);
-        const page = unresolved.slice(offset, offset + limit);
-        return {
-            unresolved: page,
-            total,
-            truncated: total > offset + page.length,
-        };
+        return this.withGraphRead(graph => graph.findUnresolvedLinks(limit, canAccessPath, offset));
     }
     async findOrphanNotes(limit = 100, canAccessPath = () => true, offset = 0) {
-        if (this.graphIndex)
-            return this.graphIndex.findOrphanNotes(limit, canAccessPath, offset);
-        const vaultFiles = (await this.collectVaultFiles()).filter(canAccessPath);
-        const noteFiles = vaultFiles.filter((path) => this.isNotePath(path));
-        const incomingCounts = new Map(noteFiles.map((path) => [path.toLowerCase(), 0]));
-        for (const source of noteFiles) {
-            try {
-                const content = await readFile(this.resolvePath(source), 'utf-8');
-                for (const { target } of extractObsidianLinkOccurrences(content)) {
-                    for (const destination of resolveWikiLinkTargets(target, noteFiles)) {
-                        if (destination.toLowerCase() !== source.toLowerCase()) {
-                            const key = destination.toLowerCase();
-                            incomingCounts.set(key, (incomingCounts.get(key) || 0) + 1);
-                        }
-                    }
-                }
-            }
-            catch {
-                // An unreadable note contributes no observed incoming links.
-            }
-        }
-        const orphans = noteFiles
-            .filter((path) => incomingCounts.get(path.toLowerCase()) === 0)
-            .map((path) => ({ path, incomingLinks: 0 }))
-            .sort((left, right) => left.path.localeCompare(right.path));
-        return {
-            orphans: orphans.slice(offset, offset + limit),
-            total: orphans.length,
-            truncated: orphans.length > offset + limit,
-        };
-    }
-    isNotePath(path) {
-        return /\.(?:md|markdown|txt)$/i.test(path);
+        return this.withGraphRead(graph => graph.findOrphanNotes(limit, canAccessPath, offset));
     }
     async getDailyNote(dateInput = 'today', folder = 'Daily Notes') {
         const date = resolveDailyDate(dateInput);
@@ -2514,51 +2360,7 @@ export class FileSystemService {
         };
     }
     async listAllTags(canAccessPath = () => true) {
-        if (this.graphIndex)
-            return this.graphIndex.listAllTags(canAccessPath);
-        const tagCounts = new Map();
-        const inlineTagRegex = /(?:^|\s)#([a-zA-Z][a-zA-Z0-9_/\-]*)/g;
-        const scanDirectory = async (dirPath, relativePath = '') => {
-            const entries = await readdir(dirPath, { withFileTypes: true });
-            for (const entry of entries) {
-                const entryRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
-                const fullEntryPath = join(dirPath, entry.name);
-                if (entry.isDirectory()) {
-                    if (!this.pathFilter.isAllowedForListing(entryRelativePath))
-                        continue;
-                    await scanDirectory(fullEntryPath, entryRelativePath);
-                }
-                else if (entry.isFile() && this.pathFilter.isAllowed(entryRelativePath) && canAccessPath(entryRelativePath)) {
-                    try {
-                        const content = await readFile(fullEntryPath, 'utf-8');
-                        const parsed = this.frontmatterHandler.parse(content);
-                        // Frontmatter tags
-                        const fmTags = parsed.frontmatter?.tags;
-                        if (Array.isArray(fmTags)) {
-                            for (const tag of fmTags) {
-                                if (typeof tag === 'string' && tag.trim()) {
-                                    const normalized = tag.trim().toLowerCase();
-                                    tagCounts.set(normalized, (tagCounts.get(normalized) || 0) + 1);
-                                }
-                            }
-                        }
-                        // Inline #tags from body content
-                        let match;
-                        while ((match = inlineTagRegex.exec(parsed.content)) !== null) {
-                            const normalized = match[1].toLowerCase();
-                            tagCounts.set(normalized, (tagCounts.get(normalized) || 0) + 1);
-                        }
-                    }
-                    catch {
-                        // Skip files that can't be read
-                    }
-                }
-            }
-        };
-        await scanDirectory(this.vaultPath);
-        return Array.from(tagCounts.entries())
-            .map(([tag, count]) => ({ tag, count }))
-            .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+        return this.withGraphRead(graph => graph.listAllTags(canAccessPath));
     }
     resolvePathPrefix(input) {
         const rawPathPrefix = input ? this.normalizePath(input) : '';

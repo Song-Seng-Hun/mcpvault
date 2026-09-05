@@ -3,7 +3,7 @@ import { PathFilter } from './pathfilter.js';
 import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, DeleteNotePreviewParams, DeleteNotePreviewResult, MoveNoteParams, MoveNotePreviewParams, MoveNotePreviewResult, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, PatchMultipleNotesParams, PatchMultipleNotesResult, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult, DailyNoteResult, ListTasksParams, ListTasksResult, UpdateTaskParams, UpdateTaskResult, QueryNotesParams, QueryNotesResult, QueryNote, AuthorityShelfResult } from './types.js';
 import { type DailyDateInput } from './daily.js';
 import type { VaultMetadataIndex } from './vault-index.js';
-import type { VaultGraphIndex } from './vault-graph.js';
+import { VaultGraphIndex } from './vault-graph.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import { type PackedQueryPage } from './query-page.js';
 /** Hard per-note write limit so stdio callers cannot exhaust the vault disk. */
@@ -156,10 +156,10 @@ export declare class FileSystemService {
     getBacklinks(path: string, limit?: number, canAccessPath?: (path: string) => boolean, offset?: number, options?: {
         includeSourceRevision?: boolean;
     }): Promise<BacklinksResult>;
+    private withGraphRead;
     getOutlinks(path: string, limit?: number, canAccessPath?: (path: string) => boolean, offset?: number): Promise<OutlinksResult>;
     findUnresolvedLinks(limit?: number, canAccessPath?: (path: string) => boolean, offset?: number): Promise<UnresolvedLinksResult>;
     findOrphanNotes(limit?: number, canAccessPath?: (path: string) => boolean, offset?: number): Promise<OrphanNotesResult>;
-    private isNotePath;
     getDailyNote(dateInput?: DailyDateInput, folder?: string): Promise<DailyNoteResult>;
     writeDailyNote(params: {
         action: 'create' | 'append';

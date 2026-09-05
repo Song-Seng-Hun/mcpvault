@@ -679,6 +679,16 @@ recognized HTML block starts. It does not claim complete parsing of top-level
 indented code. These rules apply consistently to backlinks, outlinks, broken-link
 lint, graph navigation, MOC order, impact review, and managed Canvas projections.
 
+Graph navigation and tag discovery exclude moderation-hidden notes independently
+of their folder, before caller-visible counts and pagination. Hidden incoming
+edges do not prevent an orphan suggestion. A destination known only through
+invisible notes is not a public unresolved-link repair task; readable attachments
+and genuinely missing targets retain their usual behavior. Neighboring known
+invisible references may be projected as `[unavailable link]`, or their clipped
+context omitted. Never quote these placeholders as evidence or use them as patch
+text: read the actual authorized source revision. Graph views remain advisory,
+event/reconciliation-refreshed and not a whole-vault deletion certificate.
+
 Heading and block targets are preserved by graph reads, so
 `[[folder/Source#Heading]]` and `[[folder/Source#^block-id]]` can take an agent
 directly to the intended passage without rereading the entire source note.

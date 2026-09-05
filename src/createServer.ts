@@ -760,7 +760,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getIdeationTools(),
         {
           name: "list_all_tags",
-          description: "List all tags across the vault with occurrence counts. Returns both frontmatter tags and inline #hashtags, deduplicated and sorted by frequency. Useful for discovering existing tags before creating or organizing notes.",
+          description: "List tags from caller-visible, non-hidden notes with occurrence counts, not distinct-note counts. Combines frontmatter tags and inline #hashtags, sorted by frequency. An advisory discovery view, not a complete vault inventory.",
           inputSchema: {
             type: "object",
             properties: {
@@ -975,7 +975,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "find_orphan_notes",
-          description: "Find a bounded page of notes with no incoming wikilinks. Self-links and attachment links do not prevent orphan status.",
+          description: "Find a bounded page of visible notes with no incoming links from another visible, non-hidden note. Self-links and attachments do not prevent orphan status. Counts describe the caller-visible graph; orphan status is a review suggestion, never deletion authority.",
           inputSchema: {
             type: "object",
             properties: {
@@ -988,7 +988,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "find_unresolved_links",
-          description: "Find one bounded page of broken Obsidian wikilinks and relative Markdown note links. Returns compact source, locator, target, and context data. Links in matching fences or closed inline backtick spans and links with escaped openers are ignored; top-level indented code is outside the literal scanner.",
+          description: "Find one bounded page of unresolved Obsidian/relative Markdown links from visible, non-hidden notes. Known invisible-only destinations and private scope URIs are not repair tasks. Context may mask unavailable references; inspect the source before editing. Matching fences, closed inline backticks and escaped openers are ignored; top-level indented code is outside the scanner.",
           inputSchema: {
             type: "object",
             properties: {
@@ -1001,7 +1001,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "get_outlinks",
-          description: "List one bounded page of a note's Obsidian wikilinks and relative Markdown note links with compact line context. Links in matching fences or closed inline backtick spans and links with escaped openers are ignored; top-level indented code is outside the literal scanner.",
+          description: "List one bounded page of a visible, non-hidden note's Obsidian/relative Markdown links. Excludes known invisible-only targets before counts; readable attachments and genuine missing links remain. Context may mask unavailable references; inspect the source before editing. Matching fences, closed inline backticks and escaped openers are ignored; top-level indented code is outside the scanner.",
           inputSchema: {
             type: "object",
             properties: {
@@ -1016,7 +1016,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "get_backlinks",
-          description: "Find one bounded page of notes containing Obsidian wikilinks or relative Markdown links to a target note, with compact locator context. Links in matching fences or closed inline backtick spans and links with escaped openers are ignored; top-level indented code is outside the literal scanner.",
+          description: "Find one bounded page of incoming Obsidian/relative Markdown links to a visible, non-hidden note. Source visibility is checked before counts and pagination. Context may mask unavailable neighboring references; inspect the source before editing. Matching fences, closed inline backticks and escaped openers are ignored; top-level indented code is outside the scanner.",
           inputSchema: {
             type: "object",
             properties: {

@@ -158,9 +158,9 @@ describe('VaultGraphIndex', () => {
     await expect(graph.getBacklinks('Wiki/Nested/Relative target.md', 10, publicOnly)).resolves.toMatchObject({ total: 1 });
 
     const unresolved = await graph.findUnresolvedLinks(10, publicOnly);
-    expect(unresolved.unresolved).toEqual([
-      expect.objectContaining({ path: 'Wiki/Public source.md', target: 'Hidden alias' }),
-    ]);
+    // Known private-only aliases are not public broken-link repair tasks,
+    // matching the outlink visibility rule; their candidates remain private.
+    expect(unresolved.unresolved).toEqual([]);
     await expect(graph.findOrphanNotes(10, publicOnly)).resolves.toMatchObject({
       orphans: expect.not.arrayContaining([expect.objectContaining({ path: 'Wiki/Canonical.md' }), expect.objectContaining({ path: 'Wiki/Nested/Relative target.md' })]),
     });
