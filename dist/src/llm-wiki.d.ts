@@ -1993,14 +1993,9 @@ export declare class LlmWikiService {
      * gate. This is deliberately a suggestion: the agent decides whether the
      * note should be split, expanded, or left as a composition/MOC.
      */
-    compositionCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
-        purpose: string;
-        items: {
-            [x: string]: unknown;
-        }[];
-        total: number;
-        truncated: boolean;
-    }>;
+    compositionCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number, options?: {
+        prettyPrint?: boolean;
+    }): Promise<import("./organization-queue-packet.js").OrganizationQueuePacket>;
     /**
      * Preview-only Zettelkasten/Obsidian section extraction. The preview carries
      * the source revision so the caller can perform the actual write and patch

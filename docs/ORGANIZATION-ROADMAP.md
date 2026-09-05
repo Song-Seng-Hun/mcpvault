@@ -633,7 +633,20 @@ do not prove a current, bounded, actionable response through its public adapter.
   fallback remain open audits. The dispatcher already bounds wire output, but
   tiny compiled probes reduced these views to 44/33 characters through generic
   compaction, losing actionable detail/recovery. Ranking correctness does not
-  solve this over-compaction problem.
+  solve this over-compaction problem. Update: this old open-item description
+  is superseded by `packNextActionPacket` and `packReviewDashboard`, including
+  final pretty-format budgeting, original-argument retry and source locators.
+  Current verification: `next-action-budget` and `review-dashboard-budget`
+  pass 25 tests; compiled endpoint coverage also exists in `llm-wiki.test.ts`.
+- Composition review had independently retained body-relative line numbers,
+  counted fenced headings/sample paragraphs, and removed its first candidate
+  entirely at small budgets. The shared physical Markdown scanner now supplies
+  headings/paragraphs outside Properties and matching fences, with captured
+  revisions and selected-source validation. Long code samples alone do not
+  imply multi-claim prose. Shared organization queue packing preserves an
+  inspectable leading candidate or explicit same-query retry in either format.
+  This does not establish semantic atomicity, an atomic Vault census, or a
+  whole-Vault memory bound; full candidate ranking remains a separate audit.
 
 Record new concrete gaps here when registered schema, dispatcher, service,
 persistent representation, guide, invalidation, or bounded failure evidence

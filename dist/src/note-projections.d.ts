@@ -1,6 +1,12 @@
 import type { NoteHeading, ReadNoteLinesParams } from './types.js';
 /** Pure projection of one already-authorized raw Markdown snapshot. */
 export declare function projectNoteOutline(raw: string): NoteHeading[];
+/** Prose paragraphs with physical locators; never join across headings or fences. */
+export declare function projectNoteParagraphs(raw: string): Generator<{
+    text: string;
+    startLine: number;
+    endLine: number;
+}>;
 /** Retain only requested normalized names, not a complete outline. */
 export declare function projectNoteHeadingPresence(raw: string, requested: ReadonlySet<string>): Set<string>;
 /** Exact terminal block anchors, not ID prefixes, mentions or code examples. */

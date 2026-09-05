@@ -22,7 +22,7 @@ import { classifyDependencyResidual } from './dependency-graph.js';
 import { boundedTopK } from './search-limits.js';
 import { CollectionHealthProjection } from './collection-health.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
-import { projectNoteOutline, projectNoteHeadingPresence, projectNoteBlockLines, selectNoteHeading } from './note-projections.js';
+import { projectNoteOutline, projectNoteParagraphs, projectNoteHeadingPresence, projectNoteBlockLines, selectNoteHeading } from './note-projections.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
 import { buildNoteReferenceIndex, normalizeNoteReferenceTerm, noteReferenceDocument, resolveNoteReference, type NoteReferenceIndex } from './note-reference.js';
@@ -7079,64 +7079,61 @@ export class LlmWikiService {
    * gate. This is deliberately a suggestion: the agent decides whether the
    * note should be split, expanded, or left as a composition/MOC.
    */
-  async compositionCandidates(principal?: ScopePrincipal, limit = 10, maxChars = 6000) {
+  async compositionCandidates(principal?: ScopePrincipal, limit = 10, maxChars = 6000, options: { prettyPrint?: boolean } = {}) {
     const boundedLimit = Math.min(Math.max(Number(limit) || 10, 1), 30);
     const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 16000);
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
     const candidates: Array<Record<string, unknown> & { score: number }> = [];
     let total = 0;
-    for await (const note of iterateNotes(this.fileSystem, { includeContent: true }, canAccess)) {
-      const kind = String(note.frontmatter.note_kind || '').toLowerCase();
-      const managedType = String(note.frontmatter.llm_wiki_type || '').toLowerCase();
-      const lifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
+    for await (const metadata of iterateNotes(this.fileSystem, {}, canAccess)) {
+      const kind = String(metadata.frontmatter.note_kind || '').toLowerCase();
+      const managedType = String(metadata.frontmatter.llm_wiki_type || '').toLowerCase();
+      const lifecycle = String(metadata.frontmatter.lifecycle || '').toLowerCase();
+      if (isModerationHidden(metadata.frontmatter)) continue;
       if (managedType !== 'knowledge' && !['literature', 'atomic', 'knowledge', 'decision', 'moc', 'question', 'hypothesis', 'experiment', 'assumption'].includes(kind)) continue;
-      if (['archived', 'superseded'].includes(lifecycle) || !note.content?.trim()) continue;
-      const headings: Array<{ heading: string; level: number; line: number }> = [];
-      const lines = note.content.split(/\r?\n/);
-      for (let index = 0; index < lines.length; index += 1) {
-        const match = lines[index]!.match(/^ {0,3}(#{1,6})\s+(.+?)\s*#*\s*$/);
-        if (match) headings.push({ heading: match[2]!.trim(), level: match[1]!.length, line: index + 1 });
+      if (['archived', 'superseded'].includes(lifecycle)) continue;
+      let note;
+      try {
+        if (!canAccess(metadata.path)) throw new Error('unavailable');
+        note = await this.fileSystem.readNote(metadata.path);
+        if (!canAccess(metadata.path) || isModerationHidden(note.frontmatter)
+          || (metadata.revision && metadata.revision !== note.revision)) throw new Error('changed');
+      } catch {
+        throw new Error('A composition source changed or became unavailable; re-read the candidate list and retry.');
       }
-      const paragraphs: Array<{ text: string; startLine: number; endLine: number }> = [];
-      let paragraphStart = -1;
-      let paragraphLines: string[] = [];
-      const flushParagraph = (endLine: number) => {
-        const text = paragraphLines.join('\n').trim();
-        if (paragraphStart !== -1 && text && !text.startsWith('#') && !text.startsWith('```')) paragraphs.push({ text, startLine: paragraphStart, endLine });
-        paragraphStart = -1;
-        paragraphLines = [];
-      };
-      for (let index = 0; index <= lines.length; index += 1) {
-        const line = lines[index] || '';
-        if (!line.trim()) { flushParagraph(index); continue; }
-        if (paragraphStart === -1) paragraphStart = index + 1;
-        paragraphLines.push(line);
+      if (!note.content.trim()) continue;
+      const headings = projectNoteOutline(note.originalContent).map(({ text, level, line }) => ({ heading: text, level, line }));
+      let paragraphCount = 0, proseChars = headings.reduce((sum, heading) => sum + heading.heading.length, 0);
+      const paragraphCandidates: Array<{ startLine: number; endLine: number; chars: number; sentenceCount: number; linkCount: number }> = [];
+      for (const item of projectNoteParagraphs(note.originalContent)) {
+        paragraphCount += 1;
+        proseChars += item.text.length;
+        if (paragraphCandidates.length >= 4) continue;
+        const sentenceCount = (item.text.match(/[.!?。！？](?=\s|$)/g) || []).length;
+        const linkCount = extractObsidianLinkOccurrences(item.text).length;
+        if (sentenceCount >= 3 && (item.text.length >= 420 || linkCount >= 2)) {
+          paragraphCandidates.push({ startLine: item.startLine, endLine: item.endLine, chars: item.text.length, sentenceCount, linkCount });
+        }
       }
-      const paragraphTexts = paragraphs.map(item => item.text);
-      const paragraphCandidates = paragraphs
-        .map(item => {
-          const sentenceCount = (item.text.match(/[.!?。！？](?=\s|$)/g) || []).length;
-          const linkCount = extractObsidianLinkOccurrences(item.text).length;
-          return { ...item, chars: item.text.length, sentenceCount, linkCount };
-        })
-        .filter(item => item.sentenceCount >= 3 && (item.chars >= 420 || item.linkCount >= 2))
-        .slice(0, 4);
       const signals = [
         ...(headings.length >= 3 ? ['many_sections'] : []),
-        ...(note.content.length >= 4000 ? ['long_body'] : []),
-        ...(paragraphTexts.length >= 12 ? ['many_paragraphs'] : []),
+        ...(proseChars >= 4000 ? ['long_body'] : []),
+        ...(paragraphCount >= 12 ? ['many_paragraphs'] : []),
         ...(paragraphCandidates.length > 0 ? ['multi_claim_paragraphs'] : []),
       ];
       if (signals.length === 0) continue;
       total += 1;
-      const score = (headings.length >= 3 ? 40 : 0) + (note.content.length >= 4000 ? 30 : 0) + (paragraphTexts.length >= 12 ? 20 : 0) + (paragraphCandidates.length > 0 ? 15 : 0) + (note.frontmatter.summary || note.frontmatter.key_points ? 0 : 10);
+      const score = (headings.length >= 3 ? 40 : 0) + (proseChars >= 4000 ? 30 : 0) + (paragraphCount >= 12 ? 20 : 0) + (paragraphCandidates.length > 0 ? 15 : 0) + (note.frontmatter.summary || note.frontmatter.key_points ? 0 : 10);
       candidates.push({
-        path: this.access.toPublicPath(note.path),
-        title: note.frontmatter.title || note.path.split('/').at(-1),
+        path: this.access.toPublicPath(metadata.path),
+        revision: note.revision,
+        lineBasis: 'physical',
+        title: note.frontmatter.title || metadata.path.split('/').at(-1),
         noteKind: kind || 'knowledge',
         lifecycle: lifecycle || undefined,
         contentChars: note.content.length,
-        paragraphCount: paragraphTexts.length,
+        proseChars,
+        paragraphCount,
         headingCount: headings.length,
         headingCandidates: headings.slice(0, 8),
         ...(paragraphCandidates.length > 0 && { paragraphCandidates: paragraphCandidates.map(item => ({ startLine: item.startLine, endLine: item.endLine, chars: item.chars, sentenceCount: item.sentenceCount, linkCount: item.linkCount, suggestion: 'Review whether this block contains multiple reusable claims; split only when each claim can stand alone with its own links/evidence.' })) }),
@@ -7148,14 +7145,13 @@ export class LlmWikiService {
     }
     candidates.sort((left, right) => right.score - left.score || String(left.path).localeCompare(String(right.path)));
     const items = candidates.slice(0, boundedLimit).map(({ score: _score, ...item }) => item);
-    const result = { purpose: 'A bounded composition review. Atomicity is a desired outcome, not a publication gate; inspect the note before deciding whether to split, link, or leave it composed.', items, total, truncated: total > items.length };
-    if (JSON.stringify(result).length <= boundedChars) return result;
-    let compact = { ...result, items: items.slice(0, Math.min(5, boundedLimit)), truncated: true };
-    while (JSON.stringify(compact).length > boundedChars && compact.items.length > 0) {
-      compact = { ...compact, items: compact.items.slice(0, -1), truncated: true };
+    try {
+      await this.assertCurrentContextSources(principal, items.map(item => ({ path: String(item.path), revision: String(item.revision) })));
+    } catch {
+      throw new Error('A composition source changed or became unavailable; re-read the candidate list and retry.');
     }
-    if (JSON.stringify(compact).length <= boundedChars) return compact;
-    return { purpose: 'A bounded composition review.', items: [], total, truncated: true };
+    const result = { purpose: 'A bounded composition review. Atomicity is a desired outcome, not a publication gate; inspect the note before deciding whether to split, link, or leave it composed.', items, total, truncated: total > items.length };
+    return packOrganizationQueue(result, endpointIdForTool('get_wiki_composition_candidates'), boundedChars, 16000, options.prettyPrint);
   }
 
   /**

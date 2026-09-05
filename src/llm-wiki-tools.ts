@@ -467,7 +467,7 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_composition_candidates',
-      description: 'Find bounded knowledge notes where atomicity may be a useful next outcome because the note is long, heavily sectioned, or paragraph-dense. This is advisory: inspect the note and use preview_wiki_split before any revision-checked edit; it never splits or rewrites files.',
+      description: 'Find bounded composition candidates from prose outside Properties and matching fenced examples. Heading/paragraph locators are physical 1-based file lines at the returned revision. Inspect before using wiki.split_preview; long_body refers to prose, not code sample size. Small responses preserve a source read or same-query budget retry. This is advisory, not proof of multiple claims, and never splits or rewrites files.',
       inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 30, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint } },
     },
     {

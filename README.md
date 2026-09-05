@@ -560,7 +560,17 @@ merges automatically and should be followed by revision reads and
 `get_wiki_composition_candidates` is a bounded advisory detector for long or
 section-heavy knowledge notes. Atomicity is a desired outcome, not a
 publication gate: inspect a heading with `preview_wiki_split` before deciding
-whether to split, link, or leave the note composed. `update_wiki_projection`
+whether to split, link, or leave the note composed. Matching backtick/tilde
+examples and YAML Properties do not count as prose claims or sections; a long
+code sample alone does not trigger `long_body`. `contentChars` describes the
+body, while `proseChars` counts heading text and non-fenced paragraph text.
+Candidate heading/paragraph lines are physical 1-based file lines (including
+Properties above them), with `lineBasis: physical` and the source `revision`.
+Use that revision for a guarded line read before editing. A compact or pretty
+response retains the highest-ranked source locator/read action, or gives a
+same-query budget retry instead of silently dropping it. Selected sources are
+revalidated; a concurrent edit requires retry rather than using stale lines.
+`update_wiki_projection`
 updates only the compact summary/key-points/highlights projection with
 `expectedRevision`; it preserves the Markdown body and unrelated Properties.
 

@@ -752,7 +752,17 @@ introduces no publication gate.
 Use `get_wiki_composition_candidates` to find long or section-heavy notes
 where atomicity may improve reuse. This is only a suggestion: inspect one
 section with `preview_wiki_split` and decide whether to split, link, or leave
-the composition intact. Use `update_wiki_projection` to refresh only
+the composition intact. Candidates carry the captured `revision` and
+`lineBasis: physical`: heading/paragraph ranges count raw file lines, including
+YAML Properties. Matching backtick/tilde fenced examples are not prose; neither
+their headings, blank-separated sample text, nor their length creates a split
+signal. `long_body` uses `proseChars`, the sum of visible heading and paragraph
+text, while `contentChars` remains the full body length. Paragraphs cannot join
+across a heading or excluded fence. Selected-source drift produces a retry;
+this is not an atomic Vault census. Complete serialized JSON, including pretty
+formatting, obeys maxChars and preserves a source locator or explicit same-query
+retry if the highest-ranked identity cannot fit. No lower-ranked cheap row
+silently replaces it. Use `update_wiki_projection` to refresh only
 summary/key-points/highlights with `expectedRevision`; the full Markdown body
 and unrelated Properties remain authoritative.
 

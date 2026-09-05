@@ -64,6 +64,26 @@ function* noteHeadings(raw) {
 export function projectNoteOutline(raw) {
     return [...noteHeadings(raw)];
 }
+/** Prose paragraphs with physical locators; never join across headings or fences. */
+export function* projectNoteParagraphs(raw) {
+    let pending = [];
+    let startLine = 0, endLine = 0;
+    for (const { text, line } of visibleNoteLines(raw)) {
+        const boundary = !text.trim() || /^ {0,3}#{1,6}(?:[ \t]|$)/.test(text);
+        if (pending.length && (boundary || line !== endLine + 1)) {
+            yield { text: pending.join('\n').trim(), startLine, endLine };
+            pending = [];
+        }
+        if (boundary)
+            continue;
+        if (!pending.length)
+            startLine = line;
+        pending.push(text);
+        endLine = line;
+    }
+    if (pending.length)
+        yield { text: pending.join('\n').trim(), startLine, endLine };
+}
 /** Retain only requested normalized names, not a complete outline. */
 export function projectNoteHeadingPresence(raw, requested) {
     const wanted = new Set([...requested].map(name => name.trim().toLowerCase()));

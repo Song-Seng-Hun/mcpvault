@@ -1491,7 +1491,7 @@ export function createServer(vaultPath, options = {}) {
                         }), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_composition_candidates": {
-                        return jsonResult(await llmWiki.compositionCandidates(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+                        return jsonResult(await llmWiki.compositionCandidates(principal, trimmedArgs.limit, trimmedArgs.maxChars, { prettyPrint: trimmedArgs.prettyPrint }), trimmedArgs.prettyPrint);
                     }
                     case "preview_wiki_split": {
                         return boundedWikiProjectionResult(await llmWiki.previewSplit({
