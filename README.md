@@ -1892,10 +1892,16 @@ For one logically coupled edit spanning several notes, discover
 operations. The first request defaults to `dryRun: true` and returns one
 `planFingerprint`; applying requires the identical change list with
 `dryRun: false` and that fingerprint. Every item is planned before the first
-write. If a later filesystem write fails, MCPVault restores attempted earlier
-writes and explicitly reports any rollback uncertainty. This is a guarded
-filesystem transaction rather than a claim of OS-wide atomicity; Git remains
-the durable audit and recovery layer.
+write, and each target is rechecked immediately before its individual write.
+If a later operation fails, rollback restores an attempted target only while
+its content still equals this change set's planned content. Already-original
+content needs no rewrite; other edits or missing targets are preserved and
+reported as incomplete rollback. A partial failed write may also be uncertain.
+Re-read all affected targets after a failure; reconcile with Git/history before
+planning a fresh change set rather than blindly retrying an old fingerprint.
+This is best-effort guarded recovery, not OS-wide atomicity or cross-process
+compare-and-swap: external changes can still race the final check/write gap.
+Git remains the durable audit and recovery layer.
 
 Each resolved document may appear only once in the change list, even if one
 entry says `Note.md` and another says `./Note.md` or `dir/../Note.md`. Duplicate

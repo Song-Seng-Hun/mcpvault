@@ -457,6 +457,15 @@ do not prove a current, bounded, actionable response through its public adapter.
   rejection preserves original revisions and larger-budget retry succeeds.
   This does not certify other mutation adapters' post-write formatting, network
   delivery, cross-process races or rollback atomicity; those remain separate.
+- Change sets now recheck each writable target immediately before its individual
+  write. Failure recovery only restores content still equal to this transaction's
+  planned bytes; already-original targets are skipped, observed external edits or
+  deletions are preserved and reported as incomplete rollback. Restored/uncertain
+  attempted paths and observed pre-write drift invalidate derived views. Real-file
+  race regressions plus an authenticated compiled MCP smoke verify this contract.
+  Agents must reread affected targets and reconcile before a fresh dry-run. This
+  is not cross-process CAS: final check/write races, uncertain partial writes,
+  crash recovery and other write workflows still need independent assessment.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

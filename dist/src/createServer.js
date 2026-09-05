@@ -536,7 +536,7 @@ export function createServer(vaultPath, options = {}) {
         },
         {
             name: "patch_multiple_notes",
-            description: "Preflight/apply up to 10 existing notes with current revisions. Each resolved note may appear only once, including ./ or dot-segment aliases: combine its hunks and Properties into one change, then dry-run again. Default dry-run returns the exact fingerprint required to apply. Uses ordered locks and rollback-backed writes; never silently chooses between duplicate edits.",
+            description: "Preflight/apply up to 10 existing notes with current revisions. Each resolved note may appear only once, including ./ or dot-segment aliases: combine its hunks and Properties into one change, then dry-run again. Default dry-run returns the exact fingerprint required to apply. Ordered locks and per-write revision checks; best-effort rollback preserves observed external edits/deletions and reports incomplete recovery. After failure re-read affected notes and reconcile before a fresh dry-run. Not cross-process atomicity.",
             inputSchema: {
                 type: "object",
                 properties: {

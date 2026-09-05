@@ -1196,19 +1196,46 @@ export class FileSystemService {
                 const attempted = [];
                 try {
                     for (const plan of plans.filter(candidate => candidate.item.wouldChange)) {
+                        let fullPath;
+                        let current;
+                        try {
+                            fullPath = this.resolveWritablePath(plan.path);
+                            current = await readFile(fullPath, 'utf8');
+                        }
+                        catch {
+                            this.notifyNoteChanged(plan.path, 'upsert');
+                            throw new Error(`Cannot safely recheck ${plan.path} before its individual write; inspect its current state`);
+                        }
+                        if (this.revision(current) !== plan.item.previousRevision) {
+                            this.notifyNoteChanged(plan.path, 'upsert');
+                            throw new Error(`Revision conflict for ${plan.path}: it changed before its individual write`);
+                        }
                         attempted.push(plan);
-                        await writeFile(this.resolveWritablePath(plan.path), plan.content, 'utf8');
+                        await writeFile(fullPath, plan.content, 'utf8');
                     }
                 }
                 catch (error) {
                     const rollbackFailures = [];
                     for (const plan of attempted.reverse()) {
                         try {
-                            await writeFile(this.resolveWritablePath(plan.path), plan.original, 'utf8');
-                            this.notifyNoteChanged(plan.path, 'upsert');
+                            const fullPath = this.resolveWritablePath(plan.path);
+                            const current = await readFile(fullPath, 'utf8');
+                            // Preserve edits from writers outside our instance-local lock.
+                            // This is a conservative ownership check, not filesystem CAS.
+                            if (current === plan.original)
+                                continue;
+                            if (current !== plan.content) {
+                                rollbackFailures.push(`${plan.path}: content changed after our write; current content preserved`);
+                                continue;
+                            }
+                            await writeFile(fullPath, plan.original, 'utf8');
                         }
-                        catch (rollbackError) {
-                            rollbackFailures.push(`${plan.path}: ${rollbackError instanceof Error ? rollbackError.message : 'unknown rollback error'}`);
+                        catch {
+                            rollbackFailures.push(`${plan.path}: could not safely read or restore the target; inspect its current state`);
+                        }
+                        finally {
+                            // Even an uncertain restoration may have changed the disk view.
+                            this.notifyNoteChanged(plan.path, 'upsert');
                         }
                     }
                     const rollback = rollbackFailures.length ? ` Rollback was incomplete: ${rollbackFailures.join('; ')}` : ' All attempted writes were restored.';

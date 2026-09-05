@@ -729,6 +729,14 @@ permits a larger-budget/non-pretty retry after checking revisions. The prepared
 success receipt is returned only after successful apply; actual write failures
 still use the rollback/error path. Network delivery remains outside this check.
 
+Each change-set target is rechecked immediately before its write. On failure,
+rollback restores only exact planned content, skips already-original content,
+and preserves observed divergent or missing targets with an incomplete-rollback
+error. Attempted targets and observed pre-write drift invalidate read models.
+After an error, re-read targets and use Git/history to reconcile before a new
+dry-run; a partial failed write may need manual recovery. The final check/write
+gap remains: this is not cross-process CAS or a filesystem-atomic transaction.
+
 Heading and block targets are preserved by graph reads, so
 `[[folder/Source#Heading]]` and `[[folder/Source#^block-id]]` can take an agent
 directly to the intended passage without rereading the entire source note.
