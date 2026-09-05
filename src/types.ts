@@ -467,6 +467,8 @@ export type TaskStatus = 'open' | 'completed' | 'all';
 
 export interface TaskItem {
   path: string;
+  /** Exact source revision attached by listTasks; standalone parsing has none. */
+  revision?: string;
   line: number;
   text: string;
   status: 'open' | 'completed';

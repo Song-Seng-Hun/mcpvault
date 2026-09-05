@@ -900,14 +900,21 @@ replacement for reading the selected note. For classification browsing, pass
 `related_terms` are labeled `broader_term_match`/`related_term_match` and rank
 below direct body, title, or alias matches.
 
-`list_tasks` returns ordinary Markdown checkbox locations plus a content-derived
-`taskId`. Its `maxChars` bounds the full response; long task text is a marked
+`list_tasks` returns visible, non-hidden Markdown checkbox locations plus a
+content-derived or block-based `taskId` and exact source `revision`. Hidden owners
+are excluded before counts. Its `maxChars` bounds the full response; long task text is a marked
 preview and `total`, `returned`, and `truncated` expose omitted context. After
 reading the note, `update_task` preferably changes one checkbox
 using `taskId`, `status`, and the current `expectedRevision`; `path` plus `line`
 remains a compatible fallback. The ID survives surrounding line insertions when
 the task text is unchanged, stale edits are rejected, and no second task
 database is created.
+
+Discovery and update share the same frontmatter/fence-aware extractor. A duplicate
+block-derived ID is ambiguous; update rejects it instead of choosing a checkbox.
+After inspecting the current note, use an explicit line without taskId or repair
+the IDs. The listed source revision can supply expectedRevision; re-read after
+mutation. This does not turn the multi-note listing into an atomic snapshot.
 
 For renames, call `preview_move_note` first. `move_note` intentionally does not
 silently rewrite links. If the reviewed plan is correct, pass

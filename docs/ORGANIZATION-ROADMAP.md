@@ -466,6 +466,15 @@ do not prove a current, bounded, actionable response through its public adapter.
   Agents must reread affected targets and reconcile before a fresh dry-run. This
   is not cross-process CAS: final check/write races, uncertain partial writes,
   crash recovery and other write workflows still need independent assessment.
+- Checkbox task discovery and mutation now share the same Markdown extractor.
+  Line fallback cannot inherit an earlier task match inside a code example;
+  duplicate block-derived IDs reject rather than selecting the first checkbox.
+  Hidden owners are excluded before aggregation and cannot be toggled, regardless
+  of folder. Listing attaches the exact parsed source revision, retained by the
+  bounded MCP response; explicit current lines and revision-safe retries remain
+  usable. Direct and public MCP tests cover these cases without new task storage.
+  Inventory pagination, large-file parsing budgets and cross-process snapshot
+  races remain separate audits, not claims of this consistency repair.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

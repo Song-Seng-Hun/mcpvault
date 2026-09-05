@@ -2468,9 +2468,12 @@ export class FileSystemService {
             catch {
                 continue;
             }
+            if (isModerationHidden(this.frontmatterHandler.parse(content).frontmatter))
+                continue;
+            const revision = this.revision(content);
             for (const task of extractMarkdownTasks(content, path)) {
                 if (status === 'all' || status === task.status)
-                    tasks.push(task);
+                    tasks.push({ ...task, revision });
             }
         }
         return {
@@ -2492,56 +2495,24 @@ export class FileSystemService {
         return this.withMutationLock(path, async () => {
             await this.assertExpectedRevision(path, params.expectedRevision);
             const note = await this.readNote(path);
+            if (isModerationHidden(note.frontmatter))
+                throw new Error(`Access denied: ${path}`);
+            if (note.revision !== params.expectedRevision)
+                throw new Error(`Revision conflict for ${path}: refresh list_tasks and retry`);
             const lines = note.originalContent.split('\n');
-            const locatedTask = params.taskId
-                ? extractMarkdownTasks(note.originalContent, path).find(task => task.taskId === params.taskId)
-                : undefined;
+            const candidates = extractMarkdownTasks(note.originalContent, path).filter(task => params.taskId ? task.taskId === params.taskId : task.line === params.line);
+            if (candidates.length > 1)
+                throw new Error(`Task identity is ambiguous in ${path}; read the current note and use an explicit line without taskId, or repair duplicate block IDs`);
+            const locatedTask = candidates[0];
             if (params.taskId && !locatedTask)
                 throw new Error(`Task ${params.taskId} was not found in ${path}; refresh list_tasks and retry`);
             const targetLine = locatedTask?.line ?? params.line;
             if (targetLine > lines.length)
                 throw new Error(`Task line ${targetLine} is outside ${path}`);
-            let inFrontmatter = false;
-            let frontmatterEnded = false;
-            let inFence = false;
-            let fenceChar = '';
-            let fenceLength = 0;
-            const fenceRegex = /^ {0,3}(`{3,}|~{3,})(.*)$/;
             const targetIndex = targetLine - 1;
-            let targetMatch = null;
-            for (let index = 0; index <= targetIndex; index += 1) {
-                const line = lines[index].replace(/\r$/, '');
-                if (!frontmatterEnded && index === 0 && line === '---') {
-                    inFrontmatter = true;
-                    continue;
-                }
-                if (inFrontmatter) {
-                    if (line === '---') {
-                        inFrontmatter = false;
-                        frontmatterEnded = true;
-                    }
-                    continue;
-                }
-                const fenceMatch = fenceRegex.exec(line);
-                if (fenceMatch) {
-                    const markers = fenceMatch[1];
-                    const trailing = fenceMatch[2];
-                    const char = markers.charAt(0);
-                    if (!inFence) {
-                        inFence = true;
-                        fenceChar = char;
-                        fenceLength = markers.length;
-                    }
-                    else if (char === fenceChar && markers.length >= fenceLength && trailing.trim() === '') {
-                        inFence = false;
-                        fenceChar = '';
-                        fenceLength = 0;
-                    }
-                    continue;
-                }
-                if (!inFence)
-                    targetMatch = /^(\s*[-*+]\s+\[)([ xX])(\]\s+.*)$/.exec(line);
-            }
+            const targetMatch = locatedTask
+                ? /^(\s*[-*+]\s+\[)([ xX])(\]\s+.*)$/.exec(lines[targetIndex].replace(/\r$/, ''))
+                : null;
             if (!targetMatch)
                 throw new Error(`Line ${targetLine} is not a Markdown checkbox task outside frontmatter/code fences`);
             const previousStatus = targetMatch[2].toLowerCase() === 'x' ? 'completed' : 'open';
@@ -2555,7 +2526,7 @@ export class FileSystemService {
                 await this.writeNoteUnlocked({ path, content: lines.join('\n'), expectedRevision: params.expectedRevision });
             }
             const updated = await this.readNote(path);
-            const resultingTaskId = locatedTask?.taskId || extractMarkdownTasks(note.originalContent, path).find(task => task.line === targetLine)?.taskId;
+            const resultingTaskId = locatedTask?.taskId;
             return {
                 success: true,
                 path,

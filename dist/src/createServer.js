@@ -761,7 +761,7 @@ export function createServer(vaultPath, options = {}) {
         },
         {
             name: "list_tasks",
-            description: "List checkbox tasks across the vault as a bounded projection. Defaults to open tasks; returns a stable taskId plus path and line, clips pathological text previews, and reports total/returned/truncated. Use update_task with taskId (preferred), or path and line, after a revision-safe read to complete or reopen one task. Ignores YAML frontmatter and fenced code blocks.",
+            description: "List caller-visible, non-hidden checkbox tasks as a bounded projection. Defaults to open tasks; returns taskId, path, line and the exact source revision, clips text previews, and reports total/returned/truncated. Inspect sufficient context before update_task; use the current revision as expectedRevision. Duplicate block IDs are ambiguous: read the note and use an explicit line without taskId or repair the IDs. Listing and updates share the parser that ignores YAML frontmatter and fenced code examples.",
             inputSchema: {
                 type: "object",
                 properties: {
@@ -775,7 +775,7 @@ export function createServer(vaultPath, options = {}) {
         },
         {
             name: "update_task",
-            description: "Toggle one Markdown checkbox task in place. Read the note first and pass its current revision; identify the task with the stable taskId from list_tasks (preferred) or path+line. This keeps GTD execution state in ordinary Obsidian Markdown and rejects stale concurrent edits.",
+            description: "Toggle one visible Markdown checkbox task in place. Inspect the note context and pass its current revision; identify the task with taskId from list_tasks or an explicit path+line without taskId. Rejects duplicate task IDs, hidden owners, frontmatter/code examples and stale revisions. Keeps GTD execution state in ordinary Obsidian Markdown; reread the affected note after writing.",
             inputSchema: {
                 type: "object",
                 properties: {

@@ -2412,13 +2412,21 @@ provided explicitly.
 
 ### `list_tasks`
 
-List checkbox tasks across the vault. By default only open tasks are returned;
+List caller-visible, non-hidden checkbox tasks across the vault. By default only open tasks are returned;
 use `status: "completed"` or `status: "all"` for other views. Results include
 the vault-relative path, 1-based line number, bounded task-text preview, stable
-`taskId`, and status. Use `pathPrefix` to limit the scan, `limit` to cap item
+`taskId`, exact source `revision`, and status. Use `pathPrefix` to limit the scan, `limit` to cap item
 count, and `maxChars` (default 4000) to cap the complete JSON response. A clipped
 preview carries `textTruncated: true`; `total`, `returned`, and `truncated` make
 omission explicit. YAML frontmatter and fenced code blocks are ignored.
+
+List and update share the same task parser. Inspect sufficient nearby context,
+then pass the current source revision as `expectedRevision` to `notes.task_update`.
+An ID derived from duplicate Obsidian block IDs is ambiguous and is never resolved
+by picking the first checkbox. Read the current note and supply an explicit line
+without `taskId`, or repair the duplicate IDs first. Hidden/quarantined/removed
+notes are excluded before counts and cannot be toggled through this endpoint.
+Re-read after mutation; listing revisions are guards, not a vault-wide snapshot.
 
 ```json
 {
@@ -2439,10 +2447,13 @@ omission explicit. YAML frontmatter and fenced code blocks are ignored.
       "path": "Projects/Plan.md",
       "line": 12,
       "text": "Publish the release notes",
+      "taskId": "task:content:<returned-content-id>",
+      "revision": "<returned-source-sha256>",
       "status": "open"
     }
   ],
   "total": 1,
+  "returned": 1,
   "truncated": false
 }
 ```
