@@ -255,7 +255,11 @@ executable `next_action` list; `get_wiki_project_packet` gives a bounded
 Natural Planning review of purpose, outcome, brainstorm, support, and next
 action completeness. These are advisory projections, not a second database.
 Work dependency projections use a single captured metadata inventory per
-request. Project planning hydrates only visible, non-retired knowledge projects
+request. `wiki.next_actions` ranks all eligible visible action candidates,
+retaining only the top requested rows rather than cutting off candidate input.
+Equal-ranked actions preserve authored order; a timestamp of zero is a valid
+deadline. Existing context, capacity, workflow and dependency gates are unchanged.
+Project planning hydrates only visible, non-retired knowledge projects
 with matching revisions (at most 16 reads per batch; 8 MiB per complete source).
 It validates the visible inventory again after hydration; changed dependency,
 alias-candidate, membership or visibility metadata requires restarting the query,

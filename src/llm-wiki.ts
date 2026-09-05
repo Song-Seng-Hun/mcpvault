@@ -6897,94 +6897,102 @@ export class LlmWikiService {
     const requestedEffort = optionalWorkLabel(options.effort, 'effort');
     const dependencySnapshot = await this.workDependencySnapshot(principal);
     const contextCounts = new Map<string, number>();
-    const candidates: Array<Record<string, unknown>> = [];
     const dependencyBlockedItems: Array<Record<string, unknown>> = [];
     const filterDiagnostics = { unknownDuration: 0, unknownEnergy: 0, unknownEffort: 0, workflowBlocked: 0, deferred: 0, dependencyBlocked: 0, unresolvedDependencies: 0, dependencyCycles: 0 };
     let total = 0;
     const nowMs = Date.now();
-    for (const note of dependencySnapshot.workNotes) {
-      const taskStatus = String(note.frontmatter.task_status || '').toLowerCase();
-      if (!isOpenActionableKnowledge(note.frontmatter)) continue;
-      const actions = [
-        ...(typeof note.frontmatter.next_action === 'string' ? [note.frontmatter.next_action] : []),
-        ...(Array.isArray(note.frontmatter.next_actions) ? note.frontmatter.next_actions.filter((item: unknown): item is string => typeof item === 'string') : []),
-      ].map(action => action.trim()).filter(Boolean);
-      const uniqueActions = [...new Set(actions)].slice(0, 20);
-      if (uniqueActions.length === 0) continue;
-      const actionContext = typeof note.frontmatter.task_context === 'string' && note.frontmatter.task_context.trim()
-        ? note.frontmatter.task_context.trim()
-        : 'unclassified';
-      if (requestedContext && actionContext.toLowerCase() !== requestedContext) continue;
-      const estimatedMinutes = frontmatterNumber(note.frontmatter, ['time_estimate_minutes', 'estimated_minutes', 'duration_minutes', 'time_minutes']);
-      const energy = frontmatterWorkLabel(note.frontmatter, ['energy', 'energy_level']);
-      const effort = frontmatterWorkLabel(note.frontmatter, ['effort', 'effort_level']);
-      if (maxMinutes !== undefined && estimatedMinutes === undefined) { filterDiagnostics.unknownDuration += uniqueActions.length; continue; }
-      if (maxMinutes !== undefined && estimatedMinutes! > maxMinutes) continue;
-      if (requestedEnergy && energy === undefined) { filterDiagnostics.unknownEnergy += uniqueActions.length; continue; }
-      if (requestedEnergy && energy !== requestedEnergy) continue;
-      if (requestedEffort && effort === undefined) { filterDiagnostics.unknownEffort += uniqueActions.length; continue; }
-      if (requestedEffort && effort !== requestedEffort) continue;
-      const waitingState = taskStatus === 'waiting' || Boolean(String(note.frontmatter.waiting_for || '').trim());
-      if (taskStatus === 'blocked' || waitingState) {
-        filterDiagnostics.workflowBlocked += uniqueActions.length;
-        continue;
+    const candidates = function* (this: LlmWikiService): Generator<Record<string, unknown>> {
+      for (const note of dependencySnapshot.workNotes) {
+        const taskStatus = String(note.frontmatter.task_status || '').toLowerCase();
+        if (!isOpenActionableKnowledge(note.frontmatter)) continue;
+        const actions = [
+          ...(typeof note.frontmatter.next_action === 'string' ? [note.frontmatter.next_action] : []),
+          ...(Array.isArray(note.frontmatter.next_actions) ? note.frontmatter.next_actions.filter((item: unknown): item is string => typeof item === 'string') : []),
+        ].map(action => action.trim()).filter(Boolean);
+        const uniqueActions = [...new Set(actions)].slice(0, 20);
+        if (uniqueActions.length === 0) continue;
+        const actionContext = typeof note.frontmatter.task_context === 'string' && note.frontmatter.task_context.trim()
+          ? note.frontmatter.task_context.trim()
+          : 'unclassified';
+        if (requestedContext && actionContext.toLowerCase() !== requestedContext) continue;
+        const estimatedMinutes = frontmatterNumber(note.frontmatter, ['time_estimate_minutes', 'estimated_minutes', 'duration_minutes', 'time_minutes']);
+        const energy = frontmatterWorkLabel(note.frontmatter, ['energy', 'energy_level']);
+        const effort = frontmatterWorkLabel(note.frontmatter, ['effort', 'effort_level']);
+        if (maxMinutes !== undefined && estimatedMinutes === undefined) { filterDiagnostics.unknownDuration += uniqueActions.length; continue; }
+        if (maxMinutes !== undefined && estimatedMinutes! > maxMinutes) continue;
+        if (requestedEnergy && energy === undefined) { filterDiagnostics.unknownEnergy += uniqueActions.length; continue; }
+        if (requestedEnergy && energy !== requestedEnergy) continue;
+        if (requestedEffort && effort === undefined) { filterDiagnostics.unknownEffort += uniqueActions.length; continue; }
+        if (requestedEffort && effort !== requestedEffort) continue;
+        const waitingState = taskStatus === 'waiting' || Boolean(String(note.frontmatter.waiting_for || '').trim());
+        if (taskStatus === 'blocked' || waitingState) {
+          filterDiagnostics.workflowBlocked += uniqueActions.length;
+          continue;
+        }
+        const deferUntil = typeof note.frontmatter.defer_until === 'string' ? Date.parse(note.frontmatter.defer_until) : NaN;
+        if (Number.isFinite(deferUntil) && deferUntil > nowMs) {
+          filterDiagnostics.deferred += uniqueActions.length;
+          continue;
+        }
+        const dependencyKey = normalizePath(note.path).toLowerCase();
+        const dependencyState = dependencySnapshot.stateByPath.get(dependencyKey)!;
+        if (!dependencyState.executable) {
+          filterDiagnostics.dependencyBlocked += uniqueActions.length;
+          filterDiagnostics.unresolvedDependencies += dependencyState.blockers.filter(item => ['unresolved_or_inaccessible', 'ambiguous'].includes(item.state)).length;
+          if (dependencyState.cyclePaths.length > 0) filterDiagnostics.dependencyCycles += 1;
+          if (dependencyBlockedItems.length < boundedLimit) dependencyBlockedItems.push({
+            path: this.access.toPublicPath(note.path),
+            title: note.frontmatter.title || note.path.split('/').at(-1),
+            ...(note.revision && { revision: note.revision }),
+            actionCount: uniqueActions.length,
+            dependencies: this.workDependencyProjection(dependencyState),
+          });
+          continue;
+        }
+        contextCounts.set(actionContext, (contextCounts.get(actionContext) || 0) + uniqueActions.length);
+        for (const action of uniqueActions) {
+          total += 1;
+          yield {
+            path: this.access.toPublicPath(note.path),
+            title: note.frontmatter.title || note.path.split('/').at(-1),
+            ...(note.revision && { revision: note.revision }),
+            action: boundedText(action, 600),
+            context: actionContext,
+            ...(taskStatus && { taskStatus }),
+            ...(typeof note.frontmatter.project === 'string' && { project: note.frontmatter.project }),
+            ...(typeof note.frontmatter.due_at === 'string' && { dueAt: note.frontmatter.due_at }),
+            ...(typeof note.frontmatter.scheduled_at === 'string' && { scheduledAt: note.frontmatter.scheduled_at }),
+            ...(typeof note.frontmatter.waiting_for === 'string' && { waitingFor: note.frontmatter.waiting_for }),
+            ...(estimatedMinutes !== undefined && { estimatedMinutes }),
+            ...(energy && { energy }),
+            ...(effort && { effort }),
+            serviceClass: (SERVICE_CLASSES as readonly string[]).includes(String(note.frontmatter.service_class || '').trim().toLowerCase()) ? String(note.frontmatter.service_class).trim().toLowerCase() : 'standard',
+            plannedStage: dependencySnapshot.plan.stageByPath.get(dependencyKey) || 0,
+            directDependents: dependencySnapshot.plan.dependents.get(dependencyKey)?.size || 0,
+            immediateUnlocks: dependencySnapshot.plan.immediateUnlockByPath.get(dependencyKey) || 0,
+          };
+        }
       }
-      const deferUntil = typeof note.frontmatter.defer_until === 'string' ? Date.parse(note.frontmatter.defer_until) : NaN;
-      if (Number.isFinite(deferUntil) && deferUntil > nowMs) {
-        filterDiagnostics.deferred += uniqueActions.length;
-        continue;
-      }
-      const dependencyKey = normalizePath(note.path).toLowerCase();
-      const dependencyState = dependencySnapshot.stateByPath.get(dependencyKey)!;
-      if (!dependencyState.executable) {
-        filterDiagnostics.dependencyBlocked += uniqueActions.length;
-        filterDiagnostics.unresolvedDependencies += dependencyState.blockers.filter(item => ['unresolved_or_inaccessible', 'ambiguous'].includes(item.state)).length;
-        if (dependencyState.cyclePaths.length > 0) filterDiagnostics.dependencyCycles += 1;
-        if (dependencyBlockedItems.length < boundedLimit) dependencyBlockedItems.push({
-          path: this.access.toPublicPath(note.path),
-          title: note.frontmatter.title || note.path.split('/').at(-1),
-          ...(note.revision && { revision: note.revision }),
-          actionCount: uniqueActions.length,
-          dependencies: this.workDependencyProjection(dependencyState),
-        });
-        continue;
-      }
-      contextCounts.set(actionContext, (contextCounts.get(actionContext) || 0) + uniqueActions.length);
-      for (const action of uniqueActions) {
-        total += 1;
-        if (candidates.length >= boundedLimit * 4) continue;
-        candidates.push({
-          path: this.access.toPublicPath(note.path),
-          title: note.frontmatter.title || note.path.split('/').at(-1),
-          ...(note.revision && { revision: note.revision }),
-          action: boundedText(action, 600),
-          context: actionContext,
-          ...(taskStatus && { taskStatus }),
-          ...(typeof note.frontmatter.project === 'string' && { project: note.frontmatter.project }),
-          ...(typeof note.frontmatter.due_at === 'string' && { dueAt: note.frontmatter.due_at }),
-          ...(typeof note.frontmatter.scheduled_at === 'string' && { scheduledAt: note.frontmatter.scheduled_at }),
-          ...(typeof note.frontmatter.waiting_for === 'string' && { waitingFor: note.frontmatter.waiting_for }),
-          ...(estimatedMinutes !== undefined && { estimatedMinutes }),
-          ...(energy && { energy }),
-          ...(effort && { effort }),
-          serviceClass: (SERVICE_CLASSES as readonly string[]).includes(String(note.frontmatter.service_class || '').trim().toLowerCase()) ? String(note.frontmatter.service_class).trim().toLowerCase() : 'standard',
-          plannedStage: dependencySnapshot.plan.stageByPath.get(dependencyKey) || 0,
-          directDependents: dependencySnapshot.plan.dependents.get(dependencyKey)?.size || 0,
-          immediateUnlocks: dependencySnapshot.plan.immediateUnlockByPath.get(dependencyKey) || 0,
-        });
-      }
-    }
-    const priorityTime = (item: Record<string, unknown>) => Date.parse(String(item.dueAt || item.scheduledAt || '')) || Number.MAX_SAFE_INTEGER;
+    }.call(this);
+    const priorityTime = (item: Record<string, unknown>) => {
+      const timestamp = Date.parse(String(item.dueAt || item.scheduledAt || ''));
+      return Number.isFinite(timestamp) ? timestamp : Number.MAX_SAFE_INTEGER;
+    };
     const statusRank = (item: Record<string, unknown>) => item.taskStatus === 'next_action' ? 0 : 1;
     const serviceRank = (item: Record<string, unknown>) => ({ expedite: 0, fixed_date: 1, standard: 2, research: 3 }[String(item.serviceClass)] ?? 2);
-    candidates.sort((left, right) => priorityTime(left) - priorityTime(right)
+    const compare = (left: Record<string, unknown>, right: Record<string, unknown>) => priorityTime(left) - priorityTime(right)
       || statusRank(left) - statusRank(right)
       || serviceRank(left) - serviceRank(right)
       || Number(right.immediateUnlocks || 0) - Number(left.immediateUnlocks || 0)
       || Number(right.directDependents || 0) - Number(left.directDependents || 0)
       || String(left.context).localeCompare(String(right.context))
-      || String(left.path).localeCompare(String(right.path)));
-    const items = candidates.slice(0, boundedLimit);
+      || String(left.path).localeCompare(String(right.path));
+    const rankedCandidates = (function* () {
+      let ordinal = 0;
+      for (const item of candidates) yield { item, ordinal: ordinal++ };
+    })();
+    const items = boundedTopK(rankedCandidates, Math.floor(boundedLimit),
+      (left, right) => compare(left.item, right.item) || left.ordinal - right.ordinal).map(candidate => candidate.item);
     const contexts = [...contextCounts.entries()]
       .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
       .slice(0, 30)

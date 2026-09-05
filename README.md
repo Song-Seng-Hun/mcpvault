@@ -571,6 +571,13 @@ outcome, brainstorm, support, next-action completeness, and the same derived
 dependency readiness used by the action and flow views.
 Work, flow, review and project projections capture one request-local metadata
 inventory instead of stitching independently refreshed 500-row pages together.
+`wiki.next_actions` evaluates the entire eligible visible action cohort before
+selecting its top results. A late deadline or high-impact prerequisite is not
+lost beyond a first-candidate window. A bounded heap retains only `limit`
+winners with stable authored order on ranking ties; context/capacity/workflow
+and dependency exclusions remain in force. The valid Unix epoch deadline is
+ranked as a date, not as missing metadata. This does not make the graph snapshot
+atomic or remove the complete eligibility scan.
 Project planning hydrates only visible, non-retired knowledge-project bodies,
 in drained batches of at most 16 complete 8 MiB reads. It checks each body
 revision and rechecks the visible inventory after hydration, including changed

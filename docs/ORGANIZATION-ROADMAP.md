@@ -622,6 +622,18 @@ do not prove a current, bounded, actionable response through its public adapter.
   Compiled responses match the baseline across 108 fixture/limit/budget/format
   combinations. The authoritative graph and one count per stage still occupy
   vault-dependent memory; this does not establish a process-wide memory bound.
+- `wiki.next_actions` previously ranked only the first limit*4 action candidates,
+  silently missing a later urgent deadline or a prerequisite with five immediate
+  unlocks. Its eligibility scan now streams the complete visible cohort into a
+  bounded heap; totals and diagnostic counters still cover all evaluated work.
+  Internal ordinals preserve equal-ranked authored action order without entering
+  public rows. Valid epoch-zero deadlines are no longer mistaken for no deadline.
+  Metadata/dependency gates are unchanged. The next-action response's pretty
+  budgeting/oversized-row fallback and reviewDashboard's unchecked compact
+  fallback remain open audits. The dispatcher already bounds wire output, but
+  tiny compiled probes reduced these views to 44/33 characters through generic
+  compaction, losing actionable detail/recovery. Ranking correctness does not
+  solve this over-compaction problem.
 
 Record new concrete gaps here when registered schema, dispatcher, service,
 persistent representation, guide, invalidation, or bounded failure evidence
