@@ -9,6 +9,7 @@ import { PathFilter } from './pathfilter.js';
 import { VaultFileCatalog } from './vault-catalog.js';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createServer } from './createServer.js';
+import { endpointIdForTool } from './endpoint-registry.js';
 
 const faults = vi.hoisted(() => ({ readFile: new Map<string, string>(), readdir: new Map<string, string>(), stat: new Map<string, string>() }));
 vi.mock('node:fs/promises', async importOriginal => {
@@ -66,6 +67,82 @@ test('an index row matching a currently hidden source is never hydrated', async 
   await writeFile(join(vault, 'Area/Note.md'), hidden);
   rows[0].hash = hash(hidden);
   expect((await service.search(params)).results).toEqual([]);
+});
+
+test.each(['\n', '\r\n'])('legacy semantic rows resolve current raw lines with %j separators', async newline => {
+  const content = ['---', 'title: Metadata', '---', '', '# Heading', '', ' ', '', '  Target paragraph'].join(newline);
+  await writeFile(join(vault, 'Area/Note.md'), content);
+  rows = [{ ...rows[0], id: 'Area/Note.md#2', hash: hash(content), line: 2 }];
+  const result = (await service.search({ ...params, includeRevisions: true } )).results[0];
+  expect(result).toMatchObject({ ln: 9, rv: hash(content) });
+  expect(result?.ex).toContain('Target paragraph');
+  // The cached candidate must preserve its ID and use the same raw locator.
+  expect((await service.search({ ...params, includeRevisions: true })).results[0]?.ln).toBe(9);
+});
+
+test('long-line excerpts include the selected continuation and fit a 512-character response', async () => {
+  const content = 'x'.repeat(1190) + 'Target continuation ' + 'y'.repeat(1600);
+  await writeFile(join(vault, 'Area/Note.md'), content);
+  rows = [{ ...rows[0], id: 'Area/Note.md#1', hash: hash(content), line: 8000 }];
+  const result = await service.search(params);
+  expect(result.results[0]?.ln).toBe(1);
+  expect(result.results[0]?.ex).toContain('Target continuation');
+  expect(JSON.stringify(result.results).length).toBeLessThanOrEqual(512);
+});
+
+test.each(['Other.md#0', 'Area/Note.md#999', 'Area/Note.md#-1'])('unknown semantic chunk ID %s cannot supply a false locator', async id => {
+  rows[0].id = id;
+  expect((await service.search(params)).results).toEqual([]);
+});
+
+test('small-budget Unicode excerpts retain exact revisions without broken surrogate endings', async () => {
+  const content = '한글😀'.repeat(500);
+  await writeFile(join(vault, 'Area/Note.md'), content);
+  rows = [{ ...rows[0], hash: hash(content) }];
+  const result = await service.search({ ...params, includeRevisions: true });
+  expect(result.results[0]).toMatchObject({ ln: 1, rv: hash(content) });
+  expect(result.results[0]?.ex).toContain('한글');
+  expect(result.results[0]?.ex).not.toMatch(/[\uD800-\uDBFF]…?$/);
+  expect(JSON.stringify(result.results).length).toBeLessThanOrEqual(512);
+});
+
+test('raw excerpt windows never expose split Unicode pairs at either boundary', async () => {
+  const content = '한글😀'.repeat(1000);
+  await writeFile(join(vault, 'Area/Note.md'), content);
+  rows = [{ ...rows[0], id: 'Area/Note.md#1', hash: hash(content) }];
+  const result = await service.search({ ...params, maxChars: 4000 });
+  expect(result.results[0]?.ex).toContain('한글');
+  expect(result.results[0]?.ex).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/);
+});
+
+test('newly prepared vector rows carry raw Markdown line numbers', async () => {
+  const content = '---\nkey: value\n---\n\n# Heading\n\n \n\nTarget paragraph';
+  await writeFile(join(vault, 'Area/Note.md'), content);
+  const prepared = await (service as any).prepareIndex('Area/Note.md');
+  expect(prepared.rows.find((row: any) => row.id === 'Area/Note.md#2').line).toBe(9);
+});
+
+test('public MCP semantic search locators open the intended physical line', async () => {
+  const content = '---\nkey: value\n---\n\n# Heading\n\n \n\nTarget paragraph';
+  await writeFile(join(vault, 'Area/Note.md'), content);
+  const legacyRows = [{ ...rows[0], id: 'Area/Note.md#2', hash: hash(content), line: 2 }];
+  vi.spyOn(SemanticSearchService.prototype as any, 'acquireIndexLease').mockResolvedValue(false);
+  vi.spyOn(SemanticSearchService.prototype as any, 'getTableNames').mockResolvedValue(new Set(['chunks_global']));
+  vi.spyOn(SemanticSearchService.prototype as any, 'getTable').mockResolvedValue({ vectorSearch: () => ({ distanceType() { return this; }, limit() { return this; }, toArray: async () => legacyRows }) });
+  vi.spyOn(SemanticSearchService.prototype as any, 'embedQuery').mockResolvedValue(vector);
+  const server = createServer(vault, { version: 'locator-integrity' });
+  const client = new Client({ name: 'locator-integrity', version: '1' });
+  const [ct, st] = InMemoryTransport.createLinkedPair();
+  try {
+    await Promise.all([client.connect(ct), server.connect(st)]);
+    const search = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'wiki.search', arguments: { query: 'semantic-only-query', semantic: true, includeRevisions: true, maxChars: 512 } } });
+    expect(search.isError).not.toBe(true);
+    const hit = JSON.parse((search.content as any)[0].text)[0];
+    expect(hit).toMatchObject({ p: 'Area/Note.md', ln: 9, rv: hash(content), vs: true });
+    const read = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: endpointIdForTool('read_note_lines'), arguments: { path: hit.p, startLine: hit.ln, endLine: hit.ln, maxChars: 512 } } });
+    expect(read.isError).not.toBe(true);
+    expect((read.content as any)[0].text).toContain('Target paragraph');
+  } finally { await client.close(); await server.close(); }
 });
 
 test('cached hydration IO errors are bounded unavailability, not cached verified text', async () => {

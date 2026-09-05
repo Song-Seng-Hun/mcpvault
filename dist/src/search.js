@@ -1232,6 +1232,7 @@ export class SearchService {
                 relativePath,
                 documentId: existing?.documentId ?? this.nextDocumentId++,
                 body,
+                bodyStartLine: frontmatterMatch ? frontmatterMatch[0].split('\n').length : 1,
                 frontmatterText,
                 ...(parsedFrontmatter ? { frontmatter: parsedFrontmatter } : {}),
                 title,
@@ -1487,6 +1488,7 @@ export class SearchService {
             const content = await readFile(join(this.vaultPath, document.relativePath), 'utf-8');
             const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
             document.body = frontmatterMatch ? content.slice(frontmatterMatch[0].length) : content;
+            document.bodyStartLine = frontmatterMatch ? frontmatterMatch[0].split('\n').length : 1;
             document.frontmatterText = frontmatterMatch?.[1] || '';
             const parsedFrontmatter = parseSearchFrontmatter(document.frontmatterText);
             if (parsedFrontmatter)
@@ -1715,7 +1717,17 @@ export class SearchService {
                 }
                 matchCount += count;
             }
-            lineNumber = searchableText.slice(0, candidate.firstIndex).split('\n').length;
+            // firstIndex is measured in the case-folded search projection, not raw
+            // Markdown. Count its preserved newlines within the matched field and
+            // add that field's physical origin (including the YAML delimiters).
+            const frontmatterSearchLength = (caseSensitive ? document.frontmatterText || '' : (document.frontmatterText || '').toLowerCase()).length;
+            const bodySearchOffset = searchFrontmatter ? frontmatterSearchLength + 1 : 0;
+            if (searchContent && (!searchFrontmatter || candidate.firstIndex >= bodySearchOffset)) {
+                lineNumber = (document.bodyStartLine || 1) + searchIn.slice(bodySearchOffset, candidate.firstIndex).split('\n').length - 1;
+            }
+            else {
+                lineNumber = 2 + searchIn.slice(0, candidate.firstIndex).split('\n').length - 1;
+            }
         }
         else {
             excerpt = searchableText.slice(0, 50).trim();

@@ -131,10 +131,36 @@ describe("SearchService", () => {
     expect(results).toHaveLength(0);
   });
 
+  test.each(['\n', '\r\n'])("lexical body and Properties matches use raw Markdown lines with %j", async newline => {
+    await writeNote('locators.md', ['---', 'label: PropertyNeedle', '---', '', '# Heading', '', 'BodyNeedle'].join(newline));
+    for (const searchFrontmatter of [false, true]) {
+      const result = await searchService.search({ query: 'BodyNeedle', searchFrontmatter });
+      expect(result[0]?.ln).toBe(7);
+    }
+    const property = await searchService.search({ query: 'PropertyNeedle', searchContent: false, searchFrontmatter: true });
+    expect(property[0]?.ln).toBe(2);
+    const both = await searchService.search({ query: 'PropertyNeedle', searchContent: true, searchFrontmatter: true });
+    expect(both[0]?.ln).toBe(2);
+  });
+
+  test("lexical line locators handle empty Properties and no Properties", async () => {
+    await writeNote('empty-properties.md', '---\n\n---\nEmptyPropertyNeedle');
+    await writeNote('no-properties.md', '# Heading\n\nNoPropertyNeedle');
+    expect((await searchService.search({ query: 'EmptyPropertyNeedle' }))[0]?.ln).toBe(4);
+    expect((await searchService.search({ query: 'NoPropertyNeedle' }))[0]?.ln).toBe(3);
+  });
+
+  test("lexical lines remain correct when Unicode case folding changes string length", async () => {
+    await writeNote('case-length.md', '---\nlabel: İİİİ\n---\nİİİİİİİİ\nFoldNeedle\n');
+    expect((await searchService.search({ query: 'FoldNeedle' }))[0]?.ln).toBe(5);
+  });
+
   test("restores the derived index snapshot after a server restart", async () => {
     await writeNote("restartable.md", "# Restartable\n\nSnapshot candidate.");
+    await writeNote("raw-locator.md", "---\nkey: metadata\n---\n\nRawLineNeedle");
     await writeNote("authority-restart.md", "---\nclose_match: [Restart Authority]\n---\n# Authority restart\n\nNeutral body.");
     expect(await searchService.search({ query: "candidate" })).toHaveLength(1);
+    expect((await searchService.search({ query: "RawLineNeedle" }))[0]?.ln).toBe(5);
     expect((await searchService.search({ query: "Restart Authority", expandAuthority: true }))[0]).toMatchObject({ au: { relation: "close_match", confidence: "high" } });
     await new Promise(resolve => setTimeout(resolve, 1_100));
     const snapshot = await readFile(join(testVaultPath, ".mcpvault", "search-index.snapshot.bin"));
@@ -146,6 +172,7 @@ describe("SearchService", () => {
       const results = await restarted.search({ query: "candidate" });
       expect(results).toHaveLength(1);
       expect(results[0]!.p).toBe("restartable.md");
+      expect((await restarted.search({ query: "RawLineNeedle" }))[0]?.ln).toBe(5);
       expect((await restarted.search({ query: "Restart Authority", expandAuthority: true }))[0]).toMatchObject({
         p: "authority-restart.md", au: { relation: "close_match", confidence: "high", matched: "Restart Authority" },
       });

@@ -14,6 +14,7 @@ import { generateObsidianUri } from './uri.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import { isMissingVaultPath, VaultReadUnavailableError } from './vault-read-errors.js';
 import { readSnapshotBytes } from './snapshot-read.js';
+import { chunkSemanticNote } from './semantic-chunks.js';
 import { isMarkdownModerationHidden } from './moderation-policy.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 
@@ -24,8 +25,6 @@ const MANIFEST_FILE = 'manifest.snapshot.gz';
 const LEGACY_MANIFEST_FILE = 'manifest.json';
 const PENDING_FILE = 'pending.snapshot.gz';
 const WORKER_LOCK_FILE = 'worker.lock';
-const MAX_CHUNK_CHARS = 1200;
-const MAX_CHUNKS_PER_NOTE = 64;
 const MAX_EXCERPT_CHARS = 600;
 const IDLE_DELAY_MS = 15_000;
 const UNAVAILABLE_RETRY_MS = 5 * 60_000;
@@ -66,13 +65,7 @@ interface IndexRow {
   updatedAt: string;
 }
 
-interface SemanticChunk {
-  id: string;
-  text: string;
-  line: number;
-}
-
-type SemanticResultRow = Pick<IndexRow, 'path' | 'hash' | 'title' | 'line' | 'wiki'>;
+type SemanticResultRow = Pick<IndexRow, 'id' | 'path' | 'hash'>;
 
 interface PreparedIndex {
   path: string;
@@ -222,45 +215,17 @@ function isWikiPath(path: string, content: string): boolean {
   return /^---\r?\n[\s\S]*?\r?\nllm_wiki_type\s*:/im.test(content);
 }
 
-function stripFrontmatter(content: string): string {
-  return content.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, '');
-}
-
 function hashContent(content: string): string {
   return createHash('sha256').update(content, 'utf8').digest('hex');
 }
 
 function compactExcerpt(text: string): string {
-  const compact = text.replace(/\s+/g, ' ').trim();
-  return compact.length > MAX_EXCERPT_CHARS ? `${compact.slice(0, MAX_EXCERPT_CHARS - 1)}…` : compact;
-}
-
-function chunkNote(path: string, content: string): SemanticChunk[] {
-  const body = stripFrontmatter(content);
-  const title = path.split('/').pop()?.replace(/\.md$/i, '') || path;
-  const source = `${title}\n${body}`.trim();
-  if (!source) return [];
-
-  const chunks: SemanticChunk[] = [];
-  let offset = 0;
-  for (const paragraph of source.split(/\n\s*\n/)) {
-    const trimmed = paragraph.trim();
-    if (!trimmed) {
-      offset += paragraph.length + 2;
-      continue;
-    }
-    for (let start = 0; start < trimmed.length && chunks.length < MAX_CHUNKS_PER_NOTE; start += MAX_CHUNK_CHARS) {
-      const text = trimmed.slice(start, start + MAX_CHUNK_CHARS);
-      const id = `${path}#${chunks.length}`;
-      chunks.push({
-        id,
-        text,
-        line: source.slice(0, offset + start).split('\n').length,
-      });
-    }
-    offset += paragraph.length + 2;
-  }
-  return chunks;
+  // Raw windows/chunk boundaries use UTF-16 offsets. Drop only pairs split by
+  // the window, and never leave a dangling high surrogate before an ellipsis.
+  const compact = text.replace(/\s+/g, ' ').trim().replace(/^[\uDC00-\uDFFF]|[\uD800-\uDBFF]$/g, '');
+  return compact.length > MAX_EXCERPT_CHARS
+    ? `${compact.slice(0, MAX_EXCERPT_CHARS - 1).replace(/[\uD800-\uDBFF]$/, '')}…`
+    : compact;
 }
 
 async function resultFromRow(row: SemanticResultRow, vaultPath: string, includeRevision: boolean, vaultIo?: VaultIoCoordinator): Promise<SearchResult | undefined> {
@@ -269,21 +234,25 @@ async function resultFromRow(row: SemanticResultRow, vaultPath: string, includeR
     // A vector row is disposable and may lag behind an Obsidian edit. Never
     // return a deleted note or an excerpt ranked from an older revision.
     if (hashContent(raw) !== row.hash || isMarkdownModerationHidden(raw)) return undefined;
-    const content = stripFrontmatter(raw);
-    const lines = content.split(/\r?\n/);
-    const start = Math.max(0, row.line - 2);
+    // Legacy rows carry lines from a synthetic title/body string. The same
+    // text/ordinal contract resolves their actual source anchor without a
+    // schema change, reembedding, or trusting persisted display metadata.
+    const chunk = chunkSemanticNote(row.path, raw).find(value => value.id === row.id);
+    if (!chunk) return undefined;
+    const start = Math.max(chunk.bodyOffset, chunk.offset - 120);
+    const wiki = isWikiPath(row.path, raw);
     return {
       p: row.path,
-      t: row.title,
-      ex: compactExcerpt(lines.slice(start, start + 3).join(' ')),
+      t: row.path.split('/').pop()?.replace(/\.md$/i, '') || row.path,
+      ex: compactExcerpt(raw.slice(start, chunk.offset + MAX_EXCERPT_CHARS - 120)),
       mc: 0,
-      ln: row.line,
+      ln: chunk.line,
       uri: generateObsidianUri(vaultPath, row.path),
-      ...(row.wiki && { wk: true as const }),
+      ...(wiki && { wk: true as const }),
       vs: true,
       why: ['semantic_match'],
       fresh: 'verified' as const,
-      next: row.wiki ? 'read_projection' as const : 'read_section' as const,
+      next: wiki ? 'read_projection' as const : 'read_section' as const,
       ...(includeRevision && { rv: row.hash }),
     };
   } catch (error) {
@@ -291,6 +260,22 @@ async function resultFromRow(row: SemanticResultRow, vaultPath: string, includeR
     if (isMissingVaultPath(error)) return undefined;
     throw new VaultReadUnavailableError();
   }
+}
+
+function fitSemanticExcerpt(result: SearchResult, maxChars: number): SearchResult {
+  if (JSON.stringify([result]).length <= maxChars) return result;
+  const original = result.ex;
+  const fitted = { ...result, ex: '' };
+  let low = 0;
+  let high = original.length;
+  while (low <= high) {
+    const length = Math.floor((low + high) / 2);
+    const prefix = original.slice(0, length).replace(/[\uD800-\uDBFF]$/, '');
+    const candidate = { ...result, ex: prefix ? `${prefix}…` : '' };
+    if (JSON.stringify([candidate]).length <= maxChars) { fitted.ex = candidate.ex; low = length + 1; }
+    else high = length - 1;
+  }
+  return fitted;
 }
 
 /**
@@ -548,7 +533,7 @@ export class SemanticSearchService {
       }
 
       const ordered: SemanticResultRow[] = diversifyRows([...bestByPath.values()], limit)
-        .map(({ row }) => ({ path: row.path, hash: row.hash, title: row.title, line: row.line, wiki: row.wiki }));
+        .map(({ row }) => ({ id: row.id, path: row.path, hash: row.hash }));
       const results = await this.hydrateRows(ordered, params);
       if (generation !== this.queryGeneration) return this.changedQueryOutcome();
       this.queryCache.set(cacheKey, {
@@ -583,7 +568,9 @@ export class SemanticSearchService {
   private async hydrateRows(rows: readonly SemanticResultRow[], params: SemanticSearchParams): Promise<SearchResult[]> {
     const visible = rows.filter(row => row.path === normalizePath(row.path) && this.pathIsVisible(row.path, params));
     const hydrated = await Promise.all(visible.map(row => resultFromRow(row, this.vaultPath, params.includeRevisions === true, this.vaultIo)));
-    return boundSearchResults(hydrated.filter((result): result is SearchResult => result !== undefined), normalizeSearchMaxChars(params.maxChars));
+    const maxChars = normalizeSearchMaxChars(params.maxChars);
+    return boundSearchResults(hydrated.filter((result): result is SearchResult => result !== undefined)
+      .map(result => fitSemanticExcerpt(result, maxChars)), maxChars);
   }
 
   private changedQueryOutcome(): SemanticSearchOutcome {
@@ -1096,7 +1083,7 @@ export class SemanticSearchService {
     if (info.size !== afterRead.size || info.mtimeMs !== afterRead.mtimeMs) throw new VaultReadUnavailableError();
     const contentHash = hashContent(content);
     const scope = scopeForPath(path);
-    const chunks = chunkNote(path, content);
+    const chunks = chunkSemanticNote(path, content);
     const title = path.split('/').pop()?.replace(/\.md$/i, '') || path;
     const wiki = isWikiPath(path, content);
     const rows: IndexRow[] = [];

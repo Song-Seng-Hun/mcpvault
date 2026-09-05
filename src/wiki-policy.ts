@@ -19,7 +19,7 @@ export const WIKI_POLICY_TOPICS = [
 ] as const;
 
 export type WikiPolicyTopicId = typeof WIKI_POLICY_TOPICS[number];
-export const WIKI_POLICY_VERSION = 19;
+export const WIKI_POLICY_VERSION = 20;
 
 type WikiPolicyTopic = {
   purpose: string;
@@ -72,6 +72,7 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
     purpose: 'Find the smallest sufficient, current, explainable context.',
     rules: [
       'Search returns bounded excerpts; select a result and then read a projection, section, block, or exact note rather than expanding every hit.',
+      'A positive search ln is a one-based raw Markdown line, including Properties. If ln is zero or absent, use an outline or projection, not a guessed range. Always re-read the source and revision before editing.',
       'Vault read unavailable is not evidence of deletion or an empty collection. Retry once storage access is restored; no retry loop and no cleanup, recreation, or mass rewrite based on that error.',
       'Use lexical filters as authoritative constraints and semantic matches only as discovery hints.',
       'Visible note identities resolve exact paths, filenames, titles, aliases, preferred terms, stable IDs, and explicit relative paths; ambiguity is repair debt, not permission to guess.',

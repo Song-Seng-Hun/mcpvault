@@ -184,7 +184,7 @@ export interface SearchResult {
   t: string;        // title
   ex: string;       // excerpt
   mc: number;       // matchCount
-  ln?: number;      // lineNumber
+  ln?: number;      // one-based raw Markdown line; 0 means no exact textual anchor
   uri?: string;     // obsidianUri
   /** Present only for LLM Wiki notes so clients can explain the priority. */
   wk?: true;

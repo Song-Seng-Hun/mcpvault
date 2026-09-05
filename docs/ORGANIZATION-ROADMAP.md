@@ -338,7 +338,6 @@ do not prove a current, bounded, actionable response through its public adapter.
   Tests cover these service workflows and the public lexical-fallback adapter
   with controlled vector/model doubles; real model relevance is not established.
 - **Open: semantic storage completeness.** Cross-process manifest refresh,
-  exact body line locators,
   operational counts, scope-table partitioning and orphan-row reconciliation
   still need dedicated audits. Multi-table vector writes are retryable, not
   atomic; do not treat candidate revalidation as a proof of complete disk cleanup
@@ -350,10 +349,13 @@ do not prove a current, bounded, actionable response through its public adapter.
   collection/type consistency. Real gzip boundary, growth, restore and fallback
   tests cover the contract. Limits are per read: streaming parse/restore, aggregate
   memory/CPU budgets, and avoiding repeated oversized snapshot writes remain open.
-- **Confirmed open: semantic raw locators.** Existing chunks calculate lines in
-  title-prefixed, frontmatter-stripped text and assume two-character paragraph
-  separators. Raw Markdown offsets, CRLF/blank runs, long-paragraph excerpts and
-  legacy vector-row compatibility need one coherent fix, not a fixed line shift.
+- Raw locators now map exact legacy chunk IDs/text to physical Markdown lines,
+  including Properties, CRLF and variable separators; legacy vector lines are
+  ignored during verified hydration. Long-line excerpt windows and Unicode/small
+  budgets are covered without changing embeddings or table schemas. Lexical
+  body/Properties field origins now use the same physical line convention,
+  including lazy text restoration. Public MCP search-to-line-read tests cover
+  navigation. This does not make a later read/edit atomic with the search.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

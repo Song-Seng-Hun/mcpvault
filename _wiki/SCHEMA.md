@@ -414,6 +414,19 @@ Vector/manifest/pending paths must be canonical relative Markdown paths, without
 dot traversal or platform stream syntax. Scope is reconstructed from the path;
 User, whisper and unknown private-root paths cannot enter the semantic worker.
 
+Search `ln > 0` is a one-based physical Markdown line including Properties;
+zero or absent means there is no exact textual anchor. Lexical field origins are
+recomputed on source-text load, including after disk-cache restoration. Semantic
+hydration uses the exact path/ordinal chunk ID plus current source hash to map
+the original chunk layout back to raw Markdown. Old stored line/display fields
+are not authority; unknown chunk IDs are omitted. New rows preserve old embedding
+text and IDs but carry corrected lines. No table migration/reembedding is needed
+for unchanged sources. Excerpts use bounded raw context around the anchor, not
+the first lines of a long paragraph; Unicode windows and small-budget trimming
+preserve valid text. If identifiers alone exceed a budget, an item may still not
+fit. Re-read the source/revision before any edit; concurrent later changes remain
+possible, and none of these locators certify exhaustive semantic coverage.
+
 Optional snapshot readers require regular files and enforce stored-byte ceilings
 while reading, not only via a prior stat. Gzip decoding enforces its output limit
 before text/JSON parsing. Lexical binary/decoded and public-discovery decoded
