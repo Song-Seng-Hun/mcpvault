@@ -8,7 +8,7 @@ function stripAtxClosingSequence(text: string): string {
 }
 
 /** Physical body lines outside Properties and matching fenced examples. */
-function* visibleNoteLines(raw: string): Generator<{ text: string; line: number }> {
+function* visibleNoteLines(raw: string): Generator<{ text: string; line: number }, boolean> {
   const lines = raw.split('\n');
   let inFrontmatter = false;
   let frontmatterEnded = false;
@@ -39,6 +39,15 @@ function* visibleNoteLines(raw: string): Generator<{ text: string; line: number 
     if (inFence) continue;
     yield { text: trimmed, line: i + 1 };
   }
+  return inFence;
+}
+
+/** Same matching-fence state used by physical outlines and paragraph reads. */
+export function hasUnclosedNoteFence(raw: string): boolean {
+  const lines = visibleNoteLines(raw);
+  let next = lines.next();
+  while (!next.done) next = lines.next();
+  return next.value;
 }
 
 function* noteHeadings(raw: string): Generator<NoteHeading> {

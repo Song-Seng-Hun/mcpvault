@@ -57,6 +57,15 @@ test("stringify without frontmatter", () => {
   expect(result).toBe(content);
 });
 
+test.each(['---\n# A thematic break\nBody.\n', '---\ninjected_property: from-body\n---\nKeep the example.\n'])('body delimiters remain body text during serialization: %s', content => {
+  for (const raw of [handler.stringify({ title: 'Actual Properties' }, content),
+    handler.preserveStringify('', { title: 'Actual Properties' }, content)]) {
+    const parsed = handler.parse(raw);
+    expect(parsed.frontmatter).toEqual({ title: 'Actual Properties' });
+    expect(parsed.content).toBe(content);
+  }
+});
+
 test("validate valid frontmatter", () => {
   const frontmatter = {
     title: "Valid Title",

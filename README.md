@@ -431,7 +431,17 @@ literature and directly distilled atomic/knowledge notes to distinguish a
 captured source from an agent's interpretation and a reusable knowledge
 synthesis. Error Book-only `issue_resolution_status`,
 `issue_retrospective_status`, `issue_retrospective`, and
-`issue_follow_up_paths` must remain on `llm_wiki_type: issue` records. The typed
+`issue_follow_up_paths` must remain on `llm_wiki_type: issue` records.
+Error Book resolver edits only exact unfenced H2 `Resolution` and
+`Retrospective` sections, stopping at the next peer/parent heading. Code
+examples, similarly named headings, later evidence and appendices stay intact.
+Omitting retrospective text preserves its authored Markdown; changing only
+its status does not reconstruct it from an older compact Property. Duplicate
+managed headings and unclosed fences require a deliberate repair before the
+single revision-checked write. Git remains the version history.
+When body text and nonempty explicit Properties are serialized together, a leading
+`---` in the body remains body text; it is not parsed again as extra Properties.
+The typed
 `answers_questions` relation makes explicit
 question-to-answer navigation available to backlinks and graph health; it is
 not evidence by itself. Use `preview_wiki_split` to inspect a heading extract

@@ -843,7 +843,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'resolve_wiki_issue',
-            description: 'Resolve an Error Book entry with attribution, reason, and optimistic concurrency protection.',
+            description: 'Update an Error Book entry at expectedRevision. Only exact unfenced H2 Resolution/Retrospective sections are managed; other sections and omitted retrospective prose are preserved. A status-only retrospective update preserves its authored text. Duplicate managed headings or unclosed code fences require explicit repair before any write. Git retains earlier versions; this does not create a second history log.',
             inputSchema: { type: 'object', properties: {
                     path: { type: 'string' }, actor: { type: 'string' }, resolution: { type: 'string' }, resolutionStatus: organizationPropertySchema('issue_resolution_status'), retrospectiveStatus: organizationPropertySchema('issue_retrospective_status'), retrospective: { type: 'string', maxLength: 1200 }, followUpPaths: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
                 }, required: ['path', 'resolution', 'expectedRevision'] },

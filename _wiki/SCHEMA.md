@@ -325,7 +325,18 @@ directly distilled atomic/knowledge notes may declare
 the source-to-knowledge transition visible. These values do not belong on
 project/task notes. Error Book workflow fields (`issue_resolution_status`,
 `issue_retrospective_status`, `issue_retrospective`, and
-`issue_follow_up_paths`) belong only on `llm_wiki_type: issue` records. Completed
+`issue_follow_up_paths`) belong only on `llm_wiki_type: issue` records.
+Issue resolution updates only exact unfenced level-2 `Resolution` and
+`Retrospective` sections, not title substrings, code examples or everything
+after the first match. Sibling/parent sections survive. Omitted retrospective
+text preserves existing prose; an explicit retrospective status changes only
+its leading managed status line. Duplicate managed headings or an unclosed
+source/replacement fence cause an error before the revision-checked write.
+Each replacement must be independently balanced, so separate inputs cannot
+hide preserved evidence between a fence opener and closer. Earlier versions
+remain in Git, not a parallel history store. Serialized body text is not
+reparsed as another YAML document when explicit Properties are supplied.
+Completed
 reviews may carry bounded `review_count`, `review_reopen_count`,
 `last_reviewed_revision`, and `last_review_trigger` metadata. These fields are
 derived workflow memory and do not replace Git history. Before splitting a

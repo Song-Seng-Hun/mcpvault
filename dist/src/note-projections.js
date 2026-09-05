@@ -51,6 +51,15 @@ function* visibleNoteLines(raw) {
             continue;
         yield { text: trimmed, line: i + 1 };
     }
+    return inFence;
+}
+/** Same matching-fence state used by physical outlines and paragraph reads. */
+export function hasUnclosedNoteFence(raw) {
+    const lines = visibleNoteLines(raw);
+    let next = lines.next();
+    while (!next.done)
+        next = lines.next();
+    return next.value;
 }
 function* noteHeadings(raw) {
     const headingRegex = /^ {0,3}(#{1,6})(?:[ \t]+(.*))?$/;

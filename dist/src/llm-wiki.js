@@ -17,7 +17,7 @@ import { classifyDependencyResidual } from './dependency-graph.js';
 import { boundedTopK } from './search-limits.js';
 import { CollectionHealthProjection } from './collection-health.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
-import { projectNoteOutline, projectNoteParagraphs, projectNoteHeadingPresence, projectNoteBlockLines, selectNoteHeading } from './note-projections.js';
+import { projectNoteOutline, projectNoteParagraphs, projectNoteHeadingPresence, projectNoteBlockLines, selectNoteHeading, hasUnclosedNoteFence } from './note-projections.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
 import { buildNoteReferenceIndex, normalizeNoteReferenceTerm, noteReferenceDocument, resolveNoteReference } from './note-reference.js';
@@ -15694,13 +15694,36 @@ export class LlmWikiService {
         const issue = await this.fileSystem.readNote(params.path);
         if (issue.frontmatter.llm_wiki_type !== 'issue')
             throw new Error('path is not an LLM Wiki issue');
+        const inspectSections = (body) => {
+            // This is already the parsed body; the prefix prevents an opening body
+            // thematic break from being interpreted as a second Properties block.
+            if (hasUnclosedNoteFence('\n' + body))
+                throw new Error('An unclosed code fence requires repair before resolving the issue.');
+            const headings = projectNoteOutline('\n' + body);
+            const lines = body.split('\n');
+            const section = (title) => {
+                const matches = headings.filter(heading => heading.level === 2 && heading.text.toLowerCase() === title.toLowerCase());
+                if (matches.length > 1)
+                    throw new Error(`Ambiguous ${title} section; use the outline and repair duplicate headings before resolving the issue.`);
+                const heading = matches[0];
+                if (!heading)
+                    return undefined;
+                const next = headings.find(item => item.line > heading.line && item.level <= 2);
+                return { start: heading.line - 2, end: next ? next.line - 2 : lines.length };
+            };
+            return { lines, resolution: section('Resolution'), retrospective: section('Retrospective') };
+        };
+        const sections = inspectSections(issue.content);
         const resolutionStatus = String(params.resolutionStatus || 'resolved').trim().toLowerCase();
         const retrospectiveStatus = String(params.retrospectiveStatus || (params.retrospective ? 'captured' : issue.frontmatter.issue_retrospective_status || 'not_started')).trim().toLowerCase();
         if (!ISSUE_RESOLUTION_STATUSES.includes(resolutionStatus))
             throw new Error(`resolutionStatus must be one of ${ISSUE_RESOLUTION_STATUSES.join(', ')}`);
         if (!ISSUE_RETROSPECTIVE_STATUSES.includes(retrospectiveStatus))
             throw new Error(`retrospectiveStatus must be one of ${ISSUE_RETROSPECTIVE_STATUSES.join(', ')}`);
-        if (retrospectiveStatus !== 'not_started' && !params.retrospective?.trim() && !issue.frontmatter.issue_retrospective)
+        const authoredRetrospective = sections.retrospective
+            ? sections.lines.slice(sections.retrospective.start + 1, sections.retrospective.end)
+                .filter(line => !/^\s*(?:- status:.*|Not recorded yet\.)\s*$/.test(line)).join('\n').trim() : '';
+        if (retrospectiveStatus !== 'not_started' && !params.retrospective?.trim() && !issue.frontmatter.issue_retrospective && !authoredRetrospective)
             throw new Error('retrospective text is required when retrospectiveStatus is captured or synthesized');
         const followUpPaths = (params.followUpPaths || []).filter(path => typeof path === 'string' && path.trim()).slice(0, 12).map(path => normalizePath(path));
         for (const path of followUpPaths) {
@@ -15708,11 +15731,42 @@ export class LlmWikiService {
                 throw new Error(`A public issue cannot expose a more-private follow-up: ${this.access.toPublicPath(path)}`);
         }
         const timestamp = now();
-        const marker = '## Resolution';
-        const replacement = `${marker}\n\n- status: ${resolutionStatus}\n- ${timestamp} — ${resolutionStatus === 'resolved' ? 'Resolved' : 'Updated'} by ${params.actor}: ${params.resolution.trim()}\n\n## Retrospective\n\n- status: ${retrospectiveStatus}\n${params.retrospective?.trim() || issue.frontmatter.issue_retrospective || 'Not recorded yet.'}\n`;
-        const content = issue.content.includes(marker)
-            ? issue.content.replace(/## Resolution[\s\S]*$/, replacement)
-            : `${issue.content.trimEnd()}\n\n${replacement}`;
+        const replacements = [];
+        const additions = [];
+        const replace = (range, text) => {
+            if (hasUnclosedNoteFence('\n' + text))
+                throw new Error('An unclosed code fence in a replacement requires repair before resolving the issue.');
+            if (range)
+                replacements.push({ ...range, text });
+            else
+                additions.push(text);
+        };
+        replace(sections.resolution, `## Resolution\n\n- status: ${resolutionStatus}\n- ${timestamp} — ${resolutionStatus === 'resolved' ? 'Resolved' : 'Updated'} by ${params.actor}: ${params.resolution.trim()}\n`);
+        if (!sections.retrospective || params.retrospective?.trim()) {
+            replace(sections.retrospective, `## Retrospective\n\n- status: ${retrospectiveStatus}\n${params.retrospective?.trim() || issue.frontmatter.issue_retrospective || 'Not recorded yet.'}\n`);
+        }
+        else if (params.retrospectiveStatus !== undefined) {
+            // A status-only change must not reconstruct authored prose from a stale
+            // compact Property. Only the leading managed status line is refreshed.
+            const range = sections.retrospective;
+            const lines = sections.lines.slice(range.start, range.end);
+            const first = lines.findIndex((line, index) => index > 0 && Boolean(line.trim()));
+            if (first >= 0 && /^- status:\s*\S+\s*$/.test(lines[first]))
+                lines[first] = `- status: ${retrospectiveStatus}`;
+            else
+                lines.splice(1, 0, '', `- status: ${retrospectiveStatus}`);
+            replace(range, lines.join('\n'));
+        }
+        let lines = sections.lines;
+        for (const replacement of replacements.sort((left, right) => right.start - left.start)) {
+            lines = lines.slice(0, replacement.start).concat(replacement.text.split('\n'), lines.slice(replacement.end));
+        }
+        let content = lines.join('\n');
+        for (const addition of additions)
+            content += `${content.endsWith('\n') ? '' : '\n'}\n${addition}`;
+        // New caller text must not introduce ambiguous managed headings or leave
+        // later sections inside an unclosed example. Reject before the single write.
+        inspectSections(content);
         await this.fileSystem.writeNote({
             path: params.path,
             content,

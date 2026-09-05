@@ -72,7 +72,9 @@ export class FrontmatterHandler {
         return content;
       }
 
-      return matter.stringify(content, frontmatterData, withYamlEngine());
+      // content is already the body, not a second raw note to parse. Passing
+      // a string here would import body examples into Properties or drop them.
+      return matter.stringify({ content }, frontmatterData, withYamlEngine());
     } catch (error) {
       throw new Error(`Failed to stringify frontmatter: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -157,7 +159,7 @@ export class FrontmatterHandler {
         if (!updates || Object.keys(updates).length === 0) {
           return content;
         }
-        return matter.stringify(content, updates, withYamlEngine());
+        return matter.stringify({ content }, updates, withYamlEngine());
       }
 
       const doc = parseDocument(rawMatter.trimStart());
