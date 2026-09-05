@@ -346,6 +346,11 @@ lifecycle-based follow-up, must describe that same serialized version. Related
 note guards remain assertions under their existing ordered locks; no unrelated
 note is rewritten. Downstream impact queries are advisory, not part of a global
 atomic snapshot. Read the target again before accepting any follow-up action.
+Ordinary note writes and Properties updates return JSON `{ success, path,
+revision, message }` receipts (writes also include `mode`). Paths use public
+scope URIs, not private physical storage paths. The receipt describes the
+successful write and does not echo body or Properties. This replaces plain
+success text; the REST `message` field remains available.
 Completed
 reviews may carry bounded `review_count`, `review_reopen_count`,
 `last_reviewed_revision`, and `last_review_trigger` metadata. These fields are

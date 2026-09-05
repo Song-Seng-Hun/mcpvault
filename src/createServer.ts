@@ -478,7 +478,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "write_note",
-          description: "Write a note to the Obsidian vault",
+          description: "Write a note to the Obsidian vault. Returns a compact JSON receipt with success, path, mode and this write's revision, without echoing the body. Re-read the same target; inspect any intervening edit before using its new revision.",
           inputSchema: {
             type: "object",
             properties: {
@@ -682,7 +682,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "update_frontmatter",
-          description: "Update frontmatter of a note without changing content",
+          description: "Update frontmatter of a note without changing content. Returns a compact JSON receipt with success, path and this write's revision, without echoing Properties or the body. Re-read the same target before another edit.",
           inputSchema: {
             type: "object",
             properties: {
@@ -2258,16 +2258,15 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         case "write_note": {
           await requireExpectedRevisionForExisting(fileSystem, trimmedArgs.path, trimmedArgs.expectedRevision, 'write_note');
           const fm = parseFrontmatter(trimmedArgs.frontmatter);
-          await fileSystem.writeNote({
+          const receipt = await fileSystem.writeNoteWithReceipt({
             path: trimmedArgs.path,
             content: trimmedArgs.content,
             ...(fm !== undefined && { frontmatter: fm }),
             mode: trimmedArgs.mode || 'overwrite',
             expectedRevision: trimmedArgs.expectedRevision,
           });
-          return {
-            content: [{ type: "text", text: `Successfully wrote note: ${trimmedArgs.path} (mode: ${trimmedArgs.mode || 'overwrite'})` }]
-          };
+          return jsonResult({ success: true, path: scopeAccess.toPublicPath(trimmedArgs.path), mode: trimmedArgs.mode || 'overwrite',
+            revision: receipt.revision, message: 'Successfully wrote note' }, trimmedArgs.prettyPrint);
         }
 
         case "patch_note": {
@@ -2570,15 +2569,14 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           if (!fm) {
             throw new Error('frontmatter is required');
           }
-          await fileSystem.updateFrontmatter({
+          const receipt = await fileSystem.updateFrontmatterWithReceipt({
             path: trimmedArgs.path,
             frontmatter: fm,
             merge: trimmedArgs.merge,
             expectedRevision: trimmedArgs.expectedRevision,
           });
-          return {
-            content: [{ type: "text", text: `Successfully updated frontmatter for: ${trimmedArgs.path}` }]
-          };
+          return jsonResult({ success: true, path: scopeAccess.toPublicPath(trimmedArgs.path), revision: receipt.revision,
+            message: 'Successfully updated frontmatter' }, trimmedArgs.prettyPrint);
         }
 
         case "get_notes_info": {

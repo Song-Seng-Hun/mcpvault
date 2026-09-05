@@ -2,6 +2,7 @@ import { afterEach, expect, test } from 'vitest';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createServer } from './createServer.js';
 import { startRestApi, type RestApiHandle } from './rest-api.js';
@@ -83,8 +84,13 @@ test('REST adapter uses the same dynamic endpoint registry and dispatcher', asyn
     body: JSON.stringify({ path: 'nested/rest.md', content: '# REST', accessToken }),
   });
   expect(write.status).toBe(200);
-  expect((await write.json()).message).toContain('Successfully wrote note');
-  expect(await readFile(join(vault, 'nested', 'rest.md'), 'utf8')).toContain('# REST');
+  const writeReceipt = await write.json();
+  expect(writeReceipt.message).toContain('Successfully wrote note');
+  const writtenBody = await readFile(join(vault, 'nested', 'rest.md'), 'utf8');
+  expect(writtenBody).toContain('# REST');
+  expect(writeReceipt).toMatchObject({ success: true, path: 'nested/rest.md', mode: 'overwrite',
+    revision: createHash('sha256').update(writtenBody, 'utf8').digest('hex') });
+  expect(writeReceipt).not.toHaveProperty('content');
 
   const routeWrite = await fetch(`http://127.0.0.1:${api.port}/api/notes/nested/route.md`, {
     method: 'POST',
@@ -92,7 +98,10 @@ test('REST adapter uses the same dynamic endpoint registry and dispatcher', asyn
     body: JSON.stringify({ content: '# Route', accessToken }),
   });
   expect(routeWrite.status).toBe(200);
-  expect(await readFile(join(vault, 'nested', 'route.md'), 'utf8')).toContain('# Route');
+  const routeReceipt = await routeWrite.json();
+  const routeBody = await readFile(join(vault, 'nested', 'route.md'), 'utf8');
+  expect(routeBody).toContain('# Route');
+  expect(routeReceipt.revision).toBe(createHash('sha256').update(routeBody, 'utf8').digest('hex'));
 
   const routeRead = await fetch(`http://127.0.0.1:${api.port}/api/notes/nested/route.md?maxChars=4000`, {
     headers: { authorization: `Bearer ${accessToken}` },

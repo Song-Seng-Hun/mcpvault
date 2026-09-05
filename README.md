@@ -448,6 +448,12 @@ review and claim review use the same own-write receipt semantics. Triage
 Properties/cleanup advice and note-review author/lifecycle fields come from
 that write, not a later editor's state. Re-read before acting on returned advice.
 Downstream impact lists remain bounded advisory queries, not a Vault-wide snapshot.
+Ordinary `notes.write` and the `update_frontmatter` capability return compact
+JSON receipts too: `success`, public `path`, `revision`, and a compatibility
+`message` (`notes.write` also includes `mode`). These replace plain success
+strings; REST retains its `message` field. Neither body nor Properties are
+echoed. Compare the returned revision with a bounded re-read of the same target
+before deciding how to continue; never adopt an intervening revision blindly.
 When body text and nonempty explicit Properties are serialized together, a leading
 `---` in the body remains body text; it is not parsed again as extra Properties.
 The typed
@@ -2161,7 +2167,11 @@ Write a note to the vault with optional frontmatter and write mode.
 
 ```json
 {
-  "message": "Successfully wrote note: meeting-notes.md (mode: overwrite)"
+  "success": true,
+  "path": "daily-log.md",
+  "mode": "append",
+  "revision": "<SHA-256 of this write>",
+  "message": "Successfully wrote note"
 }
 ```
 
@@ -3422,7 +3432,10 @@ Update frontmatter of a note without changing content.
 
 ```json
 {
-  "message": "Successfully updated frontmatter for: research-note.md"
+  "success": true,
+  "path": "research-note.md",
+  "revision": "<SHA-256 of this write>",
+  "message": "Successfully updated frontmatter"
 }
 ```
 
