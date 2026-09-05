@@ -599,6 +599,11 @@ Use that revision for a guarded line read before editing. A compact or pretty
 response retains the highest-ranked source locator/read action, or gives a
 same-query budget retry instead of silently dropping it. Selected sources are
 revalidated; a concurrent edit requires retry rather than using stale lines.
+Candidate selection retains only the best `limit` summaries (at most 30),
+ordered by score then public path, while still evaluating every eligible note
+and counting all matches. Heading scoring counts every visible heading but
+retains only the first eight locators. This bounds candidate/heading retention,
+not total Vault memory: metadata pages and one current full note are still read.
 `wiki.split_preview` uses the complete heading identifier, never a shortened
 ellipsis label. Preview the intended `targetPath` before extraction. Both the
 return link and copied content must remain scope-compatible; access to model

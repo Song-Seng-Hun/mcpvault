@@ -73,6 +73,20 @@ function* noteHeadings(raw) {
 export function projectNoteOutline(raw) {
     return [...noteHeadings(raw)];
 }
+/** Count every visible heading, retaining only the requested leading locators. */
+export function projectNoteHeadingSummary(raw, limit = 8) {
+    if (!Number.isInteger(limit) || limit < 0)
+        throw new Error('heading limit must be a non-negative integer');
+    const headings = [];
+    let headingCount = 0, headingChars = 0;
+    for (const heading of noteHeadings(raw)) {
+        headingCount++;
+        headingChars += heading.text.length;
+        if (headings.length < limit)
+            headings.push(heading);
+    }
+    return { headings, headingCount, headingChars };
+}
 /** Prose paragraphs with physical locators; never join across headings or fences. */
 export function* projectNoteParagraphs(raw) {
     let pending = [];

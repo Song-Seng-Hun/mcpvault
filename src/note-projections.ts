@@ -63,6 +63,19 @@ export function projectNoteOutline(raw: string): NoteHeading[] {
   return [...noteHeadings(raw)];
 }
 
+/** Count every visible heading, retaining only the requested leading locators. */
+export function projectNoteHeadingSummary(raw: string, limit = 8): { headings: NoteHeading[]; headingCount: number; headingChars: number } {
+  if (!Number.isInteger(limit) || limit < 0) throw new Error('heading limit must be a non-negative integer');
+  const headings: NoteHeading[] = [];
+  let headingCount = 0, headingChars = 0;
+  for (const heading of noteHeadings(raw)) {
+    headingCount++;
+    headingChars += heading.text.length;
+    if (headings.length < limit) headings.push(heading);
+  }
+  return { headings, headingCount, headingChars };
+}
+
 /** Prose paragraphs with physical locators; never join across headings or fences. */
 export function* projectNoteParagraphs(raw: string): Generator<{ text: string; startLine: number; endLine: number }> {
   let pending: string[] = [];

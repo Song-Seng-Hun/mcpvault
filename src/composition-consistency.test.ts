@@ -6,7 +6,7 @@ import { FileSystemService } from './filesystem.js';
 import { ScopeAccessPolicy } from './scope-access.js';
 import { ReferenceService } from './references.js';
 import { LlmWikiService } from './llm-wiki.js';
-import { projectNoteParagraphs } from './note-projections.js';
+import { projectNoteParagraphs, projectNoteOutline, projectNoteHeadingSummary } from './note-projections.js';
 
 const vaults: string[] = [];
 afterEach(async () => { vi.restoreAllMocks(); for (const vault of vaults.splice(0)) await rm(vault, { recursive: true, force: true }); });
@@ -20,6 +20,70 @@ async function fixture() {
   return { fs, wiki, write };
 }
 const claims = 'One claim refers to [[A]]. Another refers to [[B]]. The third is a conclusion.';
+
+test('heading summary preserves exact totals and physical locators while retaining only eight headings', () => {
+  const raw = '---\ntitle: Test\n---\n```md\n# Example\n```\n' + Array.from({ length: 2000 }, (_, index) => `## Heading ${index} ###\r\nBody.`).join('\n');
+  const all = projectNoteOutline(raw);
+  expect(projectNoteHeadingSummary(raw, 8)).toEqual({
+    headings: all.slice(0, 8), headingCount: all.length, headingChars: all.reduce((sum, heading) => sum + heading.text.length, 0),
+  });
+  expect(projectNoteHeadingSummary(raw, 0)).toEqual({ headings: [], headingCount: all.length,
+    headingChars: all.reduce((sum, heading) => sum + heading.text.length, 0) });
+});
+
+test.each([-1, 1.5, NaN, Infinity])('heading summary rejects invalid retained count %s', limit => {
+  expect(() => projectNoteHeadingSummary('# Title', limit)).toThrow(/non-negative integer/);
+});
+
+test('composition counts headings beyond the retained prefix for long-body signals', async () => {
+  const { wiki, write } = await fixture();
+  const body = Array.from({ length: 50 }, (_, index) => `## ${index} ${'x'.repeat(100)}`).join('\n');
+  await write('Headings.md', body);
+  const result = await wiki.compositionCandidates(undefined, 1.9, 16000);
+  expect(result.items).toHaveLength(1);
+  expect(result.items[0]).toMatchObject({ headingCount: 50, signals: ['many_sections', 'long_body'] });
+  expect((result.items[0]!.headingCandidates as unknown[]).length).toBe(8);
+  expect(result.items[0]!.proseChars).toBe(projectNoteOutline(body).reduce((sum, heading) => sum + heading.text.length, 0));
+});
+
+test('composition ranks every candidate but never sorts a candidate pool larger than the requested limit', async () => {
+  const { wiki, write } = await fixture();
+  for (let index = 0; index < 45; index++) await write(`Note-${String(index).padStart(2, '0')}.md`, '# One\n## Two\n## Three');
+  await write('Z-best.md', '# One\n## Two\n## Three\n' + 'Long prose. '.repeat(400));
+  const originalSort = Array.prototype.sort;
+  let largestCandidateSort = 0;
+  vi.spyOn(Array.prototype, 'sort').mockImplementation(function(this: any[], compare) {
+    if (this.length && this.every(item => item && typeof item === 'object' && 'headingCandidates' in item && 'score' in item)) {
+      largestCandidateSort = Math.max(largestCandidateSort, this.length);
+    }
+    return originalSort.call(this, compare);
+  });
+  const result = await wiki.compositionCandidates(undefined, 3, 16000);
+  expect(result.total).toBe(46);
+  expect(result.items.map(item => item.path)).toEqual(['Z-best.md', 'Note-00.md', 'Note-01.md']);
+  expect(result.truncated).toBe(true);
+  expect(largestCandidateSort).toBeLessThanOrEqual(3);
+});
+
+test('composition preserves prior stable scan order when distinct Unicode paths collate equally', async () => {
+  const { fs, wiki, write } = await fixture();
+  const tiedPaths = ['é.md', 'e\u0301.md'];
+  expect(tiedPaths[0]!.localeCompare(tiedPaths[1]!)).toBe(0);
+  for (const path of tiedPaths) await write(path, '# One\n## Two\n## Three');
+  await write('z.md', '# One\n## Two\n## Three\n' + 'Long prose. '.repeat(400));
+  const query = fs.queryNotes.bind(fs);
+  const scanOrder: string[] = [];
+  vi.spyOn(fs, 'queryNotes').mockImplementation(async (...args) => {
+    const page = await query(...args);
+    scanOrder.push(...page.notes.map(note => note.path));
+    return page;
+  });
+  const result = await wiki.compositionCandidates(undefined, 2, 16000);
+  const firstTie = scanOrder.find(path => tiedPaths.includes(path));
+  expect(scanOrder.filter(path => tiedPaths.includes(path))).toHaveLength(2);
+  expect(result.items.map(item => item.path)).toEqual(['z.md', firstTie]);
+  expect(result.items.every(item => !('scanOrder' in item))).toBe(true);
+});
 
 test.each(['```', '~~~~'])('fenced %s examples do not create composition signals', async fence => {
   const { wiki, write } = await fixture();

@@ -3,6 +3,12 @@ import type { NoteHeading, ReadNoteLinesParams } from './types.js';
 export declare function hasUnclosedNoteFence(raw: string): boolean;
 /** Pure projection of one already-authorized raw Markdown snapshot. */
 export declare function projectNoteOutline(raw: string): NoteHeading[];
+/** Count every visible heading, retaining only the requested leading locators. */
+export declare function projectNoteHeadingSummary(raw: string, limit?: number): {
+    headings: NoteHeading[];
+    headingCount: number;
+    headingChars: number;
+};
 /** Prose paragraphs with physical locators; never join across headings or fences. */
 export declare function projectNoteParagraphs(raw: string): Generator<{
     text: string;

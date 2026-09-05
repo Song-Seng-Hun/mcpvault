@@ -785,6 +785,11 @@ their headings, blank-separated sample text, nor their length creates a split
 signal. `long_body` uses `proseChars`, the sum of visible heading and paragraph
 text, while `contentChars` remains the full body length. Paragraphs cannot join
 across a heading or excluded fence. Selected-source drift produces a retry;
+selection keeps only the best `limit` summaries, using unchanged score then
+public-path order, and still counts all matching notes. Count every visible
+heading and its prose characters even when only eight leading locators are
+retained; truncating the displayed prefix must not change scoring or totals.
+Current-note reads and final source-revision checks remain required;
 this is not an atomic Vault census. Complete serialized JSON, including pretty
 formatting, obeys maxChars and preserves a source locator or explicit same-query
 retry if the highest-ranked identity cannot fit. No lower-ranked cheap row

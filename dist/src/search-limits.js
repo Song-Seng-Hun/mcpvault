@@ -61,6 +61,13 @@ export function boundItems(items, maxChars) {
  * The returned items are sorted with the same comparator.
  */
 export function boundedTopK(items, limit, compare) {
+    const collector = createBoundedTopK(limit, compare);
+    for (const item of items)
+        collector.add(item);
+    return collector.values();
+}
+/** Incremental top-K selection for asynchronous scans; snapshots never expose the heap. */
+export function createBoundedTopK(limit, compare) {
     if (!Number.isInteger(limit) || limit < 1)
         throw new Error('limit must be a positive integer');
     const heap = [];
@@ -96,7 +103,7 @@ export function boundedTopK(items, limit, compare) {
             parent = worst;
         }
     };
-    for (const item of items) {
+    const add = (item) => {
         if (heap.length < limit) {
             heap.push(item);
             moveUp(heap.length - 1);
@@ -105,6 +112,6 @@ export function boundedTopK(items, limit, compare) {
             heap[0] = item;
             moveDown(0);
         }
-    }
-    return heap.sort(compare);
+    };
+    return { add, values: () => heap.slice().sort(compare), get size() { return heap.length; } };
 }

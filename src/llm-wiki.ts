@@ -19,10 +19,10 @@ import { packNextActionPacket } from './next-action-packet.js';
 import { packReviewDashboard } from './review-dashboard-packet.js';
 import { packOrganizationQueue } from './organization-queue-packet.js';
 import { classifyDependencyResidual } from './dependency-graph.js';
-import { boundedTopK } from './search-limits.js';
+import { boundedTopK, createBoundedTopK } from './search-limits.js';
 import { CollectionHealthProjection } from './collection-health.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
-import { projectNoteOutline, projectNoteParagraphs, projectNoteHeadingPresence, projectNoteBlockLines, selectNoteHeading, hasUnclosedNoteFence } from './note-projections.js';
+import { projectNoteOutline, projectNoteParagraphs, projectNoteHeadingSummary, projectNoteHeadingPresence, projectNoteBlockLines, selectNoteHeading, hasUnclosedNoteFence } from './note-projections.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
 import { buildNoteReferenceIndex, normalizeNoteReferenceTerm, noteReferenceDocument, resolveNoteReference, type NoteReferenceIndex } from './note-reference.js';
@@ -7078,10 +7078,11 @@ export class LlmWikiService {
    * note should be split, expanded, or left as a composition/MOC.
    */
   async compositionCandidates(principal?: ScopePrincipal, limit = 10, maxChars = 6000, options: { prettyPrint?: boolean } = {}) {
-    const boundedLimit = Math.min(Math.max(Number(limit) || 10, 1), 30);
+    const boundedLimit = Math.floor(Math.min(Math.max(Number(limit) || 10, 1), 30));
     const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 16000);
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
-    const candidates: Array<Record<string, unknown> & { score: number }> = [];
+    const candidates = createBoundedTopK<Record<string, unknown> & { score: number; scanOrder: number }>(boundedLimit,
+      (left, right) => right.score - left.score || String(left.path).localeCompare(String(right.path)) || left.scanOrder - right.scanOrder);
     let total = 0;
     for await (const metadata of iterateNotes(this.fileSystem, {}, canAccess)) {
       const kind = String(metadata.frontmatter.note_kind || '').toLowerCase();
@@ -7100,8 +7101,10 @@ export class LlmWikiService {
         throw new Error('A composition source changed or became unavailable; re-read the candidate list and retry.');
       }
       if (!note.content.trim()) continue;
-      const headings = projectNoteOutline(note.originalContent).map(({ text, level, line }) => ({ heading: text, level, line }));
-      let paragraphCount = 0, proseChars = headings.reduce((sum, heading) => sum + heading.heading.length, 0);
+      const headingSummary = projectNoteHeadingSummary(note.originalContent, 8);
+      const headings = headingSummary.headings.map(({ text, level, line }) => ({ heading: text, level, line }));
+      const headingCount = headingSummary.headingCount;
+      let paragraphCount = 0, proseChars = headingSummary.headingChars;
       const paragraphCandidates: Array<{ startLine: number; endLine: number; chars: number; sentenceCount: number; linkCount: number }> = [];
       for (const item of projectNoteParagraphs(note.originalContent)) {
         paragraphCount += 1;
@@ -7114,15 +7117,16 @@ export class LlmWikiService {
         }
       }
       const signals = [
-        ...(headings.length >= 3 ? ['many_sections'] : []),
+        ...(headingCount >= 3 ? ['many_sections'] : []),
         ...(proseChars >= 4000 ? ['long_body'] : []),
         ...(paragraphCount >= 12 ? ['many_paragraphs'] : []),
         ...(paragraphCandidates.length > 0 ? ['multi_claim_paragraphs'] : []),
       ];
       if (signals.length === 0) continue;
       total += 1;
-      const score = (headings.length >= 3 ? 40 : 0) + (proseChars >= 4000 ? 30 : 0) + (paragraphCount >= 12 ? 20 : 0) + (paragraphCandidates.length > 0 ? 15 : 0) + (note.frontmatter.summary || note.frontmatter.key_points ? 0 : 10);
-      candidates.push({
+      const score = (headingCount >= 3 ? 40 : 0) + (proseChars >= 4000 ? 30 : 0) + (paragraphCount >= 12 ? 20 : 0) + (paragraphCandidates.length > 0 ? 15 : 0) + (note.frontmatter.summary || note.frontmatter.key_points ? 0 : 10);
+      candidates.add({
+        scanOrder: total,
         path: this.access.toPublicPath(metadata.path),
         revision: note.revision,
         lineBasis: 'physical',
@@ -7132,8 +7136,8 @@ export class LlmWikiService {
         contentChars: note.content.length,
         proseChars,
         paragraphCount,
-        headingCount: headings.length,
-        headingCandidates: headings.slice(0, 8),
+        headingCount,
+        headingCandidates: headings,
         ...(paragraphCandidates.length > 0 && { paragraphCandidates: paragraphCandidates.map(item => ({ startLine: item.startLine, endLine: item.endLine, chars: item.chars, sentenceCount: item.sentenceCount, linkCount: item.linkCount, suggestion: 'Review whether this block contains multiple reusable claims; split only when each claim can stand alone with its own links/evidence.' })) }),
         signals,
         score,
@@ -7141,8 +7145,7 @@ export class LlmWikiService {
         suggestedAction: 'Inspect one heading with preview_wiki_split; split only when it improves reuse and preserves a link/provenance trail.',
       });
     }
-    candidates.sort((left, right) => right.score - left.score || String(left.path).localeCompare(String(right.path)));
-    const items = candidates.slice(0, boundedLimit).map(({ score: _score, ...item }) => item);
+    const items = candidates.values().map(({ score: _score, scanOrder: _scanOrder, ...item }) => item);
     try {
       await this.assertCurrentContextSources(principal, items.map(item => ({ path: String(item.path), revision: String(item.revision) })));
     } catch {

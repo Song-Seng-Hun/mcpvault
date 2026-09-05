@@ -17,4 +17,10 @@ export declare function boundItems<T>(items: T[], maxChars: number): {
  * The returned items are sorted with the same comparator.
  */
 export declare function boundedTopK<T>(items: Iterable<T>, limit: number, compare: (a: T, b: T) => number): T[];
+/** Incremental top-K selection for asynchronous scans; snapshots never expose the heap. */
+export declare function createBoundedTopK<T>(limit: number, compare: (a: T, b: T) => number): {
+    add: (item: T) => void;
+    values: () => T[];
+    readonly size: number;
+};
 //# sourceMappingURL=search-limits.d.ts.map
