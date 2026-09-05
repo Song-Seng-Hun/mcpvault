@@ -546,6 +546,16 @@ do not prove a current, bounded, actionable response through its public adapter.
   counts still scan metadata and recommendation rank is window-local. Establish
   representative large-vault measurements before choosing a global-ranking or
   inventory-count optimization; do not relabel the current projection as either.
+- Metadata full/dirty refreshes now discard observed-obsolete staged results,
+  retain invalidation obligations, drain catalog notifications received during
+  IO, and retry up to three stabilization rounds. Unknown resets bypass matching
+  stats; dirty reads now share the 32-read full-refresh batch bound and failures
+  drain before rejection. Regression coverage includes a prerequisite reopened
+  during IO: its dependent action must not be offered as ready. This is an index
+  read barrier, not atomic filesystem snapshots. `workDependencySnapshot` still
+  combines independent metadata pages, and project planning still hydrates
+  unrelated bodies; single-inventory capture and selective revision-checked
+  project hydration remain concrete follow-up work.
 
 Record new concrete gaps here when registered schema, dispatcher, service,
 persistent representation, guide, invalidation, or bounded failure evidence

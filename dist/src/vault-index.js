@@ -218,6 +218,8 @@ export class VaultMetadataIndex {
     watcherStarted = false;
     catalogUnsubscribe;
     needsFullRefresh = true;
+    changeGeneration = 0;
+    forceFullRead = false;
     lastFullRefreshAt = 0;
     firstList = true;
     constructor(vaultPath, pathFilter, frontmatter, catalog, vaultIo = new VaultIoCoordinator()) {
@@ -236,10 +238,8 @@ export class VaultMetadataIndex {
             this.catalogUnsubscribe = catalog.subscribeBatch(changes => {
                 if (changes)
                     this.invalidateMany(changes);
-                else {
-                    this.clearQueryCaches();
-                    this.needsFullRefresh = true;
-                }
+                else
+                    this.invalidateAll();
             });
         }
     }
@@ -252,6 +252,7 @@ export class VaultMetadataIndex {
             const normalized = normalizePath(change.path);
             if (!isNote(normalized) || !this.pathFilter.isAllowed(normalized))
                 continue;
+            this.changeGeneration++;
             if (change.kind === 'delete') {
                 const existing = this.entries.get(normalized);
                 if (existing)
@@ -264,6 +265,12 @@ export class VaultMetadataIndex {
             }
             this.dirty.add(normalized);
         }
+    }
+    invalidateAll() {
+        this.changeGeneration++;
+        this.forceFullRead = true;
+        this.needsFullRefresh = true;
+        this.clearQueryCaches();
     }
     clearQueryCaches() {
         this.queryCache.clear();
@@ -626,12 +633,20 @@ export class VaultMetadataIndex {
             this.firstList = false;
             this.needsFullRefresh = true;
         }
-        if (this.refreshPromise)
-            await this.refreshPromise;
-        if (this.needsFullRefresh || Date.now() - this.lastFullRefreshAt >= FULL_REFRESH_INTERVAL_MS)
-            await this.refreshAll();
-        if (this.dirty.size > 0)
-            await this.refreshDirty();
+        for (let attempt = 0; attempt < 3; attempt++) {
+            if (this.refreshPromise)
+                await this.refreshPromise;
+            if (this.needsFullRefresh || Date.now() - this.lastFullRefreshAt >= FULL_REFRESH_INTERVAL_MS)
+                await this.refreshAll();
+            else if (this.dirty.size > 0)
+                await this.refreshDirty();
+            // Events may have arrived while a source read was in flight. They must
+            // participate in this read barrier, not only in the next caller's read.
+            await this.catalog?.flushPendingEvents();
+            if (!this.needsFullRefresh && this.dirty.size === 0 && !this.refreshPromise)
+                return;
+        }
+        throw new Error('Metadata changed during refresh; retry the request.');
     }
     candidatePaths(filters, normalizedPrefix) {
         const hasFilters = Object.keys(filters).length > 0;
@@ -666,19 +681,17 @@ export class VaultMetadataIndex {
         try {
             this.watcher = watch(this.vaultPath, { recursive: true }, (_event, filename) => {
                 if (!filename) {
-                    this.clearQueryCaches();
-                    this.needsFullRefresh = true;
+                    this.invalidateAll();
                     return;
                 }
                 const normalized = normalizePath(String(filename));
-                this.clearQueryCaches();
                 if (isNote(normalized) && this.pathFilter.isAllowed(normalized))
-                    this.dirty.add(normalized);
+                    this.invalidate(normalized, 'upsert');
                 else
-                    this.needsFullRefresh = true;
+                    this.invalidateAll();
             });
             this.watcher.on('error', () => {
-                this.needsFullRefresh = true;
+                this.invalidateAll();
             });
             this.watcher.unref?.();
         }
@@ -692,19 +705,27 @@ export class VaultMetadataIndex {
         if (this.refreshPromise)
             return this.refreshPromise;
         this.refreshPromise = (async () => {
-            this.dirty.clear();
-            this.needsFullRefresh = false;
+            const generation = this.changeGeneration;
+            // A periodic refresh can reuse unchanged stats. An observed reset cannot.
+            const forceRead = this.forceFullRead;
             const next = new Map();
             const paths = this.catalog ? await this.catalog.notePathsSnapshot() : await this.findNotePaths(this.vaultPath);
             for (let start = 0; start < paths.length; start += READ_BATCH_SIZE) {
                 const batch = paths.slice(start, start + READ_BATCH_SIZE);
                 const sharedStats = this.catalog ? await this.catalog.statPaths(batch) : undefined;
-                const metadata = await Promise.all(batch.map(path => this.readEntry(path, this.entries.get(path), sharedStats?.get(path))));
+                const metadata = await this.readBatch(batch, path => this.readEntry(path, forceRead || this.dirty.has(path) ? undefined : this.entries.get(path), sharedStats?.get(path)));
                 for (const entry of metadata) {
                     if (entry)
                         next.set(entry.path, entry);
                 }
             }
+            if (generation !== this.changeGeneration) {
+                this.needsFullRefresh = true;
+                return;
+            }
+            this.dirty.clear();
+            this.needsFullRefresh = false;
+            this.forceFullRead = false;
             this.entries.clear();
             for (const [path, entry] of next)
                 this.entries.set(path, entry);
@@ -730,17 +751,25 @@ export class VaultMetadataIndex {
         if (this.refreshPromise)
             return this.refreshPromise;
         this.refreshPromise = (async () => {
+            const generation = this.changeGeneration;
             const paths = [...this.dirty];
             this.dirty.clear();
             this.clearQueryCaches();
-            let metadata;
+            const metadata = [];
             try {
-                metadata = await Promise.all(paths.map(path => this.readEntry(path)));
+                for (let start = 0; start < paths.length; start += READ_BATCH_SIZE) {
+                    metadata.push(...await this.readBatch(paths.slice(start, start + READ_BATCH_SIZE), path => this.readEntry(path)));
+                }
             }
             catch (error) {
                 for (const path of paths)
                     this.dirty.add(path);
                 throw error;
+            }
+            if (generation !== this.changeGeneration) {
+                for (const path of paths)
+                    this.dirty.add(path);
+                return;
             }
             for (let index = 0; index < paths.length; index += 1) {
                 const path = paths[index];
@@ -771,6 +800,15 @@ export class VaultMetadataIndex {
         finally {
             this.refreshPromise = undefined;
         }
+    }
+    async readBatch(paths, read) {
+        // Drain the entire bounded batch before rejecting: no source reads should
+        // outlive a failed refresh and overlap its retry or shutdown.
+        const results = await Promise.allSettled(paths.map(read));
+        const failed = results.find(result => result.status === 'rejected');
+        if (failed?.status === 'rejected')
+            throw failed.reason;
+        return results.map(result => result.status === 'fulfilled' ? result.value : undefined);
     }
     async readEntry(path, existing, sharedStat) {
         const normalized = normalizePath(path);

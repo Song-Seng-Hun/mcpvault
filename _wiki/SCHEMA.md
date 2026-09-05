@@ -733,6 +733,17 @@ returning. After at most three stabilization rounds, continuing changes produce
 a generic retry error, not a known-obsolete successful view. Retain the pending
 repair obligation after storage failures; never interpret those as deletion.
 
+Metadata index refreshes also stage entries under an observed-change generation,
+drain received catalog events, and allow at most three stabilization rounds.
+Continuing churn returns `Metadata changed during refresh; retry the request.`
+without a successful stale metadata response. Unknown resets force rereading
+even equal-size/mtime entries; ordinary periodic reconciliation can reuse them.
+Full and dirty metadata reads run in batches of at most 32, drain failures, and
+retain pending repairs. This does not make independently paged work inventories
+atomic, guarantee OS event delivery, or impose the graph source-size cap on
+metadata reads. Retry after changes settle; do not infer a task is unblocked
+from a failed refresh.
+
 Full and dirty reads use batches of at most 16 and an 8 MiB complete-source cap.
 An oversized note causes graph-query failure until repaired/split, not a partial
 index answer or MCP process shutdown. Errors expose neither its path nor private

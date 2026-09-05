@@ -2246,6 +2246,17 @@ when writes settle. No partial successful graph page is returned on that error.
 Explicit full resets reread source text even when size/mtime are unchanged;
 ordinary periodic reconciliation may still use the metadata shortcut.
 
+Metadata refreshes use the same observed-change rule for work/review queries:
+full and dirty results are staged, newer invalidations trigger another read,
+and received catalog events are drained before returning. After three unstable
+rounds, `Metadata changed during refresh; retry the request.` means retry when
+writes settle, not proceed using an old task state. Unknown resets bypass
+equal-size/mtime reuse. Both modes schedule at most 32 metadata reads per batch
+and drain failed batches before retry; failed reads do not erase pending work.
+This is not a vault-wide transaction: separate query pages can still differ,
+unreceived OS events remain outside the guarantee, and metadata source/total
+memory limits are separate from the graph's limits below.
+
 Both full and dirty refreshes schedule at most 16 reads per batch through shared
 I/O. Each note must fit an 8 MiB complete-source read; oversized notes fail graph
 queries with a generic error until split/repaired, without terminating the MCP

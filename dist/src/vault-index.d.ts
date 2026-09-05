@@ -44,11 +44,14 @@ export declare class VaultMetadataIndex {
     private watcherStarted;
     private readonly catalogUnsubscribe;
     private needsFullRefresh;
+    private changeGeneration;
+    private forceFullRead;
     private lastFullRefreshAt;
     private firstList;
     constructor(vaultPath: string, pathFilter: PathFilter, frontmatter: FrontmatterHandler, catalog?: VaultFileCatalog | undefined, vaultIo?: VaultIoCoordinator);
     invalidate(path: string, kind: 'upsert' | 'delete'): void;
     invalidateMany(changes: readonly VaultCatalogChange[]): void;
+    private invalidateAll;
     private clearQueryCaches;
     /** Resolve a visible Obsidian note identity from the disposable metadata
      * read model. The identity map is rebuilt only after metadata invalidation;
@@ -112,6 +115,7 @@ export declare class VaultMetadataIndex {
     private startWatcher;
     private refreshAll;
     private refreshDirty;
+    private readBatch;
     private readEntry;
     private initialize;
     private loadSnapshot;
