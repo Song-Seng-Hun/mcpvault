@@ -87,3 +87,37 @@ test('an inaccessible Markdown sibling does not become an accessible alias and s
   expect(JSON.stringify(health)).not.toContain('PRIVATE MARKER');
   expect((await fs.readNote('Mocs/Root.md')).content).toContain('[missing sibling](Secret.md)');
 });
+
+test.each([
+  { name: 'ambiguous extensionless claim', target: './Base', files: ['Mocs/Base.md', 'Mocs/Base.markdown'], issue: 'ambiguous', principal: undefined },
+  { name: 'explicit extension mismatch', target: './Base.md', files: ['Mocs/Base.md.md'], issue: 'unresolved', principal: undefined },
+])('MOC sequence and learning reject the same $name dependency', async ({ target, files, issue, principal }) => {
+  const { wiki, write } = await fixture('# Map\n[[Mocs/Dependent.md]]\n');
+  await write('Mocs/Dependent.md', { claims: [{ id: 'dependent', text: 'Depends on evidence.', depends_on_claims: [`[[${target}#^base]]`] }] });
+  for (const path of files) await write(path, { claims: [{ id: 'base', text: 'Evidence.' }] });
+  const learning = await wiki.learningPath(principal, 'Mocs/Root.md', 2, 30, 16000);
+  expect(learning.externalPrerequisites).toEqual([]);
+  expect(learning.orderIssues).toEqual(expect.arrayContaining([expect.objectContaining({ type: issue === 'ambiguous' ? 'ambiguous_prerequisite' : 'unresolved_or_inaccessible_prerequisite' })]));
+  const graph = await wiki.graphHealth(principal, 30, 16000);
+  const moc = graph.mocSequenceHealth?.items.find(item => item.path === 'Mocs/Root.md');
+  expect(moc).toBeDefined();
+  expect(moc?.externalPrerequisites).toMatchObject({ total: 0 });
+  expect(moc?.[issue]).toMatchObject({ total: 1 });
+});
+
+test('a model MOC cannot borrow an agent-private claim even when its reader owns both scopes', async () => {
+  const { fs, wiki, write } = await fixture('# Public map\n');
+  const principal = { accountId: 'worker', modelId: 'codex', agentId: 'worker', role: 'agent' as const };
+  const root = '_scopes/models/codex/Root.md';
+  await fs.writeNote({ path: root, content: '# Model map\n[dependent](Dependent.md)\n', frontmatter: { note_kind: 'moc', llm_wiki_type: 'knowledge' } });
+  await write('_scopes/models/codex/Dependent.md', { claims: [{ id: 'dependent', text: 'Model knowledge.', depends_on_claims: ['[[../../agents/worker/Base.md#^base]]'] }] });
+  await write('_scopes/agents/worker/Base.md', { claims: [{ id: 'base', text: 'Agent private evidence.' }] });
+  const learning = await wiki.learningPath(principal, root, 2, 30, 16000);
+  expect(learning.externalPrerequisites).toEqual([]);
+  expect(learning.orderIssues).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'unresolved_or_inaccessible_prerequisite' })]));
+  const graph = await wiki.graphHealth(principal, 30, 16000);
+  const moc = graph.mocSequenceHealth?.items.find(item => item.path === 'scope://model/codex/Root.md');
+  expect(moc).toBeDefined();
+  expect(moc?.externalPrerequisites).toMatchObject({ total: 0 });
+  expect(moc?.unresolved).toMatchObject({ total: 1 });
+});

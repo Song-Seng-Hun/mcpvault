@@ -229,10 +229,10 @@ function normalizeClaimReferenceList(value, field) {
     });
     return output;
 }
-function claimRelationValues(claim, property) {
+function claimRelationValues(claim, property, limit = 20) {
     const definition = CLAIM_RELATION_FIELDS.find(item => item.property === property);
     const value = claim[property] ?? claim[definition.input];
-    return Array.isArray(value) ? value.filter((item) => typeof item === 'string' && Boolean(item.trim())).slice(0, 20) : [];
+    return Array.isArray(value) ? value.filter((item) => typeof item === 'string' && Boolean(item.trim())).slice(0, limit) : [];
 }
 function claimDependencyReferences(frontmatter, limit = 120) {
     const items = [];
@@ -243,7 +243,10 @@ function claimDependencyReferences(frontmatter, limit = 120) {
         if (!claim || typeof claim !== 'object')
             continue;
         const sourceClaimId = claimId(typeof claim.id === 'string' ? claim.id : undefined, claimIndex);
-        for (const raw of claimRelationValues(claim, 'depends_on_claims')) {
+        const dependencies = claimRelationValues(claim, 'depends_on_claims', 21);
+        if (dependencies.length > 20)
+            truncated = true;
+        for (const raw of dependencies.slice(0, 20)) {
             if (items.length >= limit) {
                 truncated = true;
                 break outer;
@@ -8739,16 +8742,7 @@ export class LlmWikiService {
                 return [];
             if (!reference.document)
                 return [sourcePath];
-            let matches = [];
-            if (reference.document.startsWith('../') || reference.document.startsWith('./')) {
-                const relative = posix.normalize(posix.join(posix.dirname(normalizePath(sourcePath)), reference.document));
-                const direct = graphByPath.get(relative.toLowerCase()) || graphByPath.get(`${relative}.md`.toLowerCase());
-                if (direct)
-                    matches = [direct.path];
-            }
-            if (!matches.length)
-                matches = resolveGraphDocument(sourcePath, reference.document);
-            return matches;
+            return resolveGraphDocument(sourcePath, reference.document);
         };
         const incoming = new Map();
         const resolvedOutgoing = new Map();
@@ -11315,15 +11309,19 @@ export class LlmWikiService {
             const dependentKey = normalizePath(entry.internalPath).toLowerCase();
             const metadata = visibleByPath.get(dependentKey);
             const dependencies = Array.isArray(metadata?.frontmatter.depends_on)
-                ? metadata.frontmatter.depends_on.filter((item) => typeof item === 'string' && Boolean(item.trim())).slice(0, 30)
+                ? metadata.frontmatter.depends_on.filter((item) => typeof item === 'string' && Boolean(item.trim())).slice(0, 31)
                 : [];
+            if (dependencies.length > 30) {
+                orderIssues.push({ type: 'note_prerequisites_truncated', path: entry.path, limit: 30 });
+                truncated = true;
+            }
             const claimDependencies = claimDependencyReferences(metadata?.frontmatter || {}, 120);
             if (claimDependencies.truncated) {
                 orderIssues.push({ type: 'claim_prerequisites_truncated', path: entry.path, limit: 120 });
                 truncated = true;
             }
             const prerequisites = [
-                ...dependencies.map(raw => ({ dependencyType: 'note', raw, document: relationDocument(raw) })),
+                ...dependencies.slice(0, 30).map(raw => ({ dependencyType: 'note', raw, document: relationDocument(raw) })),
                 ...claimDependencies.items.map(reference => ({ dependencyType: 'claim', raw: reference.raw, document: reference.document || '', reference })),
             ];
             for (const prerequisite of prerequisites) {
@@ -11585,7 +11583,7 @@ export class LlmWikiService {
         const latePrerequisites = orderIssues.filter(issue => issue.type === 'prerequisite_after_dependent').length;
         const incompletePrerequisites = orderIssues.filter(issue => [
             'unresolved_or_inaccessible_prerequisite', 'ambiguous_prerequisite', 'invalid_claim_prerequisite',
-            'missing_claim_prerequisite_target', 'ambiguous_claim_prerequisite_target', 'claim_prerequisites_truncated',
+            'missing_claim_prerequisite_target', 'ambiguous_claim_prerequisite_target', 'claim_prerequisites_truncated', 'note_prerequisites_truncated',
         ].includes(String(issue.type))).length + externalPrerequisites.length;
         const latestRoot = await this.fileSystem.readNote(path);
         if (latestRoot.revision !== rootNote.revision)
@@ -11595,8 +11593,11 @@ export class LlmWikiService {
                 mode: 'learning_path_checkpoint_source',
                 root: { path: this.access.toPublicPath(path), revision: rootNote.revision },
                 authoredOrder,
-                recommendedOrder,
+                // Public diagnostics retain cyclic entries for inspection. A durable
+                // recommended checkpoint must contain only the prerequisite-safe path.
+                recommendedOrder: acyclicRecommendedKeys.map(key => entryByKey.get(key).path),
                 summary: { entries: authoredOrder.length, omittedEntries },
+                truncated,
             };
         }
         const result = {

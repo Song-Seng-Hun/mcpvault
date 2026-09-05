@@ -134,6 +134,79 @@ test('real MOC relocation keeps a usable checkpoint recovery path without certif
   expect(resumed.learningProgress.drift.validationError).toBeUndefined();
 });
 
+test.each(['cycle', 'truncated'])('real learning checkpoints reject a %s recommended sequence', async scenario => {
+  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-continuity-'));
+  vaults.push(vault);
+  const fs = new FileSystemService(vault), access = new ScopeAccessPolicy();
+  const wiki = new LlmWikiService(fs, access, new ReferenceService(fs, access));
+  const continuity = new ContinuityService(fs, { access, buildLearningPath: (principal, path, depth, limit, chars) => wiki.learningPath(principal, path, depth, limit, chars, true) });
+  const principal = { accountId: 'reader', modelId: 'codex', agentId: 'worker', role: 'agent' as const };
+  await fs.writeNote({ path: 'MOC.md', content: scenario === 'cycle' ? '# Map\n[[A.md]]\n[[B.md]]\n' : '# Map\n' + '[[A.md]]\n'.repeat(200) + '[[B.md]]\n', frontmatter: { note_kind: 'moc', llm_wiki_type: 'knowledge' } });
+  for (const path of ['A.md', 'B.md']) await fs.writeNote({ path, content: '# Entry\n', frontmatter: { note_kind: 'atomic', llm_wiki_type: 'knowledge', ...(scenario === 'cycle' && { depends_on: [path === 'A.md' ? '[[B.md]]' : '[[A.md]]'] }) } });
+  await expect(continuity.save({ principal, topic: 'Learn', summary: 'Read A', nextAction: 'Read B', learningProgress: { rootPath: 'MOC.md', order: 'recommended', completedThrough: 'A.md' } })).rejects.toThrow(scenario === 'cycle' ? /cyclic or blocked/ : /truncated|incomplete/);
+  expect(await fs.exists('_scopes/agents/worker/_continuity/work-state.md')).toBe(false);
+  if (scenario === 'cycle') {
+    const authored = await continuity.save({ principal, topic: 'Read authored route', summary: 'Read A despite the cycle', nextAction: 'Inspect B and repair the cycle', learningProgress: { rootPath: 'MOC.md', order: 'authored', completedThrough: 'A.md' } });
+    expect(authored.learningProgress).toMatchObject({ state: 'ready', next: { path: 'B.md' } });
+  }
+});
+
+test.each(['cycle', 'truncated'])('resuming after a %s path change preserves the checkpoint and withholds the next read', async scenario => {
+  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-continuity-'));
+  vaults.push(vault);
+  const fs = new FileSystemService(vault), access = new ScopeAccessPolicy();
+  const wiki = new LlmWikiService(fs, access, new ReferenceService(fs, access));
+  const continuity = new ContinuityService(fs, { access, buildLearningPath: (principal, path, depth, limit, chars) => wiki.learningPath(principal, path, depth, limit, chars, true) });
+  const principal = { accountId: 'reader', modelId: 'codex', agentId: 'worker', role: 'agent' as const };
+  await fs.writeNote({ path: 'MOC.md', content: '# Map\n[[A.md]]\n[[B.md]]\n', frontmatter: { note_kind: 'moc', llm_wiki_type: 'knowledge' } });
+  for (const path of ['A.md', 'B.md']) await fs.writeNote({ path, content: '# Entry\n', frontmatter: { note_kind: 'atomic', llm_wiki_type: 'knowledge' } });
+  await continuity.save({ principal, topic: 'Learn', summary: 'Read A', nextAction: 'Read B', learningProgress: { rootPath: 'MOC.md', order: 'recommended', completedThrough: 'A.md' } });
+  const checkpoint = '_scopes/agents/worker/_continuity/work-state.md';
+  const before = await fs.readNote(checkpoint);
+  if (scenario === 'cycle') {
+    for (const path of ['A.md', 'B.md']) await fs.writeNote({ path, content: '# Entry\n', frontmatter: { note_kind: 'atomic', llm_wiki_type: 'knowledge', depends_on: [path === 'A.md' ? '[[B.md]]' : '[[A.md]]'] }, expectedRevision: (await fs.readNote(path)).revision });
+  } else {
+    await fs.writeNote({ path: 'MOC.md', content: '# Map\n' + '[[A.md]]\n'.repeat(200) + '[[B.md]]\n', frontmatter: { note_kind: 'moc', llm_wiki_type: 'knowledge' }, expectedRevision: (await fs.readNote('MOC.md')).revision });
+  }
+  const resumed = await continuity.read({ principal });
+  expect(resumed.learningProgress).toMatchObject({ state: 'stale', canResume: false, nextAction: { endpointId: 'wiki.learning_path' } });
+  expect(resumed.learningProgress.next).toBeUndefined();
+  expect(resumed.learningProgress.drift.validationError).toMatch(scenario === 'cycle' ? /cyclic or blocked/ : /truncated|incomplete/);
+  expect((await fs.readNote(checkpoint)).revision).toBe(before.revision);
+});
+
+test.each(['note', 'claim'])('oversized %s prerequisites cannot hide a cycle from save or resume', async kind => {
+  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-continuity-'));
+  vaults.push(vault);
+  const fs = new FileSystemService(vault), access = new ScopeAccessPolicy();
+  const wiki = new LlmWikiService(fs, access, new ReferenceService(fs, access));
+  const continuity = new ContinuityService(fs, { access, buildLearningPath: (principal, path, depth, limit, chars) => wiki.learningPath(principal, path, depth, limit, chars, true) });
+  const principal = { accountId: 'reader', modelId: 'codex', agentId: 'worker', role: 'agent' as const };
+  await fs.writeNote({ path: 'MOC.md', content: '# Map\n[[A.md]]\n[[B.md]]\n[[C.md]]\n', frontmatter: { note_kind: 'moc', llm_wiki_type: 'knowledge' } });
+  const base = { note_kind: 'atomic', llm_wiki_type: 'knowledge', claims: [{ id: 'claim', text: 'Claim.' }] };
+  for (const path of ['A.md', 'B.md', 'C.md']) await fs.writeNote({ path, content: '# Entry\n', frontmatter: base });
+  const save = { principal, topic: 'Learn', summary: 'Read C', nextAction: 'Review path', learningProgress: { rootPath: 'MOC.md', order: 'recommended', completedThrough: 'C.md' } };
+  const dependencies = (targets: string[]) => kind === 'note'
+    ? { depends_on: targets.map(path => `[[${path}]]`) }
+    : { claims: [{ id: 'claim', text: 'Claim.', depends_on_claims: targets.map(path => `[[${path}#^claim]]`) }] };
+  await fs.writeNote({ path: 'A.md', content: '# Entry\n', frontmatter: { ...base, ...dependencies(Array(kind === 'note' ? 30 : 20).fill('B.md')) }, expectedRevision: (await fs.readNote('A.md')).revision });
+  await continuity.save(save);
+  const checkpoint = '_scopes/agents/worker/_continuity/work-state.md';
+  const before = await fs.readNote(checkpoint);
+  await fs.writeNote({ path: 'A.md', content: '# Entry\n', frontmatter: { ...base, ...dependencies([...Array(kind === 'note' ? 30 : 20).fill('B.md'), 'C.md']) }, expectedRevision: (await fs.readNote('A.md')).revision });
+  await fs.writeNote({ path: 'C.md', content: '# Entry\n', frontmatter: { ...base, ...dependencies(['A.md']) }, expectedRevision: (await fs.readNote('C.md')).revision });
+  const projection = await wiki.learningPath(principal, 'MOC.md', 2, 50, 16000, true);
+  expect(projection.truncated).toBe(true);
+  const diagnostic = await wiki.learningPath(principal, 'MOC.md', 2, 50, 16000);
+  expect(diagnostic.prerequisiteCoverageComplete).toBe(false);
+  expect(diagnostic.orderIssues).toEqual(expect.arrayContaining([expect.objectContaining({ type: kind === 'note' ? 'note_prerequisites_truncated' : 'claim_prerequisites_truncated' })]));
+  await expect(continuity.save({ ...save, expectedRevision: before.revision })).rejects.toThrow(/truncated|incomplete/);
+  const resumed = await continuity.read({ principal });
+  expect(resumed.learningProgress).toMatchObject({ state: 'stale', canResume: false });
+  expect(resumed.learningProgress.drift.validationError).toMatch(/truncated|incomplete/);
+  expect((await fs.readNote(checkpoint)).revision).toBe(before.revision);
+});
+
 test('learning progress rejects inaccessible, incomplete, and unsafe sequences', async () => {
   const vault = await mkdtemp(join(tmpdir(), 'mcpvault-continuity-'));
   vaults.push(vault);

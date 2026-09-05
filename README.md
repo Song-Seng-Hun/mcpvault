@@ -1608,6 +1608,25 @@ Its optional `learningProgress` needs only `rootPath`, authored/recommended
 `order`, optional `maxDepth`, and the last `completedThrough` path. The server
 builds the revision snapshot; routine pulses return an unchecked compact hint,
 while explicit `continuity.resume` performs the more expensive drift check.
+The snapshot covers at most 50 entries within the requested depth. A truncated
+link/dependency scan cannot be saved as a complete route, even if duplicate
+links left fewer than 50 distinct entries. Simplify that MOC or checkpoint a
+smaller nested map. Learning scans process up to 30 note prerequisites per
+entry and 20 claim prerequisites per claim (120 per note); further valid
+items explicitly mark the result incomplete rather than silently certifying
+the inspected prefix. Simplify the dependency list before saving that route.
+Recommended checkpoints reject dependency cycles and their
+blocked dependents; authored order can still record deliberate reading of those
+notes, without certifying the dependencies. Public learning diagnostics retain
+cycle entries for inspection. If a saved route becomes unsafe or truncated,
+resume returns `stale`, withholds the next read, and provides a learning-path
+repair action without rewriting the historical checkpoint.
+
+MOC sequence health resolves claim prerequisites with the same file identity
+and source-to-target scope rules as learning paths. A reader owning both a
+model and an agent scope does not let model knowledge depend on agent-private
+claims. Extensionless ambiguity remains a repair issue; an explicit `.md`
+reference is not silently substituted with `.md.md` or another file type.
 
 ## Prerequisites
 

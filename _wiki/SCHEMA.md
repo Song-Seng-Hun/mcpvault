@@ -147,6 +147,15 @@ private value in the error. These historical paths count in delete impact but
 are not live graph edges. Learning revisions/fingerprints remain unchanged;
 resume validates drift and returns a fresh learning-path recovery action at
 the relocated root instead of certifying old progress.
+Learning snapshots reject truncated scans rather than marking a scanned prefix
+complete. Recommended-order snapshots include only acyclic, unblocked entries;
+if that omits authored entries, repair the dependency graph or explicitly use
+authored order. Public diagnostic order may retain blocked entries for review,
+not as prerequisite-safe checkpoint candidates. A failed resume validation is
+read-only: return stale state with a repair action and no next-read command.
+Claim prerequisites in MOC sequence health use the same exact/ambiguous file
+resolution and source-to-target scope predicate as learning paths; visibility
+to the reader alone does not authorize a cross-scope knowledge relationship.
 Move rewrites never update their captured revisions or certify summary/review
 digests. Resolved upstream entries compare their actual path, not display
 target spelling; unresolved entries still compare the authored target.

@@ -179,6 +179,9 @@ export class ContinuityService {
         if (omitted > 0 || authored.length > MAX_LEARNING_ENTRIES) {
             throw new Error(`Learning progress is limited to ${MAX_LEARNING_ENTRIES} entries; split this oversized MOC into nested maps before checkpointing it`);
         }
+        if (projection.truncated === true) {
+            throw new Error('The learning path scan is truncated or incomplete; simplify the MOC or checkpoint a smaller nested map before saving progress');
+        }
         const byPath = new Map(authoredEntries.map(item => [item.path, item]));
         const entries = order === 'authored'
             ? authoredEntries

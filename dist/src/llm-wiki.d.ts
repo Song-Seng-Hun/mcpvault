@@ -3347,6 +3347,7 @@ export declare class LlmWikiService {
             entries: number;
             omittedEntries: number;
         };
+        truncated: boolean;
     } | {
         mode: string;
         root: {
