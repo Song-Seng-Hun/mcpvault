@@ -507,6 +507,15 @@ do not prove a current, bounded, actionable response through its public adapter.
   The old public bare array becomes a documented envelope; internal arrays stay
   unchanged and no fixed MCP tool is added. Full graph aggregation and eventual
   watcher/reconciliation freshness remain scale/correctness limits.
+- Graph refresh now preserves observed invalidations across full/dirty reads,
+  stages entries and path membership until a stable generation, and drains
+  shared catalog events received during IO. Standalone new/delete events update
+  navigation membership. Explicit full resets bypass equal-size/mtime reuse.
+  Three unsuccessful stabilization rounds return a bounded retry error rather
+  than a known-obsolete view. Both refresh modes schedule batches of 16 complete
+  bounded 8 MiB source reads; failed batches drain and remain retryable. Oversized
+  sources fail graph queries without partial success or process shutdown. Total
+  graph memory, unseen OS changes and cross-process atomicity remain limitations.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

@@ -14,11 +14,14 @@ import { noteReferenceDocument, noteReferenceTermKeys } from './note-reference.j
 import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference } from './property-references.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { extractInlineTags } from './markdown-tags.js';
+import { SourceReadLimitError } from './bounded-source-read.js';
 
 const GRAPH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
 const REVERSE_LINK_CACHE_LIMIT = 16_384;
 const NOTE_PATTERN = /\.(?:md|markdown|txt)$/i;
+const GRAPH_READ_BATCH_SIZE = 16;
+const GRAPH_SOURCE_MAX_BYTES = 8 * 1024 * 1024;
 
 interface GraphEntry {
   path: string;
@@ -160,6 +163,7 @@ export class VaultGraphIndex {
   private watcherStarted = false;
   private initialized = false;
   private needsFullRefresh = true;
+  private forceFullRead = true;
   private lastFullRefreshAt = 0;
   private changeGeneration = 0;
   private readonly visibilityCache = new WeakMap<(path: string) => boolean, VisibilityContext>();
@@ -176,10 +180,7 @@ export class VaultGraphIndex {
     if (catalog) {
       this.catalogUnsubscribe = catalog.subscribeBatch(changes => {
         if (changes) this.invalidateMany(changes);
-        else {
-          this.needsFullRefresh = true;
-          this.dirty.clear();
-        }
+        else this.invalidate();
       });
     }
   }
@@ -188,6 +189,7 @@ export class VaultGraphIndex {
     this.changeGeneration += 1;
     if (!path) {
       this.needsFullRefresh = true;
+      this.forceFullRead = true;
       this.dirty.clear();
       return;
     }
@@ -367,10 +369,16 @@ export class VaultGraphIndex {
   private async ensure(): Promise<void> {
     await this.catalog?.flushPendingEvents();
     this.startWatcher();
-    if (this.refreshPromise) await this.refreshPromise;
-    const interval = this.watcher ? GRAPH_RECONCILE_INTERVAL_MS : NO_WATCHER_RECONCILE_INTERVAL_MS;
-    if (!this.initialized || this.needsFullRefresh || Date.now() - this.lastFullRefreshAt >= interval) await this.refreshAll();
-    if (this.dirty.size > 0) await this.refreshDirty();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (this.refreshPromise) await this.refreshPromise;
+      const interval = this.watcher ? GRAPH_RECONCILE_INTERVAL_MS : NO_WATCHER_RECONCILE_INTERVAL_MS;
+      if (!this.initialized || this.needsFullRefresh || Date.now() - this.lastFullRefreshAt >= interval) await this.refreshAll();
+      else if (this.dirty.size > 0) await this.refreshDirty();
+      // A shared catalog may still be debouncing events received during IO.
+      await this.catalog?.flushPendingEvents();
+      if (this.initialized && !this.needsFullRefresh && this.dirty.size === 0) return;
+    }
+    throw new Error('Graph changed during refresh; retry the query. No stable graph view was returned.');
   }
 
   /** Caller-local excerpts; never mutate shared source edges or headings. */
@@ -466,13 +474,14 @@ export class VaultGraphIndex {
     try {
       this.watcher = watch(this.vaultPath, { recursive: true }, (_event, filename) => {
         const path = filename ? normalizePath(String(filename)) : '';
-        if (path && isNote(path) && this.pathFilter.isAllowed(path)) this.dirty.add(path);
-        else this.needsFullRefresh = true;
+        if (path && !this.pathFilter.isAllowedForListing(path)) return;
+        if (path && isNote(path) && this.pathFilter.isAllowed(path)) this.invalidate(path);
+        else this.invalidate();
       });
       this.watcher.on('error', () => {
         this.watcher?.close();
         this.watcher = undefined;
-        this.needsFullRefresh = true;
+        this.invalidate();
       });
       this.watcher.unref?.();
     } catch {
@@ -487,19 +496,25 @@ export class VaultGraphIndex {
       const paths = this.catalog
         ? await this.catalog.allPathsSnapshot()
         : await this.findNotePaths(this.vaultPath);
-      this.allPaths = new Set(paths.filter(path => this.pathFilter.isAllowedForListing(path)));
+      const nextPaths = new Set(paths.filter(path => this.pathFilter.isAllowedForListing(path)));
       const next = new Map<string, GraphEntry>();
-      for (let start = 0; start < paths.length; start += 16) {
-        const batch = paths.slice(start, start + 16);
-      const entries = await Promise.all(batch.map(path => this.readEntry(path, this.entries.get(path))));
+      for (let start = 0; start < paths.length; start += GRAPH_READ_BATCH_SIZE) {
+        const batch = paths.slice(start, start + GRAPH_READ_BATCH_SIZE);
+        const entries = await this.readBatch(batch, true);
         for (const entry of entries) if (entry) next.set(entry.path, entry);
+        if (generation !== this.changeGeneration) {
+          this.needsFullRefresh = true;
+          return;
+        }
       }
+      if (generation !== this.changeGeneration) { this.needsFullRefresh = true; return; }
+      this.allPaths = nextPaths;
       this.entries.clear();
       for (const [path, entry] of next) this.entries.set(path, entry);
-      const unchangedDuringRefresh = generation === this.changeGeneration;
       this.changeGeneration += 1;
-      if (unchangedDuringRefresh) this.dirty.clear();
+      this.dirty.clear();
       this.needsFullRefresh = false;
+      this.forceFullRead = false;
       this.initialized = true;
       this.lastFullRefreshAt = Date.now();
     })();
@@ -513,11 +528,18 @@ export class VaultGraphIndex {
   private async refreshDirty(): Promise<void> {
     if (this.refreshPromise) return this.refreshPromise;
     this.refreshPromise = (async () => {
+      const generation = this.changeGeneration;
       const paths = [...this.dirty];
       this.dirty.clear();
-      let entries: Array<GraphEntry | undefined>;
+      const entries: Array<GraphEntry | undefined> = [];
       try {
-        entries = await Promise.all(paths.map(path => this.readEntry(path)));
+        for (let start = 0; start < paths.length; start += GRAPH_READ_BATCH_SIZE) {
+          entries.push(...await this.readBatch(paths.slice(start, start + GRAPH_READ_BATCH_SIZE)));
+          if (generation !== this.changeGeneration) {
+            for (const path of paths) this.dirty.add(path);
+            return;
+          }
+        }
       } catch (error) {
         for (const path of paths) this.dirty.add(path);
         throw error;
@@ -525,8 +547,11 @@ export class VaultGraphIndex {
       for (let index = 0; index < paths.length; index += 1) {
         const path = paths[index]!;
         const entry = entries[index];
-        if (entry) this.entries.set(path, entry);
-        else this.entries.delete(path);
+        if (entry) { this.entries.set(path, entry); this.allPaths.add(path); }
+        else {
+          this.entries.delete(path);
+          if (isNote(path)) this.allPaths.delete(path);
+        }
       }
       this.changeGeneration += 1;
     })();
@@ -537,6 +562,15 @@ export class VaultGraphIndex {
     }
   }
 
+  private async readBatch(paths: string[], reuseExisting = false): Promise<Array<GraphEntry | undefined>> {
+    // Drain a failed batch before allowing another refresh to share its reads.
+    const results = await Promise.allSettled(paths.map(path => this.readEntry(path,
+      reuseExisting && !this.forceFullRead && !this.dirty.has(path) ? this.entries.get(path) : undefined)));
+    const failed = results.find(result => result.status === 'rejected');
+    if (failed?.status === 'rejected') throw failed.reason;
+    return results.map(result => result.status === 'fulfilled' ? result.value : undefined);
+  }
+
   private async readEntry(path: string, existing?: GraphEntry): Promise<GraphEntry | undefined> {
     const normalized = normalizePath(path);
     if (!isNote(normalized) || !this.pathFilter.isAllowed(normalized)) return undefined;
@@ -545,7 +579,7 @@ export class VaultGraphIndex {
       const info = await stat(fullPath);
       if (!info.isFile()) return undefined;
       if (existing && existing.size === info.size && existing.mtimeMs === info.mtimeMs) return existing;
-      const raw = await this.vaultIo.readUtf8(fullPath);
+      const raw = await this.vaultIo.readUtf8Bounded(fullPath, GRAPH_SOURCE_MAX_BYTES);
       const parsed = this.frontmatter.parse(raw);
       const tags: string[] = [];
       const identityTerms: string[] = [];
@@ -645,6 +679,7 @@ export class VaultGraphIndex {
       return { path: normalized, moderationHidden: isModerationHidden(parsed.frontmatter), revision: createHash('sha256').update(raw).digest('hex'), size: info.size, mtimeMs: info.mtimeMs, links, tags, identityTerms };
     } catch (error) {
       if (isMissingVaultPath(error)) return undefined;
+      if (error instanceof SourceReadLimitError) throw new Error('Graph source exceeds the 8 MiB read limit; split oversized notes before retrying. No partial graph view was returned.');
       throw new VaultReadUnavailableError();
     }
   }

@@ -10,10 +10,13 @@ import { noteReferenceDocument, noteReferenceTermKeys } from './note-reference.j
 import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference } from './property-references.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { extractInlineTags } from './markdown-tags.js';
+import { SourceReadLimitError } from './bounded-source-read.js';
 const GRAPH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
 const REVERSE_LINK_CACHE_LIMIT = 16_384;
 const NOTE_PATTERN = /\.(?:md|markdown|txt)$/i;
+const GRAPH_READ_BATCH_SIZE = 16;
+const GRAPH_SOURCE_MAX_BYTES = 8 * 1024 * 1024;
 function normalizePath(value) {
     return value.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
 }
@@ -131,6 +134,7 @@ export class VaultGraphIndex {
     watcherStarted = false;
     initialized = false;
     needsFullRefresh = true;
+    forceFullRead = true;
     lastFullRefreshAt = 0;
     changeGeneration = 0;
     visibilityCache = new WeakMap();
@@ -145,10 +149,8 @@ export class VaultGraphIndex {
             this.catalogUnsubscribe = catalog.subscribeBatch(changes => {
                 if (changes)
                     this.invalidateMany(changes);
-                else {
-                    this.needsFullRefresh = true;
-                    this.dirty.clear();
-                }
+                else
+                    this.invalidate();
             });
         }
     }
@@ -156,6 +158,7 @@ export class VaultGraphIndex {
         this.changeGeneration += 1;
         if (!path) {
             this.needsFullRefresh = true;
+            this.forceFullRead = true;
             this.dirty.clear();
             return;
         }
@@ -349,13 +352,20 @@ export class VaultGraphIndex {
     async ensure() {
         await this.catalog?.flushPendingEvents();
         this.startWatcher();
-        if (this.refreshPromise)
-            await this.refreshPromise;
-        const interval = this.watcher ? GRAPH_RECONCILE_INTERVAL_MS : NO_WATCHER_RECONCILE_INTERVAL_MS;
-        if (!this.initialized || this.needsFullRefresh || Date.now() - this.lastFullRefreshAt >= interval)
-            await this.refreshAll();
-        if (this.dirty.size > 0)
-            await this.refreshDirty();
+        for (let attempt = 0; attempt < 3; attempt++) {
+            if (this.refreshPromise)
+                await this.refreshPromise;
+            const interval = this.watcher ? GRAPH_RECONCILE_INTERVAL_MS : NO_WATCHER_RECONCILE_INTERVAL_MS;
+            if (!this.initialized || this.needsFullRefresh || Date.now() - this.lastFullRefreshAt >= interval)
+                await this.refreshAll();
+            else if (this.dirty.size > 0)
+                await this.refreshDirty();
+            // A shared catalog may still be debouncing events received during IO.
+            await this.catalog?.flushPendingEvents();
+            if (this.initialized && !this.needsFullRefresh && this.dirty.size === 0)
+                return;
+        }
+        throw new Error('Graph changed during refresh; retry the query. No stable graph view was returned.');
     }
     /** Caller-local excerpts; never mutate shared source edges or headings. */
     linkProjector(visible, all) {
@@ -456,15 +466,17 @@ export class VaultGraphIndex {
         try {
             this.watcher = watch(this.vaultPath, { recursive: true }, (_event, filename) => {
                 const path = filename ? normalizePath(String(filename)) : '';
+                if (path && !this.pathFilter.isAllowedForListing(path))
+                    return;
                 if (path && isNote(path) && this.pathFilter.isAllowed(path))
-                    this.dirty.add(path);
+                    this.invalidate(path);
                 else
-                    this.needsFullRefresh = true;
+                    this.invalidate();
             });
             this.watcher.on('error', () => {
                 this.watcher?.close();
                 this.watcher = undefined;
-                this.needsFullRefresh = true;
+                this.invalidate();
             });
             this.watcher.unref?.();
         }
@@ -480,23 +492,31 @@ export class VaultGraphIndex {
             const paths = this.catalog
                 ? await this.catalog.allPathsSnapshot()
                 : await this.findNotePaths(this.vaultPath);
-            this.allPaths = new Set(paths.filter(path => this.pathFilter.isAllowedForListing(path)));
+            const nextPaths = new Set(paths.filter(path => this.pathFilter.isAllowedForListing(path)));
             const next = new Map();
-            for (let start = 0; start < paths.length; start += 16) {
-                const batch = paths.slice(start, start + 16);
-                const entries = await Promise.all(batch.map(path => this.readEntry(path, this.entries.get(path))));
+            for (let start = 0; start < paths.length; start += GRAPH_READ_BATCH_SIZE) {
+                const batch = paths.slice(start, start + GRAPH_READ_BATCH_SIZE);
+                const entries = await this.readBatch(batch, true);
                 for (const entry of entries)
                     if (entry)
                         next.set(entry.path, entry);
+                if (generation !== this.changeGeneration) {
+                    this.needsFullRefresh = true;
+                    return;
+                }
             }
+            if (generation !== this.changeGeneration) {
+                this.needsFullRefresh = true;
+                return;
+            }
+            this.allPaths = nextPaths;
             this.entries.clear();
             for (const [path, entry] of next)
                 this.entries.set(path, entry);
-            const unchangedDuringRefresh = generation === this.changeGeneration;
             this.changeGeneration += 1;
-            if (unchangedDuringRefresh)
-                this.dirty.clear();
+            this.dirty.clear();
             this.needsFullRefresh = false;
+            this.forceFullRead = false;
             this.initialized = true;
             this.lastFullRefreshAt = Date.now();
         })();
@@ -511,11 +531,19 @@ export class VaultGraphIndex {
         if (this.refreshPromise)
             return this.refreshPromise;
         this.refreshPromise = (async () => {
+            const generation = this.changeGeneration;
             const paths = [...this.dirty];
             this.dirty.clear();
-            let entries;
+            const entries = [];
             try {
-                entries = await Promise.all(paths.map(path => this.readEntry(path)));
+                for (let start = 0; start < paths.length; start += GRAPH_READ_BATCH_SIZE) {
+                    entries.push(...await this.readBatch(paths.slice(start, start + GRAPH_READ_BATCH_SIZE)));
+                    if (generation !== this.changeGeneration) {
+                        for (const path of paths)
+                            this.dirty.add(path);
+                        return;
+                    }
+                }
             }
             catch (error) {
                 for (const path of paths)
@@ -525,10 +553,15 @@ export class VaultGraphIndex {
             for (let index = 0; index < paths.length; index += 1) {
                 const path = paths[index];
                 const entry = entries[index];
-                if (entry)
+                if (entry) {
                     this.entries.set(path, entry);
-                else
+                    this.allPaths.add(path);
+                }
+                else {
                     this.entries.delete(path);
+                    if (isNote(path))
+                        this.allPaths.delete(path);
+                }
             }
             this.changeGeneration += 1;
         })();
@@ -538,6 +571,14 @@ export class VaultGraphIndex {
         finally {
             this.refreshPromise = undefined;
         }
+    }
+    async readBatch(paths, reuseExisting = false) {
+        // Drain a failed batch before allowing another refresh to share its reads.
+        const results = await Promise.allSettled(paths.map(path => this.readEntry(path, reuseExisting && !this.forceFullRead && !this.dirty.has(path) ? this.entries.get(path) : undefined)));
+        const failed = results.find(result => result.status === 'rejected');
+        if (failed?.status === 'rejected')
+            throw failed.reason;
+        return results.map(result => result.status === 'fulfilled' ? result.value : undefined);
     }
     async readEntry(path, existing) {
         const normalized = normalizePath(path);
@@ -550,7 +591,7 @@ export class VaultGraphIndex {
                 return undefined;
             if (existing && existing.size === info.size && existing.mtimeMs === info.mtimeMs)
                 return existing;
-            const raw = await this.vaultIo.readUtf8(fullPath);
+            const raw = await this.vaultIo.readUtf8Bounded(fullPath, GRAPH_SOURCE_MAX_BYTES);
             const parsed = this.frontmatter.parse(raw);
             const tags = [];
             const identityTerms = [];
@@ -663,6 +704,8 @@ export class VaultGraphIndex {
         catch (error) {
             if (isMissingVaultPath(error))
                 return undefined;
+            if (error instanceof SourceReadLimitError)
+                throw new Error('Graph source exceeds the 8 MiB read limit; split oversized notes before retrying. No partial graph view was returned.');
             throw new VaultReadUnavailableError();
         }
     }

@@ -22,6 +22,7 @@ export declare class VaultGraphIndex {
     private watcherStarted;
     private initialized;
     private needsFullRefresh;
+    private forceFullRead;
     private lastFullRefreshAt;
     private changeGeneration;
     private readonly visibilityCache;
@@ -53,6 +54,7 @@ export declare class VaultGraphIndex {
     private startWatcher;
     private refreshAll;
     private refreshDirty;
+    private readBatch;
     private readEntry;
     private findNotePaths;
 }

@@ -2225,6 +2225,24 @@ still cannot fit gets an explicit error, not a clipped or silently skipped label
 Graph aggregation still scans visible entries; bounded output is not a claim of
 constant server cost. No new MCP tool or client installation is needed.
 
+Graph refreshes preserve observed changes instead of letting a completed scan
+erase newer invalidations. New/deleted notes update both parsed entries and
+navigation membership. Shared catalog events received during reads are drained
+before returning; a changed generation is retried rather than published as a
+stable answer. After three unsuccessful stabilization rounds, retry the query
+when writes settle. No partial successful graph page is returned on that error.
+Explicit full resets reread source text even when size/mtime are unchanged;
+ordinary periodic reconciliation may still use the metadata shortcut.
+
+Both full and dirty refreshes schedule at most 16 reads per batch through shared
+I/O. Each note must fit an 8 MiB complete-source read; oversized notes fail graph
+queries with a generic error until split/repaired, without terminating the MCP
+server or presenting a truncated source as truth. Source paths/driver details
+are not exposed in these errors. Failed batches are drained and pending changes
+remain retryable. This bounds per-source reads and batch scheduling, not total
+graph/parse memory; undelivered OS events and cross-process read races remain
+outside the guarantee. Markdown and current note revisions remain authoritative.
+
 Body tag discovery and per-note tag management share literal-aware extraction:
 matching backtick/tilde fences, closed backtick spans and escaped hashes are not
 classification tags. Nested tags retain their full slash path; Korean, combining

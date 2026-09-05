@@ -16,12 +16,13 @@ const faults = vi.hoisted(() => ({
 }));
 vi.mock('node:fs/promises', async importOriginal => {
   const real = await importOriginal<typeof import('node:fs/promises')>();
-  const wrap = (name: keyof typeof faults) => async (...args: any[]) => {
+  const wrap = (name: keyof typeof faults, operation: keyof typeof real = name) => async (...args: any[]) => {
     const code = faults[name].get(String(args[0]));
     if (code) throw Object.assign(new Error(`private-path=${args[0]} secret-driver-detail`), { code });
-    return (real[name] as any)(...args);
+    return (real[operation] as any)(...args);
   };
-  return { ...real, stat: wrap('stat'), readFile: wrap('readFile'), readdir: wrap('readdir') };
+  // The same source-read fault covers whole-file and bounded-handle readers.
+  return { ...real, stat: wrap('stat'), readFile: wrap('readFile'), open: wrap('readFile', 'open'), readdir: wrap('readdir') };
 });
 vi.mock('node:fs', async importOriginal => {
   const real = await importOriginal<typeof import('node:fs')>();

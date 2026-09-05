@@ -689,6 +689,21 @@ context omitted. Never quote these placeholders as evidence or use them as patch
 text: read the actual authorized source revision. Graph views remain advisory,
 event/reconciliation-refreshed and not a whole-vault deletion certificate.
 
+Graph refresh publication is guarded by observed invalidation generation.
+Standalone note events update path membership as well as entries. Unknown/full
+resets force source rereads; unchanged size/mtime is not sufficient for those
+resets. Shared catalog notifications received during reads are drained before
+returning. After at most three stabilization rounds, continuing changes produce
+a generic retry error, not a known-obsolete successful view. Retain the pending
+repair obligation after storage failures; never interpret those as deletion.
+
+Full and dirty reads use batches of at most 16 and an 8 MiB complete-source cap.
+An oversized note causes graph-query failure until repaired/split, not a partial
+index answer or MCP process shutdown. Errors expose neither its path nor private
+driver details. This does not bound total graph memory, prove atomic filesystem
+reads, or guarantee delivery of OS notifications. Periodic reconciliation still
+may reuse equal-size/mtime entries; revisions remain the evidence/write guard.
+
 Tag discovery and per-note tag management use the same body extractor. Tags in
 matching fences, closed backtick spans or escaped hashes are examples, not
 classification. Preserve complete nested tags (`#topic/subtopic`) and Unicode
