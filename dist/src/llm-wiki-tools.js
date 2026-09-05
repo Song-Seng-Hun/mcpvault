@@ -388,7 +388,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_review_dashboard',
-            description: 'Run one bounded GTD Reflect/weekly-review pass over Inbox, next actions, due work, waiting/someday/dependency-blocked items, open questions/hypotheses, due or stale knowledge, and graph/MOC/focus health. Work dependency diagnostics carry current revisions; the view is advisory and never mutates notes.',
+            description: 'Run one bounded GTD Reflect pass over Inbox, work readiness, due/waiting/someday/dependency-blocked work, epistemic notes, stale knowledge and graph health. maxChars includes pretty formatting. Sections are overlapping samples, not additive task counts. detailsOmitted/truncated never mean clean or complete. At tiny budgets follow selected and nextAction for one source read; compare its current revision before changing anything. If only a category action fits, follow it for details. Same-review retries retain original authentication and arguments with explicit overrides; no targets are skipped for oversized locators. Category priority is due, dependency-blocked, waiting, missing action, Inbox, knowledge, epistemic, someday, scheduled, readiness; it is not a global urgency sort. Advisory only; never mutates notes.',
             inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 50, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 18000, default: 9000 }, accessToken, prettyPrint } },
         },
         {

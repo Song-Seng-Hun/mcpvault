@@ -357,7 +357,18 @@ reactivation through triage, review, or general `publish_knowledge` is
 rejected.
 `get_wiki_review_dashboard` is a bounded Reflect pass over Inbox, next actions,
 due work, waiting/someday items, open questions/hypotheses/assumptions,
-knowledge review, and graph/focus/connectivity health. `focus_parent` and
+knowledge review, and graph/focus/connectivity health. Final JSON indentation
+counts toward `maxChars`. Reduced collections recompute `truncated`; compact
+rows/graph signals mark `detailsOmitted`. Missing graph details are not evidence
+of health. Tiny responses carry one `selected` source and `nextAction`, or a
+category retrieval action when no internal preview row fits. Read the source
+and compare any returned revision before changing it. Priority is due,
+dependency-blocked, waiting, missing action, Inbox, knowledge, epistemic,
+someday, scheduled, readiness; it selects from bounded samples, not a global
+urgency ordering. Counts overlap across sections. Same-review retry overrides
+preserve original arguments/authentication; impossible ceiling locators fail
+explicitly. Internal review planning consumes discovery before wire packing.
+`focus_parent` and
 `focus_supports` are resolved against the visible Obsidian graph and report
 unresolved, ambiguous, unparented, or cyclic focus links without becoming
 mandatory properties. `get_wiki_graph_health` also reports isolated durable

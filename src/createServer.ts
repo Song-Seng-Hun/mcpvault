@@ -1570,7 +1570,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "get_wiki_review_dashboard": {
-          return jsonResult(await llmWiki.reviewDashboard(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+          return jsonResult(await llmWiki.reviewDashboard(principal, trimmedArgs.limit, trimmedArgs.maxChars, { prettyPrint: trimmedArgs.prettyPrint }), trimmedArgs.prettyPrint);
         }
 
         case "get_wiki_flow_health": {

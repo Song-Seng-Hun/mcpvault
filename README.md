@@ -515,6 +515,21 @@ questions/hypotheses/assumptions, literature without an immutable source, and
 syntheses without evidence or `derived_from` inputs. These are repair prompts,
 not automatic publication or truth judgments.
 
+`wiki.review_dashboard` budgets its final JSON, including pretty formatting.
+Overflow first reduces section samples and correctly marks omitted rows, then
+keeps concise source locators and graph counters. Graph detail omission is not
+a clean-health verdict. At tiny budgets, follow `selected` and `nextAction`
+to inspect one current source; compare its revision before any revision-checked
+edit. A category-only action means its internal preview had no usable row.
+Category priority is due, dependency-blocked, waiting, missing next action,
+Inbox, knowledge, epistemic, someday, scheduled, and readiness; these are
+bounded samples, not a complete urgency ranking. Section counts overlap and
+must not be added together. If a locator cannot fit, reuse original arguments
+and authentication with the returned retry overrides. The maximum compact
+budget fails explicitly on an impossible locator instead of looping.
+Internal review planning uses shared discovery before user-facing dashboard
+compaction, so a tiny dashboard response is not mistaken for absent evidence.
+
 For low-friction capture, `capture_wiki_note` creates an ordinary Markdown
 note in `Inbox/` with `note_kind: fleeting` and `lifecycle: inbox`, then returns
 its exact revision and a `wiki.clarify` next action. When known, pass the bounded `capturedFrom`, `captureReason`, and

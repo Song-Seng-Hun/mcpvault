@@ -16,6 +16,7 @@ import { packExceptionBoard, type ExceptionBoardItem } from './exception-board.j
 import { packLintReport } from './lint-report.js';
 import { packProjectPacket, type ProjectPacketOptions } from './project-packet.js';
 import { packNextActionPacket } from './next-action-packet.js';
+import { packReviewDashboard } from './review-dashboard-packet.js';
 import { classifyDependencyResidual } from './dependency-graph.js';
 import { boundedTopK } from './search-limits.js';
 import { CollectionHealthProjection } from './collection-health.js';
@@ -4213,7 +4214,14 @@ export class LlmWikiService {
     };
   }
 
-  async reviewDashboard(principal?: ScopePrincipal, limit = 10, maxChars = 9000) {
+  async reviewDashboard(principal?: ScopePrincipal, limit = 10, maxChars = 9000, options: { prettyPrint?: boolean } = {}) {
+    const boundedChars = Math.min(Math.max(Number(maxChars) || 9000, 512), 18000);
+    const result = await this.collectReviewDashboard(principal, limit, boundedChars);
+    return packReviewDashboard(result, boundedChars, options.prettyPrint);
+  }
+
+  /** Shared bounded-row discovery, before any user-facing packet compaction. */
+  private async collectReviewDashboard(principal?: ScopePrincipal, limit = 10, maxChars = 9000) {
     const boundedLimit = Math.min(Math.max(Number(limit) || 10, 1), 50);
     const boundedChars = Math.min(Math.max(Number(maxChars) || 9000, 512), 18000);
     const dependencySnapshot = await this.workDependencySnapshot(principal);
@@ -4388,29 +4396,7 @@ export class LlmWikiService {
       nextActions,
       generatedAt: now(),
     };
-    const encoded = JSON.stringify(result);
-    return encoded.length <= boundedChars ? result : {
-      ...result,
-      sections: {
-        inbox: { ...inbox, items: inbox.items.slice(0, 2) },
-        projectsAndTasks: { ...result.sections.projectsAndTasks, items: actionItems.slice(0, 2) },
-        projectReadiness: { ...result.sections.projectReadiness, items: projectReadinessItems.slice(0, 2) },
-        due: { ...result.sections.due, items: dueItems.slice(0, 2) },
-        scheduled: { ...result.sections.scheduled, items: scheduledItems.slice(0, 2) },
-        waiting: { ...result.sections.waiting, items: waitingItems.slice(0, 2) },
-        dependencyBlocked: { ...result.sections.dependencyBlocked, items: dependencyBlockedItems.slice(0, 2) },
-        someday: { ...result.sections.someday, items: somedayItems.slice(0, 2) },
-        epistemic: {
-          questions: { ...result.sections.epistemic.questions, items: questionItems.slice(0, 2) },
-          hypotheses: { ...result.sections.epistemic.hypotheses, items: hypothesisItems.slice(0, 2) },
-          experiments: { ...result.sections.epistemic.experiments, items: experimentItems.slice(0, 2) },
-          assumptions: { ...result.sections.epistemic.assumptions, items: assumptionItems.slice(0, 2) },
-        },
-        knowledge: { ...knowledgeReview, items: knowledgeReview.items.slice(0, 2) },
-        graph: graphView,
-      },
-      truncated: true,
-    };
+    return result;
   }
 
   /**
@@ -5090,7 +5076,7 @@ export class LlmWikiService {
     // deliberately snoozed first item can hide every actionable item behind
     // it when pulse asks for limit=1.
     const priorityScanLimit = Math.min(500, Math.max(boundedLimit * 8, 32));
-    const dashboard = await this.reviewDashboard(principal, priorityScanLimit, Math.min(boundedChars, 14000));
+    const dashboard = await this.collectReviewDashboard(principal, priorityScanLimit, Math.min(boundedChars, 14000));
     const sections = dashboard.sections as Record<string, any>;
     let graph = sections.graph as Record<string, any>;
     // The weekly dashboard deliberately gives each section a small share of
