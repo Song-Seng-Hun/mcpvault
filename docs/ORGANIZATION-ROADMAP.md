@@ -277,7 +277,14 @@ do not prove a current, bounded, actionable response through its public adapter.
   totals remain separate from public compaction. Temporary-Vault hygiene and
   MCP tests cover edits, hiding, deletion, IO failure, aggregate races, exact
   scoped reads, 512-character output and original-request retry IDs.
-- **Open: independently derived child views.** Standalone graph/Canvas/collection
+- Collection projection now shares the coherent lint note scan rather than
+  independently rereading cached Properties. It keeps exact grouping keys,
+  correct blank-projection signals, review-time expiry, bounded retained-group
+  accounting and executable revision-stamped member reads. Minimum budgets,
+  oversized labels/paths, hidden/foreign groups, mutable-response isolation and
+  public MCP actions have dedicated coverage. Collection health is an internal
+  child of organization health, not a separately registered endpoint.
+- **Open: independently derived child views.** Standalone graph/Canvas
   views still need direct audits for source/target freshness, visibility and
   actionable minimum budgets. A checked lint inventory does not prove every
   separately cached graph edge current. The new lint guard scans known metadata;
@@ -288,6 +295,12 @@ do not prove a current, bounded, actionable response through its public adapter.
   run, passed alone in 1.68s, and passed on the next unmodified full run. Its
   assertions/time limit were not relaxed. Reproduce under controlled filesystem
   load before claiming this intermittent timing issue fixed.
+- **Observed inventory timing risk.** One combined collection-validation run
+  omitted a newly externally written waiting project from reviewDashboard.
+  Focused reruns and the subsequent full suite passed. That dashboard uses
+  workDependencySnapshot's query inventory, not the new lint collection
+  accumulator. Investigate deterministic new-file reconciliation and snapshot
+  freshness; do not infer this symptom is fixed from the later green run.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

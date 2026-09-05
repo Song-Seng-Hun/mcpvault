@@ -94,6 +94,7 @@ export declare class LlmWikiService {
     private readonly lintCache;
     private readonly lintInFlight;
     private readonly lintSnapshots;
+    private readonly lintCollections;
     constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, references: ReferenceService, semanticSearch?: SemanticSearchService | undefined);
     invalidate(): void;
     /**
@@ -3935,36 +3936,8 @@ export declare class LlmWikiService {
         mutates: boolean;
         truncated: boolean;
     }>;
-    /**
-     * One-pass organization quality projection. It reuses lint's authoritative
-     * scan instead of running separate folder/property scans, and never mutates
-     * notes or treats organization hints as security boundaries.
-     */
-    collectionHealth(principal?: ScopePrincipal, limit?: number, maxChars?: number, snapshotAccess?: (path: string) => boolean): Promise<{
-        purpose: string;
-        totalNotes: number;
-        collectionTotal: number;
-        items: {
-            key: string;
-            entryPoint: string;
-            representativePath?: string;
-            representativeTitle?: string;
-            purpose?: string;
-            scope?: string;
-            questions?: string[];
-            total: number;
-            knowledge: number;
-            inbox: number;
-            reviewDue: number;
-            withoutSummary: number;
-            withOpenQuestions: number;
-            attentionScore: number;
-            signals: string[];
-            nextAction: string;
-        }[];
-        truncated: boolean;
-        generatedAt: string;
-    }>;
+    /** Render collection signals from the same verified lint note snapshots. */
+    collectionHealth(principal?: ScopePrincipal, limit?: number, maxChars?: number, basis?: WikiLintResult): Promise<import("./collection-health.js").CollectionReport>;
     organizationHealth(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<any>;
     /**
      * Return a derived maintenance ledger.  It deliberately reports debt rather

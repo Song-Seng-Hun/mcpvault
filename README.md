@@ -815,6 +815,24 @@ reads across known scoped files: it is neither a constant-time cache nor an
 atomic inventory of newly created files. Derived graph signals remain advisory;
 an owner revision does not prove every graph edge current. Use focused checks
 for ordinary repairs rather than polling full-Vault diagnostics.
+The `collectionHealth` child of `wiki.organization_health` is built during that
+same coherent lint scan, not from a second cached-Properties inventory. There is
+no separate collection-health MCP endpoint. It groups declared MOC memberships,
+domains, or scope-qualified filing areas and points to the most actionable
+visible member using `repairTarget` (path/revision) and `action`; its top-level
+`nextAction` executes the same read. A member's legacy `nextAction` **string** is
+only an intent label. Group `entryPoint` is an authored label, not a resolved
+MOC address or permission grant. Empty/whitespace summaries and blank key-point
+lists still need a projection. The next future `review_at` boundary invalidates
+cached counts even without a document edit.
+At most 120 group records are retained. `collectionTotal` counts those records;
+`collectionCountComplete: false` and `untrackedMemberships` identify overflow
+without pretending skipped memberships are distinct groups. Ranking is among
+retained groups. Long keys never merge by truncated prefix. When needed,
+`groupKeyOmitted` suppresses a display label, not the exact member path/revision.
+Child compaction preserves one useful read before the parent's primary findings
+are removed. An exact target too large even at maximum budget returns
+`unavailable: exact_target_exceeds_maximum_budget`, not an endless retry.
 `get_wiki_quality_check` applies a small role-specific checklist
 to one current visible note. Its `assessment: authoring_structure` score counts
 authored structure only, not factual truth, source integrity, or verified

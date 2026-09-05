@@ -20,7 +20,7 @@ describe('progressive Wiki policy', () => {
   });
 
   test('teaches bounded authority shelves and distinct relation strengths progressively', () => {
-    expect(WIKI_POLICY_VERSION).toBe(16);
+    expect(WIKI_POLICY_VERSION).toBe(17);
     const retrieval = getWikiPolicyTopic('retrieval', 2000);
     const knowledge = getWikiPolicyTopic('knowledge', 2000);
     expect(retrieval.routes).toEqual(expect.arrayContaining(['wiki.authority_map']));
@@ -49,6 +49,15 @@ describe('progressive Wiki policy', () => {
     expect(maintenance.rules.join(' ')).toContain('not an atomic census');
     const lint = getLlmWikiTools().find(tool => tool.name === 'lint_wiki')!;
     expect((lint.inputSchema as any).properties.maxChars).toMatchObject({ minimum: 512, maximum: 16000 });
+  });
+
+  test('collection guidance distinguishes real read actions from group labels and partial counts', () => {
+    const maintenance = getWikiPolicyTopic('maintenance', 5000);
+    expect(maintenance.rules.join(' ')).toContain('collectionHealth');
+    expect(maintenance.rules.join(' ')).toContain('repairTarget');
+    expect(maintenance.rules.join(' ')).toContain('collectionCountComplete');
+    expect(maintenance.rules.join(' ')).toContain('not an endpoint');
+    expect(MCPVAULT_SERVER_INSTRUCTIONS).not.toContain('collectionCountComplete');
   });
 
   test('quality guidance is progressive and forbids fingerprint-only certification', () => {

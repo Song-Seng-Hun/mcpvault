@@ -19,7 +19,7 @@ export const WIKI_POLICY_TOPICS = [
 ] as const;
 
 export type WikiPolicyTopicId = typeof WIKI_POLICY_TOPICS[number];
-export const WIKI_POLICY_VERSION = 16;
+export const WIKI_POLICY_VERSION = 17;
 
 type WikiPolicyTopic = {
   purpose: string;
@@ -170,6 +170,7 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
       'Begin with one bounded wiki.review_packet or wiki.exception_board item and execute its nextAction. Exception-board totals are partial candidate counts, not a Vault health verdict; a matching owner revision does not certify all dependencies. Apply any retry.overrides to the original request without shortening target paths.',
       'Use wiki.quality_check for one note\'s authoring structure, not source truth. Follow its nextAction before editing; unverified/stale projections require reading and revision-checked wiki.projection_update, never fingerprint-only certification.',
       'Use mcp.lint_wiki or wiki.organization_health only for a needed broader diagnosis. A known-source revision check costs metadata reads and is not an atomic census or graph freshness proof. Retry a changed snapshot; keep maxChars bounded and reuse original arguments with retry.overrides.',
+      'In wiki.organization_health, collectionHealth shares the lint snapshot. Read its nextAction or a member action at repairTarget before repair; a member nextAction string is an intent label, not an endpoint. collectionCountComplete=false means counts omit groups; an omitted group label is not a renamed group.',
       'Treat graph, vocabulary, duplicate, placement, and composition findings as advisory signals; inspect both current revisions before editing.',
       'Similarity, zero usage, high degree, or a missing reciprocal edge may justify review but never automatic merge, split, move, or deletion.',
       'For a structural repair, use wiki.relation_set, wiki.reciprocal_link, wiki.moc_order, wiki.hierarchy_change, wiki.moc_membership, or wiki.property_migration as applicable; dry-run its complete notes.change_set, inspect every revision and preview, then confirm that exact fingerprint.',

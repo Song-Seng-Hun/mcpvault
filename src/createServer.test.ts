@@ -640,6 +640,35 @@ test('direct lint and organization health retain bounded executable scoped repai
   } finally { await client.close(); await server.close(); }
 });
 
+test('organization collection repair reads the exact scoped member without hidden or foreign groups', async () => {
+  const root = join(testVaultPath, '_scopes', 'models', 'codex');
+  const foreign = join(testVaultPath, '_scopes', 'models', 'claude');
+  await mkdir(root, { recursive: true });
+  await mkdir(foreign, { recursive: true });
+  await writeFile(join(root, 'Concept.md'), '---\nnote_kind: atomic\ndomain: Shared\n---\nCurrent explanation.');
+  await writeFile(join(foreign, 'Foreign.md'), '---\nnote_kind: atomic\ndomain: Foreign group\n---\nForeign body.');
+  await writeFile(join(testVaultPath, 'Hidden.md'), '---\nnote_kind: moc\ndomain: Hidden group\nmoderation_status: hidden\n---\nHidden body.');
+  const { server, client, accessToken } = await connectClient();
+  try {
+    expect((await client.listTools()).tools).toHaveLength(5);
+    const result = await client.callTool({ name: 'call_endpoint', arguments: {
+      endpointId: 'wiki.organization_health', arguments: { maxChars: 16000, accessToken },
+    } });
+    expect(result.isError, JSON.stringify(result)).toBeFalsy();
+    const text = (result.content as any)[0].text;
+    expect(text).not.toMatch(/_scopes|Foreign|Hidden/);
+    expect(text.length).toBeLessThanOrEqual(16000);
+    const collections = JSON.parse(text).collectionHealth;
+    const item = collections.items.find((entry: any) => entry.key === 'domain:Shared');
+    expect(item.repairTarget.path).toBe('scope://model/codex/Concept.md');
+    const read = await client.callTool({ name: 'call_endpoint', arguments: {
+      endpointId: item.action.endpointId, arguments: { ...item.action.arguments, accessToken },
+    } });
+    expect(read.isError).toBeFalsy();
+    expect(JSON.parse((read.content as any)[0].text).revision).toBe(item.repairTarget.revision);
+  } finally { await client.close(); await server.close(); }
+});
+
 test("search_notes bounds output and prioritizes Wiki notes", async () => {
   const { server, client } = await connectClient();
   try {

@@ -14,6 +14,7 @@ import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference } from './property-references.js';
 import { packExceptionBoard, type ExceptionBoardItem } from './exception-board.js';
 import { packLintReport } from './lint-report.js';
+import { CollectionHealthProjection } from './collection-health.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
@@ -1299,6 +1300,7 @@ export class LlmWikiService {
   private readonly lintInFlight = new Map<string, Promise<WikiLintResult>>();
   // Scope-private guards must never become enumerable diagnostic payload.
   private readonly lintSnapshots = new WeakMap<WikiLintResult, LintSnapshot>();
+  private readonly lintCollections = new WeakMap<WikiLintResult, CollectionHealthProjection>();
 
   constructor(
     private readonly fileSystem: FileSystemService,
@@ -9925,70 +9927,14 @@ export class LlmWikiService {
     return report;
   }
 
-  /**
-   * One-pass organization quality projection. It reuses lint's authoritative
-   * scan instead of running separate folder/property scans, and never mutates
-   * notes or treats organization hints as security boundaries.
-   */
-  async collectionHealth(principal?: ScopePrincipal, limit = 20, maxChars = 6000, snapshotAccess?: (path: string) => boolean) {
-    const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
+  /** Render collection signals from the same verified lint note snapshots. */
+  async collectionHealth(principal?: ScopePrincipal, limit = 20, maxChars = 6000, basis?: WikiLintResult) {
+    const boundedLimit = Math.floor(Math.min(Math.max(Number(limit) || 20, 1), 50));
     const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 12000);
-    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
-    type Collection = { key: string; entryPoint: string; representativePath?: string; representativeTitle?: string; purpose?: string; scope?: string; questions?: string[]; total: number; knowledge: number; inbox: number; reviewDue: number; withoutSummary: number; withOpenQuestions: number };
-    const groups = new Map<string, Collection>();
-    let noteTotal = 0;
-    const overflowKeys = new Set<string>();
-    for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
-      if (isModerationHidden(note.frontmatter) || (snapshotAccess && !snapshotAccess(note.path))) continue;
-      noteTotal += 1;
-      const frontmatter = note.frontmatter || {};
-      const kind = String(frontmatter.note_kind || '').toLowerCase();
-      const primaryMoc = typeof frontmatter.primary_moc === 'string' ? frontmatter.primary_moc.trim() : '';
-      const declaredMocs = Array.isArray(frontmatter.mocs) ? frontmatter.mocs.filter((item: unknown): item is string => typeof item === 'string' && Boolean(item.trim())).map(item => item.trim()) : [];
-      const mocMemberships = [...new Set([primaryMoc, ...declaredMocs, ...(typeof frontmatter.moc === 'string' && frontmatter.moc.trim() ? [frontmatter.moc.trim()] : [])].filter(Boolean))];
-      const rawKeys = mocMemberships.length > 0
-        ? mocMemberships
-        : typeof frontmatter.domain === 'string' && frontmatter.domain.trim()
-          ? [`domain:${frontmatter.domain.trim()}`]
-          : [`folder:${normalizePath(note.path).split('/')[0] || 'root'}`];
-      const reviewAt = Date.parse(String(frontmatter.review_at || ''));
-      for (const rawKey of rawKeys) {
-        const key = rawKey.slice(0, 500);
-        let group = groups.get(key);
-        if (!group) {
-          if (groups.size >= 120) { overflowKeys.add(key); continue; }
-          group = { key, entryPoint: primaryMoc || rawKey || this.access.toPublicPath(note.path), total: 0, knowledge: 0, inbox: 0, reviewDue: 0, withoutSummary: 0, withOpenQuestions: 0 };
-          groups.set(key, group);
-        }
-        group.total += 1;
-        if (['atomic', 'knowledge', 'decision', 'literature'].includes(kind)) group.knowledge += 1;
-        if (kind === 'moc' && !group.representativePath) {
-          group.representativePath = this.access.toPublicPath(note.path);
-          const representativeTitle = typeof frontmatter.title === 'string' ? frontmatter.title : note.path.split('/').at(-1);
-          if (representativeTitle) group.representativeTitle = representativeTitle;
-          if (typeof frontmatter.moc_purpose === 'string' && frontmatter.moc_purpose.trim()) group.purpose = boundedText(frontmatter.moc_purpose, 500);
-          if (typeof frontmatter.moc_scope === 'string' && frontmatter.moc_scope.trim()) group.scope = boundedText(frontmatter.moc_scope, 300);
-          if (Array.isArray(frontmatter.moc_questions)) group.questions = frontmatter.moc_questions.filter((item: unknown): item is string => typeof item === 'string' && Boolean(item.trim())).slice(0, 6).map(item => boundedText(item, 300));
-        }
-        if (String(frontmatter.lifecycle || '').toLowerCase() === 'inbox') group.inbox += 1;
-        if (Number.isFinite(reviewAt) && reviewAt <= Date.now() && !['archived', 'superseded'].includes(String(frontmatter.lifecycle || '').toLowerCase())) group.reviewDue += 1;
-        if (['atomic', 'knowledge', 'decision'].includes(kind) && !frontmatter.summary && !Array.isArray(frontmatter.key_points)) group.withoutSummary += 1;
-        if (Array.isArray(frontmatter.open_questions) && frontmatter.open_questions.length > 0) group.withOpenQuestions += 1;
-      }
-    }
-    const items = Array.from(groups.values()).map(group => ({
-      ...group,
-      attentionScore: group.reviewDue * 3 + group.inbox * 2 + group.withoutSummary + group.withOpenQuestions,
-      signals: [
-        ...(group.reviewDue > 0 ? ['review_due'] : []),
-        ...(group.inbox > 0 ? ['inbox_capture'] : []),
-        ...(group.withoutSummary > 0 ? ['missing_progressive_summary'] : []),
-        ...(group.withOpenQuestions > 0 ? ['open_questions'] : []),
-      ],
-      nextAction: group.reviewDue > 0 ? 'review_due_notes' : group.inbox > 0 ? 'clarify_inbox_captures' : group.withoutSummary > 0 ? 'add_compact_projections' : group.withOpenQuestions > 0 ? 'connect_questions_to_evidence' : 'keep_collection_healthy',
-    })).sort((a, b) => b.attentionScore - a.attentionScore || a.key.localeCompare(b.key)).slice(0, boundedLimit);
-    const result = { purpose: 'Bounded collection-level health for MOCs, domains, or top-level filing areas. It is an advisory view; it never moves or rewrites notes.', totalNotes: noteTotal, collectionTotal: groups.size + overflowKeys.size, items, truncated: groups.size > items.length || overflowKeys.size > 0, generatedAt: now() };
-    return JSON.stringify(result).length <= boundedChars ? result : { ...result, items: items.slice(0, Math.max(1, Math.floor(items.length / 2))), truncated: true };
+    const lint = basis || await this.lint(principal, 200);
+    const projection = this.lintCollections.get(lint);
+    if (!projection) throw new Error('Collection source snapshot unavailable; retry organization health');
+    return projection.report(boundedLimit, boundedChars);
   }
 
   async organizationHealth(principal?: ScopePrincipal, limit = 30, maxChars = 7000) {
@@ -10065,7 +10011,7 @@ export class LlmWikiService {
     const snapshot = this.lintSnapshots.get(lint);
     const snapshotAccess = (path: string) => snapshot?.get(normalizePath(path))?.visible === true;
     const graph = await this.graphHealth(principal, Math.min(boundedLimit, 20), Math.min(boundedChars, 12000), snapshotAccess);
-    const collectionHealth = await this.collectionHealth(principal, Math.min(boundedLimit, 20), Math.min(boundedChars, 9000), snapshotAccess);
+    const collectionHealth = await this.collectionHealth(principal, Math.min(boundedLimit, 20), Math.min(boundedChars, 12000), lint);
     if (!await this.lintSnapshotMatches(lint, principal)) throw new Error('Wiki changed during organization health; retry the current snapshot');
     const mocCoverage = 'mocCoverage' in graph ? graph.mocCoverage as Record<string, unknown> : undefined;
     const focusHealth = 'focusHealth' in graph ? graph.focusHealth as Record<string, any> : undefined;
@@ -10198,7 +10144,8 @@ export class LlmWikiService {
           truncated: true,
         },
       }),
-      collectionHealth: { totalNotes: collectionHealth.totalNotes, collectionTotal: collectionHealth.collectionTotal, items: collectionHealth.items.slice(0, 3), truncated: true },
+      // Optional collection context must not crowd out the primary diagnosis.
+      collectionHealth: this.lintCollections.get(lint)!.report(Math.min(3, boundedLimit), 512),
       truncated: true,
       generatedAt: result.generatedAt,
     };
@@ -10207,7 +10154,7 @@ export class LlmWikiService {
       ...Object.values(compact.knowledgeConnectivity || {}).flatMap((item: any) => Array.isArray(item?.items) ? [item.items] : []),
       ...Object.values(compact.typedRelations || {}).flatMap((item: any) => Array.isArray(item?.items) ? [item.items] : []),
     ];
-    while (JSON.stringify(compact).length > boundedChars && compact.collectionHealth.items.length > 1) compact.collectionHealth.items.pop();
+    while (JSON.stringify(compact).length > boundedChars && (compact.collectionHealth.items?.length || 0) > 1) compact.collectionHealth.items.pop();
     while (JSON.stringify(compact).length > boundedChars) {
       const largest = compactSignalArrays.sort((left, right) => right.length - left.length)[0];
       if (!largest || largest.length <= 1) break;
@@ -14279,6 +14226,7 @@ export class LlmWikiService {
   }
 
   private async lintSnapshotMatches(result: WikiLintResult, principal?: ScopePrincipal): Promise<boolean> {
+    if (!this.lintCollections.get(result)?.isCurrent()) return false;
     const snapshot = this.lintSnapshots.get(result);
     if (!snapshot) return false;
     const paths = [...snapshot.keys()];
@@ -14288,10 +14236,11 @@ export class LlmWikiService {
       const current = await this.fileSystem.readNoteMetadata(batch, canAccess, { fresh: true, strict: true });
       if (current.length !== batch.length || current.some(note => note.revision !== snapshot.get(note.path)?.revision)) return false;
     }
-    return true;
+    return this.lintCollections.get(result)?.isCurrent() === true;
   }
 
   private async computeLint(principal?: ScopePrincipal, limit: number = 200): Promise<WikiLintResult> {
+    const collections = new CollectionHealthProjection(path => this.access.toPublicPath(path));
     const scopeAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
     const snapshot: LintSnapshot = new Map();
     let paths: string[] = [];
@@ -14348,6 +14297,7 @@ export class LlmWikiService {
       const opened = await this.fileSystem.readNote(path);
       if (opened.revision !== basis.revision) throw new Error('Wiki changed during lint; retry the current snapshot');
       const note = { path, frontmatter: opened.frontmatter, content: opened.content, revision: opened.revision };
+      collections.add(note);
       const type = note.frontmatter.llm_wiki_type;
       const publicPath = this.access.toPublicPath(note.path);
       classificationNotes.push({ path: note.path, frontmatter: note.frontmatter, ...(note.revision && { revision: note.revision }) });
@@ -14996,6 +14946,7 @@ export class LlmWikiService {
       truncated: totalIssues > limit || unresolved.truncated,
     };
     this.lintSnapshots.set(result, snapshot);
+    this.lintCollections.set(result, collections);
     return result;
   }
 

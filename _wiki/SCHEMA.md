@@ -377,6 +377,25 @@ retry instruction. The private known-file guard requires metadata reads and
 is not an atomic new-file census or a certificate for derived graph snapshots.
 Unresolved-link graph findings without source provenance carry no owner revision.
 
+`wiki.organization_health.collectionHealth` is an optional derived child, not a
+separate endpoint. It accumulates the same visible coherent notes as lint and
+shares their private source guards. Its earliest future `review_at` deadline
+also invalidates cached results; `generatedAt` describes the evaluation basis.
+Group keys retain complete authored values and never merge at a shared truncated
+prefix. `entryPoint` is a membership/domain/filing label, not a resolved MOC link.
+Counts describe the at-most-120 retained groups: `collectionTotal` is not a
+complete distinct-group total when `collectionCountComplete` is false.
+`untrackedMemberships` counts skipped memberships, not unseen unique collections.
+`repairTarget.path` and `.revision` identify a current member; the group's
+`action` and child's top-level `nextAction` execute `notes.read`. Legacy group
+`nextAction` strings describe intent only. Absent/blank summaries and empty
+key-point lists are missing projections. Compact output may omit counts, prose,
+or an oversized label with `groupKeyOmitted: true`; it never shortens member
+paths/revisions. Apply a returned retry to the original organization request.
+If an exact target cannot fit at maximum budget, `unavailable` is
+`exact_target_exceeds_maximum_budget` with no retry. An omitted count is not zero.
+Returned nested fields are detached from the privately cached accumulator.
+
 `wiki.quality_check` is a separate single-note **authoring structure** rubric,
 not factual verification. Its path must be Vault-relative or an authorized
 `scope://` URI; absolute and traversal aliases are rejected before reading.
