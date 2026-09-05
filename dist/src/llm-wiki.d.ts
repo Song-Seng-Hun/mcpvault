@@ -412,19 +412,13 @@ export declare class LlmWikiService {
         truncated: boolean;
         note: string;
     }>;
-    /**
-     * Return a bounded, explainable neighborhood around one note.  The note's
-     * Markdown path remains canonical; links, metadata facets, and optional
-     * semantic matches are only read-model views of nearby knowledge.
-     */
+    /** Resolve an authored navigation edge using its syntax and source scope. */
+    private resolveNavigationLink;
+    /** Bounded, explainable neighbors; Markdown identity remains authoritative. */
     neighborhood(principal: ScopePrincipal | undefined, path: string, limit?: number, maxChars?: number, includeSemantic?: boolean): Promise<{
         source: {
             path: string;
-            title: string | undefined;
             revision: string;
-            moc?: string;
-            mocs?: string[];
-            project?: string;
         };
         neighbors: {
             path: string;
@@ -445,14 +439,12 @@ export declare class LlmWikiService {
             revision?: string;
         }[];
         totalCandidates: number;
-        truncated: boolean;
-        ordering: string[];
-        semantic?: {
-            available: boolean;
-            indexed: number;
-            pending: number;
-            error?: string;
+        navigation: {
+            unresolvedLinks: number;
+            ambiguousLinks: number;
+            truncated: boolean;
         };
+        truncated: boolean;
     }>;
     /**
      * Find short, explainable link paths between two visible notes. This is a

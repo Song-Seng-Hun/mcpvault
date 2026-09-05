@@ -1040,7 +1040,15 @@ Knowledge notes may optionally declare controlled-vocabulary metadata:
 projects these fields for bounded library-style navigation; lint warns about
 invalid or incomplete replacements, but existing Obsidian links are never
 silently rewritten. `get_wiki_trail` follows a bounded chain of real
-Obsidian links between two visible notes. `get_wiki_placement_candidates`
+Obsidian links between two visible notes. Neighborhood/trail use the shared
+Markdown/wikilink resolver with source-relative context and exact extensions;
+only one uniquely resolved, source-referenceable target creates a direct edge.
+Ambiguity is not a set of asserted links. Neighborhood reports bounded visible
+unresolved/ambiguous link counts; hidden candidates are not enumerated. Scope
+rules apply in the direction of each link, including backlinks. Hidden roots
+are rejected. maxChars applies to the entire serialized response: omit full
+rows, then optional metadata, while retaining exact identities and marking
+truncation, or ask for a larger budget. `get_wiki_placement_candidates`
 reports lifecycle/`note_kind` versus PARA-folder disagreements as advisory
 repair candidates. Review the current revision before any triage or move; no
 automatic relocation occurs.

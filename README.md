@@ -1111,6 +1111,17 @@ multi-hop traversal of existing Obsidian links, and
 `get_wiki_placement_candidates` reports likely PARA filing mismatches without
 moving notes. Both are derived navigation aids; Markdown, Properties, and Git
 remain authoritative.
+`wiki.neighborhood` and `wiki.trail` resolve Markdown links from their source
+note and keep explicit file extensions. Ambiguous wikilinks are not definite
+edges: inspect the bounded outgoing-link unresolved/ambiguous counts in neighborhood
+navigation rather than assuming every matching alias is linked. Traversal
+checks the source-to-target scope at each step; owning both identities does
+not permit a model note to reference an agent-private note. Backlinks must
+also resolve uniquely from their author's scope;
+filtering backlink authors must not change the target resolution. Hidden roots are
+unavailable, including zero-hop trails. Small budgets omit complete rows and
+mark truncation; canonical endpoint paths are never shortened. If identity
+itself cannot fit, increase maxChars.
 `get_wiki_vocabulary_health` adds a bounded library-style hygiene view for tag
 spelling/case variants, subject terms without a local authority note, and terms
 used by multiple notes. It suggests review only; it never renames or retags

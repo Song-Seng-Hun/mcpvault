@@ -20,7 +20,7 @@ import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.
 import { projectNoteOutline, projectNoteHeadingPresence, projectNoteBlockLines, selectNoteHeading } from './note-projections.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
-import { buildNoteReferenceIndex, normalizeNoteReferenceTerm, resolveNoteReference } from './note-reference.js';
+import { buildNoteReferenceIndex, normalizeNoteReferenceTerm, noteReferenceDocument, resolveNoteReference } from './note-reference.js';
 import { buildJsonCanvasProjection, canvasFileNodeId, readJsonCanvasMetadata, validateJsonCanvasDocument } from './json-canvas.js';
 export { SOURCE_TRUST_LEVELS } from './organization.js';
 const knowledgeStatuses = new Set(KNOWLEDGE_STATUSES);
@@ -2801,19 +2801,26 @@ export class LlmWikiService {
             note: 'This queue is for active recall and research prioritization. It does not decide truth, rewrite notes, or replace evidence review.',
         };
     }
-    /**
-     * Return a bounded, explainable neighborhood around one note.  The note's
-     * Markdown path remains canonical; links, metadata facets, and optional
-     * semantic matches are only read-model views of nearby knowledge.
-     */
+    /** Resolve an authored navigation edge using its syntax and source scope. */
+    async resolveNavigationLink(principal, sourcePath, link) {
+        const canAccess = (target) => this.access.canAccessPhysicalPath(target, principal)
+            && this.access.canReferenceFrom(sourcePath, target);
+        return /^!?\[[^\]]*\]\(/.test(link.link)
+            ? this.fileSystem.findPathForMarkdownLink(link.target, sourcePath, canAccess)
+            : this.fileSystem.findPathForWikiLink(link.target, canAccess, sourcePath);
+    }
+    /** Bounded, explainable neighbors; Markdown identity remains authoritative. */
     async neighborhood(principal, path, limit = 12, maxChars = 6000, includeSemantic = false) {
         const boundedLimit = Math.min(Math.max(Number(limit) || 12, 1), 40);
         const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 16000);
         const sourcePath = normalizePath(path);
-        const canAccess = (candidatePath) => this.access.canAccessPhysicalPath(candidatePath, principal);
+        const canAccess = (candidatePath) => this.access.canAccessPhysicalPath(candidatePath, principal)
+            && this.access.canReferenceFrom(sourcePath, candidatePath);
         if (!canAccess(sourcePath))
             throw new Error(`Access denied: ${this.access.toPublicPath(sourcePath)}`);
         const source = await this.fileSystem.readNote(sourcePath);
+        if (isModerationHidden(source.frontmatter))
+            throw new Error('The neighborhood source is unavailable');
         const sourceKey = sourcePath.toLowerCase();
         const candidates = new Map();
         const add = (candidatePath, score, reason, details = {}) => {
@@ -2841,18 +2848,39 @@ export class LlmWikiService {
             this.fileSystem.getOutlinks(sourcePath, graphLimit, canAccess),
             this.fileSystem.getBacklinks(sourcePath, graphLimit, canAccess),
         ]);
+        let unresolvedLinks = 0, ambiguousLinks = 0;
         for (const link of outlinks.outlinks) {
             let targets = [];
             try {
-                targets = await this.fileSystem.findPathForWikiLink(link.target, canAccess);
+                targets = await this.resolveNavigationLink(principal, sourcePath, link);
             }
             catch {
                 targets = [];
             }
-            for (const target of targets.slice(0, 3))
-                add(target, 100, 'direct_link', { line: link.line, context: boundedText(link.context, 240), relations: [link.relation || 'links_to'] });
+            if (targets.length !== 1) {
+                if (targets.length > 1)
+                    ambiguousLinks += 1;
+                else
+                    unresolvedLinks += 1;
+                continue;
+            }
+            add(targets[0], 100, 'direct_link', { line: link.line, context: boundedText(link.context, 240), relations: [link.relation || 'links_to'] });
         }
         for (const link of backlinks.backlinks) {
+            // Graph visibility also controls its target resolver. Filter author
+            // direction here instead of removing valid public resolution candidates.
+            if (!canAccess(link.path) || !this.access.canReferenceFrom(link.path, sourcePath))
+                continue;
+            const target = extractObsidianLinkOccurrences(link.link, 1)[0]?.target ?? noteReferenceDocument(link.link);
+            let matches;
+            try {
+                matches = await this.resolveNavigationLink(principal, link.path, { target, link: link.link });
+            }
+            catch {
+                continue;
+            }
+            if (matches.length !== 1 || normalizePath(matches[0]).toLowerCase() !== sourceKey)
+                continue;
             add(link.path, 95, 'backlink', { line: link.line, context: boundedText(link.context, 240), relations: [link.relation || 'backlinks_to'] });
         }
         const mocRefs = (frontmatter) => {
@@ -2883,6 +2911,8 @@ export class LlmWikiService {
         const projectKey = sourceProject ? referenceKey(sourceProject) : '';
         if (mocKeys.size > 0 || projectKey || sourceTaskContext || sourceTags.size > 0 || sourceEvidence.size > 0 || Number.isFinite(sourceUpdatedAt)) {
             for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+                if (isModerationHidden(note.frontmatter))
+                    continue;
                 const noteMocs = mocRefs(note.frontmatter);
                 const noteProject = typeof note.frontmatter.project === 'string' ? note.frontmatter.project.trim() : '';
                 const sameMoc = noteMocs.some(value => mocKeys.has(referenceKey(value)));
@@ -3001,12 +3031,22 @@ export class LlmWikiService {
             neighbors,
             totalCandidates: candidates.size,
             truncated: candidates.size > neighbors.length,
+            navigation: { unresolvedLinks, ambiguousLinks, truncated: outlinks.truncated || backlinks.truncated },
             ordering: ['direct_link', 'backlink', 'shared_source', 'shared_moc', 'shared_project', 'shared_task_context', 'shared_tag', 'temporal_proximity', 'semantic_match'],
             ...(semantic && { semantic }),
         };
         if (JSON.stringify(result).length <= boundedChars)
             return result;
-        return { ...result, neighbors: neighbors.slice(0, Math.max(1, Math.floor(neighbors.length / 2))), truncated: true };
+        const compact = { ...result, neighbors: [...neighbors], truncated: true };
+        while (compact.neighbors.length && JSON.stringify(compact).length > boundedChars)
+            compact.neighbors.pop();
+        if (JSON.stringify(compact).length <= boundedChars)
+            return compact;
+        const minimal = { source: { path: result.source.path, revision: result.source.revision }, neighbors: [],
+            totalCandidates: result.totalCandidates, navigation: result.navigation, truncated: true };
+        if (JSON.stringify(minimal).length > boundedChars)
+            throw new Error('maxChars is too small to preserve this source path and revision; increase the read budget.');
+        return minimal;
     }
     /**
      * Find short, explainable link paths between two visible notes. This is a
@@ -3022,8 +3062,9 @@ export class LlmWikiService {
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
         if (!from || !to || !canAccess(from) || !canAccess(to))
             throw new Error('Both trail endpoints must be visible notes');
-        await this.fileSystem.readNote(from);
-        await this.fileSystem.readNote(to);
+        const fromNote = await this.fileSystem.readNote(from), toNote = await this.fileSystem.readNote(to);
+        if (isModerationHidden(fromNote.frontmatter) || isModerationHidden(toNote.frontmatter))
+            throw new Error('A trail endpoint is unavailable');
         const queue = [{ path: from, nodes: [from], edges: [] }];
         const visited = new Set([from.toLowerCase()]);
         const paths = [];
@@ -3041,17 +3082,18 @@ export class LlmWikiService {
                 truncated = true;
                 continue;
             }
-            const outlinks = await this.fileSystem.getOutlinks(current.path, 24, canAccess);
+            const outlinks = await this.fileSystem.getOutlinks(current.path, 24, target => canAccess(target) && this.access.canReferenceFrom(current.path, target));
+            if (outlinks.truncated)
+                truncated = true;
             for (const link of outlinks.outlinks) {
                 if (exploredEdges >= 200) {
                     truncated = true;
                     break;
                 }
-                const targetName = String(link.target || '').replace(/\.md$/i, '').trim();
-                if (!targetName)
+                const matches = await this.resolveNavigationLink(principal, current.path, link);
+                if (matches.length !== 1)
                     continue;
-                const matches = await this.fileSystem.findPathForWikiLink(targetName, canAccess);
-                for (const match of matches.slice(0, 8)) {
+                for (const match of matches) {
                     exploredEdges += 1;
                     const key = match.toLowerCase();
                     if (current.nodes.some(node => node.toLowerCase() === key))
@@ -3075,7 +3117,12 @@ export class LlmWikiService {
         const result = { mode: 'bounded_wiki_trail', from: this.access.toPublicPath(from), to: this.access.toPublicPath(to), maxDepth: depthLimit, paths: paths.slice(0, pathLimit), totalPaths: paths.length, exploredNodes, exploredEdges, truncated: truncated || queue.length > 0 };
         if (JSON.stringify(result).length <= boundedChars)
             return result;
-        return { ...result, paths: result.paths.slice(0, 1), truncated: true };
+        const compact = { ...result, paths: [...result.paths], truncated: true };
+        while (compact.paths.length && JSON.stringify(compact).length > boundedChars)
+            compact.paths.pop();
+        if (JSON.stringify(compact).length > boundedChars)
+            throw new Error('maxChars is too small to preserve the trail endpoint paths; increase the read budget.');
+        return compact;
     }
     async reviewQueue(principal, limit = 5, maxChars = 4000, maxCascadeDepth = 3, options = {}) {
         const boundedChars = Math.min(Math.max(Number(maxChars) || 4000, 512), 12000);
@@ -11040,6 +11087,8 @@ export class LlmWikiService {
             ...(Array.isArray(source.evidence) && { evidence: source.evidence.slice(0, 8) }),
         };
         const neighborhood = await this.neighborhood(principal, path, 16, Math.min(7000, boundedChars), includeSemantic);
+        const neighborhoodSemantic = 'semantic' in neighborhood && typeof neighborhood.semantic === 'object' && neighborhood.semantic !== null
+            ? neighborhood.semantic : undefined;
         const neighborRows = neighborhood.neighbors;
         const isCounterpoint = (item) => {
             const relations = Array.isArray(item.relations) ? item.relations.map(String).map(value => value.toLowerCase()) : [];
@@ -11160,7 +11209,7 @@ export class LlmWikiService {
             neighborhood: {
                 totalCandidates: neighborhood.totalCandidates,
                 truncated: neighborhood.truncated,
-                ...(neighborhood.semantic && { semantic: neighborhood.semantic }),
+                ...(neighborhoodSemantic && { semantic: neighborhoodSemantic }),
             },
         };
         while (JSON.stringify(result).length > boundedChars && (result.supporting.length > 0 || result.counterpoints.length > 0 || result.reasoningTrail.decisions.length > 0 || result.reasoningTrail.counterexamples.length > 0)) {
