@@ -123,6 +123,12 @@ readers. Missing source-relative targets do not select same-name notes elsewhere
 Revision-checked moves with link updates preserve both incoming and outgoing
 relative wikilink targets, including links in typed Properties; use the preview
 to inspect replacements before execution.
+Managed plain Property references (`depends_on`, `evidence[].path`, and other
+recognized reference fields) also resolve explicit `./` and `../` from their
+containing note. Link-updating moves preserve their outgoing, incoming, self,
+and unresolved relative destinations; anchors and extension omission survive.
+Ordinary prose fields are unchanged. Delete impact includes these references,
+while inaccessible referring notes produce only a hidden-reference flag.
 Markdown destinations are source-relative file paths, not wikilink aliases:
 `[x](Sibling.md)` names a sibling; `[x](Folder/Note.md)` or
 `[x](/Folder/Note.md)` names a Vault-root path; `./Folder/Note.md` is explicitly

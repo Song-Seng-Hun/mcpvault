@@ -35,8 +35,8 @@ Caller visibility, reference direction, PathFilter, revision-safe writes,
 bounded responses, and ordinary Markdown/Git authority remain intact. No live
 Vault, account, server restart, plugin installation, or upstream action.
 
-Plain Property path values without wikilink syntax still require an independent
-relocation audit. This does not implement a complete CommonMark parser, change
+Plain Property path relocation was subsequently audited and corrected in
+`2026-09-06-plain-property-relocation.md`. This does not implement a complete CommonMark parser, change
 read-only authorization, or repair already-authored private content.
 
 ## Verification

@@ -3,6 +3,7 @@ import { FileSystemService, classifyWriteError, MAX_DERIVED_VIEW_READ_BYTES, MAX
 import { PathFilter } from "./pathfilter.js";
 import { FrontmatterHandler } from "./frontmatter.js";
 import { VaultMetadataIndex } from "./vault-index.js";
+import { VaultIoCoordinator } from "./vault-io.js";
 import { writeFile, readFile, mkdir, mkdtemp, rm, symlink, access } from "fs/promises";
 import { join, relative } from "path";
 import { tmpdir, homedir } from "os";
@@ -937,6 +938,128 @@ describe("tasks", () => {
     expect(moved.content).toContain("[[Wiki/Target.md#Heading|target]]");
     expect(moved.content).toContain("[[./Example]]");
     expect(moved.frontmatter.depends_on).toEqual(["[[Wiki/Target.md#^proof|typed]]"]);
+  });
+
+  test("plain relative Properties track target moves and deletion impact without basename guessing", async () => {
+    await mkdir(join(testVaultPath, "Wiki"), { recursive: true });
+    await mkdir(join(testVaultPath, "Other"), { recursive: true });
+    await writeFile(join(testVaultPath, "Wiki/Target.md"), "# Target\n");
+    await writeFile(join(testVaultPath, "Other/Target.md"), "# Namesake\n");
+    await writeFile(join(testVaultPath, "Wiki/Source.md"), "---\ndepends_on: ['./Target#Heading']\nevidence:\n  - path: ./Target.md#^proof\n---\n# Source\n");
+    const before = await fileSystem.readNote("Wiki/Target.md");
+    expect(await fileSystem.previewDeleteNote({ path: "Wiki/Target.md" })).toMatchObject({ total: 2, ambiguousTotal: 0 });
+    const preview = await fileSystem.previewMoveNote({ oldPath: "Wiki/Target.md", newPath: "Archive/Renamed.md" });
+    expect(preview.affectedProperties).toEqual(expect.arrayContaining([
+      expect.objectContaining({ propertyPath: "depends_on[0]", replacement: "../Archive/Renamed#Heading", direction: "inbound" }),
+      expect.objectContaining({ propertyPath: "evidence[0].path", replacement: "../Archive/Renamed.md#^proof" }),
+    ]));
+    expect((await fileSystem.moveNote({ oldPath: "Wiki/Target.md", newPath: "Archive/Renamed.md", updateLinks: true, expectedRevision: before.revision })).success).toBe(true);
+    expect((await fileSystem.readNote("Wiki/Source.md")).frontmatter.depends_on).toEqual(["../Archive/Renamed#Heading"]);
+    expect((await fileSystem.getBacklinks("Archive/Renamed.md")).total).toBeGreaterThan(0);
+    expect((await fileSystem.getBacklinks("Other/Target.md")).total).toBe(0);
+  });
+
+  test.each(["Wiki", ""])("plain relative Properties preserve outgoing and missing targets from %s", async folder => {
+    await mkdir(join(testVaultPath, "Wiki"), { recursive: true });
+    await mkdir(join(testVaultPath, "Archive"), { recursive: true });
+    const prefix = folder ? `${folder}/` : "";
+    await writeFile(join(testVaultPath, `${prefix}Target.md`), "# Target\n");
+    await writeFile(join(testVaultPath, "Archive/Target.md"), "# Wrong target\n");
+    await writeFile(join(testVaultPath, "Archive/Missing.md"), "# Not the future target\n");
+    await writeFile(join(testVaultPath, `${prefix}Source.md`), "---\ndepends_on: ['./Target#Heading', './Missing']\nrelated: ['./Source']\ndescription: ./Target\n---\n# Source\n");
+    const before = await fileSystem.readNote(`${prefix}Source.md`);
+    const preview = await fileSystem.previewMoveNote({ oldPath: `${prefix}Source.md`, newPath: "Archive/Moved.md" });
+    expect(preview.affectedProperties).toEqual(expect.arrayContaining([
+      expect.objectContaining({ propertyPath: "depends_on[0]", direction: "outgoing" }),
+      expect.objectContaining({ propertyPath: "related[0]", direction: "self" }),
+    ]));
+    expect((await fileSystem.moveNote({ oldPath: `${prefix}Source.md`, newPath: "Archive/Moved.md", updateLinks: true, expectedRevision: before.revision })).success).toBe(true);
+    expect((await fileSystem.readNote("Archive/Moved.md")).frontmatter).toMatchObject({
+      depends_on: [`../${prefix}Target#Heading`, `../${prefix}Missing`], related: ["./Moved"], description: "./Target",
+    });
+    expect((await fileSystem.getBacklinks("Archive/Target.md")).total).toBe(0);
+    expect((await fileSystem.getBacklinks("Archive/Missing.md")).total).toBe(0);
+  });
+
+  test("plain relative Property deletion impact hides private referencing paths", async () => {
+    await mkdir(join(testVaultPath, "Private"), { recursive: true });
+    await writeFile(join(testVaultPath, "Target.md"), "# Target\n");
+    await writeFile(join(testVaultPath, "Private/Source.md"), "---\ndepends_on: ['../Target']\n---\n");
+    expect(await fileSystem.previewDeleteNote({ path: "Target.md" }, path => !path.startsWith("Private/"))).toMatchObject({
+      total: 0, affectedProperties: [], hiddenReferencesPresent: true,
+    });
+  });
+
+  test.each(["../../Escape", "./Target"])("plain relative Property relocation refuses unsafe or ambiguous %s", async reference => {
+    await mkdir(join(testVaultPath, "Wiki"), { recursive: true });
+    await writeFile(join(testVaultPath, "Wiki/Target.md"), "# Markdown\n");
+    await writeFile(join(testVaultPath, "Wiki/Target.markdown"), "# Alternate\n");
+    const content = `---\ndepends_on: ['${reference}']\n---\n# Source\n`;
+    await writeFile(join(testVaultPath, "Wiki/Source.md"), content);
+    const before = await fileSystem.readNote("Wiki/Source.md");
+    const result = await fileSystem.moveNote({ oldPath: "Wiki/Source.md", newPath: "Archive/Source.md", updateLinks: true, expectedRevision: before.revision });
+    expect(result.success).toBe(false);
+    expect(result.message).toMatch(reference.startsWith("../../") ? /out-of-vault/ : /ambiguous/);
+    expect(await readFile(join(testVaultPath, "Wiki/Source.md"), "utf8")).toBe(content);
+    expect(await fileSystem.exists("Archive/Source.md")).toBe(false);
+  });
+
+  test("plain relative Property target moves respect revisions and preserve exact root destinations", async () => {
+    await mkdir(join(testVaultPath, "Wiki"), { recursive: true });
+    await writeFile(join(testVaultPath, "Wiki/Target.md"), "# Target\n");
+    await writeFile(join(testVaultPath, "Wiki/Renamed.md"), "# Namesake\n");
+    await writeFile(join(testVaultPath, "Wiki/Source.md"), "---\ndepends_on: ['./Target']\n---\n");
+    const before = await fileSystem.readNote("Wiki/Target.md");
+    await writeFile(join(testVaultPath, "Wiki/Target.md"), "# Concurrent edit\n");
+    const params = { oldPath: "Wiki/Target.md", newPath: "Renamed.md", updateLinks: true, expectedRevision: before.revision };
+    expect((await fileSystem.moveNote(params)).success).toBe(false);
+    expect((await fileSystem.readNote("Wiki/Source.md")).frontmatter.depends_on).toEqual(["./Target"]);
+    const current = await fileSystem.readNote("Wiki/Target.md");
+    expect((await fileSystem.moveNote({ ...params, expectedRevision: current.revision })).success).toBe(true);
+    expect((await fileSystem.readNote("Wiki/Source.md")).frontmatter.depends_on).toEqual(["../Renamed"]);
+    expect((await fileSystem.getBacklinks("Renamed.md")).total).toBe(1);
+    expect((await fileSystem.getBacklinks("Wiki/Renamed.md")).total).toBe(0);
+  });
+
+  test.each(["source", "destination"])("move service enforces %s access even without link updates", async denied => {
+    await writeFile(join(testVaultPath, "Source.md"), "# Original\n");
+    await writeFile(join(testVaultPath, "Destination.md"), "# Existing\n");
+    const result = await fileSystem.moveNote({ oldPath: "Source.md", newPath: "Destination.md", overwrite: true }, path => path !== (denied === "source" ? "Source.md" : "Destination.md"));
+    expect(result.success).toBe(false);
+    expect(result.message).toMatch(/access denied/i);
+    expect(await readFile(join(testVaultPath, "Source.md"), "utf8")).toBe("# Original\n");
+    expect(await readFile(join(testVaultPath, "Destination.md"), "utf8")).toBe("# Existing\n");
+  });
+
+  test("reference impact fails closed without leaking an unreadable source", async () => {
+    await mkdir(join(testVaultPath, "Private"), { recursive: true });
+    await writeFile(join(testVaultPath, "Target.md"), "# Target\n");
+    await writeFile(join(testVaultPath, "Private/Source.md"), "---\ndepends_on: ['../Target']\n---\n");
+    const io = new VaultIoCoordinator({ reader: async path => {
+      if (path.replace(/\\/g, "/").endsWith("Private/Source.md")) throw Object.assign(new Error("secret path Private/Source.md"), { code: "EACCES" });
+      return readFile(path, "utf8");
+    } });
+    const guarded = new FileSystemService(testVaultPath, undefined, undefined, undefined, undefined, undefined, io);
+    const visible = (path: string) => !path.startsWith("Private/");
+    await expect(guarded.previewDeleteNote({ path: "Target.md" }, visible)).rejects.toThrow("Reference integrity scan incomplete");
+    const before = await fileSystem.readNote("Target.md");
+    const deletion = await guarded.deleteNote({ path: "Target.md", confirmPath: "Target.md", expectedRevision: before.revision, allowDanglingReferences: true }, visible);
+    expect(deletion.success).toBe(false);
+    expect(deletion.message).not.toContain("Private/Source.md");
+    const move = await guarded.moveNote({ oldPath: "Target.md", newPath: "Moved.md", expectedRevision: before.revision, updateLinks: true }, visible);
+    expect(move.success).toBe(false);
+    expect(move.message).not.toContain("Private/Source.md");
+    expect(await readFile(join(testVaultPath, "Target.md"), "utf8")).toBe("# Target\n");
+    expect(await fileSystem.exists("Moved.md")).toBe(false);
+  });
+
+  test("plain Property rewrites preserve authored surrounding whitespace", async () => {
+    await mkdir(join(testVaultPath, "Wiki"), { recursive: true });
+    await writeFile(join(testVaultPath, "Wiki/Target.md"), "# Target\n");
+    await writeFile(join(testVaultPath, "Wiki/Source.md"), "---\ndepends_on: ['  ./Target#Heading  ']\n---\n");
+    const before = await fileSystem.readNote("Wiki/Source.md");
+    expect((await fileSystem.moveNote({ oldPath: "Wiki/Source.md", newPath: "Archive/Source.md", expectedRevision: before.revision, updateLinks: true })).success).toBe(true);
+    expect((await fileSystem.readNote("Archive/Source.md")).frontmatter.depends_on).toEqual(["  ../Wiki/Target#Heading  "]);
   });
 
   test("moving a source keeps unresolved local destinations from rebinding to destination siblings", async () => {

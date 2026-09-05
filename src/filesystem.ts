@@ -247,18 +247,34 @@ function rewriteExplicitLinks(
   return { content: lines.join('\n'), changes, ambiguous };
 }
 
-function rewritePlainReference(value: string, oldPath: string, newPath: string, referenceIndex: NoteReferenceIndex): { replacement?: string; candidates?: string[] } {
+function rewritePlainReference(value: string, sourcePath: string, renderedSourcePath: string, oldPath: string, newPath: string, referenceIndex: NoteReferenceIndex): { replacement?: string; candidates?: string[]; targetPath?: string } {
   const trimmed = value.trim();
   if (!trimmed || /^[a-z][a-z0-9+.-]*:/i.test(trimmed) || trimmed.startsWith('#')) return {};
   const suffixAt = [trimmed.indexOf('?'), trimmed.indexOf('#')].filter(index => index >= 0).sort((a, b) => a - b)[0];
   const document = suffixAt === undefined ? trimmed : trimmed.slice(0, suffixAt);
   const suffix = suffixAt === undefined ? '' : trimmed.slice(suffixAt);
-  const targets = resolveNoteReference(document, referenceIndex);
+  let targets = resolveNoteReference(document, referenceIndex, { sourcePath });
+  const sourceRelative = /^\.\.?\//.test(document);
+  const relocatingRelative = sourceRelative && normalizeNoteTarget(sourcePath) === normalizeNoteTarget(oldPath)
+    && posix.dirname(sourcePath) !== posix.dirname(renderedSourcePath);
   const includesMovedTarget = targets.some(target => normalizeNoteTarget(target) === normalizeNoteTarget(oldPath));
-  if (targets.length > 1 && includesMovedTarget) return { candidates: targets };
-  if (targets.length !== 1 || !includesMovedTarget) return {};
+  if (targets.length > 1 && (includesMovedTarget || relocatingRelative)) return { candidates: targets };
+  if (!targets.length && relocatingRelative) {
+    const intendedTarget = markdownNotePath(document, sourcePath);
+    if (!intendedTarget) throw new Error('Cannot preserve an out-of-vault relative Property destination during source relocation; repair the reference before moving.');
+    targets = [intendedTarget];
+  }
+  if (targets.length !== 1 || (!includesMovedTarget && !relocatingRelative)) return {};
+  const targetPath = targets[0]!;
+  const renderedTarget = includesMovedTarget ? newPath : targetPath;
+  const relativeTarget = posix.relative(posix.dirname(renderedSourcePath), renderedTarget);
+  const destination = sourceRelative || !renderedTarget.includes('/')
+    ? /^\.\.?\//.test(relativeTarget) ? relativeTarget : `./${relativeTarget}`
+    : renderedTarget;
   const keepExtension = /\.(?:md|markdown|txt)$/i.test(document);
-  return { replacement: `${keepExtension ? newPath : newPath.replace(/\.(?:md|markdown|txt)$/i, '')}${suffix}` };
+  const leading = value.slice(0, value.length - value.trimStart().length);
+  const trailing = value.slice(value.trimEnd().length);
+  return { replacement: `${leading}${keepExtension ? destination : destination.replace(/\.(?:md|markdown|txt)$/i, '')}${suffix}${trailing}`, targetPath };
 }
 
 function rewriteFrontmatterReferences(
@@ -289,13 +305,13 @@ function rewriteFrontmatterReferences(
         return explicit.content;
       }
       if (!acceptsPlainReference(segments)) return value;
-      const plain = rewritePlainReference(value, oldPath, newPath, referenceIndex);
+      const plain = rewritePlainReference(value, sourcePath, renderedSourcePath, oldPath, newPath, referenceIndex);
       if (plain.candidates) {
         ambiguous.push({ sourcePath, propertyPath: propertyPathText(segments), value, candidates: plain.candidates });
         return value;
       }
       if (!plain.replacement || plain.replacement === value) return value;
-      changes.push({ sourcePath, propertyPath: propertyPathText(segments), value, replacement: plain.replacement, direction: moveDirection(sourcePath, oldPath, oldPath) });
+      changes.push({ sourcePath, propertyPath: propertyPathText(segments), value, replacement: plain.replacement, direction: moveDirection(sourcePath, oldPath, plain.targetPath!) });
       return plain.replacement;
     }
     if (Array.isArray(value)) {
@@ -1416,9 +1432,11 @@ export class FileSystemService {
               stableId: frontmatter.stable_id,
             } satisfies NoteReferenceDescriptor,
           };
-        } catch {
-          // A concurrently removed or unreadable note cannot be rewritten.
-          return undefined;
+        } catch (error) {
+          // A removed note has no remaining references. Any other failure
+          // leaves integrity unknown: never report an incomplete scan as safe.
+          if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined;
+          throw new Error('Reference integrity scan incomplete; restore readable notes and retry. No changes were made.');
         }
       }));
       for (const document of batch) if (document) documents.push(document);
@@ -1648,6 +1666,10 @@ export class FileSystemService {
     const { overwrite = false, updateLinks = false } = params;
     const oldPath = params.oldPath;
     const newPath = params.newPath;
+
+    if (!canAccessPath(oldPath) || !canAccessPath(newPath)) {
+      return { success: false, oldPath, newPath, message: 'Access denied: source or destination is outside the caller scope.' };
+    }
 
     if (oldPath.toLowerCase() === newPath.toLowerCase()) {
       return { success: false, oldPath, newPath, message: 'Source and destination are identical; no move was performed.' };

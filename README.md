@@ -359,6 +359,17 @@ With link updates enabled, a note move rewrites incoming relative wikilinks and
 the moved note's outgoing relative wikilinks, including typed Properties, to
 keep the original target and heading/block/alias. Preview the move first;
 plain ambiguous names still require disambiguation.
+Managed plain Property references such as `depends_on: ['./Sibling#Heading']`
+and `evidence[].path: ../Source.md` use the containing note's path too. Moves
+preserve existing and missing relative targets, self references, suffixes, and
+extension omission; ordinary prose Properties are not rewritten. Move/delete
+previews include these references and flag inaccessible inbound references
+without revealing their paths. Ambiguous or out-of-vault relative relocation
+is rejected before writing; a stale revision does not permit partial updates.
+If a reference scan cannot read a note (other than one concurrently removed),
+move/delete integrity checks stop with a path-free error instead of treating
+unknown references as absent. Restore readable notes and retry. The move
+service checks both source and destination access even without link updates.
 Ordinary Markdown links such as `[guide](Guide.md)` use the containing note's
 folder in graph, reference validation, review baselines, and move rewrites;
 `[guide](Guides/Guide.md)` (or `/Guides/Guide.md`) starts at the Vault root;
