@@ -1594,6 +1594,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
         case "get_wiki_next_actions": {
           return jsonResult(await llmWiki.nextActions(principal, trimmedArgs.context, trimmedArgs.limit, trimmedArgs.maxChars, {
+            prettyPrint: trimmedArgs.prettyPrint,
             ...(trimmedArgs.maxMinutes !== undefined && { maxMinutes: trimmedArgs.maxMinutes }),
             ...(trimmedArgs.energy !== undefined && { energy: trimmedArgs.energy }),
             ...(trimmedArgs.effort !== undefined && { effort: trimmedArgs.effort }),

@@ -2758,37 +2758,8 @@ export declare class LlmWikiService {
         maxMinutes?: unknown;
         energy?: unknown;
         effort?: unknown;
-    }): Promise<{
-        purpose: string;
-        context?: string;
-        selection?: {
-            maxMinutes?: number;
-            energy?: string;
-            effort?: string;
-        };
-        filterDiagnostics?: {
-            unknownDuration: number;
-            unknownEnergy: number;
-            unknownEffort: number;
-        };
-        items: Record<string, unknown>[];
-        contexts: {
-            name: string;
-            count: number;
-        }[];
-        exclusions?: {
-            workflowBlocked: number;
-            deferred: number;
-            dependencyBlocked: number;
-            unresolvedDependencies: number;
-            dependencyCycles: number;
-            dependencyBlockedItems: Record<string, unknown>[];
-            note: string;
-        };
-        total: number;
-        truncated: boolean;
-        generatedAt: string;
-    }>;
+        prettyPrint?: boolean;
+    }): Promise<Record<string, any>>;
     /**
      * Find notes where atomicity is a useful next outcome rather than an input
      * gate. This is deliberately a suggestion: the agent decides whether the

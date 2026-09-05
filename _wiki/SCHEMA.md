@@ -259,6 +259,17 @@ request. `wiki.next_actions` ranks all eligible visible action candidates,
 retaining only the top requested rows rather than cutting off candidate input.
 Equal-ranked actions preserve authored order; a timestamp of zero is a valid
 deadline. Existing context, capacity, workflow and dependency gates are unchanged.
+Next-action `maxChars` includes final JSON indentation. Budget compaction sets
+`detailsOmitted` and preserves a ranked prefix, with exact paths and revisions.
+`actionTruncated` marks a preview; `actionOmitted` marks a locator-only row.
+Follow `readAction` and compare the current source revision before acting;
+continue bounded source reads if necessary. No lower-ranked action replaces an
+oversized head. A positive `total` with empty `items` requires the returned
+same-request `nextAction`: retain original identity/context/capacity arguments
+and apply its overrides. It re-evaluates current work, not a cursor or lock.
+At the maximum compact budget, an unrepresentable identity fails explicitly.
+Zero eligible actions may still have exclusion counters; omitted details do
+not imply that waiting, blocked or deferred work has disappeared.
 Project planning hydrates only visible, non-retired knowledge projects
 with matching revisions (at most 16 reads per batch; 8 MiB per complete source).
 It validates the visible inventory again after hydration; changed dependency,

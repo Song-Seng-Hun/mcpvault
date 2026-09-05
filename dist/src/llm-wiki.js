@@ -10,6 +10,7 @@ import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference }
 import { packExceptionBoard } from './exception-board.js';
 import { packLintReport } from './lint-report.js';
 import { packProjectPacket } from './project-packet.js';
+import { packNextActionPacket } from './next-action-packet.js';
 import { classifyDependencyResidual } from './dependency-graph.js';
 import { boundedTopK } from './search-limits.js';
 import { CollectionHealthProjection } from './collection-health.js';
@@ -7000,6 +7001,8 @@ export class LlmWikiService {
                         title: note.frontmatter.title || note.path.split('/').at(-1),
                         ...(note.revision && { revision: note.revision }),
                         action: boundedText(action, 600),
+                        ...(action.length > 600 && { actionTruncated: true,
+                            readAction: { endpointId: 'notes.read', arguments: { path: this.access.toPublicPath(note.path), maxChars: 8000 } } }),
                         context: actionContext,
                         ...(taskStatus && { taskStatus }),
                         ...(typeof note.frontmatter.project === 'string' && { project: note.frontmatter.project }),
@@ -7061,25 +7064,7 @@ export class LlmWikiService {
             truncated: total > items.length,
             generatedAt: now(),
         };
-        if (JSON.stringify(result).length <= boundedChars)
-            return result;
-        const compact = {
-            ...result,
-            purpose: 'Bounded executable GTD actions; waiting and dependency-blocked work is excluded.',
-            items: items.slice(0, Math.min(5, boundedLimit)),
-            contexts: contexts.slice(0, 8),
-            ...(hasWorkExclusions && { exclusions: { ...workExclusions, dependencyBlockedItems: dependencyBlockedItems.slice(0, 2), note: 'Inspect current revisions and repair one work dependency deliberately.' } }),
-            truncated: true,
-        };
-        while (JSON.stringify(compact).length > boundedChars && compact.items.length > 1)
-            compact.items.pop();
-        while (JSON.stringify(compact).length > boundedChars && compact.contexts.length > 1)
-            compact.contexts.pop();
-        if (hasWorkExclusions) {
-            while (JSON.stringify(compact).length > boundedChars && compact.exclusions.dependencyBlockedItems.length > 0)
-                compact.exclusions.dependencyBlockedItems.pop();
-        }
-        return compact;
+        return packNextActionPacket(result, boundedChars, options.prettyPrint);
     }
     /**
      * Find notes where atomicity is a useful next outcome rather than an input

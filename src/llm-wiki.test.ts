@@ -13,6 +13,26 @@ import { LlmWikiService } from './llm-wiki.js';
 
 let vault: string;
 
+test('dynamic next-actions preserves useful rows through the final MCP budget', async () => {
+  await writeFile(join(vault, 'A.md'), `---\nnote_kind: task\ntask_status: open\nnext_action: Check the evidence\ntitle: ${'가'.repeat(20000)}\n---\n# Evidence\n`);
+  const { server, client } = await setup();
+  try {
+    const account = await callJson(client, 'register_scope_account', { accountId: 'action-budget', modelId: 'codex', password: 'action-budget-fixture' });
+    const accessToken = account.value.accessToken;
+    for (const prettyPrint of [false, true]) {
+      const { result, value } = await callJson(client, 'call_endpoint', {
+        endpointId: 'wiki.next_actions', accessToken, arguments: { maxChars: 512, prettyPrint },
+      });
+      expect(result.isError).toBeFalsy();
+      const text = (result.content as any[]).filter(item => item.type === 'text').map(item => item.text).join('');
+      expect(text.length).toBeLessThanOrEqual(512);
+      expect(text).toBe(JSON.stringify(value, null, prettyPrint ? 2 : undefined));
+      expect(value.items[0]).toMatchObject({ path: 'A.md', revision: expect.stringMatching(/^[a-f0-9]{64}$/),
+        action: 'Check the evidence', readAction: { endpointId: 'notes.read', arguments: { path: 'A.md' } } });
+    }
+  } finally { await client.close(); await server.close(); }
+});
+
 beforeEach(async () => {
   vault = await mkdtemp(join(tmpdir(), 'mcpvault-llm-wiki-'));
 });

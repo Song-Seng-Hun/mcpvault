@@ -578,6 +578,17 @@ winners with stable authored order on ranking ties; context/capacity/workflow
 and dependency exclusions remain in force. The valid Unix epoch deadline is
 ranked as a date, not as missing metadata. This does not make the graph snapshot
 atomic or remove the complete eligibility scan.
+The next-action budget includes final JSON indentation. On overflow, the view
+keeps a ranked prefix with exact paths/revisions and marks `detailsOmitted`;
+it never substitutes a cheaper lower-ranked action for an oversized first one.
+`actionTruncated` means the action is only a preview; `actionOmitted` means only
+a locator fits. Follow the row's `readAction`, compare its current revision,
+and follow bounded read continuation as needed before acting. If even the exact
+locator cannot fit, `items: []` with positive `total` is not an empty workload:
+follow `nextAction` by reusing the original arguments (including context,
+capacity filters and authentication) and applying its overrides. This is a
+fresh same-request retry, not pagination or a reservation. An unrepresentable
+identity at the maximum compact budget fails explicitly instead of looping.
 Project planning hydrates only visible, non-retired knowledge-project bodies,
 in drained batches of at most 16 complete 8 MiB reads. It checks each body
 revision and rechecks the visible inventory after hydration, including changed
