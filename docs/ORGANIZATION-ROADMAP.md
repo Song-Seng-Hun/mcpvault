@@ -484,6 +484,13 @@ do not prove a current, bounded, actionable response through its public adapter.
   The scan retains at most one requested page of task bodies and response packing
   uses logarithmic prefix selection. Full inventory scans, per-file parse arrays,
   large-file IO and intra-scan races remain real scale/freshness limitations.
+- Task inventory now uses the existing shared bounded I/O coordinator instead
+  of direct uncoordinated reads. Concurrent identical source/limit reads coalesce;
+  later scans reopen current content, not a persistent task-body cache. An 8 MiB
+  source cap fails before partial parsing/counts with a generic narrowing hint.
+  Lazy line/task iteration removes full per-note arrays from this scan while the
+  array adapter preserves existing parser callers. Full scans, duplicate-identity
+  maps, total process memory and source changes during reads remain limitations.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

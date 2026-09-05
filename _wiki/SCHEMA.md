@@ -928,6 +928,14 @@ Only the requested page is retained during the scan, but full note inventory
 and per-file parsing costs remain. An IO failure other than confirmed absence
 fails the read rather than reporting a misleading complete inventory.
 
+Task source reads participate in the shared I/O coordinator and use the 8 MiB
+supported-note limit. Concurrent identical reads can coalesce, but completed
+bodies are not persistently cached. An oversized source fails without a partial
+inventory or disclosure of its unparsed path/body; callers can narrow pathPrefix.
+The shared task parser has a lazy iterator plus its compatibility array adapter.
+Inventory uses the iterator and does not allocate all task objects or lines for
+each note, while preserving the existing identity and Markdown parsing rules.
+
 For renames, call `preview_move_note` first. `move_note` intentionally does not
 silently rewrite links. If the reviewed plan is correct, pass
 `updateLinks: true` and the source note's `expectedRevision`; the server then

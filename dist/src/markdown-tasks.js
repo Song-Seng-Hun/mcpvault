@@ -1,16 +1,14 @@
 import { createHash } from 'node:crypto';
-function taskIdentity(path, text, occurrence, rawText) {
+function taskIdentity(path, normalized, occurrence, rawText) {
     const blockId = /\s+\^([A-Za-z0-9][A-Za-z0-9_-]*)\s*$/.exec(rawText)?.[1];
     if (blockId)
         return `task:block:${blockId}`;
-    const normalized = text.replace(/\s+/g, ' ').trim().toLowerCase();
     const digest = createHash('sha256').update(`${path}\0${normalized}\0${occurrence}`).digest('hex').slice(0, 16);
     return `task:content:${digest}`;
 }
 /** Extract ordinary Obsidian Markdown task items while ignoring YAML
  * frontmatter and matching backtick or tilde fenced examples. */
-export function extractMarkdownTasks(content, path) {
-    const tasks = [];
+export function* iterateMarkdownTasks(content, path) {
     const occurrences = new Map();
     let inFrontmatter = false;
     let frontmatterEnded = false;
@@ -18,9 +16,12 @@ export function extractMarkdownTasks(content, path) {
     let fenceChar = '';
     let fenceLength = 0;
     const fenceRegex = /^ {0,3}(`{3,}|~{3,})(.*)$/;
-    const lines = content.split('\n');
-    for (let index = 0; index < lines.length; index += 1) {
-        const line = lines[index].replace(/\r$/, '');
+    // Advance the source cursor before any continue; do not allocate a lines array.
+    for (let index = 0, start = 0; start <= content.length; index += 1) {
+        const newline = content.indexOf('\n', start);
+        const end = newline < 0 ? content.length : newline;
+        const line = content.slice(start, end).replace(/\r$/, '');
+        start = newline < 0 ? content.length + 1 : newline + 1;
         if (!frontmatterEnded && index === 0 && line === '---') {
             inFrontmatter = true;
             continue;
@@ -58,13 +59,16 @@ export function extractMarkdownTasks(content, path) {
         const occurrenceKey = text.replace(/\s+/g, ' ').toLowerCase();
         const occurrence = occurrences.get(occurrenceKey) || 0;
         occurrences.set(occurrenceKey, occurrence + 1);
-        tasks.push({
+        yield {
             path,
             line: index + 1,
             text,
             status: taskMatch[2].toLowerCase() === 'x' ? 'completed' : 'open',
-            taskId: taskIdentity(path, text, occurrence, text),
-        });
+            taskId: taskIdentity(path, occurrenceKey, occurrence, text),
+        };
     }
-    return tasks;
+}
+/** Compatibility array adapter for callers that need random access to tasks. */
+export function extractMarkdownTasks(content, path) {
+    return [...iterateMarkdownTasks(content, path)];
 }

@@ -17,7 +17,7 @@ import { buildNoteReferenceIndex, resolveNoteReference, type NoteReferenceDescri
 import { validateJsonCanvasDocument } from './json-canvas.js';
 import { acceptsPlainReference, propertyPathText } from './property-references.js';
 import { assertLegacyDiscussionMutationAllowed } from './scope-access.js';
-import { extractMarkdownTasks } from './markdown-tasks.js';
+import { extractMarkdownTasks, iterateMarkdownTasks } from './markdown-tasks.js';
 import { extractInlineTags } from './markdown-tags.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { projectNoteOutline, projectNoteLineWindow } from './note-projections.js';
@@ -2587,14 +2587,15 @@ export class FileSystemService {
     for (const path of notePaths) {
       let content: string;
       try {
-        content = await readFile(this.resolvePath(path), 'utf-8');
+        content = await this.vaultIo.readUtf8Bounded(this.resolvePath(path), MAX_NOTE_CONTENT_BYTES);
       } catch (error) {
+        if (error instanceof SourceReadLimitError) throw new Error('Task inventory source exceeds 8 MiB; narrow pathPrefix or split oversized notes before retrying. No partial inventory was returned.');
         if (isMissingVaultPath(error)) continue;
         throw new VaultReadUnavailableError();
       }
       if (isModerationHidden(this.frontmatterHandler.parse(content).frontmatter)) continue;
       const revision = this.revision(content);
-      for (const task of extractMarkdownTasks(content, path)) {
+      for (const task of iterateMarkdownTasks(content, path)) {
         if (status !== 'all' && status !== task.status) continue;
         fingerprint.update(JSON.stringify([path, revision, task.line, task.taskId, task.status]));
         if (total >= offset && tasks.length < limit) tasks.push({ ...task, revision });

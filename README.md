@@ -2445,6 +2445,14 @@ The server retains at most the requested page of task bodies while counting and
 hashing, but still scans eligible notes; this is not constant-cost pagination or
 an atomic filesystem census. Storage errors are not silently counted as absence.
 
+Task scans use the shared server I/O coordinator, coalescing concurrent reads of
+the same source/byte limit without retaining a long-lived body cache. Source
+reads are capped at 8 MiB, matching the supported note-write size. Oversized
+sources fail the inventory rather than producing partial tasks/counts; narrow
+`pathPrefix` or split the oversized note. Task extraction walks lines and yields
+items sequentially, avoiding a full lines/task array in this scan. This does not
+eliminate the complete inventory scan or the duplicate-identity tracking map.
+
 ```json
 {
   "name": "list_tasks",
