@@ -13,8 +13,8 @@ async function withDashboard(notes: ReturnType<typeof task>[], run: (wiki: LlmWi
   // Isolate packing from independent Inbox/knowledge/graph producers; keep
   // real work dependency classification and revision-stamped row construction.
   const spies = [vi.spyOn(fs, 'readQueryInventory').mockResolvedValue(notes),
-    vi.spyOn(wiki, 'inbox').mockResolvedValue({ items: [], total: 0, truncated: false } as any),
-    vi.spyOn(wiki, 'reviewQueue').mockResolvedValue({ items: [], total: 0, truncated: false } as any),
+    vi.spyOn(wiki as any, 'collectInbox').mockResolvedValue({ items: [], total: 0, truncated: false }),
+    vi.spyOn(wiki as any, 'collectReviewQueue').mockResolvedValue({ items: [], total: 0, truncated: false }),
     vi.spyOn(wiki, 'graphHealth').mockResolvedValue({ mocCoverage: { needsAttention: 0 },
       unresolvedLinks: { items: [], total: 0, truncated: false } } as any)];
   try { await run(wiki); } finally { for (const spy of spies) spy.mockRestore(); }
@@ -69,7 +69,7 @@ test('empty work lists at a tiny budget do not imply a clean graph or invent a n
 
 test('a category with an internally omitted sample gets its own retrieval action', async () => {
   await withDashboard([], async wiki => {
-    vi.mocked(wiki.inbox).mockResolvedValue({ items: [], total: 5, truncated: true } as any);
+    vi.mocked((wiki as any).collectInbox).mockResolvedValue({ items: [], total: 5, truncated: true });
     const result = await wiki.reviewDashboard(undefined, 10, 512, { prettyPrint: true });
     expect(JSON.stringify(result, null, 2).length).toBeLessThanOrEqual(512);
     expect(result).toMatchObject({ section: 'inbox', detailsOmitted: true,

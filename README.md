@@ -530,6 +530,19 @@ budget fails explicitly on an impossible locator instead of looping.
 Internal review planning uses shared discovery before user-facing dashboard
 compaction, so a tiny dashboard response is not mistaken for absent evidence.
 
+Inbox, knowledge review, and Inbox planning (`wiki.inbox`, `wiki.review_queue`,
+`mcp.get_wiki_inbox_plan`) budget the entire final JSON, including indentation. A long
+first title does not empty the queue or let a cheaper later item jump ahead.
+Compact items preserve exact source paths/revisions and `readAction`; use that
+read and compare the current revision before acting. `detailsOmitted` includes
+potentially omitted age/review reasons or filing suggestions, not permission to
+guess them. Empty `items` with positive `total` means follow `nextAction`, reusing
+original authentication and arguments (including `maxCascadeDepth`) with its
+explicit overrides. These are fresh retries, not pagination or work reservations;
+impossible identities at the compact ceiling fail instead of looping.
+Internal Inbox planning and Reflect discovery consume bounded ranked rows
+before wire packing, so neither mistakes a short response for absent knowledge.
+
 For low-friction capture, `capture_wiki_note` creates an ordinary Markdown
 note in `Inbox/` with `note_kind: fleeting` and `lifecycle: inbox`, then returns
 its exact revision and a `wiki.clarify` next action. When known, pass the bounded `capturedFrom`, `captureReason`, and

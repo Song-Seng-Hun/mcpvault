@@ -13,6 +13,30 @@ import { LlmWikiService } from './llm-wiki.js';
 
 let vault: string;
 
+test('dynamic organization queues preserve long first candidates and their current revisions', async () => {
+  await mkdir(join(vault, 'Inbox'), { recursive: true });
+  await mkdir(join(vault, 'Knowledge'), { recursive: true });
+  await writeFile(join(vault, 'Inbox/A.md'), `---\nnote_kind: atomic\nlifecycle: inbox\ncaptured_at: 2000-01-01\ntitle: ${'가'.repeat(20000)}\n---\n# Capture\n`);
+  await writeFile(join(vault, 'Knowledge/A.md'), `---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: review\nreview_at: 2000-01-01\ntitle: ${'가'.repeat(20000)}\n---\n# Evidence\n`);
+  const { server, client } = await setup();
+  try {
+    const account = await callJson(client, 'register_scope_account', { accountId: 'queue-budget', modelId: 'codex', password: 'queue-budget-fixture' });
+    const accessToken = account.value.accessToken;
+    for (const endpointId of ['wiki.inbox', 'mcp.get_wiki_inbox_plan', 'wiki.review_queue']) for (const prettyPrint of [false, true]) {
+      const { result, value } = await callJson(client, 'call_endpoint', { endpointId, accessToken, arguments: { maxChars: 512, prettyPrint } });
+      expect(result.isError).toBeFalsy();
+      const text = (result.content as any[]).filter(item => item.type === 'text').map(item => item.text).join('');
+      expect(text.length).toBeLessThanOrEqual(512);
+      expect(text).toBe(JSON.stringify(value, null, prettyPrint ? 2 : undefined));
+      expect(value.items[0]).toMatchObject({ path: endpointId === 'wiki.review_queue' ? 'Knowledge/A.md' : 'Inbox/A.md', revision: expect.stringMatching(/^[a-f0-9]{64}$/) });
+      const source = await callJson(client, 'call_endpoint', { ...value.items[0].readAction, accessToken });
+      expect(source.value.revision).toBe(value.items[0].revision);
+    }
+    const dashboard = await callJson(client, 'call_endpoint', { endpointId: 'wiki.review_dashboard', accessToken, arguments: { maxChars: 512 } });
+    expect(dashboard.value.selected).toMatchObject({ section: 'inbox', path: 'Inbox/A.md', revision: expect.any(String) });
+  } finally { await client.close(); await server.close(); }
+});
+
 test('dynamic review dashboard retains an inspectable target in the smallest final response', async () => {
   await writeFile(join(vault, 'Overdue.md'), `---\nnote_kind: task\ntask_status: open\nnext_action: Check evidence\ndue_at: 2000-01-01\ntitle: ${'가'.repeat(20000)}\n---\n# Evidence\n`);
   const { server, client } = await setup();

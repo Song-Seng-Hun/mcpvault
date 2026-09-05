@@ -480,43 +480,22 @@ export declare class LlmWikiService {
         exploredEdges: number;
         truncated: boolean;
     }>;
-    reviewQueue(principal?: ScopePrincipal, limit?: number, maxChars?: number, maxCascadeDepth?: number): Promise<{
-        items: Record<string, unknown>[];
-        total: number;
-        truncated: boolean;
-        cascade: {
-            maxDepth: number;
-            scanned: number;
-            edgeCount: number;
-            seedCount: number;
-            truncated: boolean;
-        };
-    }>;
-    inbox(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
-        purpose: string;
-        items: Record<string, unknown>[];
-        total: number;
-        oldestAgeDays: unknown;
-        ageBands: {
-            fresh: number;
-            aging: number;
-            stale: number;
-            undated: number;
-        };
-        truncated: boolean;
-    }>;
+    reviewQueue(principal?: ScopePrincipal, limit?: number, maxChars?: number, maxCascadeDepth?: number, options?: {
+        prettyPrint?: boolean;
+    }): Promise<import("./organization-queue-packet.js").OrganizationQueuePacket>;
+    private collectReviewQueue;
+    inbox(principal?: ScopePrincipal, limit?: number, maxChars?: number, options?: {
+        prettyPrint?: boolean;
+    }): Promise<import("./organization-queue-packet.js").OrganizationQueuePacket>;
+    private collectInbox;
     /**
      * Produce a read-only plan for Inbox clarification.  Suggestions are based
      * only on existing Properties, so the agent can review the evidence before
      * choosing a GTD disposition; this endpoint never moves or edits notes.
      */
-    inboxPlan(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
-        purpose: string;
-        items: any[];
-        total: number;
-        truncated: boolean;
-        note: string;
-    }>;
+    inboxPlan(principal?: ScopePrincipal, limit?: number, maxChars?: number, options?: {
+        prettyPrint?: boolean;
+    }): Promise<import("./organization-queue-packet.js").OrganizationQueuePacket>;
     /**
      * Flag links in durable Wiki notes that have no explanatory nearby text.
      * This is intentionally advisory: a short link can be correct, and the

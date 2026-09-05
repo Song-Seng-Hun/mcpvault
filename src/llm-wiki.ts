@@ -17,6 +17,7 @@ import { packLintReport } from './lint-report.js';
 import { packProjectPacket, type ProjectPacketOptions } from './project-packet.js';
 import { packNextActionPacket } from './next-action-packet.js';
 import { packReviewDashboard } from './review-dashboard-packet.js';
+import { packOrganizationQueue } from './organization-queue-packet.js';
 import { classifyDependencyResidual } from './dependency-graph.js';
 import { boundedTopK } from './search-limits.js';
 import { CollectionHealthProjection } from './collection-health.js';
@@ -3258,9 +3259,14 @@ export class LlmWikiService {
     return { ...result, paths: result.paths.slice(0, 1), truncated: true };
   }
 
-  async reviewQueue(principal?: ScopePrincipal, limit = 5, maxChars = 4000, maxCascadeDepth = 3) {
-    const boundedLimit = Math.min(Math.max(Number(limit) || 5, 1), 20);
+  async reviewQueue(principal?: ScopePrincipal, limit = 5, maxChars = 4000, maxCascadeDepth = 3, options: { prettyPrint?: boolean } = {}) {
     const boundedChars = Math.min(Math.max(Number(maxChars) || 4000, 512), 12000);
+    return packOrganizationQueue(await this.collectReviewQueue(principal, limit, maxCascadeDepth),
+      endpointIdForTool('get_wiki_review_queue'), boundedChars, 12000, options.prettyPrint);
+  }
+
+  private async collectReviewQueue(principal?: ScopePrincipal, limit = 5, maxCascadeDepth = 3) {
+    const boundedLimit = Math.min(Math.max(Number(limit) || 5, 1), 20);
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
     const cascadeProjection = await this.upstreamCascadeProjection(principal, maxCascadeDepth);
     // Keep only the bounded best candidates while scanning. Review queues are
@@ -3355,6 +3361,7 @@ export class LlmWikiService {
         overdue: due,
         reviewScore,
         reviewReasons,
+        ...(note.revision && { revision: note.revision }),
         reviewPolicy,
         ...(reviewTriggers.length > 0 && { reviewTriggered: true, reviewTriggers, reviewTrigger: reviewTriggers[0] }),
         ...(reviewSignals.upstreamChanges.length > 0 && { upstreamChanges: reviewSignals.upstreamChanges }),
@@ -3383,14 +3390,7 @@ export class LlmWikiService {
         if (candidates.length > boundedLimit) candidates.pop();
       }
     }
-    const items: Array<Record<string, unknown>> = [];
-    let used = 2;
-    for (const item of candidates) {
-      const encoded = JSON.stringify(item);
-      if (used + encoded.length + 1 > boundedChars) break;
-      items.push(item);
-      used += encoded.length + 1;
-    }
+    const items = candidates;
     return {
       items,
       total,
@@ -3405,9 +3405,13 @@ export class LlmWikiService {
     };
   }
 
-  async inbox(principal?: ScopePrincipal, limit = 10, maxChars = 5000) {
-    const boundedLimit = Math.min(Math.max(Number(limit) || 10, 1), 50);
+  async inbox(principal?: ScopePrincipal, limit = 10, maxChars = 5000, options: { prettyPrint?: boolean } = {}) {
     const boundedChars = Math.min(Math.max(Number(maxChars) || 5000, 512), 12000);
+    return packOrganizationQueue(await this.collectInbox(principal, limit), endpointIdForTool('get_wiki_inbox'), boundedChars, 12000, options.prettyPrint);
+  }
+
+  private async collectInbox(principal?: ScopePrincipal, limit = 10) {
+    const boundedLimit = Math.min(Math.max(Number(limit) || 10, 1), 50);
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
     const candidates: Array<Record<string, unknown> & { sortTime: number }> = [];
     let total = 0;
@@ -3437,6 +3441,7 @@ export class LlmWikiService {
         ...(updatedAt && { updatedAt }),
         ...(ageDays !== undefined && { ageDays }),
         agingBand,
+        ...(note.revision && { revision: note.revision }),
         suggestedAction: ageDays !== undefined && ageDays > 30 ? 'clarify_or_archive_this_old_capture' : 'clarify_wiki_note',
       };
       const candidate = { ...item, sortTime: Number.isFinite(timestamp) ? timestamp : Number.MAX_SAFE_INTEGER };
@@ -3450,14 +3455,7 @@ export class LlmWikiService {
       }
     }
     candidates.sort((left, right) => left.sortTime - right.sortTime || String(left.path).localeCompare(String(right.path)));
-    const items: Array<Record<string, unknown>> = [];
-    let used = 2;
-    for (const { sortTime: _sortTime, ...item } of candidates.slice(0, boundedLimit)) {
-      const itemChars = JSON.stringify(item).length + 1;
-      if (used + itemChars > boundedChars) break;
-      items.push(item);
-      used += itemChars;
-    }
+    const items = candidates.map(({ sortTime: _sortTime, ...item }) => item);
     const oldest = candidates.find(candidate => candidate.ageDays !== undefined);
     return {
       purpose: 'A bounded GTD Inbox triage queue ordered oldest-first. Age is a maintenance signal, not a reason to delete or auto-move a capture.',
@@ -3474,10 +3472,10 @@ export class LlmWikiService {
    * only on existing Properties, so the agent can review the evidence before
    * choosing a GTD disposition; this endpoint never moves or edits notes.
    */
-  async inboxPlan(principal?: ScopePrincipal, limit = 20, maxChars = 7000) {
+  async inboxPlan(principal?: ScopePrincipal, limit = 20, maxChars = 7000, options: { prettyPrint?: boolean } = {}) {
     const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
     const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
-    const queue = await this.inbox(principal, boundedLimit, boundedChars);
+    const queue = await this.collectInbox(principal, boundedLimit);
     const items = queue.items.map((item: Record<string, any>) => {
       const kind = String(item.noteKind || '').toLowerCase();
       const suggestion = kind === 'project' || kind === 'task'
@@ -3489,6 +3487,7 @@ export class LlmWikiService {
             : { disposition: 'needs_agent_decision', reason: 'no reliable metadata-based disposition is available yet' };
       return {
         path: item.path,
+        ...(item.revision && { revision: item.revision }),
         title: item.title,
         noteKind: item.noteKind,
         lifecycle: item.lifecycle,
@@ -3499,14 +3498,13 @@ export class LlmWikiService {
         nextAction: 'Read this capture, then call clarify_wiki_note with the current revision and a deliberate disposition.',
       };
     });
-    while (JSON.stringify(items).length > boundedChars && items.length > 1) items.pop();
-    return {
+    return packOrganizationQueue({
       purpose: 'A bounded GTD Clarify preview. Suggestions are advisory metadata hints, not automatic filing decisions.',
       items,
       total: queue.total,
       truncated: queue.truncated || items.length < queue.items.length,
       note: 'Inspect one capture before clarifying it. A suggested destination is not applied automatically and never authorizes deletion.',
-    };
+    }, endpointIdForTool('get_wiki_inbox_plan'), boundedChars, 16000, options.prettyPrint);
   }
 
   /**
@@ -4335,8 +4333,8 @@ export class LlmWikiService {
       }
     }
     const [inbox, knowledgeReview, graph] = await Promise.all([
-      this.inbox(principal, boundedLimit, Math.floor(boundedChars / 4)),
-      this.reviewQueue(principal, boundedLimit, Math.floor(boundedChars / 3)),
+      this.collectInbox(principal, boundedLimit),
+      this.collectReviewQueue(principal, boundedLimit),
       // Health computation already scans the graph once. Keep a sufficiently
       // rich internal projection so the outer dashboard can choose and trim
       // actionable categories instead of losing them before prioritization.

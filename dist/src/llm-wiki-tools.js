@@ -369,7 +369,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_review_queue',
-            description: 'Return a bounded review queue of knowledge notes that are disputed, in review, due for evidence review, past valid_until, or transitively affected through explicit typed upstream relations. Cascades are read-only, cycle-safe, and include only visible notes that opted into on_upstream_change.',
+            description: 'Return a bounded ranked review queue of knowledge notes that are disputed, in review, due, expired, or affected through typed upstream relations. Cascades are read-only, cycle-safe, and include only visible notes opted into on_upstream_change. maxChars includes pretty formatting. Compact items retain exact paths/revisions and readAction; detailsOmitted means inspect current sources before review. Empty items with positive total require the returned nextAction, reusing original authentication/arguments including maxCascadeDepth and applying overrides. Long first items are never skipped.',
             inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 20, default: 5 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, maxCascadeDepth: { type: 'integer', minimum: 1, maximum: 6, default: 3, description: 'Maximum typed-relation cascade depth; no files are changed' }, accessToken, prettyPrint } },
         },
         {
@@ -469,12 +469,12 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_inbox',
-            description: 'Return a bounded oldest-first Inbox triage queue with capture age, fresh/aging/stale bands, and a suggested next action. Age is advisory; this metadata-only view never moves, deletes, or rewrites files.',
+            description: 'Return a bounded oldest-first Inbox queue with capture age and fresh/aging/stale bands. maxChars includes pretty formatting. Long first items retain exact paths/revisions and readAction instead of disappearing. detailsOmitted means read current context and compare revisions before clarifying. Empty items with positive total require the returned same-request nextAction; retain original authentication/arguments and apply overrides. Age is advisory, not permission to move, delete or rewrite.',
             inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 50, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 5000 }, accessToken, prettyPrint } },
         },
         {
             name: 'get_wiki_inbox_plan',
-            description: 'Preview bounded GTD Clarify dispositions for Inbox captures using only existing Properties. Suggestions are advisory and include the current revision; inspect the note and then call clarify_wiki_note explicitly. It never moves, deletes, or rewrites files.',
+            description: 'Preview GTD Clarify dispositions using existing Properties before user-facing queue compaction. maxChars includes pretty formatting. Items retain exact paths/revisions; compact readAction locators and detailsOmitted are inspection prompts, not filing decisions. Read current context and compare revisions before explicitly calling clarify_wiki_note. Empty items with positive total require the returned same-request nextAction, preserving original authentication/arguments with overrides. Never skips an oversized head or silently moves, deletes or rewrites notes.',
             inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
         },
         {

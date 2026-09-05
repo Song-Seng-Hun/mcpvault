@@ -1511,7 +1511,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "get_wiki_review_queue": {
-          return jsonResult(await llmWiki.reviewQueue(principal, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.maxCascadeDepth), trimmedArgs.prettyPrint);
+          return jsonResult(await llmWiki.reviewQueue(principal, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.maxCascadeDepth, { prettyPrint: trimmedArgs.prettyPrint }), trimmedArgs.prettyPrint);
         }
 
         case "review_wiki_note": {
@@ -1616,11 +1616,11 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "get_wiki_inbox": {
-          return jsonResult(await llmWiki.inbox(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+          return jsonResult(await llmWiki.inbox(principal, trimmedArgs.limit, trimmedArgs.maxChars, { prettyPrint: trimmedArgs.prettyPrint }), trimmedArgs.prettyPrint);
         }
 
         case "get_wiki_inbox_plan": {
-          return jsonResult(await llmWiki.inboxPlan(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+          return jsonResult(await llmWiki.inboxPlan(principal, trimmedArgs.limit, trimmedArgs.maxChars, { prettyPrint: trimmedArgs.prettyPrint }), trimmedArgs.prettyPrint);
         }
 
         case "triage_wiki_note": {

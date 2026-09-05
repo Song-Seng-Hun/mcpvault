@@ -355,6 +355,16 @@ Pass `nextLifecycle` only when the review moves among active states such as
 returned `notes.change_set` before confirming it. Direct retirement or
 reactivation through triage, review, or general `publish_knowledge` is
 rejected.
+`wiki.inbox`, `wiki.review_queue`, and `mcp.get_wiki_inbox_plan` budget final JSON with
+pretty formatting. Long first candidates remain first: compact rows keep exact
+paths/revisions and `readAction`, with `detailsOmitted` for missing context.
+Read the source and compare the revision before applying review or clarification;
+missing reasons/suggestions must not be guessed. Empty `items` with positive
+`total` requires the returned same-request `nextAction`, retaining original
+authentication/arguments, including cascade depth, and applying only overrides.
+Retries are neither cursors nor reservations; impossible ceiling locators fail
+without skipping. Internal planning uses ranked collection rows before packing.
+
 `get_wiki_review_dashboard` is a bounded Reflect pass over Inbox, next actions,
 due work, waiting/someday items, open questions/hypotheses/assumptions,
 knowledge review, and graph/focus/connectivity health. Final JSON indentation
