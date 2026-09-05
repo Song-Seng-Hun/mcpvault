@@ -610,8 +610,18 @@ do not prove a current, bounded, actionable response through its public adapter.
   preserve original arguments and apply only budget/limit/format overrides;
   no identical retry at the ceiling. This dashboard remains a sample, not a
   paginated task/chain browser, and omission must not be read as an empty queue.
-  Other dashboards' formatted budgets and graph/candidate construction costs
+  Other dashboards' formatted budgets and graph construction costs
   still require independent verification.
+- Flow frontier selection now counts all stage memberships but retains only
+  four keys per displayed stage (at most eight); the deepest tail is selected
+  by a lexical-min scan. Unlock candidates are filtered before detail projection
+  and streamed through the existing bounded top-K heap. Exact candidate totals,
+  immediate-unlock/direct-dependent ranking, locale path order and stable ties
+  are retained. A 3,000 independent-node regression previously converted 6,004
+  public paths despite having zero unlock candidates; the new bound is 3,020.
+  Compiled responses match the baseline across 108 fixture/limit/budget/format
+  combinations. The authoritative graph and one count per stage still occupy
+  vault-dependent memory; this does not establish a process-wide memory bound.
 
 Record new concrete gaps here when registered schema, dispatcher, service,
 persistent representation, guide, invalidation, or bounded failure evidence

@@ -282,6 +282,11 @@ chain alone cannot fit the response budget; the whole chain and stage counts
 are still computed. Such a partial projection cannot take the full-response
 branch and uses the existing truncated compact/minimal representation instead.
 Lane limits also precede blocked dependency detail conversion, not counting.
+Stage recommendations retain exact totals and the lexical four-key prefix for
+only the selected stages. Unlock selection counts all eligible stage-0 nodes
+with dependents, retaining at most eight lightweight rank candidates before
+detail projection. Score order, public-path locale order and stable ties match
+the full-sort contract; this is not a classification cutoff or cached snapshot.
 Flow response bounds include `prettyPrint` indentation. Compacted nested
 collections update their own `truncated` flags; deepest-chain previews expose
 their total and truncation independently of the overall report. `detailsOmitted`

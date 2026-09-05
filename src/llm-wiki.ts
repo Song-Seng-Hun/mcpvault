@@ -16,6 +16,7 @@ import { packExceptionBoard, type ExceptionBoardItem } from './exception-board.j
 import { packLintReport } from './lint-report.js';
 import { packProjectPacket, type ProjectPacketOptions } from './project-packet.js';
 import { classifyDependencyResidual } from './dependency-graph.js';
+import { boundedTopK } from './search-limits.js';
 import { CollectionHealthProjection } from './collection-health.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
 import { projectNoteOutline, projectNoteHeadingPresence, projectNoteBlockLines, selectNoteHeading } from './note-projections.js';
@@ -4521,10 +4522,10 @@ export class LlmWikiService {
     }
     const plan = dependencySnapshot.plan;
     const workByKey = new Map(dependencySnapshot.workNotes.map(note => [normalizePath(note.path).toLowerCase(), note]));
-    const planItem = (key: string) => {
+    const projectPlanItem = (key: string, publicPath: string) => {
       const note = workByKey.get(key)!;
       return {
-        path: this.access.toPublicPath(note.path),
+        path: publicPath,
         title: note.frontmatter.title || note.path.split('/').at(-1),
         ...(note.revision && { revision: note.revision }),
         taskStatus: String(note.frontmatter.task_status || 'open').trim().toLowerCase() || 'open',
@@ -4532,27 +4533,47 @@ export class LlmWikiService {
         immediateUnlocks: plan.immediateUnlockByPath.get(key) || 0,
       };
     };
-    const stageGroups = new Map<number, string[]>();
+    const planItem = (key: string) => projectPlanItem(key, this.access.toPublicPath(workByKey.get(key)!.path));
+    const stageTotals = new Map<number, number>();
+    let maximumStage = 0, deepestTail: string | undefined;
     for (const [key, stage] of plan.stageByPath) {
-      const keys = stageGroups.get(stage) || [];
-      keys.push(key);
-      stageGroups.set(stage, keys);
+      stageTotals.set(stage, (stageTotals.get(stage) || 0) + 1);
+      if (deepestTail === undefined || stage > maximumStage || (stage === maximumStage && key < deepestTail)) {
+        maximumStage = stage; deepestTail = key;
+      }
     }
-    const orderedStages = [...stageGroups.entries()].sort((left, right) => left[0] - right[0]);
-    const recommendedStages = orderedStages.slice(0, Math.min(8, boundedLimit)).map(([stage, keys]) => ({
+    const selectedStages = boundedTopK(stageTotals.entries(), Math.min(8, Math.floor(boundedLimit)), (left, right) => left[0] - right[0]);
+    const stageKeys = new Map(selectedStages.map(([stage]) => [stage, [] as string[]]));
+    for (const [key, stage] of plan.stageByPath) {
+      const keys = stageKeys.get(stage);
+      if (!keys) continue;
+      // Retain only the exact lexical four-key prefix for displayed stages.
+      const position = keys.findIndex(existing => key < existing);
+      if (position >= 0) keys.splice(position, 0, key);
+      else if (keys.length < 4) keys.push(key);
+      if (keys.length > 4) keys.pop();
+    }
+    const recommendedStages = selectedStages.map(([stage, total]) => ({
       stage,
       meaning: stage === 0 ? 'executable_now_if_not_already_active' : `after_stage_${stage - 1}_prerequisites_complete`,
-      total: keys.length,
-      items: keys.sort().slice(0, 4).map(planItem),
-      truncated: keys.length > 4,
+      total,
+      items: stageKeys.get(stage)!.map(key => planItem(key)),
+      truncated: total > 4,
     }));
-    const unlockCandidates = [...plan.stageByPath.entries()]
-      .filter(([, stage]) => stage === 0)
-      .map(([key]) => planItem(key))
-      .filter(item => item.directDependents > 0)
-      .sort((left, right) => right.immediateUnlocks - left.immediateUnlocks || right.directDependents - left.directDependents || String(left.path).localeCompare(String(right.path)));
-    const maximumStage = orderedStages.at(-1)?.[0] || 0;
-    const deepestTail = [...(stageGroups.get(maximumStage) || [])].sort()[0];
+    let unlockTotal = 0;
+    const publicPathForKey = (key: string) => this.access.toPublicPath(workByKey.get(key)!.path);
+    function* unlockCandidates() {
+      for (const [key, stage] of plan.stageByPath) {
+        const directDependents = plan.dependents.get(key)?.size || 0;
+        if (stage !== 0 || directDependents === 0) continue;
+        yield { key, path: publicPathForKey(key), directDependents,
+          immediateUnlocks: plan.immediateUnlockByPath.get(key) || 0, rank: unlockTotal++ };
+      }
+    }
+    const unlockItems = boundedTopK(unlockCandidates(), Math.min(8, Math.floor(boundedLimit)),
+      (left, right) => right.immediateUnlocks - left.immediateUnlocks || right.directDependents - left.directDependents
+        || left.path.localeCompare(right.path) || left.rank - right.rank)
+      .map(item => projectPlanItem(item.key, item.path));
     const deepestChain: string[] = [];
     if (deepestTail) {
       let current = deepestTail;
@@ -4595,7 +4616,7 @@ export class LlmWikiService {
       stats: {
         edges: plan.edgeCount,
         stageable: plan.stageByPath.size,
-        stages: orderedStages.length,
+        stages: stageTotals.size,
         longestDependencyDepth: maximumStage,
         incompletePrerequisites: incompleteRoots.length,
         blockedByIncompletePrerequisites: incompleteDownstream.length,
@@ -4606,7 +4627,7 @@ export class LlmWikiService {
         blockedByCycles: plan.blockedByCycles.size,
       },
       recommendedStages,
-      unlockPoints: { total: unlockCandidates.length, items: unlockCandidates.slice(0, Math.min(8, boundedLimit)), truncated: unlockCandidates.length > Math.min(8, boundedLimit) },
+      unlockPoints: { total: unlockTotal, items: unlockItems, truncated: unlockTotal > unlockItems.length },
       ...(deepestChain.length > 1 && { deepestDependencyChain: deepestChainItems,
         deepestDependencyChainTotal: deepestChain.length, deepestDependencyChainTruncated: !completeChainProjection }),
       dependencyCycles: { total: plan.cycles.length, items: cycleComponents, truncated: plan.cycles.length > cycleComponents.length },

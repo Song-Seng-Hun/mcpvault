@@ -603,6 +603,12 @@ detail rows once that chain alone exceeds the response budget. It then uses
 the existing explicitly truncated response, never a partial chain labeled as
 complete. Blocked-lane details are built only for admitted rows; all work still
 contributes to counts. This reduces discarded projection work, not graph size.
+Stage recommendations keep exact membership totals but retain only four keys
+per displayed stage, for at most eight stages. Unlock ranking streams eligible
+stage-0 nodes into a bounded top-K selection and constructs detailed rows only
+for winners; independent nodes with no dependents are not unlock candidates.
+Ranking still uses immediate unlocks, direct dependents and public-path order,
+preserving input order for equal comparisons. Metadata/graph scans still run.
 Flow `maxChars` includes final JSON indentation. Nested dependency collections
 update their `truncated` flag when compacted; a chain preview reports
 `deepestDependencyChainTotal` and `deepestDependencyChainTruncated`. Omitted
