@@ -697,7 +697,26 @@ case and count occurrences, not unique notes. Existing Properties are not
 automatically repaired. HTML/indented-code parsing and complete Obsidian symbol
 equivalence are not claimed by this bounded-scope literal scanner.
 
-Tag list returns its snapshot revision. Public tag add/remove requires that
+Public `mcp.list_all_tags` returns a bounded page object (not a bare array):
+`tags`, filtered `total`, `returned`, `offset`, `snapshotFingerprint`, `truncated`
+and optional `nextAction`. `prefix` is a literal lowercase tag prefix with an
+optional leading hash; `topic/` selects nested tags. `limit` defaults to 50 and
+caps at 200; `maxChars` defaults to 4000 and clamps at 12000 (minimum 512), including
+JSON formatting. Order is occurrence count descending, then ordinal label.
+Only caller-visible, non-hidden tag/count tuples contribute to totals or the
+filter-bound fingerprint. Positive offsets require `expectedSnapshot`; changed
+views reject continuation and require restart at 0 without that field. This
+guard does not prove atomic source freshness or replace access checks.
+
+Follow the exact `nextAction` and keep credentials locally. Normal continuation
+uses emitted rows, not requested page size. A `reuseOriginalArguments` retry
+applies its `overrides` to the same original request; it never skips a tag when
+one exact label cannot fit. At the maximum compact single-item budget, an
+unrepresentable label fails explicitly. Source labels are not truncated.
+The graph still performs full aggregation; response bounds do not bound total
+inventory cost. Existing internal filesystem/graph array contracts are unchanged.
+
+Per-note `mcp.manage_tags` list returns its note revision. Public tag add/remove requires that
 `expectedRevision`; success returns `previousRevision` and `revision`, and stale
 requests must reread before changing anything. The service serializes tag edits
 with its note mutations, rechecks the derived snapshot and signals index

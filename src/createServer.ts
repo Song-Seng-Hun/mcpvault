@@ -2,6 +2,7 @@ import { Server, type Tool } from "@modelcontextprotocol/server";
 import { FileSystemService } from "./filesystem.js";
 import { projectNoteOutline, projectNoteLineWindow } from './note-projections.js';
 import { packTaskPage } from './task-page.js';
+import { packTagPage } from './tag-page.js';
 import { FrontmatterHandler, parseFrontmatter } from "./frontmatter.js";
 import { PathFilter } from "./pathfilter.js";
 import { SearchService } from "./search.js";
@@ -763,10 +764,15 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getIdeationTools(),
         {
           name: "list_all_tags",
-          description: "List tags from caller-visible, non-hidden notes with occurrence counts, not distinct-note counts. Combines Properties and body tags, including nested/Unicode tags. Body tags ignore matching fences, closed inline backticks and escaped hashes. Sorted by frequency; advisory, not a complete vault inventory.",
+          description: "Discover caller-visible, non-hidden tags in bounded {tags,total,returned,offset,snapshotFingerprint,truncated,nextAction} pages. Counts are occurrences, not distinct notes. Combines Properties and body Unicode/nested tags; ignores fenced/inline examples and escaped hashes. Sorted by count then ordinal tag. Follow nextAction, retaining authentication locally; changed tag views require restart. Exact labels are never clipped. Advisory derived view, not an atomic source inventory.",
           inputSchema: {
             type: "object",
             properties: {
+              prefix: { type: "string", description: "Literal case-insensitive tag prefix, optional leading #; use research/ for that nested subtree" },
+              limit: { type: "integer", minimum: 1, description: "Maximum tags per page (default 50, capped at 200)", default: 50 },
+              maxChars: { type: "integer", minimum: 512, description: "Whole JSON character budget including formatting (default 4000, capped at 12000)", default: 4000 },
+              offset: { type: "integer", minimum: 0, description: "Follow nextAction's emitted-item offset; positive offsets require expectedSnapshot", default: 0 },
+              expectedSnapshot: { type: "string", description: "Returned tag-view fingerprint. On change restart at offset 0 without this field; not an access token or source revision", pattern: "^[a-f0-9]{64}$" },
               prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
             }
           }
@@ -2620,9 +2626,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
         case "list_all_tags": {
           const tags = await fileSystem.listAllTags(canAccessPath);
-          const indent = trimmedArgs.prettyPrint ? 2 : undefined;
           return {
-            content: [{ type: "text", text: JSON.stringify(tags, null, indent) }]
+            content: [{ type: "text", text: packTagPage(tags, args) }]
           };
         }
 

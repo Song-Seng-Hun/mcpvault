@@ -499,6 +499,14 @@ do not prove a current, bounded, actionable response through its public adapter.
   recent entries. Counts still include allowed non-Markdown inventory and visible
   empty directories as documented. This correctness check costs source IO; an
   atomic inventory or independently freshness-validated cheaper index is not proven.
+- Public tag discovery now returns exact bounded pages, literal prefix filtering,
+  occurrence totals and emitted-item continuation. A filter-bound fingerprint
+  rejects changed tag/count views; private or moderation-hidden contributions
+  remain outside counts and fingerprints. Oversized labels get a same-position
+  retry or explicit ceiling error, not silent tail loss or fabricated labels.
+  The old public bare array becomes a documented envelope; internal arrays stay
+  unchanged and no fixed MCP tool is added. Full graph aggregation and eventual
+  watcher/reconciliation freshness remain scale/correctness limits.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

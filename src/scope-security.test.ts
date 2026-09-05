@@ -62,8 +62,8 @@ test('anonymous and authenticated searches never expose another model scope', as
     expect(ownDirectory.value.files).toContain('Private.md');
 
     const alphaTags = await json(client, 'list_all_tags', { accessToken: alphaToken });
-    expect(alphaTags.value.some((item: any) => item.tag === 'alpha_private_tag')).toBe(true);
-    expect(alphaTags.value.some((item: any) => item.tag === 'beta_private_tag')).toBe(false);
+    expect(alphaTags.value.tags.some((item: any) => item.tag === 'alpha_private_tag')).toBe(true);
+    expect(alphaTags.value.tags.some((item: any) => item.tag === 'beta_private_tag')).toBe(false);
     const alphaTasks = await json(client, 'list_tasks', { status: 'all', accessToken: alphaToken });
     expect(alphaTasks.value.tasks.some((item: any) => item.text === 'alpha task')).toBe(true);
     expect(alphaTasks.value.tasks.some((item: any) => item.text === 'beta task')).toBe(false);

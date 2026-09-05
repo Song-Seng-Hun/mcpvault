@@ -92,7 +92,7 @@ test('public MCP requires a current revision and immediately exposes successful 
     expect(listed.isError).not.toBe(true);
     const revision = JSON.parse(text(listed)).revision;
     expect(revision).toMatch(/^[a-f0-9]{64}$/);
-    await call('mcp.list_all_tags', {}); // Warm the derived view before mutation.
+    const tagSnapshot = JSON.parse(text(await call('mcp.list_all_tags', {}))).snapshotFingerprint;
     const missing = await call('mcp.manage_tags', { path: 'Note.md', operation: 'add', tags: ['new'] });
     expect(missing.isError).toBe(true);
     expect(text(missing)).toContain('expectedRevision');
@@ -107,7 +107,11 @@ test('public MCP requires a current revision and immediately exposes successful 
     expect(text(stale)).toMatch(/Revision conflict/);
     const tags = await call('mcp.list_all_tags', {});
     expect(text(tags).length).toBeLessThanOrEqual(3000);
-    expect(JSON.parse(text(tags))).toContainEqual({ tag: 'new', count: 1 });
+    expect(JSON.parse(text(tags)).tags).toContainEqual({ tag: 'new', count: 1 });
+    expect(JSON.parse(text(tags)).snapshotFingerprint).not.toBe(tagSnapshot);
+    const stalePage = await call('mcp.list_all_tags', { offset: 1, expectedSnapshot: tagSnapshot });
+    expect(stalePage.isError).toBe(true);
+    expect(text(stalePage)).toMatch(/Tag view changed/);
     expect((await fs.readNote('Note.md')).revision).toBe(after.revision);
   } finally { await client.close(); await server.close(); }
 });

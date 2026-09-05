@@ -38,7 +38,7 @@ async function call(tool: string, args = {}) {
 }
 test('public tags contain no hidden note contributions', async () => {
   const result = await call('list_all_tags');
-  expect(result.value).toEqual([{ tag: 'public_tag', count: 1 }]);
+  expect(result.value.tags).toEqual([{ tag: 'public_tag', count: 1 }]);
 });
 test('public unresolved repairs exclude hidden sources and known hidden-only targets', async () => {
   const result = await call('find_unresolved_links', { limit: 1 });

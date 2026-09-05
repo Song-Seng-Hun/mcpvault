@@ -344,7 +344,7 @@ export class VaultGraphIndex {
         }
         return [...counts.entries()]
             .map(([tag, count]) => ({ tag, count }))
-            .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+            .sort((a, b) => b.count - a.count || (a.tag < b.tag ? -1 : a.tag > b.tag ? 1 : 0));
     }
     async ensure() {
         await this.catalog?.flushPendingEvents();

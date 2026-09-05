@@ -77,6 +77,6 @@ test('public MCP tag discovery delivers bounded real tags, not examples', async 
     expect(result.isError).not.toBe(true);
     const text = (result.content as Array<{ text: string }>)[0]!.text;
     expect(text.length).toBeLessThanOrEqual(1024);
-    expect(JSON.parse(text).map((row: { tag: string }) => row.tag).sort()).toEqual(['real', '한국어/정리']);
+    expect(JSON.parse(text).tags.map((row: { tag: string }) => row.tag).sort()).toEqual(['real', '한국어/정리']);
   } finally { await client.close(); await server.close(); }
 });

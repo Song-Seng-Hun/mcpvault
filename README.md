@@ -2205,6 +2205,26 @@ the same graph parser even without an injected index. Tags count occurrences,
 not distinct notes. Graph refresh follows received changes/reconciliation; this
 is not an atomic whole-vault snapshot or a general redactor of public prose.
 
+`mcp.list_all_tags` now returns an object, not the former bare array:
+`{tags,total,returned,offset,snapshotFingerprint,truncated,nextAction?}`.
+Use `call_endpoint` with `arguments: {prefix: "research/", limit: 50, maxChars: 4000}`
+to browse that literal nested-tag prefix. Prefixes normalize case and an optional
+leading `#`; no prefix searches all visible tags. Counts sort descending, then
+exact normalized tag labels sort ordinally. Limit is capped at 200; the whole
+JSON budget (including pretty printing) is 512–12000 characters, default 4000.
+
+Follow the returned `nextAction.arguments` rather than adding the requested limit
+to an offset: fewer entries may fit. Retain your authentication locally. A
+positive offset requires `expectedSnapshot`; if the visible tag/count view or
+prefix changes, restart at offset 0 without the old fingerprint. This fingerprint
+is not a note revision, evidence freshness guarantee, or permission grant.
+If no exact tag fits, `reuseOriginalArguments` plus `overrides` requests the same
+position with a compact 12000-character budget and limit 1. Apply those overrides
+to the original arguments; never advance past an omitted tag. An identifier that
+still cannot fit gets an explicit error, not a clipped or silently skipped label.
+Graph aggregation still scans visible entries; bounded output is not a claim of
+constant server cost. No new MCP tool or client installation is needed.
+
 Body tag discovery and per-note tag management share literal-aware extraction:
 matching backtick/tilde fences, closed backtick spans and escaped hashes are not
 classification tags. Nested tags retain their full slash path; Korean, combining
