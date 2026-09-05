@@ -951,6 +951,7 @@ export function createServer(vaultPath, options = {}) {
                 type: "object",
                 properties: {
                     limit: { type: "integer", minimum: 1, maximum: 500, description: "Maximum orphan notes to return (default: 100, max: 500)", default: 100 },
+                    expectedSnapshot: { type: "string", pattern: "^[a-f0-9]{64}$", description: "Result-view fingerprint from nextAction. On change restart at offset 0 without this field; not a write revision or access token" },
                     offset: { type: "integer", minimum: 0, maximum: 100000, description: "Zero-based result offset (default: 0)", default: 0 },
                     maxChars: { type: "integer", minimum: 1024, maximum: 12000, description: "Hard total response budget (default: 6000)", default: 6000 },
                     prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
@@ -964,6 +965,7 @@ export function createServer(vaultPath, options = {}) {
                 type: "object",
                 properties: {
                     limit: { type: "integer", minimum: 1, maximum: 500, description: "Maximum unresolved link occurrences to return (default: 100, max: 500)", default: 100 },
+                    expectedSnapshot: { type: "string", pattern: "^[a-f0-9]{64}$", description: "Result-view fingerprint from nextAction. On change restart at offset 0 without this field; not a write revision or access token" },
                     offset: { type: "integer", minimum: 0, maximum: 100000, description: "Zero-based result offset (default: 0)", default: 0 },
                     maxChars: { type: "integer", minimum: 1024, maximum: 12000, description: "Hard total response budget (default: 6000)", default: 6000 },
                     prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
@@ -978,6 +980,7 @@ export function createServer(vaultPath, options = {}) {
                 properties: {
                     path: { type: "string", description: "Path to the source note relative to vault root" },
                     limit: { type: "integer", minimum: 1, maximum: 500, description: "Maximum outlink occurrences to return (default: 100, max: 500)", default: 100 },
+                    expectedSnapshot: { type: "string", pattern: "^[a-f0-9]{64}$", description: "Result-view fingerprint from nextAction. On change restart at offset 0 without this field; not a write revision or access token" },
                     offset: { type: "integer", minimum: 0, maximum: 100000, description: "Zero-based result offset (default: 0)", default: 0 },
                     maxChars: { type: "integer", minimum: 1024, maximum: 12000, description: "Hard total response budget (default: 6000)", default: 6000 },
                     prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
@@ -993,6 +996,7 @@ export function createServer(vaultPath, options = {}) {
                 properties: {
                     path: { type: "string", description: "Path to the target note relative to vault root" },
                     limit: { type: "integer", minimum: 1, maximum: 500, description: "Maximum backlink occurrences to return (default: 100, max: 500)", default: 100 },
+                    expectedSnapshot: { type: "string", pattern: "^[a-f0-9]{64}$", description: "Result-view fingerprint from nextAction. On change restart at offset 0 without this field; not a write revision or access token" },
                     offset: { type: "integer", minimum: 0, maximum: 100000, description: "Zero-based result offset (default: 0)", default: 0 },
                     maxChars: { type: "integer", minimum: 1024, maximum: 12000, description: "Hard total response budget (default: 6000)", default: 6000 },
                     prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
@@ -2535,17 +2539,17 @@ export function createServer(vaultPath, options = {}) {
                         return await handleWikiLinkTool(fileSystem, trimmedArgs, canAccessPath);
                     case "get_backlinks": {
                         const page = navigationPageArgs(trimmedArgs);
-                        const backlinks = await fileSystem.getBacklinks(trimmedArgs.path, page.limit, canAccessPath, page.offset, { includeSourceRevision: true });
+                        const backlinks = await fileSystem.getBacklinks(trimmedArgs.path, page.limit, canAccessPath, page.offset, { includeSourceRevision: true, includeSnapshot: true });
                         return boundedNavigationResult('backlinks', endpointIdForTool('get_backlinks'), backlinks, page, args, path => scopeAccess.toPublicPath(path));
                     }
                     case "get_outlinks": {
                         const page = navigationPageArgs(trimmedArgs);
-                        const outlinks = await fileSystem.getOutlinks(trimmedArgs.path, page.limit, canAccessPath, page.offset, { includeSourceRevision: true });
+                        const outlinks = await fileSystem.getOutlinks(trimmedArgs.path, page.limit, canAccessPath, page.offset, { includeSourceRevision: true, includeSnapshot: true });
                         return boundedNavigationResult('outlinks', endpointIdForTool('get_outlinks'), outlinks, page, args, path => scopeAccess.toPublicPath(path));
                     }
                     case "find_unresolved_links": {
                         const page = navigationPageArgs(trimmedArgs);
-                        const unresolved = await fileSystem.findUnresolvedLinks(page.limit, canAccessPath, page.offset);
+                        const unresolved = await fileSystem.findUnresolvedLinks(page.limit, canAccessPath, page.offset, { includeSnapshot: true });
                         return boundedNavigationResult('unresolved', endpointIdForTool('find_unresolved_links'), unresolved, page, args, path => scopeAccess.toPublicPath(path));
                     }
                     case "get_daily_note": {
@@ -2575,7 +2579,7 @@ export function createServer(vaultPath, options = {}) {
                     }
                     case "find_orphan_notes": {
                         const page = navigationPageArgs(trimmedArgs);
-                        const orphans = await fileSystem.findOrphanNotes(page.limit, canAccessPath, page.offset);
+                        const orphans = await fileSystem.findOrphanNotes(page.limit, canAccessPath, page.offset, { includeSnapshot: true });
                         return boundedNavigationResult('orphans', endpointIdForTool('find_orphan_notes'), orphans, page, args, path => scopeAccess.toPublicPath(path));
                     }
                     case "get_note_outline": {

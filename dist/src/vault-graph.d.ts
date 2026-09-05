@@ -31,16 +31,17 @@ export declare class VaultGraphIndex {
     invalidate(path?: string, kind?: VaultCatalogChangeKind): void;
     invalidateMany(changes: readonly VaultCatalogChange[]): void;
     close(): void;
-    getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, canIncludeSource?: (path: string) => Promise<boolean>, includeSourceRevision?: boolean): Promise<BacklinksResult>;
-    getOutlinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, includeSourceRevision?: boolean): Promise<{
+    getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, canIncludeSource?: (path: string) => Promise<boolean>, includeSourceRevision?: boolean, includeSnapshot?: boolean): Promise<BacklinksResult>;
+    getOutlinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, includeSourceRevision?: boolean, includeSnapshot?: boolean): Promise<{
         source: string;
         sourceRevision?: string;
+        snapshotFingerprint?: string;
         outlinks: OutlinkMatch[];
         total: number;
         truncated: boolean;
     }>;
-    findUnresolvedLinks(limit: number, canAccessPath: (path: string) => boolean, offset?: number): Promise<UnresolvedLinksResult>;
-    findOrphanNotes(limit: number, canAccessPath: (path: string) => boolean, offset?: number): Promise<OrphanNotesResult>;
+    findUnresolvedLinks(limit: number, canAccessPath: (path: string) => boolean, offset?: number, includeSnapshot?: boolean): Promise<UnresolvedLinksResult>;
+    findOrphanNotes(limit: number, canAccessPath: (path: string) => boolean, offset?: number, includeSnapshot?: boolean): Promise<OrphanNotesResult>;
     listAllTags(canAccessPath: (path: string) => boolean): Promise<Array<{
         tag: string;
         count: number;

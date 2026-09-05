@@ -11,6 +11,7 @@ import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference }
 import { isModerationHidden } from './moderation-policy.js';
 import { extractInlineTags } from './markdown-tags.js';
 import { SourceReadLimitError } from './bounded-source-read.js';
+import { NavigationViewFingerprint } from './navigation-view.js';
 const GRAPH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
 const REVERSE_LINK_CACHE_LIMIT = 16_384;
@@ -200,8 +201,9 @@ export class VaultGraphIndex {
         this.entries.clear();
         this.allPaths.clear();
     }
-    async getBacklinks(path, limit, canAccessPath, offset = 0, canIncludeSource, includeSourceRevision = false) {
+    async getBacklinks(path, limit, canAccessPath, offset = 0, canIncludeSource, includeSourceRevision = false, includeSnapshot = false) {
         await this.ensure();
+        const startGeneration = this.changeGeneration;
         const target = normalizePath(path);
         const normalizedTarget = normalizedPath(target);
         let targetEntry;
@@ -215,6 +217,7 @@ export class VaultGraphIndex {
             throw new Error(`File not found: ${target}`);
         if (!canAccessPath(targetEntry.path) || targetEntry.moderationHidden)
             throw new Error(`Access denied: ${target}`);
+        const snapshot = includeSnapshot ? new NavigationViewFingerprint(['backlinks', targetEntry.path, targetEntry.revision]) : undefined;
         const visible = this.visibilityContext(canAccessPath);
         const project = this.linkProjector(visible.resolver, buildResolver([...this.allPaths], this.entries));
         const backlinks = [];
@@ -250,13 +253,17 @@ export class VaultGraphIndex {
                 ...(link.sourceClaimId && { sourceClaimId: link.sourceClaimId }),
                 ...(link.propertyPath && { propertyPath: link.propertyPath }),
             };
+            snapshot?.add(entry.path, entry.revision, project(entry, backlink));
             addTopMatch(backlinks, backlink, offset + limit, compare);
+        }
+        if (includeSnapshot && this.changeGeneration !== startGeneration) {
+            throw new Error('Graph changed during navigation; retry the query. No stable navigation view was returned.');
         }
         backlinks.sort(compare);
         const page = backlinks.slice(offset, offset + limit).map(link => project(sourceEntries.get(link.path), link));
-        return { target, ...(includeSourceRevision && { targetRevision: targetEntry.revision }), backlinks: page, total, truncated: total > offset + page.length };
+        return { target, ...(includeSourceRevision && { targetRevision: targetEntry.revision }), ...(snapshot && { snapshotFingerprint: snapshot.finish() }), backlinks: page, total, truncated: total > offset + page.length };
     }
-    async getOutlinks(path, limit, canAccessPath, offset = 0, includeSourceRevision = false) {
+    async getOutlinks(path, limit, canAccessPath, offset = 0, includeSourceRevision = false, includeSnapshot = false) {
         await this.ensure();
         const source = normalizePath(path);
         const entry = this.entries.get(source);
@@ -275,20 +282,26 @@ export class VaultGraphIndex {
                 return true;
             return resolveTargets(link.target, visible.resolver, entry.path).length > 0;
         });
+        const snapshot = includeSnapshot ? new NavigationViewFingerprint(['outlinks', source, entry.revision]) : undefined;
+        if (snapshot)
+            for (const link of outlinks)
+                snapshot.add(source, entry.revision, project(entry, link));
         return {
             source,
             ...(includeSourceRevision && { sourceRevision: entry.revision }),
+            ...(snapshot && { snapshotFingerprint: snapshot.finish() }),
             outlinks: outlinks.slice(offset, offset + limit).map(link => project(entry, link)),
             total: outlinks.length,
             truncated: outlinks.length > offset + limit,
         };
     }
-    async findUnresolvedLinks(limit, canAccessPath, offset = 0) {
+    async findUnresolvedLinks(limit, canAccessPath, offset = 0, includeSnapshot = false) {
         await this.ensure();
         const { paths: visiblePaths, pathSet: visible, resolver } = this.visibilityContext(canAccessPath);
         const allResolver = buildResolver([...this.allPaths], this.entries);
         const project = this.linkProjector(resolver, allResolver);
         const unresolved = [];
+        const snapshot = includeSnapshot ? new NavigationViewFingerprint(['unresolved']) : undefined;
         let total = 0;
         for (const path of visiblePaths) {
             if (!isNote(path))
@@ -306,13 +319,14 @@ export class VaultGraphIndex {
                 if (resolveTargets(link.target, allResolver, entry.path).length > 0)
                     continue;
                 total += 1;
+                snapshot?.add(entry.path, entry.revision, project(entry, link));
                 if (total > offset && unresolved.length < limit)
                     unresolved.push({ ...project(entry, link), path: entry.path });
             }
         }
-        return { unresolved, total, truncated: total > offset + unresolved.length };
+        return { unresolved, ...(snapshot && { snapshotFingerprint: snapshot.finish() }), total, truncated: total > offset + unresolved.length };
     }
-    async findOrphanNotes(limit, canAccessPath, offset = 0) {
+    async findOrphanNotes(limit, canAccessPath, offset = 0, includeSnapshot = false) {
         await this.ensure();
         const { paths: allVisiblePaths, resolver } = this.visibilityContext(canAccessPath);
         const notePaths = allVisiblePaths.filter(isNote);
@@ -335,7 +349,11 @@ export class VaultGraphIndex {
             .filter(path => incomingCounts.get(normalizedPath(path)) === 0)
             .map(path => ({ path, incomingLinks: 0 }))
             .sort((left, right) => left.path.localeCompare(right.path));
-        return { orphans: orphans.slice(offset, offset + limit), total: orphans.length, truncated: orphans.length > offset + limit };
+        const snapshot = includeSnapshot ? new NavigationViewFingerprint(['orphans']) : undefined;
+        if (snapshot)
+            for (const row of orphans)
+                snapshot.add(row.path, this.entries.get(row.path).revision, row);
+        return { orphans: orphans.slice(offset, offset + limit), ...(snapshot && { snapshotFingerprint: snapshot.finish() }), total: orphans.length, truncated: orphans.length > offset + limit };
     }
     async listAllTags(canAccessPath) {
         await this.ensure();

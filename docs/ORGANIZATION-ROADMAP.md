@@ -16,7 +16,15 @@ tools; new behaviors belong in the endpoint catalog.
   total JSON budget, includes parsed source revisions for backlinks/outlinks,
   and retries oversized entries without skipping or clipping identities.
   Offset-ceiling metadata is budgeted in separate monotonic regions; ordinary
-  graph offsets are still advisory across edits, not pinned snapshots.
+  graph continuations now carry a stateless result fingerprint. Changes in
+  admitted rows, parsed revisions or masked context reject continuation before
+  returning mixed rows. Per-source streaming hashes cover off-page results,
+  remain stable across unrelated private edits and source insertion order, and
+  do not retain history. Manual offsets without a guard remain advisory;
+  unobserved filesystem drift and atomic cross-file reads are not solved.
+  Fingerprinting streams all admitted rows, adding projection/hash CPU without
+  a second full edge collection; dense same-line redaction cost still needs a
+  dedicated scale audit before claiming graph navigation cost is fully bounded.
 - MOC Home and graph hierarchy traverse whole branches in sibling order.
   Missing, ambiguous, and cyclic ancestry is explicit. Traversal is iterative.
 - MOC context packets respect authored mixed-link order and preserve locators,

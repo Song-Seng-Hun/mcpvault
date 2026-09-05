@@ -1245,6 +1245,7 @@ test("find_orphan_notes excludes linked notes and self-links", async () => {
         { path: "Self.md", incomingLinks: 0 },
         { path: "Source.md", incomingLinks: 0 },
       ],
+      snapshotFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
       total: 3,
       truncated: false,
     });
@@ -1281,6 +1282,7 @@ test("find_unresolved_links reports only real broken internal links", async () =
         targetHeading: "Heading",
         context: "Broken: [[Missing#Heading|display]].",
       }],
+      snapshotFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
       total: 1,
       truncated: false,
     });
@@ -1311,6 +1313,7 @@ test("get_outlinks returns destinations and ignores literal examples", async () 
     expect(JSON.parse((result.content as any)[0].text)).toEqual({
       source: "Source.md",
       sourceRevision: createHash('sha256').update(await readFile(join(testVaultPath, 'Source.md'))).digest('hex'),
+      snapshotFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
       outlinks: [
         {
           target: "Target",

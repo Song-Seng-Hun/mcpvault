@@ -663,10 +663,17 @@ budgeting; authentication stays local. Only context/title previews may shorten,
 marked `fieldsTruncated`; read the source rather than patching from that preview.
 Backlink rows carry their parsed `sourceRevision` and the page's `targetRevision`;
 outlink pages carry the parsed `sourceRevision`. These are not an atomic current
-Vault snapshot. Offsets are advisory across concurrent edits: re-read changed
-sources before editing. Follow continuations by emitted row count. If no exact
+Vault snapshot. All four graph pages return `snapshotFingerprint` over the full
+admitted, masked result set, independent of page size/offset/format. Generated
+continuations carry `expectedSnapshot`; a changed view rejects continuation
+without returning rows. Restart at offset 0 without that field. Fingerprints do
+not include unrelated private rows or depend on graph source insertion order.
+They do not freeze historical files or detect unobserved filesystem changes;
+legacy manually unguarded offsets remain advisory. Re-read source revisions
+before editing. Follow continuations by emitted row count. If no exact
 row fits, `nextAction.reuseOriginalArguments` means merge its `overrides` into
 the original request (same position, compact 12000-character budget, limit 1).
+Keep any original expectedSnapshot through this budget retry.
 At that ceiling an oversized locator fails explicitly without skipping a row.
 `paginationLimited` reports the existing 100000-offset ceiling rather than
 emitting an invalid continuation. No new MCP tools or client installation are

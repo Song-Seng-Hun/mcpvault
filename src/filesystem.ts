@@ -2334,7 +2334,7 @@ export class FileSystemService {
     return matches;
   }
 
-  async getBacklinks(path: string, limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0, options: { includeSourceRevision?: boolean } = {}): Promise<BacklinksResult> {
+  async getBacklinks(path: string, limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0, options: { includeSourceRevision?: boolean; includeSnapshot?: boolean } = {}): Promise<BacklinksResult> {
     const target = this.normalizePath(path);
     if (!this.pathFilter.isAllowed(target) || !canAccessPath(target)) throw new Error(`Access denied: ${target}`);
     const targetNote = await this.readNote(target);
@@ -2342,7 +2342,7 @@ export class FileSystemService {
     return this.withGraphRead(graph => graph.getBacklinks(target, limit, canAccessPath, offset, async sourcePath => {
       const current = await this.readNoteMetadata([sourcePath], canAccessPath, { fresh: true, strict: true });
       return current.length > 0 && !isModerationHidden(current[0]!.frontmatter);
-    }, options.includeSourceRevision));
+    }, options.includeSourceRevision, options.includeSnapshot));
   }
 
   private async withGraphRead<T>(read: (graph: VaultGraphIndex) => Promise<T>): Promise<T> {
@@ -2352,20 +2352,20 @@ export class FileSystemService {
     finally { graph.close(); }
   }
 
-  async getOutlinks(path: string, limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0, options: { includeSourceRevision?: boolean } = {}): Promise<OutlinksResult> {
+  async getOutlinks(path: string, limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0, options: { includeSourceRevision?: boolean; includeSnapshot?: boolean } = {}): Promise<OutlinksResult> {
     const source = this.normalizePath(path);
     if (!this.pathFilter.isAllowed(source) || !canAccessPath(source)) throw new Error(`Access denied: ${source}`);
     const note = await this.readNote(source);
     if (isModerationHidden(note.frontmatter)) throw new Error(`Access denied: ${source}`);
-    return this.withGraphRead(graph => graph.getOutlinks(source, limit, canAccessPath, offset, options.includeSourceRevision));
+    return this.withGraphRead(graph => graph.getOutlinks(source, limit, canAccessPath, offset, options.includeSourceRevision, options.includeSnapshot));
   }
 
-  async findUnresolvedLinks(limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0): Promise<UnresolvedLinksResult> {
-    return this.withGraphRead(graph => graph.findUnresolvedLinks(limit, canAccessPath, offset));
+  async findUnresolvedLinks(limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0, options: { includeSnapshot?: boolean } = {}): Promise<UnresolvedLinksResult> {
+    return this.withGraphRead(graph => graph.findUnresolvedLinks(limit, canAccessPath, offset, options.includeSnapshot));
   }
 
-  async findOrphanNotes(limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0): Promise<OrphanNotesResult> {
-    return this.withGraphRead(graph => graph.findOrphanNotes(limit, canAccessPath, offset));
+  async findOrphanNotes(limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0, options: { includeSnapshot?: boolean } = {}): Promise<OrphanNotesResult> {
+    return this.withGraphRead(graph => graph.findOrphanNotes(limit, canAccessPath, offset, options.includeSnapshot));
   }
 
   async getDailyNote(dateInput: DailyDateInput = 'today', folder: string = 'Daily Notes'): Promise<DailyNoteResult> {

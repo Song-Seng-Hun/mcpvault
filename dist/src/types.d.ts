@@ -393,6 +393,7 @@ export interface BacklinkMatch {
     propertyPath?: string;
 }
 export interface BacklinksResult {
+    snapshotFingerprint?: string;
     target: string;
     /** Opt-in revision of the target used by the link resolver. */
     targetRevision?: string;
@@ -419,6 +420,7 @@ export interface OutlinkMatch {
     propertyPath?: string;
 }
 export interface OutlinksResult {
+    snapshotFingerprint?: string;
     source: string;
     /** Opt-in raw-file revision captured when these links were parsed. */
     sourceRevision?: string;
@@ -430,6 +432,7 @@ export interface UnresolvedLinkMatch extends OutlinkMatch {
     path: string;
 }
 export interface UnresolvedLinksResult {
+    snapshotFingerprint?: string;
     unresolved: UnresolvedLinkMatch[];
     total: number;
     truncated: boolean;
@@ -439,6 +442,7 @@ export interface OrphanNote {
     incomingLinks: number;
 }
 export interface OrphanNotesResult {
+    snapshotFingerprint?: string;
     orphans: OrphanNote[];
     total: number;
     truncated: boolean;

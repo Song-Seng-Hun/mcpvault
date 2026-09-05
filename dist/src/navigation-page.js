@@ -1,4 +1,4 @@
-export const NAVIGATION_READ_GUIDANCE = ' Paths and locators remain exact; only context/title previews may shrink (fieldsTruncated). Follow nextAction; reuseOriginalArguments means merge its overrides into this request, keeping authentication local. Offsets are advisory across edits, not snapshot-pinned. paginationLimited marks the offset ceiling; verify the source revision before editing.';
+export const NAVIGATION_READ_GUIDANCE = ' Paths and locators remain exact; only context/title previews may shrink (fieldsTruncated). Follow nextAction with expectedSnapshot; changed views reject continuation: restart at offset 0 without that field. reuseOriginalArguments means merge its overrides into this request, keeping authentication local. Fingerprints guard observed results, not atomic Vault snapshots; legacy unguarded offsets remain advisory. paginationLimited marks the offset ceiling; verify source revisions before editing.';
 /** Exact locators are never prose. Budget the final public JSON before return. */
 export function packNavigationPage(key, endpointId, result, page, args, toPublicPath = path => path) {
     const rows = (Array.isArray(result[key]) ? result[key] : []).map((item) => ({
@@ -9,6 +9,14 @@ export function packNavigationPage(key, endpointId, result, page, args, toPublic
         if (typeof metadata[name] === 'string')
             metadata[name] = toPublicPath(metadata[name]);
     const path = key === 'backlinks' ? metadata.target : key === 'outlinks' ? metadata.source : undefined;
+    if (args.expectedSnapshot !== undefined) {
+        if (typeof args.expectedSnapshot !== 'string' || !/^[a-f0-9]{64}$/.test(args.expectedSnapshot)) {
+            throw new Error('expectedSnapshot must be a lowercase SHA-256 fingerprint');
+        }
+        if (args.expectedSnapshot !== result.snapshotFingerprint) {
+            throw new Error('Navigation view changed; restart at offset 0 without expectedSnapshot. No continuation items returned.');
+        }
+    }
     const total = Number(result.total || 0);
     const indent = args.prettyPrint ? 2 : undefined;
     for (const previewChars of [240, 80, 0]) {
@@ -41,6 +49,7 @@ export function packNavigationPage(key, endpointId, result, page, args, toPublic
                     value.nextAction = { endpointId, arguments: {
                             ...(typeof path === 'string' && { path }), offset: nextOffset, limit: page.limit,
                             maxChars: page.maxChars, ...(args.prettyPrint && { prettyPrint: true }),
+                            ...(typeof result.snapshotFingerprint === 'string' && { expectedSnapshot: result.snapshotFingerprint }),
                         } };
             }
             return JSON.stringify(value, null, indent);

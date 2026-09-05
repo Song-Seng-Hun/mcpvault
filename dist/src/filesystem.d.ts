@@ -159,13 +159,19 @@ export declare class FileSystemService {
     findPathForWikiLink(wikiLinkName: string, canAccessPath?: (path: string) => boolean): Promise<string[]>;
     getBacklinks(path: string, limit?: number, canAccessPath?: (path: string) => boolean, offset?: number, options?: {
         includeSourceRevision?: boolean;
+        includeSnapshot?: boolean;
     }): Promise<BacklinksResult>;
     private withGraphRead;
     getOutlinks(path: string, limit?: number, canAccessPath?: (path: string) => boolean, offset?: number, options?: {
         includeSourceRevision?: boolean;
+        includeSnapshot?: boolean;
     }): Promise<OutlinksResult>;
-    findUnresolvedLinks(limit?: number, canAccessPath?: (path: string) => boolean, offset?: number): Promise<UnresolvedLinksResult>;
-    findOrphanNotes(limit?: number, canAccessPath?: (path: string) => boolean, offset?: number): Promise<OrphanNotesResult>;
+    findUnresolvedLinks(limit?: number, canAccessPath?: (path: string) => boolean, offset?: number, options?: {
+        includeSnapshot?: boolean;
+    }): Promise<UnresolvedLinksResult>;
+    findOrphanNotes(limit?: number, canAccessPath?: (path: string) => boolean, offset?: number, options?: {
+        includeSnapshot?: boolean;
+    }): Promise<OrphanNotesResult>;
     getDailyNote(dateInput?: DailyDateInput, folder?: string): Promise<DailyNoteResult>;
     writeDailyNote(params: {
         action: 'create' | 'append';

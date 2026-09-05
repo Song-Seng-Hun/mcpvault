@@ -2249,7 +2249,7 @@ export class FileSystemService {
         return this.withGraphRead(graph => graph.getBacklinks(target, limit, canAccessPath, offset, async (sourcePath) => {
             const current = await this.readNoteMetadata([sourcePath], canAccessPath, { fresh: true, strict: true });
             return current.length > 0 && !isModerationHidden(current[0].frontmatter);
-        }, options.includeSourceRevision));
+        }, options.includeSourceRevision, options.includeSnapshot));
     }
     async withGraphRead(read) {
         if (this.graphIndex)
@@ -2269,13 +2269,13 @@ export class FileSystemService {
         const note = await this.readNote(source);
         if (isModerationHidden(note.frontmatter))
             throw new Error(`Access denied: ${source}`);
-        return this.withGraphRead(graph => graph.getOutlinks(source, limit, canAccessPath, offset, options.includeSourceRevision));
+        return this.withGraphRead(graph => graph.getOutlinks(source, limit, canAccessPath, offset, options.includeSourceRevision, options.includeSnapshot));
     }
-    async findUnresolvedLinks(limit = 100, canAccessPath = () => true, offset = 0) {
-        return this.withGraphRead(graph => graph.findUnresolvedLinks(limit, canAccessPath, offset));
+    async findUnresolvedLinks(limit = 100, canAccessPath = () => true, offset = 0, options = {}) {
+        return this.withGraphRead(graph => graph.findUnresolvedLinks(limit, canAccessPath, offset, options.includeSnapshot));
     }
-    async findOrphanNotes(limit = 100, canAccessPath = () => true, offset = 0) {
-        return this.withGraphRead(graph => graph.findOrphanNotes(limit, canAccessPath, offset));
+    async findOrphanNotes(limit = 100, canAccessPath = () => true, offset = 0, options = {}) {
+        return this.withGraphRead(graph => graph.findOrphanNotes(limit, canAccessPath, offset, options.includeSnapshot));
     }
     async getDailyNote(dateInput = 'today', folder = 'Daily Notes') {
         const date = resolveDailyDate(dateInput);
