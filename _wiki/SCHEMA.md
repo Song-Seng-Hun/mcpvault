@@ -916,6 +916,18 @@ After inspecting the current note, use an explicit line without taskId or repair
 the IDs. The listed source revision can supply expectedRevision; re-read after
 mutation. This does not turn the multi-note listing into an atomic snapshot.
 
+Task pages use ordinal path/line order, `offset`, and `snapshotFingerprint`.
+A positive offset requires `expectedSnapshot`; changing the visible filtered
+task stream, source revisions, status or path filter rejects continuation and
+requires a restart at offset 0 without that guard. Hidden owners affect neither
+the hash nor counts. The public `nextAction` advances only by emitted items and
+preserves the public filter; it never serializes an access token. An empty page
+caused by response pressure gets a same-position compact-budget retry, not a
+zero-progress page loop. Text previews may be truncated on the final page too.
+Only the requested page is retained during the scan, but full note inventory
+and per-file parsing costs remain. An IO failure other than confirmed absence
+fails the read rather than reporting a misleading complete inventory.
+
 For renames, call `preview_move_note` first. `move_note` intentionally does not
 silently rewrite links. If the reviewed plan is correct, pass
 `updateLinks: true` and the source note's `expectedRevision`; the server then

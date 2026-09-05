@@ -475,6 +475,15 @@ do not prove a current, bounded, actionable response through its public adapter.
   usable. Direct and public MCP tests cover these cases without new task storage.
   Inventory pagination, large-file parsing budgets and cross-process snapshot
   races remain separate audits, not claims of this consistency repair.
+- Checkbox inventory now has stateless guarded continuation. Ordinal task pages
+  bind status/path filter and the visible task stream's exact source revisions;
+  drift rejects the next request instead of silently shifting offsets. Public
+  continuation counts only emitted items, retains the public filter and excludes
+  credentials. Oversized locators get a bounded same-position retry or explicit
+  ceiling error. Non-absence IO failures no longer appear as an empty inventory.
+  The scan retains at most one requested page of task bodies and response packing
+  uses logarithmic prefix selection. Full inventory scans, per-file parse arrays,
+  large-file IO and intra-scan races remain real scale/freshness limitations.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

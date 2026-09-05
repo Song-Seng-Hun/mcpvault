@@ -486,11 +486,15 @@ export interface ListTasksParams {
     status?: TaskStatus;
     pathPrefix?: string;
     limit?: number;
+    offset?: number;
+    expectedSnapshot?: string;
 }
 export interface ListTasksResult {
     tasks: TaskItem[];
     total: number;
     truncated: boolean;
+    offset: number;
+    snapshotFingerprint: string;
 }
 export interface QueryNotesParams {
     filters?: Record<string, unknown>;

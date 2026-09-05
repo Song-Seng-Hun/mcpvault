@@ -2449,37 +2449,57 @@ export class FileSystemService {
             throw new Error('limit must be a positive integer');
         }
         const limit = Math.min(requestedLimit, 500);
+        const offset = params.offset ?? 0;
+        if (!Number.isSafeInteger(offset) || offset < 0)
+            throw new Error('offset must be a non-negative safe integer');
+        if (params.expectedSnapshot !== undefined && !/^[a-f0-9]{64}$/.test(params.expectedSnapshot))
+            throw new Error('expectedSnapshot must be a SHA256 fingerprint from list_tasks');
+        if (offset > 0 && !params.expectedSnapshot)
+            throw new Error('expectedSnapshot is required for continuation; restart list_tasks at offset 0');
         // Validate the optional scope before scanning. resolvePath performs the
         // lexical and symlink boundary checks; listing validation blocks hidden
         // and system directories such as .obsidian and .git.
         const pathPrefix = this.resolvePathPrefix(params.pathPrefix);
         const tasks = [];
+        let total = 0;
+        const fingerprint = createHash('sha256').update(JSON.stringify(['task-page-v1', status, pathPrefix]));
         const notePaths = (await this.collectVaultFiles())
             .filter(path => this.pathFilter.isAllowed(path))
             .filter(canAccessPath)
             .filter(path => /\.(?:md|markdown|txt)$/i.test(path))
             .filter(path => !pathPrefix || path === pathPrefix || path.startsWith(`${pathPrefix}/`))
-            .sort((a, b) => a.localeCompare(b));
+            .sort();
         for (const path of notePaths) {
             let content;
             try {
                 content = await readFile(this.resolvePath(path), 'utf-8');
             }
-            catch {
-                continue;
+            catch (error) {
+                if (isMissingVaultPath(error))
+                    continue;
+                throw new VaultReadUnavailableError();
             }
             if (isModerationHidden(this.frontmatterHandler.parse(content).frontmatter))
                 continue;
             const revision = this.revision(content);
             for (const task of extractMarkdownTasks(content, path)) {
-                if (status === 'all' || status === task.status)
+                if (status !== 'all' && status !== task.status)
+                    continue;
+                fingerprint.update(JSON.stringify([path, revision, task.line, task.taskId, task.status]));
+                if (total >= offset && tasks.length < limit)
                     tasks.push({ ...task, revision });
+                total++;
             }
         }
+        const snapshotFingerprint = fingerprint.digest('hex');
+        if (params.expectedSnapshot && params.expectedSnapshot !== snapshotFingerprint)
+            throw new Error('Task listing changed; restart list_tasks at offset 0 without expectedSnapshot');
         return {
-            tasks: tasks.slice(0, limit),
-            total: tasks.length,
-            truncated: tasks.length > limit,
+            tasks,
+            total,
+            truncated: total > offset + tasks.length,
+            offset,
+            snapshotFingerprint,
         };
     }
     async updateTask(params) {

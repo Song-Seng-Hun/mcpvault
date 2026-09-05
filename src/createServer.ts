@@ -1,6 +1,7 @@
 import { Server, type Tool } from "@modelcontextprotocol/server";
 import { FileSystemService } from "./filesystem.js";
 import { projectNoteOutline, projectNoteLineWindow } from './note-projections.js';
+import { packTaskPage } from './task-page.js';
 import { FrontmatterHandler, parseFrontmatter } from "./frontmatter.js";
 import { PathFilter } from "./pathfilter.js";
 import { SearchService } from "./search.js";
@@ -802,13 +803,15 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "list_tasks",
-          description: "List caller-visible, non-hidden checkbox tasks as a bounded projection. Defaults to open tasks; returns taskId, path, line and the exact source revision, clips text previews, and reports total/returned/truncated. Inspect sufficient context before update_task; use the current revision as expectedRevision. Duplicate block IDs are ambiguous: read the note and use an explicit line without taskId or repair the IDs. Listing and updates share the parser that ignores YAML frontmatter and fenced code examples.",
+          description: "List caller-visible, non-hidden checkbox tasks as bounded pages with source revisions. Follow nextAction for emitted-item continuation or same-position budget retry. A changed snapshot rejects continuation: restart at offset 0 without expectedSnapshot. Inspect context before update_task with the current revision. Duplicate block IDs are ambiguous: use an explicit current line without taskId or repair IDs. Listing and updates share the parser excluding YAML frontmatter and fenced examples. Not an atomic vault snapshot.",
           inputSchema: {
             type: "object",
             properties: {
               status: { type: "string", enum: ["open", "completed", "all"], description: "Task status to return (default: open)", default: "open" },
               pathPrefix: { type: "string", description: "Restrict results to a vault subtree, e.g. Projects/2026" },
               limit: { type: "number", description: "Maximum tasks to return (default: 100, max: 500)", default: 100 },
+              offset: { type: "integer", minimum: 0, description: "Next offset from the previous response; requires expectedSnapshot when positive", default: 0 },
+              expectedSnapshot: { type: "string", pattern: "^[a-f0-9]{64}$", description: "snapshotFingerprint from the preceding page; rejects changed results or filters instead of skipping work" },
               maxChars: { type: "integer", minimum: 512, maximum: 12000, description: "Hard total response budget; task text is previewed and the page shrinks before exceeding it (default: 4000)", default: 4000 },
               prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
             }
@@ -2629,8 +2632,10 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             status,
             pathPrefix: trimmedArgs.pathPrefix,
             limit: Math.min(requestedLimit, 500),
+            offset: trimmedArgs.offset,
+            expectedSnapshot: trimmedArgs.expectedSnapshot,
           }, canAccessPath);
-          return boundedTaskListResult(tasks, trimmedArgs);
+          return { content: [{ type: 'text', text: packTaskPage(tasks, args) }] };
         }
 
         case "update_task": {
@@ -3143,35 +3148,6 @@ function compactNavigationItem(item: unknown): unknown {
   }
   if (truncated) compact.fieldsTruncated = true;
   return compact;
-}
-
-function boundedTaskListResult(
-  result: { tasks: Array<{ path: string; line: number; text: string; status: string; taskId: string }>; total: number; truncated: boolean },
-  args: Record<string, any>,
-) {
-  const maxChars = normalizeSearchMaxChars(args.maxChars);
-  const items = result.tasks.map(task => {
-    const text = Array.from(task.text).slice(0, 160).join('');
-    return {
-      ...task,
-      text,
-      ...(text.length < task.text.length && { textTruncated: true }),
-    };
-  });
-  const serialize = (count: number) => {
-    const selected = items.slice(0, count);
-    const value = {
-      tasks: selected,
-      total: result.total,
-      returned: selected.length,
-      truncated: result.truncated || selected.length < result.tasks.length || selected.some(task => task.textTruncated),
-    };
-    return JSON.stringify(value, null, args.prettyPrint ? 2 : undefined);
-  };
-  let count = items.length;
-  let text = serialize(count);
-  while (text.length > maxChars && count > 0) text = serialize(--count);
-  return { content: [{ type: 'text' as const, text }] };
 }
 
 function boundedNavigationResult(

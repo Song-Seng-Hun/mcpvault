@@ -2428,6 +2428,23 @@ without `taskId`, or repair the duplicate IDs first. Hidden/quarantined/removed
 notes are excluded before counts and cannot be toggled through this endpoint.
 Re-read after mutation; listing revisions are guards, not a vault-wide snapshot.
 
+When more tasks remain, execute the returned `nextAction` rather than adding the
+requested `limit` to an offset yourself: character-budget packing may have
+returned fewer items. Continuation uses `offset` plus `expectedSnapshot` from
+`snapshotFingerprint` with unchanged status/path filters. The fingerprint hashes
+only the caller-visible filtered task stream and its source revisions. If those
+results change, restart at offset 0 without expectedSnapshot; never continue a
+stale offset. Edits to hidden owners alone do not change this fingerprint.
+
+If not even one exact locator fits, the action requests a same-position retry
+with a larger compact budget and one item; it does not skip the task or advance
+an empty page. An unrepresentable locator at the maximum budget fails explicitly.
+A final page may still have `truncated: true` because a text preview was clipped;
+`textTruncated` means read that source context, not that another task page exists.
+The server retains at most the requested page of task bodies while counting and
+hashing, but still scans eligible notes; this is not constant-cost pagination or
+an atomic filesystem census. Storage errors are not silently counted as absence.
+
 ```json
 {
   "name": "list_tasks",
