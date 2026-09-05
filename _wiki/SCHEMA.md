@@ -482,6 +482,20 @@ ten-file batch bound remains; this is a response-token optimization, not a
 promise to skip source reads. Other aggregate/index visibility and freshness
 contracts still require their own audits.
 
+Public `mcp.query_notes` applies caller path access and folder-independent
+moderation visibility before totals, offsets, top-K and cursor selection. The
+predicate is request-local; shared metadata caches keep caller-independent rows.
+Internal query consumers retain their own explicit/default policy. Metadata-only
+rows are refreshed-index projections, not locked file snapshots. With
+`includeContent: true`, each selected raw source must match its selected revision
+and visibility. Changed/deleted sources reject the whole page with a path-free
+`Query snapshot changed` error: discard previous pages and restart without
+`after`/`offset`. IO failure returns `Vault read unavailable`, not an empty success.
+`includeTotal: false` consistently returns `total: -1, totalKnown: false`, even
+without an index (where candidate reads/sorting may still be required). Keyset
+cursors do not retain a vault-wide snapshot across requests. Prefer small pages
+and bounded follow-up reads; response compaction is not complete-page evidence.
+
 Optional snapshot readers require regular files and enforce stored-byte ceilings
 while reading, not only via a prior stat. Gzip decoding enforces its output limit
 before text/JSON parsing. Lexical binary/decoded and public-discovery decoded

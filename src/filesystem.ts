@@ -21,6 +21,7 @@ import { assertLegacyDiscussionMutationAllowed } from './scope-access.js';
 import { extractMarkdownTasks } from './markdown-tasks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { projectNoteOutline, projectNoteLineWindow } from './note-projections.js';
+import { isMissingVaultPath, QuerySnapshotChangedError, VaultReadUnavailableError } from './vault-read-errors.js';
 
 /** Hard per-note write limit so stdio callers cannot exhaust the vault disk. */
 export const MAX_NOTE_CONTENT_BYTES = 8 * 1024 * 1024;
@@ -424,17 +425,6 @@ function cursorForQueryNote(note: QueryNote, sortBy: string): QueryNotesCursor {
     return { path: note.path, value };
   }
   return { path: note.path, value: String(value) };
-}
-
-function findCursorStart(notes: Array<Pick<QueryNote, 'path' | 'frontmatter'>>, cursor: QueryNotesCursor, sortBy: string, sortOrder: 'asc' | 'desc'): number {
-  let low = 0;
-  let high = notes.length;
-  while (low < high) {
-    const middle = Math.floor((low + high) / 2);
-    if (compareQueryNoteToCursor(notes[middle]!, cursor, sortBy, sortOrder) > 0) high = middle;
-    else low = middle + 1;
-  }
-  return low;
 }
 
 function lineStarts(content: string): number[] {
@@ -2840,7 +2830,7 @@ export class FileSystemService {
     });
   }
 
-  async queryNotes(params: QueryNotesParams = {}, canAccessPath: (path: string) => boolean = () => true): Promise<QueryNotesResult> {
+  async queryNotes(params: QueryNotesParams = {}, canAccessPath: (path: string) => boolean = () => true, canReadNote: (note: QueryNote) => boolean = () => true): Promise<QueryNotesResult> {
     const requestedLimit = params.limit ?? 100;
     if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
       throw new Error('limit must be a positive integer');
@@ -2868,6 +2858,20 @@ export class FileSystemService {
     const sortBy = params.sortBy || 'path';
     const notes: QueryNote[] = [];
     const filters = params.filters || {};
+    const hydrate = (selected: QueryNote[]) => Promise.all(selected.map(async note => {
+      let raw: string;
+      try {
+        raw = await this.vaultIo.readUtf8(this.resolvePath(note.path));
+      } catch (error) {
+        if (isMissingVaultPath(error)) throw new QuerySnapshotChangedError();
+        throw new VaultReadUnavailableError();
+      }
+      if (this.revision(raw) !== note.revision || !canAccessPath(note.path)) throw new QuerySnapshotChangedError();
+      const parsed = this.frontmatterHandler.parse(raw);
+      const current = { path: note.path, revision: note.revision, frontmatter: parsed.frontmatter, content: parsed.content };
+      if (!canReadNote(current)) throw new QuerySnapshotChangedError();
+      return current;
+    }));
     if (this.metadataIndex && params.includeTotal === false) {
       const page = await this.metadataIndex.listSortedPage({
         filters,
@@ -2878,20 +2882,14 @@ export class FileSystemService {
         offset: requestedOffset,
         ...(params.after && { after: params.after }),
         canAccessPath,
+        canReadEntry: canReadNote,
       });
       const selected = page.entries.map(entry => ({ path: entry.path, frontmatter: entry.frontmatter, revision: entry.revision }));
       const nextCursor = page.truncated ? cursorForQueryNote(selected[selected.length - 1]!, sortBy) : undefined;
       if (params.includeContent) {
-        const withContent = await Promise.all(selected.map(async note => {
-          try {
-            const raw = await this.vaultIo.readUtf8(this.resolvePath(note.path));
-            return { ...note, content: this.frontmatterHandler.parse(raw).content };
-          } catch {
-            return undefined;
-          }
-        }));
+        const withContent = await hydrate(selected);
         return {
-          notes: withContent.filter((note): note is NonNullable<typeof note> => note !== undefined),
+          notes: withContent,
           total: -1,
           totalKnown: false,
           truncated: page.truncated,
@@ -2907,54 +2905,6 @@ export class FileSystemService {
       };
     }
     const indexedEntries = this.metadataIndex ? await this.metadataIndex.listSorted(filters, pathPrefix, sortBy, sortOrder) : undefined;
-    if (indexedEntries && params.includeTotal === false) {
-      const start = params.after ? findCursorStart(indexedEntries, params.after, sortBy, sortOrder) : 0;
-      const pageCandidates: QueryNote[] = [];
-      let skipped = requestedOffset;
-      for (let index = start; index < indexedEntries.length; index += 1) {
-        const entry = indexedEntries[index]!;
-        if (!this.pathFilter.isAllowed(entry.path) || !canAccessPath(entry.path)) continue;
-        if (pathPrefix && entry.path !== pathPrefix && !entry.path.startsWith(`${pathPrefix}/`)) continue;
-        const matches = Object.entries(filters).every(([key, expected]) => {
-          const actual = getFrontmatterValue(entry.frontmatter, key);
-          return actual.found && frontmatterValuesEqual(actual.value, expected);
-        });
-        if (!matches) continue;
-        if (skipped > 0) {
-          skipped -= 1;
-          continue;
-        }
-        pageCandidates.push({ path: entry.path, frontmatter: entry.frontmatter, revision: entry.revision });
-        if (pageCandidates.length > limit) break;
-      }
-      const truncated = pageCandidates.length > limit;
-      const selected = pageCandidates.slice(0, limit);
-      const nextCursor = truncated ? cursorForQueryNote(selected[selected.length - 1]!, sortBy) : undefined;
-      if (params.includeContent) {
-        const withContent = await Promise.all(selected.map(async note => {
-          try {
-            const raw = await this.vaultIo.readUtf8(this.resolvePath(note.path));
-            return { ...note, content: this.frontmatterHandler.parse(raw).content };
-          } catch {
-            return undefined;
-          }
-        }));
-        return {
-          notes: withContent.filter((note): note is NonNullable<typeof note> => note !== undefined),
-          total: -1,
-          totalKnown: false,
-          truncated,
-          ...(nextCursor ? { nextCursor } : {}),
-        };
-      }
-      return {
-        notes: selected,
-        total: -1,
-        totalKnown: false,
-        truncated,
-        ...(nextCursor ? { nextCursor } : {}),
-      };
-    }
     if (indexedEntries) {
       for (const entry of indexedEntries) {
         if (!this.pathFilter.isAllowed(entry.path) || !canAccessPath(entry.path)) continue;
@@ -2963,7 +2913,7 @@ export class FileSystemService {
           const actual = getFrontmatterValue(entry.frontmatter, key);
           return actual.found && frontmatterValuesEqual(actual.value, expected);
         });
-        if (matches) notes.push({ path: entry.path, frontmatter: entry.frontmatter, revision: entry.revision });
+        if (matches && canReadNote(entry)) notes.push({ path: entry.path, frontmatter: entry.frontmatter, revision: entry.revision });
       }
     } else {
       const notePaths = (await this.collectVaultFiles())
@@ -2977,8 +2927,9 @@ export class FileSystemService {
         let raw: string;
         try {
           raw = await readFile(this.resolvePath(path), 'utf-8');
-        } catch {
-          continue;
+        } catch (error) {
+          if (isMissingVaultPath(error)) throw new QuerySnapshotChangedError();
+          throw new VaultReadUnavailableError();
         }
 
         const parsed = this.frontmatterHandler.parse(raw);
@@ -2986,7 +2937,8 @@ export class FileSystemService {
           const actual = getFrontmatterValue(parsed.frontmatter, key);
           return actual.found && frontmatterValuesEqual(actual.value, expected);
         });
-        if (matches) notes.push({ path, frontmatter: parsed.frontmatter, revision: this.revision(raw), ...(params.includeContent && { content: parsed.content }) });
+        const note = { path, frontmatter: parsed.frontmatter, revision: this.revision(raw), ...(params.includeContent && { content: parsed.content }) };
+        if (matches && canReadNote(note)) notes.push(note);
       }
     }
 
@@ -2999,16 +2951,9 @@ export class FileSystemService {
     const truncated = requestedOffset + limit < afterNotes.length;
     const nextCursor = selected.length > 0 && truncated ? cursorForQueryNote(selected[selected.length - 1]!, sortBy) : undefined;
     if (params.includeContent && indexedEntries) {
-      const withContent = await Promise.all(selected.map(async note => {
-        try {
-            const raw = await this.vaultIo.readUtf8(this.resolvePath(note.path));
-          return { ...note, content: this.frontmatterHandler.parse(raw).content };
-        } catch {
-          return undefined;
-        }
-      }));
+      const withContent = await hydrate(selected);
       return {
-        notes: withContent.filter((note): note is NonNullable<typeof note> => note !== undefined),
+        notes: withContent,
         total: notes.length,
         truncated,
         ...(nextCursor ? { nextCursor } : {}),
@@ -3016,7 +2961,8 @@ export class FileSystemService {
     }
     return {
       notes: selected,
-      total: notes.length,
+      total: params.includeTotal === false ? -1 : notes.length,
+      ...(params.includeTotal === false && { totalKnown: false }),
       truncated,
       ...(nextCursor ? { nextCursor } : {}),
     };

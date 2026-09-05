@@ -435,6 +435,7 @@ export class VaultMetadataIndex {
     offset?: number;
     after?: { path: string; value?: unknown; missing?: boolean };
     canAccessPath?: (path: string) => boolean;
+    canReadEntry?: (entry: VaultIndexEntry) => boolean;
   }): Promise<{ entries: VaultIndexEntry[]; truncated: boolean }> {
     await this.ensureFresh();
     const limit = Math.min(Math.max(params.limit, 1), 500);
@@ -449,6 +450,7 @@ export class VaultMetadataIndex {
       for (const entry of this.iterateCandidateEntries(candidates)) {
         if (this.pathFilter.isAllowed(entry.path)
           && (!params.canAccessPath || params.canAccessPath(entry.path))
+          && (!params.canReadEntry || params.canReadEntry(entry))
           && (!params.after || compareEntryToCursor(entry, params.after, sortBy, sortOrder) > 0)) eligible.push(entry);
       }
       const sorted = eligible.sort(compare);
@@ -479,6 +481,7 @@ export class VaultMetadataIndex {
     for (const entry of this.iterateCandidateEntries(candidates)) {
       if (!this.pathFilter.isAllowed(entry.path)
         || (params.canAccessPath && !params.canAccessPath(entry.path))
+        || (params.canReadEntry && !params.canReadEntry(entry))
         || (params.after && compareEntryToCursor(entry, params.after, sortBy, sortOrder) <= 0)) continue;
       if (heap.length < needed) {
         heap.push(entry);

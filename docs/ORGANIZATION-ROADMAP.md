@@ -380,8 +380,23 @@ do not prove a current, bounded, actionable response through its public adapter.
   independent of folder. Batch response shaping cannot omit Properties before
   authorization or accept cached unchanged metadata as an access grant; it
   checks at most ten current snapshots, then suppresses unchanged visible bodies.
-  Generic query/aggregate moderation, hidden-row counts and graph inventory
-  freshness still need dedicated audits; this batch does not certify them.
+  Aggregate moderation and graph inventory freshness still need dedicated
+  audits; this batch does not certify them.
+- Public structured query now applies folder-independent moderation and caller
+  visibility before counts, offsets, heap/large-offset selection and cursors.
+  Shared sorted caches retain caller-independent rows. Selected body hydration
+  validates raw revision and current visibility; changed/deleted sources reject
+  the whole page and IO failure is unavailable, never empty success. Real public
+  MCP tests cover Knowledge/Community, both count modes, follow-on cursors, file
+  edits/deletion and controlled storage failures; unindexed mode and large-offset
+  predicate/cache isolation are covered separately. Metadata-only views remain
+  advisory and independent pages do not retain a vault-wide snapshot.
+- **Open: query response packing.** Dedicated budget-aware page packing must
+  verify that generic JSON compaction cannot drop delivered rows while keeping
+  a cursor beyond them. Large `includeContent` pages can also hydrate more text
+  than ultimately fits the response. Audit delivered-row cursor provenance,
+  oversized-row recovery and source-read budgets; do not infer these guarantees
+  from small-row pagination tests. Prefer metadata and bounded follow-up reads.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

@@ -20,6 +20,26 @@ async function writeNote(path: string, content: string): Promise<void> {
 }
 
 describe('VaultMetadataIndex', () => {
+  test('large-offset page selection applies request-local row visibility before counting skipped entries', async () => {
+    vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-index-visible-offset-'));
+    for (let start = 0; start < 1032; start += 32) {
+      await Promise.all(Array.from({ length: Math.min(32, 1032 - start) }, (_, i) => {
+        const n = start + i;
+        return writeNote(`note-${String(n).padStart(4, '0')}.md`, `---\nhidden: ${n < 4}\n---\nBody`);
+      }));
+    }
+    const index = new VaultMetadataIndex(vaultPath, new PathFilter(), new FrontmatterHandler());
+    try {
+      const common = { limit: 2, offset: 1025, canAccessPath: (path: string) => path !== 'note-1031.md' };
+      const filtered = await index.listSortedPage({ ...common, canReadEntry: entry => entry.frontmatter.hidden !== true });
+      expect(filtered.entries.map(entry => entry.path)).toEqual(['note-1029.md', 'note-1030.md']);
+      expect(filtered.truncated).toBe(false);
+      const internal = await index.listSortedPage(common);
+      expect(internal.entries.map(entry => entry.path)).toEqual(['note-1025.md', 'note-1026.md']);
+      expect(internal.truncated).toBe(true);
+    } finally { await index.close(); }
+  });
+
   test('refreshes only invalidated metadata while preserving revisions', async () => {
     vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-index-'));
     await writeNote('Community/Post.md', '---\nstatus: published\n---\n\nold');

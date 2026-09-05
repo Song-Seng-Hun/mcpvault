@@ -434,6 +434,7 @@ export class VaultMetadataIndex {
             for (const entry of this.iterateCandidateEntries(candidates)) {
                 if (this.pathFilter.isAllowed(entry.path)
                     && (!params.canAccessPath || params.canAccessPath(entry.path))
+                    && (!params.canReadEntry || params.canReadEntry(entry))
                     && (!params.after || compareEntryToCursor(entry, params.after, sortBy, sortOrder) > 0))
                     eligible.push(entry);
             }
@@ -468,6 +469,7 @@ export class VaultMetadataIndex {
         for (const entry of this.iterateCandidateEntries(candidates)) {
             if (!this.pathFilter.isAllowed(entry.path)
                 || (params.canAccessPath && !params.canAccessPath(entry.path))
+                || (params.canReadEntry && !params.canReadEntry(entry))
                 || (params.after && compareEntryToCursor(entry, params.after, sortBy, sortOrder) <= 0))
                 continue;
             if (heap.length < needed) {

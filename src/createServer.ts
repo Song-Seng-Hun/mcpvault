@@ -831,7 +831,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "query_notes",
-          description: "Filter notes by structured YAML frontmatter and optionally sort by a frontmatter property. Filters use exact values; array fields match when they contain the requested value(s). Every metadata row includes its current revision so a selected follow-up can use optimistic concurrency without rereading every body.",
+          description: "Filter notes by structured YAML frontmatter and optionally sort by a frontmatter property. Filters use exact values; arrays match contained value(s). Public rows, counts and page selection exclude inaccessible or moderation-hidden notes. Metadata-only rows are advisory refreshed-index revisions, not locked snapshots; use their revision for guarded follow-up reads/edits. includeContent validates each selected source against its revision and rejects the whole page on drift.",
           inputSchema: {
             type: "object",
             properties: {
@@ -840,9 +840,9 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
               sortBy: { type: "string", description: "path (default) or a frontmatter property, including nested dot notation" },
               sortOrder: { type: "string", enum: ["asc", "desc"], description: "Sort direction (default: asc)", default: "asc" },
               limit: { type: "number", description: "Maximum notes to return (default: 100, max: 500)", default: 100 },
-              after: { type: "object", description: "Keyset cursor returned as nextCursor by the previous page; keeps the next page stable while avoiding large offsets" },
-              includeContent: { type: "boolean", description: "Include the note body in each result (default: false)", default: false },
-              includeTotal: { type: "boolean", description: "Compute the exact total matching count (default: true); false returns total=-1 and can stop after the requested page", default: true },
+              after: { type: "object", description: "Use the previous nextCursor with unchanged filters/sort. Keyset position does not retain a cross-request snapshot; after a Query snapshot changed error, discard old pages and restart without after/offset." },
+              includeContent: { type: "boolean", description: "Include selected bodies after matching raw revision and visibility (default: false). Changed/deleted sources reject the whole page; storage failures return unavailable, never an empty success. Prefer a small limit or metadata followed by bounded reads.", default: false },
+              includeTotal: { type: "boolean", description: "Return the exact visible matching count from this read model (default: true); false returns total=-1,totalKnown=false and uses indexed page selection. Candidate scanning may still be required.", default: true },
               prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
             }
           }
@@ -2659,8 +2659,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             after: trimmedArgs.after,
             includeContent: trimmedArgs.includeContent,
             includeTotal: trimmedArgs.includeTotal,
-          }, canAccessPath);
-          result.notes = result.notes.filter(note => !isManagedCommunityPath(note.path) || !isModerationHidden(note.frontmatter));
+          }, canAccessPath, note => !isModerationHidden(note.frontmatter));
           const indent = trimmedArgs.prettyPrint ? 2 : undefined;
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, indent) }]

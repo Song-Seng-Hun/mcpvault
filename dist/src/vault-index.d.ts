@@ -82,6 +82,7 @@ export declare class VaultMetadataIndex {
             missing?: boolean;
         };
         canAccessPath?: (path: string) => boolean;
+        canReadEntry?: (entry: VaultIndexEntry) => boolean;
     }): Promise<{
         entries: VaultIndexEntry[];
         truncated: boolean;

@@ -12,3 +12,12 @@ export class VaultReadUnavailableError extends Error {
     this.name = 'VaultReadUnavailableError';
   }
 }
+
+/** A selected query row changed before hydration; no partial page is safe. */
+export class QuerySnapshotChangedError extends Error {
+  readonly code = 'QUERY_SNAPSHOT_CHANGED';
+  constructor() {
+    super('Query snapshot changed; discard this page and restart the query from its first page (without after/offset).');
+    this.name = 'QuerySnapshotChangedError';
+  }
+}

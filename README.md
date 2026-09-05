@@ -2381,11 +2381,25 @@ sorted by path by default, or by a frontmatter property when `sortBy` is set.
 Note content is omitted by default and can be requested with
 `includeContent: true`.
 For large result sets, pass the previous response's `nextCursor` as `after`
-to continue with a stable keyset page; `total` remains the total matching
-count and `truncated` indicates that another page exists. Internal page-only
-readers may set `includeTotal: false`; this returns `total: -1`, avoids scanning
-the remainder once the next-page boundary is known, and uses bounded top-K page
-selection when the metadata index is active instead of sorting every candidate.
+with unchanged filters/sort. Public query visibility is applied before counts,
+offsets, top-K selection and cursors, including moderation-hidden notes outside
+Community folders. `total` counts visible matches in that read model and
+`truncated` indicates more selected candidates. `includeTotal: false` returns
+`total: -1, totalKnown: false`; indexed page selection normally uses bounded
+top-K rather than sorting every candidate. Large offsets can use a sorted
+fallback. Candidate scanning can still be necessary; without an index the
+fallback still reads and selects from matching notes.
+
+Metadata-only rows carry refreshed-index revisions, not locked snapshots. Use
+the returned revision for a guarded follow-up read/edit. `includeContent: true`
+checks each selected raw source against its selected revision and visibility:
+a changed/deleted source rejects the **whole page** with `Query snapshot changed`.
+Discard prior pages and restart the query without `after`/`offset`; do not append
+retries to stale results. Storage failures return `Vault read unavailable`, not
+an empty successful page. Keyset requests do not retain a vault-wide snapshot,
+and metadata-only queries do not reread every body. Prefer small limits or
+metadata followed by bounded line/section reads; generic response compaction is
+not proof that an oversized query page was delivered completely.
 
 ```json
 {

@@ -184,7 +184,7 @@ export declare class FileSystemService {
     private resolvePathPrefix;
     listTasks(params?: ListTasksParams, canAccessPath?: (path: string) => boolean): Promise<ListTasksResult>;
     updateTask(params: UpdateTaskParams): Promise<UpdateTaskResult>;
-    queryNotes(params?: QueryNotesParams, canAccessPath?: (path: string) => boolean): Promise<QueryNotesResult>;
+    queryNotes(params?: QueryNotesParams, canAccessPath?: (path: string) => boolean, canReadNote?: (note: QueryNote) => boolean): Promise<QueryNotesResult>;
     queryAuthorityShelf(params: {
         scheme: string;
         aroundAuthorityId?: string;

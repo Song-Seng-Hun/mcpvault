@@ -30,7 +30,9 @@ beforeEach(async () => {
   index = new VaultMetadataIndex(vault, filter, frontmatter, catalog);
   graph = new VaultGraphIndex(vault, filter, frontmatter, catalog);
   search = new SearchService(vault, filter, catalog);
-  const fs = new FileSystemService(vault, undefined, frontmatter, undefined, index, graph, catalog);
+  // The catalog is shared by the indexes above; argument seven is the IO
+  // coordinator, not a catalog. Use the real default reader for hydration.
+  const fs = new FileSystemService(vault, undefined, frontmatter, undefined, index, graph);
   const access = new ScopeAccessPolicy();
   service = new LlmWikiService(fs, access, new ReferenceService(fs, access));
   await index.list();
