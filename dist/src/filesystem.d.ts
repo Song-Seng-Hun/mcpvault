@@ -63,6 +63,10 @@ export declare class FileSystemService {
     noteExists(path: string): Promise<boolean>;
     private assertExpectedRevision;
     writeNote(params: NoteWriteParams): Promise<void>;
+    /** Revision of this serialized write, not a subsequent read/current-state guarantee. */
+    writeNoteWithReceipt(params: NoteWriteParams): Promise<{
+        revision: string;
+    }>;
     /**
      * Write one note while holding revision locks for related notes whose state
      * is an invariant of the write. Guards are assertions only: they are never

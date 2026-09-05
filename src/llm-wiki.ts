@@ -15387,14 +15387,13 @@ export class LlmWikiService {
     // New caller text must not introduce ambiguous managed headings or leave
     // later sections inside an unclosed example. Reject before the single write.
     inspectSections(content);
-    await this.fileSystem.writeNote({
+    const receipt = await this.fileSystem.writeNoteWithReceipt({
       path: params.path,
       content,
       frontmatter: { ...issue.frontmatter, status: resolutionStatus, issue_resolution_status: resolutionStatus, issue_retrospective_status: retrospectiveStatus, ...(params.retrospective?.trim() && { issue_retrospective: boundedText(params.retrospective, 1200) }), ...(followUpPaths.length > 0 && { issue_follow_up_paths: followUpPaths }), resolved_by: params.actor, resolved_at: timestamp, updated_at: timestamp },
       expectedRevision: params.expectedRevision,
     });
-    const updated = await this.fileSystem.readNote(params.path);
-    return { success: true, path: this.access.toPublicPath(params.path), status: resolutionStatus, retrospectiveStatus, ...(followUpPaths.length > 0 && { followUpPaths: followUpPaths.map(path => this.access.toPublicPath(path)) }), revision: updated.revision };
+    return { success: true, path: this.access.toPublicPath(params.path), status: resolutionStatus, retrospectiveStatus, ...(followUpPaths.length > 0 && { followUpPaths: followUpPaths.map(path => this.access.toPublicPath(path)) }), revision: receipt.revision };
   }
 
 }

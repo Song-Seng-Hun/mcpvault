@@ -719,6 +719,10 @@ export class FileSystemService {
         }
     }
     async writeNote(params) {
+        await this.writeNoteWithReceipt(params);
+    }
+    /** Revision of this serialized write, not a subsequent read/current-state guarantee. */
+    async writeNoteWithReceipt(params) {
         const path = this.normalizePath(params.path);
         return this.withMutationLock(path, () => this.writeNoteUnlocked({ ...params, path }));
     }
@@ -889,6 +893,7 @@ export class FileSystemService {
             await mkdir(dirname(fullPath), { recursive: true });
             await writeFile(fullPath, finalContent, 'utf-8');
             this.notifyNoteChanged(path, 'upsert');
+            return { revision: this.revision(finalContent) };
         }
         catch (error) {
             throw classifyWriteError(error, path);

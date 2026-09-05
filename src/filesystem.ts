@@ -771,6 +771,11 @@ export class FileSystemService {
   }
 
   async writeNote(params: NoteWriteParams): Promise<void> {
+    await this.writeNoteWithReceipt(params);
+  }
+
+  /** Revision of this serialized write, not a subsequent read/current-state guarantee. */
+  async writeNoteWithReceipt(params: NoteWriteParams): Promise<{ revision: string }> {
     const path = this.normalizePath(params.path);
     return this.withMutationLock(path, () => this.writeNoteUnlocked({ ...params, path }));
   }
@@ -869,7 +874,7 @@ export class FileSystemService {
     return { path, revision: this.revision(content), document };
   }
 
-  private async writeNoteUnlocked(params: NoteWriteParams): Promise<void> {
+  private async writeNoteUnlocked(params: NoteWriteParams): Promise<{ revision: string }> {
     const { content, frontmatter, mode = 'overwrite', expectedRevision } = params;
     const path = this.normalizePath(params.path);
     const fullPath = this.resolveWritablePath(path);
@@ -944,6 +949,7 @@ export class FileSystemService {
       await mkdir(dirname(fullPath), { recursive: true });
       await writeFile(fullPath, finalContent!, 'utf-8');
       this.notifyNoteChanged(path, 'upsert');
+      return { revision: this.revision(finalContent!) };
     } catch (error) {
       throw classifyWriteError(error, path);
     }

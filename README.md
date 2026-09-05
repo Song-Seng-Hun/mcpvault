@@ -439,6 +439,10 @@ Omitting retrospective text preserves its authored Markdown; changing only
 its status does not reconstruct it from an older compact Property. Duplicate
 managed headings and unclosed fences require a deliberate repair before the
 single revision-checked write. Git remains the version history.
+The resolver's returned `revision` identifies the serialized content it wrote,
+not a later reader's view. Re-read the same issue after success; a different
+revision means another edit followed, so inspect it before the next change.
+This receipt is not a cross-process lock or a promise that the file stays current.
 When body text and nonempty explicit Properties are serialized together, a leading
 `---` in the body remains body text; it is not parsed again as extra Properties.
 The typed

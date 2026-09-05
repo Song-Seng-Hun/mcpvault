@@ -336,6 +336,10 @@ Each replacement must be independently balanced, so separate inputs cannot
 hide preserved evidence between a fence opener and closer. Earlier versions
 remain in Git, not a parallel history store. Serialized body text is not
 reparsed as another YAML document when explicit Properties are supplied.
+The issue resolver returns the SHA-256 revision of its serialized write, not
+of a subsequent read. Re-read the same issue; if the revision differs, inspect
+the intervening edit before using its new revision as an edit guard. A write
+receipt does not guarantee that the file remains current or lock external editors.
 Completed
 reviews may carry bounded `review_count`, `review_reopen_count`,
 `last_reviewed_revision`, and `last_review_trigger` metadata. These fields are
