@@ -433,6 +433,15 @@ do not prove a current, bounded, actionable response through its public adapter.
   MCP missing/stale/current guards plus immediate derived tag reads. Locks are
   service-local, not cross-process CAS; a final external check/write race,
   alias-equivalent lock keys and response-wide tag budgets remain separate work.
+- Single and multi-note mutation locks now share absolute lexical, separator-
+  normalized, case-folded keys. Multi-lock acquisition deduplicates these keys
+  and uses ordinal ordering, preventing dot-segment alias bypass/self-deadlock.
+  Actual paths and access predicates remain unchanged; conservative case folding
+  can reduce concurrency between distinct case-sensitive files but never merges
+  their data. Paused real reads, guarded overlapping writes and failure-release
+  tests cover the service-local contract. Independent FileSystemService instances,
+  other processes, hard links and Unicode filesystem aliases remain unaudited;
+  semantic duplicate-path validation in change sets is distinct from lock identity.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

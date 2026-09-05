@@ -706,6 +706,13 @@ This is not cross-process atomic compare-and-swap; external writers can still
 race the final filesystem check/write. Inline hashtags are not removed by a
 Properties-only remove operation.
 
+Mutation lock identity is independent of note identity: absolute lexical paths
+and separator normalization collapse equivalent dot-segment spellings before
+single/multi-note locking. Multiple locks are deduplicated and ordinally ordered.
+Conservative case folding may serialize distinct case-sensitive files but never
+renames them or grants scope access. This is service-local coordination, not
+cross-process filesystem CAS or a complete hard-link/Unicode alias resolver.
+
 Heading and block targets are preserved by graph reads, so
 `[[folder/Source#Heading]]` and `[[folder/Source#^block-id]]` can take an agent
 directly to the intended passage without rereading the entire source note.

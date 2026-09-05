@@ -32,6 +32,9 @@ export declare class FileSystemService {
     private notifyNoteChanged;
     private revision;
     private withMutationLock;
+    /** Lock identity only; never use this folded key for access checks or IO. */
+    private mutationLockKey;
+    private withMutationLockKey;
     /** Acquire several note locks in one stable order so reciprocal edits cannot deadlock. */
     private withMutationLocks;
     constructor(vaultPath: string, pathFilter?: PathFilter, frontmatterHandler?: FrontmatterHandler, onNoteChanged?: ((path: string, kind: 'upsert' | 'delete') => void | Promise<void>) | undefined, metadataIndex?: VaultMetadataIndex | undefined, graphIndex?: VaultGraphIndex | undefined, vaultIo?: VaultIoCoordinator);

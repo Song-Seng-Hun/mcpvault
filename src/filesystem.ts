@@ -489,25 +489,34 @@ export class FileSystemService {
   }
 
   private async withMutationLock<T>(path: string, operation: () => Promise<T>): Promise<T> {
-    const previous = this.mutationTails.get(path) || Promise.resolve();
+    return this.withMutationLockKey(this.mutationLockKey(path), operation);
+  }
+
+  /** Lock identity only; never use this folded key for access checks or IO. */
+  private mutationLockKey(path: string): string {
+    return resolve(this.vaultPath, this.normalizePath(path).replace(/\\/g, '/')).toLowerCase();
+  }
+
+  private async withMutationLockKey<T>(key: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.mutationTails.get(key) || Promise.resolve();
     let release!: () => void;
     const current = new Promise<void>(resolveLock => { release = resolveLock; });
-    this.mutationTails.set(path, current);
+    this.mutationTails.set(key, current);
     await previous;
     try {
       return await operation();
     } finally {
       release();
-      if (this.mutationTails.get(path) === current) this.mutationTails.delete(path);
+      if (this.mutationTails.get(key) === current) this.mutationTails.delete(key);
     }
   }
 
   /** Acquire several note locks in one stable order so reciprocal edits cannot deadlock. */
   private async withMutationLocks<T>(paths: string[], operation: () => Promise<T>): Promise<T> {
-    const ordered = [...new Set(paths)].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
+    const ordered = [...new Set(paths.map(path => this.mutationLockKey(path)))].sort();
     const acquire = async (index: number): Promise<T> => index >= ordered.length
       ? operation()
-      : this.withMutationLock(ordered[index]!, () => acquire(index + 1));
+      : this.withMutationLockKey(ordered[index]!, () => acquire(index + 1));
     return acquire(0);
   }
 

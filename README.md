@@ -2201,6 +2201,15 @@ CAS. Hidden notes reject tag reads/writes. Removal updates Properties only;
 inline hashtags remain discoverable until edited in the body. Re-read the target
 after every mutation; notification failures remain best-effort, not a rollback.
 
+All service note mutations now derive a common lock identity from a resolved
+absolute lexical path: `Note.md`, `./Note.md` and `dir/../Note.md` cannot bypass
+one another's lock. Multiple-note operations deduplicate and sort these keys
+before acquisition to avoid alias self-deadlock and inconsistent lock order.
+Case is conservatively folded for locking only; actual file spelling, scope and
+path checks are unchanged. On case-sensitive filesystems distinct case variants
+may share a lock without becoming the same note. Locks remain service-local,
+not cross-process coordination or hard-link/Unicode-filesystem identity proof.
+
 **Request:**
 
 ```json

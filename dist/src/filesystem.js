@@ -434,26 +434,33 @@ export class FileSystemService {
         return createHash('sha256').update(content, 'utf8').digest('hex');
     }
     async withMutationLock(path, operation) {
-        const previous = this.mutationTails.get(path) || Promise.resolve();
+        return this.withMutationLockKey(this.mutationLockKey(path), operation);
+    }
+    /** Lock identity only; never use this folded key for access checks or IO. */
+    mutationLockKey(path) {
+        return resolve(this.vaultPath, this.normalizePath(path).replace(/\\/g, '/')).toLowerCase();
+    }
+    async withMutationLockKey(key, operation) {
+        const previous = this.mutationTails.get(key) || Promise.resolve();
         let release;
         const current = new Promise(resolveLock => { release = resolveLock; });
-        this.mutationTails.set(path, current);
+        this.mutationTails.set(key, current);
         await previous;
         try {
             return await operation();
         }
         finally {
             release();
-            if (this.mutationTails.get(path) === current)
-                this.mutationTails.delete(path);
+            if (this.mutationTails.get(key) === current)
+                this.mutationTails.delete(key);
         }
     }
     /** Acquire several note locks in one stable order so reciprocal edits cannot deadlock. */
     async withMutationLocks(paths, operation) {
-        const ordered = [...new Set(paths)].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
+        const ordered = [...new Set(paths.map(path => this.mutationLockKey(path)))].sort();
         const acquire = async (index) => index >= ordered.length
             ? operation()
-            : this.withMutationLock(ordered[index], () => acquire(index + 1));
+            : this.withMutationLockKey(ordered[index], () => acquire(index + 1));
         return acquire(0);
     }
     constructor(vaultPath, pathFilter, frontmatterHandler, onNoteChanged, metadataIndex, graphIndex, vaultIo = new VaultIoCoordinator()) {
