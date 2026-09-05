@@ -786,7 +786,20 @@ evidence, canonical hierarchy, or permissions. No Obsidian plugin or
 client-side helper is required.
 `get_wiki_exception_board` combines organization, graph,
 quarantine, freshness, vocabulary, and execution findings into one 5S-style
-repair board. `get_wiki_quality_check` applies a small role-specific checklist
+repair board. `wiki.exception_board` deduplicates findings by path/code before
+counting and prioritizes validation errors. `countScope: validated_candidates`
+and `coverage: partial` mean the totals are not a Vault census or health verdict.
+Owner revisions captured by lint are freshly checked; changed/deleted/hidden
+targets are omitted, and stale lint cache entries are evicted for the next call.
+`sourceState: snapshot_matched` checks only the owner, not every dependency;
+`recheck_required` identifies missing snapshot provenance. Follow exactly one
+item's `nextAction` before revision-safe repair. Canvas candidates use guarded
+Canvas routes, never an unsupported Markdown read of a `.canvas` file.
+The board never copies free-form child diagnostics or nested actions. Its whole
+JSON fits `maxChars`, dropping optional prose/counts when needed; a long exact
+target instead returns `retry` with original arguments and a larger budget.
+Child views may be truncated: no candidates does not mean no remaining work.
+`get_wiki_quality_check` applies a small role-specific checklist
 to one current visible note. Its `assessment: authoring_structure` score counts
 authored structure only, not factual truth, source integrity, or verified
 interpretation. Projection presence and fingerprint freshness are separate

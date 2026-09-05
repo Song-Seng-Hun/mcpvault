@@ -20,7 +20,7 @@ describe('progressive Wiki policy', () => {
   });
 
   test('teaches bounded authority shelves and distinct relation strengths progressively', () => {
-    expect(WIKI_POLICY_VERSION).toBe(14);
+    expect(WIKI_POLICY_VERSION).toBe(15);
     const retrieval = getWikiPolicyTopic('retrieval', 2000);
     const knowledge = getWikiPolicyTopic('knowledge', 2000);
     expect(retrieval.routes).toEqual(expect.arrayContaining(['wiki.authority_map']));
@@ -51,6 +51,17 @@ describe('progressive Wiki policy', () => {
     const tool = getLlmWikiTools().find(tool => tool.name === 'get_wiki_quality_check')!;
     expect(tool.description).toContain('authoring structure');
     expect(tool.description).toContain('reuseOriginalArguments');
+  });
+
+  test('exception guidance explains partial counts and executable actions without eager expansion', () => {
+    const maintenance = getWikiPolicyTopic('maintenance', 4000);
+    expect(maintenance.rules.join(' ')).toContain('partial candidate counts');
+    expect(maintenance.rules.join(' ')).toContain('matching owner revision does not certify');
+    expect(maintenance.rules.join(' ')).toContain('retry.overrides');
+    expect(MCPVAULT_SERVER_INSTRUCTIONS).not.toContain('validated_candidates');
+    const tool = getLlmWikiTools().find(tool => tool.name === 'get_wiki_exception_board')!;
+    expect(tool.description).toContain('item.nextAction');
+    expect(tool.description).toContain('not the entire Vault');
   });
 
   test('surfaces authored synthesis as bounded idle pull work', () => {

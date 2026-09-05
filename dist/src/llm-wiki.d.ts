@@ -64,6 +64,8 @@ interface WikiLintIssue {
     code: string;
     path: string;
     detail: string;
+    /** Owner revision captured while computing this signal, not its dependencies. */
+    revision?: string;
 }
 interface WikiLintResult {
     healthy: boolean;
@@ -4222,17 +4224,7 @@ export declare class LlmWikiService {
      * bounded visual-management board.  It is intentionally a projection:
      * Markdown, Properties, and Git remain authoritative.
      */
-    exceptionBoard(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
-        purpose: string;
-        counts: Record<string, number>;
-        total: number;
-        items: any[];
-        recommendations: any;
-        sourceViews: string[];
-        advisory: boolean;
-        truncated: boolean;
-        generatedAt: string;
-    }>;
+    exceptionBoard(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<import("./exception-board.js").ExceptionBoardResult>;
     /**
      * Check one note against a small role-specific quality rubric.  The rubric
      * is advisory and deliberately does not become a publication gate.

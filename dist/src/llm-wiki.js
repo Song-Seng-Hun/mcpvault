@@ -7,6 +7,7 @@ import { iterateNotes } from './paged-query.js';
 import { getOrganizationPropertyContract, getOrganizationRelationContract, hasExplicitKnowledgeDisposition, inapplicableOrganizationProperties, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeKnowledgeDisposition, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeTaskStatus, normalizeVolatilityClass, organizationLintIssues, organizationNoteTemplate, organizationPropertyAppliesTo, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, COMPLETION_DISPOSITION_REQUIRED_MESSAGE, CONFIDENCE_LEVELS, DECISION_STATUSES, FOCUS_HORIZONS, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, VOLATILITY_CLASSES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS } from './organization.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference } from './property-references.js';
+import { packExceptionBoard } from './exception-board.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
@@ -10067,6 +10068,7 @@ export class LlmWikiService {
                 path: issue.path,
                 code: issue.code,
                 detail: issue.detail,
+                ...(issue.revision && { revision: issue.revision }),
                 repairTarget: issue.path,
                 state: 'quarantined',
             })),
@@ -11889,85 +11891,126 @@ export class LlmWikiService {
      * Markdown, Properties, and Git remain authoritative.
      */
     async exceptionBoard(principal, limit = 20, maxChars = 7000) {
-        const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 60);
+        const boundedLimit = Math.floor(Math.min(Math.max(Number(limit) || 20, 1), 60));
         const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
-        const health = await this.organizationHealth(principal, Math.min(100, Math.max(boundedLimit, 20)), Math.min(16000, Math.max(boundedChars, 7000)));
-        const canvasHealth = await this.canvasHealth(principal, Math.min(50, Math.max(boundedLimit, 20)), Math.min(16000, Math.max(boundedChars, 7000)));
+        // Child budgets select candidates, not the final response size or a census.
+        const healthLimit = Math.min(100, Math.max(boundedLimit, 20));
+        const health = await this.organizationHealth(principal, healthLimit, 16000);
+        const canvases = await this.canvasHealth(principal, Math.min(50, Math.max(boundedLimit, 20)), 16000);
+        const list = (value) => Array.isArray(value) ? value.filter(item => item && typeof item === 'object') : [];
         const categoryFor = (code) => CLAIM_ARGUMENT_LINT_CODES.has(code) ? 'argument_integrity' : code.startsWith('invalid_') || code.startsWith('unsafe_') ? 'validation' : code.includes('stale') || code.includes('review') || code.includes('fresh') ? 'freshness' : code.includes('moc') || code.includes('relation') || code.includes('link') || code.includes('orphan') ? 'navigation' : code.includes('project') || code.includes('task') || code.includes('waiting') ? 'execution' : code.includes('term') || code.includes('alias') || code.includes('vocabulary') ? 'vocabulary' : code.includes('retention') || code.includes('archive') ? 'preservation' : 'knowledge_quality';
-        const repairActionFor = (code) => CLAIM_ARGUMENT_LINT_CODES.has(code) ? 'call_wiki_argument_map_then_edit_with_current_revision' : 'inspect_before_editing';
-        const rawIssues = Array.isArray(health.issues) ? health.issues : [];
-        const rawQuarantine = health.quarantine && Array.isArray(health.quarantine.items) ? health.quarantine.items : [];
-        const rawMocSequences = health.mocSequenceHealth && Array.isArray(health.mocSequenceHealth.items) ? health.mocSequenceHealth.items : [];
-        const rawCanvasIssues = Array.isArray(canvasHealth.items)
-            ? canvasHealth.items.filter(item => !['fresh', 'unmanaged'].includes(String(item.state || ''))).map(item => ({
-                path: item.path,
-                code: `canvas_${String(item.state || 'invalid')}`,
-                detail: item.detail || `Derived Canvas state is ${String(item.state || 'invalid')}; inspect its guarded sources before reuse.`,
-                category: ['invalid', 'scope_violation'].includes(String(item.state || '')) ? 'validation' : 'freshness',
-                severity: ['invalid', 'scope_violation'].includes(String(item.state || '')) ? 'error' : 'warning',
-                state: 'open',
-                suggestedAction: item.nextAction ? 'call_returned_canvas_action' : 'inspect_canvas_before_reuse',
-                ...(item.canvasRevision && { revision: item.canvasRevision }),
-                ...(item.nextAction && { nextAction: item.nextAction }),
-            }))
-            : [];
-        const mocSequenceIssues = rawMocSequences.map(item => {
-            const state = String(item.state || 'incomplete_prerequisite_path');
-            const code = state === 'cyclic_or_cycle_blocked' ? 'moc_dependency_cycle'
-                : state === 'order_conflict' ? 'moc_prerequisite_order_conflict'
-                    : state === 'redundant_prerequisites' ? 'moc_redundant_prerequisite'
-                        : 'moc_prerequisite_path_incomplete';
-            const repairGuidance = state === 'cyclic_or_cycle_blocked'
-                ? 'Repair a cycle edge before considering downstream edits.'
-                : state === 'redundant_prerequisites'
-                    ? 'Inspect the alternate path and retain the direct edge when it carries deliberate pedagogy or semantics.'
-                    : 'Inspect the detailed learning path and current revisions before editing.';
-            return {
-                path: item.path,
-                code,
-                detail: `MOC sequence needs review: ${Number(item.latePrerequisites?.total || 0)} late, ${Number(item.externalPrerequisites?.total || 0)} external, ${Number(item.unresolved?.total || 0)} unresolved, ${Number(item.ambiguous?.total || 0)} ambiguous, ${Number(item.dependencyCycles?.total || 0)} actual cycles (${Number(item.dependencyCycles?.entries || 0)} entries), ${Number(item.blockedByCycles?.total || 0)} downstream entries blocked by cycles, ${Number(item.redundantPrerequisites?.total || 0)} redundant-edge candidates, ${Number(item.dependencyEdges?.claim || 0)} claim-level prerequisite edges. ${repairGuidance}`,
-                category: 'navigation',
-                severity: 'warning',
-                state: 'open',
-                suggestedAction: 'call_wiki_learning_path_then_edit_with_current_revision',
-                ...(item.revision && { revision: item.revision }),
-                ...(item.nextAction && { nextAction: item.nextAction }),
-            };
-        });
-        const items = [
-            ...rawQuarantine.map(item => ({ ...item, category: 'validation', severity: 'error', state: 'quarantined', suggestedAction: 'inspect_and_repair_with_revision' })),
-            ...rawCanvasIssues,
-            ...mocSequenceIssues,
-            ...rawIssues.filter(issue => !rawQuarantine.some(item => item.path === issue.path && item.code === issue.code)).map(issue => ({
-                path: issue.path,
-                code: issue.code,
-                detail: issue.detail,
-                category: categoryFor(String(issue.code || '')),
-                severity: issue.severity || 'warning',
-                state: 'open',
-                suggestedAction: repairActionFor(String(issue.code || '')),
-                ...(CLAIM_ARGUMENT_LINT_CODES.has(String(issue.code || '')) && { nextAction: { endpointId: endpointIdForTool('get_wiki_argument_map'), arguments: { path: issue.path, maxDepth: 2, limit: 20, maxChars: 7000 } } }),
+        const candidates = [
+            ...list(health.quarantine?.items).map(item => ({ path: item.path, code: item.code, category: 'validation', severity: 'error', quarantined: true, revision: item.revision })),
+            ...list(canvases.items).filter(item => !['fresh', 'unmanaged'].includes(item.state)).map(item => ({
+                path: item.path, code: `canvas_${String(item.state || 'invalid')}`,
+                category: ['invalid', 'scope_violation'].includes(item.state) ? 'validation' : 'freshness',
+                severity: ['invalid', 'scope_violation'].includes(item.state) ? 'error' : 'warning',
+                revision: item.canvasRevision, canvas: item,
             })),
-        ].slice(0, boundedLimit);
-        const counts = {};
-        for (const item of [...rawQuarantine, ...rawCanvasIssues, ...mocSequenceIssues, ...rawIssues]) {
-            const category = String(item.category || (item.state === 'quarantined' ? 'validation' : categoryFor(String(item.code || ''))));
-            counts[category] = (counts[category] || 0) + 1;
-        }
-        const result = {
-            purpose: 'A bounded 5S-style exception board: make repair work visible, prioritized, and explainable without creating another task database or changing notes.',
-            counts,
-            total: Object.values(counts).reduce((sum, value) => sum + value, 0),
-            items,
-            recommendations: Array.isArray(health.recommendations) ? health.recommendations.slice(0, boundedLimit) : [],
-            sourceViews: ['wiki.organization_health', 'wiki.graph_health', 'wiki.canvas_health', 'wiki.review_packet'],
-            advisory: true,
-            truncated: rawIssues.length + rawQuarantine.length + rawCanvasIssues.length + mocSequenceIssues.length > items.length || Boolean(health.truncated) || Boolean(canvasHealth.truncated),
-            generatedAt: now(),
+            ...list(health.mocSequenceHealth?.items).map(item => ({
+                path: item.path,
+                code: item.state === 'cyclic_or_cycle_blocked' ? 'moc_dependency_cycle' : item.state === 'order_conflict' ? 'moc_prerequisite_order_conflict' : item.state === 'redundant_prerequisites' ? 'moc_redundant_prerequisite' : 'moc_prerequisite_path_incomplete',
+                category: 'navigation', severity: 'warning', revision: item.revision, sequence: true,
+            })),
+            ...list(health.issues).map(item => ({ path: item.path, code: item.code, category: categoryFor(String(item.code || '')), severity: item.severity === 'error' ? 'error' : 'warning', revision: item.revision })),
+        ];
+        const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        const resolve = (raw) => {
+            if (typeof raw !== 'string' || !raw.trim())
+                return undefined;
+            try {
+                const path = this.access.resolveExternalPath(raw, principal).replace(/\\/g, '/');
+                if (/^(?:\/|~|[a-z][a-z0-9+.-]*:)/i.test(path) || path.split('/').includes('..') || !canAccess(path))
+                    return undefined;
+                return normalizePath(path);
+            }
+            catch {
+                return undefined;
+            }
         };
-        if (JSON.stringify(result).length <= boundedChars)
-            return result;
-        return { ...result, items: items.slice(0, Math.max(1, Math.floor(boundedLimit / 2))), recommendations: result.recommendations.slice(0, 4), truncated: true };
+        const staged = [];
+        for (const candidate of candidates) {
+            const path = resolve(candidate.path);
+            if (!path || !/^[a-z][a-z0-9_]{0,95}$/.test(candidate.code))
+                continue;
+            if (!candidate.canvas) {
+                staged.push({ candidate, path });
+                continue;
+            }
+            try {
+                const opened = await this.fileSystem.readCanvasFile(path);
+                if (candidate.revision && candidate.revision !== opened.revision)
+                    continue;
+                const action = candidate.canvas.nextAction;
+                const root = action?.endpointId === 'wiki.canvas_view' ? resolve(action.arguments?.path) : undefined;
+                const mode = action?.arguments?.mode;
+                staged.push({ candidate, path, canvasRevision: opened.revision,
+                    ...(root && canvasScopeRoot(root).toLowerCase() === canvasScopeRoot(path).toLowerCase() && ['moc', 'neighborhood'].includes(mode) ? { root, mode } : {}) });
+            }
+            catch (error) {
+                if (error && typeof error === 'object' && ['ENOENT', 'ENOTDIR'].includes(String(error.code)))
+                    continue;
+                // Invalid JSON has no parsed revision. Do not claim snapshot validity,
+                // expose raw parser details, or send unsupported notes.read(.canvas).
+                if (error instanceof Error && error.message.startsWith('Canvas is not valid JSON:') && !candidate.revision) {
+                    staged.push({ candidate, path });
+                }
+                else
+                    throw error;
+            }
+        }
+        const notePaths = [...new Set(staged.flatMap(item => item.candidate.canvas ? item.root ? [item.root] : [] : [item.path]))];
+        const current = new Map();
+        for (let offset = 0; offset < notePaths.length; offset += 500) {
+            for (const note of await this.fileSystem.readNoteMetadata(notePaths.slice(offset, offset + 500), canAccess, { fresh: true, strict: true })) {
+                current.set(note.path, note);
+            }
+        }
+        const items = [];
+        for (const entry of staged) {
+            const { candidate, path } = entry;
+            const source = current.get(path);
+            if (!candidate.canvas) {
+                if (!source || (candidate.revision && candidate.revision !== source.revision)) {
+                    // Evict only this principal/limit's stale lint view. The next call
+                    // recomputes it instead of repeatedly dropping the same old signals.
+                    this.lintCache.delete(`${this.principalKey(principal)}|${Math.max(200, healthLimit * 4)}`);
+                    continue;
+                }
+                if (isModerationHidden(source.frontmatter))
+                    continue;
+            }
+            const publicPath = this.access.toPublicPath(path);
+            const revision = candidate.canvas ? entry.canvasRevision : source?.revision;
+            const argument = CLAIM_ARGUMENT_LINT_CODES.has(candidate.code);
+            let nextAction = { endpointId: 'notes.read', arguments: { path: publicPath, maxChars: 3000 } };
+            let suggestedAction = candidate.quarantined ? 'inspect_and_repair_with_revision' : 'inspect_before_editing';
+            if (argument) {
+                nextAction = { endpointId: 'wiki.argument_map', arguments: { path: publicPath, maxDepth: 2, limit: 20, maxChars: 7000 } };
+                suggestedAction = 'call_wiki_argument_map_then_edit_with_current_revision';
+            }
+            else if (candidate.sequence) {
+                nextAction = { endpointId: 'wiki.learning_path', arguments: { path: publicPath, limit: 20, maxChars: 7000 } };
+                suggestedAction = 'call_wiki_learning_path_then_edit_with_current_revision';
+            }
+            else if (candidate.canvas) {
+                const root = entry.root ? current.get(entry.root) : undefined;
+                nextAction = entry.root && root && !isModerationHidden(root.frontmatter)
+                    ? { endpointId: 'wiki.canvas_view', arguments: { path: this.access.toPublicPath(entry.root), mode: entry.mode, limit: 20, maxChars: 12000 } }
+                    : { endpointId: 'wiki.canvas_health', arguments: { limit: 20, maxChars: 12000 } };
+                suggestedAction = 'call_returned_canvas_action';
+            }
+            items.push({
+                path: publicPath, code: candidate.code, category: argument ? 'argument_integrity' : candidate.category,
+                severity: candidate.severity, state: candidate.quarantined ? 'quarantined' : 'open',
+                ...(revision && { revision }),
+                sourceState: candidate.revision && candidate.revision === revision ? 'snapshot_matched' : 'recheck_required',
+                suggestedAction, nextAction,
+                detail: candidate.canvas ? 'Reinspect the derived Canvas before reuse; never rewrite source knowledge to make a derived view green.'
+                    : `Review the ${argument ? 'argument integrity' : candidate.category.replace(/_/g, ' ')} signal in the current note. Inspect context and dependencies before changing its Properties or body.`,
+            });
+        }
+        return packExceptionBoard(items, boundedLimit, boundedChars, Boolean(health.truncated) || Boolean(canvases.truncated));
     }
     /**
      * Check one note against a small role-specific quality rubric.  The rubric
@@ -14560,7 +14603,7 @@ export class LlmWikiService {
         for await (const note of iterateNotes(this.fileSystem, { includeContent: true }, canAccess)) {
             const type = note.frontmatter.llm_wiki_type;
             const publicPath = this.access.toPublicPath(note.path);
-            classificationNotes.push({ path: note.path, frontmatter: note.frontmatter });
+            classificationNotes.push({ path: note.path, frontmatter: note.frontmatter, ...(note.revision && { revision: note.revision }) });
             for (const [property, value] of Object.entries(note.frontmatter)) {
                 const valueType = value === null ? 'null' : Array.isArray(value) ? 'list' : typeof value === 'object' ? 'object' : typeof value === 'number' ? 'number' : typeof value === 'boolean' ? 'boolean' : 'text';
                 const previous = propertyTypes.get(property);
@@ -15243,11 +15286,23 @@ export class LlmWikiService {
         for (const link of unresolved.unresolved) {
             addIssue({ severity: 'warning', code: 'broken_wikilink', path: this.access.toPublicPath(link.path), detail: `${link.link} at line ${link.line}` });
         }
+        // Reuse the captured inventory; retain a revision map only for returned
+        // findings. Never stamp a cached finding with a later read's revision.
+        const sourceRevisions = new Map(issues.map(issue => [issue.path, undefined]));
+        for (const note of classificationNotes) {
+            const publicPath = this.access.toPublicPath(note.path);
+            if (sourceRevisions.has(publicPath))
+                sourceRevisions.set(publicPath, note.revision);
+        }
         return {
             healthy: errors === 0,
             errors,
             warnings,
-            issues,
+            issues: issues.map(issue => {
+                // Unresolved links are supplied by a separate graph snapshot above.
+                const revision = issue.code === 'broken_wikilink' ? undefined : sourceRevisions.get(issue.path);
+                return { ...issue, ...(revision && { revision }) };
+            }),
             truncated: totalIssues > limit || unresolved.truncated,
         };
     }

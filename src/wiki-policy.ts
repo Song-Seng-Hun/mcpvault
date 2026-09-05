@@ -19,7 +19,7 @@ export const WIKI_POLICY_TOPICS = [
 ] as const;
 
 export type WikiPolicyTopicId = typeof WIKI_POLICY_TOPICS[number];
-export const WIKI_POLICY_VERSION = 14;
+export const WIKI_POLICY_VERSION = 15;
 
 type WikiPolicyTopic = {
   purpose: string;
@@ -167,7 +167,7 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
   maintenance: {
     purpose: 'Repair the smallest high-value organization defect without loading every overlapping dashboard.',
     rules: [
-      'Begin with one bounded wiki.review_packet or wiki.exception_board item and follow only its selected repair route.',
+      'Begin with one bounded wiki.review_packet or wiki.exception_board item and execute its nextAction. Exception-board totals are partial candidate counts, not a Vault health verdict; a matching owner revision does not certify all dependencies. Apply any retry.overrides to the original request without shortening target paths.',
       'Use wiki.quality_check for one note\'s authoring structure, not source truth. Follow its nextAction before editing; unverified/stale projections require reading and revision-checked wiki.projection_update, never fingerprint-only certification.',
       'Treat graph, vocabulary, duplicate, placement, and composition findings as advisory signals; inspect both current revisions before editing.',
       'Similarity, zero usage, high degree, or a missing reciprocal edge may justify review but never automatic merge, split, move, or deletion.',

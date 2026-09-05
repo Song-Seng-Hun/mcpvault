@@ -359,7 +359,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_exception_board',
-            description: 'Combine existing organization, graph, quarantine, freshness, vocabulary, and execution findings into one bounded 5S-style exception board. It makes repair work visible and prioritized without creating another task database or changing notes.',
+            description: 'Read a bounded 5S exception board of deduplicated visible organization and Canvas repair candidates. total/counts cover validated candidates, not the entire Vault; coverage is partial and zero is not a health certificate. Owner revisions are checked; sourceState does not certify cross-note dependencies. Execute one item.nextAction before revision-safe repair. Whole JSON respects maxChars; compact items may omit descriptions/counts. For retry.reuseOriginalArguments, repeat the original request with retry.overrides, never shorten a target path. Read-only and advisory; no automatic repair or new task database.',
             inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 60, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
         },
         {

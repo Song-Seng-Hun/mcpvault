@@ -340,6 +340,24 @@ with a generic title, no compact projection (`summary` or `key_points`), or no
 meaningful incoming/outgoing graph connection. It never blocks publication,
 forces atomicity, or rewrites a note automatically.
 
+`wiki.exception_board` is an advisory, read-only aggregate of existing signals,
+not another task database. Deduplicate by authorized public path/code before
+counting, with errors first. `countScope: validated_candidates` and
+`coverage: partial` distinguish the returned candidate total from a Vault-wide
+health assertion. Lint owner revisions are captured with the original scan;
+fresh checks omit changed/deleted/moderation-hidden owners. An observed stale
+lint cache entry is evicted so a subsequent call can recompute it.
+`sourceState: snapshot_matched` is not a dependency snapshot or truth score;
+`recheck_required` means the source finding lacks a matching captured revision.
+Use exactly one returned `items[].nextAction` before revision-checked repair.
+The board allowlists output fields instead of copying child error text, private
+reference details, or arbitrary actions. Invalid Canvas JSON has no verified
+revision and uses `wiki.canvas_health`, not `notes.read` on a non-note file.
+Compact output may omit descriptions, legacy suggestion labels, or counts but
+never shortens paths or revisions. If an exact item cannot fit, repeat the
+original `wiki.exception_board` request with `retry.overrides`. Empty or
+truncated candidate output does not establish that the Vault is healthy.
+
 `wiki.quality_check` is a separate single-note **authoring structure** rubric,
 not factual verification. Its path must be Vault-relative or an authorized
 `scope://` URI; absolute and traversal aliases are rejected before reading.

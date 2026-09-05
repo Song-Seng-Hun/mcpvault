@@ -581,6 +581,36 @@ test('quality MCP rejects hidden notes without returning their title or diagnost
   } finally { await client.close(); await server.close(); }
 });
 
+test('exception board keeps a bounded private next action executable through MCP', async () => {
+  const root = join(testVaultPath, '_scopes', 'models', 'codex');
+  await mkdir(root, { recursive: true });
+  await writeFile(join(root, 'Concept.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: invalid\n---\nCurrent explanation.');
+  await writeFile(join(testVaultPath, 'Hidden.md'), '---\nllm_wiki_type: knowledge\nmoderation_status: hidden\n---\nPrivate body.');
+  const { server, client, accessToken } = await connectClient();
+  try {
+    expect((await client.listTools()).tools).toHaveLength(5);
+    for (const maxChars of [512, 7000]) {
+      const result = await client.callTool({ name: 'call_endpoint', arguments: {
+        endpointId: 'wiki.exception_board', arguments: { limit: 10, maxChars, prettyPrint: true, accessToken },
+      } });
+      expect(result.isError).toBeFalsy();
+      const text = (result.content as any)[0].text;
+      expect(text.length).toBeLessThanOrEqual(maxChars);
+      expect(text).not.toMatch(/_scopes|Hidden|Private body/);
+      expect(text).not.toContain(accessToken);
+      const board = JSON.parse(text);
+      expect(board).toMatchObject({ countScope: 'validated_candidates', coverage: 'partial', advisory: true });
+      const item = board.items[0];
+      expect(item.path).toBe('scope://model/codex/Concept.md');
+      const read = await client.callTool({ name: 'call_endpoint', arguments: {
+        endpointId: item.nextAction.endpointId, arguments: { ...item.nextAction.arguments, accessToken },
+      } });
+      expect(read.isError).toBeFalsy();
+      expect(JSON.parse((read.content as any)[0].text).revision).toBe(item.revision);
+    }
+  } finally { await client.close(); await server.close(); }
+});
+
 test("search_notes bounds output and prioritizes Wiki notes", async () => {
   const { server, client } = await connectClient();
   try {

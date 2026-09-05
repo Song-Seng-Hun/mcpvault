@@ -264,11 +264,18 @@ do not prove a current, bounded, actionable response through its public adapter.
   same-note read guidance. `quality-check.test.ts`, public `call_endpoint` cases
   in `createServer.test.ts`, and progressive policy tests provide the evidence.
   The score is explicitly authoring structure, not a factual/source certificate.
-- **Open: exception-board response packing.** The current `exceptionBoard`
-  fallback halves item counts instead of guaranteeing the whole JSON budget.
-  Audit its source-view truncation, private/hidden metadata, current revisions,
-  and usable next action as one aggregation workflow. Completion requires
-  minimum-budget direct and public-adapter tests, not only bounded child views.
+- Exception-board packing now deduplicates visible candidates before counts,
+  checks captured owner revisions, evicts stale lint cache entries, uses only
+  reconstructed safe actions, and preserves exact targets within whole-JSON
+  budgets or a same-request retry. Direct temporary-Vault and public MCP tests
+  cover minimum budgets, hidden/changed owners, cached results and Canvas routes.
+  Its partial count is explicitly not a Vault-wide health certificate.
+- **Open: child-view hygiene.** The exception-board audit observed that the
+  original lint/organization-health views can include moderation-hidden owner
+  findings and free-form reference details, and organization-health packing
+  still does not guarantee every minimum-sized result. The aggregate's guards
+  do not prove those independently callable views safe or bounded. Audit their
+  direct/MCP interfaces, dependent aggregation, and source/target revisions.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish
