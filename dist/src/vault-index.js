@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { join, relative, resolve } from 'node:path';
 import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { VaultIoCoordinator } from './vault-io.js';
+import { isMissingVaultPath, VaultReadUnavailableError } from './vault-read-errors.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 import { buildNoteReferenceIndex, resolveNoteReference as resolveIndexedNoteReference } from './note-reference.js';
 const FULL_REFRESH_INTERVAL_MS = 60_000;
@@ -226,7 +227,11 @@ export class VaultMetadataIndex {
         this.vaultIo = vaultIo;
         this.vaultPath = resolve(vaultPath);
         this.snapshotReady = this.loadSnapshot();
-        this.ready = this.initialize();
+        this.ready = this.initialize().catch(() => {
+            // Initialization runs eagerly. A failed load must not permanently poison
+            // ready or create an unhandled rejection; public reads retry and report it.
+            this.needsFullRefresh = true;
+        });
         if (catalog) {
             this.catalogUnsubscribe = catalog.subscribeBatch(changes => {
                 if (changes)
@@ -711,6 +716,10 @@ export class VaultMetadataIndex {
         try {
             await this.refreshPromise;
         }
+        catch (error) {
+            this.needsFullRefresh = true;
+            throw error;
+        }
         finally {
             this.refreshPromise = undefined;
         }
@@ -722,7 +731,15 @@ export class VaultMetadataIndex {
             const paths = [...this.dirty];
             this.dirty.clear();
             this.clearQueryCaches();
-            const metadata = await Promise.all(paths.map(path => this.readEntry(path)));
+            let metadata;
+            try {
+                metadata = await Promise.all(paths.map(path => this.readEntry(path)));
+            }
+            catch (error) {
+                for (const path of paths)
+                    this.dirty.add(path);
+                throw error;
+            }
             for (let index = 0; index < paths.length; index += 1) {
                 const path = paths[index];
                 const entry = metadata[index];
@@ -786,8 +803,10 @@ export class VaultMetadataIndex {
                 mtimeMs,
             };
         }
-        catch {
-            return undefined;
+        catch (error) {
+            if (isMissingVaultPath(error))
+                return undefined;
+            throw new VaultReadUnavailableError();
         }
     }
     async initialize() {
@@ -1012,8 +1031,10 @@ export class VaultMetadataIndex {
         try {
             entries = await readdir(directory, { withFileTypes: true });
         }
-        catch {
-            return output;
+        catch (error) {
+            if (directory !== this.vaultPath && isMissingVaultPath(error))
+                return output;
+            throw new VaultReadUnavailableError();
         }
         for (const entry of entries) {
             if (entry.name === '.mcpvault' || entry.name === '.git' || entry.name === '.obsidian' || entry.name === 'node_modules')

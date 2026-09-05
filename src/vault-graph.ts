@@ -8,6 +8,7 @@ import type { FrontmatterHandler } from './frontmatter.js';
 import type { PathFilter } from './pathfilter.js';
 import type { VaultCatalogChange, VaultFileCatalog, VaultCatalogChangeKind } from './vault-catalog.js';
 import { VaultIoCoordinator } from './vault-io.js';
+import { isMissingVaultPath, VaultReadUnavailableError } from './vault-read-errors.js';
 import { RELATION_FIELDS } from './organization.js';
 import { noteReferenceDocument, noteReferenceTermKeys } from './note-reference.js';
 import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference } from './property-references.js';
@@ -464,7 +465,13 @@ export class VaultGraphIndex {
     this.refreshPromise = (async () => {
       const paths = [...this.dirty];
       this.dirty.clear();
-      const entries = await Promise.all(paths.map(path => this.readEntry(path)));
+      let entries: Array<GraphEntry | undefined>;
+      try {
+        entries = await Promise.all(paths.map(path => this.readEntry(path)));
+      } catch (error) {
+        for (const path of paths) this.dirty.add(path);
+        throw error;
+      }
       for (let index = 0; index < paths.length; index += 1) {
         const path = paths[index]!;
         const entry = entries[index];
@@ -588,8 +595,9 @@ export class VaultGraphIndex {
         }
       }
       return { path: normalized, revision: createHash('sha256').update(raw).digest('hex'), size: info.size, mtimeMs: info.mtimeMs, links, tags, identityTerms };
-    } catch {
-      return undefined;
+    } catch (error) {
+      if (isMissingVaultPath(error)) return undefined;
+      throw new VaultReadUnavailableError();
     }
   }
 
@@ -598,8 +606,9 @@ export class VaultGraphIndex {
     let entries;
     try {
       entries = await readdir(directory, { withFileTypes: true });
-    } catch {
-      return output;
+    } catch (error) {
+      if (directory !== this.vaultPath && isMissingVaultPath(error)) return output;
+      throw new VaultReadUnavailableError();
     }
     for (const entry of entries) {
       const fullPath = join(directory, entry.name);

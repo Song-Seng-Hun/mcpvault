@@ -300,6 +300,12 @@ do not prove a current, bounded, actionable response through its public adapter.
   tests and the next unchanged full suite passed. Preserve this evidence when
   investigating runner load and cancellation/teardown; do not erase timeouts
   by only reporting the passing rerun.
+  Subsequent IO-failure validation reproduced default-worker reputation/archive
+  timeouts; the four-worker full comparison passed all 915 tests (one skipped)
+  in 42.70s versus 46.91s at the CPU-derived 11-worker default. Test configuration
+  now caps workers at four without extending deadlines or changing assertions.
+  This reduces observed contention; it is not proof of a production latency SLA
+  or a fix for every cancellation/teardown race.
 - Received-event inventory lag now has a deterministic reproduction and common
   fix: the catalog's 50ms subscriber debounce could leave metadata, backlinks
   and even lexical result-cache hits stale after notification delivery. Read
@@ -310,12 +316,18 @@ do not prove a current, bounded, actionable response through its public adapter.
   This resolves that proven delivery-to-index gap, not every possible cause of
   the earlier intermittent waiting-item omission. OS-undelivered notifications
   and workDependencySnapshot's independent snapshot consistency remain open.
-- **Open: notification failure semantics.** Catalog stat failures currently
-  classify all errors as deletions, not only missing files. The watcher error
-  handler also notifies legacy listeners without notifying batch subscribers.
-  Add controlled IO/watcher-failure coverage and safe reconciliation before
-  claiming fail-safe behavior during NAS/permission outages. Received-event
-  read barriers do not by themselves repair these separate failure paths.
+- Catalog notification and core read-index failure semantics now distinguish
+  confirmed absence from IO/permission failure. Shared stat/directory readers
+  reject path-free errors; watcher errors reach batch subscribers; failed
+  notification tails and dirty reads stay retryable without new events. Initial
+  metadata/search failures recover without restart, and evicted search text
+  is not permanently blanked by a failed reload. Controlled temporary-file
+  failure/recovery and public MCP tests cover these paths.
+- **Open: independent IO and snapshot audits.** Semantic indexes and other
+  service-specific catches have not inherited this contract automatically.
+  Cached files not selected for refresh are not continuously revalidated.
+  Scope-aware graph/Canvas freshness and work-snapshot race audits remain open;
+  core read-model fault tests are not proof of all derived views' completeness.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

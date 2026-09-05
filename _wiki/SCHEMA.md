@@ -387,6 +387,17 @@ work from repopulating the cache. This is not a global atomic snapshot or an
 immediate guarantee for OS-undelivered events/semantic embedding updates.
 Revision checks and scope/visibility checks remain required independently.
 
+Catalog and metadata/graph/lexical-index IO failures return a bounded,
+path-free `VaultReadUnavailableError` (`VAULT_READ_UNAVAILABLE` internally),
+not a successful empty view. ENOENT/ENOTDIR denotes missing child/file paths;
+a missing Vault root is unavailable. A failed watcher batch retains its
+undelivered tail, and failed dirty refreshes retain their paths for the next
+read. Failed startup loads can retry without a restart. Watcher errors invalidate
+both batch and legacy subscribers. No automatic write or busy retry loop occurs.
+Preserve the source and restore storage access before retrying; this error is
+not evidence of deletion. Semantic indexes and independent service projections
+are outside this IO failure contract and still require separate audits.
+
 `wiki.organization_health.collectionHealth` is an optional derived child, not a
 separate endpoint. It accumulates the same visible coherent notes as lint and
 shares their private source guards. Its earliest future `review_at` deadline

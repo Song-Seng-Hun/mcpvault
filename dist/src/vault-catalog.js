@@ -1,6 +1,7 @@
 import { watch } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
+import { isMissingVaultPath, VaultReadUnavailableError } from './vault-read-errors.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 const WATCH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
@@ -126,7 +127,8 @@ export class VaultFileCatalog {
                 // Keep the serialization chain usable and reconcile after a failed
                 // batch. The reading caller still receives the original rejection.
                 this.invalidate();
-                this.pendingFullRefresh = true;
+                if (!this.pendingChanges.size)
+                    this.pendingFullRefresh = true;
             });
             await flush;
         })();
@@ -212,12 +214,17 @@ export class VaultFileCatalog {
             }
             return value;
         })
-            .catch(() => undefined);
+            .catch(error => {
+            if (isMissingVaultPath(error))
+                return undefined;
+            throw new VaultReadUnavailableError();
+        });
         this.statInFlight.set(normalized, computation);
-        void computation.finally(() => {
+        const cleanup = () => {
             if (this.statInFlight.get(normalized) === computation)
                 this.statInFlight.delete(normalized);
-        });
+        };
+        void computation.then(cleanup, cleanup);
         return computation;
     }
     startWatcher() {
@@ -232,7 +239,7 @@ export class VaultFileCatalog {
                 this.watcher?.close();
                 this.watcher = undefined;
                 this.invalidate();
-                this.emit();
+                this.emitBatch();
             });
             this.watcher.unref?.();
         }
@@ -292,15 +299,29 @@ export class VaultFileCatalog {
         }
         for (let start = 0; start < paths.length; start += WATCH_EVENT_STAT_BATCH_SIZE) {
             const batch = paths.slice(start, start + WATCH_EVENT_STAT_BATCH_SIZE);
-            const states = await Promise.all(batch.map(async (path) => {
-                try {
-                    const info = await stat(join(this.vaultPath, path));
-                    return { path, kind: info.isFile() ? 'upsert' : 'delete' };
+            let states;
+            try {
+                states = await Promise.all(batch.map(async (path) => {
+                    try {
+                        const info = await stat(join(this.vaultPath, path));
+                        return { path, kind: info.isFile() ? 'upsert' : 'delete' };
+                    }
+                    catch (error) {
+                        if (!isMissingVaultPath(error))
+                            throw new VaultReadUnavailableError();
+                        return { path, kind: 'delete' };
+                    }
+                }));
+            }
+            catch (error) {
+                // The batch was not delivered. Preserve its tail without scheduling
+                // an automatic retry loop during a storage outage.
+                if (!this.closed && !this.pendingFullRefresh) {
+                    for (const path of paths.slice(start))
+                        this.pendingChanges.set(path, true);
                 }
-                catch {
-                    return { path, kind: 'delete' };
-                }
-            }));
+                throw error;
+            }
             if (this.closed)
                 return;
             if (states.length > 0)
@@ -364,8 +385,10 @@ export class VaultFileCatalog {
                     return { notes: cached.notes, all: cached.all };
                 }
             }
-            catch {
-                return { notes: [], all: [] };
+            catch (error) {
+                if (directory !== this.vaultPath && isMissingVaultPath(error))
+                    return { notes: [], all: [] };
+                throw new VaultReadUnavailableError();
             }
         }
         const notes = [];
@@ -417,16 +440,20 @@ export class VaultFileCatalog {
                 const entries = await readdir(directory, { withFileTypes: true });
                 return entries.map(entry => ({ name: entry.name, directory: entry.isDirectory(), file: entry.isFile() }));
             }
-            catch {
-                return [];
+            catch (error) {
+                if (directory !== this.vaultPath && isMissingVaultPath(error))
+                    return [];
+                throw new VaultReadUnavailableError();
             }
         }
         let info;
         try {
             info = await stat(directory);
         }
-        catch {
-            return [];
+        catch (error) {
+            if (directory !== this.vaultPath && isMissingVaultPath(error))
+                return [];
+            throw new VaultReadUnavailableError();
         }
         const cached = this.directoryCache.get(directory);
         if (!this.dirtyDirectories.has(directory) && cached && cached.mtimeMs === info.mtimeMs && cached.size === info.size) {
@@ -440,8 +467,10 @@ export class VaultFileCatalog {
             const listed = await readdir(directory, { withFileTypes: true });
             entries = listed.map(entry => ({ name: entry.name, directory: entry.isDirectory(), file: entry.isFile() }));
         }
-        catch {
-            return [];
+        catch (error) {
+            if (directory !== this.vaultPath && isMissingVaultPath(error))
+                return [];
+            throw new VaultReadUnavailableError();
         }
         this.dirtyDirectories.delete(directory);
         const cacheEntry = { mtimeMs: info.mtimeMs, size: info.size, entries };

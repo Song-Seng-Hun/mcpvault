@@ -16,7 +16,7 @@ export const WIKI_POLICY_TOPICS = [
     'portability',
     'safety',
 ];
-export const WIKI_POLICY_VERSION = 17;
+export const WIKI_POLICY_VERSION = 18;
 /**
  * The only policy that every MCP client must receive eagerly. Detailed
  * organization guidance is selected through wiki.policy so a rich Wiki does
@@ -60,6 +60,7 @@ const POLICY_TOPICS = {
         purpose: 'Find the smallest sufficient, current, explainable context.',
         rules: [
             'Search returns bounded excerpts; select a result and then read a projection, section, block, or exact note rather than expanding every hit.',
+            'Vault read unavailable is not evidence of deletion or an empty collection. Retry once storage access is restored; no retry loop and no cleanup, recreation, or mass rewrite based on that error.',
             'Use lexical filters as authoritative constraints and semantic matches only as discovery hints.',
             'Visible note identities resolve exact paths, filenames, titles, aliases, preferred terms, stable IDs, and explicit relative paths; ambiguity is repair debt, not permission to guess.',
             'Use wiki.home for one intent route, wiki.neighborhood for nearby context, and wiki.context_pack only when a reusable bounded shelf is warranted.',

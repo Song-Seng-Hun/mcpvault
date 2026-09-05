@@ -9,6 +9,7 @@ import { boundSearchResults, boundedTopK, normalizeSearchLimit, normalizeSearchM
 import { isMarkdownModerationHidden } from './moderation-policy.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 import { VaultIoCoordinator } from './vault-io.js';
+import { isMissingVaultPath, VaultReadUnavailableError } from './vault-read-errors.js';
 import { parse as parseYaml } from 'yaml';
 const WIKI_TYPES = new Set(['schema', 'source', 'knowledge', 'issue']);
 const SEARCH_CACHE_TTL_MS = 5_000;
@@ -1079,7 +1080,10 @@ export class SearchService {
         this.startWatcher();
         await this.snapshotReady;
         if (!this.indexReady)
-            this.indexReady = this.refreshAll();
+            this.indexReady = this.refreshAll().catch(error => {
+                this.indexReady = undefined;
+                throw error;
+            });
         await this.indexReady;
         if (this.dirtyDocuments.size > 0)
             await this.refreshDirty();
@@ -1166,7 +1170,15 @@ export class SearchService {
         this.indexRefresh = (async () => {
             const paths = [...this.dirtyDocuments];
             this.dirtyDocuments.clear();
-            const documents = await Promise.all(paths.map(path => this.readIndexedDocument(join(this.vaultPath, path))));
+            let documents;
+            try {
+                documents = await Promise.all(paths.map(path => this.readIndexedDocument(join(this.vaultPath, path))));
+            }
+            catch (error) {
+                for (const path of paths)
+                    this.dirtyDocuments.add(path);
+                throw error;
+            }
             for (let index = 0; index < paths.length; index += 1) {
                 const path = paths[index];
                 const document = documents[index];
@@ -1245,8 +1257,10 @@ export class SearchService {
                 titleGrams: this.gramIdsForText([...authorityTerms, ...authorityMetadata.authorityIds, ...authorityMetadata.sameAsTerms, ...authorityMetadata.closeMatchTerms, ...authorityMetadata.broaderTerms, ...authorityMetadata.relatedTerms, ...retrievalMetadata.cues, ...(retrievalMetadata.useWhen ? [retrievalMetadata.useWhen] : [])].join('\n').toLowerCase()),
             };
         }
-        catch {
-            return undefined;
+        catch (error) {
+            if (isMissingVaultPath(error))
+                return undefined;
+            throw new VaultReadUnavailableError();
         }
     }
     gramIdsForText(value) {
@@ -1499,7 +1513,9 @@ export class SearchService {
             document.lastAccessAt = Date.now();
             this.trimTextCache(document.relativePath);
         }
-        catch {
+        catch (error) {
+            if (!isMissingVaultPath(error))
+                throw new VaultReadUnavailableError();
             document.body = '';
             document.frontmatterText = '';
         }
@@ -1609,7 +1625,8 @@ export class SearchService {
             }
         }
         catch (error) {
-            // Skip directories that can't be read
+            if (dirPath === this.vaultPath || !isMissingVaultPath(error))
+                throw new VaultReadUnavailableError();
         }
         const entry = { expiresAt: Date.now() + DIRECTORY_CACHE_TTL_MS, paths: markdownFiles };
         this.directoryCache.set(dirPath, entry);

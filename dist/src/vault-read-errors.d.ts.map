@@ -1,0 +1,1 @@
+{"version":3,"file":"vault-read-errors.d.ts","sourceRoot":"","sources":["../../src/vault-read-errors.ts"],"names":[],"mappings":"AAAA,iFAAiF;AACjF,wBAAgB,kBAAkB,CAAC,KAAK,EAAE,OAAO,GAAG,OAAO,CAG1D;AAED,8EAA8E;AAC9E,qBAAa,yBAA0B,SAAQ,KAAK;IAClD,QAAQ,CAAC,IAAI,4BAA4B;IACzC,cAGC;CACF"}

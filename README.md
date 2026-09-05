@@ -3092,6 +3092,22 @@ changes during a read, and asynchronous semantic indexing remain separate
 freshness boundaries. Use returned revisions and `expectedRevision` when editing.
 No client installation, new endpoint, or configuration is needed.
 
+Development tests use at most four workers (`npm test`) because each integration
+worker creates a Vault and IO pipeline. This bounds filesystem contention without
+relaxing assertions or deadlines; `--maxWorkers` remains an optional developer
+override. It does not change the running MCP server's concurrency settings.
+
+When a catalog, metadata, backlink or lexical-index refresh encounters an IO or
+permission failure, it rejects with `Vault read unavailable; retry after storage
+access is restored.` It does not treat that failure as a deleted note or a valid
+empty collection. Failed batches/dirty paths remain retryable; even initial
+index-load failures can recover in the same server. Only confirmed missing paths
+are omitted, and an unavailable Vault root is never a successful empty inventory.
+Watcher failure invalidates both legacy and batched read models. Do not delete,
+recreate, or mass-rewrite knowledge in response to this error; restore storage
+access and retry the read. This is not continuous verification of every cached
+file or a claim about independent semantic/service-specific fallback paths.
+
 The organization layer now connects five maintenance loops without adding a
 second source of truth:
 
