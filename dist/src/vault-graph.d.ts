@@ -1,4 +1,4 @@
-import type { BacklinkMatch, OrphanNotesResult, UnresolvedLinksResult, OutlinkMatch } from './types.js';
+import type { BacklinksResult, OrphanNotesResult, UnresolvedLinksResult, OutlinkMatch } from './types.js';
 import type { FrontmatterHandler } from './frontmatter.js';
 import type { PathFilter } from './pathfilter.js';
 import type { VaultCatalogChange, VaultFileCatalog, VaultCatalogChangeKind } from './vault-catalog.js';
@@ -30,12 +30,7 @@ export declare class VaultGraphIndex {
     invalidate(path?: string, kind?: VaultCatalogChangeKind): void;
     invalidateMany(changes: readonly VaultCatalogChange[]): void;
     close(): void;
-    getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, canIncludeSource?: (path: string) => Promise<boolean>): Promise<{
-        target: string;
-        backlinks: BacklinkMatch[];
-        total: number;
-        truncated: boolean;
-    }>;
+    getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, canIncludeSource?: (path: string) => Promise<boolean>, includeSourceRevision?: boolean): Promise<BacklinksResult>;
     getOutlinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number): Promise<{
         source: string;
         outlinks: OutlinkMatch[];
@@ -50,6 +45,9 @@ export declare class VaultGraphIndex {
     }>>;
     private ensure;
     private visibilityContext;
+    /** Lazily reuse resolved edges only within this predicate/generation view. */
+    private incomingBacklinks;
+    private matchingBacklinks;
     private startWatcher;
     private refreshAll;
     private refreshDirty;

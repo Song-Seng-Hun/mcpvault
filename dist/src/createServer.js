@@ -1557,7 +1557,7 @@ export function createServer(vaultPath, options = {}) {
                         return jsonResult(await llmWiki.resurfaceKnowledge(principal, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.context), trimmedArgs.prettyPrint);
                     }
                     case "resurface_wiki_archives": {
-                        return jsonResult(await llmWiki.resurfaceArchivedKnowledge(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+                        return jsonResult(await llmWiki.resurfaceArchivedKnowledge(principal, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.afterPath), trimmedArgs.prettyPrint);
                     }
                     case "update_wiki_projection": {
                         await requireExpectedRevisionForExisting(fileSystem, trimmedArgs.path, trimmedArgs.expectedRevision, 'update_wiki_projection');

@@ -12072,46 +12072,139 @@ export class LlmWikiService {
      * them.  This preserves PARA's “forget without deleting” behavior without
      * automatically reopening or moving archived knowledge.
      */
-    async resurfaceArchivedKnowledge(principal, limit = 8, maxChars = 5000) {
-        const boundedLimit = Math.min(Math.max(Number(limit) || 8, 1), 20);
+    async resurfaceArchivedKnowledge(principal, limit = 8, maxChars = 5000, afterPath) {
+        const boundedLimit = Math.floor(Math.min(Math.max(Number(limit) || 8, 1), 20));
         const boundedChars = Math.min(Math.max(Number(maxChars) || 5000, 512), 12000);
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        const fresh = (paths) => this.fileSystem.readNoteMetadata(paths, canAccess, { fresh: true, strict: true });
+        const inactive = (note) => !isModerationHidden(note.frontmatter)
+            && ['archived', 'superseded'].includes(String(note.frontmatter.lifecycle || '').toLowerCase());
+        let after;
+        if (afterPath !== undefined) {
+            if (typeof afterPath !== 'string' || !afterPath.trim() || afterPath.length > 1024)
+                throw new Error('afterPath must be a nonempty path of at most 1024 characters');
+            const resolved = this.access.resolveExternalPath(afterPath, principal).replace(/\\/g, '/');
+            if (resolved.startsWith('/') || /^[a-z]:/i.test(resolved) || resolved.startsWith('~') || resolved.split('/').includes('..')) {
+                throw new Error('afterPath must be a relative note path or authorized scope URI');
+            }
+            // Keep the cursor contract stricter than legacy filesystem absolute-path
+            // compatibility. PathFilter, scope, and symlink guards still apply below.
+            const cursor = (await fresh([resolved]))[0];
+            if (!cursor || isModerationHidden(cursor.frontmatter))
+                throw new Error('Archive cursor is unavailable; restart without afterPath');
+            after = cursor.path;
+        }
         const candidates = [];
         let totalInactive = 0;
         const probeLimit = Math.min(200, Math.max(20, boundedLimit * 10));
         const probe = [];
-        for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
-            const lifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
-            if (!['archived', 'superseded'].includes(lifecycle))
-                continue;
-            totalInactive += 1;
-            if (probe.length < probeLimit)
-                probe.push({ path: note.path, title: String(note.frontmatter.title || note.path.split('/').at(-1) || ''), lifecycle, ...(note.frontmatter.replaced_by && { replacedBy: String(note.frontmatter.replaced_by) }), ...(note.frontmatter.retention_reason && { reason: boundedText(note.frontmatter.retention_reason, 300) }) });
+        let hasLaterWindow = false;
+        // Count current visible inactive notes, but retain only one scan window.
+        // Counting still scans the inventory; this is not a constant-time cursor.
+        const scanBatch = async (paths) => {
+            // Promise.all preserves natural inventory order despite overlapping IO.
+            const current = await Promise.all(paths.map(path => fresh([path])));
+            for (const notes of current) {
+                const note = notes[0];
+                if (!note || !inactive(note))
+                    continue;
+                totalInactive += 1;
+                if (after && (note.path.localeCompare(after, undefined, { numeric: true, sensitivity: 'base' }) || note.path.localeCompare(after)) <= 0)
+                    continue;
+                if (probe.length < probeLimit)
+                    probe.push({ path: note.path, revision: note.revision });
+                else
+                    hasLaterWindow = true;
+            }
+        };
+        let scanPaths = [];
+        for await (const discovered of iterateNotes(this.fileSystem, {}, canAccess)) {
+            scanPaths.push(discovered.path);
+            if (scanPaths.length === 8) {
+                await scanBatch(scanPaths);
+                scanPaths = [];
+            }
         }
+        if (scanPaths.length)
+            await scanBatch(scanPaths);
+        let matchedInWindow = 0;
+        const compare = (left, right) => right.incomingLinks - left.incomingLinks || String(left.path).localeCompare(String(right.path));
         for (let offset = 0; offset < probe.length; offset += 8) {
-            const batch = probe.slice(offset, offset + 8);
-            const rows = await Promise.all(batch.map(async (item) => {
+            const rows = await Promise.all(probe.slice(offset, offset + 8).map(async (item) => {
+                const note = (await fresh([item.path]))[0];
+                if (!note || !inactive(note) || note.revision !== item.revision)
+                    return undefined;
+                let backlinks;
                 try {
-                    const backlinks = await this.fileSystem.getBacklinks(item.path, 4, canAccess);
-                    if (backlinks.total === 0)
-                        return undefined;
-                    const note = await this.fileSystem.readNote(item.path);
-                    return { path: this.access.toPublicPath(item.path), title: item.title, lifecycle: item.lifecycle, revision: note.revision, incomingLinks: backlinks.total, referringNotes: backlinks.backlinks.slice(0, 4).map((link) => ({ path: this.access.toPublicPath(link.path), line: link.line, context: boundedText(link.context, 240) })), ...(item.replacedBy && { replacedBy: item.replacedBy }), ...(item.reason && { retentionReason: item.reason }), reason: 'referenced_by_current_visible_note', suggestedAction: 'read_current_revision_before_restoring_or_replacing', rank: backlinks.total };
+                    backlinks = await this.fileSystem.getBacklinks(item.path, 4, canAccess, 0, { includeSourceRevision: true });
                 }
-                catch {
+                catch (error) {
+                    if ((await fresh([item.path])).length)
+                        throw error;
                     return undefined;
                 }
+                if (!backlinks.total || !backlinks.targetRevision || backlinks.targetRevision !== note.revision)
+                    return undefined;
+                const authors = await fresh(backlinks.backlinks.map(link => link.path));
+                const revisions = new Map(authors.filter(source => !isModerationHidden(source.frontmatter)).map(source => [source.path, source.revision]));
+                const referringNotes = backlinks.backlinks.filter(link => link.sourceRevision && revisions.get(link.path) === link.sourceRevision)
+                    .map(link => ({ path: this.access.toPublicPath(link.path), revision: link.sourceRevision, line: link.line, context: boundedText(link.context, 240) }));
+                if (!referringNotes.length)
+                    return undefined;
+                const path = this.access.toPublicPath(item.path);
+                return { path, title: boundedText(note.frontmatter.title || item.path.split('/').at(-1), 160),
+                    lifecycle: String(note.frontmatter.lifecycle).toLowerCase(), revision: note.revision,
+                    incomingLinks: backlinks.total, incomingLinksAdvisory: true, referringNotes,
+                    _replacement: note.frontmatter.replaced_by, _physicalPath: item.path,
+                    ...(note.frontmatter.retention_reason && { retentionReason: boundedText(note.frontmatter.retention_reason, 300) }),
+                    reason: 'referenced_by_current_visible_note', suggestedAction: 'read_current_revision_before_restoring_or_replacing',
+                    nextAction: { endpointId: 'notes.read', arguments: { path, maxChars: 3000 } } };
             }));
             for (const row of rows)
-                if (row)
+                if (row) {
+                    matchedInWindow++;
                     candidates.push(row);
+                    candidates.sort(compare);
+                    if (candidates.length > boundedLimit)
+                        candidates.pop();
+                }
         }
-        candidates.sort((left, right) => right.rank - left.rank || String(left.path).localeCompare(String(right.path)));
-        const items = candidates.slice(0, boundedLimit).map(({ rank: _rank, ...item }) => item);
-        const result = { purpose: 'A bounded Archive resurfacing view. Inactive notes appear only when current visible notes still reference them; nothing is automatically restored, moved, or deleted.', totalInactive, probed: probe.length, items, truncated: candidates.length > items.length || totalInactive > probe.length, generatedAt: now() };
-        if (JSON.stringify(result).length <= boundedChars)
-            return result;
-        return { ...result, items: items.slice(0, Math.max(1, Math.floor(boundedLimit / 2))), truncated: true };
+        const hydrated = await Promise.all(candidates.map(async ({ _replacement, _physicalPath, ...item }) => ({
+            ...item, ...await this.maintenanceReplacement(_replacement, _physicalPath, principal),
+        })));
+        let items = await this.currentMaintenanceCandidates(hydrated, principal);
+        const authors = await fresh(items.flatMap(item => item.referringNotes.map((link) => this.access.resolveExternalPath(link.path, principal))));
+        const revisions = new Map(authors.filter(note => !isModerationHidden(note.frontmatter)).map(note => [this.access.toPublicPath(note.path), note.revision]));
+        items = items.map(item => ({ ...item, referringNotes: item.referringNotes.filter((link) => link.revision && revisions.get(link.path) === link.revision) }))
+            .filter(item => item.referringNotes.length > 0);
+        const selectionTruncated = matchedInWindow > items.length;
+        // Do not disclose a cursor that became hidden during candidate hydration.
+        const last = probe.at(-1);
+        const cursor = hasLaterWindow && last ? (await fresh([last.path]))[0] : undefined;
+        const retry = { endpointId: 'wiki.resurface_archives', reuseOriginalArguments: true, overrides: { maxChars: 12000 } };
+        if (hasLaterWindow && (!cursor || isModerationHidden(cursor.frontmatter))) {
+            return { items: [], truncated: true, retry, reason: 'scan_changed_retry_same_request' };
+        }
+        const nextScan = cursor ? { endpointId: 'wiki.resurface_archives', arguments: { afterPath: this.access.toPublicPath(cursor.path), limit: boundedLimit, maxChars: boundedChars } } : undefined;
+        const base = { totalInactive, probed: probe.length, selectionTruncated, ...(nextScan && { nextScan }) };
+        const makeResult = () => ({ ...base, items, selectionTruncated: selectionTruncated || items.length < hydrated.length,
+            truncated: hasLaterWindow || selectionTruncated || items.length < hydrated.length });
+        const full = { ...makeResult(), purpose: 'Path-ordered archive scan, ranked within this window only. Counts and links are advisory, not a snapshot. Nothing is restored, moved, or deleted.', generatedAt: now() };
+        if (JSON.stringify(full).length <= boundedChars)
+            return full;
+        while (items.length > 1 && JSON.stringify(makeResult()).length > boundedChars)
+            items.pop();
+        if (JSON.stringify(makeResult()).length <= boundedChars)
+            return makeResult();
+        if (items.length) {
+            const { path, revision, nextAction } = items[0];
+            const compact = { ...base, items: [{ path, revision, nextAction, candidateTruncated: true }],
+                selectionTruncated: selectionTruncated || hydrated.length > 1, truncated: true };
+            if (JSON.stringify(compact).length <= boundedChars)
+                return compact;
+        }
+        // Preserve limit and afterPath: changing limit would change the scan window.
+        return { items: [], truncated: true, retry, reason: 'response_budget_retry_same_request' };
     }
     /**
      * Expose a small library-like authority view derived from note titles,

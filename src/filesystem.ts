@@ -2309,7 +2309,7 @@ export class FileSystemService {
     return matches;
   }
 
-  async getBacklinks(path: string, limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0): Promise<BacklinksResult> {
+  async getBacklinks(path: string, limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0, options: { includeSourceRevision?: boolean } = {}): Promise<BacklinksResult> {
     const target = this.normalizePath(path);
     if (!this.pathFilter.isAllowed(target)) {
       throw new Error(`Access denied: ${target}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
@@ -2321,13 +2321,13 @@ export class FileSystemService {
       return this.graphIndex.getBacklinks(target, limit, canAccessPath, offset, async sourcePath => {
         const current = await this.readNoteMetadata([sourcePath], canAccessPath, { fresh: true, strict: true });
         return current.length > 0 && !isModerationHidden(current[0]!.frontmatter);
-      });
+      }, options.includeSourceRevision);
     }
 
     // Validate that the requested target is an existing readable note before
     // scanning the vault. This also applies the same symlink boundary checks
     // as read_note.
-    await this.readNote(target);
+    const targetNote = await this.readNote(target);
 
     const visiblePaths = (await this.collectVaultFiles())
       .filter(candidate => this.pathFilter.isAllowed(candidate) && canAccessPath(candidate) && /\.(?:md|markdown|txt)$/i.test(candidate));
@@ -2359,6 +2359,7 @@ export class FileSystemService {
           const found = findBacklinkMatches(content, target);
           const parsed = this.frontmatterHandler.parse(content);
           if (isModerationHidden(parsed.frontmatter)) continue;
+          const sourceRevision = options.includeSourceRevision ? this.revision(content) : undefined;
           for (const reference of collectPlainFrontmatterReferences(parsed.frontmatter)) {
             if (!isNavigationalFrontmatterReference(reference)) continue;
             const targets = resolveNoteReference(reference.value, referenceIndex);
@@ -2376,7 +2377,7 @@ export class FileSystemService {
             total += 1;
             addBoundedSorted(
               backlinks,
-              { ...backlink, path: entryRelativePath },
+              { ...backlink, path: entryRelativePath, ...(sourceRevision && { sourceRevision }) },
               offset + limit,
               (left, right) => left.path.localeCompare(right.path) || left.line - right.line,
             );
@@ -2394,6 +2395,7 @@ export class FileSystemService {
 
     return {
       target,
+      ...(options.includeSourceRevision && { targetRevision: targetNote.revision }),
       backlinks: page,
       total,
       truncated: total > offset + page.length,

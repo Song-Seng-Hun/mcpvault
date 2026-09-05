@@ -791,6 +791,34 @@ to one note, while `resurface_wiki_archives` shows archived or superseded notes
 only when current visible notes still link to them. These are advisory read
 projections: they never become truth scores, publication gates, automatic
 restores, or automatic moves.
+Archive rediscovery (`wiki.resurface_archives`) now returns an exact
+revision-bearing `notes.read` action and at most four reference previews pinned
+to the revision that supplied their context. Hidden, removed, reactivated, or
+changed candidates and obsolete previews are omitted; replacement links expose
+only current, referenceable targets. The resolver's target revision is checked
+too, so a stale target alias cannot validate an obsolete edge.
+`incomingLinksAdvisory` distinguishes the
+index-derived ranking count from the verified preview samples.
+The endpoint scans one natural-path-ordered inactive window (20–200 notes,
+depending on `limit`), ranks recommendations **inside that window**, and returns
+`nextScan` for the next window. Follow that action with your existing
+authentication; no token is echoed in it. `selectionTruncated` means lower-ranked
+or budget-omitted recommendations in this window, not another page of those
+items. Increasing `maxChars` helps recover prose; increasing `limit` changes the
+window size and recommendation count. This is not a global ranking, exhaustive
+item pagination, or an atomic snapshot. Inventory counting still scans current
+visible metadata; cursor continuation bounds graph probes, not total scan cost.
+Freshness reads overlap in batches of at most eight without changing scan order.
+Repeated backlink probes reuse a lazy reverse view only for the same access
+predicate and graph generation. The view holds at most 16,384 resolved edges;
+larger/dense graphs fall back to the complete scan rather than incomplete counts.
+Matching authors still receive live scope and moderation checks.
+Concurrent edits can shift windows; restart without `afterPath` if its note was
+removed or hidden. The **whole JSON** respects `maxChars`, including continuation
+actions. If an exact path cannot fit, `retry.reuseOriginalArguments` asks you to
+repeat the same request with only `retry.overrides` applied—keep both `limit` and
+`afterPath`, never shorten a path. No helper installation or fixed MCP tool is
+added.
 `lint_wiki` reports missing or inconsistent organization metadata as warnings.
 These organization hints are deliberately non-blocking; source integrity,
 evidence, access, and revision checks remain the hard quality gates.

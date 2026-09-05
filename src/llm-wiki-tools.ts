@@ -824,8 +824,8 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'resurface_wiki_archives',
-      description: 'Find a bounded set of archived or superseded notes that are still referenced by current visible notes. It supports “forget without deleting” while never restoring, moving, or deleting anything automatically.',
-      inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 20, default: 8 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 5000 }, accessToken, prettyPrint } },
+      description: 'Rediscover current visible archived/superseded notes using revision-checked link previews. Whole JSON is bounded. Follow nextScan for later path-ordered scan windows; selectionTruncated means recommendations were omitted within this window, not global ranking or item pagination. Counts/links are advisory; restart without afterPath after cursor removal. Retry reuses original arguments with the supplied overrides. Never restores, moves, or deletes anything.',
+      inputSchema: { type: 'object', properties: { afterPath: { type: 'string', maxLength: 1024, description: 'Exact visible path or authorized scope URI from nextScan. Keep limit unchanged; concurrent edits may shift windows.' }, limit: { type: 'integer', minimum: 1, maximum: 20, default: 8 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 5000 }, accessToken, prettyPrint } },
     },
     {
       name: 'update_wiki_projection',

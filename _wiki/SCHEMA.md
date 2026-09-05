@@ -181,6 +181,33 @@ revalidate selected revisions, and bound the whole response. Follow the exact
 repeat the original endpoint request with `retry.overrides`; do not drop or
 truncate the original context. These reports never perform disposition.
 
+`wiki.resurface_archives` is a read-only archive rediscovery projection, not a
+restoration workflow. It reads current metadata before counting visible inactive
+notes (`totalInactive`) and probes at most 200 notes per natural-path-ordered
+window. Its `afterPath` (maximum 1024 characters) must resolve to a current visible
+relative path or authorized scope URI. `nextScan.arguments` preserves `limit`
+and advances to the next **scan window**; `selectionTruncated` indicates omitted
+recommendations within the current window, not ranked-item pagination. The
+ranking is window-local and inventory counts still require a metadata scan,
+using at most eight concurrent freshness reads while preserving inventory order.
+Backlink probes may reuse a predicate-local, generation-bound reverse view, capped
+at 16,384 resolved edges. Overflow uses the complete scan. Access and moderation
+checks on matching authors still run before counting or pagination.
+Selected candidates and replacement targets are revision-checked. Reference
+resolution also checks the target revision, including its indexed aliases.
+Reference
+previews carry the raw source `revision` captured with their parsed context;
+changed, missing, or hidden previews are discarded rather than relabelled as
+current. `incomingLinksAdvisory: true` marks the graph-derived count as advisory,
+not a claim that all indexed links are a cross-file snapshot. Re-read a selected
+note through its exact `nextAction` before any revision-checked mutation.
+The whole response respects `maxChars`. If an exact read/scan path cannot fit,
+apply `retry.overrides` to the **original** request, preserving `limit` and
+`afterPath`; no path is truncated. A cursor hidden during the scan triggers the
+same-request retry without exposing that cursor. If the supplied cursor becomes
+unavailable between calls, restart without it. Concurrent edits may shift scan
+windows. This projection never rewrites lifecycle, links, or Git history.
+
 Graph health also reports epistemic consistency and the source-to-knowledge
 flow: an answered question without `answers_questions`, a resolved
 hypothesis/assumption without evidence, literature without immutable source

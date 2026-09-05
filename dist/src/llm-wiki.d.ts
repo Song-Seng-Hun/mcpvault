@@ -4282,15 +4282,50 @@ export declare class LlmWikiService {
      * them.  This preserves PARA's “forget without deleting” behavior without
      * automatically reopening or moving archived knowledge.
      */
-    resurfaceArchivedKnowledge(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
-        purpose: string;
+    resurfaceArchivedKnowledge(principal?: ScopePrincipal, limit?: number, maxChars?: number, afterPath?: string): Promise<{
+        items: never[];
+        truncated: boolean;
+        retry: {
+            endpointId: string;
+            reuseOriginalArguments: boolean;
+            overrides: {
+                maxChars: number;
+            };
+        };
+        reason: string;
+    } | {
         totalInactive: number;
         probed: number;
-        items: {
-            [x: string]: any;
-        }[];
+        nextScan?: {
+            endpointId: string;
+            arguments: {
+                afterPath: string;
+                limit: number;
+                maxChars: number;
+            };
+        };
+        items: Record<string, any>[];
+        selectionTruncated: boolean;
         truncated: boolean;
-        generatedAt: string;
+    } | {
+        totalInactive: number;
+        probed: number;
+        nextScan?: {
+            endpointId: string;
+            arguments: {
+                afterPath: string;
+                limit: number;
+                maxChars: number;
+            };
+        };
+        items: {
+            path: any;
+            revision: any;
+            nextAction: any;
+            candidateTruncated: boolean;
+        }[];
+        selectionTruncated: boolean;
+        truncated: boolean;
     }>;
     /**
      * Expose a small library-like authority view derived from note titles,

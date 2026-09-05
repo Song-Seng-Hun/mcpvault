@@ -496,8 +496,9 @@ async function connectClient() {
   return { server, client, accessToken };
 }
 
-test.each(['wiki.summary_candidates', 'wiki.unused_knowledge'])('%s keeps pretty-printed MCP output within the response budget', async endpointId => {
-  await writeFile(join(testVaultPath, 'Old.md'), `---\nllm_wiki_type: knowledge\nupdated_at: 2020-01-01\ntitle: ${'Long title '.repeat(20)}\n---\n${'Current knowledge. '.repeat(50)}`);
+test.each(['wiki.summary_candidates', 'wiki.unused_knowledge', 'wiki.resurface_archives'])('%s keeps pretty-printed MCP output within the response budget', async endpointId => {
+  await writeFile(join(testVaultPath, 'Old.md'), `---\nllm_wiki_type: knowledge\n${endpointId === 'wiki.resurface_archives' ? 'lifecycle: archived\n' : ''}updated_at: 2020-01-01\ntitle: ${'Long title '.repeat(20)}\n---\n${'Current knowledge. '.repeat(50)}`);
+  if (endpointId === 'wiki.resurface_archives') await writeFile(join(testVaultPath, 'Reader.md'), '[[Old]]');
   const { server, client } = await connectClient();
   try {
     for (const maxChars of [512, 600, 850, 1024, 1600]) {
@@ -513,6 +514,29 @@ test.each(['wiki.summary_candidates', 'wiki.unused_knowledge'])('%s keeps pretty
     await client.close();
     await server.close();
   }
+});
+
+test('archive nextScan executes through the fixed MCP executor with the same authenticated scope', async () => {
+  const root = join(testVaultPath, '_scopes', 'models', 'codex');
+  await mkdir(root, { recursive: true });
+  for (let i = 0; i < 21; i++) await writeFile(join(root, `A${String(i).padStart(2, '0')}.md`), '---\nlifecycle: archived\n---\nArchive');
+  await writeFile(join(root, 'Reader.md'), '[[A20]]');
+  const { server, client, accessToken } = await connectClient();
+  try {
+    const call = async (arguments_: any) => {
+      const result = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'wiki.resurface_archives', arguments: arguments_ } });
+      expect(result.isError).toBeFalsy();
+      return JSON.parse((result.content as any)[0].text);
+    };
+    const first = await call({ limit: 1, maxChars: 5000, accessToken });
+    expect(first.nextScan.arguments.afterPath).toBe('scope://model/codex/A19.md');
+    expect(JSON.stringify(first)).not.toContain(accessToken);
+    const second = await call({ ...first.nextScan.arguments, accessToken });
+    expect(second.items[0]).toMatchObject({ path: 'scope://model/codex/A20.md', referringNotes: [expect.objectContaining({ revision: expect.any(String) })] });
+    expect(second.nextScan).toBeUndefined();
+    const bad = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'wiki.resurface_archives', arguments: { afterPath: '../outside.md', accessToken } } });
+    expect(bad.isError).toBe(true);
+  } finally { await client.close(); await server.close(); }
 });
 
 test("search_notes bounds output and prioritizes Wiki notes", async () => {

@@ -369,6 +369,8 @@ export interface ReadNoteLinesParams {
 }
 export interface BacklinkMatch {
     path: string;
+    /** Opt-in raw-file revision captured when this context was parsed. */
+    sourceRevision?: string;
     line: number;
     link: string;
     context: string;
@@ -387,6 +389,8 @@ export interface BacklinkMatch {
 }
 export interface BacklinksResult {
     target: string;
+    /** Opt-in revision of the target used by the link resolver. */
+    targetRevision?: string;
     backlinks: BacklinkMatch[];
     total: number;
     truncated: boolean;

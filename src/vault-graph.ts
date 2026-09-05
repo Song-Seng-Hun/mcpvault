@@ -1,7 +1,8 @@
 import { watch, type FSWatcher } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, posix, relative, resolve } from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
-import type { BacklinkMatch, OrphanNotesResult, UnresolvedLinksResult, OutlinkMatch } from './types.js';
+import type { BacklinkMatch, BacklinksResult, OrphanNotesResult, UnresolvedLinksResult, OutlinkMatch } from './types.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import type { FrontmatterHandler } from './frontmatter.js';
 import type { PathFilter } from './pathfilter.js';
@@ -13,11 +14,13 @@ import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference }
 
 const GRAPH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
+const REVERSE_LINK_CACHE_LIMIT = 16_384;
 const NOTE_PATTERN = /\.(?:md|markdown|txt)$/i;
 const INLINE_TAG_PATTERN = /(?:^|\s)#([a-zA-Z][a-zA-Z0-9_\/\-]*)/g;
 
 interface GraphEntry {
   path: string;
+  revision: string;
   size: number;
   mtimeMs: number;
   links: OutlinkMatch[];
@@ -38,6 +41,8 @@ interface VisibilityContext {
   paths: string[];
   pathSet: Set<string>;
   resolver: Resolver;
+  incoming?: Map<string, Array<{ entry: GraphEntry; link: OutlinkMatch }>>;
+  incomingOverflow?: boolean;
 }
 
 function normalizePath(value: string): string {
@@ -218,7 +223,7 @@ export class VaultGraphIndex {
     this.allPaths.clear();
   }
 
-  async getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset = 0, canIncludeSource?: (path: string) => Promise<boolean>): Promise<{ target: string; backlinks: BacklinkMatch[]; total: number; truncated: boolean }> {
+  async getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset = 0, canIncludeSource?: (path: string) => Promise<boolean>, includeSourceRevision = false): Promise<BacklinksResult> {
     await this.ensure();
     const target = normalizePath(path);
     const normalizedTarget = normalizedPath(target);
@@ -235,21 +240,22 @@ export class VaultGraphIndex {
     const backlinks: BacklinkMatch[] = [];
     let total = 0;
     const compare = (a: BacklinkMatch, b: BacklinkMatch) => a.path.localeCompare(b.path) || a.line - b.line;
-    for (const entry of this.entries.values()) {
-      if (normalizedPath(entry.path) === normalizedTarget || !canAccessPath(entry.path)) continue;
-      let sourceChecked = false;
-      for (const link of entry.links) {
-        if (!resolveTargets(link.target, visible.resolver, entry.path).some(path => normalizedPath(path) === normalizedTarget)) continue;
+    const incoming = this.incomingBacklinks(visible);
+    const edges = incoming ? incoming.get(normalizedTarget) || [] : this.matchingBacklinks(visible, normalizedTarget);
+    const checkedSources = new Map<string, boolean>();
+    for (const { entry, link } of edges) {
+        if (normalizedPath(entry.path) === normalizedTarget) continue;
         // Check each matching author once, before counts and pagination. The
         // filesystem supplies a fresh, path-guarded moderation check so a
         // stale graph entry cannot disclose a newly hidden author's links.
-        if (!sourceChecked) {
-          if (canIncludeSource && !await canIncludeSource(entry.path)) break;
-          sourceChecked = true;
+        if (!checkedSources.has(entry.path)) {
+          checkedSources.set(entry.path, canAccessPath(entry.path) && (!canIncludeSource || await canIncludeSource(entry.path)));
         }
+        if (!checkedSources.get(entry.path)) continue;
         total += 1;
         const backlink: BacklinkMatch = {
           path: entry.path,
+          ...(includeSourceRevision && { sourceRevision: entry.revision }),
           line: link.line,
           link: link.link,
           context: link.context,
@@ -261,11 +267,10 @@ export class VaultGraphIndex {
           ...(link.propertyPath && { propertyPath: link.propertyPath }),
         };
         addTopMatch(backlinks, backlink, offset + limit, compare);
-      }
     }
     backlinks.sort(compare);
     const page = backlinks.slice(offset, offset + limit);
-    return { target, backlinks: page, total, truncated: total > offset + page.length };
+    return { target, ...(includeSourceRevision && { targetRevision: targetEntry.revision }), backlinks: page, total, truncated: total > offset + page.length };
   }
 
   async getOutlinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset = 0): Promise<{ source: string; outlinks: OutlinkMatch[]; total: number; truncated: boolean }> {
@@ -366,6 +371,41 @@ export class VaultGraphIndex {
     };
     this.visibilityCache.set(canAccessPath, context);
     return context;
+  }
+
+  /** Lazily reuse resolved edges only within this predicate/generation view. */
+  private incomingBacklinks(visible: VisibilityContext) {
+    if (visible.incoming || visible.incomingOverflow) return visible.incoming;
+    const incoming = new Map<string, Array<{ entry: GraphEntry; link: OutlinkMatch }>>();
+    let count = 0;
+    for (const entry of this.entries.values()) {
+      if (!visible.pathSet.has(entry.path)) continue;
+      for (const link of entry.links) {
+        const targets = new Set(resolveTargets(link.target, visible.resolver, entry.path).map(normalizedPath));
+        for (const target of targets) {
+          // Dense/ambiguous graphs must not create an unbounded second index.
+          // Fall back to the original scan, never a partial cached answer.
+          if (++count > REVERSE_LINK_CACHE_LIMIT) {
+            visible.incomingOverflow = true;
+            return undefined;
+          }
+          const edges = incoming.get(target) || [];
+          edges.push({ entry, link });
+          incoming.set(target, edges);
+        }
+      }
+    }
+    visible.incoming = incoming;
+    return incoming;
+  }
+
+  private *matchingBacklinks(visible: VisibilityContext, target: string) {
+    for (const entry of this.entries.values()) {
+      if (!visible.pathSet.has(entry.path)) continue;
+      for (const link of entry.links) {
+        if (resolveTargets(link.target, visible.resolver, entry.path).some(path => normalizedPath(path) === target)) yield { entry, link };
+      }
+    }
   }
 
   private startWatcher(): void {
@@ -546,7 +586,7 @@ export class VaultGraphIndex {
           }
         }
       }
-      return { path: normalized, size: info.size, mtimeMs: info.mtimeMs, links, tags, identityTerms };
+      return { path: normalized, revision: createHash('sha256').update(raw).digest('hex'), size: info.size, mtimeMs: info.mtimeMs, links, tags, identityTerms };
     } catch {
       return undefined;
     }

@@ -1,4 +1,5 @@
 import { watch } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, posix, relative, resolve } from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
@@ -8,6 +9,7 @@ import { noteReferenceDocument, noteReferenceTermKeys } from './note-reference.j
 import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference } from './property-references.js';
 const GRAPH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
+const REVERSE_LINK_CACHE_LIMIT = 16_384;
 const NOTE_PATTERN = /\.(?:md|markdown|txt)$/i;
 const INLINE_TAG_PATTERN = /(?:^|\s)#([a-zA-Z][a-zA-Z0-9_\/\-]*)/g;
 function normalizePath(value) {
@@ -193,7 +195,7 @@ export class VaultGraphIndex {
         this.entries.clear();
         this.allPaths.clear();
     }
-    async getBacklinks(path, limit, canAccessPath, offset = 0, canIncludeSource) {
+    async getBacklinks(path, limit, canAccessPath, offset = 0, canIncludeSource, includeSourceRevision = false) {
         await this.ensure();
         const target = normalizePath(path);
         const normalizedTarget = normalizedPath(target);
@@ -212,40 +214,39 @@ export class VaultGraphIndex {
         const backlinks = [];
         let total = 0;
         const compare = (a, b) => a.path.localeCompare(b.path) || a.line - b.line;
-        for (const entry of this.entries.values()) {
-            if (normalizedPath(entry.path) === normalizedTarget || !canAccessPath(entry.path))
+        const incoming = this.incomingBacklinks(visible);
+        const edges = incoming ? incoming.get(normalizedTarget) || [] : this.matchingBacklinks(visible, normalizedTarget);
+        const checkedSources = new Map();
+        for (const { entry, link } of edges) {
+            if (normalizedPath(entry.path) === normalizedTarget)
                 continue;
-            let sourceChecked = false;
-            for (const link of entry.links) {
-                if (!resolveTargets(link.target, visible.resolver, entry.path).some(path => normalizedPath(path) === normalizedTarget))
-                    continue;
-                // Check each matching author once, before counts and pagination. The
-                // filesystem supplies a fresh, path-guarded moderation check so a
-                // stale graph entry cannot disclose a newly hidden author's links.
-                if (!sourceChecked) {
-                    if (canIncludeSource && !await canIncludeSource(entry.path))
-                        break;
-                    sourceChecked = true;
-                }
-                total += 1;
-                const backlink = {
-                    path: entry.path,
-                    line: link.line,
-                    link: link.link,
-                    context: link.context,
-                    ...(link.heading && { heading: link.heading }),
-                    ...(link.targetHeading && { targetHeading: link.targetHeading }),
-                    ...(link.targetBlockId && { targetBlockId: link.targetBlockId }),
-                    ...(link.relation && { relation: link.relation }),
-                    ...(link.sourceClaimId && { sourceClaimId: link.sourceClaimId }),
-                    ...(link.propertyPath && { propertyPath: link.propertyPath }),
-                };
-                addTopMatch(backlinks, backlink, offset + limit, compare);
+            // Check each matching author once, before counts and pagination. The
+            // filesystem supplies a fresh, path-guarded moderation check so a
+            // stale graph entry cannot disclose a newly hidden author's links.
+            if (!checkedSources.has(entry.path)) {
+                checkedSources.set(entry.path, canAccessPath(entry.path) && (!canIncludeSource || await canIncludeSource(entry.path)));
             }
+            if (!checkedSources.get(entry.path))
+                continue;
+            total += 1;
+            const backlink = {
+                path: entry.path,
+                ...(includeSourceRevision && { sourceRevision: entry.revision }),
+                line: link.line,
+                link: link.link,
+                context: link.context,
+                ...(link.heading && { heading: link.heading }),
+                ...(link.targetHeading && { targetHeading: link.targetHeading }),
+                ...(link.targetBlockId && { targetBlockId: link.targetBlockId }),
+                ...(link.relation && { relation: link.relation }),
+                ...(link.sourceClaimId && { sourceClaimId: link.sourceClaimId }),
+                ...(link.propertyPath && { propertyPath: link.propertyPath }),
+            };
+            addTopMatch(backlinks, backlink, offset + limit, compare);
         }
         backlinks.sort(compare);
         const page = backlinks.slice(offset, offset + limit);
-        return { target, backlinks: page, total, truncated: total > offset + page.length };
+        return { target, ...(includeSourceRevision && { targetRevision: targetEntry.revision }), backlinks: page, total, truncated: total > offset + page.length };
     }
     async getOutlinks(path, limit, canAccessPath, offset = 0) {
         await this.ensure();
@@ -354,6 +355,43 @@ export class VaultGraphIndex {
         };
         this.visibilityCache.set(canAccessPath, context);
         return context;
+    }
+    /** Lazily reuse resolved edges only within this predicate/generation view. */
+    incomingBacklinks(visible) {
+        if (visible.incoming || visible.incomingOverflow)
+            return visible.incoming;
+        const incoming = new Map();
+        let count = 0;
+        for (const entry of this.entries.values()) {
+            if (!visible.pathSet.has(entry.path))
+                continue;
+            for (const link of entry.links) {
+                const targets = new Set(resolveTargets(link.target, visible.resolver, entry.path).map(normalizedPath));
+                for (const target of targets) {
+                    // Dense/ambiguous graphs must not create an unbounded second index.
+                    // Fall back to the original scan, never a partial cached answer.
+                    if (++count > REVERSE_LINK_CACHE_LIMIT) {
+                        visible.incomingOverflow = true;
+                        return undefined;
+                    }
+                    const edges = incoming.get(target) || [];
+                    edges.push({ entry, link });
+                    incoming.set(target, edges);
+                }
+            }
+        }
+        visible.incoming = incoming;
+        return incoming;
+    }
+    *matchingBacklinks(visible, target) {
+        for (const entry of this.entries.values()) {
+            if (!visible.pathSet.has(entry.path))
+                continue;
+            for (const link of entry.links) {
+                if (resolveTargets(link.target, visible.resolver, entry.path).some(path => normalizedPath(path) === target))
+                    yield { entry, link };
+            }
+        }
     }
     startWatcher() {
         if (this.catalog || this.watcherStarted)
@@ -559,7 +597,7 @@ export class VaultGraphIndex {
                     }
                 }
             }
-            return { path: normalized, size: info.size, mtimeMs: info.mtimeMs, links, tags, identityTerms };
+            return { path: normalized, revision: createHash('sha256').update(raw).digest('hex'), size: info.size, mtimeMs: info.mtimeMs, links, tags, identityTerms };
         }
         catch {
             return undefined;

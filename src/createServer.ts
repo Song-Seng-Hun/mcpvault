@@ -1685,7 +1685,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "resurface_wiki_archives": {
-          return jsonResult(await llmWiki.resurfaceArchivedKnowledge(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+        return jsonResult(await llmWiki.resurfaceArchivedKnowledge(principal, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.afterPath), trimmedArgs.prettyPrint);
         }
 
         case "update_wiki_projection": {
