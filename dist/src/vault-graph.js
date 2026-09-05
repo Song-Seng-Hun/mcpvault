@@ -12,6 +12,7 @@ import { isModerationHidden } from './moderation-policy.js';
 import { extractInlineTags } from './markdown-tags.js';
 import { SourceReadLimitError } from './bounded-source-read.js';
 import { NavigationViewFingerprint } from './navigation-view.js';
+import { createGraphLinkProjector } from './graph-link-projection.js';
 const GRAPH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
 const REVERSE_LINK_CACHE_LIMIT = 16_384;
@@ -388,42 +389,9 @@ export class VaultGraphIndex {
     }
     /** Caller-local excerpts; never mutate shared source edges or headings. */
     linkProjector(visible, all) {
-        const byEntry = new WeakMap();
         const invisible = (target, source) => /^scope:\/\/(?:model|agent|user)\//i.test(target.trim())
             || (resolveTargets(target, all, source).length > 0 && resolveTargets(target, visible, source).length === 0);
-        return (entry, link) => {
-            let hiddenLines = byEntry.get(entry);
-            if (!hiddenLines) {
-                hiddenLines = new Map();
-                for (const other of entry.links) {
-                    if (!invisible(other.target, entry.path))
-                        continue;
-                    const line = hiddenLines.get(other.line) || [];
-                    line.push(other);
-                    hiddenLines.set(other.line, line);
-                }
-                byEntry.set(entry, hiddenLines);
-            }
-            let context = link.context;
-            for (const other of hiddenLines.get(link.line) || []) {
-                if (context.includes(other.link))
-                    context = context.split(other.link).join('[unavailable link]');
-                else if (!link.context.includes(other.link) && link.context === other.context) {
-                    // The stored excerpt may end partway through this reference. Its
-                    // visible prefix is not safe to publish as neighboring context.
-                    context = `[context omitted] ${link.link}`;
-                    break;
-                }
-            }
-            let heading = link.heading;
-            if (heading) {
-                for (const occurrence of extractObsidianLinkOccurrences(heading)) {
-                    if (invisible(occurrence.target, entry.path))
-                        heading = heading.split(occurrence.link).join('[unavailable link]');
-                }
-            }
-            return { ...link, context, ...(heading !== undefined && { heading }) };
-        };
+        return createGraphLinkProjector(invisible);
     }
     visibilityContext(canAccessPath) {
         const cached = this.visibilityCache.get(canAccessPath);

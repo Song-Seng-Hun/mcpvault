@@ -720,6 +720,10 @@ invisible references may be projected as `[unavailable link]`, or their clipped
 context omitted. Never quote these placeholders as evidence or use them as patch
 text: read the actual authorized source revision. Graph views remain advisory,
 event/reconciliation-refreshed and not a whole-vault deletion certificate.
+Repeated context/heading masking may be reused within one query only, keyed by
+parsed source identity and original text (including the line for contexts).
+This bounded ephemeral cache never changes exact own-link fallback locators,
+never modifies stored edges, and never crosses caller visibility views.
 
 Graph refresh publication is guarded by observed invalidation generation.
 Standalone note events update path membership as well as entries. Unknown/full

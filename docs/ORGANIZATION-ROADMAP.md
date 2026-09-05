@@ -23,8 +23,12 @@ tools; new behaviors belong in the endpoint catalog.
   do not retain history. Manual offsets without a guard remain advisory;
   unobserved filesystem drift and atomic cross-file reads are not solved.
   Fingerprinting streams all admitted rows, adding projection/hash CPU without
-  a second full edge collection; dense same-line redaction cost still needs a
-  dedicated scale audit before claiming graph navigation cost is fully bounded.
+  a second full edge collection. Dense repeated context/heading projection now
+  uses a query-local, source-identity-keyed cache (256 entries, 64 Ki key/value
+  characters). A 600-link fixture reduced repeated heading parses from 601 to
+  one while preserving masking and exact fallback links. Total graph traversal,
+  oversized uncached headings and overall index memory still need scale audits;
+  bounded memoization is not a constant-cost navigation claim.
 - MOC Home and graph hierarchy traverse whole branches in sibling order.
   Missing, ambiguous, and cyclic ancestry is explicit. Traversal is iterative.
 - MOC context packets respect authored mixed-link order and preserve locators,

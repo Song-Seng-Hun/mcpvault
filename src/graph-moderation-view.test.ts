@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { mkdtemp, mkdir, writeFile, rm, utimes } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -8,6 +8,7 @@ import { VaultGraphIndex } from './vault-graph.js';
 import { FileSystemService } from './filesystem.js';
 import { PathFilter } from './pathfilter.js';
 import { FrontmatterHandler } from './frontmatter.js';
+import * as links from './backlinks.js';
 let vault: string;
 let graph: VaultGraphIndex;
 let server: ReturnType<typeof createServer>;
@@ -117,4 +118,30 @@ test('synthetic Property line numbers do not erase unrelated public Property con
   await writeFile(join(vault, 'Source.md'), '---\nsupports: [Target.md]\ndepends_on: [SecretAlias]\n---\n# Source');
   const result = await graph.getOutlinks('Source.md', 10, all);
   expect(result.outlinks).toContainEqual(expect.objectContaining({ propertyPath: 'supports[0]', context: 'supports: Target.md' }));
+});
+
+test('dense fingerprint scans reuse one heading parse and one identical context redaction', async () => {
+  const heading = 'Public [[SecretAlias]]';
+  await writeFile(join(vault, 'Source.md'), `# ${heading}\n[[SecretAlias]] ${Array(600).fill('[[Target]]').join(' ')}`);
+  const parseSpy = vi.spyOn(links, 'extractObsidianLinkOccurrences');
+  const splitSpy = vi.spyOn(String.prototype, 'split');
+  try {
+    const result = await graph.getBacklinks('Target.md', 1, all, 0, undefined, true, true);
+    const headingParses = parseSpy.mock.calls.filter(([text]) => text === heading).length;
+    const redactions = splitSpy.mock.calls.filter(([separator]) => separator === '[[SecretAlias]]').length;
+    expect(result.total).toBe(600);
+    expect(result.backlinks[0]!.heading).toBe('Public [unavailable link]');
+    expect(result.backlinks[0]!.context).toContain('[unavailable link]');
+    expect(JSON.stringify(result)).not.toContain('SecretAlias');
+    expect(headingParses).toBeLessThanOrEqual(1);
+    expect(redactions).toBeLessThanOrEqual(2);
+  } finally { parseSpy.mockRestore(); splitSpy.mockRestore(); }
+});
+
+test('omitted-context reuse retains each own link instead of copying the first link', async () => {
+  await writeFile(join(vault, 'Source.md'), `[[Target#First]] [[Target#Second]] ${'space '.repeat(25)} [[SecretAlias|${'x'.repeat(400)}]]`);
+  const result = await graph.getOutlinks('Source.md', 10, all, 0, true, true);
+  expect(result.outlinks.map(link => link.context)).toEqual([
+    '[context omitted] [[Target#First]]', '[context omitted] [[Target#Second]]',
+  ]);
 });
