@@ -724,7 +724,8 @@ export class FileSystemService {
     /** Revision of this serialized write, not a subsequent read/current-state guarantee. */
     async writeNoteWithReceipt(params) {
         const path = this.normalizePath(params.path);
-        return this.withMutationLock(path, () => this.writeNoteUnlocked({ ...params, path }));
+        const receipt = await this.withMutationLock(path, () => this.writeNoteUnlocked({ ...params, path }));
+        return { revision: receipt.revision };
     }
     /**
      * Write one note while holding revision locks for related notes whose state
@@ -732,6 +733,10 @@ export class FileSystemService {
      * rewritten, but a stale guard aborts before the target changes.
      */
     async writeNoteWithRevisionGuards(params, guards) {
+        await this.writeNoteWithRevisionGuardsAndReceipt(params, guards);
+    }
+    /** Same related-note assertions/locks, with the target's own write revision. */
+    async writeNoteWithRevisionGuardsAndReceipt(params, guards) {
         const path = this.normalizePath(params.path);
         if (!Array.isArray(guards) || guards.length < 1 || guards.length > 9) {
             throw new Error('A guarded note write requires between 1 and 9 related-note revision guards');
@@ -756,7 +761,8 @@ export class FileSystemService {
         return this.withMutationLocks([path, ...normalizedGuards.map(guard => guard.path)], async () => {
             for (const guard of normalizedGuards)
                 await this.assertExpectedRevision(guard.path, guard.expectedRevision);
-            await this.writeNoteUnlocked({ ...params, path });
+            const receipt = await this.writeNoteUnlocked({ ...params, path });
+            return { revision: receipt.revision };
         });
     }
     async writeDerivedViewFile(params, extension) {
@@ -893,7 +899,7 @@ export class FileSystemService {
             await mkdir(dirname(fullPath), { recursive: true });
             await writeFile(fullPath, finalContent, 'utf-8');
             this.notifyNoteChanged(path, 'upsert');
-            return { revision: this.revision(finalContent) };
+            return { revision: this.revision(finalContent), originalContent: finalContent };
         }
         catch (error) {
             throw classifyWriteError(error, path);
@@ -2017,7 +2023,13 @@ export class FileSystemService {
     }
     async updateFrontmatter(params) {
         const path = this.normalizePath(params.path);
-        return this.withMutationLock(path, () => this.updateFrontmatterUnlocked({ ...params, path }));
+        await this.withMutationLock(path, () => this.updateFrontmatterUnlocked({ ...params, path }));
+    }
+    /** Parsed Properties and revision from this write, without a later disk read. */
+    async updateFrontmatterWithReceipt(params) {
+        const path = this.normalizePath(params.path);
+        const receipt = await this.withMutationLock(path, () => this.updateFrontmatterUnlocked({ ...params, path }));
+        return { revision: receipt.revision, frontmatter: this.frontmatterHandler.parse(receipt.originalContent).frontmatter };
     }
     /**
      * Preview a note move without changing files. Markdown, Properties, and
@@ -2101,10 +2113,11 @@ export class FileSystemService {
             // Frontmatter-only mutations bypass writeNoteUnlocked, so explicitly
             // invalidate the shared catalog/index read models before returning.
             this.notifyNoteChanged(path, 'upsert');
+            return { revision: this.revision(updatedContent), originalContent: updatedContent };
         }
         else {
             // Replace frontmatter entirely (or no existing matter to preserve)
-            await this.writeNoteUnlocked({
+            return this.writeNoteUnlocked({
                 path,
                 content: note.content,
                 frontmatter: newFrontmatter

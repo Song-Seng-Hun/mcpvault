@@ -340,6 +340,12 @@ The issue resolver returns the SHA-256 revision of its serialized write, not
 of a subsequent read. Re-read the same issue; if the revision differs, inspect
 the intervening edit before using its new revision as an edit guard. A write
 receipt does not guarantee that the file remains current or lock external editors.
+Publishing, triage, note review and claim review also return their own write
+revision. Triage's Properties and cleanup guard, and note review's reviewer and
+lifecycle-based follow-up, must describe that same serialized version. Related
+note guards remain assertions under their existing ordered locks; no unrelated
+note is rewritten. Downstream impact queries are advisory, not part of a global
+atomic snapshot. Read the target again before accepting any follow-up action.
 Completed
 reviews may carry bounded `review_count`, `review_reopen_count`,
 `last_reviewed_revision`, and `last_review_trigger` metadata. These fields are

@@ -443,6 +443,11 @@ The resolver's returned `revision` identifies the serialized content it wrote,
 not a later reader's view. Re-read the same issue after success; a different
 revision means another edit followed, so inspect it before the next change.
 This receipt is not a cross-process lock or a promise that the file stays current.
+Knowledge publishing (including related-note revision guards), triage, note
+review and claim review use the same own-write receipt semantics. Triage
+Properties/cleanup advice and note-review author/lifecycle fields come from
+that write, not a later editor's state. Re-read before acting on returned advice.
+Downstream impact lists remain bounded advisory queries, not a Vault-wide snapshot.
 When body text and nonempty explicit Properties are serialized together, a leading
 `---` in the body remains body text; it is not parsed again as extra Properties.
 The typed

@@ -2354,11 +2354,9 @@ export class LlmWikiService {
             },
             expectedRevision: params.expectedRevision,
         };
-        if (internal.revisionGuards?.length)
-            await this.fileSystem.writeNoteWithRevisionGuards(write, internal.revisionGuards);
-        else
-            await this.fileSystem.writeNote(write);
-        const updated = await this.fileSystem.readNote(params.path);
+        const updated = internal.revisionGuards?.length
+            ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, internal.revisionGuards)
+            : await this.fileSystem.writeNoteWithReceipt(write);
         return {
             success: true,
             created: !exists,
@@ -3974,7 +3972,7 @@ export class LlmWikiService {
         const reviewAt = explicitReviewAt || (effectiveReviewIntervalDays !== undefined && outcome !== 'superseded'
             ? new Date(Date.parse(timestamp) + effectiveReviewIntervalDays * 24 * 60 * 60 * 1000).toISOString()
             : undefined);
-        await this.fileSystem.updateFrontmatter({
+        const updated = await this.fileSystem.updateFrontmatterWithReceipt({
             path: params.path,
             frontmatter: {
                 review_basis_content_sha256: hash(note.content),
@@ -3999,7 +3997,6 @@ export class LlmWikiService {
             merge: true,
             expectedRevision: params.expectedRevision,
         });
-        const updated = await this.fileSystem.readNote(params.path);
         const followUpRequired = String(updated.frontmatter.lifecycle || '').toLowerCase() === 'review' && !nextLifecycle;
         // When an upstream note is retired or disputed, point at the notes whose
         // conclusions may need review. Direction matters: incoming dependencies
@@ -4069,13 +4066,12 @@ export class LlmWikiService {
             reviewed_at: reviewedAt,
             ...(params.reviewNote?.trim() && { review_note: boundedText(params.reviewNote, 1000) }),
         };
-        await this.fileSystem.updateFrontmatter({
+        const updated = await this.fileSystem.updateFrontmatterWithReceipt({
             path: params.path,
             frontmatter: { claims, claim_reviews: existingReviews, updated_by: params.reviewedBy, updated_at: reviewedAt },
             merge: true,
             expectedRevision: params.expectedRevision,
         });
-        const updated = await this.fileSystem.readNote(params.path);
         const downstream = ['disputed', 'superseded'].includes(params.status)
             ? await this.collectClaimDownstreamKnowledgePaths(params.path, String(claim.id), claim, params.principal, 8)
             : { total: 0, paths: [], truncated: false };
@@ -7478,8 +7474,7 @@ export class LlmWikiService {
         const removals = params.clearInapplicable
             ? Object.fromEntries(inapplicableBefore.map(property => [property, undefined]))
             : {};
-        await this.fileSystem.updateFrontmatter({ path: params.path, frontmatter: { ...patch, ...dispositionPatch, ...removals }, merge: true, expectedRevision: params.expectedRevision });
-        const updated = await this.fileSystem.readNote(params.path);
+        const updated = await this.fileSystem.updateFrontmatterWithReceipt({ path: params.path, frontmatter: { ...patch, ...dispositionPatch, ...removals }, merge: true, expectedRevision: params.expectedRevision });
         const inapplicableAfter = inapplicableOrganizationProperties(updated.frontmatter, 'knowledge', targetKind);
         return {
             success: true,

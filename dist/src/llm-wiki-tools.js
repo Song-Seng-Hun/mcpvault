@@ -117,7 +117,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'publish_knowledge',
-            description: 'Create or update active evidence-grounded knowledge while preserving ordinary Markdown/Obsidian/Git behavior. Use wiki.lifecycle_transition instead of this endpoint for retirement or reactivation. Every evidence path must be an immutable source snapshot. Entering taskStatus=completed requires one auditable knowledge disposition.',
+            description: 'Create or update active evidence-grounded knowledge while preserving ordinary Markdown/Obsidian/Git behavior. Use wiki.lifecycle_transition instead of this endpoint for retirement or reactivation. Every evidence path must be an immutable source snapshot. Entering taskStatus=completed requires one auditable knowledge disposition. Returned revision identifies this write; re-read the target and inspect any intervening edit before editing again.',
             inputSchema: { type: 'object', properties: {
                     ...executionProperties,
                     ...temporalProperties,
@@ -374,14 +374,14 @@ export function getLlmWikiTools() {
         },
         {
             name: 'review_wiki_note',
-            description: 'Record completion of an evidence review without resubmitting the Markdown body. Refreshes the body/link review baseline, records the reviewer and outcome, and can schedule the next review; non-manual policies without an explicit interval use a bounded adaptive cadence.',
+            description: 'Record completion of an evidence review without resubmitting the Markdown body. Refreshes the body/link review baseline, records the reviewer and outcome, and can schedule the next review; non-manual policies without an explicit interval use a bounded adaptive cadence. Returned revision and reviewer fields describe this write; re-read the target to detect intervening edits.',
             inputSchema: { type: 'object', properties: {
                     path: { type: 'string' }, reviewOutcome: organizationPropertySchema('last_review_outcome'), reviewedBy: { type: 'string' }, reviewAt: { type: 'string', description: 'Optional next review ISO date/time; if omitted, reviewIntervalDays is used when present' }, reviewIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: 'Optional cadence in days; completed reviews schedule the next review automatically' }, nextLifecycle: organizationPropertySchema('lifecycle', { enum: [...ACTIVE_LIFECYCLES], description: 'Optional active lifecycle after review; retirement or reactivation uses wiki.lifecycle_transition' }), reviewReason: { type: 'string', maxLength: 120, description: 'Why this review was entered, such as source_changed, link_changed, note_edited, or manual_review' }, reviewChecks: organizationPropertySchema('review_checks', { maxItems: 7, description: 'Quality dimensions actually checked during this review' }), reviewOpenItems: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 8, description: 'Bounded follow-up items left by the review' }, reviewNote: { type: 'string', maxLength: 1000 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
                 }, required: ['path', 'reviewOutcome', 'expectedRevision'] },
         },
         {
             name: 'review_wiki_claim',
-            description: 'Review one persisted claim inside a knowledge note without rewriting the Markdown body. Updates only that claim status/confidence and records a bounded reviewer note with the expected revision; evidence remains unchanged and must still be verified separately. Disputed or superseded claims return bounded downstream notes found through claim dependencies/support/contradiction so their conclusions can be re-read rather than silently changed.',
+            description: 'Review one persisted claim inside a knowledge note without rewriting the Markdown body. Updates only that claim status/confidence and records a bounded reviewer note with the expected revision; evidence remains unchanged and must still be verified separately. Disputed or superseded claims return bounded downstream notes found through claim dependencies/support/contradiction so their conclusions can be re-read rather than silently changed. Returned revision identifies this write; re-read the target to detect intervening edits.',
             inputSchema: { type: 'object', properties: {
                     path: { type: 'string' }, claimId: { type: 'string', maxLength: 80 }, status: { type: 'string', enum: [...CLAIM_STATUSES] }, confidence: { type: 'string', enum: [...CONFIDENCE_LEVELS] }, reviewedBy: { type: 'string', maxLength: 200 }, reviewNote: { type: 'string', maxLength: 1000 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
                 }, required: ['path', 'claimId', 'status', 'reviewedBy', 'expectedRevision'] },
@@ -479,7 +479,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'triage_wiki_note',
-            description: 'Classify one active ordinary Markdown note with PARA/Zettelkasten-style metadata without changing its body or moving it. Retirement and reactivation use wiki.lifecycle_transition. Entering taskStatus=completed requires one auditable knowledge disposition. New managed fields are rejected when they do not apply to the selected note role. Use expectedRevision to avoid overwriting another agent.',
+            description: 'Classify one active ordinary Markdown note with PARA/Zettelkasten-style metadata without changing its body or moving it. Retirement and reactivation use wiki.lifecycle_transition. Entering taskStatus=completed requires one auditable knowledge disposition. New managed fields are rejected when they do not apply to the selected note role. Use expectedRevision to avoid overwriting another agent. Returned revision, Properties and cleanup advice describe this write; re-read the target before applying follow-up advice.',
             inputSchema: { type: 'object', properties: {
                     ...executionProperties,
                     ...temporalProperties,

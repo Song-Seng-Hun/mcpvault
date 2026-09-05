@@ -76,6 +76,13 @@ export declare class FileSystemService {
         path: string;
         expectedRevision: string;
     }>): Promise<void>;
+    /** Same related-note assertions/locks, with the target's own write revision. */
+    writeNoteWithRevisionGuardsAndReceipt(params: NoteWriteParams, guards: Array<{
+        path: string;
+        expectedRevision: string;
+    }>): Promise<{
+        revision: string;
+    }>;
     private writeDerivedViewFile;
     /**
      * Write an Obsidian Bases definition as a derived, revision-checked view.
@@ -139,6 +146,11 @@ export declare class FileSystemService {
     moveFile(params: MoveFileParams): Promise<MoveResult>;
     readMultipleNotes(params: BatchReadParams): Promise<BatchReadResult>;
     updateFrontmatter(params: UpdateFrontmatterParams): Promise<void>;
+    /** Parsed Properties and revision from this write, without a later disk read. */
+    updateFrontmatterWithReceipt(params: UpdateFrontmatterParams): Promise<{
+        revision: string;
+        frontmatter: Record<string, any>;
+    }>;
     /**
      * Preview a note move without changing files. Markdown, Properties, and
      * Obsidian links remain authoritative, so this resolves one bounded,
