@@ -5,7 +5,7 @@ export function getContinuityTools() {
     return [
         {
             name: 'save_work_state',
-            description: 'Save a compact private resume checkpoint in this authenticated model or agent scope. Use before a context limit, handoff, session end, interrupted multi-note edit, or pause in a MOC learning path. learningProgress accepts only the MOC, order, and last completed entry; the server snapshots bounded path revisions and continuity.resume detects drift. pendingEdits preserves revision guards and researchTrail preserves short findings. Never store passwords, tokens, note bodies, prompts, or hidden reasoning.',
+            description: 'Save a compact private resume checkpoint in this authenticated model or agent scope. Use before a context limit, handoff, session end, interrupted multi-note edit, or pause in a MOC learning path. learningProgress accepts only the MOC, order, and last completed entry; the server snapshots bounded path revisions and continuity.resume detects drift. pendingEdits preserves revision guards and researchTrail preserves short findings. Returned revision identifies this save; compare with continuity.resume and inspect intervening edits before saving again. Never store passwords, tokens, note bodies, prompts, or hidden reasoning.',
             inputSchema: { type: 'object', properties: {
                     topic: { type: 'string', description: 'Short name of the work in progress' },
                     summary: { type: 'string', description: 'What has been established so far' },

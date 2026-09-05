@@ -1348,6 +1348,13 @@ artifacts may be combined; `no_reusable_knowledge` is exclusive. These fields
 make reuse or deliberate non-reuse visible without creating a parallel log.
 Linked notes must be visible from the completed work and match the durable or
 negative role. A retrospective is experiential context, not factual evidence.
+Task creation/update receipts identify their own serialized write. An update's
+status, assignee, retrospective and knowledge-disposition fields must belong to
+that write, not a later reader's version. Re-read the task before following up;
+an intervening revision requires inspecting the new content first. Continuity
+save uses the same own-write rule; `continuity.resume` reads the current private
+checkpoint and validates its learning path rather than silently certifying the
+older save receipt. Neither receipt reserves a file against external editors.
 Direct Obsidian and Git edits remain authoritative; lint and
 `wiki.review_packet` surface an invalid direct-edit completion as one bounded,
 revision-safe `wiki.triage` repair rather than blocking the editor or running a

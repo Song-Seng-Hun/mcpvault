@@ -137,6 +137,10 @@ target, nearby items, parent chain, and accessible references in one bounded
 packet. `contextBefore`, `contextAfter`, and `maxChars` apply to the whole
 packet. Save a private resume checkpoint with `continuity.save` before a
 handoff or context limit, then restore it later with `continuity.resume`.
+The save receipt's revision and learning position describe that save, whereas
+resume reads the current checkpoint and validates learning-path drift. If its
+revision differs, inspect the intervening checkpoint before saving again with
+an explicit `expectedRevision` from that read.
 
 `get_agent_pulse` returns one bounded next action. It prioritizes actionable
 notifications, private continuity, assigned non-terminal tasks, Wiki-first

@@ -9,6 +9,9 @@ import { ScopeAccessPolicy } from './scope-access.js';
 import { ReferenceService } from './references.js';
 import { LlmWikiService } from './llm-wiki.js';
 import { FrontmatterHandler } from './frontmatter.js';
+import { ContinuityService } from './continuity.js';
+import { AgentTaskService } from './agent-tasks.js';
+import { ScopeAuthService } from './scope-auth.js';
 
 const vaults: string[] = [];
 afterEach(async () => { for (const vault of vaults.splice(0)) await rm(vault, { recursive: true, force: true }); });
@@ -183,4 +186,64 @@ test('guarded receipt rejects stale related state before touching the target', a
   await expect(fs.writeNoteWithRevisionGuardsAndReceipt({ path: 'target.md', content: 'Unsafe.', expectedRevision }, [guard])).rejects.toThrow(/revision conflict/i);
   expect(await fs.readNoteRevision('target.md')).toBe(expectedRevision);
   expect(events).toBe(0);
+});
+
+const worker = { accountId: 'receipt-owner', modelId: 'codex', agentId: 'receipt-worker', role: 'agent' as const };
+
+test.each([false, true])('continuity save existing=%s returns the checkpoint it wrote, not a later checkpoint', async existing => {
+  const { fs, observe } = await fixture();
+  const continuity = new ContinuityService(fs);
+  const path = '_scopes/agents/receipt-worker/_continuity/work-state.md';
+  const params = { principal: worker, topic: 'Research', summary: 'First finding.', nextAction: 'Read next source.' };
+  const expectedRevision = existing ? (await continuity.save(params)).revision : 'missing';
+  let written = '';
+  observe(fullPath => {
+    written = readFileSync(fullPath, 'utf8');
+    writeFileSync(fullPath, written.replace('topic: Research', 'topic: Later') + '\nLater checkpoint.');
+  });
+  const saved = await continuity.save({ ...params, expectedRevision });
+  const resumed = await continuity.read({ principal: worker });
+  expect(resumed.fm.topic).toBe('Later');
+  expect(saved.revision).toBe(hash(written));
+  expect(saved.revision).not.toBe(resumed.revision);
+  expect(saved.path).toBe('scope://agent/receipt-worker/_continuity/work-state.md');
+  expect(JSON.stringify(saved).length).toBeLessThan(512);
+  await expect(continuity.save({ ...params, expectedRevision: saved.revision })).rejects.toThrow(/revision conflict/i);
+  expect(await fs.readNoteRevision(path)).toBe(resumed.revision);
+});
+
+test('task creation returns the proposed revision even if another editor changes its state', async () => {
+  const { fs, vault, observe } = await fixture();
+  const access = new ScopeAccessPolicy();
+  const tasks = new AgentTaskService(fs, new ReferenceService(fs, access), new ScopeAuthService(vault));
+  let written = '';
+  observe(fullPath => {
+    written = readFileSync(fullPath, 'utf8');
+    writeFileSync(fullPath, written.replace('status: proposed', 'status: cancelled'));
+  });
+  const created = await tasks.create({ principal: worker, taskId: 'receipt-task', title: 'Research', description: 'Check evidence.' });
+  expect(created.status).toBe('proposed');
+  expect((await fs.readNote(created.path)).frontmatter.status).toBe('cancelled');
+  expect(created.revision).toBe(hash(written));
+  await expect(tasks.update({ principal: worker, taskId: created.taskId, description: 'Unsafe.', expectedRevision: created.revision })).rejects.toThrow(/revision conflict/i);
+});
+
+test.each(['retrospective', 'no reusable knowledge'] as const)('task completion keeps its own %s disposition and revision', async disposition => {
+  const { fs, vault, observe } = await fixture();
+  const access = new ScopeAccessPolicy();
+  const tasks = new AgentTaskService(fs, new ReferenceService(fs, access), new ScopeAuthService(vault));
+  const created = await tasks.create({ principal: worker, taskId: 'receipt-task', title: 'Research', description: 'Check evidence.' });
+  let written = '';
+  observe(fullPath => {
+    written = readFileSync(fullPath, 'utf8');
+    writeFileSync(fullPath, written.replaceAll('Our finding.', 'Other finding.').replace('status: completed', 'status: blocked'));
+  });
+  const updated = await tasks.update({ principal: worker, taskId: created.taskId, status: 'completed', reason: 'Finished.',
+    ...(disposition === 'retrospective' ? { retrospective: 'Our finding.' } : { noReusableKnowledge: true, knowledgeDispositionReason: 'Our finding.' }),
+    expectedRevision: created.revision });
+  expect(updated.status).toBe('completed');
+  expect(disposition === 'retrospective' ? updated.retrospective : updated.knowledgeDispositionReason).toBe('Our finding.');
+  expect((await fs.readNote(created.path)).frontmatter.status).toBe('blocked');
+  expect(updated.revision).toBe(hash(written));
+  await expect(tasks.update({ principal: worker, taskId: created.taskId, description: 'Unsafe.', expectedRevision: updated.revision })).rejects.toThrow(/revision conflict/i);
 });

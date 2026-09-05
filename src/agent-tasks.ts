@@ -80,7 +80,7 @@ export class AgentTaskService {
     const assignee = await this.assignee(params.assignee);
     const refs = await this.references.validateAndNormalize(params.references, path, principal, params.description);
     const timestamp = now();
-    await this.fileSystem.writeNote({
+    const receipt = await this.fileSystem.writeNoteWithReceipt({
       path,
       content: `# ${title}\n\n${description}\n`,
       frontmatter: {
@@ -91,8 +91,7 @@ export class AgentTaskService {
       },
       expectedRevision: 'missing',
     });
-    const note = await this.fileSystem.readNote(path);
-    return { success: true, taskId, path, status: 'proposed', revision: note.revision };
+    return { success: true, taskId, path, status: 'proposed', revision: receipt.revision };
   }
 
   async read(params: { taskId: string; includeContent?: boolean; referenceLimit?: number; referenceMaxChars?: number }) {
@@ -248,25 +247,26 @@ export class AgentTaskService {
     if (!requestedAssignee) delete frontmatter.assignee;
     if (!disposition.retrospective) delete frontmatter.retrospective;
     if (!disposition.noReusableKnowledge) delete frontmatter.knowledge_disposition_reason;
-    await this.fileSystem.writeNote({
+    const receipt = await this.fileSystem.writeNoteWithReceipt({
       path,
       content: `# ${String(note.frontmatter.title || taskId)}\n\n${description}\n`,
       frontmatter,
       expectedRevision: params.expectedRevision,
     });
-    const updated = await this.fileSystem.readNote(path);
+    // These normalized disposition values belong to this write. A later read
+    // could combine another editor's lesson with our completion status.
     return {
       success: true,
       taskId,
       status,
       assignee: requestedAssignee || undefined,
       reason: status !== previousStatus ? reason : undefined,
-      ...(updated.frontmatter.retrospective && { retrospective: updated.frontmatter.retrospective }),
-      ...(updated.frontmatter.knowledge_notes && { knowledgeNotes: updated.frontmatter.knowledge_notes }),
-      ...(updated.frontmatter.negative_knowledge_notes && { negativeKnowledgeNotes: updated.frontmatter.negative_knowledge_notes }),
-      ...(updated.frontmatter.knowledge_dispositions && { knowledgeDispositions: updated.frontmatter.knowledge_dispositions }),
-      ...(updated.frontmatter.knowledge_disposition_reason && { knowledgeDispositionReason: updated.frontmatter.knowledge_disposition_reason }),
-      revision: updated.revision,
+      ...(frontmatter.retrospective && { retrospective: frontmatter.retrospective }),
+      ...(frontmatter.knowledge_notes && { knowledgeNotes: frontmatter.knowledge_notes }),
+      ...(frontmatter.negative_knowledge_notes && { negativeKnowledgeNotes: frontmatter.negative_knowledge_notes }),
+      ...(frontmatter.knowledge_dispositions && { knowledgeDispositions: frontmatter.knowledge_dispositions }),
+      ...(frontmatter.knowledge_disposition_reason && { knowledgeDispositionReason: frontmatter.knowledge_disposition_reason }),
+      revision: receipt.revision,
     };
   }
 }

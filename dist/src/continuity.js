@@ -339,7 +339,7 @@ export class ContinuityService {
         const existing = await this.fileSystem.noteExists(path) ? await this.fileSystem.readNote(path) : undefined;
         const expectedRevision = params.expectedRevision || existing?.revision || 'missing';
         const updatedAt = new Date().toISOString();
-        await this.fileSystem.writeNote({
+        const receipt = await this.fileSystem.writeNoteWithReceipt({
             path,
             content: render({ topic, summary, nextAction, ...(openQuestions && { openQuestions }), ...(references && { references }), ...(params.cursors && { cursors: params.cursors }), focus: { ...(focusQuestions && { questions: focusQuestions }), ...(focusProjects && { projects: focusProjects }), ...(focusNotes && { notes: focusNotes }) }, ...(pending && { pendingEdits: pending }), ...(trail && { researchTrail: trail }), ...(learningProgress && { learningProgress }) }),
             frontmatter: {
@@ -350,10 +350,9 @@ export class ContinuityService {
             },
             expectedRevision,
         });
-        const updated = await this.fileSystem.readNote(path);
         const learningCompletedIndex = learningProgress?.completed_through ? learningProgress.entries.findIndex(item => item.path === learningProgress.completed_through) : -1;
         const learningState = learningProgress && learningCompletedIndex + 1 >= learningProgress.entries.length ? 'complete' : 'ready';
-        return { success: true, path: `scope://${principal.agentId ? 'agent' : 'model'}/${principal.agentId || principal.modelId}/_continuity/work-state.md`, updatedAt, revision: updated.revision, ...(learningProgress && { learningProgress: this.compactLearningProgress(learningProgress, learningState) }) };
+        return { success: true, path: `scope://${principal.agentId ? 'agent' : 'model'}/${principal.agentId || principal.modelId}/_continuity/work-state.md`, updatedAt, revision: receipt.revision, ...(learningProgress && { learningProgress: this.compactLearningProgress(learningProgress, learningState) }) };
     }
     async read(params) {
         const principal = requiredPrincipal(params.principal);
