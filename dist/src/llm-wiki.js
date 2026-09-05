@@ -10982,6 +10982,39 @@ export class LlmWikiService {
             note: 'Increase maxChars to receive the bounded claim argument map.',
         };
     }
+    async assertCurrentContextSources(principal, sources) {
+        try {
+            const snapshots = new Map();
+            for (const source of sources) {
+                if (typeof source.path !== 'string' || typeof source.revision !== 'string' || !/^[a-f0-9]{64}$/.test(source.revision))
+                    throw new Error('invalid snapshot');
+                const path = this.access.resolveExternalPath(source.path, principal);
+                if (!this.access.canAccessPhysicalPath(path, principal))
+                    throw new Error('unavailable');
+                const key = normalizePath(path).toLowerCase();
+                const existing = snapshots.get(key);
+                if (existing && existing.revision !== source.revision)
+                    throw new Error('mixed revisions');
+                snapshots.set(key, { path, revision: source.revision });
+            }
+            // Root + at most 24 MOC entries + the bounded answer-packet neighbors.
+            if (snapshots.size > 32)
+                throw new Error('too many sources');
+            const entries = [...snapshots.values()];
+            for (let offset = 0; offset < entries.length; offset += 4) {
+                await Promise.all(entries.slice(offset, offset + 4).map(async (source) => {
+                    if (!this.access.canAccessPhysicalPath(source.path, principal))
+                        throw new Error('unavailable');
+                    const revision = await this.fileSystem.readNoteRevision(source.path);
+                    if (revision !== source.revision || !this.access.canAccessPhysicalPath(source.path, principal))
+                        throw new Error('changed');
+                }));
+            }
+        }
+        catch {
+            throw new Error('A context source changed or became unavailable; re-read the root note and retry.');
+        }
+    }
     async answerPacket(principal, path, maxChars = 7000, includeSemantic = true, intent = 'decide') {
         const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 1024), 16000);
         const selectedIntent = ANSWER_PACKET_INTENTS.includes(intent) ? intent : 'decide';
@@ -11020,7 +11053,10 @@ export class LlmWikiService {
         const selected = [...supporting, ...counterpoints].filter((item, index, all) => all.findIndex(candidate => candidate.path === item.path) === index);
         const readNeighbor = async (item) => {
             try {
-                const projection = await this.readProjection({ ...(principal && { principal }), path: String(item.path), view: 'progressive', maxChars: 900 });
+                const target = this.access.resolveExternalPath(String(item.path), principal);
+                const projection = await this.readProjection({ ...(principal && { principal }), path: target, view: 'progressive', maxChars: 900 });
+                if (projection.revision !== item.revision)
+                    throw new Error('neighbor classification changed');
                 return {
                     path: projection.path,
                     title: projection.title,
@@ -11037,7 +11073,7 @@ export class LlmWikiService {
                 };
             }
             catch {
-                return undefined;
+                throw new Error('A context source changed or became unavailable; re-read the root note and retry.');
             }
         };
         const context = (await Promise.all(selected.map(readNeighbor))).filter((item) => item !== undefined);
@@ -11113,6 +11149,7 @@ export class LlmWikiService {
             mode: 'bounded_answer_packet',
             intent: selectedIntent,
             intentGuidance,
+            truncated: false,
             instructions: 'Start with the source and follow the intent guidance. Re-read a selected note at a larger bound only when the compact packet is insufficient; revisions are freshness guards, not truth scores.',
             source: sourcePacket,
             supporting: context.filter(item => item.relationToSource === 'supporting_context'),
@@ -11127,6 +11164,7 @@ export class LlmWikiService {
             },
         };
         while (JSON.stringify(result).length > boundedChars && (result.supporting.length > 0 || result.counterpoints.length > 0 || result.reasoningTrail.decisions.length > 0 || result.reasoningTrail.counterexamples.length > 0)) {
+            result.truncated = true;
             if (result.supporting.length > 0)
                 result.supporting.pop();
             else if (result.counterpoints.length > 0)
@@ -11137,10 +11175,12 @@ export class LlmWikiService {
                 result.reasoningTrail.counterexamples.pop();
         }
         while (JSON.stringify(result).length > boundedChars && result.source.content.length > 160) {
+            result.truncated = true;
             result.source.content = boundedText(result.source.content, Math.max(160, Math.floor(result.source.content.length * 0.7)));
         }
+        await this.assertCurrentContextSources(principal, [sourcePacket, ...context]);
         if (JSON.stringify(result).length <= boundedChars)
-            return { ...result, truncated: false };
+            return result;
         // A caller-supplied budget is a hard response contract. Metadata such as
         // aliases or relation explanations can be large even after bodies are
         // trimmed, so retain only the identity needed for a safe follow-up read.
@@ -11155,13 +11195,18 @@ export class LlmWikiService {
         if (JSON.stringify(compact).length <= boundedChars)
             return compact;
         const tinyAction = synthesisPlan?.nextAction;
-        return {
+        const minimal = {
             mode: 'bounded_answer_packet',
             intent: selectedIntent,
-            source: { path: String(result.source.path).slice(0, 160), revision: String(result.source.revision).slice(0, 160) },
+            source: { path: result.source.path, revision: result.source.revision },
             ...(tinyAction && { synthesisPlan: { status: synthesisPlan?.status, nextAction: { endpointId: tinyAction.endpointId, ...(tinyAction.arguments?.path && { arguments: { path: tinyAction.arguments.path } }) } } }),
             truncated: true,
         };
+        if (JSON.stringify(minimal).length > boundedChars)
+            delete minimal.synthesisPlan;
+        if (JSON.stringify(minimal).length > boundedChars)
+            throw new Error('maxChars is too small to preserve this root path and revision; increase the read budget.');
+        return minimal;
     }
     /**
      * Turn an authored MOC outline into a bounded, dependency-aware reading
@@ -11827,6 +11872,7 @@ export class LlmWikiService {
             ...counterpoints.map(item => ({ path: item.path, title: item.title, revision: item.revision, role: 'counterpoint_or_review' })),
         ].filter((item, index, all) => item.path && all.findIndex(candidate => candidate.path === item.path) === index);
         const trail = packet.reasoningTrail;
+        const synthesis = packet.synthesisPlan;
         const result = {
             mode: 'context_pack',
             purpose: 'A live, bounded shelf for one question, project, MOC, or decision. It is derived from Markdown and must be re-read at the returned revisions before editing or relying on it.',
@@ -11846,6 +11892,12 @@ export class LlmWikiService {
             packet,
             truncated: Boolean(packet.truncated) || outline.length > 24,
         };
+        // Packet construction finished before MOC traversal. Revalidate every
+        // returned live snapshot again, including copies retained in the trail or
+        // synthesis plan even when their supporting/counterpoint row was trimmed.
+        await this.assertCurrentContextSources(principal, [source, ...orderedEntries,
+            ...supporting, ...counterpoints, ...(synthesis?.inputs || []),
+            ...(trail?.decisions || []), ...(trail?.counterexamples || [])]);
         if (JSON.stringify(result).length <= boundedChars)
             return result;
         const compact = {

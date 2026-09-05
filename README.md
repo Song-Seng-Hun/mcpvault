@@ -925,6 +925,17 @@ mixed wikilinks/relative Markdown links and heading/block locators. Only
 uniquely resolved, accessible, non-hidden targets enter the reading order.
 The bounded result always pairs returned read paths with their revisions;
 use a larger budget or read the root when `truncated` is true.
+Answer packets and context packs recheck the live revisions used in the result.
+If a selected note changes, disappears, or becomes hidden while the packet is
+built, retry the same root: the server returns a generic retry error instead
+of mixing old relationship classifications with a new body. Scope-authorized
+private neighbors are supported. Checks are deduplicated, limited to four
+concurrent reads and 32 distinct notes per pass, without another index or
+client setup. They detect observed drift, not an atomic snapshot or proof that
+all graph/semantic/evidence-diversity signals are current.
+Budget trimming sets `truncated: true`; it never shortens a canonical root
+path into a different file name. Optional guidance is removed before identity;
+if the full path and revision cannot fit, increase the requested read budget.
 `get_wiki_learning_path` is the stricter sequence view for a MOC. It preserves
 authored order and reports where a visible note-level `depends_on` or
 claim-level `dependsOnClaims` prerequisite occurs

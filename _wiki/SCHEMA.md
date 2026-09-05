@@ -1002,7 +1002,19 @@ candidates. Every neighbor has an explainable reason and revision; vector
 similarity helps discovery only and must not move notes or replace evidence.
 `get_wiki_answer_packet` is the compact follow-up projection: it combines the
 selected note with a few supporting neighbors and counterpoints or negative
-knowledge. `get_wiki_authority_map` is a derived library-style access-term
+knowledge. Answer/context packets revalidate returned live note snapshots;
+changed, hidden or unavailable selected sources cause a path-free retry error,
+not a mixture of old classifications and new content. Context packs check again
+after MOC traversal, including copies in reasoning/synthesis fields. Checks
+deduplicate at most 32 notes per pass, run four at a time, and do not reparse
+bodies. Retry the same root rather than act on a failed packet. This detects
+observed drift, not atomic multi-note state or freshness of every advisory
+graph/semantic/source-diversity signal. Authorized scope URIs are resolved to
+physical paths before internal reads; this never grants access to other scopes.
+Budget-driven row/body removal marks the packet truncated. Minimal output
+preserves the exact root path and revision, removing optional guidance first;
+if even that identity does not fit, fail with a larger-budget instruction.
+`get_wiki_authority_map` is a derived library-style access-term
 view for titles, aliases, stable IDs, and scheme-local authority identities.
 A classification record may use:
 

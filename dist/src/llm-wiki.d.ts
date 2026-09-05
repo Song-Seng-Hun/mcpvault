@@ -3315,7 +3315,8 @@ export declare class LlmWikiService {
         truncated: boolean;
         note: string;
     }>;
-    answerPacket(principal: ScopePrincipal | undefined, path: string, maxChars?: number, includeSemantic?: boolean, intent?: AnswerPacketIntent): Promise<Record<string, unknown>>;
+    private assertCurrentContextSources;
+    answerPacket(principal: ScopePrincipal | undefined, path: string, maxChars?: number, includeSemantic?: boolean, intent?: AnswerPacketIntent): Promise<Record<string, any>>;
     /**
      * Turn an authored MOC outline into a bounded, dependency-aware reading
      * path. The Markdown order remains authoritative; the topological order is
