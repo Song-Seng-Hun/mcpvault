@@ -4,6 +4,7 @@ import { PathFilter } from "./pathfilter.js";
 import { FrontmatterHandler } from "./frontmatter.js";
 import { VaultMetadataIndex } from "./vault-index.js";
 import { VaultIoCoordinator } from "./vault-io.js";
+import { ScopeAccessPolicy } from "./scope-access.js";
 import { writeFile, readFile, mkdir, mkdtemp, rm, symlink, access } from "fs/promises";
 import { join, relative } from "path";
 import { tmpdir, homedir } from "os";
@@ -983,6 +984,92 @@ describe("tasks", () => {
     expect(updatedSibling.frontmatter.depends_on).toEqual(['Archive/Renamed.md']);
     expect(updatedSibling.content).toContain('[[Archive/Renamed.md]]');
     expect((await fileSystem.readNote('Archive/Renamed.md')).content).toContain('# Markdown target');
+  });
+
+  test("community checkpoint URIs match only this command center", async () => {
+    const fs = new FileSystemService(testVaultPath, undefined, undefined, undefined, undefined, undefined, undefined, new ScopeAccessPolicy({ commandCenterId: 'office' }));
+    await fs.writeNote({ path: 'Community/Map.md', content: '# Map\n' });
+    await fs.writeNote({ path: 'Checkpoint.md', content: '# Checkpoint\n', frontmatter: {
+      pending_edits: [{ path: 'scope://community/office/Map.md', expectedRevision: 'original' }, { path: 'scope://community/foreign/Map.md', expectedRevision: 'foreign' }],
+    } });
+    expect((await fs.previewDeleteNote({ path: 'Community/Map.md' })).total).toBe(1);
+    expect((await fs.moveNote({ oldPath: 'Community/Map.md', newPath: 'Community/Renamed.md', updateLinks: true, expectedRevision: (await fs.readNote('Community/Map.md')).revision })).success).toBe(true);
+    expect((await fs.readNote('Checkpoint.md')).frontmatter.pending_edits).toEqual([
+      { path: 'scope://community/office/Renamed.md', expectedRevision: 'original' },
+      { path: 'scope://community/foreign/Map.md', expectedRevision: 'foreign' },
+    ]);
+  });
+
+  test("scope URI checkpoint references preserve their namespace during safe moves", async () => {
+    const target = '_scopes/agents/worker/Target.md';
+    const checkpoint = '_scopes/agents/worker/Checkpoint.md';
+    await fileSystem.writeNote({ path: target, content: '# Private target\n' });
+    await fileSystem.writeNote({ path: checkpoint, content: '# Private checkpoint\n', frontmatter: {
+      pending_edits: [{ path: 'scope://agent/worker/Target.md', expectedRevision: 'captured' }],
+      learning_progress: { root_path: 'scope://agent/worker/Target.md' },
+    } });
+    expect((await fileSystem.previewDeleteNote({ path: target })).total).toBe(2);
+    const before = await fileSystem.readNote(target);
+    expect((await fileSystem.moveNote({ oldPath: target, newPath: '_scopes/agents/worker/Moved.md', updateLinks: true, expectedRevision: before.revision })).success).toBe(true);
+    const fm = (await fileSystem.readNote(checkpoint)).frontmatter;
+    expect(fm.pending_edits[0]).toEqual({ path: 'scope://agent/worker/Moved.md', expectedRevision: 'captured' });
+    expect(fm.learning_progress.root_path).toBe('scope://agent/worker/Moved.md');
+  });
+
+  test("scoped checkpoint moves never widen scope or disclose inaccessible referring notes", async () => {
+    await fileSystem.writeNote({ path: 'Target.md', content: '# Target\n' });
+    const hidden = '_scopes/agents/other/Checkpoint.md';
+    await fileSystem.writeNote({ path: hidden, content: '# Hidden\n', frontmatter: { learning_progress: { root_path: 'scope://global/Target.md' } } });
+    const visible = (path: string) => !path.startsWith('_scopes/');
+    const preview = await fileSystem.previewDeleteNote({ path: 'Target.md' }, visible);
+    expect(preview).toMatchObject({ total: 0, hiddenReferencesPresent: true });
+    expect(JSON.stringify(preview)).not.toContain(hidden);
+    const before = await fileSystem.readNote('Target.md');
+    expect((await fileSystem.moveNote({ oldPath: 'Target.md', newPath: 'Moved.md', updateLinks: true, expectedRevision: before.revision }, visible)).success).toBe(false);
+    const crossScope = await fileSystem.moveNote({ oldPath: 'Target.md', newPath: '_scopes/agents/other/Target.md', updateLinks: true, expectedRevision: before.revision });
+    expect(crossScope.success).toBe(false);
+    expect(crossScope.message).toContain('captured reference scope');
+    expect(await fileSystem.exists('Target.md')).toBe(true);
+    expect((await fileSystem.readNote(hidden)).frontmatter.learning_progress.root_path).toBe('scope://global/Target.md');
+  });
+
+  test("global checkpoint relocation cannot manufacture a private service URI", async () => {
+    await fileSystem.writeNote({ path: 'Target.md', content: '# Target\n' });
+    await fileSystem.writeNote({ path: 'Checkpoint.md', content: '# Checkpoint\n', frontmatter: { learning_progress: { root_path: 'scope://global/Target.md' } } });
+    const result = await fileSystem.moveNote({ oldPath: 'Target.md', newPath: '_whispers/Target.md', updateLinks: true, expectedRevision: (await fileSystem.readNote('Target.md')).revision });
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('captured reference scope');
+    expect(await fileSystem.exists('Target.md')).toBe(true);
+    expect((await fileSystem.readNote('Checkpoint.md')).frontmatter.learning_progress.root_path).toBe('scope://global/Target.md');
+  });
+
+  test("malformed hidden checkpoint URIs fail closed without echoing private values", async () => {
+    await fileSystem.writeNote({ path: 'Target.md', content: '# Target\n' });
+    const hidden = '_scopes/agents/other/Checkpoint.md';
+    await fileSystem.writeNote({ path: hidden, content: '# Checkpoint\n', frontmatter: { learning_progress: { root_path: 'scope://global/private/secret-value\ninvalid.md' } } });
+    const visible = (path: string) => !path.startsWith('_scopes/');
+    await expect(fileSystem.previewDeleteNote({ path: 'Target.md' }, visible)).rejects.toThrow('Cannot validate a captured scope reference; repair malformed checkpoint metadata before retrying.');
+    const result = await fileSystem.moveNote({ oldPath: 'Target.md', newPath: 'Moved.md', updateLinks: true, expectedRevision: (await fileSystem.readNote('Target.md')).revision }, visible);
+    expect(result.success).toBe(false);
+    expect(JSON.stringify(result)).not.toContain('secret-value');
+    expect(JSON.stringify(result)).not.toContain(hidden);
+    expect(await fileSystem.exists('Target.md')).toBe(true);
+  });
+
+  test("learning checkpoint paths participate in safe move/delete impact without recertifying fingerprints", async () => {
+    await fileSystem.writeNote({ path: 'MOC.md', content: '# Map\n' });
+    await fileSystem.writeNote({ path: 'Checkpoint.md', content: '# Saved work\n', frontmatter: { learning_progress: {
+      root_path: 'MOC.md', root_revision: 'captured-root', completed_through: 'MOC.md',
+      entries: [{ path: 'MOC.md', revision: 'captured-entry' }], structure_fingerprint: 'captured-structure', revision_fingerprint: 'captured-revisions',
+    } } });
+    expect((await fileSystem.previewDeleteNote({ path: 'MOC.md' })).total).toBe(3);
+    expect((await fileSystem.getBacklinks('MOC.md')).total).toBe(0);
+    const before = await fileSystem.readNote('MOC.md');
+    expect((await fileSystem.moveNote({ oldPath: 'MOC.md', newPath: 'Maps/Root.md', expectedRevision: before.revision, updateLinks: true })).success).toBe(true);
+    expect((await fileSystem.readNote('Checkpoint.md')).frontmatter.learning_progress).toMatchObject({
+      root_path: 'Maps/Root.md', root_revision: 'captured-root', completed_through: 'Maps/Root.md',
+      entries: [{ path: 'Maps/Root.md', revision: 'captured-entry' }], structure_fingerprint: 'captured-structure', revision_fingerprint: 'captured-revisions',
+    });
   });
 
   test.each(['review_basis_links', 'review_basis_upstream', 'pending_edits', 'research_trail'])("%s snapshots retain canonical paths and original captured revisions on move", async root => {

@@ -12,4 +12,11 @@ test('snapshot paths match only the producer-defined array shapes', () => {
   expect(isReferenceSnapshotPath(['review_basis_upstream', 0, 'path'])).toBe(false);
   expect(isReferenceSnapshotPath(['review_basis_upstream', 'other', 0, 'path'])).toBe(false);
   expect(isReferenceSnapshotPath(['evidence', 0, 'path'])).toBe(false);
+  expect(isReferenceSnapshotPath(['learning_progress', 'root_path'])).toBe(true);
+  expect(isReferenceSnapshotPath(['learning_progress', 'completed_through'])).toBe(true);
+  expect(isReferenceSnapshotPath(['learning_progress', 'entries', 0, 'path'])).toBe(true);
+  expect(isReferenceSnapshotPath(['learning_progress', 'extra', 'root_path'])).toBe(false);
+  expect(isReferenceSnapshotPath(['learning_progress', 'entries', 'path'])).toBe(false);
+  expect(isReferenceSnapshotPath(['learning_progress', 'entries', 0, 'revision'])).toBe(false);
+  expect(isReferenceSnapshotPath(['learning_progress', 'structure_fingerprint'])).toBe(false);
 });

@@ -381,13 +381,25 @@ move/delete integrity checks stop with a path-free error instead of treating
 unknown references as absent. Restore readable notes and retry. The move
 service checks both source and destination access even without link updates.
 Captured `.path` values in `review_basis_links[]`,
-`review_basis_upstream.entries[]`, `pending_edits[]`, and `research_trail[]`
-remain canonical Vault-relative file identities during moves, including at the
-Vault root; they are not rewritten as relative navigation links. Original
+`review_basis_upstream.entries[]`, `pending_edits[]`, and `research_trail[]`,
+plus `learning_progress.root_path`, `.completed_through`, and `.entries[].path`,
+retain file identity during moves, including at the Vault root; they are not
+rewritten as relative navigation links. Physical paths stay Vault-relative;
+durable Global/model/agent and this command center's Community scope URIs keep
+their namespace during same-scope moves. Foreign Community URIs and host-only
+User URIs are not rebound to local notes. A scoped checkpoint cannot be
+automatically rewritten across a scope boundary; explicitly review/update the
+checkpoint first. Malformed supported scope URIs stop integrity scans with a
+path-free error, even when the referring checkpoint is inaccessible. Original
 captured revisions and summary/review hashes remain unchanged. A pure rename
 does not invalidate unchanged link/upstream evidence just because a display
 path changed. Actual evidence edits still trigger review, and rewritten note
 bodies still make their old summaries stale until explicitly reviewed.
+Learning checkpoint paths also count in delete impact, but do not create live
+graph edges. Moves preserve captured learning revisions and fingerprints:
+`continuity.resume` can return `stale` with a callable `wiki.learning_path`
+recovery action at the new root. Follow that action and review the sequence
+before saving refreshed progress; a rename is not proof of learning completion.
 Ordinary Markdown links such as `[guide](Guide.md)` use the containing note's
 folder in graph, reference validation, review baselines, and move rewrites;
 `[guide](Guides/Guide.md)` (or `/Guides/Guide.md`) starts at the Vault root;

@@ -14,7 +14,8 @@ import { VaultIoCoordinator } from './vault-io.js';
 import { buildNoteReferenceIndex, markdownNotePath, resolveNoteReference } from './note-reference.js';
 import { validateJsonCanvasDocument } from './json-canvas.js';
 import { acceptsPlainReference, isReferenceSnapshotPath, propertyPathText } from './property-references.js';
-import { assertLegacyDiscussionMutationAllowed } from './scope-access.js';
+import { assertLegacyDiscussionMutationAllowed, ScopeAccessPolicy } from './scope-access.js';
+import { expandScopePath, parseScopePath, scopeRoot } from './scopes.js';
 import { extractMarkdownTasks, iterateMarkdownTasks } from './markdown-tasks.js';
 import { extractInlineTags } from './markdown-tags.js';
 import { isModerationHidden } from './moderation-policy.js';
@@ -200,10 +201,28 @@ function rewriteExplicitLinks(content, sourcePath, renderedSourcePath, oldPath, 
 }
 function rewritePlainReference(value, sourcePath, renderedSourcePath, oldPath, newPath, referenceIndex, snapshotPath = false) {
     const trimmed = value.trim();
-    if (!trimmed || /^[a-z][a-z0-9+.-]*:/i.test(trimmed) || trimmed.startsWith('#'))
+    if (!trimmed || trimmed.startsWith('#'))
         return {};
     const suffixAt = [trimmed.indexOf('?'), trimmed.indexOf('#')].filter(index => index >= 0).sort((a, b) => a - b)[0];
-    const document = suffixAt === undefined ? trimmed : trimmed.slice(0, suffixAt);
+    const authoredDocument = suffixAt === undefined ? trimmed : trimmed.slice(0, suffixAt);
+    let scoped;
+    let document = authoredDocument;
+    try {
+        scoped = snapshotPath && /^scope:\/\/(?:global|community|model|agent)\//i.test(authoredDocument)
+            ? parseScopePath(authoredDocument) : undefined;
+        if (scoped)
+            document = expandScopePath(authoredDocument);
+    }
+    catch {
+        // Scans include inaccessible checkpoints. Never echo their URI or parse error.
+        throw new Error('Cannot validate a captured scope reference; repair malformed checkpoint metadata before retrying.');
+    }
+    // Only the server's own community spellings are registered in this index.
+    // A foreign command-center URI must never bind to a same-path local note.
+    if (scoped?.kind === 'community' && !referenceIndex.exact.has(authoredDocument.toLowerCase()))
+        return {};
+    if (!scoped && /^[a-z][a-z0-9+.-]*:/i.test(trimmed))
+        return {};
     const suffix = suffixAt === undefined ? '' : trimmed.slice(suffixAt);
     let targets = snapshotPath
         ? normalizeNoteTarget(document) === normalizeNoteTarget(oldPath) ? [oldPath] : []
@@ -225,9 +244,17 @@ function rewritePlainReference(value, sourcePath, renderedSourcePath, oldPath, n
     const targetPath = targets[0];
     const renderedTarget = includesMovedTarget ? newPath : targetPath;
     const relativeTarget = posix.relative(posix.dirname(renderedSourcePath), renderedTarget);
-    const destination = snapshotPath ? renderedTarget : sourceRelative || !renderedTarget.includes('/')
+    let destination = snapshotPath ? renderedTarget : sourceRelative || !renderedTarget.includes('/')
         ? /^\.\.?\//.test(relativeTarget) ? relativeTarget : `./${relativeTarget}`
         : renderedTarget;
+    if (scoped) {
+        const root = scopeRoot(scoped.kind, scoped.id);
+        if (root ? !renderedTarget.toLowerCase().startsWith(`${root.toLowerCase()}/`) : /^(?:_scopes|_whispers|Community)(?:\/|$)/i.test(renderedTarget)) {
+            throw new Error('Move would change a captured reference scope; update the checkpoint explicitly before moving across scopes.');
+        }
+        const logical = root ? renderedTarget.slice(root.length + 1) : renderedTarget;
+        destination = `scope://${scoped.kind}/${scoped.id ? `${scoped.id}/` : ''}${logical}`;
+    }
     const keepExtension = /\.(?:md|markdown|txt)$/i.test(document);
     const leading = value.slice(0, value.length - value.trimStart().length);
     const trailing = value.slice(value.trimEnd().length);
@@ -439,6 +466,7 @@ export class FileSystemService {
     metadataIndex;
     graphIndex;
     vaultIo;
+    scopeAccess;
     frontmatterHandler;
     pathFilter;
     mutationTails = new Map();
@@ -489,12 +517,13 @@ export class FileSystemService {
             : this.withMutationLockKey(ordered[index], () => acquire(index + 1));
         return acquire(0);
     }
-    constructor(vaultPath, pathFilter, frontmatterHandler, onNoteChanged, metadataIndex, graphIndex, vaultIo = new VaultIoCoordinator()) {
+    constructor(vaultPath, pathFilter, frontmatterHandler, onNoteChanged, metadataIndex, graphIndex, vaultIo = new VaultIoCoordinator(), scopeAccess = new ScopeAccessPolicy()) {
         this.vaultPath = vaultPath;
         this.onNoteChanged = onNoteChanged;
         this.metadataIndex = metadataIndex;
         this.graphIndex = graphIndex;
         this.vaultIo = vaultIo;
+        this.scopeAccess = scopeAccess;
         const resolved = resolve(vaultPath);
         try {
             this.vaultPath = realpathSync(resolved);
@@ -1389,6 +1418,8 @@ export class FileSystemService {
                         sourceContent,
                         descriptor: {
                             path: sourcePath,
+                            qualifiedPaths: this.scopeAccess.isCommunityPath(sourcePath)
+                                ? [`scope://community/${this.scopeAccess.getCommandCenterId()}/${sourcePath.slice('Community/'.length)}`] : [],
                             title: frontmatter.title,
                             aliases: frontmatter.aliases,
                             preferredTerm: frontmatter.preferred_term,
@@ -1414,7 +1445,7 @@ export class FileSystemService {
         for (const { sourcePath, sourceContent } of documents) {
             if (!includeMovedSource && sourcePath.toLowerCase() === oldPath.toLowerCase())
                 continue;
-            if (sourcePath.toLowerCase() === newPath.toLowerCase() && sourcePath.toLowerCase() !== oldPath.toLowerCase())
+            if (includeMovedSource && sourcePath.toLowerCase() === newPath.toLowerCase() && sourcePath.toLowerCase() !== oldPath.toLowerCase())
                 continue;
             const plan = planMoveReferenceRewrite(this.frontmatterHandler, sourceContent, sourcePath, oldPath, newPath, referenceIndex);
             if (!canAccessPath(sourcePath)) {
@@ -1441,7 +1472,7 @@ export class FileSystemService {
         if (!Number.isInteger(requestedLimit) || requestedLimit < 1)
             throw new Error('limit must be a positive integer');
         const limit = Math.min(requestedLimit, 200);
-        const scan = await this.collectMoveReferencePlans(path, `__mcpvault_deleted__/${path}`, canAccessPath, false);
+        const scan = await this.collectMoveReferencePlans(path, `${path}.__mcpvault_deleted__`, canAccessPath, false);
         const affectedLinks = [];
         const affectedProperties = [];
         const ambiguousReferences = [];

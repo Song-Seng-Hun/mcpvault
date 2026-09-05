@@ -32,14 +32,19 @@ export interface FrontmatterReferenceValue {
  */
 const NON_NAVIGATIONAL_REFERENCE_ROOTS = new Set([
   'review_basis_links', 'review_basis_upstream', 'pending_edits', 'research_trail',
+  'learning_progress',
 ]);
 
 export function isNavigationalFrontmatterReference(reference: FrontmatterReferenceValue): boolean {
   return !NON_NAVIGATIONAL_REFERENCE_ROOTS.has(reference.root);
 }
 
-/** Captured file paths are Vault-relative identities, not authored wikilinks. */
+/** Captured file paths are Vault-relative identities or durable scope URIs, not authored wikilinks. */
 export function isReferenceSnapshotPath(segments: Array<string | number>): boolean {
+  if (segments[0] === 'learning_progress') {
+    return (segments.length === 2 && ['root_path', 'completed_through'].includes(String(segments[1])))
+      || (segments.length === 4 && segments[1] === 'entries' && typeof segments[2] === 'number' && segments[3] === 'path');
+  }
   if (segments[0] === 'review_basis_upstream') {
     return segments.length === 4 && segments[1] === 'entries' && typeof segments[2] === 'number' && segments[3] === 'path';
   }
@@ -52,6 +57,7 @@ export function propertyPathText(segments: Array<string | number>): string {
 }
 
 export function acceptsPlainReference(segments: Array<string | number>): boolean {
+  if (isReferenceSnapshotPath(segments)) return true;
   const names = segments.filter((segment): segment is string => typeof segment === 'string');
   const root = names[0] || '';
   const leaf = names.at(-1) || '';

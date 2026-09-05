@@ -367,7 +367,7 @@ export function createServer(vaultPath, options = {}) {
     let notificationsCache;
     let communityFeaturesCache;
     let llmWikiCache;
-    const fileSystem = new FileSystemService(resolvedVaultPath, pathFilter, frontmatterHandler, queueReadModelChange, metadataIndex, graphIndex, vaultIo);
+    const fileSystem = new FileSystemService(resolvedVaultPath, pathFilter, frontmatterHandler, queueReadModelChange, metadataIndex, graphIndex, vaultIo, scopeAccess);
     const gitHistory = new GitHistoryService(resolvedVaultPath, pathFilter);
     const collaboration = new CollaborationService(fileSystem, searchService);
     const references = new ReferenceService(fileSystem, scopeAccess);

@@ -407,6 +407,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     metadataIndex,
     graphIndex,
     vaultIo,
+    scopeAccess,
   );
   const gitHistory = new GitHistoryService(resolvedVaultPath, pathFilter);
   const collaboration = new CollaborationService(fileSystem, searchService);

@@ -136,7 +136,17 @@ Ordinary prose fields are unchanged. Delete impact includes these references,
 while inaccessible referring notes produce only a hidden-reference flag.
 Snapshot file identities (`review_basis_links[].path`,
 `review_basis_upstream.entries[].path`, `pending_edits[].path`,
-`research_trail[].path`) remain canonical Vault-relative paths after moves.
+`research_trail[].path`, `learning_progress.root_path`,
+`learning_progress.completed_through`, `learning_progress.entries[].path`)
+remain canonical Vault-relative paths or preserve their durable scope URI
+namespace after same-scope moves. Only Global/model/agent and this server's
+Community URIs are supported; foreign Community and host-only User URIs are
+not interpreted as local references. Scoped snapshots cannot be automatically
+rewritten across namespaces. Malformed supported URIs fail closed with no
+private value in the error. These historical paths count in delete impact but
+are not live graph edges. Learning revisions/fingerprints remain unchanged;
+resume validates drift and returns a fresh learning-path recovery action at
+the relocated root instead of certifying old progress.
 Move rewrites never update their captured revisions or certify summary/review
 digests. Resolved upstream entries compare their actual path, not display
 target spelling; unresolved entries still compare the authored target.

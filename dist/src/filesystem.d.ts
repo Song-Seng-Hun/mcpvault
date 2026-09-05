@@ -5,6 +5,7 @@ import { type DailyDateInput } from './daily.js';
 import type { VaultMetadataIndex } from './vault-index.js';
 import { VaultGraphIndex } from './vault-graph.js';
 import { VaultIoCoordinator } from './vault-io.js';
+import { ScopeAccessPolicy } from './scope-access.js';
 import { type PackedQueryPage } from './query-page.js';
 /** Hard per-note write limit so stdio callers cannot exhaust the vault disk. */
 export declare const MAX_NOTE_CONTENT_BYTES: number;
@@ -26,6 +27,7 @@ export declare class FileSystemService {
     private readonly metadataIndex?;
     private readonly graphIndex?;
     private readonly vaultIo;
+    private readonly scopeAccess;
     private frontmatterHandler;
     private pathFilter;
     private mutationTails;
@@ -37,7 +39,7 @@ export declare class FileSystemService {
     private withMutationLockKey;
     /** Acquire several note locks in one stable order so reciprocal edits cannot deadlock. */
     private withMutationLocks;
-    constructor(vaultPath: string, pathFilter?: PathFilter, frontmatterHandler?: FrontmatterHandler, onNoteChanged?: ((path: string, kind: 'upsert' | 'delete') => void | Promise<void>) | undefined, metadataIndex?: VaultMetadataIndex | undefined, graphIndex?: VaultGraphIndex | undefined, vaultIo?: VaultIoCoordinator);
+    constructor(vaultPath: string, pathFilter?: PathFilter, frontmatterHandler?: FrontmatterHandler, onNoteChanged?: ((path: string, kind: 'upsert' | 'delete') => void | Promise<void>) | undefined, metadataIndex?: VaultMetadataIndex | undefined, graphIndex?: VaultGraphIndex | undefined, vaultIo?: VaultIoCoordinator, scopeAccess?: ScopeAccessPolicy);
     /**
      * Normalize an incoming path to be vault-relative. Strips leading slashes
      * and the vault path prefix when a caller accidentally passes an absolute path

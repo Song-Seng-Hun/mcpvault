@@ -6,6 +6,9 @@ import { ContinuityService } from './continuity.js';
 import { FileSystemService } from './filesystem.js';
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
+import { LlmWikiService } from './llm-wiki.js';
+import { ReferenceService } from './references.js';
+import { ScopeAccessPolicy } from './scope-access.js';
 
 const vaults: string[] = [];
 afterEach(async () => { for (const vault of vaults.splice(0)) await rm(vault, { recursive: true, force: true }); });
@@ -105,6 +108,30 @@ test('learning progress resumes at the next MOC entry and blocks stale paths', a
   });
   expect(completed.learningProgress).toMatchObject({ state: 'complete', complete: true, completedCount: 3, entriesTracked: 3 });
   expect(completed.learningProgress.next).toBeUndefined();
+});
+
+test('real MOC relocation keeps a usable checkpoint recovery path without certifying old progress', async () => {
+  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-continuity-'));
+  vaults.push(vault);
+  const fs = new FileSystemService(vault), access = new ScopeAccessPolicy();
+  const wiki = new LlmWikiService(fs, access, new ReferenceService(fs, access));
+  const continuity = new ContinuityService(fs, { access, buildLearningPath: (principal, path, depth, limit, chars) => wiki.learningPath(principal, path, depth, limit, chars, true) });
+  const principal = { accountId: 'reader', modelId: 'codex', agentId: 'worker', role: 'agent' as const };
+  await fs.writeNote({ path: 'MOC.md', content: '# Map\n[[A.md]]\n[[B.md]]\n', frontmatter: { note_kind: 'moc', llm_wiki_type: 'knowledge' } });
+  for (const path of ['A.md', 'B.md']) await fs.writeNote({ path, content: '# Entry\n', frontmatter: { note_kind: 'atomic', llm_wiki_type: 'knowledge' } });
+  await continuity.save({ principal, topic: 'Learn', summary: 'Read A', nextAction: 'Read B', learningProgress: { rootPath: 'MOC.md', completedThrough: 'A.md' } });
+  const checkpointPath = '_scopes/agents/worker/_continuity/work-state.md';
+  const before = (await fs.readNote(checkpointPath)).frontmatter.learning_progress;
+  const canAccess = (path: string) => access.canAccessPhysicalPath(path, principal);
+  expect((await fs.moveNote({ oldPath: 'MOC.md', newPath: 'Renamed.md', updateLinks: true, expectedRevision: (await fs.readNote('MOC.md')).revision }, canAccess)).success).toBe(true);
+  const stored = (await fs.readNote(checkpointPath)).frontmatter.learning_progress;
+  expect(stored.root_path).toBe('Renamed.md');
+  expect(stored.root_revision).toBe(before.root_revision);
+  expect(stored.structure_fingerprint).toBe(before.structure_fingerprint);
+  const resumed = await continuity.read({ principal });
+  expect(resumed.learningProgress).toMatchObject({ state: 'stale', canResume: false, completedThrough: 'A.md', nextAction: { endpointId: 'wiki.learning_path', arguments: { path: 'Renamed.md' } } });
+  expect(resumed.learningProgress.next).toBeUndefined();
+  expect(resumed.learningProgress.drift.validationError).toBeUndefined();
 });
 
 test('learning progress rejects inaccessible, incomplete, and unsafe sequences', async () => {
