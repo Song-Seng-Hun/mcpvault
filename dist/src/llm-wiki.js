@@ -24,6 +24,10 @@ const sourceTrustLevels = new Set(SOURCE_TRUST_LEVELS);
 const PROMOTION_CATEGORIES = new Map([['research', 5], ['proposal', 4], ['agora', 3], ['discussion', 2], ['feedback', 2]]);
 const WELCOME_NOTE_PATH = '환영합니다!.md';
 const PUBLIC_SCHEMA_PATH = '_wiki/SCHEMA.md';
+function isPlanningProject(note) {
+    return note.frontmatter.llm_wiki_type === 'knowledge' && note.frontmatter.note_kind === 'project'
+        && !['archived', 'superseded'].includes(String(note.frontmatter.lifecycle || '').toLowerCase());
+}
 const claimStatuses = new Set(CLAIM_STATUSES);
 const claimRoles = new Set(CLAIM_ROLES);
 const CLAIM_RELATION_FIELDS = [
@@ -1233,11 +1237,7 @@ export class LlmWikiService {
      */
     async workDependencySnapshot(principal, includeContent = false) {
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
-        const notes = [];
-        for await (const note of iterateNotes(this.fileSystem, { includeContent }, canAccess)) {
-            if (!isModerationHidden(note.frontmatter))
-                notes.push(note);
-        }
+        const notes = await this.fileSystem.readQueryInventory(canAccess, note => !isModerationHidden(note.frontmatter), includeContent ? isPlanningProject : undefined);
         const isWorkNote = (note) => isActionableKnowledge(note.frontmatter);
         const workNotes = notes.filter(isWorkNote);
         const visibleByPath = new Map(notes.map(note => [normalizePath(note.path).toLowerCase(), note]));
@@ -6808,11 +6808,9 @@ export class LlmWikiService {
         };
         const concreteNextAction = (value) => Boolean(value && value.length >= 8 && !/^(?:research|investigate|review|improve|handle|work on|continue|look into|figure out|explore)\b/i.test(value.trim()));
         for (const note of dependencySnapshot.workNotes) {
-            if (note.frontmatter.llm_wiki_type !== 'knowledge' || note.frontmatter.note_kind !== 'project')
+            if (!isPlanningProject(note))
                 continue;
             const lifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
-            if (lifecycle === 'archived' || lifecycle === 'superseded')
-                continue;
             total += 1;
             const nextActions = Array.isArray(note.frontmatter.next_actions) ? note.frontmatter.next_actions.filter((item) => typeof item === 'string').slice(0, 8) : [];
             const nextAction = typeof note.frontmatter.next_action === 'string' ? note.frontmatter.next_action : undefined;

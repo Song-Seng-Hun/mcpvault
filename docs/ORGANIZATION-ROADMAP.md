@@ -332,7 +332,7 @@ do not prove a current, bounded, actionable response through its public adapter.
   searches, unknown-path reconciliation, close/failure recovery and clean-read IO.
   This resolves that proven delivery-to-index gap, not every possible cause of
   the earlier intermittent waiting-item omission. OS-undelivered notifications
-  and workDependencySnapshot's independent snapshot consistency remain open.
+  remain open. The later work-inventory fix below removes independent page mixing.
 - Catalog notification and core read-index failure semantics now distinguish
   confirmed absence from IO/permission failure. Shared stat/directory readers
   reject path-free errors; watcher errors reach batch subscribers; failed
@@ -343,7 +343,7 @@ do not prove a current, bounded, actionable response through its public adapter.
 - **Open: independent IO and snapshot audits.** Semantic indexes and other
   service-specific catches do not inherit the core-index contract automatically.
   Cached files not selected for refresh are not continuously revalidated.
-  Scope-aware graph/Canvas freshness and work-snapshot race audits remain open;
+  Scope-aware graph/Canvas freshness and unobserved external work-snapshot races remain open;
   core read-model fault tests are not proof of all derived views' completeness.
 - Semantic query hydration now checks current hashes/moderation even on cached
   candidates, guards generation drift, and keeps backend faults bounded while
@@ -552,10 +552,17 @@ do not prove a current, bounded, actionable response through its public adapter.
   stats; dirty reads now share the 32-read full-refresh batch bound and failures
   drain before rejection. Regression coverage includes a prerequisite reopened
   during IO: its dependent action must not be offered as ready. This is an index
-  read barrier, not atomic filesystem snapshots. `workDependencySnapshot` still
-  combines independent metadata pages, and project planning still hydrates
-  unrelated bodies; single-inventory capture and selective revision-checked
-  project hydration remain concrete follow-up work.
+  read barrier, not atomic filesystem snapshots.
+- `workDependencySnapshot` now captures a single metadata inventory rather than
+  combining independently refreshed pages. Project planning hydrates only its
+  visible non-retired knowledge projects, checks body revisions, and compares
+  visible inventory membership/revisions after hydration. Off-project dependency
+  changes also reject the plan. Reads use drained 16-source batches with complete
+  8 MiB source limits; a no-index reader parses one path inventory once, without
+  the previous repeated scans per 500 rows. Scope-invisible changes do not leak
+  through cohort validation. Unobserved filesystem races, whole-inventory/selected
+  body memory, and project-packet response packing remain separate audit topics;
+  this is not an OS transaction, globally retained snapshot or partial plan.
 
 Record new concrete gaps here when registered schema, dispatcher, service,
 persistent representation, guide, invalidation, or bounded failure evidence

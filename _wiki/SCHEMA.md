@@ -254,6 +254,15 @@ links or paths to planning material. Keep project support separate from the
 executable `next_action` list; `get_wiki_project_packet` gives a bounded
 Natural Planning review of purpose, outcome, brainstorm, support, and next
 action completeness. These are advisory projections, not a second database.
+Work dependency projections use a single captured metadata inventory per
+request. Project planning hydrates only visible, non-retired knowledge projects
+with matching revisions (at most 16 reads per batch; 8 MiB per complete source).
+It validates the visible inventory again after hydration; changed dependency,
+alias-candidate, membership or visibility metadata requires restarting the query,
+not returning a mixed plan. Private invisible changes are outside this cohort.
+The no-index fallback captures paths once and parses each source once. Neither
+path is an atomic filesystem transaction or a guarantee of OS event delivery;
+the inventory and selected bodies still have vault-dependent total memory cost.
 Source snapshots should keep `citation_key` unique; `lint_wiki` reports
 duplicate keys before source references become ambiguous.
 Optional

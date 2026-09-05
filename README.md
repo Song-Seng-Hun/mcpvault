@@ -569,6 +569,18 @@ Keep support material separate from the executable `next_action` list; use
 `get_wiki_project_packet` for a bounded Natural Planning review of purpose,
 outcome, brainstorm, support, next-action completeness, and the same derived
 dependency readiness used by the action and flow views.
+Work, flow, review and project projections capture one request-local metadata
+inventory instead of stitching independently refreshed 500-row pages together.
+Project planning hydrates only visible, non-retired knowledge-project bodies,
+in drained batches of at most 16 complete 8 MiB reads. It checks each body
+revision and rechecks the visible inventory after hydration, including changed
+prerequisites and reference candidates. A query-snapshot error means discard
+the result and rerun the same endpoint after writes settle; it is not evidence
+that a task is executable. Other models' hidden changes do not invalidate the
+visible cohort. No-index readers parse one captured path inventory once.
+This removes page mixing, not external-writer races or OS notification limits;
+the whole work graph and selected project bodies still consume vault-dependent
+memory. No client setup or new MCP tool is required.
 The MCP server exposes only a compact always-on constitution so its fixed five
 tools do not repeatedly consume the full organization manual. The dynamic
 `wiki.policy` endpoint

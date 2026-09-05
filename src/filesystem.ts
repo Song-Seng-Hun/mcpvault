@@ -2725,6 +2725,60 @@ export class FileSystemService {
     });
   }
 
+  /** Internal whole-inventory consumer. Unlike independent cursor pages, all
+   * rows belong to one captured metadata cohort. This is not an OS transaction. */
+  async readQueryInventory(
+    canAccessPath: (path: string) => boolean,
+    canReadNote: (note: QueryNote) => boolean,
+    includeContentFor?: (note: QueryNote) => boolean,
+  ): Promise<QueryNote[]> {
+    const admitted = (note: QueryNote) => this.pathFilter.isAllowed(note.path)
+      && canAccessPath(note.path) && canReadNote(note);
+    const captureMetadata = async (): Promise<QueryNote[]> => (await this.metadataIndex!.list())
+      .map(entry => ({ path: this.normalizePath(entry.path), frontmatter: entry.frontmatter, revision: entry.revision }))
+      .filter(admitted);
+    if (!this.metadataIndex) {
+      const paths = (await this.collectVaultFiles()).map(path => this.normalizePath(path))
+        .filter(path => /\.(?:md|markdown|txt)$/i.test(path) && this.pathFilter.isAllowed(path) && canAccessPath(path));
+      const notes: QueryNote[] = [];
+      for (const path of paths) {
+        let raw: string;
+        try { raw = await this.vaultIo.readUtf8Bounded(this.resolvePath(path), MAX_NOTE_CONTENT_BYTES); }
+        catch (error) {
+          if (error instanceof SourceReadLimitError) throw error;
+          if (isMissingVaultPath(error)) throw new QuerySnapshotChangedError();
+          throw new VaultReadUnavailableError();
+        }
+        const parsed = this.frontmatterHandler.parse(raw);
+        const note: QueryNote = { path, frontmatter: parsed.frontmatter, revision: this.revision(raw) };
+        if (admitted(note)) notes.push(includeContentFor?.(note) ? { ...note, content: parsed.content } : note);
+      }
+      if (notes.some(note => !admitted(note))) throw new QuerySnapshotChangedError();
+      return notes;
+    }
+    const notes = await captureMetadata();
+    if (!includeContentFor) return notes;
+    const selected = notes.filter(includeContentFor);
+    if (!selected.length) return notes;
+    const hydrated = new Map<string, QueryNote>();
+    for (let start = 0; start < selected.length; start += 16) {
+      const batch = await Promise.allSettled(selected.slice(start, start + 16).map(note =>
+        this.hydrateQueryNote(note, canAccessPath, canReadNote,
+          path => this.vaultIo.readUtf8Bounded(path, MAX_NOTE_CONTENT_BYTES))));
+      const failure = batch.find(result => result.status === 'rejected');
+      if (failure?.status === 'rejected') throw failure.reason;
+      for (const result of batch) if (result.status === 'fulfilled') hydrated.set(result.value.path, result.value);
+    }
+    // A prerequisite, alias candidate or visibility change can invalidate the
+    // plan even when no selected project's own body changed.
+    const current = await captureMetadata();
+    const revisions = new Map(current.map(note => [note.path, note.revision]));
+    if (current.length !== notes.length || notes.some(note => !revisions.has(note.path) || revisions.get(note.path) !== note.revision)) {
+      throw new QuerySnapshotChangedError();
+    }
+    return notes.map(note => hydrated.get(note.path) || note);
+  }
+
   async queryNotes(params: QueryNotesParams = {}, canAccessPath: (path: string) => boolean = () => true, canReadNote: (note: QueryNote) => boolean = () => true): Promise<QueryNotesResult> {
     const requestedLimit = params.limit ?? 100;
     if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {

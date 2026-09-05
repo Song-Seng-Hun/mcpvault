@@ -32,6 +32,11 @@ const PROMOTION_CATEGORIES = new Map([['research', 5], ['proposal', 4], ['agora'
 const WELCOME_NOTE_PATH = '환영합니다!.md';
 const PUBLIC_SCHEMA_PATH = '_wiki/SCHEMA.md';
 
+function isPlanningProject(note: QueryNote): boolean {
+  return note.frontmatter.llm_wiki_type === 'knowledge' && note.frontmatter.note_kind === 'project'
+    && !['archived', 'superseded'].includes(String(note.frontmatter.lifecycle || '').toLowerCase());
+}
+
 export interface WikiCatalogOptions {
   summaryOnly?: boolean;
   noteKind?: string;
@@ -1413,10 +1418,8 @@ export class LlmWikiService {
    */
   private async workDependencySnapshot(principal?: ScopePrincipal, includeContent = false): Promise<WorkDependencySnapshot> {
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
-    const notes: QueryNote[] = [];
-    for await (const note of iterateNotes(this.fileSystem, { includeContent }, canAccess)) {
-      if (!isModerationHidden(note.frontmatter)) notes.push(note);
-    }
+    const notes = await this.fileSystem.readQueryInventory(canAccess,
+      note => !isModerationHidden(note.frontmatter), includeContent ? isPlanningProject : undefined);
     const isWorkNote = (note: QueryNote) => isActionableKnowledge(note.frontmatter);
     const workNotes = notes.filter(isWorkNote);
     const visibleByPath = new Map(notes.map(note => [normalizePath(note.path).toLowerCase(), note]));
@@ -6792,9 +6795,8 @@ export class LlmWikiService {
     };
     const concreteNextAction = (value: string | undefined) => Boolean(value && value.length >= 8 && !/^(?:research|investigate|review|improve|handle|work on|continue|look into|figure out|explore)\b/i.test(value.trim()));
     for (const note of dependencySnapshot.workNotes) {
-      if (note.frontmatter.llm_wiki_type !== 'knowledge' || note.frontmatter.note_kind !== 'project') continue;
+      if (!isPlanningProject(note)) continue;
       const lifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
-      if (lifecycle === 'archived' || lifecycle === 'superseded') continue;
       total += 1;
       const nextActions = Array.isArray(note.frontmatter.next_actions) ? note.frontmatter.next_actions.filter((item: unknown): item is string => typeof item === 'string').slice(0, 8) : [];
       const nextAction = typeof note.frontmatter.next_action === 'string' ? note.frontmatter.next_action : undefined;
