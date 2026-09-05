@@ -198,7 +198,18 @@ resolution also checks the target revision, including its indexed aliases.
 Reference
 previews carry the raw source `revision` captured with their parsed context;
 changed, missing, or hidden previews are discarded rather than relabelled as
-current. `incomingLinksAdvisory: true` marks the graph-derived count as advisory,
+current. A candidate probes at most 64 link occurrences, freshly validates each
+distinct source path once, and retains at most four distinct-source previews.
+Repeated/stale occurrences cannot consume all four slots when other current
+sources exist in that probe. `referenceScanTruncated` marks further unprobed
+occurrences; `referencesNextAction` uses the existing `mcp.get_backlinks` endpoint
+with an exact public path and the emitted probe offset. It inspects current
+backlinks, not a revision-pinned scan continuation. A top-level incomplete flag
+and revalidated follow-up can survive an empty recommendation sample; do not
+infer absence of useful references from that result. A target observed hidden,
+changed or missing on this final validation loses both its route and old row.
+Distinct documents do not imply independent factual corroboration.
+`incomingLinksAdvisory: true` marks the graph-derived occurrence count as advisory,
 not a claim that all indexed links are a cross-file snapshot. Re-read a selected
 note through its exact `nextAction` before any revision-checked mutation.
 The whole response respects `maxChars`. If an exact read/scan path cannot fit,

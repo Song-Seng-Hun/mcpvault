@@ -860,8 +860,18 @@ only when current visible notes still link to them. These are advisory read
 projections: they never become truth scores, publication gates, automatic
 restores, or automatic moves.
 Archive rediscovery (`wiki.resurface_archives`) now returns an exact
-revision-bearing `notes.read` action and at most four reference previews pinned
-to the revision that supplied their context. Hidden, removed, reactivated, or
+revision-bearing `notes.read` action and at most four reference previews from
+distinct referring documents, pinned to the revisions that supplied their
+context. Repeated links from one document do not occupy all preview slots.
+The internal probe is capped at 64 link occurrences per candidate. If more
+remain, `referenceScanTruncated` and `referencesNextAction` offer the existing
+backlink query starting after the probed occurrences; this reads the current
+graph, not a pinned cross-call snapshot. The top-level flag remains true even
+when all probed excerpts were stale and no recommendation could be shown:
+an empty incomplete sample is not evidence of no useful archive. One exact
+top-level follow-up target is revalidated before disclosure. Distinct documents
+are not necessarily independent evidence, and ranking still uses advisory link
+occurrences rather than the four sampled documents. Hidden, removed, reactivated, or
 changed candidates and obsolete previews are omitted; replacement links expose
 only current, referenceable targets. The resolver's target revision is checked
 too, so a stale target alias cannot validate an obsolete edge.

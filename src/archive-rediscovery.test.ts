@@ -34,6 +34,91 @@ async function seed(path: string, fields = 'lifecycle: archived', body = 'Preser
 }
 const digest = (raw: string) => createHash('sha256').update(raw).digest('hex');
 
+test.each([false, true])('archive previews distinct referring documents instead of repeated links with indexed=%s', async indexed => {
+  setup(indexed);
+  await seed('Old.md');
+  await seed('AReader.md', '', Array(12).fill('[[Old]]').join('\n'));
+  for (const name of ['BReader', 'CReader', 'DReader']) await seed(`${name}.md`, '', 'A distinct use of [[Old]]');
+  const result: any = await service.resurfaceArchivedKnowledge(undefined, 8, 12000);
+  expect(result.items[0].referringNotes.map((note: any) => note.path)).toEqual(['AReader.md', 'BReader.md', 'CReader.md', 'DReader.md']);
+  expect(result.items[0]).toMatchObject({ incomingLinks: 15, incomingLinksAdvisory: true, referenceScanTruncated: false });
+  expect(result.items[0].referencesNextAction).toBeUndefined();
+});
+
+test('archive can use a later fresh author when the first repeated author is stale', async () => {
+  setup(true);
+  await seed('Old.md');
+  await seed('AReader.md', '', Array(10).fill('Obsolete [[Old]]').join('\n'));
+  const valid = await seed('BReader.md', '', 'Current [[Old]] context');
+  await fs.getBacklinks('Old.md');
+  vi.spyOn(graph as any, 'ensure').mockResolvedValue(undefined);
+  await seed('AReader.md', '', 'No longer refers to it.');
+  const result: any = await service.resurfaceArchivedKnowledge(undefined, 8, 12000);
+  expect(result.items).toHaveLength(1);
+  expect(result.items[0].referringNotes).toEqual([expect.objectContaining({ path: 'BReader.md', revision: digest(valid) })]);
+  expect(JSON.stringify(result)).not.toContain('Obsolete');
+});
+
+test('archive caps reference probes and returns an exact authorized backlink continuation', async () => {
+  setup(true);
+  const folder = '_scopes/agents/worker/';
+  await seed(`${folder}Old.md`);
+  await seed(`${folder}AReader.md`, '', Array(80).fill('[[Old]]').join('\n'));
+  await seed(`${folder}BReader.md`, '', 'Later [[Old]]');
+  const probe = vi.spyOn(fs, 'getBacklinks');
+  const result: any = await service.resurfaceArchivedKnowledge(principal, 8, 12000);
+  expect(probe.mock.calls).toHaveLength(1);
+  expect(probe.mock.calls[0]![1]).toBe(64);
+  expect(result.items[0].referringNotes).toHaveLength(1);
+  expect(result.items[0]).toMatchObject({ referenceScanTruncated: true, referencesNextAction: {
+    endpointId: 'mcp.get_backlinks', arguments: { path: 'scope://agent/worker/Old.md', offset: 64, limit: 20, maxChars: 3000 },
+  } });
+  expect(JSON.stringify(result)).not.toMatch(/_scopes|accessToken/);
+});
+
+test('exhausting stale reference samples is incomplete, not proof that no useful archive exists', async () => {
+  setup(true);
+  await seed('Old.md');
+  await seed('AReader.md', '', Array(80).fill('Obsolete [[Old]]').join('\n'));
+  await seed('BReader.md', '', 'Later current [[Old]]');
+  await fs.getBacklinks('Old.md');
+  vi.spyOn(graph as any, 'ensure').mockResolvedValue(undefined);
+  await seed('AReader.md', '', 'No longer refers to it.');
+  const result: any = await service.resurfaceArchivedKnowledge(undefined, 8, 12000);
+  expect(result).toMatchObject({ items: [], truncated: true, referenceScanTruncated: true,
+    referencesNextAction: { endpointId: 'mcp.get_backlinks', arguments: { path: 'Old.md', offset: 64 } } });
+  expect(JSON.stringify(result)).not.toContain('Obsolete');
+});
+
+test.each(['hidden', 'edited', 'deleted'])('reference follow-up never exposes a target observed %s at its final check', async change => {
+  setup(true);
+  await seed('Old.md');
+  await seed('Reader.md', '', Array(80).fill('[[Old]]').join('\n'));
+  const validate = (service as any).currentMaintenanceCandidates.bind(service);
+  vi.spyOn(service as any, 'currentMaintenanceCandidates').mockImplementation(async (...args: unknown[]) => {
+    const result = await validate(...args);
+    if (change === 'deleted') await rm(join(vault, 'Old.md'));
+    else await seed('Old.md', change === 'hidden' ? 'lifecycle: archived\nmoderation_status: hidden' : 'lifecycle: evergreen');
+    return result;
+  });
+  const result: any = await service.resurfaceArchivedKnowledge(undefined, 8, 12000);
+  expect(result.items).toEqual([]);
+  expect(result.referencesNextAction).toBeUndefined();
+  expect(JSON.stringify(result)).not.toContain('Old.md');
+});
+
+test('reference continuation metadata also respects the smallest whole-response budgets', async () => {
+  setup(true);
+  await seed('Old.md');
+  await seed('Reader.md', '', Array(80).fill('[[Old]]').join('\n'));
+  for (const budget of [512, 700, 1200]) {
+    const result: any = await service.resurfaceArchivedKnowledge(undefined, 8, budget);
+    expect(JSON.stringify(result).length).toBeLessThanOrEqual(budget);
+    expect(result.truncated).toBe(true);
+    expect(result.referencesNextAction || result.retry).toBeTruthy();
+  }
+});
+
 test('archive excludes hidden and foreign notes before counts and probing', async () => {
   await seed('Visible.md');
   for (const status of ['hidden', 'removed', 'quarantined']) await seed(`${status}.md`, `lifecycle: archived\nmoderation_status: ${status}`);

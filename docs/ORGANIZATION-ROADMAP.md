@@ -516,6 +516,14 @@ do not prove a current, bounded, actionable response through its public adapter.
   bounded 8 MiB source reads; failed batches drain and remain retryable. Oversized
   sources fail graph queries without partial success or process shutdown. Total
   graph memory, unseen OS changes and cross-process atomicity remain limitations.
+- Archive reference samples now select four distinct current source documents
+  from a bounded 64-occurrence probe; repeated or stale first-author links no
+  longer hide other available usage contexts. Probe overflow has a current
+  backlink follow-up and remains explicit even with no valid sample. The final
+  follow-up target is checked again and known changed/hidden targets lose their
+  old recommendation too. Occurrence-based ranking is still advisory; these
+  documents are not automatically independent evidence. Whole JSON remains
+  bounded and this does not reduce the whole-inventory counting cost.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

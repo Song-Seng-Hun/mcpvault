@@ -12010,6 +12010,11 @@ export class LlmWikiService {
     }
     if (scanPaths.length) await scanBatch(scanPaths);
     let matchedInWindow = 0;
+    let referenceScanTruncated = false;
+    let pendingReferenceRead: { path: string; revision: string | undefined; offset: number } | undefined;
+    const referenceAction = (path: string, offset: number) => ({ endpointId: 'mcp.get_backlinks', arguments: {
+      path: this.access.toPublicPath(path), offset, limit: 20, maxChars: 3000,
+    } });
     const compare = (left: Record<string, any>, right: Record<string, any>) => right.incomingLinks - left.incomingLinks || String(left.path).localeCompare(String(right.path));
     for (let offset = 0; offset < probe.length; offset += 8) {
       const rows = await Promise.all(probe.slice(offset, offset + 8).map(async item => {
@@ -12017,21 +12022,37 @@ export class LlmWikiService {
         if (!note || !inactive(note) || note.revision !== item.revision) return undefined;
         let backlinks;
         try {
-          backlinks = await this.fileSystem.getBacklinks(item.path, 4, canAccess, 0, { includeSourceRevision: true });
+          backlinks = await this.fileSystem.getBacklinks(item.path, 64, canAccess, 0, { includeSourceRevision: true });
         } catch (error) {
           if ((await fresh([item.path])).length) throw error;
           return undefined;
         }
         if (!backlinks.total || !backlinks.targetRevision || backlinks.targetRevision !== note.revision) return undefined;
-        const authors = await fresh(backlinks.backlinks.map(link => link.path));
+        if (backlinks.truncated) {
+          referenceScanTruncated = true;
+          // Keep one deterministic inspection route even if every probed
+          // excerpt is stale. It will be revalidated before disclosure.
+          if (!pendingReferenceRead || item.path < pendingReferenceRead.path) {
+            pendingReferenceRead = { path: item.path, revision: note.revision, offset: backlinks.backlinks.length };
+          }
+        }
+        const authors = await fresh([...new Set(backlinks.backlinks.map(link => link.path))]);
         const revisions = new Map(authors.filter(source => !isModerationHidden(source.frontmatter)).map(source => [source.path, source.revision]));
-        const referringNotes = backlinks.backlinks.filter(link => link.sourceRevision && revisions.get(link.path) === link.sourceRevision)
-          .map(link => ({ path: this.access.toPublicPath(link.path), revision: link.sourceRevision, line: link.line, context: boundedText(link.context, 240) }));
+        const seenAuthors = new Set<string>();
+        const referringNotes: Array<{ path: string; revision: string; line: number; context: string }> = [];
+        for (const link of backlinks.backlinks) {
+          if (seenAuthors.has(link.path) || !link.sourceRevision || revisions.get(link.path) !== link.sourceRevision) continue;
+          seenAuthors.add(link.path);
+          referringNotes.push({ path: this.access.toPublicPath(link.path), revision: link.sourceRevision, line: link.line, context: boundedText(link.context, 240) });
+          if (referringNotes.length === 4) break;
+        }
         if (!referringNotes.length) return undefined;
         const path = this.access.toPublicPath(item.path);
         return { path, title: boundedText(note.frontmatter.title || item.path.split('/').at(-1), 160),
           lifecycle: String(note.frontmatter.lifecycle).toLowerCase(), revision: note.revision,
           incomingLinks: backlinks.total, incomingLinksAdvisory: true, referringNotes,
+          referenceScanTruncated: backlinks.truncated,
+          ...(backlinks.truncated && { referencesNextAction: referenceAction(item.path, backlinks.backlinks.length) }),
           _replacement: note.frontmatter.replaced_by, _physicalPath: item.path,
           ...(note.frontmatter.retention_reason && { retentionReason: boundedText(note.frontmatter.retention_reason, 300) }),
           reason: 'referenced_by_current_visible_note', suggestedAction: 'read_current_revision_before_restoring_or_replacing',
@@ -12052,6 +12073,15 @@ export class LlmWikiService {
     const revisions = new Map(authors.filter(note => !isModerationHidden(note.frontmatter)).map(note => [this.access.toPublicPath(note.path), note.revision]));
     items = items.map(item => ({ ...item, referringNotes: item.referringNotes.filter((link: any) => link.revision && revisions.get(link.path) === link.revision) }))
       .filter(item => item.referringNotes.length > 0);
+    const referenceTarget = pendingReferenceRead ? (await fresh([pendingReferenceRead.path]))[0] : undefined;
+    const referencesNextAction = referenceTarget && inactive(referenceTarget) && referenceTarget.revision === pendingReferenceRead?.revision
+      ? referenceAction(referenceTarget.path, pendingReferenceRead!.offset) : undefined;
+    if (pendingReferenceRead && !referencesNextAction) {
+      // The final inspection discovered a changed/hidden target. Remove its
+      // already-hydrated row too, not only the top-level follow-up route.
+      const unavailablePath = this.access.toPublicPath(pendingReferenceRead.path);
+      items = items.filter(item => item.path !== unavailablePath);
+    }
     const selectionTruncated = matchedInWindow > items.length;
     // Do not disclose a cursor that became hidden during candidate hydration.
     const last = probe.at(-1);
@@ -12061,9 +12091,10 @@ export class LlmWikiService {
       return { items: [], truncated: true, retry, reason: 'scan_changed_retry_same_request' };
     }
     const nextScan = cursor ? { endpointId: 'wiki.resurface_archives', arguments: { afterPath: this.access.toPublicPath(cursor.path), limit: boundedLimit, maxChars: boundedChars } } : undefined;
-    const base = { totalInactive, probed: probe.length, selectionTruncated, ...(nextScan && { nextScan }) };
+    const base = { totalInactive, probed: probe.length, selectionTruncated, ...(nextScan && { nextScan }),
+      ...(referenceScanTruncated ? { referenceScanTruncated: true } : {}), ...(referencesNextAction && { referencesNextAction }) };
     const makeResult = () => ({ ...base, items, selectionTruncated: selectionTruncated || items.length < hydrated.length,
-      truncated: hasLaterWindow || selectionTruncated || items.length < hydrated.length });
+      truncated: hasLaterWindow || selectionTruncated || items.length < hydrated.length || referenceScanTruncated });
     const full = { ...makeResult(), purpose: 'Path-ordered archive scan, ranked within this window only. Counts and links are advisory, not a snapshot. Nothing is restored, moved, or deleted.', generatedAt: now() };
     if (JSON.stringify(full).length <= boundedChars) return full;
     while (items.length > 1 && JSON.stringify(makeResult()).length > boundedChars) items.pop();

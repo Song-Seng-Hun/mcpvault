@@ -4295,6 +4295,16 @@ export declare class LlmWikiService {
                 maxChars: number;
             };
         };
+        referenceScanTruncated?: boolean;
+        referencesNextAction?: {
+            endpointId: string;
+            arguments: {
+                path: string;
+                offset: number;
+                limit: number;
+                maxChars: number;
+            };
+        };
         items: Record<string, any>[];
         selectionTruncated: boolean;
         truncated: boolean;
@@ -4305,6 +4315,16 @@ export declare class LlmWikiService {
             endpointId: string;
             arguments: {
                 afterPath: string;
+                limit: number;
+                maxChars: number;
+            };
+        };
+        referenceScanTruncated?: boolean;
+        referencesNextAction?: {
+            endpointId: string;
+            arguments: {
+                path: string;
+                offset: number;
                 limit: number;
                 maxChars: number;
             };
