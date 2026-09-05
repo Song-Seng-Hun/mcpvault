@@ -799,6 +799,22 @@ The board never copies free-form child diagnostics or nested actions. Its whole
 JSON fits `maxChars`, dropping optional prose/counts when needed; a long exact
 target instead returns `retry` with original arguments and a larger budget.
 Child views may be truncated: no candidates does not mean no remaining work.
+Direct `mcp.lint_wiki` and `wiki.organization_health` also honor the whole
+`maxChars` budget (512–16000). Compact reports keep a real finding and exact
+`nextAction` when it fits; otherwise apply `retry.overrides` to the original
+request. Do not invent a `wiki.lint` endpoint. Detailed child dashboards are
+optional in compact organization reports. Public lint totals remain those of
+the scan, even when fewer findings are returned; internal commit validation
+does not use the shortened presentation.
+Lint captures fresh scoped metadata and coherent note revisions, excludes
+moderation-hidden owners before collision/count calculations, and treats
+hidden or too-private evidence as unavailable without returning its identity.
+Known-file changes invalidate cached lint immediately; changes during lint or
+organization aggregation require retry. This verification performs metadata
+reads across known scoped files: it is neither a constant-time cache nor an
+atomic inventory of newly created files. Derived graph signals remain advisory;
+an owner revision does not prove every graph edge current. Use focused checks
+for ordinary repairs rather than polling full-Vault diagnostics.
 `get_wiki_quality_check` applies a small role-specific checklist
 to one current visible note. Its `assessment: authoring_structure` score counts
 authored structure only, not factual truth, source integrity, or verified

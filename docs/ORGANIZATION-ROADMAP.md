@@ -270,12 +270,24 @@ do not prove a current, bounded, actionable response through its public adapter.
   budgets or a same-request retry. Direct temporary-Vault and public MCP tests
   cover minimum budgets, hidden/changed owners, cached results and Canvas routes.
   Its partial count is explicitly not a Vault-wide health certificate.
-- **Open: child-view hygiene.** The exception-board audit observed that the
-  original lint/organization-health views can include moderation-hidden owner
-  findings and free-form reference details, and organization-health packing
-  still does not guarantee every minimum-sized result. The aggregate's guards
-  do not prove those independently callable views safe or bounded. Audit their
-  direct/MCP interfaces, dependent aggregation, and source/target revisions.
+- Direct lint/organization-health now exclude hidden owners before collisions
+  and collection groups, reject unavailable evidence without target identities,
+  check coherent known-source revisions on cache returns and aggregation, and
+  preserve actionable findings within whole-response budgets. Internal commit
+  totals remain separate from public compaction. Temporary-Vault hygiene and
+  MCP tests cover edits, hiding, deletion, IO failure, aggregate races, exact
+  scoped reads, 512-character output and original-request retry IDs.
+- **Open: independently derived child views.** Standalone graph/Canvas/collection
+  views still need direct audits for source/target freshness, visibility and
+  actionable minimum budgets. A checked lint inventory does not prove every
+  separately cached graph edge current. The new lint guard scans known metadata;
+  new-file discovery is not an atomic census. Measure large-inventory costs
+  before optimizing or claiming complete freshness across all child APIs.
+- **Observed verification timing risk.** The existing archive long-path retry
+  integration test exceeded its five-second timeout once during the full hygiene
+  run, passed alone in 1.68s, and passed on the next unmodified full run. Its
+  assertions/time limit were not relaxed. Reproduce under controlled filesystem
+  load before claiming this intermittent timing issue fixed.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

@@ -575,7 +575,7 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_organization_health',
-      description: 'Return one bounded report for PARA, Zettelkasten, Properties, typed links, GTD focus alignment, and progressive knowledge organization issues. It reuses the live Wiki lint scan plus derived graph signals, never moves or deletes notes, and treats folders as filing aids rather than security boundaries.',
+      description: 'Return one whole-budgeted report for PARA, Zettelkasten, Properties, typed links, GTD focus alignment, and knowledge organization. Hidden owners cannot contribute lint collisions or collection groups. Known-source revisions are checked again after aggregation; retry if the Wiki changes. This is advisory, not an atomic Vault census or a guarantee of graph freshness. Compact responses omit child dashboards before real findings; follow nextAction or repeat the original request with retry.overrides without shortening paths. Never moves or deletes notes; folders are filing aids, not security boundaries.',
       inputSchema: { type: 'object', properties: {
         limit: { type: 'integer', minimum: 1, maximum: 100, default: 30 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint,
       } },
@@ -836,8 +836,8 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'lint_wiki',
-      description: 'Deterministically check accessible Wiki sources, evidence grounding, integrity hashes, and broken wikilinks.',
-      inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 500, default: 200 }, accessToken, prettyPrint } },
+      description: 'Check visible Wiki sources, evidence, integrity hashes, Properties and links from a revision-checked known-source snapshot. Hidden notes do not contribute owner findings or collisions. A changed snapshot must be retried; this is not an atomic global census. Whole JSON respects maxChars; compact output keeps error priority, exact path/revision and nextAction but may omit detail. Follow nextAction before revision-safe repair. If retry.reuseOriginalArguments is true, repeat original arguments with retry.overrides. Counts retain the internal scan totals even when displayed issues are truncated; advisory diagnostics do not certify source truth.',
+      inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 500, default: 200 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
     },
     {
       name: 'report_wiki_issue',

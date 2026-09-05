@@ -358,6 +358,25 @@ never shortens paths or revisions. If an exact item cannot fit, repeat the
 original `wiki.exception_board` request with `retry.overrides`. Empty or
 truncated candidate output does not establish that the Vault is healthy.
 
+Direct `mcp.lint_wiki` uses the existing endpoint with `maxChars: 512..16000`.
+Its presentation carries `advisory: true`, `basis: known_source_snapshot`,
+complete lint error/warning totals, and bounded `issues`; optional details can
+be omitted before exact path/revision and `nextAction`. If no exact actionable
+item fits, return only advisory/basis/truncation and an original-request `retry`
+with a larger budget. Never interpret absent counts in that retry as zero.
+`wiki.organization_health` preserves its detailed contract at sufficient budgets
+and may use this smaller lint-shaped projection instead of child dashboards.
+Internal commit validation always consumes complete lint totals, not this view.
+Fresh metadata excludes moderation-hidden owners from identity, alias, type,
+authority and collection counts. Evidence must be visible and referenceable
+from its owner; rejection details identify the owner's declaration, not the
+unavailable source. Coherent Properties/body/revision snapshots are checked
+before returning a cache hit or new lint, and after organization aggregation.
+Changed known files recompute a cached result; mid-scan changes reject with a
+retry instruction. The private known-file guard requires metadata reads and
+is not an atomic new-file census or a certificate for derived graph snapshots.
+Unresolved-link graph findings without source provenance carry no owner revision.
+
 `wiki.quality_check` is a separate single-note **authoring structure** rubric,
 not factual verification. Its path must be Vault-relative or an authorized
 `scope://` URI; absolute and traversal aliases are rejected before reading.

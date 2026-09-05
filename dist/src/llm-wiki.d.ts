@@ -93,6 +93,7 @@ export declare class LlmWikiService {
     private readonly catalogSummaryInFlight;
     private readonly lintCache;
     private readonly lintInFlight;
+    private readonly lintSnapshots;
     constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, references: ReferenceService, semanticSearch?: SemanticSearchService | undefined);
     invalidate(): void;
     /**
@@ -3566,7 +3567,7 @@ export declare class LlmWikiService {
         routingRule: string;
         truncated: boolean;
     }>;
-    graphHealth(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+    graphHealth(principal?: ScopePrincipal, limit?: number, maxChars?: number, snapshotAccess?: (path: string) => boolean): Promise<{
         unresolvedLinks: {
             total: number;
             items: {
@@ -3939,7 +3940,7 @@ export declare class LlmWikiService {
      * scan instead of running separate folder/property scans, and never mutates
      * notes or treats organization hints as security boundaries.
      */
-    collectionHealth(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+    collectionHealth(principal?: ScopePrincipal, limit?: number, maxChars?: number, snapshotAccess?: (path: string) => boolean): Promise<{
         purpose: string;
         totalNotes: number;
         collectionTotal: number;
@@ -5031,6 +5032,8 @@ export declare class LlmWikiService {
         warnings: number;
     }>;
     lint(principal?: ScopePrincipal, limit?: number): Promise<WikiLintResult>;
+    lintReport(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<import("./lint-report.js").LintReport>;
+    private lintSnapshotMatches;
     private computeLint;
     proposeTermChange(params: {
         principal?: ScopePrincipal;

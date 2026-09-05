@@ -1874,7 +1874,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "lint_wiki": {
-          return jsonResult(await llmWiki.lint(principal, trimmedArgs.limit), trimmedArgs.prettyPrint);
+          return jsonResult(await llmWiki.lintReport(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
         }
 
         case "report_wiki_issue": {

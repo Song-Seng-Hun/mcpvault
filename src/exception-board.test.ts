@@ -76,14 +76,17 @@ test.each(['edited', 'hidden', 'deleted'])('exception board rejects owner %s bet
   expect(board.total).toBe(0);
 });
 
-test('cached lint findings retain original revision and cannot be relabeled as current', async () => {
+test('cached lint findings recompute immediately without relabeling an old revision', async () => {
   await seed('Concept.md');
   const old = await fs.readNote('Concept.md');
   const lint: any = await service.lint(undefined, 200);
   expect(lint.issues.every((item: any) => item.revision === old.revision)).toBe(true);
   await seed('Concept.md', { lifecycle: 'evergreen' });
+  const current = await fs.readNote('Concept.md');
   const board: any = await service.exceptionBoard(undefined, 20, 16000);
-  expect(board.items).toEqual([]);
+  expect(board.items.length).toBeGreaterThan(0);
+  expect(board.items.every((item: any) => item.revision === current.revision)).toBe(true);
+  expect(board.items.some((item: any) => item.code === 'invalid_lifecycle')).toBe(false);
   const refreshed: any = await service.exceptionBoard(undefined, 20, 16000);
   expect(refreshed.items.length).toBeGreaterThan(0);
   expect(refreshed.items.every((item: any) => item.revision !== old.revision)).toBe(true);

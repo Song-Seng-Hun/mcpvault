@@ -13,6 +13,7 @@ import { getOrganizationPropertyContract, getOrganizationRelationContract, hasEx
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference } from './property-references.js';
 import { packExceptionBoard, type ExceptionBoardItem } from './exception-board.js';
+import { packLintReport } from './lint-report.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
@@ -812,6 +813,8 @@ interface WikiLintResult {
   truncated: boolean;
 }
 
+type LintSnapshot = Map<string, { revision: string; visible: boolean }>;
+
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 
 interface ReviewPacketOptions {
@@ -1294,6 +1297,8 @@ export class LlmWikiService {
   private readonly catalogSummaryInFlight = new Map<string, Promise<any>>();
   private readonly lintCache = new Map<string, { generation: number; value: WikiLintResult }>();
   private readonly lintInFlight = new Map<string, Promise<WikiLintResult>>();
+  // Scope-private guards must never become enumerable diagnostic payload.
+  private readonly lintSnapshots = new WeakMap<WikiLintResult, LintSnapshot>();
 
   constructor(
     private readonly fileSystem: FileSystemService,
@@ -8640,10 +8645,10 @@ export class LlmWikiService {
     return { scope: result.scope, counts: result.counts, nextAction, routingRule: result.routingRule, truncated: true };
   }
 
-  async graphHealth(principal?: ScopePrincipal, limit = 20, maxChars = 6000) {
+  async graphHealth(principal?: ScopePrincipal, limit = 20, maxChars = 6000, snapshotAccess?: (path: string) => boolean) {
     const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
     const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 16000);
-    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal) && (snapshotAccess?.(path) ?? true);
     const [unresolved, orphans] = await Promise.all([
       this.fileSystem.findUnresolvedLinks(boundedLimit, canAccess),
       this.fileSystem.findOrphanNotes(boundedLimit, canAccess),
@@ -9925,7 +9930,7 @@ export class LlmWikiService {
    * scan instead of running separate folder/property scans, and never mutates
    * notes or treats organization hints as security boundaries.
    */
-  async collectionHealth(principal?: ScopePrincipal, limit = 20, maxChars = 6000) {
+  async collectionHealth(principal?: ScopePrincipal, limit = 20, maxChars = 6000, snapshotAccess?: (path: string) => boolean) {
     const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
     const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 12000);
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
@@ -9934,6 +9939,7 @@ export class LlmWikiService {
     let noteTotal = 0;
     const overflowKeys = new Set<string>();
     for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+      if (isModerationHidden(note.frontmatter) || (snapshotAccess && !snapshotAccess(note.path))) continue;
       noteTotal += 1;
       const frontmatter = note.frontmatter || {};
       const kind = String(frontmatter.note_kind || '').toLowerCase();
@@ -10056,8 +10062,11 @@ export class LlmWikiService {
       ...(byCode.invalid_review_checks || byCode.invalid_review_open_items ? ['Repair the bounded review checklist metadata before relying on the review projection.'] : []),
       ...(quarantine.total > 0 ? ['Repair quarantined validation errors before treating the affected notes as dependable knowledge; the quarantine is a derived view and does not move or delete them.'] : []),
     ];
-    const graph = await this.graphHealth(principal, Math.min(boundedLimit, 20), Math.min(boundedChars, 12000));
-    const collectionHealth = await this.collectionHealth(principal, Math.min(boundedLimit, 20), Math.min(boundedChars, 9000));
+    const snapshot = this.lintSnapshots.get(lint);
+    const snapshotAccess = (path: string) => snapshot?.get(normalizePath(path))?.visible === true;
+    const graph = await this.graphHealth(principal, Math.min(boundedLimit, 20), Math.min(boundedChars, 12000), snapshotAccess);
+    const collectionHealth = await this.collectionHealth(principal, Math.min(boundedLimit, 20), Math.min(boundedChars, 9000), snapshotAccess);
+    if (!await this.lintSnapshotMatches(lint, principal)) throw new Error('Wiki changed during organization health; retry the current snapshot');
     const mocCoverage = 'mocCoverage' in graph ? graph.mocCoverage as Record<string, unknown> : undefined;
     const focusHealth = 'focusHealth' in graph ? graph.focusHealth as Record<string, any> : undefined;
     const knowledgeConnectivity = 'knowledgeConnectivity' in graph ? graph.knowledgeConnectivity as Record<string, any> : undefined;
@@ -10110,7 +10119,7 @@ export class LlmWikiService {
       recommendations.push('Improve one Evergreen note with a concept-oriented title, compact projection, or meaningful graph connection; these are advisory quality hints.');
     }
     const result = {
-      healthy: issues.length === 0,
+      healthy: issues.length === 0 && lint.errors === 0,
       organizationIssueTotal: Object.values(byCode).reduce((sum, count) => sum + count, 0),
       byCode,
       issues,
@@ -10209,7 +10218,11 @@ export class LlmWikiService {
     while (JSON.stringify(compact).length > boundedChars && compact.mocSequenceHealth?.items?.length > 0) compact.mocSequenceHealth.items.pop();
     while (JSON.stringify(compact).length > boundedChars && compact.recommendations.length > 1) compact.recommendations.pop();
     while (JSON.stringify(compact).length > boundedChars && Object.keys(compact.byCode).length > 0) delete compact.byCode[Object.keys(compact.byCode).at(-1)!];
-    return compact;
+    if (JSON.stringify(compact).length <= boundedChars) return compact;
+    // Child dashboards and recommendations are optional; preserve one real
+    // repair target before resorting to an exact same-request retry.
+    return packLintReport({ ...lint, healthy: result.healthy,
+      issues: issues.length ? issues : quarantineIssues.slice(0, boundedLimit), truncated: true }, boundedChars, 'wiki.organization_health');
   }
 
   /**
@@ -14238,14 +14251,18 @@ export class LlmWikiService {
   }
 
   async lint(principal?: ScopePrincipal, limit: number = 200) {
-    const normalizedLimit = Math.max(0, Number(limit));
+    const normalizedLimit = Math.floor(Math.min(500, Math.max(0, Number.isNaN(Number(limit)) ? 200 : Number(limit))));
     const key = `${this.principalKey(principal)}|${normalizedLimit}`;
     const cached = this.lintCache.get(key);
-    if (cached?.generation === this.generation) return cached.value;
+    if (cached?.generation === this.generation && await this.lintSnapshotMatches(cached.value, principal)) return cached.value;
+    if (cached) this.lintCache.delete(key);
     const running = this.lintInFlight.get(key);
     if (running) return running;
     const generation = this.generation;
-    const computation = this.computeLint(principal, normalizedLimit);
+    const computation = this.computeLint(principal, normalizedLimit).then(async value => {
+      if (!await this.lintSnapshotMatches(value, principal)) throw new Error('Wiki changed during lint; retry the current snapshot');
+      return value;
+    });
     this.lintInFlight.set(key, computation);
     try {
       const value = await computation;
@@ -14256,8 +14273,40 @@ export class LlmWikiService {
     }
   }
 
-  private async computeLint(principal?: ScopePrincipal, limit: number = 200): Promise<WikiLintResult> {
+  async lintReport(principal?: ScopePrincipal, limit = 200, maxChars = 7000) {
+    const budget = Math.min(16000, Math.max(512, Number(maxChars) || 7000));
+    return packLintReport(await this.lint(principal, limit), budget);
+  }
+
+  private async lintSnapshotMatches(result: WikiLintResult, principal?: ScopePrincipal): Promise<boolean> {
+    const snapshot = this.lintSnapshots.get(result);
+    if (!snapshot) return false;
+    const paths = [...snapshot.keys()];
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+    for (let offset = 0; offset < paths.length; offset += 500) {
+      const batch = paths.slice(offset, offset + 500);
+      const current = await this.fileSystem.readNoteMetadata(batch, canAccess, { fresh: true, strict: true });
+      if (current.length !== batch.length || current.some(note => note.revision !== snapshot.get(note.path)?.revision)) return false;
+    }
+    return true;
+  }
+
+  private async computeLint(principal?: ScopePrincipal, limit: number = 200): Promise<WikiLintResult> {
+    const scopeAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+    const snapshot: LintSnapshot = new Map();
+    let paths: string[] = [];
+    const capture = async () => {
+      for (const note of await this.fileSystem.readNoteMetadata(paths, scopeAccess, { fresh: true, strict: true })) {
+        if (note.revision) snapshot.set(note.path, { revision: note.revision, visible: !isModerationHidden(note.frontmatter) });
+      }
+      paths = [];
+    };
+    for await (const note of iterateNotes(this.fileSystem, {}, scopeAccess)) {
+      paths.push(note.path);
+      if (paths.length === 500) await capture();
+    }
+    if (paths.length) await capture();
+    const canAccess = (path: string) => scopeAccess(path) && snapshot.get(normalizePath(path))?.visible === true;
     const issues: WikiLintIssue[] = [];
     let totalIssues = 0;
     let errors = 0;
@@ -14294,7 +14343,11 @@ export class LlmWikiService {
     const claimRecordCap = 20_000;
     let claimGraphTruncatedAt: string | undefined;
 
-    for await (const note of iterateNotes(this.fileSystem, { includeContent: true }, canAccess)) {
+    for (const [path, basis] of snapshot) {
+      if (!basis.visible) continue;
+      const opened = await this.fileSystem.readNote(path);
+      if (opened.revision !== basis.revision) throw new Error('Wiki changed during lint; retry the current snapshot');
+      const note = { path, frontmatter: opened.frontmatter, content: opened.content, revision: opened.revision };
       const type = note.frontmatter.llm_wiki_type;
       const publicPath = this.access.toPublicPath(note.path);
       classificationNotes.push({ path: note.path, frontmatter: note.frontmatter, ...(note.revision && { revision: note.revision }) });
@@ -14375,8 +14428,8 @@ export class LlmWikiService {
           addIssue({ severity: 'error', code: 'knowledge_without_evidence', path: this.access.toPublicPath(note.path), detail: 'Knowledge note has no immutable source evidence.' });
         }
         for (const evidencePath of evidence) {
-          if (!canAccess(evidencePath) || !await this.fileSystem.noteExists(evidencePath)) {
-            addIssue({ severity: 'error', code: 'missing_evidence', path: this.access.toPublicPath(note.path), detail: `Missing or inaccessible evidence: ${this.access.toPublicPath(evidencePath)}` });
+          if (!canAccess(evidencePath) || !this.access.canReferenceFrom(note.path, evidencePath)) {
+            addIssue({ severity: 'error', code: 'missing_evidence', path: this.access.toPublicPath(note.path), detail: 'Missing, inaccessible, or too-private evidence; inspect this note\'s evidence_paths.' });
             continue;
           }
           const source = sourceCache.get(evidencePath) || await this.fileSystem.readNote(evidencePath);
@@ -14483,8 +14536,8 @@ export class LlmWikiService {
               }
             }
             for (const evidencePath of claimEvidence) {
-              if (!canAccess(evidencePath) || !await this.fileSystem.noteExists(evidencePath)) {
-                addIssue({ severity: 'error', code: 'missing_claim_evidence', path: this.access.toPublicPath(note.path), detail: `Claim ${String(claim.id || claimIndex + 1)} references missing evidence: ${this.access.toPublicPath(evidencePath)}` });
+              if (!canAccess(evidencePath) || !this.access.canReferenceFrom(note.path, evidencePath)) {
+                addIssue({ severity: 'error', code: 'missing_claim_evidence', path: this.access.toPublicPath(note.path), detail: `Claim ${String(claim.id || claimIndex + 1)} has missing, inaccessible, or too-private evidence; inspect its evidence_paths.` });
                 continue;
               }
               const source = sourceCache.get(evidencePath) || await this.fileSystem.readNote(evidencePath);
@@ -14931,7 +14984,7 @@ export class LlmWikiService {
       const publicPath = this.access.toPublicPath(note.path);
       if (sourceRevisions.has(publicPath)) sourceRevisions.set(publicPath, note.revision);
     }
-    return {
+    const result: WikiLintResult = {
       healthy: errors === 0,
       errors,
       warnings,
@@ -14942,6 +14995,8 @@ export class LlmWikiService {
       }),
       truncated: totalIssues > limit || unresolved.truncated,
     };
+    this.lintSnapshots.set(result, snapshot);
+    return result;
   }
 
   async proposeTermChange(params: {
