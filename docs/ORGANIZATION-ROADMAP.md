@@ -423,6 +423,16 @@ do not prove a current, bounded, actionable response through its public adapter.
   invalidation and public MCP output. Existing Properties cleanup, full HTML/
   indented-code rendering equivalence and per-note mutation concurrency remain
   independent work, not claims of this parser change.
+- Tag mutations now participate in the service's existing per-note write lock,
+  reject supplied stale revisions, recheck their read snapshot before writing,
+  and notify the normal index invalidation callback. Public add/remove requires
+  a revision; list and successful mutations return usable revision provenance.
+  Hidden and invalid-operation paths reject without exposing tags or mutating.
+  Real-file tests cover concurrent same-revision requests, serialized unguarded
+  internal additions, observed external edits, callback isolation and public
+  MCP missing/stale/current guards plus immediate derived tag reads. Locks are
+  service-local, not cross-process CAS; a final external check/write race,
+  alias-equivalent lock keys and response-wide tag budgets remain separate work.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

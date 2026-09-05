@@ -2019,6 +2019,10 @@ export class FileSystemService {
             .map(result => result.value);
     }
     async manageTags(params) {
+        const path = this.normalizePath(params.path);
+        return this.withMutationLock(path, () => this.manageTagsUnlocked({ ...params, path }));
+    }
+    async manageTagsUnlocked(params) {
         const { operation, tags = [] } = params;
         const path = this.normalizePath(params.path);
         if (!this.pathFilter.isAllowed(path)) {
@@ -2031,7 +2035,14 @@ export class FileSystemService {
             };
         }
         try {
+            if (!['list', 'add', 'remove'].includes(operation))
+                throw new Error('Invalid tag operation');
             const note = await this.readNote(path);
+            if (isModerationHidden(note.frontmatter))
+                throw new Error(`Access denied: ${path}`);
+            if (params.expectedRevision !== undefined && params.expectedRevision !== note.revision) {
+                throw new Error(`Revision conflict for ${path}. Read the note again before changing its tags.`);
+            }
             let currentTags = [];
             // Extract tags from frontmatter
             if (note.frontmatter.tags) {
@@ -2050,6 +2061,7 @@ export class FileSystemService {
                     path,
                     operation,
                     tags: currentTags,
+                    revision: note.revision,
                     success: true
                 };
             }
@@ -2089,12 +2101,18 @@ export class FileSystemService {
             }
             assertNoteContentSize(updatedContent, path);
             const fullPath = this.resolveWritablePath(path);
+            // The lock serializes this service's writers. Also reject external edits
+            // observed after deriving tags; this is a recheck, not filesystem CAS.
+            await this.assertExpectedRevision(path, note.revision);
             await writeFile(fullPath, updatedContent, 'utf-8');
+            this.notifyNoteChanged(path, 'upsert');
             return {
                 path,
                 operation,
                 tags: newTags,
                 success: true,
+                previousRevision: note.revision,
+                revision: this.revision(updatedContent),
                 message: `Successfully ${operation === 'add' ? 'added' : 'removed'} tags`
             };
         }

@@ -349,6 +349,7 @@ export interface TagManagementParams {
     path: string;
     operation: 'add' | 'remove' | 'list';
     tags?: string[];
+    expectedRevision?: string;
 }
 export interface TagManagementResult {
     path: string;
@@ -356,6 +357,8 @@ export interface TagManagementResult {
     tags: string[];
     success: boolean;
     message?: string;
+    revision?: string;
+    previousRevision?: string;
 }
 export interface NoteHeading {
     level: number;

@@ -716,12 +716,13 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "manage_tags",
-          description: "List combined Properties/body tags, or add/remove Properties tags. Body extraction preserves nested/Unicode tags and ignores literal examples. Add includes recognized body tags in Properties; remove does not rewrite inline hashtags, which remain discoverable until the body is edited. Re-read the note after writing.",
+          description: "List combined Properties/body tags with revision, or add/remove Properties tags with required expectedRevision. Writes reject stale snapshots and return previous/new revisions. Add includes real body tags, not code examples; remove leaves inline hashtags intact. Re-read after writing; a conflict requires a fresh read, never blind retry.",
           inputSchema: {
             type: "object",
             properties: {
               path: { type: "string", description: "Path to the note relative to vault root" },
               operation: { type: "string", enum: ["add", "remove", "list"], description: "Operation to perform: 'add', 'remove', or 'list'" },
+              expectedRevision: { type: "string", pattern: "^[a-fA-F0-9]{64}$", description: "Required for add/remove: current SHA-256 revision from a note read or tag list. Optional read guard for list." },
               tags: { type: "array", items: { type: "string" }, description: "Array of tags (required for 'add' and 'remove' operations)" }
             },
             required: ["path", "operation"]
@@ -2578,10 +2579,14 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "manage_tags": {
+          if (trimmedArgs.operation !== 'list' && !trimmedArgs.expectedRevision) {
+            throw new Error('manage_tags add/remove requires expectedRevision from a current note read or tag list');
+          }
           const result = await fileSystem.manageTags({
             path: trimmedArgs.path,
             operation: trimmedArgs.operation,
-            tags: trimmedArgs.tags
+            tags: trimmedArgs.tags,
+            expectedRevision: trimmedArgs.expectedRevision,
           });
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],

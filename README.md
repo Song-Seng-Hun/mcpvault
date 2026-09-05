@@ -2019,6 +2019,10 @@ Extract only the frontmatter from a note without reading the full content.
 
 Add, remove, or list tags in a note. Tags are managed in the frontmatter and inline tags are detected.
 
+List first, then copy its exact `revision` into `expectedRevision` for add/remove.
+The hashes below are illustrative, not reusable values. After any successful
+write, read again before the next mutation. `remove` leaves body hashtags intact.
+
 **Request (List Tags):**
 
 ```json
@@ -2039,6 +2043,7 @@ Add, remove, or list tags in a note. Tags are managed in the frontmatter and inl
   "arguments": {
     "path": "research-notes.md",
     "operation": "add",
+    "expectedRevision": "0000000000000000000000000000000000000000000000000000000000000000",
     "tags": ["machine-learning", "ai", "important"]
   }
 }
@@ -2052,6 +2057,7 @@ Add, remove, or list tags in a note. Tags are managed in the frontmatter and inl
   "arguments": {
     "path": "research-notes.md",
     "operation": "remove",
+    "expectedRevision": "1111111111111111111111111111111111111111111111111111111111111111",
     "tags": ["draft", "temporary"]
   }
 }
@@ -2065,6 +2071,8 @@ Add, remove, or list tags in a note. Tags are managed in the frontmatter and inl
   "operation": "add",
   "tags": ["research", "ai", "machine-learning", "important"],
   "success": true,
+  "previousRevision": "0000000000000000000000000000000000000000000000000000000000000000",
+  "revision": "1111111111111111111111111111111111111111111111111111111111111111",
   "message": "Successfully added tags"
 }
 ```
@@ -2182,6 +2190,16 @@ are excluded. Graph occurrence counts still normalize case. Adding a tag no
 longer imports code-example tags into Properties. Existing Properties are not
 automatically cleaned or renamed. This is not a full HTML/indented-code parser
 or a promise of every Obsidian symbol rule. See [Obsidian tag syntax](https://obsidian.md/help/tags).
+
+Public `manage_tags` add/remove requires `expectedRevision` from a current note
+read or tag list. Listing returns `revision`; successful writes return both
+`previousRevision` and the new `revision`. On conflict, reread and reconsider the
+edit instead of blindly retrying. Tag mutations share the service's per-note
+write lock and notify the normal index invalidation path. A final snapshot
+recheck catches observed external edits, but is not cross-process filesystem
+CAS. Hidden notes reject tag reads/writes. Removal updates Properties only;
+inline hashtags remain discoverable until edited in the body. Re-read the target
+after every mutation; notification failures remain best-effort, not a rollback.
 
 **Request:**
 

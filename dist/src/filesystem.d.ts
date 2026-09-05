@@ -135,6 +135,7 @@ export declare class FileSystemService {
     private updateFrontmatterUnlocked;
     getNotesInfo(paths: string[]): Promise<NoteInfo[]>;
     manageTags(params: TagManagementParams): Promise<TagManagementResult>;
+    private manageTagsUnlocked;
     getVaultPath(): string;
     /**
      * Resolve an Obsidian wiki link name to its vault-relative paths.

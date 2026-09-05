@@ -697,6 +697,15 @@ case and count occurrences, not unique notes. Existing Properties are not
 automatically repaired. HTML/indented-code parsing and complete Obsidian symbol
 equivalence are not claimed by this bounded-scope literal scanner.
 
+Tag list returns its snapshot revision. Public tag add/remove requires that
+`expectedRevision`; success returns `previousRevision` and `revision`, and stale
+requests must reread before changing anything. The service serializes tag edits
+with its note mutations, rechecks the derived snapshot and signals index
+invalidation after a write. Hidden notes cannot be inspected through tags.
+This is not cross-process atomic compare-and-swap; external writers can still
+race the final filesystem check/write. Inline hashtags are not removed by a
+Properties-only remove operation.
+
 Heading and block targets are preserved by graph reads, so
 `[[folder/Source#Heading]]` and `[[folder/Source#^block-id]]` can take an agent
 directly to the intended passage without rereading the entire source note.
