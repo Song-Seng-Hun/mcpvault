@@ -6,7 +6,7 @@ import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import { isMissingVaultPath, VaultReadUnavailableError } from './vault-read-errors.js';
 import { RELATION_FIELDS } from './organization.js';
-import { noteReferenceDocument, noteReferenceTermKeys } from './note-reference.js';
+import { markdownNotePath, noteReferenceDocument, noteReferenceTermKeys } from './note-reference.js';
 import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference } from './property-references.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { extractInlineTags } from './markdown-tags.js';
@@ -71,7 +71,16 @@ function buildResolver(paths, entries) {
  * maps built once per visibility set instead of scanning every note for every
  * link. This is a derived read model; Markdown remains authoritative.
  */
-function resolveTargets(target, resolver, sourcePath) {
+function resolveTargets(target, resolver, sourcePath, authoredLink) {
+    if (authoredLink && /^\[[^\]]*\]\(/.test(authoredLink)) {
+        const path = markdownNotePath(target, sourcePath || '');
+        if (!path)
+            return [];
+        const normalized = normalizedPath(path);
+        return /(^|\/)[^/]+\.[^/]+$/.test(normalized)
+            ? resolver.exact.get(normalized) || []
+            : resolver.withoutExtension.get(normalized) || [];
+    }
     const normalizedTarget = normalizedPath(target);
     if (!normalizedTarget)
         return [];
@@ -278,10 +287,10 @@ export class VaultGraphIndex {
         const outlinks = entry.links.filter(link => {
             if (/^scope:\/\/(?:model|agent|user)\//i.test(link.target.trim()))
                 return false;
-            const anyMatches = resolveTargets(link.target, allResolver, entry.path);
+            const anyMatches = resolveTargets(link.target, allResolver, entry.path, link.link);
             if (anyMatches.length === 0)
                 return true;
-            return resolveTargets(link.target, visible.resolver, entry.path).length > 0;
+            return resolveTargets(link.target, visible.resolver, entry.path, link.link).length > 0;
         });
         const snapshot = includeSnapshot ? new NavigationViewFingerprint(['outlinks', source, entry.revision]) : undefined;
         if (snapshot)
@@ -313,11 +322,11 @@ export class VaultGraphIndex {
             for (const link of entry.links) {
                 if (/^scope:\/\/(?:model|agent|user)\//i.test(link.target.trim()))
                     continue;
-                if (resolveTargets(link.target, resolver, entry.path).some(path => visible.has(path)))
+                if (resolveTargets(link.target, resolver, entry.path, link.link).some(path => visible.has(path)))
                     continue;
                 // A known invisible target is not an actionable broken-link repair.
                 // Never return its resolution candidates or count its hidden edges.
-                if (resolveTargets(link.target, allResolver, entry.path).length > 0)
+                if (resolveTargets(link.target, allResolver, entry.path, link.link).length > 0)
                     continue;
                 total += 1;
                 snapshot?.add(entry.path, entry.revision, project(entry, link));
@@ -338,7 +347,7 @@ export class VaultGraphIndex {
             if (!entry)
                 continue;
             for (const link of entry.links) {
-                for (const destination of resolveTargets(link.target, resolver, entry.path)) {
+                for (const destination of resolveTargets(link.target, resolver, entry.path, link.link)) {
                     if (normalizedPath(destination) !== normalizedPath(source) && visible.has(destination)) {
                         const key = normalizedPath(destination);
                         incomingCounts.set(key, (incomingCounts.get(key) || 0) + 1);
@@ -389,8 +398,8 @@ export class VaultGraphIndex {
     }
     /** Caller-local excerpts; never mutate shared source edges or headings. */
     linkProjector(visible, all) {
-        const invisible = (target, source) => /^scope:\/\/(?:model|agent|user)\//i.test(target.trim())
-            || (resolveTargets(target, all, source).length > 0 && resolveTargets(target, visible, source).length === 0);
+        const invisible = (target, source, link) => /^scope:\/\/(?:model|agent|user)\//i.test(target.trim())
+            || (resolveTargets(target, all, source, link).length > 0 && resolveTargets(target, visible, source, link).length === 0);
         return createGraphLinkProjector(invisible);
     }
     visibilityContext(canAccessPath) {
@@ -419,7 +428,7 @@ export class VaultGraphIndex {
             if (!visible.pathSet.has(entry.path))
                 continue;
             for (const link of entry.links) {
-                const targets = new Set(resolveTargets(link.target, visible.resolver, entry.path).map(normalizedPath));
+                const targets = new Set(resolveTargets(link.target, visible.resolver, entry.path, link.link).map(normalizedPath));
                 for (const target of targets) {
                     // Dense/ambiguous graphs must not create an unbounded second index.
                     // Fall back to the original scan, never a partial cached answer.
@@ -441,7 +450,7 @@ export class VaultGraphIndex {
             if (!visible.pathSet.has(entry.path))
                 continue;
             for (const link of entry.links) {
-                if (resolveTargets(link.target, visible.resolver, entry.path).some(path => normalizedPath(path) === target))
+                if (resolveTargets(link.target, visible.resolver, entry.path, link.link).some(path => normalizedPath(path) === target))
                     yield { entry, link };
             }
         }

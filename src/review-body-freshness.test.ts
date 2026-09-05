@@ -104,6 +104,21 @@ test('on_link_change reads real body links rather than interpreting omitted cont
   });
 });
 
+test.each([false, true])('ordinary Markdown links use source-relative reference and review targets (indexed=%s)', async indexed => {
+  await fixture(async (wiki, fs, seed) => {
+    await seed('Wiki/Target.md', '# Target\n');
+    await seed('Other/Target.md', '# Other\n');
+    const path = 'Wiki/Reader.md', body = '[target](Target.md#Heading)\n';
+    await seed(path, body, { review_policy: 'on_link_change' });
+    expect(await new ReferenceService(fs, new ScopeAccessPolicy()).validateAndNormalize(undefined, path, undefined, body)).toEqual(['Wiki/Target.md']);
+    await wiki.review({ path, reviewOutcome: 'confirmed', reviewedBy: 'reader', expectedRevision: (await fs.readNote(path)).revision });
+    expect((await fs.readNote(path)).frontmatter.review_basis_links.map((item: {path: string}) => item.path)).toEqual(['Wiki/Target.md']);
+    expect((await wiki.reviewQueue()).total).toBe(0);
+    await fs.writeNote({ path: 'Wiki/Target.md', content: '# Changed\n', expectedRevision: (await fs.readNote('Wiki/Target.md')).revision });
+    expect((await wiki.reviewQueue(undefined, 20, 12000)).items.find(item => item.path === path)?.reviewReasons).toContain('link_changed');
+  }, indexed);
+});
+
 test.each([false, true])('relative wikilinks keep their source-relative review target (indexed=%s)', async indexed => {
   await fixture(async (wiki, fs, seed) => {
     await seed('Knowledge/Target.md', '# Target\n');

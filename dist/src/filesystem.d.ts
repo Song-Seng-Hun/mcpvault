@@ -157,6 +157,8 @@ export declare class FileSystemService {
      * Throws only on caller misuse (empty name).
      */
     findPathForWikiLink(wikiLinkName: string, canAccessPath?: (path: string) => boolean, sourcePath?: string): Promise<string[]>;
+    findPathForMarkdownLink(target: string, sourcePath: string, canAccessPath?: (path: string) => boolean): Promise<string[]>;
+    private findPathsForNoteReference;
     getBacklinks(path: string, limit?: number, canAccessPath?: (path: string) => boolean, offset?: number, options?: {
         includeSourceRevision?: boolean;
         includeSnapshot?: boolean;

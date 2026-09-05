@@ -4,7 +4,7 @@ type SourceEntry = {
     links: readonly OutlinkMatch[];
 };
 /** One resolver/permission view only. Neither shared graph entries nor caller data are mutated. */
-export declare function createGraphLinkProjector(invisible: (target: string, source: string) => boolean): <T extends {
+export declare function createGraphLinkProjector(invisible: (target: string, source: string, link: string) => boolean): <T extends {
     context: string;
     link: string;
     line: number;

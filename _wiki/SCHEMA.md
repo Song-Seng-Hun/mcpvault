@@ -123,6 +123,14 @@ readers. Missing source-relative targets do not select same-name notes elsewhere
 Revision-checked moves with link updates preserve both incoming and outgoing
 relative wikilink targets, including links in typed Properties; use the preview
 to inspect replacements before execution.
+Markdown destinations are source-relative file paths, not wikilink aliases:
+`[x](Sibling.md)` names a sibling; `[x](Folder/Note.md)` or
+`[x](/Folder/Note.md)` names a Vault-root path; `./Folder/Note.md` is explicitly
+source-relative. The `.md` suffix may be omitted; explicitly written suffixes
+are not substituted. Graph visibility projection and review baseline resolution use the same
+path rule. Relocation with link updates preserves unresolved local destinations
+as well as existing ones, and rejects ambiguous or out-of-vault destinations
+that cannot be preserved safely. Delete preview still inspects inbound links.
 The baseline never replaces Markdown or Git. Use
 `get_wiki_organization_health` for one bounded report of
 property, MOC coverage, atomic-note, Evergreen discoverability, summary

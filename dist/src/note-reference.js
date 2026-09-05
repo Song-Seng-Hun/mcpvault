@@ -1,6 +1,18 @@
 import { posix } from 'node:path';
 import { resolveWikiLinkTargets } from './backlinks.js';
 const NOTE_EXTENSION = /\.(?:md|markdown|txt)$/i;
+/** A local Markdown destination names a path, never an alias or basename. */
+export function markdownNotePath(target, sourcePath) {
+    const value = target.trim().replace(/\\/g, '/');
+    if (!value || value.startsWith('#') || value.startsWith('//') || /^[a-z][a-z0-9+.-]*:/i.test(value))
+        return undefined;
+    const explicitRelative = /^\.\.?\//.test(value);
+    const rootQualified = value.startsWith('/') || (value.includes('/') && !explicitRelative);
+    const candidate = posix.normalize(rootQualified ? value.replace(/^\//, '') : posix.join(posix.dirname(normalizeNoteReferencePath(sourcePath)), value));
+    if (candidate === '.' || candidate === '..' || candidate.startsWith('../'))
+        return undefined;
+    return normalizeNoteReferencePath(candidate);
+}
 export function normalizeNoteReferencePath(value) {
     return value.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
 }
@@ -70,6 +82,17 @@ export function buildNoteReferenceIndex(notes) {
  * further without ever broadening visibility.
  */
 export function resolveNoteReference(document, index, options = {}) {
+    if (options.syntax === 'markdown') {
+        const path = markdownNotePath(document, options.sourcePath || '');
+        if (!path)
+            return [];
+        const matches = index.qualified.get(path.toLocaleLowerCase()) || index.qualified.get(path.replace(NOTE_EXTENSION, '').toLocaleLowerCase());
+        const hasExtension = /(^|\/)[^/]+\.[^/]+$/.test(path);
+        return [...(matches || [])]
+            .filter(target => !hasExtension || target.toLocaleLowerCase() === path.toLocaleLowerCase())
+            .filter(target => !options.canReference || options.canReference(options.sourcePath || '', target))
+            .sort((a, b) => a.localeCompare(b));
+    }
     const target = noteReferenceDocument(document);
     if (!target)
         return [];

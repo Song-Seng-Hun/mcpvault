@@ -939,6 +939,70 @@ describe("tasks", () => {
     expect(moved.frontmatter.depends_on).toEqual(["[[Wiki/Target.md#^proof|typed]]"]);
   });
 
+  test("moving a source keeps unresolved local destinations from rebinding to destination siblings", async () => {
+    await mkdir(join(testVaultPath, "Wiki"), { recursive: true });
+    await mkdir(join(testVaultPath, "Archive"), { recursive: true });
+    await writeFile(join(testVaultPath, "Archive/Missing.md"), "# Must not become the target\n");
+    await writeFile(join(testVaultPath, "Wiki/Source.md"), "[[./Missing#Heading|future]] [future](Missing.md#^proof)\n");
+    const before = await fileSystem.readNote("Wiki/Source.md");
+    expect((await fileSystem.moveNote({ oldPath: "Wiki/Source.md", newPath: "Archive/Source.md", updateLinks: true, expectedRevision: before.revision })).success).toBe(true);
+    const moved = await fileSystem.readNote("Archive/Source.md");
+    expect(moved.content).toContain("[[Wiki/Missing#Heading|future]]");
+    expect(moved.content).toContain("[future](../Wiki/Missing.md#^proof)");
+    expect((await fileSystem.getBacklinks("Archive/Missing.md")).total).toBe(0);
+  });
+
+  test("source relocation keeps existing and missing Vault-root wikilinks exact", async () => {
+    await mkdir(join(testVaultPath, 'Archive'), { recursive: true });
+    await writeFile(join(testVaultPath, 'Target.md'), '# Root\n');
+    await writeFile(join(testVaultPath, 'Archive/Target.md'), '# Namesake\n');
+    await writeFile(join(testVaultPath, 'Archive/Missing.md'), '# Not the intended target\n');
+    await writeFile(join(testVaultPath, 'Source.md'), '[[./Target]] [[./Missing]]\n');
+    const before = await fileSystem.readNote('Source.md');
+    expect((await fileSystem.moveNote({ oldPath: 'Source.md', newPath: 'Archive/Source.md', updateLinks: true, expectedRevision: before.revision })).success).toBe(true);
+    const moved = await fileSystem.readNote('Archive/Source.md');
+    expect(moved.content).toContain('[[../Target.md]]');
+    expect(moved.content).toContain('[[../Missing]]');
+    expect((await fileSystem.getBacklinks('Target.md')).total).toBe(1);
+    expect((await fileSystem.getBacklinks('Archive/Target.md')).total).toBe(0);
+    expect((await fileSystem.getBacklinks('Archive/Missing.md')).total).toBe(0);
+  });
+
+  test("source moves refuse unpreservable out-of-vault relative destinations", async () => {
+    await writeFile(join(testVaultPath, "Source.md"), "[outside](../Outside.md)\n");
+    const before = await fileSystem.readNote("Source.md");
+    const result = await fileSystem.moveNote({ oldPath: "Source.md", newPath: "Folder/Source.md", updateLinks: true, expectedRevision: before.revision });
+    expect(result.success).toBe(false);
+    expect(result.message).toMatch(/out-of-vault/i);
+    expect((await fileSystem.readNote("Source.md")).revision).toBe(before.revision);
+    await expect(access(join(testVaultPath, "Folder/Source.md"))).rejects.toMatchObject({ code: "ENOENT" });
+    // Delete previews inspect inbound references, not relocation of the
+    // deleted source's own outgoing links to an artificial destination.
+    expect((await fileSystem.previewDeleteNote({ path: 'Source.md' })).total).toBe(0);
+  });
+
+  test("source relocation refuses ambiguous outgoing relative targets", async () => {
+    await mkdir(join(testVaultPath, "Wiki"), { recursive: true });
+    await writeFile(join(testVaultPath, "Wiki/Target.md"), "# First\n");
+    await writeFile(join(testVaultPath, "Wiki/Target.txt"), "# Second\n");
+    await writeFile(join(testVaultPath, "Wiki/Source.md"), "[[./Target]]\n");
+    const before = await fileSystem.readNote("Wiki/Source.md");
+    const result = await fileSystem.moveNote({ oldPath: "Wiki/Source.md", newPath: "Archive/Source.md", updateLinks: true, expectedRevision: before.revision });
+    expect(result.success).toBe(false);
+    expect(result.message).toMatch(/ambiguous/i);
+    expect((await fileSystem.readNote("Wiki/Source.md")).revision).toBe(before.revision);
+  });
+
+  test("moving a Markdown target keeps generated child paths explicitly relative", async () => {
+    await mkdir(join(testVaultPath, 'Wiki'), { recursive: true });
+    await writeFile(join(testVaultPath, 'Wiki/Target.md'), '# Target\n');
+    await writeFile(join(testVaultPath, 'Wiki/Source.md'), '[target](Target.md)\n');
+    const before = await fileSystem.readNote('Wiki/Target.md');
+    expect((await fileSystem.moveNote({ oldPath: 'Wiki/Target.md', newPath: 'Wiki/Sub/Target.md', updateLinks: true, expectedRevision: before.revision })).success).toBe(true);
+    expect((await fileSystem.readNote('Wiki/Source.md')).content).toContain('[target](./Sub/Target.md)');
+    expect((await fileSystem.getBacklinks('Wiki/Sub/Target.md')).total).toBe(1);
+  });
+
   test("blocks a move rather than leaking or breaking references from an inaccessible scope", async () => {
     await mkdir(join(testVaultPath, "Private"), { recursive: true });
     await writeFile(join(testVaultPath, "Target.md"), "# Target\n");

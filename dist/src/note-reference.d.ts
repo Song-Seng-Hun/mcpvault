@@ -14,9 +14,12 @@ export interface NoteReferenceIndex {
 }
 export interface ResolveNoteReferenceOptions {
     sourcePath?: string;
+    syntax?: 'markdown';
     preferRelative?: boolean;
     canReference?: (sourcePath: string, targetPath: string) => boolean;
 }
+/** A local Markdown destination names a path, never an alias or basename. */
+export declare function markdownNotePath(target: string, sourcePath: string): string | undefined;
 export declare function normalizeNoteReferencePath(value: string): string;
 export declare function normalizeNoteReferenceTerm(value: unknown): string;
 export declare function noteReferenceDocument(value: string): string;

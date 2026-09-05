@@ -28,9 +28,12 @@ export class ReferenceService {
         this.fileSystem = fileSystem;
         this.access = access;
     }
-    async resolveWikiLinkTarget(target, principal, sourcePath) {
-        const name = target.trim().replace(/\.md$/i, '');
-        const matches = await this.fileSystem.findPathForWikiLink(name, path => this.access.canAccessPhysicalPath(path, principal), sourcePath);
+    async resolveWikiLinkTarget(target, principal, sourcePath, syntax) {
+        const name = syntax === 'markdown' ? target : target.trim().replace(/\.md$/i, '');
+        const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        const matches = syntax === 'markdown'
+            ? await this.fileSystem.findPathForMarkdownLink(name, sourcePath || '', canAccess)
+            : await this.fileSystem.findPathForWikiLink(name, canAccess, sourcePath);
         if (matches.length === 0)
             throw new Error(`Obsidian reference does not resolve: [[${target}]]`);
         if (matches.length > 1)
@@ -64,7 +67,7 @@ export class ReferenceService {
                 // Keep authored wikilink spelling, including relative prefixes and
                 // table escapes, through the shared wikilink parser.
                 const target = /^!?\[\[/.test(link.link) ? parseWikiLink(link.link.replace(/^!/, '')).document : link.target;
-                const path = await this.resolveWikiLinkTarget(target, principal, containerPath);
+                const path = await this.resolveWikiLinkTarget(target, principal, containerPath, /^!?\[\[/.test(link.link) ? undefined : 'markdown');
                 if (!this.access.canReferenceFrom(containerPath, path)) {
                     throw new Error(`A more-private note cannot be referenced from this note: ${this.access.toPublicPath(path)}`);
                 }

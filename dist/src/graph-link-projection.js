@@ -32,7 +32,7 @@ export function createGraphLinkProjector(invisible) {
         if (!state) {
             const hiddenLines = new Map();
             for (const other of entry.links) {
-                if (!invisible(other.target, entry.path))
+                if (!invisible(other.target, entry.path, other.link))
                     continue;
                 const line = hiddenLines.get(other.line) || [];
                 line.push(other);
@@ -58,7 +58,7 @@ export function createGraphLinkProjector(invisible) {
         const heading = link.heading ? memo(`${state.id}\0heading\0${link.heading}`, () => {
             let text = link.heading;
             for (const occurrence of extractObsidianLinkOccurrences(text)) {
-                if (invisible(occurrence.target, entry.path))
+                if (invisible(occurrence.target, entry.path, occurrence.link))
                     text = text.split(occurrence.link).join('[unavailable link]');
             }
             return { text };

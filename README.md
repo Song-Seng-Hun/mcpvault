@@ -359,6 +359,20 @@ With link updates enabled, a note move rewrites incoming relative wikilinks and
 the moved note's outgoing relative wikilinks, including typed Properties, to
 keep the original target and heading/block/alias. Preview the move first;
 plain ambiguous names still require disambiguation.
+Ordinary Markdown links such as `[guide](Guide.md)` use the containing note's
+folder in graph, reference validation, review baselines, and move rewrites;
+`[guide](Guides/Guide.md)` (or `/Guides/Guide.md`) starts at the Vault root;
+`[guide](./Guides/Guide.md)` explicitly starts at the containing folder.
+They do not search aliases or substitute an explicitly written extension.
+The `.md` extension may be omitted, following [Obsidian's link formats](https://obsidian.md/help/links).
+Hidden Markdown targets
+are also removed from graph context and heading previews. When relocating a
+source with link updates enabled, missing local targets keep their original
+intended location, so a destination sibling cannot silently become the target.
+Ambiguous outgoing targets and out-of-vault relative destinations must be
+repaired before relocation; a same-folder rename does not relocate those links.
+Delete previews inspect inbound references without pretending to relocate the
+deleted note's outgoing links.
 Completing the review refreshes
 the upstream baseline, so a known retired or disputed prerequisite does not
 reopen the same review indefinitely until it changes again. The bounded

@@ -1621,7 +1621,10 @@ export class LlmWikiService {
     const candidates = new Set<string>(references);
     for (const link of extractObsidianLinkOccurrences(content)) {
       const target = /^!?\[\[/.test(link.link) ? link.link : link.target;
-      const matches = await this.fileSystem.findPathForWikiLink(target, path => this.access.canAccessPhysicalPath(path, principal), sourcePath);
+      const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+      const matches = /^!?\[\[/.test(link.link)
+        ? await this.fileSystem.findPathForWikiLink(target, canAccess, sourcePath)
+        : await this.fileSystem.findPathForMarkdownLink(target, sourcePath || '', canAccess);
       if (matches.length === 1) candidates.add(matches[0]!);
     }
     const result: ReviewBasisLink[] = [];

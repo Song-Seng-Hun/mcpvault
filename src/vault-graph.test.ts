@@ -23,6 +23,25 @@ async function writeNote(path: string, content: string): Promise<void> {
 }
 
 describe('VaultGraphIndex', () => {
+  test('ordinary Markdown siblings resolve locally and hidden neighbors are redacted', async () => {
+    vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-markdown-graph-'));
+    await writeNote('Wiki/Target.md', '# Actual\n');
+    await writeNote('Other/Target.md', '# Other\n');
+    await writeNote('Wiki/Secret.md', '# Hidden\n');
+    await writeNote('Other/Secret.md', '# Not the hidden target\n');
+    await writeNote('Wiki/Source.md', '## [secret](Secret.md)\n[local](Target.md) [secret](Secret.md)\n');
+    graph = new VaultGraphIndex(vaultPath, new PathFilter(), new FrontmatterHandler());
+    const visible = (path: string) => path !== 'Wiki/Secret.md';
+    expect((await graph.getBacklinks('Other/Target.md', 10, visible)).total).toBe(0);
+    const actual = await graph.getBacklinks('Wiki/Target.md', 10, visible);
+    expect(actual.total).toBe(1);
+    expect(JSON.stringify(actual)).not.toContain('Secret.md');
+    expect((await graph.getOutlinks('Wiki/Source.md', 10, visible)).total).toBe(1);
+    await writeNote('Wiki/Source.md', '[local](Target) [root](Other/Target.md)\n');
+    graph.invalidate('Wiki/Source.md', 'upsert');
+    expect((await graph.getBacklinks('Wiki/Target.md', 10, visible)).total).toBe(1);
+    expect((await graph.getBacklinks('Other/Target.md', 10, visible)).total).toBe(1);
+  });
   test('relative sibling links do not create backlinks to same-name notes elsewhere', async () => {
     vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-relative-graph-'));
     await writeNote('Wiki/Target.md', '# Actual target\n');

@@ -291,7 +291,7 @@ export class VaultMetadataIndex {
   /** Resolve a visible Obsidian note identity from the disposable metadata
    * read model. The identity map is rebuilt only after metadata invalidation;
    * Markdown and current frontmatter entries remain authoritative. */
-  async resolveNoteReference(document: string, canAccessPath: (path: string) => boolean = () => true, sourcePath?: string): Promise<string[]> {
+  async resolveNoteReference(document: string, canAccessPath: (path: string) => boolean = () => true, sourcePath?: string, syntax?: 'markdown'): Promise<string[]> {
     await this.ensureFresh();
     let referenceIndex = this.referenceIndex;
     if (!referenceIndex) {
@@ -312,6 +312,7 @@ export class VaultMetadataIndex {
     }
     return resolveIndexedNoteReference(document, referenceIndex, {
       ...(sourcePath !== undefined && { sourcePath }),
+      ...(syntax !== undefined && { syntax }),
       canReference: (_source, target) => canAccessPath(target),
     });
   }

@@ -7,7 +7,7 @@ const CACHE_ENTRIES = 256;
 const CACHE_CHARS = 64 * 1024;
 
 /** One resolver/permission view only. Neither shared graph entries nor caller data are mutated. */
-export function createGraphLinkProjector(invisible: (target: string, source: string) => boolean) {
+export function createGraphLinkProjector(invisible: (target: string, source: string, link: string) => boolean) {
   const byEntry = new WeakMap<SourceEntry, { id: number; hiddenLines: Map<number, OutlinkMatch[]> }>();
   const cache = new Map<string, { preview: Preview; weight: number }>();
   let nextId = 0;
@@ -32,7 +32,7 @@ export function createGraphLinkProjector(invisible: (target: string, source: str
     if (!state) {
       const hiddenLines = new Map<number, OutlinkMatch[]>();
       for (const other of entry.links) {
-        if (!invisible(other.target, entry.path)) continue;
+        if (!invisible(other.target, entry.path, other.link)) continue;
         const line = hiddenLines.get(other.line) || [];
         line.push(other); hiddenLines.set(other.line, line);
       }
@@ -54,7 +54,7 @@ export function createGraphLinkProjector(invisible: (target: string, source: str
     const heading = link.heading ? memo(`${state.id}\0heading\0${link.heading}`, () => {
       let text = link.heading!;
       for (const occurrence of extractObsidianLinkOccurrences(text)) {
-        if (invisible(occurrence.target, entry.path)) text = text.split(occurrence.link).join('[unavailable link]');
+        if (invisible(occurrence.target, entry.path, occurrence.link)) text = text.split(occurrence.link).join('[unavailable link]');
       }
       return { text };
     }).text : link.heading;

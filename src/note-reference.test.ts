@@ -2,6 +2,17 @@ import { describe, expect, test } from 'vitest';
 import { buildNoteReferenceIndex, resolveNoteReference } from './note-reference.js';
 
 describe('note reference resolver', () => {
+  test('Markdown paths are exact source-relative locations, never aliases or basename guesses', () => {
+    const index = buildNoteReferenceIndex([{ path: 'Wiki/Target.md' }, { path: 'Other/Target.md' }, { path: 'Root.md' }, { path: 'Wiki/Only.markdown' }, { path: 'Wiki/Alias.md', aliases: ['Missing.md'] }]);
+    expect(resolveNoteReference('Target.md', index, { sourcePath: 'Wiki/Source.md', syntax: 'markdown' })).toEqual(['Wiki/Target.md']);
+    expect(resolveNoteReference('Target', index, { sourcePath: 'Wiki/Source.md', syntax: 'markdown' })).toEqual(['Wiki/Target.md']);
+    expect(resolveNoteReference('Other/Target.md', index, { sourcePath: 'Wiki/Source.md', syntax: 'markdown' })).toEqual(['Other/Target.md']);
+    expect(resolveNoteReference('./Other/Target.md', index, { sourcePath: 'Wiki/Source.md', syntax: 'markdown' })).toEqual([]);
+    expect(resolveNoteReference('/Root.md', index, { sourcePath: 'Wiki/Source.md', syntax: 'markdown' })).toEqual(['Root.md']);
+    expect(resolveNoteReference('Missing.md', index, { sourcePath: 'Wiki/Source.md', syntax: 'markdown' })).toEqual([]);
+    expect(resolveNoteReference('Only.md', index, { sourcePath: 'Wiki/Source.md', syntax: 'markdown' })).toEqual([]);
+    expect(resolveNoteReference('../../Root.md', index, { sourcePath: 'Wiki/Source.md', syntax: 'markdown' })).toEqual([]);
+  });
   test('an explicit missing relative target never falls back to another folder', () => {
     const index = buildNoteReferenceIndex([{ path: 'Other/Target.md' }]);
     expect(resolveNoteReference('./Target', index, { sourcePath: 'Wiki/Source.md' })).toEqual([]);

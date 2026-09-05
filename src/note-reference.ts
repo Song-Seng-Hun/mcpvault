@@ -21,8 +21,20 @@ export interface NoteReferenceIndex {
 
 export interface ResolveNoteReferenceOptions {
   sourcePath?: string;
+  syntax?: 'markdown';
   preferRelative?: boolean;
   canReference?: (sourcePath: string, targetPath: string) => boolean;
+}
+
+/** A local Markdown destination names a path, never an alias or basename. */
+export function markdownNotePath(target: string, sourcePath: string): string | undefined {
+  const value = target.trim().replace(/\\/g, '/');
+  if (!value || value.startsWith('#') || value.startsWith('//') || /^[a-z][a-z0-9+.-]*:/i.test(value)) return undefined;
+  const explicitRelative = /^\.\.?\//.test(value);
+  const rootQualified = value.startsWith('/') || (value.includes('/') && !explicitRelative);
+  const candidate = posix.normalize(rootQualified ? value.replace(/^\//, '') : posix.join(posix.dirname(normalizeNoteReferencePath(sourcePath)), value));
+  if (candidate === '.' || candidate === '..' || candidate.startsWith('../')) return undefined;
+  return normalizeNoteReferencePath(candidate);
 }
 
 export function normalizeNoteReferencePath(value: string): string {
@@ -93,6 +105,16 @@ export function buildNoteReferenceIndex(notes: Iterable<NoteReferenceDescriptor>
  * further without ever broadening visibility.
  */
 export function resolveNoteReference(document: string, index: NoteReferenceIndex, options: ResolveNoteReferenceOptions = {}): string[] {
+  if (options.syntax === 'markdown') {
+    const path = markdownNotePath(document, options.sourcePath || '');
+    if (!path) return [];
+    const matches = index.qualified.get(path.toLocaleLowerCase()) || index.qualified.get(path.replace(NOTE_EXTENSION, '').toLocaleLowerCase());
+    const hasExtension = /(^|\/)[^/]+\.[^/]+$/.test(path);
+    return [...(matches || [])]
+      .filter(target => !hasExtension || target.toLocaleLowerCase() === path.toLocaleLowerCase())
+      .filter(target => !options.canReference || options.canReference(options.sourcePath || '', target))
+      .sort((a, b) => a.localeCompare(b));
+  }
   const target = noteReferenceDocument(document);
   if (!target) return [];
   const normalized = normalizeNoteReferencePath(target);

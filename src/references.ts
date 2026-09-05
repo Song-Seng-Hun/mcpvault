@@ -30,9 +30,12 @@ export class ReferenceService {
     private readonly access: ScopeAccessPolicy,
   ) {}
 
-  private async resolveWikiLinkTarget(target: string, principal?: ScopePrincipal, sourcePath?: string): Promise<string> {
-    const name = target.trim().replace(/\.md$/i, '');
-    const matches = await this.fileSystem.findPathForWikiLink(name, path => this.access.canAccessPhysicalPath(path, principal), sourcePath);
+  private async resolveWikiLinkTarget(target: string, principal?: ScopePrincipal, sourcePath?: string, syntax?: 'markdown'): Promise<string> {
+    const name = syntax === 'markdown' ? target : target.trim().replace(/\.md$/i, '');
+    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+    const matches = syntax === 'markdown'
+      ? await this.fileSystem.findPathForMarkdownLink(name, sourcePath || '', canAccess)
+      : await this.fileSystem.findPathForWikiLink(name, canAccess, sourcePath);
     if (matches.length === 0) throw new Error(`Obsidian reference does not resolve: [[${target}]]`);
     if (matches.length > 1) throw new Error(`Obsidian reference is ambiguous: [[${target}]]. Use a path-qualified link such as [[folder/${name.split('/').at(-1)}]]`);
     return matches[0]!;
@@ -65,7 +68,7 @@ export class ReferenceService {
         // Keep authored wikilink spelling, including relative prefixes and
         // table escapes, through the shared wikilink parser.
         const target = /^!?\[\[/.test(link.link) ? parseWikiLink(link.link.replace(/^!/, '')).document : link.target;
-        const path = await this.resolveWikiLinkTarget(target, principal, containerPath);
+        const path = await this.resolveWikiLinkTarget(target, principal, containerPath, /^!?\[\[/.test(link.link) ? undefined : 'markdown');
         if (!this.access.canReferenceFrom(containerPath, path)) {
           throw new Error(`A more-private note cannot be referenced from this note: ${this.access.toPublicPath(path)}`);
         }

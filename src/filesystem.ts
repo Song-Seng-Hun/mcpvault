@@ -13,7 +13,7 @@ import { buildDailyNotePath, resolveDailyDate, type DailyDateInput } from './dai
 import type { VaultMetadataIndex } from './vault-index.js';
 import { VaultGraphIndex } from './vault-graph.js';
 import { VaultIoCoordinator } from './vault-io.js';
-import { buildNoteReferenceIndex, resolveNoteReference, type NoteReferenceDescriptor, type NoteReferenceIndex } from './note-reference.js';
+import { buildNoteReferenceIndex, markdownNotePath, resolveNoteReference, type NoteReferenceDescriptor, type NoteReferenceIndex, type ResolveNoteReferenceOptions } from './note-reference.js';
 import { validateJsonCanvasDocument } from './json-canvas.js';
 import { acceptsPlainReference, propertyPathText } from './property-references.js';
 import { assertLegacyDiscussionMutationAllowed } from './scope-access.js';
@@ -93,11 +93,16 @@ function rewriteLinkText(link: string, sourcePath: string, newPath: string): str
     const inner = link.slice(prefix.length, -2);
     const anchorOrAlias = inner.search(/[|#]/);
     const suffix = anchorOrAlias === -1 ? '' : inner.slice(anchorOrAlias);
-    return `${prefix}${newPath}${suffix}]]`;
+    const relativeTarget = posix.relative(posix.dirname(sourcePath), newPath);
+    const target = newPath.includes('/') ? newPath
+      : /^\.\.?\//.test(relativeTarget) ? relativeTarget : `./${relativeTarget}`;
+    return `${prefix}${target}${suffix}]]`;
   }
   const markdown = /^(\[[^\]]*\]\(\s*<?)([^>\s)]+)(.*)$/s.exec(link);
   if (!markdown) return link;
-  const destination = relative(dirname(sourcePath), newPath).replace(/\\/g, '/') || newPath;
+  const relativeDestination = relative(dirname(sourcePath), newPath).replace(/\\/g, '/') || newPath;
+  const destination = posix.dirname(sourcePath) !== '.' && relativeDestination.includes('/') && !relativeDestination.startsWith('../')
+    ? `./${relativeDestination}` : relativeDestination;
   const rawTarget = markdown[2]!;
   const suffixAt = [rawTarget.indexOf('?'), rawTarget.indexOf('#')].filter(index => index >= 0).sort((a, b) => a - b)[0];
   const suffix = suffixAt === undefined ? '' : rawTarget.slice(suffixAt);
@@ -158,15 +163,7 @@ function isWikiSyntax(link: string): boolean {
 }
 
 function resolveMarkdownLinkTargets(target: string, sourcePath: string, referenceIndex: NoteReferenceIndex): string[] {
-  const normalizedTarget = target.replace(/\\/g, '/').trim();
-  const candidate = posix.normalize(normalizedTarget.startsWith('/')
-    ? normalizedTarget.slice(1)
-    : posix.join(posix.dirname(sourcePath), normalizedTarget));
-  if (!candidate || candidate === '..' || candidate.startsWith('../')) return [];
-  const normalizedCandidate = candidate.toLowerCase();
-  const matches = referenceIndex.qualified.get(normalizedCandidate)
-    || referenceIndex.qualified.get(normalizedCandidate.replace(/\.(?:md|markdown|txt)$/i, ''));
-  return [...(matches || [])].sort((left, right) => left.localeCompare(right));
+  return resolveNoteReference(target, referenceIndex, { sourcePath, syntax: 'markdown' });
 }
 
 function resolveOccurrenceTargets(link: string, target: string, sourcePath: string, referenceIndex: NoteReferenceIndex): string[] {
@@ -197,18 +194,26 @@ function rewriteExplicitLinks(
   const byLine = new Map<number, typeof occurrences>();
   const replacements = new Map<(typeof occurrences)[number], string>();
   for (const occurrence of occurrences) {
-    const targets = resolveOccurrenceTargets(occurrence.link, occurrence.target, sourcePath, referenceIndex);
+    let targets = resolveOccurrenceTargets(occurrence.link, occurrence.target, sourcePath, referenceIndex);
+    const sourceIsMoved = normalizeNoteTarget(sourcePath) === normalizeNoteTarget(oldPath);
+    const sourceLocationChanged = sourceIsMoved && posix.dirname(sourcePath) !== posix.dirname(renderedSourcePath);
+    const sourceRelative = !isWikiSyntax(occurrence.link) || /^\.\.?\//.test(occurrence.target);
     const includesMovedTarget = targets.some(target => normalizeNoteTarget(target) === normalizeNoteTarget(oldPath));
-    if (targets.length > 1 && includesMovedTarget) {
+    if (targets.length > 1 && (includesMovedTarget || (sourceLocationChanged && sourceRelative))) {
       ambiguous.push({ sourcePath, value: occurrence.link, candidates: targets, line: occurrence.line + lineOffset });
       continue;
+    }
+    if (!targets.length && sourceLocationChanged && sourceRelative) {
+      const intendedTarget = markdownNotePath(occurrence.target, sourcePath);
+      if (!intendedTarget) throw new Error('Cannot preserve an out-of-vault relative destination during source relocation; repair the link before moving.');
+      // Preserve the authored location even before the future note exists.
+      // Otherwise a new sibling at the destination could silently take over.
+      targets = [intendedTarget];
     }
     if (targets.length !== 1) continue;
     const targetPath = targets[0]!;
     const targetIsMoved = normalizeNoteTarget(targetPath) === normalizeNoteTarget(oldPath);
-    const sourceIsMoved = normalizeNoteTarget(sourcePath) === normalizeNoteTarget(oldPath);
-    const sourceRelative = !isWikiSyntax(occurrence.link) || /^\.\.?\//.test(occurrence.target);
-    if (!targetIsMoved && !(sourceIsMoved && sourceRelative)) continue;
+    if (!targetIsMoved && !(sourceLocationChanged && sourceRelative)) continue;
     const renderedTarget = targetIsMoved ? newPath : targetPath;
     const replacement = rewriteLinkText(occurrence.link, renderedSourcePath, renderedTarget);
     if (replacement === occurrence.link) continue;
@@ -1388,6 +1393,7 @@ export class FileSystemService {
     oldPath: string,
     newPath: string,
     canAccessPath: (path: string) => boolean,
+    includeMovedSource = true,
   ): Promise<{ plans: Array<{ sourcePath: string; sourceContent: string; plan: MoveReferenceRewritePlan }>; hiddenReferencesPresent: boolean }> {
     const physicalPaths = (await this.collectVaultFiles())
       .filter(path => this.pathFilter.isAllowed(path) && /\.(?:md|markdown|txt)$/i.test(path))
@@ -1421,6 +1427,7 @@ export class FileSystemService {
     const plans: Array<{ sourcePath: string; sourceContent: string; plan: MoveReferenceRewritePlan }> = [];
     let hiddenReferencesPresent = false;
     for (const { sourcePath, sourceContent } of documents) {
+      if (!includeMovedSource && sourcePath.toLowerCase() === oldPath.toLowerCase()) continue;
       if (sourcePath.toLowerCase() === newPath.toLowerCase() && sourcePath.toLowerCase() !== oldPath.toLowerCase()) continue;
       const plan = planMoveReferenceRewrite(this.frontmatterHandler, sourceContent, sourcePath, oldPath, newPath, referenceIndex);
       if (!canAccessPath(sourcePath)) {
@@ -1443,7 +1450,7 @@ export class FileSystemService {
     const requestedLimit = params.limit ?? 100;
     if (!Number.isInteger(requestedLimit) || requestedLimit < 1) throw new Error('limit must be a positive integer');
     const limit = Math.min(requestedLimit, 200);
-    const scan = await this.collectMoveReferencePlans(path, `__mcpvault_deleted__/${path}`, canAccessPath);
+    const scan = await this.collectMoveReferencePlans(path, `__mcpvault_deleted__/${path}`, canAccessPath, false);
     const affectedLinks: DeleteNotePreviewResult['affectedLinks'] = [];
     const affectedProperties: DeleteNotePreviewResult['affectedProperties'] = [];
     const ambiguousReferences: DeleteNotePreviewResult['ambiguousReferences'] = [];
@@ -2286,11 +2293,19 @@ export class FileSystemService {
    * Throws only on caller misuse (empty name).
    */
   async findPathForWikiLink(wikiLinkName: string, canAccessPath: (path: string) => boolean = () => true, sourcePath?: string): Promise<string[]> {
+    return this.findPathsForNoteReference(wikiLinkName, canAccessPath, sourcePath === undefined ? {} : { sourcePath });
+  }
+
+  async findPathForMarkdownLink(target: string, sourcePath: string, canAccessPath: (path: string) => boolean = () => true): Promise<string[]> {
+    return this.findPathsForNoteReference(target, canAccessPath, { sourcePath, syntax: 'markdown' });
+  }
+
+  private async findPathsForNoteReference(wikiLinkName: string, canAccessPath: (path: string) => boolean, options: ResolveNoteReferenceOptions): Promise<string[]> {
     if (!wikiLinkName.trim()) {
       throw new Error('Empty wiki link — provide a document name inside [[ ]].');
     }
     if (this.metadataIndex) {
-      const indexedMatches = await this.metadataIndex.resolveNoteReference(wikiLinkName, canAccessPath, sourcePath);
+      const indexedMatches = await this.metadataIndex.resolveNoteReference(wikiLinkName, canAccessPath, options.sourcePath, options.syntax);
       return indexedMatches.sort((a, b) => {
         const da = a.split('/').length;
         const db = b.split('/').length;
@@ -2322,7 +2337,7 @@ export class FileSystemService {
       for (const entry of batch) if (entry) descriptors.push(entry);
     }
 
-    const matches = resolveNoteReference(wikiLinkName, buildNoteReferenceIndex(descriptors), sourcePath === undefined ? {} : { sourcePath });
+    const matches = resolveNoteReference(wikiLinkName, buildNoteReferenceIndex(descriptors), options);
 
     // Depth-ascending (root-first), alphabetical tiebreak at equal depth.
     // Standalone callers omit sourcePath; note-bound readers can resolve ./ and ../.
