@@ -32,8 +32,9 @@ export declare class VaultGraphIndex {
     invalidateMany(changes: readonly VaultCatalogChange[]): void;
     close(): void;
     getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, canIncludeSource?: (path: string) => Promise<boolean>, includeSourceRevision?: boolean): Promise<BacklinksResult>;
-    getOutlinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number): Promise<{
+    getOutlinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, includeSourceRevision?: boolean): Promise<{
         source: string;
+        sourceRevision?: string;
         outlinks: OutlinkMatch[];
         total: number;
         truncated: boolean;

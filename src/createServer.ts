@@ -3,6 +3,7 @@ import { FileSystemService } from "./filesystem.js";
 import { projectNoteOutline, projectNoteLineWindow } from './note-projections.js';
 import { packTaskPage } from './task-page.js';
 import { packTagPage } from './tag-page.js';
+import { packNavigationPage, NAVIGATION_READ_GUIDANCE } from './navigation-page.js';
 import { FrontmatterHandler, parseFrontmatter } from "./frontmatter.js";
 import { PathFilter } from "./pathfilter.js";
 import { SearchService } from "./search.js";
@@ -986,7 +987,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "find_orphan_notes",
-          description: "Find a bounded page of visible notes with no incoming links from another visible, non-hidden note. Self-links and attachments do not prevent orphan status. Counts describe the caller-visible graph; orphan status is a review suggestion, never deletion authority.",
+          description: "Find a bounded page of visible notes with no incoming links from another visible, non-hidden note. Self-links and attachments do not prevent orphan status. Counts describe the caller-visible graph; orphan status is a review suggestion, never deletion authority." + NAVIGATION_READ_GUIDANCE,
           inputSchema: {
             type: "object",
             properties: {
@@ -999,7 +1000,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "find_unresolved_links",
-          description: "Find one bounded page of unresolved Obsidian/relative Markdown links from visible, non-hidden notes. Known invisible-only destinations and private scope URIs are not repair tasks. Context may mask unavailable references; inspect the source before editing. Matching fences, closed inline backticks and escaped openers are ignored; top-level indented code is outside the scanner.",
+          description: "Find one bounded page of unresolved Obsidian/relative Markdown links from visible, non-hidden notes. Known invisible-only destinations and private scope URIs are not repair tasks. Context may mask unavailable references; inspect the source before editing. Matching fences, closed inline backticks and escaped openers are ignored; top-level indented code is outside the scanner." + NAVIGATION_READ_GUIDANCE,
           inputSchema: {
             type: "object",
             properties: {
@@ -1012,7 +1013,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "get_outlinks",
-          description: "List one bounded page of a visible, non-hidden note's Obsidian/relative Markdown links. Excludes known invisible-only targets before counts; readable attachments and genuine missing links remain. Context may mask unavailable references; inspect the source before editing. Matching fences, closed inline backticks and escaped openers are ignored; top-level indented code is outside the scanner.",
+          description: "List one bounded page of a visible, non-hidden note's Obsidian/relative Markdown links. Excludes known invisible-only targets before counts; readable attachments and genuine missing links remain. Context may mask unavailable references; inspect the source before editing. Matching fences, closed inline backticks and escaped openers are ignored; top-level indented code is outside the scanner. sourceRevision identifies the parsed source." + NAVIGATION_READ_GUIDANCE,
           inputSchema: {
             type: "object",
             properties: {
@@ -1027,7 +1028,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "get_backlinks",
-          description: "Find one bounded page of incoming Obsidian/relative Markdown links to a visible, non-hidden note. Source visibility is checked before counts and pagination. Context may mask unavailable neighboring references; inspect the source before editing. Matching fences, closed inline backticks and escaped openers are ignored; top-level indented code is outside the scanner.",
+          description: "Find one bounded page of incoming Obsidian/relative Markdown links to a visible, non-hidden note. Source visibility is checked before counts and pagination. Context may mask unavailable neighboring references; inspect the source before editing. Matching fences, closed inline backticks and escaped openers are ignored; top-level indented code is outside the scanner. sourceRevision on each row and targetRevision identify parsed graph entries." + NAVIGATION_READ_GUIDANCE,
           inputSchema: {
             type: "object",
             properties: {
@@ -2786,20 +2787,20 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
         case "get_backlinks": {
           const page = navigationPageArgs(trimmedArgs);
-          const backlinks = await fileSystem.getBacklinks(trimmedArgs.path, page.limit, canAccessPath, page.offset);
-          return boundedNavigationResult('backlinks', endpointIdForTool('get_backlinks'), backlinks, page, trimmedArgs);
+          const backlinks = await fileSystem.getBacklinks(trimmedArgs.path, page.limit, canAccessPath, page.offset, { includeSourceRevision: true });
+          return boundedNavigationResult('backlinks', endpointIdForTool('get_backlinks'), backlinks, page, args, path => scopeAccess.toPublicPath(path));
         }
 
         case "get_outlinks": {
           const page = navigationPageArgs(trimmedArgs);
-          const outlinks = await fileSystem.getOutlinks(trimmedArgs.path, page.limit, canAccessPath, page.offset);
-          return boundedNavigationResult('outlinks', endpointIdForTool('get_outlinks'), outlinks, page, trimmedArgs);
+          const outlinks = await fileSystem.getOutlinks(trimmedArgs.path, page.limit, canAccessPath, page.offset, { includeSourceRevision: true });
+          return boundedNavigationResult('outlinks', endpointIdForTool('get_outlinks'), outlinks, page, args, path => scopeAccess.toPublicPath(path));
         }
 
         case "find_unresolved_links": {
           const page = navigationPageArgs(trimmedArgs);
           const unresolved = await fileSystem.findUnresolvedLinks(page.limit, canAccessPath, page.offset);
-          return boundedNavigationResult('unresolved', endpointIdForTool('find_unresolved_links'), unresolved, page, trimmedArgs);
+          return boundedNavigationResult('unresolved', endpointIdForTool('find_unresolved_links'), unresolved, page, args, path => scopeAccess.toPublicPath(path));
         }
 
         case "get_daily_note": {
@@ -2832,7 +2833,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         case "find_orphan_notes": {
           const page = navigationPageArgs(trimmedArgs);
           const orphans = await fileSystem.findOrphanNotes(page.limit, canAccessPath, page.offset);
-          return boundedNavigationResult('orphans', endpointIdForTool('find_orphan_notes'), orphans, page, trimmedArgs);
+          return boundedNavigationResult('orphans', endpointIdForTool('find_orphan_notes'), orphans, page, args, path => scopeAccess.toPublicPath(path));
         }
 
         case "get_note_outline": {
@@ -3149,60 +3150,15 @@ function navigationPageArgs(args: Record<string, any>): { offset: number; limit:
   return { offset, limit, maxChars };
 }
 
-function compactNavigationItem(item: unknown): unknown {
-  if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
-  const compact: Record<string, unknown> = {};
-  let truncated = false;
-  for (const [key, value] of Object.entries(item as Record<string, unknown>)) {
-    if (typeof value !== 'string') {
-      compact[key] = value;
-      continue;
-    }
-    const cap = key === 'context' ? 240 : key === 'link' ? 180 : 300;
-    compact[key] = value.slice(0, cap);
-    if (value.length > cap) truncated = true;
-  }
-  if (truncated) compact.fieldsTruncated = true;
-  return compact;
-}
-
 function boundedNavigationResult(
   key: 'backlinks' | 'outlinks' | 'unresolved' | 'orphans',
   endpointId: string,
   result: Record<string, any>,
   page: { offset: number; limit: number; maxChars: number },
   args: Record<string, any>,
+  toPublicPath: (path: string) => string,
 ) {
-  const items = (Array.isArray(result[key]) ? result[key] : []).map(compactNavigationItem);
-  const metadata = Object.fromEntries(Object.entries(result).filter(([entryKey]) => entryKey !== key && entryKey !== 'truncated'));
-  const serialize = (count: number) => {
-    const selected = items.slice(0, count);
-    const nextOffset = page.offset + selected.length;
-    const truncated = Number(result.total || 0) > nextOffset;
-    const value: Record<string, unknown> = {
-      ...metadata,
-      ...((truncated || page.offset > 0) && { offset: page.offset, returned: selected.length }),
-      [key]: selected,
-      truncated,
-    };
-    if (truncated) {
-      value.remaining = Math.max(0, Number(result.total || 0) - nextOffset);
-      value.nextAction = {
-        endpointId,
-        arguments: {
-          ...(typeof args.path === 'string' && { path: args.path }),
-          offset: nextOffset,
-          limit: page.limit,
-          maxChars: page.maxChars,
-        },
-      };
-    }
-    return JSON.stringify(value, null, args.prettyPrint ? 2 : undefined);
-  };
-  let count = items.length;
-  let text = serialize(count);
-  while (text.length > page.maxChars && count > 0) text = serialize(--count);
-  return { content: [{ type: 'text' as const, text }] };
+  return { content: [{ type: 'text' as const, text: packNavigationPage(key, endpointId, result, page, args, toPublicPath) }] };
 }
 
 function boundedDirectoryResult(path: string, directories: string[], files: string[], args: Record<string, any>) {

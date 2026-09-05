@@ -2262,14 +2262,14 @@ export class FileSystemService {
             graph.close();
         }
     }
-    async getOutlinks(path, limit = 100, canAccessPath = () => true, offset = 0) {
+    async getOutlinks(path, limit = 100, canAccessPath = () => true, offset = 0, options = {}) {
         const source = this.normalizePath(path);
         if (!this.pathFilter.isAllowed(source) || !canAccessPath(source))
             throw new Error(`Access denied: ${source}`);
         const note = await this.readNote(source);
         if (isModerationHidden(note.frontmatter))
             throw new Error(`Access denied: ${source}`);
-        return this.withGraphRead(graph => graph.getOutlinks(source, limit, canAccessPath, offset));
+        return this.withGraphRead(graph => graph.getOutlinks(source, limit, canAccessPath, offset, options.includeSourceRevision));
     }
     async findUnresolvedLinks(limit = 100, canAccessPath = () => true, offset = 0) {
         return this.withGraphRead(graph => graph.findUnresolvedLinks(limit, canAccessPath, offset));

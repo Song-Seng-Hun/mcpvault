@@ -2352,12 +2352,12 @@ export class FileSystemService {
     finally { graph.close(); }
   }
 
-  async getOutlinks(path: string, limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0): Promise<OutlinksResult> {
+  async getOutlinks(path: string, limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0, options: { includeSourceRevision?: boolean } = {}): Promise<OutlinksResult> {
     const source = this.normalizePath(path);
     if (!this.pathFilter.isAllowed(source) || !canAccessPath(source)) throw new Error(`Access denied: ${source}`);
     const note = await this.readNote(source);
     if (isModerationHidden(note.frontmatter)) throw new Error(`Access denied: ${source}`);
-    return this.withGraphRead(graph => graph.getOutlinks(source, limit, canAccessPath, offset));
+    return this.withGraphRead(graph => graph.getOutlinks(source, limit, canAccessPath, offset, options.includeSourceRevision));
   }
 
   async findUnresolvedLinks(limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0): Promise<UnresolvedLinksResult> {

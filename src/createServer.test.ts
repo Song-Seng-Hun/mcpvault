@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
+import { createHash } from 'node:crypto';
 
 let testVaultPath: string;
 
@@ -1309,6 +1310,7 @@ test("get_outlinks returns destinations and ignores literal examples", async () 
     expect(result.isError).toBeFalsy();
     expect(JSON.parse((result.content as any)[0].text)).toEqual({
       source: "Source.md",
+      sourceRevision: createHash('sha256').update(await readFile(join(testVaultPath, 'Source.md'))).digest('hex'),
       outlinks: [
         {
           target: "Target",
@@ -1374,9 +1376,11 @@ test("get_backlinks returns real internal-link occurrences with line context", a
     const parsed = JSON.parse((result.content as any)[0].text);
     expect(parsed.target).toBe("Target.md");
     expect(parsed.total).toBe(2);
+    const sourceRevision = createHash('sha256').update(await readFile(join(testVaultPath, 'Projects', 'Source.md'), 'utf8')).digest('hex');
     expect(parsed.backlinks).toEqual([
       {
         path: "Projects/Source.md",
+        sourceRevision,
         line: 3,
         link: "[[Target|the target]]",
         context: "See [[Target|the target]].",
@@ -1384,6 +1388,7 @@ test("get_backlinks returns real internal-link occurrences with line context", a
       },
       {
         path: "Projects/Source.md",
+        sourceRevision,
         line: 4,
         link: "![[Target#Details]]",
         context: "Embed: ![[Target#Details]].",

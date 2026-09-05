@@ -657,6 +657,20 @@ routes are themselves bounded and revision-stamped. Follow their returned
 Directory and graph-navigation reads use the same rule: consume one bounded
 page and follow its exact offset continuation. A large backlink set or repair
 queue must never be loaded wholesale merely to discover the next item.
+Graph pages preserve exact paths, link text, heading/block locators and Property
+paths. Managed scope paths are returned as callable public scope URIs before
+budgeting; authentication stays local. Only context/title previews may shorten,
+marked `fieldsTruncated`; read the source rather than patching from that preview.
+Backlink rows carry their parsed `sourceRevision` and the page's `targetRevision`;
+outlink pages carry the parsed `sourceRevision`. These are not an atomic current
+Vault snapshot. Offsets are advisory across concurrent edits: re-read changed
+sources before editing. Follow continuations by emitted row count. If no exact
+row fits, `nextAction.reuseOriginalArguments` means merge its `overrides` into
+the original request (same position, compact 12000-character budget, limit 1).
+At that ceiling an oversized locator fails explicitly without skipping a row.
+`paginationLimited` reports the existing 100000-offset ceiling rather than
+emitting an invalid continuation. No new MCP tools or client installation are
+required.
 Every other non-mutating endpoint also advertises a response budget, with a
 12,000-character dispatcher fallback when omitted. REST callers must use the
 catalogued method: all mutations are POST and a GET/POST mismatch is rejected

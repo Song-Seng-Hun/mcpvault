@@ -256,7 +256,7 @@ export class VaultGraphIndex {
         const page = backlinks.slice(offset, offset + limit).map(link => project(sourceEntries.get(link.path), link));
         return { target, ...(includeSourceRevision && { targetRevision: targetEntry.revision }), backlinks: page, total, truncated: total > offset + page.length };
     }
-    async getOutlinks(path, limit, canAccessPath, offset = 0) {
+    async getOutlinks(path, limit, canAccessPath, offset = 0, includeSourceRevision = false) {
         await this.ensure();
         const source = normalizePath(path);
         const entry = this.entries.get(source);
@@ -277,6 +277,7 @@ export class VaultGraphIndex {
         });
         return {
             source,
+            ...(includeSourceRevision && { sourceRevision: entry.revision }),
             outlinks: outlinks.slice(offset, offset + limit).map(link => project(entry, link)),
             total: outlinks.length,
             truncated: outlinks.length > offset + limit,

@@ -161,7 +161,9 @@ export declare class FileSystemService {
         includeSourceRevision?: boolean;
     }): Promise<BacklinksResult>;
     private withGraphRead;
-    getOutlinks(path: string, limit?: number, canAccessPath?: (path: string) => boolean, offset?: number): Promise<OutlinksResult>;
+    getOutlinks(path: string, limit?: number, canAccessPath?: (path: string) => boolean, offset?: number, options?: {
+        includeSourceRevision?: boolean;
+    }): Promise<OutlinksResult>;
     findUnresolvedLinks(limit?: number, canAccessPath?: (path: string) => boolean, offset?: number): Promise<UnresolvedLinksResult>;
     findOrphanNotes(limit?: number, canAccessPath?: (path: string) => boolean, offset?: number): Promise<OrphanNotesResult>;
     getDailyNote(dateInput?: DailyDateInput, folder?: string): Promise<DailyNoteResult>;

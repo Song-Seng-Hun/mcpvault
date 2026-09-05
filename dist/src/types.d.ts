@@ -420,6 +420,8 @@ export interface OutlinkMatch {
 }
 export interface OutlinksResult {
     source: string;
+    /** Opt-in raw-file revision captured when these links were parsed. */
+    sourceRevision?: string;
     outlinks: OutlinkMatch[];
     total: number;
     truncated: boolean;
