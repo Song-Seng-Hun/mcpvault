@@ -380,6 +380,14 @@ If a reference scan cannot read a note (other than one concurrently removed),
 move/delete integrity checks stop with a path-free error instead of treating
 unknown references as absent. Restore readable notes and retry. The move
 service checks both source and destination access even without link updates.
+Captured `.path` values in `review_basis_links[]`,
+`review_basis_upstream.entries[]`, `pending_edits[]`, and `research_trail[]`
+remain canonical Vault-relative file identities during moves, including at the
+Vault root; they are not rewritten as relative navigation links. Original
+captured revisions and summary/review hashes remain unchanged. A pure rename
+does not invalidate unchanged link/upstream evidence just because a display
+path changed. Actual evidence edits still trigger review, and rewritten note
+bodies still make their old summaries stale until explicitly reviewed.
 Ordinary Markdown links such as `[guide](Guide.md)` use the containing note's
 folder in graph, reference validation, review baselines, and move rewrites;
 `[guide](Guides/Guide.md)` (or `/Guides/Guide.md`) starts at the Vault root;

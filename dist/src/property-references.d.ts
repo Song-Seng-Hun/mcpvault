@@ -11,6 +11,8 @@ export interface FrontmatterReferenceValue {
     leaf: string;
 }
 export declare function isNavigationalFrontmatterReference(reference: FrontmatterReferenceValue): boolean;
+/** Captured file paths are Vault-relative identities, not authored wikilinks. */
+export declare function isReferenceSnapshotPath(segments: Array<string | number>): boolean;
 export declare function propertyPathText(segments: Array<string | number>): string;
 export declare function acceptsPlainReference(segments: Array<string | number>): boolean;
 /** Return path-like values; explicit Obsidian links stay handled by the Markdown scanner. */

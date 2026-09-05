@@ -13,7 +13,7 @@ import { VaultGraphIndex } from './vault-graph.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import { buildNoteReferenceIndex, markdownNotePath, resolveNoteReference } from './note-reference.js';
 import { validateJsonCanvasDocument } from './json-canvas.js';
-import { acceptsPlainReference, propertyPathText } from './property-references.js';
+import { acceptsPlainReference, isReferenceSnapshotPath, propertyPathText } from './property-references.js';
 import { assertLegacyDiscussionMutationAllowed } from './scope-access.js';
 import { extractMarkdownTasks, iterateMarkdownTasks } from './markdown-tasks.js';
 import { extractInlineTags } from './markdown-tags.js';
@@ -198,15 +198,17 @@ function rewriteExplicitLinks(content, sourcePath, renderedSourcePath, oldPath, 
     }
     return { content: lines.join('\n'), changes, ambiguous };
 }
-function rewritePlainReference(value, sourcePath, renderedSourcePath, oldPath, newPath, referenceIndex) {
+function rewritePlainReference(value, sourcePath, renderedSourcePath, oldPath, newPath, referenceIndex, snapshotPath = false) {
     const trimmed = value.trim();
     if (!trimmed || /^[a-z][a-z0-9+.-]*:/i.test(trimmed) || trimmed.startsWith('#'))
         return {};
     const suffixAt = [trimmed.indexOf('?'), trimmed.indexOf('#')].filter(index => index >= 0).sort((a, b) => a - b)[0];
     const document = suffixAt === undefined ? trimmed : trimmed.slice(0, suffixAt);
     const suffix = suffixAt === undefined ? '' : trimmed.slice(suffixAt);
-    let targets = resolveNoteReference(document, referenceIndex, { sourcePath });
-    const sourceRelative = /^\.\.?\//.test(document);
+    let targets = snapshotPath
+        ? normalizeNoteTarget(document) === normalizeNoteTarget(oldPath) ? [oldPath] : []
+        : resolveNoteReference(document, referenceIndex, { sourcePath });
+    const sourceRelative = !snapshotPath && /^\.\.?\//.test(document);
     const relocatingRelative = sourceRelative && normalizeNoteTarget(sourcePath) === normalizeNoteTarget(oldPath)
         && posix.dirname(sourcePath) !== posix.dirname(renderedSourcePath);
     const includesMovedTarget = targets.some(target => normalizeNoteTarget(target) === normalizeNoteTarget(oldPath));
@@ -223,7 +225,7 @@ function rewritePlainReference(value, sourcePath, renderedSourcePath, oldPath, n
     const targetPath = targets[0];
     const renderedTarget = includesMovedTarget ? newPath : targetPath;
     const relativeTarget = posix.relative(posix.dirname(renderedSourcePath), renderedTarget);
-    const destination = sourceRelative || !renderedTarget.includes('/')
+    const destination = snapshotPath ? renderedTarget : sourceRelative || !renderedTarget.includes('/')
         ? /^\.\.?\//.test(relativeTarget) ? relativeTarget : `./${relativeTarget}`
         : renderedTarget;
     const keepExtension = /\.(?:md|markdown|txt)$/i.test(document);
@@ -252,7 +254,7 @@ function rewriteFrontmatterReferences(frontmatter, sourcePath, renderedSourcePat
             }
             if (!acceptsPlainReference(segments))
                 return value;
-            const plain = rewritePlainReference(value, sourcePath, renderedSourcePath, oldPath, newPath, referenceIndex);
+            const plain = rewritePlainReference(value, sourcePath, renderedSourcePath, oldPath, newPath, referenceIndex, isReferenceSnapshotPath(segments));
             if (plain.candidates) {
                 ambiguous.push({ sourcePath, propertyPath: propertyPathText(segments), value, candidates: plain.candidates });
                 return value;

@@ -104,6 +104,61 @@ test('on_link_change reads real body links rather than interpreting omitted cont
   });
 });
 
+test.each([false, true])('relocation never certifies an old summary against rewritten content (indexed=%s)', async indexed => {
+  await fixture(async (wiki, fs, seed) => {
+    await seed('Wiki/Target.md', '# Target\n');
+    const path = 'Wiki/Reader.md', body = '[[./Target.md]]\n';
+    await seed(path, body, { summary: 'Original summary', summary_of_content_sha256: digest(body), review_policy: 'on_any_edit' });
+    await wiki.review({ path, reviewOutcome: 'confirmed', reviewedBy: 'reader', expectedRevision: (await fs.readNote(path)).revision });
+    const before = await fs.readNote(path);
+    expect((await wiki.reviewQueue()).items).toEqual([]);
+    expect((await fs.moveNote({ oldPath: path, newPath: 'Archive/Reader.md', updateLinks: true, expectedRevision: before.revision })).success).toBe(true);
+    const moved = await fs.readNote('Archive/Reader.md');
+    expect(moved.content).toContain('[[Wiki/Target.md]]');
+    expect(moved.frontmatter.summary_of_content_sha256).toBe(before.frontmatter.summary_of_content_sha256);
+    expect(moved.frontmatter.review_basis_content_sha256).toBe(before.frontmatter.review_basis_content_sha256);
+    const queue = await wiki.reviewQueue();
+    expect(queue.items.find(item => item.path === 'Archive/Reader.md')?.reviewReasons).toEqual(expect.arrayContaining(['summary_stale', 'note_edited']));
+  }, indexed);
+});
+
+test.each([false, true])('a target-only rename preserves the link review baseline when its content is unchanged (indexed=%s)', async indexed => {
+  await fixture(async (wiki, fs, seed) => {
+    await seed('Wiki/Target.md', '# Target\n');
+    const path = 'Wiki/Reader.md';
+    await seed(path, '[[./Target.md]]\n', { review_policy: 'on_link_change' });
+    await wiki.review({ path, reviewOutcome: 'confirmed', reviewedBy: 'reader', expectedRevision: (await fs.readNote(path)).revision });
+    const originalBasis = (await fs.readNote(path)).frontmatter.review_basis_links;
+    await seed('Other/Target.md', '# Unrelated same-name note\n');
+    expect((await fs.moveNote({ oldPath: 'Wiki/Target.md', newPath: 'Target.md', updateLinks: true, expectedRevision: (await fs.readNote('Wiki/Target.md')).revision })).success).toBe(true);
+    const after = await fs.readNote(path);
+    expect(after.frontmatter.review_basis_links[0].path).toBe('Target.md');
+    expect(after.frontmatter.review_basis_links[0].revision).toBe(originalBasis[0].revision);
+    expect((await wiki.reviewQueue()).items).toEqual([]);
+    const rootTarget = await fs.readNote('Target.md');
+    expect((await fs.moveNote({ oldPath: 'Target.md', newPath: 'Archive/Final.md', updateLinks: true, expectedRevision: rootTarget.revision })).success).toBe(true);
+    expect((await fs.readNote(path)).frontmatter.review_basis_links[0].path).toBe('Archive/Final.md');
+    expect((await wiki.reviewQueue()).items).toEqual([]);
+    await fs.writeNote({ path: 'Archive/Final.md', content: '# Actual change\n', expectedRevision: rootTarget.revision });
+    expect((await wiki.reviewQueue()).items.find(item => item.path === path)?.reviewReasons).toContain('link_changed');
+  }, indexed);
+});
+
+test.each(['dependency', 'support'])('upstream %s renames keep unchanged evidence out of the review queue', async direction => {
+  await fixture(async (wiki, fs, seed) => {
+    const path = 'Reader.md';
+    await seed('Wiki/Target.md', '# Evidence\n', direction === 'support' ? { supports: ['Reader.md'] } : {});
+    await seed(path, '# Reader\n', { review_policy: 'on_upstream_change', ...(direction === 'dependency' ? { depends_on: ['Wiki/Target.md'] } : {}) });
+    await wiki.review({ path, reviewOutcome: 'confirmed', reviewedBy: 'reader', expectedRevision: (await fs.readNote(path)).revision });
+    expect((await wiki.reviewQueue()).items).toEqual([]);
+    expect((await fs.moveNote({ oldPath: 'Wiki/Target.md', newPath: 'Target.md', expectedRevision: (await fs.readNote('Wiki/Target.md')).revision, updateLinks: true })).success).toBe(true);
+    expect((await wiki.reviewQueue()).items).toEqual([]);
+    const evidence = await fs.readNote('Target.md');
+    await fs.writeNote({ path: 'Target.md', content: '# Evidence changed\n', expectedRevision: evidence.revision });
+    expect((await wiki.reviewQueue()).items.find(item => item.path === path)?.reviewReasons).toContain('upstream_changed');
+  });
+});
+
 test.each([false, true])('explicit wikilink extensions retain the same exact review target (indexed=%s)', async indexed => {
   await fixture(async (wiki, fs, seed) => {
     await seed('Wiki/Target.md', '# Target\n');

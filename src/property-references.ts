@@ -38,6 +38,15 @@ export function isNavigationalFrontmatterReference(reference: FrontmatterReferen
   return !NON_NAVIGATIONAL_REFERENCE_ROOTS.has(reference.root);
 }
 
+/** Captured file paths are Vault-relative identities, not authored wikilinks. */
+export function isReferenceSnapshotPath(segments: Array<string | number>): boolean {
+  if (segments[0] === 'review_basis_upstream') {
+    return segments.length === 4 && segments[1] === 'entries' && typeof segments[2] === 'number' && segments[3] === 'path';
+  }
+  return ['review_basis_links', 'pending_edits', 'research_trail'].includes(String(segments[0]))
+    && segments.length === 3 && typeof segments[1] === 'number' && segments[2] === 'path';
+}
+
 export function propertyPathText(segments: Array<string | number>): string {
   return segments.map((segment, index) => typeof segment === 'number' ? `[${segment}]` : `${index > 0 ? '.' : ''}${segment}`).join('');
 }

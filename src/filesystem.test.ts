@@ -985,6 +985,24 @@ describe("tasks", () => {
     expect((await fileSystem.readNote('Archive/Renamed.md')).content).toContain('# Markdown target');
   });
 
+  test.each(['review_basis_links', 'review_basis_upstream', 'pending_edits', 'research_trail'])("%s snapshots retain canonical paths and original captured revisions on move", async root => {
+    await mkdir(join(testVaultPath, 'Other'), { recursive: true });
+    await writeFile(join(testVaultPath, 'Target.md'), '# Root target\n');
+    await writeFile(join(testVaultPath, 'Other/Target.md'), '# Namesake\n');
+    const entries = [{ path: 'Target.md', revision: 'original-captured-revision' }];
+    const snapshots = root === 'review_basis_upstream' ? { entries } : entries;
+    await fileSystem.writeNote({ path: 'Reader.md', content: '# Reader\n', frontmatter: { [root]: snapshots } });
+    const before = await fileSystem.readNote('Target.md');
+    const preview = await fileSystem.previewMoveNote({ oldPath: 'Target.md', newPath: 'Renamed.md' });
+    expect(preview.ambiguousTotal).toBe(0);
+    expect(preview.affectedProperties).toEqual([expect.objectContaining({ replacement: 'Renamed.md' })]);
+    expect((await fileSystem.moveNote({ oldPath: 'Target.md', newPath: 'Renamed.md', expectedRevision: before.revision, updateLinks: true })).success).toBe(true);
+    const fm = (await fileSystem.readNote('Reader.md')).frontmatter;
+    const moved = root === 'review_basis_upstream' ? fm[root].entries : fm[root];
+    expect(moved).toEqual([{ path: 'Renamed.md', revision: 'original-captured-revision' }]);
+    expect((await fileSystem.getBacklinks('Renamed.md')).total).toBe(0);
+  });
+
   test("plain relative Properties track target moves and deletion impact without basename guessing", async () => {
     await mkdir(join(testVaultPath, "Wiki"), { recursive: true });
     await mkdir(join(testVaultPath, "Other"), { recursive: true });

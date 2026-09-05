@@ -1928,8 +1928,11 @@ export class LlmWikiService {
       const current = await this.collectReviewBasisUpstream(note.path, note.frontmatter, principal, referenceIndex);
       const entryKey = (entry: ReviewBasisUpstreamEntry) => `${entry.direction}|${entry.relation}|${(entry.path || entry.target).toLowerCase()}|${entry.claimId || ''}|${entry.localClaimId || ''}`;
       const comparableEntry = (entry: ReviewBasisUpstreamEntry) => {
-        if (!entry.claimDigest) return entry;
-        const { revision: _revision, ...claimStable } = entry;
+        // Once resolved, target is display spelling, not a second identity.
+        // A move may rebase that spelling without changing captured evidence.
+        const comparable = entry.path ? { ...entry, target: entry.path } : entry;
+        if (!entry.claimDigest) return comparable;
+        const { revision: _revision, ...claimStable } = comparable;
         return claimStable;
       };
       const previousByKey = new Map((baseline?.entries || []).map(entry => [entryKey(entry), entry]));

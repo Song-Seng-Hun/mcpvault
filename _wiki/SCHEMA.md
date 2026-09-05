@@ -134,6 +134,12 @@ containing note. Link-updating moves preserve their outgoing, incoming, self,
 and unresolved relative destinations; anchors and extension omission survive.
 Ordinary prose fields are unchanged. Delete impact includes these references,
 while inaccessible referring notes produce only a hidden-reference flag.
+Snapshot file identities (`review_basis_links[].path`,
+`review_basis_upstream.entries[].path`, `pending_edits[].path`,
+`research_trail[].path`) remain canonical Vault-relative paths after moves.
+Move rewrites never update their captured revisions or certify summary/review
+digests. Resolved upstream entries compare their actual path, not display
+target spelling; unresolved entries still compare the authored target.
 Markdown destinations are source-relative file paths, not wikilink aliases:
 `[x](Sibling.md)` names a sibling; `[x](Folder/Note.md)` or
 `[x](/Folder/Note.md)` names a Vault-root path; `./Folder/Note.md` is explicitly
