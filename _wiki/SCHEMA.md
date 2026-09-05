@@ -432,10 +432,26 @@ window/headings from the same ParsedNote `originalContent` whose frontmatter
 was checked and whose hash is returned. There is no second file read between
 moderation validation and projection. A concurrent edit may make that snapshot
 older than disk by response time; it cannot replace its body while retaining
-the old revision. A subsequent read performs a fresh visibility check. Returned
-cursors are not revision locks: compare revisions between pages and restart
-instead of combining different versions. Automatic revision-pinned continuation
-and other independent multi-read adapters still require separate work.
+the old revision. A subsequent read performs a fresh visibility check before
+checking the optional 64-hex SHA-256 `expectedRevision`. Returned `nextAction`
+arguments include that guard automatically. Follow them unchanged. A changed
+visible source returns `isError`, `error: revision_conflict`, `restartRequired`
+and a fresh `mcp.get_note_outline` action (without the old guard); discard the
+previous sequence, inspect the new outline, then choose the needed line range.
+Hidden sources are denied before conflict details. This is stateless drift
+rejection, not a file lock or retained historical snapshot. Unguarded manually
+constructed reads remain fresh reads, not a guaranteed multi-page snapshot.
+
+At tiny budgets these two projections minify and may omit redundant display
+fields (`path`, counts, requested end/total lines). Revision, content/heading
+locators and progressing continuation are retained. Titles may be abbreviated
+with `textTruncated`; Unicode pairs are not split. If even a useful page's
+identifiers cannot fit, `response_budget_too_small` returns `retryArguments`:
+merge those into the **same** endpoint/request, preserving its path and guard.
+No source content was consumed. A long-path conflict may similarly return
+retryArguments to obtain its full restart action; this remains a conflict, not
+permission to splice new text into old pages. Never truncate executable paths.
+Other independent multi-read adapters still require separate consistency audits.
 
 Optional snapshot readers require regular files and enforce stored-byte ceilings
 while reading, not only via a prior stat. Gzip decoding enforces its output limit

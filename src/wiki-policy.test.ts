@@ -20,7 +20,7 @@ describe('progressive Wiki policy', () => {
   });
 
   test('teaches bounded authority shelves and distinct relation strengths progressively', () => {
-    expect(WIKI_POLICY_VERSION).toBe(21);
+    expect(WIKI_POLICY_VERSION).toBe(22);
     const retrieval = getWikiPolicyTopic('retrieval', 2000);
     const knowledge = getWikiPolicyTopic('knowledge', 2000);
     expect(retrieval.routes).toEqual(expect.arrayContaining(['wiki.authority_map']));
@@ -65,7 +65,10 @@ describe('progressive Wiki policy', () => {
   test('partial-read guidance prevents combining continuation pages from different revisions', () => {
     const retrieval = getWikiPolicyTopic('retrieval', 4000);
     expect(retrieval.rules.join(' ')).toContain('single checked snapshot');
-    expect(retrieval.rules.join(' ')).toContain('compare revisions');
+    expect(retrieval.rules.join(' ')).toContain('expectedRevision');
+    expect(retrieval.rules.join(' ')).toContain('revision_conflict');
+    expect(retrieval.rules.join(' ')).toContain('discard old pages');
+    expect(retrieval.rules.join(' ')).toContain('Merge retryArguments into the same request');
     expect(retrieval.rules.join(' ')).toContain('restart');
   });
 

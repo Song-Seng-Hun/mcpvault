@@ -360,10 +360,14 @@ do not prove a current, bounded, actionable response through its public adapter.
   for moderation, returned body/headings and revision. Real-file races previously
   reproduced revision-A/body-B replies and new hidden content after a public
   precheck; both routes now retain the authorized snapshot and deny later hidden
-  reads. Shared pure projections preserve fence and clamping behavior. Automatic
-  revision-pinned continuation across requests and consistency audits of other
-  independent multi-read adapters remain open; current guidance requires revision
-  comparison and restarting a changed sequence.
+  reads. Shared pure projections preserve fence and clamping behavior. Returned
+  continuations now carry expectedRevision automatically; drift rejects the next
+  page with a fresh-outline restart, after current visibility validation. Tiny
+  budgets retain progressing locators or an explicit same-request budget retry,
+  never a zero-progress cursor/truncated path. Real public MCP tests cover full
+  512-character reconstruction, source edits, hidden changes and Unicode titles.
+  This does not retain historical snapshots or guard manually unpinned reads;
+  consistency audits of other independent multi-read adapters remain open.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

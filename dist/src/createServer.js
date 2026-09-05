@@ -989,12 +989,13 @@ export function createServer(vaultPath, options = {}) {
         },
         {
             name: "get_note_outline",
-            description: "Get a bounded heading page without returning the full note. Headings, visibility and revision use one snapshot. Continue with the returned cursor; compare revisions and restart if the source changed.",
+            description: "Get a bounded heading page from one checked snapshot. Follow nextAction unchanged: it pins expectedRevision. On revision_conflict restart with the returned fresh-outline action; never combine changed versions. A budget error supplies retryArguments for this same request.",
             inputSchema: {
                 type: "object",
                 properties: {
                     path: { type: "string", description: "Path to the note relative to vault root" },
                     afterLine: { type: "integer", minimum: 0, description: "Return headings after this 1-based line (default: 0)", default: 0 },
+                    expectedRevision: { type: "string", pattern: "^[a-fA-F0-9]{64}$", description: "Optional source SHA-256 guard, automatically supplied by nextAction. Changed sources require a fresh read." },
                     limit: { type: "integer", minimum: 1, maximum: 500, description: "Maximum headings before the character budget is applied (default: 100)", default: 100 },
                     maxChars: { type: "integer", minimum: 512, maximum: 12000, description: "Hard total response budget (default: 4000)", default: 4000 },
                     prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
@@ -1004,7 +1005,7 @@ export function createServer(vaultPath, options = {}) {
         },
         {
             name: "read_note_lines",
-            description: "Read a bounded line window whose content, visibility and revision use one snapshot. Continue truncated responses with the returned line/column cursor; compare revisions and restart if the source changed.",
+            description: "Read bounded lines from one checked snapshot. Follow nextAction unchanged: it pins expectedRevision and line/column position. On revision_conflict restart with the returned fresh-outline action. A budget error supplies retryArguments for this same request.",
             inputSchema: {
                 type: "object",
                 properties: {
@@ -1012,6 +1013,7 @@ export function createServer(vaultPath, options = {}) {
                     startLine: { type: "integer", minimum: 1, description: "First line to read (1-indexed, inclusive)" },
                     endLine: { type: "integer", minimum: 1, description: "Last line to read (1-indexed, inclusive)" },
                     startColumn: { type: "integer", minimum: 1, description: "Optional 1-based character offset within the first returned line, used only for a continuation (default: 1)", default: 1 },
+                    expectedRevision: { type: "string", pattern: "^[a-fA-F0-9]{64}$", description: "Optional source SHA-256 guard, automatically supplied by nextAction. Changed sources require a fresh read." },
                     maxChars: { type: "integer", minimum: 512, maximum: 12000, description: "Hard total response budget (default: 6000)", default: 6000 },
                     prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
                 },
@@ -2537,12 +2539,18 @@ export function createServer(vaultPath, options = {}) {
                     case "get_note_outline": {
                         const note = await fileSystem.readNote(trimmedArgs.path);
                         assertReadableCommunityNote(note.frontmatter, trimmedArgs.path);
+                        const conflict = noteContinuationConflict(trimmedArgs.path, note.revision, trimmedArgs);
+                        if (conflict)
+                            return conflict;
                         const headings = projectNoteOutline(note.originalContent);
                         return boundedOutlineResult(trimmedArgs.path, note.revision, headings, trimmedArgs);
                     }
                     case "read_note_lines": {
                         const note = await fileSystem.readNote(trimmedArgs.path);
                         assertReadableCommunityNote(note.frontmatter, trimmedArgs.path);
+                        const conflict = noteContinuationConflict(trimmedArgs.path, note.revision, trimmedArgs);
+                        if (conflict)
+                            return conflict;
                         const window = projectNoteLineWindow(note.originalContent, {
                             startLine: trimmedArgs.startLine,
                             endLine: trimmedArgs.endLine
@@ -2930,6 +2938,43 @@ function boundedDirectoryResult(path, directories, files, args) {
         text = serialize(--count);
     return { content: [{ type: 'text', text }] };
 }
+function noteReadPrefix(source, length) {
+    const end = length > 0 && length < source.length && /[\uD800-\uDBFF]/.test(source[length - 1]) && /[\uDC00-\uDFFF]/.test(source[length]) ? length - 1 : length;
+    return source.slice(0, end);
+}
+function noteReadBudgetError(requiredMaxChars, revision) {
+    return { isError: true, content: [{ type: 'text', text: JSON.stringify({
+                    error: 'response_budget_too_small',
+                    message: 'Repeat the same endpoint and arguments, merging retryArguments. No content was consumed.',
+                    retryArguments: { maxChars: Math.min(12000, Math.max(512, requiredMaxChars)), ...(revision && { expectedRevision: revision }), prettyPrint: false },
+                    ...(requiredMaxChars > 12000 && { message: 'Identifiers exceed the maximum read budget; use a shorter canonical note path.', retryArguments: undefined }),
+                }) }] };
+}
+// Called only after the current snapshot has passed visibility checks.
+function noteContinuationConflict(path, revision, args) {
+    if (args.expectedRevision === undefined)
+        return undefined;
+    if (typeof args.expectedRevision !== 'string' || !/^[a-fA-F0-9]{64}$/.test(args.expectedRevision)) {
+        throw new Error('expectedRevision must be a 64-character SHA-256 hash');
+    }
+    if (args.expectedRevision.toLowerCase() === revision)
+        return undefined;
+    const maxChars = args.maxChars === undefined ? 4000 : Number(args.maxChars);
+    const text = JSON.stringify({
+        error: 'revision_conflict', restartRequired: true,
+        message: 'Source changed. Discard previous pages and restart from this fresh outline.',
+        nextAction: { endpointId: endpointIdForTool('get_note_outline'), arguments: { path, maxChars } },
+    });
+    // Preserve the conflict (and the caller's old guard) when its restart path
+    // cannot fit; retrying with a larger budget must not silently read new text.
+    if (text.length > maxChars)
+        return { isError: true, content: [{ type: 'text', text: JSON.stringify({
+                        error: 'revision_conflict', restartRequired: true,
+                        message: 'Discard previous pages. Repeat the same request with retryArguments to obtain the restart action.',
+                        retryArguments: { maxChars: Math.min(12000, text.length + 32), prettyPrint: false },
+                    }) }] };
+    return { isError: true, content: [{ type: 'text', text }] };
+}
 function boundedOutlineResult(path, revision, headings, args) {
     const afterLine = args.afterLine === undefined ? 0 : Number(args.afterLine);
     const limit = args.limit === undefined ? 100 : Number(args.limit);
@@ -2944,36 +2989,47 @@ function boundedOutlineResult(path, revision, headings, args) {
         .filter(heading => heading.line > afterLine)
         .map(heading => ({
         ...heading,
-        text: heading.text.slice(0, 240),
+        text: noteReadPrefix(heading.text, 240),
         ...(heading.text.length > 240 && { textTruncated: true }),
     }));
     let count = Math.min(limit, eligible.length);
-    const serialize = (selectedCount) => {
+    const serialize = (selectedCount, compact = false, pretty = args.prettyPrint, titleLimit = 240) => {
         const selected = eligible.slice(0, selectedCount);
         const remaining = eligible.length - selected.length;
         const value = {
-            path,
+            ...(!compact && { path, totalHeadings: headings.length, returnedHeadings: selected.length }),
             revision,
-            totalHeadings: headings.length,
-            returnedHeadings: selected.length,
-            headings: selected,
+            headings: selected.map(heading => ({ ...heading, text: noteReadPrefix(heading.text, titleLimit), ...(heading.text.length > titleLimit && { textTruncated: true }) })),
             truncated: remaining > 0,
         };
         if (remaining > 0) {
-            value.remainingHeadings = remaining;
+            if (!compact)
+                value.remainingHeadings = remaining;
             value.nextAction = {
                 endpointId: endpointIdForTool('get_note_outline'),
-                arguments: { path, afterLine: selected.at(-1)?.line ?? afterLine, limit, maxChars },
+                arguments: { path, afterLine: selected.at(-1)?.line ?? afterLine, limit, maxChars, expectedRevision: revision },
             };
         }
-        return JSON.stringify(value, null, args.prettyPrint ? 2 : undefined);
+        return JSON.stringify(value, null, pretty ? 2 : undefined);
     };
     let text = serialize(count);
     while (text.length > maxChars && count > 0)
         text = serialize(--count);
-    if (text.length > maxChars) {
-        text = JSON.stringify({ path: path.slice(0, 120), revision, totalHeadings: headings.length, returnedHeadings: 0, headings: [], truncated: eligible.length > 0 });
+    if (text.length <= maxChars && (count > 0 || eligible.length === 0))
+        return { content: [{ type: 'text', text }] };
+    for (const compact of [false, true]) {
+        count = Math.min(limit, eligible.length);
+        text = serialize(count, compact, false);
+        while (text.length > maxChars && count > 1)
+            text = serialize(--count, compact, false);
+        if (text.length <= maxChars)
+            return { content: [{ type: 'text', text }] };
     }
+    // At tiny budgets keep a real locator and an abbreviated title, not an
+    // empty heading page that points to itself forever.
+    text = serialize(Math.min(1, eligible.length), true, false, 32);
+    if (text.length > maxChars)
+        return noteReadBudgetError(text.length + 64, revision);
     return { content: [{ type: 'text', text }] };
 }
 function boundedLineWindowResult(path, revision, window, args) {
@@ -3006,45 +3062,53 @@ function boundedLineWindowResult(path, revision, window, args) {
             return { line: window.startLine, column: effectiveStartColumn + consumed };
         return { line: window.startLine + completedLines, column: consumed - newlinePositions[completedLines - 1] };
     };
-    const serialize = (consumed) => {
+    const serialize = (consumed, compact = false, pretty = args.prettyPrint) => {
         const truncated = consumed < source.length;
         const next = truncated ? positionAfter(consumed) : undefined;
         const value = {
-            path,
+            ...(!compact && { path, requestedEndLine: window.endLine, totalLines: window.totalLines, returnedContentChars: consumed }),
             revision,
             startLine: window.startLine,
             startColumn: effectiveStartColumn,
-            requestedEndLine: window.endLine,
-            totalLines: window.totalLines,
             content: source.slice(0, consumed),
-            returnedContentChars: consumed,
             truncated,
         };
         if (next)
             value.nextAction = {
                 endpointId: endpointIdForTool('read_note_lines'),
-                arguments: { path, startLine: next.line, endLine: window.endLine, startColumn: next.column, maxChars },
+                arguments: { path, startLine: next.line, endLine: window.endLine, startColumn: next.column, maxChars, expectedRevision: revision },
             };
-        return JSON.stringify(value, null, args.prettyPrint ? 2 : undefined);
+        return JSON.stringify(value, null, pretty ? 2 : undefined);
     };
-    let low = 0;
-    let high = source.length;
-    let selected = serialize(0);
-    while (low <= high) {
-        const middle = Math.floor((low + high) / 2);
-        const candidate = serialize(middle);
-        if (candidate.length <= maxChars) {
-            selected = candidate;
-            low = middle + 1;
+    const safeBoundary = (end) => end > 0 && end < source.length && /[\uD800-\uDBFF]/.test(source[end - 1]) && /[\uDC00-\uDFFF]/.test(source[end]) ? end - 1 : end;
+    for (const mode of [{ compact: false, pretty: args.prettyPrint }, { compact: false, pretty: false }, { compact: true, pretty: false }]) {
+        // A final page has no continuation overhead: test it before the binary
+        // search, whose truncated-page size is not monotone at this endpoint.
+        if (source.length <= maxChars) {
+            const whole = serialize(source.length, mode.compact, mode.pretty);
+            if (whole.length <= maxChars)
+                return { content: [{ type: 'text', text: whole }] };
         }
-        else {
-            high = middle - 1;
+        let low = 0;
+        let high = Math.min(source.length - 1, maxChars);
+        let consumed = 0;
+        let selected = '';
+        while (low <= high) {
+            const middle = Math.floor((low + high) / 2);
+            const boundary = safeBoundary(middle);
+            const candidate = serialize(boundary, mode.compact, mode.pretty);
+            if (candidate.length <= maxChars) {
+                consumed = boundary;
+                selected = candidate;
+                low = middle + 1;
+            }
+            else
+                high = middle - 1;
         }
+        if (consumed > 0 && (mode.compact || consumed >= Math.min(64, source.length)))
+            return { content: [{ type: 'text', text: selected }] };
     }
-    if (selected.length > maxChars) {
-        selected = JSON.stringify({ path: path.slice(0, 120), revision, startLine: window.startLine, content: '', returnedContentChars: 0, truncated: source.length > 0 });
-    }
-    return { content: [{ type: 'text', text: selected }] };
+    return noteReadBudgetError(serialize(Math.min(64, source.length), true, false).length + 64, revision);
 }
 function enforceResponseBudget(response, requestedMaxChars) {
     const maxChars = Number(requestedMaxChars);
