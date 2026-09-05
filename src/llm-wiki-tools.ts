@@ -472,11 +472,11 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'preview_wiki_split',
-      description: 'Preview a visible Markdown section from one checked source snapshot, with revision and range. Exact headings take priority; partial headings must be unique. Never copy/publish truncated content: follow its guarded range read and replace the preview with the complete range before revision-checked writes. This endpoint never mutates files.',
+      description: 'Preview a visible section at its source revision and range. Full exact heading identity is preserved; partial headings must be unique. Provide an unused compatible targetPath before extraction: source return links must remain allowed and copied content must not broaden scope visibility. Blocked targets suppress write guidance; compact output retains their status. Never copy truncated content: replace it via the guarded range read. Preview does not mutate or reserve a target; use revision-checked writes.',
       inputSchema: { type: 'object', properties: {
         path: { type: 'string', description: 'Existing accessible Markdown note' },
         heading: { type: 'string', description: 'Unique exact heading, or unique partial match. Ambiguity requires outline/line selection; never guess the first match.' },
-        targetPath: { type: 'string', description: 'Optional proposed destination path for the new note' },
+        targetPath: { type: 'string', description: 'Proposed unused destination. Required for extraction guidance; must preserve source confidentiality and the source-to-target link. Caller access to both private scopes does not make a cross-scope split safe.' },
         maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 },
         accessToken, prettyPrint,
       }, required: ['path', 'heading'] },

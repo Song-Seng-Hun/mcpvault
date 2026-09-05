@@ -570,6 +570,15 @@ Use that revision for a guarded line read before editing. A compact or pretty
 response retains the highest-ranked source locator/read action, or gives a
 same-query budget retry instead of silently dropping it. Selected sources are
 revalidated; a concurrent edit requires retry rather than using stale lines.
+`wiki.split_preview` uses the complete heading identifier, never a shortened
+ellipsis label. Preview the intended `targetPath` before extraction. Both the
+return link and copied content must remain scope-compatible; access to model
+and agent spaces does not authorize moving private content between them.
+`collision: scope_incompatible`, `inaccessible`, or `target_exists` means
+choose a different unused compatible target and preview again, not write or
+patch the source. Destination status survives compact responses. This is
+preflight guidance, not a new access grant, reservation, or completed split:
+create with `expectedRevision: missing` and patch only at the source revision.
 `update_wiki_projection`
 updates only the compact summary/key-points/highlights projection with
 `expectedRevision`; it preserves the Markdown body and unrelated Properties.

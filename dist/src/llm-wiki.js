@@ -7228,7 +7228,7 @@ export class LlmWikiService {
     async previewSplit(params) {
         if (!this.access.canAccessPhysicalPath(params.path, params.principal))
             throw new Error(`Access denied: ${this.access.toPublicPath(params.path)}`);
-        const requestedHeading = boundedText(params.heading, 300).replace(/^#+\s*/, '').trim().toLowerCase();
+        const requestedHeading = String(params.heading ?? '').replace(/^#+\s*/, '').trim().toLowerCase();
         if (!requestedHeading)
             throw new Error('heading is required');
         const maxChars = Math.min(Math.max(Number(params.maxChars) || 6000, 512), 16000);
@@ -7244,10 +7244,19 @@ export class LlmWikiService {
         const targetPath = params.targetPath ? normalizePath(params.targetPath) : undefined;
         let targetExists;
         let targetUsable = true;
+        let targetScopeCompatible = true;
         if (targetPath) {
-            targetUsable = this.access.canAccessPhysicalPath(targetPath, params.principal);
+            // A split must preserve both the source's return link and the copied
+            // content's confidentiality; caller access to both scopes is not enough.
+            targetScopeCompatible = this.access.canReferenceFrom(params.path, targetPath)
+                && this.access.canReferenceFrom(targetPath, params.path);
+            targetUsable = this.access.canAccessPhysicalPath(targetPath, params.principal) && targetScopeCompatible;
             targetExists = targetUsable ? await this.fileSystem.noteExists(targetPath) : undefined;
         }
+        const targetBlocked = targetPath && (!targetUsable || targetExists);
+        const targetNextSteps = !targetUsable
+            ? ['Choose an accessible unused target in a compatible scope and repeat wiki.split_preview. Do not copy content or patch the source from this preview.']
+            : ['Choose an unused target and repeat wiki.split_preview; the existing target must not be overwritten.'];
         const links = Array.from(new Set(extractObsidianLinkOccurrences(content).map(item => item.target))).slice(0, 30);
         return {
             mode: 'preview',
@@ -7263,14 +7272,16 @@ export class LlmWikiService {
                 targetPath: this.access.toPublicPath(targetPath),
                 targetExists: targetExists === true,
                 targetUsable,
-                collision: targetExists === true ? 'target_exists' : targetUsable ? 'none' : 'inaccessible',
+                collision: targetExists === true ? 'target_exists' : targetUsable ? 'none'
+                    : this.access.canAccessPhysicalPath(targetPath, params.principal) && !targetScopeCompatible ? 'scope_incompatible' : 'inaccessible',
             }),
-            nextSteps: [
+            nextSteps: targetBlocked ? targetNextSteps : [
+                ...(!targetPath ? ['Choose an unused target in a compatible scope and repeat wiki.split_preview with targetPath before writing.'] : []),
                 ...(content.length > maxChars
                     ? ['Do not write truncated preview content. Read the complete returned range with mcp.read_note_lines and expectedRevision equal to sourceRevision, following its guarded continuations; restart if the source changed.']
-                    : ['Write the complete preview content to a new target with expectedRevision="missing".']),
-                `Patch the source section using expectedRevision="${note.revision}" after re-reading it.`,
-                'Add or preserve a [[wikilink]] from the source to the new note, then lint the result.',
+                    : targetPath ? ['Write the complete preview content to a new target with expectedRevision="missing".'] : []),
+                ...(targetPath ? [`Patch the source section using expectedRevision="${note.revision}" after re-reading it.`,
+                    'Add or preserve a [[wikilink]] from the source to the new note, then lint the result.'] : []),
             ],
         };
     }

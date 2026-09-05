@@ -762,7 +762,17 @@ across a heading or excluded fence. Selected-source drift produces a retry;
 this is not an atomic Vault census. Complete serialized JSON, including pretty
 formatting, obeys maxChars and preserves a source locator or explicit same-query
 retry if the highest-ranked identity cannot fit. No lower-ranked cheap row
-silently replaces it. Use `update_wiki_projection` to refresh only
+silently replaces it. Split previews preserve the full heading identifier;
+an ellipsis is not an alternate name for a long heading. Before extraction,
+provide a `targetPath` whose scope can contain the source content and which
+the source may link back to. Otherwise `targetUsable` is false and `collision`
+is `scope_incompatible` (or `inaccessible` when caller access is absent),
+without probing target existence. `target_exists` also suppresses write/source
+patch guidance. Compact projections retain destination status as well as the
+source revision/range; if these cannot fit, retry with the requested budget.
+A preview is not a reservation or permission grant: the later create must
+still require `expectedRevision: missing`, and source edits its captured
+revision. Use `update_wiki_projection` to refresh only
 summary/key-points/highlights with `expectedRevision`; the full Markdown body
 and unrelated Properties remain authoritative.
 

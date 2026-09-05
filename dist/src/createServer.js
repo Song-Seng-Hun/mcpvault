@@ -2929,6 +2929,10 @@ function boundedWikiProjectionResult(value, args) {
     const range = sourceRange && { startLine: sourceRange.startLine, endLine: sourceRange.endLine };
     const compact = {
         ...(split ? { mode: 'preview', sourcePath: path, sourceRevision: revision, range } : { path, revision, view: value.view, ...(range && { section: range }) }),
+        ...(split && typeof value.targetPath === 'string' && {
+            targetPath: value.targetPath, targetExists: value.targetExists,
+            targetUsable: value.targetUsable, collision: value.collision,
+        }),
         content: '', truncated: true,
         nextAction: {
             endpointId: endpointIdForTool(range ? 'read_note_lines' : 'get_note_outline'),
