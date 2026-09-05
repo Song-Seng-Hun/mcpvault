@@ -4299,12 +4299,13 @@ export class LlmWikiService {
             }
             else if (blockedState || dependencyBlocked) {
                 totalBlocked += 1;
-                push(blocked, {
-                    ...item,
-                    blockedReason: blockedState ? 'explicit_status' : 'dependency',
-                    ...(dependencyBlocked && { dependencies: this.workDependencyProjection(dependencyState) }),
-                    ...(age !== undefined && age >= boundedBlockedAfterDays && { aging: true, agingReason: `blocked_${boundedBlockedAfterDays}_days_or_more` }),
-                });
+                if (blocked.length < boundedLimit)
+                    push(blocked, {
+                        ...item,
+                        blockedReason: blockedState ? 'explicit_status' : 'dependency',
+                        ...(dependencyBlocked && { dependencies: this.workDependencyProjection(dependencyState) }),
+                        ...(age !== undefined && age >= boundedBlockedAfterDays && { aging: true, agingReason: `blocked_${boundedBlockedAfterDays}_days_or_more` }),
+                    });
             }
             else if (deferredState) {
                 totalDeferred += 1;
@@ -4362,9 +4363,11 @@ export class LlmWikiService {
             deepestChain.push(current);
             while ((plan.stageByPath.get(current) || 0) > 0) {
                 const currentStage = plan.stageByPath.get(current);
-                const prerequisite = [...(plan.adjacency.get(current) || [])]
-                    .filter(key => plan.stageByPath.get(key) === currentStage - 1)
-                    .sort()[0];
+                let prerequisite;
+                for (const key of plan.adjacency.get(current) || []) {
+                    if (plan.stageByPath.get(key) === currentStage - 1 && (prerequisite === undefined || key < prerequisite))
+                        prerequisite = key;
+                }
                 if (!prerequisite)
                     break;
                 deepestChain.push(prerequisite);
@@ -4372,6 +4375,19 @@ export class LlmWikiService {
             }
             deepestChain.reverse();
         }
+        const deepestChainItems = [];
+        let deepestChainChars = 2;
+        for (const key of deepestChain.length > 1 ? deepestChain : []) {
+            const item = planItem(key);
+            deepestChainChars += JSON.stringify(item).length + (deepestChainItems.length ? 1 : 0);
+            deepestChainItems.push(item);
+            // If the chain alone cannot fit, the full response cannot fit either.
+            // Keep enough for the existing compact prefix, but never advertise this
+            // partial projection as a complete result.
+            if (deepestChainChars > boundedChars && deepestChainItems.length >= 4)
+                break;
+        }
+        const completeChainProjection = deepestChain.length <= 1 || deepestChainItems.length === deepestChain.length;
         const cycleComponents = plan.cycles.slice(0, Math.min(6, boundedLimit)).map((cycle, index) => ({
             cycle: index + 1,
             notes: cycle.slice(0, 8).map(planItem),
@@ -4398,7 +4414,7 @@ export class LlmWikiService {
             },
             recommendedStages,
             unlockPoints: { total: unlockCandidates.length, items: unlockCandidates.slice(0, Math.min(8, boundedLimit)), truncated: unlockCandidates.length > Math.min(8, boundedLimit) },
-            ...(deepestChain.length > 1 && { deepestDependencyChain: deepestChain.map(planItem) }),
+            ...(deepestChain.length > 1 && { deepestDependencyChain: deepestChainItems }),
             dependencyCycles: { total: plan.cycles.length, items: cycleComponents, truncated: plan.cycles.length > cycleComponents.length },
             cycleBlockedDependents: { total: plan.blockedByCycles.size, items: [...plan.blockedByCycles].sort().slice(0, Math.min(8, boundedLimit)).map(planItem), truncated: plan.blockedByCycles.size > Math.min(8, boundedLimit) },
             incompletePrerequisites: { total: incompleteRoots.length, items: incompleteRoots.slice(0, Math.min(8, boundedLimit)).map(key => ({ ...planItem(key), dependencies: this.workDependencyProjection(dependencySnapshot.stateByPath.get(key), 3) })), truncated: incompleteRoots.length > Math.min(8, boundedLimit) },
@@ -4417,7 +4433,7 @@ export class LlmWikiService {
             nextActions: totalDependencyBlocked > 0 ? ['Inspect one dependency-blocked item and complete, repair, or explicitly replace its prerequisite before pulling it.'] : totalActive > boundedWipLimit ? ['Finish or unblock existing WIP before pulling another standard item.'] : totalReady > 0 ? ['Pull one ready item and set task_status=next_action with started_at.'] : ['Make one active item executable or identify its waiting/blocked dependency.'],
             generatedAt: now(),
         };
-        if (JSON.stringify(result).length <= boundedChars)
+        if (completeChainProjection && JSON.stringify(result).length <= boundedChars)
             return result;
         const compact = {
             ...result,

@@ -598,6 +598,11 @@ the original request. At the response ceiling an unrepresentable identity fails
 explicitly; paths/links are never clipped to make it fit. `paginationLimited`
 marks the 100,000 offset ceiling. Fingerprints are view guards, not retained
 historical snapshots; each page still computes the whole project cohort.
+Flow health traces the exact deepest dependency path, but stops constructing
+detail rows once that chain alone exceeds the response budget. It then uses
+the existing explicitly truncated response, never a partial chain labeled as
+complete. Blocked-lane details are built only for admitted rows; all work still
+contributes to counts. This reduces discarded projection work, not graph size.
 Dependency cycle classification shared by work and MOC projections uses an
 explicit traversal stack instead of recursive JS calls. Deep chains and cycles
 therefore do not depend on the engine call-stack limit. Work-stage and downstream

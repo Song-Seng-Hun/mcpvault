@@ -578,8 +578,8 @@ do not prove a current, bounded, actionable response through its public adapter.
   not repeated shift/sort. Tests cover a 30,000-node cycle, 150 deterministic
   graph comparisons with a reachability oracle, excluded nodes, self-cycles,
   deep stages and a 2,000-child unlock frontier. No classification cutoff was
-  introduced. Full work/index memory and construction
-  of the full deepest-chain projection before response compaction remain open;
+  introduced. Full work/index memory remains open; deepest-chain detail
+  construction before response compaction is addressed below;
   stack safety is not a whole-Vault memory or latency bound.
 - Project planning now consumes each validated body into three section flags
   before retaining its batch result, on indexed and no-index paths. Work
@@ -591,6 +591,17 @@ do not prove a current, bounded, actionable response through its public adapter.
   error details. This removes application references to the entire body cohort,
   not transient parser allocations, source-size/batch costs, or metadata/graph
   memory. Heap/GC and production latency improvements remain unmeasured.
+- Flow health now stops deepest-chain detail conversion once the chain's own
+  serialized array exceeds the budget, retaining at least the established
+  four-row compact prefix and forcing the truncated branch. Chain keys and stage
+  counts remain exact; predecessor selection scans for the lexical minimum
+  rather than sorting every eligible adjacency list. Blocked details are built
+  only for rows admitted to the lane limit. A 3,000-node regression previously
+  performed 9,028 public-path conversions; it now stays below 3,150 while
+  preserving depth/counts. Compiled baseline/current responses match across 24
+  fixture/budget combinations after removing only generatedAt. Full graph/key
+  retention, stage/unlock candidate collections, very large scalar values and
+  final pretty-format flow budgets remain separate audits, not proven solved.
 
 Record new concrete gaps here when registered schema, dispatcher, service,
 persistent representation, guide, invalidation, or bounded failure evidence

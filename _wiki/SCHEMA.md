@@ -277,6 +277,11 @@ using omitted information. A row's `nextAction` is task text, while the packet's
 Changed views restart at offset 0; budget retries reuse the same position.
 Neither oversized identities nor the 100,000 offset ceiling silently skip rows.
 These guards do not retain historical snapshots or prove atomic filesystem IO.
+Flow health's deepest-chain detail projection stops after proving that the
+chain alone cannot fit the response budget; the whole chain and stage counts
+are still computed. Such a partial projection cannot take the full-response
+branch and uses the existing truncated compact/minimal representation instead.
+Lane limits also precede blocked dependency detail conversion, not counting.
 The shared dependency component classifier is iterative and preserves caller
 input-rank ordering, self-cycles and excluded-node semantics. Work stages retain
 maximum prerequisite depth and existing cycle/hold propagation. Cursor queues
