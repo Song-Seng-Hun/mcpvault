@@ -442,6 +442,14 @@ do not prove a current, bounded, actionable response through its public adapter.
   tests cover the service-local contract. Independent FileSystemService instances,
   other processes, hard links and Unicode filesystem aliases remain unaudited;
   semantic duplicate-path validation in change sets is distinct from lock identity.
+- Change-set validation now compares checked, resolved lexical target paths,
+  so a document repeated with `./`, dot segments or an equivalent absolute path
+  cannot produce two independent previews/applies. Errors instruct consolidation
+  into one change followed by a new dry-run. Related guards reject equivalent
+  self/duplicate paths too. Actual request spellings and fingerprint semantics
+  remain unchanged; resolved host paths stay internal. Tests cover duplicate
+  rejection before any write/event and successful distinct-note transactions.
+  This is not complete hard-link/symlink/Unicode identity or cross-process CAS.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

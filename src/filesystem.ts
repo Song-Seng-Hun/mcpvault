@@ -722,17 +722,20 @@ export class FileSystemService {
     if (!Array.isArray(guards) || guards.length < 1 || guards.length > 9) {
       throw new Error('A guarded note write requires between 1 and 9 related-note revision guards');
     }
+    const targetIdentity = this.resolvePath(path).toLowerCase();
+    const guardIdentities = new Set<string>();
     const normalizedGuards = guards.map(guard => {
       const guardPath = this.normalizePath(guard?.path);
       if (!guardPath || !this.pathFilter.isAllowed(guardPath)) throw new Error(`Access denied: ${guardPath || '(empty path)'}`);
-      if (guardPath.toLowerCase() === path.toLowerCase()) throw new Error('A guarded note write cannot repeat the target as a related-note guard');
+      const identity = this.resolvePath(guardPath).toLowerCase();
+      if (identity === targetIdentity) throw new Error('A guarded note write cannot repeat the target as a related-note guard, including equivalent path spellings');
+      if (guardIdentities.has(identity)) throw new Error('A related note may appear only once in revision guards, including equivalent path spellings');
+      guardIdentities.add(identity);
       if (!/^[a-f0-9]{64}$/i.test(String(guard?.expectedRevision || ''))) {
         throw new Error(`Each related-note guard requires a current SHA-256 revision: ${guardPath}`);
       }
       return { path: guardPath, expectedRevision: guard.expectedRevision };
     });
-    const duplicate = normalizedGuards.map(guard => guard.path.toLowerCase()).find((candidate, index, all) => all.indexOf(candidate) !== index);
-    if (duplicate) throw new Error(`A related note may appear only once in revision guards: ${duplicate}`);
     return this.withMutationLocks([path, ...normalizedGuards.map(guard => guard.path)], async () => {
       for (const guard of normalizedGuards) await this.assertExpectedRevision(guard.path, guard.expectedRevision);
       await this.writeNoteUnlocked({ ...params, path });
@@ -1124,13 +1127,18 @@ export class FileSystemService {
     const maxChars = Math.min(Math.max(Number(params.maxChars ?? 12000), 4096), 20000);
     let totalHunks = 0;
     let totalPatchBytes = 0;
+    const targetIdentities = new Set<string>();
     const normalized = params.changes.map(change => {
       if (!change || typeof change !== 'object') throw new Error('Every change must be an object');
       const path = this.normalizePath(change.path);
       if (!path || !this.pathFilter.isAllowed(path)) throw new Error(`Access denied: ${path || '(empty path)'}`);
       // Preflight every destination, including dry runs, before any member of
       // this batch can be written. Absolute inputs must use the same guard.
-      assertLegacyDiscussionMutationAllowed(relative(this.vaultPath, this.resolvePath(path)), 'Change set', true);
+      const resolvedPath = this.resolvePath(path);
+      assertLegacyDiscussionMutationAllowed(relative(this.vaultPath, resolvedPath), 'Change set', true);
+      const identity = resolvedPath.toLowerCase();
+      if (targetIdentities.has(identity)) throw new Error('A note may appear only once in a change set, including equivalent path spellings. Combine its patches and Properties into one change, then dry-run again.');
+      targetIdentities.add(identity);
       if (!/^[a-f0-9]{64}$/i.test(String(change.expectedRevision || ''))) throw new Error(`Each change requires the current SHA-256 revision of an existing note: ${path}`);
       const patches = change.patches;
       const frontmatter = change.frontmatter;
@@ -1142,8 +1150,6 @@ export class FileSystemService {
     });
     if (totalHunks > 50) throw new Error('A note change set may contain at most 50 total patch hunks');
     if (totalPatchBytes > 2 * 1024 * 1024) throw new Error('A note change set may contain at most 2 MiB of patch text');
-    const duplicate = normalized.map(change => change.path.toLowerCase()).find((path, index, all) => all.indexOf(path) !== index);
-    if (duplicate) throw new Error(`A note may appear only once in a change set: ${duplicate}`);
 
     return this.withMutationLocks(normalized.map(change => change.path), async () => {
       const plans: Array<{ path: string; original: string; content: string; item: NoteChangeSetResultItem }> = [];

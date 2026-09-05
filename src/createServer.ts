@@ -577,7 +577,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "patch_multiple_notes",
-          description: "Preflight and apply one bounded revision-checked change set across up to 10 existing notes. Dry-run is the default and returns a plan fingerprint; applying requires that exact fingerprint. Supports exact body hunks and root Obsidian Property set/remove operations, holds all note locks in stable order, and restores attempted writes if a later write fails.",
+          description: "Preflight/apply up to 10 existing notes with current revisions. Each resolved note may appear only once, including ./ or dot-segment aliases: combine its hunks and Properties into one change, then dry-run again. Default dry-run returns the exact fingerprint required to apply. Uses ordered locks and rollback-backed writes; never silently chooses between duplicate edits.",
           inputSchema: {
             type: "object",
             properties: {

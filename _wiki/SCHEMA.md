@@ -713,6 +713,15 @@ Conservative case folding may serialize distinct case-sensitive files but never
 renames them or grants scope access. This is service-local coordination, not
 cross-process filesystem CAS or a complete hard-link/Unicode alias resolver.
 
+Change sets independently reject a document repeated through equivalent lexical
+paths before generating previews or writing. Combine all intended body hunks and
+Properties for that document into one entry and dry-run again; never select the
+last duplicate as a winner. Related-note revision guards likewise cannot repeat
+their target or another guard through a dot-segment/separator alias. This checked
+path validation is separate from locking, and does not claim hard-link, symlink
+or Unicode filesystem identity completeness. Actual request paths/fingerprints
+are not silently rewritten; resolved host paths are not returned in diagnostics.
+
 Heading and block targets are preserved by graph reads, so
 `[[folder/Source#Heading]]` and `[[folder/Source#^block-id]]` can take an agent
 directly to the intended passage without rereading the entire source note.

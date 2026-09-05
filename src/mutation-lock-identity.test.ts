@@ -41,13 +41,13 @@ test.each(['./Note.md', 'dir/../Note.md', 'absolute'])(
     expect((await read('Note.md')).frontmatter.tags).toEqual(['base', 'first', 'second']);
   },
 );
-test('equivalent related guards do not reacquire the same mutation lock', async () => {
+test('equivalent target guards reject before acquiring locks', async () => {
   const revision = (await fs.readNote('Note.md')).revision!;
-  await fs.writeNoteWithRevisionGuards({ path: 'Note.md', content: 'Updated\n', expectedRevision: revision }, [
+  await expect(fs.writeNoteWithRevisionGuards({ path: 'Note.md', content: 'Updated\n', expectedRevision: revision }, [
     { path: './Note.md', expectedRevision: revision },
     { path: 'dir/../Note.md', expectedRevision: revision },
-  ]);
-  expect((await fs.readNote('Note.md')).content).toBe('Updated\n');
+  ])).rejects.toThrow(/cannot repeat the target/);
+  expect((await fs.readNote('Note.md')).content).toBe('Body\n');
 }, 2000);
 test('failed alias mutation releases the lock for a subsequent valid edit', async () => {
   const failed = await fs.manageTags({ path: './Note.md', operation: 'add', tags: ['bad'], expectedRevision: '0'.repeat(64) });

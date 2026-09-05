@@ -1897,6 +1897,15 @@ writes and explicitly reports any rollback uncertainty. This is a guarded
 filesystem transaction rather than a claim of OS-wide atomicity; Git remains
 the durable audit and recovery layer.
 
+Each resolved document may appear only once in the change list, even if one
+entry says `Note.md` and another says `./Note.md` or `dir/../Note.md`. Duplicate
+targets are rejected before previews or writes; combine their intended patches
+and Properties into one entry, then request a new dry-run fingerprint. The server
+does not choose a winning duplicate or silently rewrite the request. Related-note
+revision guards similarly cannot name their own target or repeat another guard
+through these aliases. Validation keeps host-resolved paths private and does
+not claim complete hard-link/symlink/Unicode filesystem identity detection.
+
 Prefer a purpose-built read-only planner when the coupled edit represents a
 known organization invariant: `wiki.moc_order` for one complete sibling order,
 `wiki.hierarchy_change` for parent edges, `wiki.moc_membership` for map entry
