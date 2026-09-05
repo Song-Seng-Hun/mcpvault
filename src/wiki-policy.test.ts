@@ -20,7 +20,7 @@ describe('progressive Wiki policy', () => {
   });
 
   test('teaches bounded authority shelves and distinct relation strengths progressively', () => {
-    expect(WIKI_POLICY_VERSION).toBe(13);
+    expect(WIKI_POLICY_VERSION).toBe(14);
     const retrieval = getWikiPolicyTopic('retrieval', 2000);
     const knowledge = getWikiPolicyTopic('knowledge', 2000);
     expect(retrieval.routes).toEqual(expect.arrayContaining(['wiki.authority_map']));
@@ -39,6 +39,18 @@ describe('progressive Wiki policy', () => {
     expect(guidance).toContain('open Markdown task');
     expect(guidance).toContain('automatically');
     expect(work.routes).toEqual(expect.arrayContaining(['mcp.list_tasks', 'wiki.review_packet']));
+  });
+
+  test('quality guidance is progressive and forbids fingerprint-only certification', () => {
+    const maintenance = getWikiPolicyTopic('maintenance', 4000);
+    expect(maintenance.routes).toContain('wiki.quality_check');
+    expect(maintenance.rules.join(' ')).toContain('authoring structure');
+    expect(maintenance.rules.join(' ')).toContain('fingerprint-only');
+    expect(maintenance.rules.join(' ')).toContain('nextAction');
+    expect(MCPVAULT_SERVER_INSTRUCTIONS).not.toContain('projection_freshness');
+    const tool = getLlmWikiTools().find(tool => tool.name === 'get_wiki_quality_check')!;
+    expect(tool.description).toContain('authoring structure');
+    expect(tool.description).toContain('reuseOriginalArguments');
   });
 
   test('surfaces authored synthesis as bounded idle pull work', () => {

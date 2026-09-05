@@ -19,7 +19,7 @@ export const WIKI_POLICY_TOPICS = [
 ] as const;
 
 export type WikiPolicyTopicId = typeof WIKI_POLICY_TOPICS[number];
-export const WIKI_POLICY_VERSION = 13;
+export const WIKI_POLICY_VERSION = 14;
 
 type WikiPolicyTopic = {
   purpose: string;
@@ -168,6 +168,7 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
     purpose: 'Repair the smallest high-value organization defect without loading every overlapping dashboard.',
     rules: [
       'Begin with one bounded wiki.review_packet or wiki.exception_board item and follow only its selected repair route.',
+      'Use wiki.quality_check for one note\'s authoring structure, not source truth. Follow its nextAction before editing; unverified/stale projections require reading and revision-checked wiki.projection_update, never fingerprint-only certification.',
       'Treat graph, vocabulary, duplicate, placement, and composition findings as advisory signals; inspect both current revisions before editing.',
       'Similarity, zero usage, high degree, or a missing reciprocal edge may justify review but never automatic merge, split, move, or deletion.',
       'For a structural repair, use wiki.relation_set, wiki.reciprocal_link, wiki.moc_order, wiki.hierarchy_change, wiki.moc_membership, or wiki.property_migration as applicable; dry-run its complete notes.change_set, inspect every revision and preview, then confirm that exact fingerprint.',
@@ -176,7 +177,7 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
       'Use wiki.lifecycle_transition for coherent archive, supersession, tombstone, or reactivation; apply only its exact revision-stamped notes.change_set after reviewing reference impact and blockers.',
       'Use notes.delete_preview before removal; prefer a lifecycle transition when any inbound body or Property reference remains.',
     ],
-    routes: ['wiki.review_packet', 'wiki.exception_board', 'wiki.graph_health', 'wiki.canvas_health', 'wiki.vocabulary_health', 'wiki.duplicate_candidates', 'wiki.relation_set', 'wiki.reciprocal_link', 'wiki.moc_order', 'wiki.hierarchy_change', 'wiki.moc_membership', 'wiki.property_migration', 'wiki.lifecycle_transition', 'notes.change_set', 'notes.delete_preview'],
+    routes: ['wiki.review_packet', 'wiki.exception_board', 'wiki.quality_check', 'wiki.graph_health', 'wiki.canvas_health', 'wiki.vocabulary_health', 'wiki.duplicate_candidates', 'wiki.relation_set', 'wiki.reciprocal_link', 'wiki.moc_order', 'wiki.hierarchy_change', 'wiki.moc_membership', 'wiki.property_migration', 'wiki.lifecycle_transition', 'notes.change_set', 'notes.delete_preview'],
     avoid: ['calling every health endpoint in one turn', 'repairing derived indexes instead of authoritative Markdown', 'independent writes for one logically coupled repair', 'automatic cleanup from an advisory score'],
   },
   ideation: {

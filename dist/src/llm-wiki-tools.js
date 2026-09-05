@@ -364,8 +364,8 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_quality_check',
-            description: 'Check one visible note against a small role-specific rubric for titles, projections, evidence, navigation, project execution, MOC purpose, literature interpretation, or epistemic status. Results are advisory and never block publishing or rewrite the note.',
-            inputSchema: { type: 'object', properties: { path: { type: 'string' }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 6000 }, accessToken, prettyPrint }, required: ['path'] },
+            description: 'Check one current visible note\'s authoring structure, not factual truth or source integrity. Detect missing/stale projections, explicit literature interpretation, evidence declarations, and role/execution structure. Whole JSON is bounded; compact output prioritizes failures while score covers all checks. Legacy nextActions are displayed check IDs; execute the singular nextAction read before editing. If retry.reuseOriginalArguments is true, repeat the original request with retry.overrides. Never certify an old projection by changing only its fingerprint. Advisory only; no publication gate or mutation.',
+            inputSchema: { type: 'object', properties: { path: { type: 'string', description: 'Exact Vault-relative note path or authorized scope:// URI; absolute paths and traversal are rejected.' }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 6000 }, accessToken, prettyPrint }, required: ['path'] },
         },
         {
             name: 'get_wiki_review_queue',

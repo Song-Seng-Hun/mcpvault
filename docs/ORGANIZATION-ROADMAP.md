@@ -254,10 +254,30 @@ need a strict public-destination policy and bounded manual invocation.
 
 ## Open work with concrete completion evidence
 
-No previously identified organization workflow remains open without concrete
-evidence. New mechanisms should be added here only when their registered
-schema, dispatcher, service behavior, persistent representation, invalidation,
-and bounded failure evidence are not yet complete.
+The verified list above is scoped evidence, not a claim that every organization
+workflow has been exhaustively audited. In particular, unit tests for a helper
+do not prove a current, bounded, actionable response through its public adapter.
+
+- Single-note quality diagnostics have now been repaired across source revision
+  checks, moderation visibility, projection freshness, explicit interpretation,
+  malformed/structured declarations, failure-first compaction, and executable
+  same-note read guidance. `quality-check.test.ts`, public `call_endpoint` cases
+  in `createServer.test.ts`, and progressive policy tests provide the evidence.
+  The score is explicitly authoring structure, not a factual/source certificate.
+- **Open: exception-board response packing.** The current `exceptionBoard`
+  fallback halves item counts instead of guaranteeing the whole JSON budget.
+  Audit its source-view truncation, private/hidden metadata, current revisions,
+  and usable next action as one aggregation workflow. Completion requires
+  minimum-budget direct and public-adapter tests, not only bounded child views.
+- **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
+  now provides safe scan continuation and revision-checked previews, but inventory
+  counts still scan metadata and recommendation rank is window-local. Establish
+  representative large-vault measurements before choosing a global-ranking or
+  inventory-count optimization; do not relabel the current projection as either.
+
+Record new concrete gaps here when registered schema, dispatcher, service,
+persistent representation, guide, invalidation, or bounded failure evidence
+disagrees; remove a gap only after checking that complete workflow.
 
 ## Completion gate
 

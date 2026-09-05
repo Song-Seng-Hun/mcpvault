@@ -4252,30 +4252,55 @@ export declare class LlmWikiService {
             id: string;
             passed: boolean;
             detail: string;
+            state?: string;
         }[];
         nextActions: string[];
+        nextAction?: {
+            endpointId: string;
+            arguments: {
+                path: string;
+                maxChars: number;
+            };
+        };
+        assessment: string;
         advisory: boolean;
         note: string;
     } | {
         path: string;
-        title: string;
-        noteKind: string;
-        knowledgeRole?: string;
         revision: string;
         score: {
             passed: number;
             total: number;
             ratio: number;
         };
+        assessment: string;
         advisory: boolean;
-        note: string;
+        nextAction?: {
+            endpointId: string;
+            arguments: {
+                path: string;
+                maxChars: number;
+            };
+        };
         checks: {
             id: string;
             passed: boolean;
-            detail: string;
+            detail?: string;
+            state?: string;
         }[];
         nextActions: string[];
         truncated: boolean;
+    } | {
+        advisory: boolean;
+        assessment: string;
+        truncated: boolean;
+        retry: {
+            endpointId: string;
+            reuseOriginalArguments: boolean;
+            overrides: {
+                maxChars: number;
+            };
+        };
     }>;
     /**
      * Rediscover inactive notes only when current visible notes still point at

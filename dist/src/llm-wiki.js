@@ -6,6 +6,7 @@ import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
 import { getOrganizationPropertyContract, getOrganizationRelationContract, hasExplicitKnowledgeDisposition, inapplicableOrganizationProperties, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeKnowledgeDisposition, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeTaskStatus, normalizeVolatilityClass, organizationLintIssues, organizationNoteTemplate, organizationPropertyAppliesTo, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, COMPLETION_DISPOSITION_REQUIRED_MESSAGE, CONFIDENCE_LEVELS, DECISION_STATUSES, FOCUS_HORIZONS, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, VOLATILITY_CLASSES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS } from './organization.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
+import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference } from './property-references.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
@@ -11974,27 +11975,49 @@ export class LlmWikiService {
      */
     async qualityCheck(principal, path, maxChars = 6000) {
         const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 12000);
+        path = path.trim().replace(/\\/g, '/');
+        if (/^scope:\/\//i.test(path))
+            path = this.access.resolveExternalPath(path, principal);
+        if (/^(?:\/|~|[a-z][a-z0-9+.-]*:)/i.test(path) || path.split('/').includes('..')) {
+            throw new Error('qualityCheck requires a relative note path or authorized scope URI; traversal and absolute paths are not allowed');
+        }
         if (!this.access.canAccessPhysicalPath(path, principal))
             throw new Error('Access denied');
         const note = await this.fileSystem.readNote(path);
+        if (isModerationHidden(note.frontmatter))
+            throw new Error('The quality check source is unavailable');
         const visiblePath = this.access.toPublicPath(normalizePath(path));
         const fm = note.frontmatter || {};
-        const kind = String(fm.note_kind || fm.llm_wiki_type || 'note').toLowerCase();
+        const kind = String(fm.note_kind || fm.llm_wiki_type || 'note').trim().toLowerCase();
         const title = String(fm.title || visiblePath.split('/').at(-1) || '').replace(/\.(?:md|markdown|txt)$/i, '').trim();
-        const links = extractObsidianLinkOccurrences(note.content || '').length;
-        const evidence = Array.isArray(fm.evidence_paths) ? fm.evidence_paths.length : 0;
+        // Native links in Properties and plain typed relations are authored
+        // navigation too. Reuse the graph contract without resolving other notes.
+        const links = extractObsidianLinkOccurrences(note.originalContent).length
+            + collectPlainFrontmatterReferences(fm).filter(reference => isNavigationalFrontmatterReference(reference) && reference.value.trim()).length;
+        const hasText = (value) => typeof value === 'string' && Boolean(value.trim());
+        const hasEvidenceDeclaration = (Array.isArray(fm.evidence_paths) && fm.evidence_paths.some(hasText))
+            || (Array.isArray(fm.evidence) && fm.evidence.some((entry) => entry && typeof entry === 'object' && hasText(entry.path)));
         const checks = [];
         const add = (id, passed, detail) => checks.push({ id, passed, detail });
         add('title', title.length > 0 && !/^(new|note|untitled|test)(?:\s|$)/i.test(title), 'Use a concept- or outcome-oriented title that another agent can rediscover.');
         const durable = ['atomic', 'knowledge', 'decision', 'literature', 'moc', 'question', 'hypothesis', 'experiment', 'assumption'].includes(kind);
-        if (durable)
-            add('compact_projection', Boolean(String(fm.summary || '').trim() || (Array.isArray(fm.key_points) && fm.key_points.length > 0)), 'Add a compact summary or key_points projection; keep the full Markdown body authoritative.');
+        if (durable) {
+            const hasProjection = hasText(fm.summary) || (Array.isArray(fm.key_points) && fm.key_points.some(hasText));
+            add('compact_projection', hasProjection, 'Write a compact summary or key_points after reading the current body; use wiki.projection_update with its expectedRevision.');
+            if (hasProjection) {
+                const fingerprint = fm.summary_of_content_sha256;
+                const state = !hasText(fingerprint) ? 'unverified' : fingerprint === hash(note.content) ? 'current' : 'stale';
+                checks.push({ id: 'projection_freshness', passed: state === 'current', state,
+                    detail: state === 'current' ? 'Projection fingerprint matches this body; factual correctness still requires review.'
+                        : 'Read the current body and review/regenerate its projection through wiki.projection_update; never repair only the fingerprint.' });
+            }
+        }
         if (['knowledge', 'atomic', 'decision'].includes(kind))
-            add('evidence_or_explicit_uncertainty', evidence > 0 || ['draft', 'disputed'].includes(String(fm.knowledge_status || fm.status || '').toLowerCase()), 'Ground load-bearing knowledge in immutable evidence or mark its uncertainty explicitly.');
+            add('evidence_or_explicit_uncertainty', hasEvidenceDeclaration || ['draft', 'disputed'].includes(String(fm.knowledge_status || fm.status || '').trim().toLowerCase()), 'Declare evidence or explicit uncertainty. This checks authored declarations only, not source existence, integrity, or support for the claim.');
         if (['atomic', 'knowledge', 'decision', 'moc'].includes(kind))
-            add('navigation', links > 0 || (Array.isArray(fm.references) && fm.references.length > 0), 'Connect the note to an existing concept, MOC, decision, or source with an Obsidian link.');
+            add('navigation', links > 0, 'Declare an Obsidian link or navigational Property to a concept, MOC, decision, or source; target existence is not verified here.');
         if (kind === 'literature')
-            add('interpretation', String(fm.interpretation_status || '').toLowerCase() !== 'unprocessed' || links > 0, 'Interpret the source or link it to a reusable derived note.');
+            add('interpretation', ['interpreted', 'synthesized'].includes(String(fm.interpretation_status || '').trim().toLowerCase()), 'Interpret the source and explicitly record interpreted or synthesized; a link alone is not interpretation.');
         const actionable = isActionableKnowledge(fm);
         if (actionable) {
             add('desired_outcome', Boolean(String(fm.desired_outcome || '').trim()), 'State an observable outcome so the actionable work has a clear stopping condition.');
@@ -12051,21 +12074,43 @@ export class LlmWikiService {
             }
         }
         const passed = checks.filter(check => check.passed).length;
+        const current = (await this.fileSystem.readNoteMetadata([path], candidate => this.access.canAccessPhysicalPath(candidate, principal), { fresh: true, strict: true }))[0];
+        if (!current || isModerationHidden(current.frontmatter) || current.revision !== note.revision) {
+            throw new Error('The quality check source changed or is unavailable; read the current revision and retry');
+        }
+        const failed = checks.filter(check => !check.passed);
+        const nextAction = failed.length ? { endpointId: 'notes.read', arguments: { path: visiblePath, maxChars: 3000 } } : undefined;
         const result = {
             path: visiblePath,
-            title,
-            noteKind: kind,
-            ...(knowledgeRole && { knowledgeRole }),
+            title: boundedText(title, 160),
+            noteKind: boundedText(kind, 64),
+            ...(knowledgeRole && { knowledgeRole: boundedText(knowledgeRole, 64) }),
             revision: note.revision,
             score: { passed, total: checks.length, ratio: checks.length ? Number((passed / checks.length).toFixed(3)) : 1 },
             checks,
-            nextActions: checks.filter(check => !check.passed).map(check => check.id),
+            nextActions: failed.map(check => check.id),
+            ...(nextAction && { nextAction }),
+            assessment: 'authoring_structure',
             advisory: true,
-            note: 'This is a role-specific quality hint, not a truth score or publication gate.',
+            note: 'Authoring-structure hints only, not factual/source verification or a publication gate. Read before editing; never blindly certify a fingerprint.',
         };
         if (JSON.stringify(result).length <= boundedChars)
             return result;
-        return { ...result, checks: result.checks.slice(0, 6), nextActions: result.nextActions.slice(0, 6), truncated: true };
+        // Keep whole-rubric counts, but spend a small response on failures first.
+        // Descriptions may shrink; check IDs, revisions, and paths never do.
+        const base = { path: visiblePath, revision: note.revision, score: result.score,
+            assessment: result.assessment, advisory: true, ...(nextAction && { nextAction }) };
+        let selected = [...failed, ...checks.filter(check => check.passed)];
+        const pack = () => ({ ...base, checks: selected, nextActions: selected.filter(check => !check.passed).map(check => check.id), truncated: true });
+        while (selected.length > 1 && JSON.stringify(pack()).length > boundedChars)
+            selected.pop();
+        if (JSON.stringify(pack()).length <= boundedChars)
+            return pack();
+        selected = selected.map(({ detail: _detail, ...check }) => check);
+        if (JSON.stringify(pack()).length <= boundedChars)
+            return pack();
+        return { advisory: true, assessment: 'authoring_structure', truncated: true,
+            retry: { endpointId: 'wiki.quality_check', reuseOriginalArguments: true, overrides: { maxChars: 12000 } } };
     }
     /**
      * Rediscover inactive notes only when current visible notes still point at

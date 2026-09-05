@@ -340,6 +340,30 @@ with a generic title, no compact projection (`summary` or `key_points`), or no
 meaningful incoming/outgoing graph connection. It never blocks publication,
 forces atomicity, or rewrites a note automatically.
 
+`wiki.quality_check` is a separate single-note **authoring structure** rubric,
+not factual verification. Its path must be Vault-relative or an authorized
+`scope://` URI; absolute and traversal aliases are rejected before reading.
+`assessment: authoring_structure` and `advisory: true`
+remain present in compact results. `compact_projection` checks nonempty string
+summary/key-points; `projection_freshness` distinguishes `unverified` (no usable
+fingerprint), `stale`, and `current` against this body. Never repair only a hash
+to certify an unreviewed projection. Literature interpretation requires an
+explicit `interpreted`/`synthesized` declaration. Evidence checks recognize
+`evidence_paths` and structured `evidence[].path` declarations, not the truth,
+existence, or integrity of their targets; source/claim review is separate.
+Navigation accepts native body/Property links and plain navigational typed
+relations, not empty reference placeholders or fenced examples. Kind and
+uncertainty labels are trimmed and case-normalized before choosing the rubric.
+Hidden, removed, or quarantined sources are unavailable. A changed/deleted source
+at the final revision check must be re-read and retried. Small `maxChars` values
+prioritize failed checks and may omit descriptions, while `score` still counts
+the entire rubric. Legacy `nextActions` contains displayed failed check IDs;
+the executable singular `nextAction` reads that same note before revision-safe
+editing. Fully passed rubrics do not request another read. If an exact path/read
+cannot fit the whole JSON budget, retain the original arguments and apply only
+`retry.overrides`; never shorten a path. This workflow mutates no files and
+introduces no publication gate.
+
 Use `get_wiki_composition_candidates` to find long or section-heavy notes
 where atomicity may improve reuse. This is only a suggestion: inspect one
 section with `preview_wiki_split` and decide whether to split, link, or leave

@@ -787,7 +787,28 @@ client-side helper is required.
 `get_wiki_exception_board` combines organization, graph,
 quarantine, freshness, vocabulary, and execution findings into one 5S-style
 repair board. `get_wiki_quality_check` applies a small role-specific checklist
-to one note, while `resurface_wiki_archives` shows archived or superseded notes
+to one current visible note. Its `assessment: authoring_structure` score counts
+authored structure only, not factual truth, source integrity, or verified
+interpretation. Projection presence and fingerprint freshness are separate
+checks; `unverified`/`stale` projections require reading the current body and
+reviewing or regenerating the projection, never repairing only its hash.
+Literature needs an explicit `interpreted` or `synthesized` status; linking a
+source is not interpretation. Evidence declarations accept nonempty
+`evidence_paths` or structured `evidence[].path`, without following or certifying
+the referenced source. Navigation recognizes native links in the body or
+Properties and plain typed relations using the graph's Property contract;
+empty reference placeholders and fenced example links do not count.
+The whole quality JSON respects `maxChars`. Full reports keep rubric order;
+compact reports prioritize failures while retaining whole-rubric `score` counts
+and the exact source revision. `nextActions` remains the IDs of displayed
+failures; the singular `nextAction` is an executable same-note read before any
+edit. An all-passed report requests no extra read. If the exact path/read cannot
+fit, apply `retry.overrides` to the original request without shortening its path.
+Hidden notes and sources changed during evaluation produce errors instead of
+stale diagnoses. Pass a Vault-relative path or authorized `scope://` URI, not
+an absolute host path or traversal alias. The lazy `wiki.policy` maintenance topic explains this flow;
+the eager welcome does not preload another guide.
+`resurface_wiki_archives` shows archived or superseded notes
 only when current visible notes still link to them. These are advisory read
 projections: they never become truth scores, publication gates, automatic
 restores, or automatic moves.

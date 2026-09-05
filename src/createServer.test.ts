@@ -539,6 +539,48 @@ test('archive nextScan executes through the fixed MCP executor with the same aut
   } finally { await client.close(); await server.close(); }
 });
 
+test('quality diagnostics preserve a bounded executable read through the fixed MCP surface', async () => {
+  const root = join(testVaultPath, '_scopes', 'models', 'codex');
+  await mkdir(root, { recursive: true });
+  await writeFile(join(root, 'Concept.md'), `---\nllm_wiki_type: knowledge\nknowledge_role: model\ntitle: ${'Detailed title '.repeat(500)}\nsummary: Obsolete secret-looking summary\nsummary_of_content_sha256: ${'0'.repeat(64)}\n---\n# Current body\n\nRead this current explanation.`);
+  const { server, client, accessToken } = await connectClient();
+  try {
+    expect((await client.listTools()).tools).toHaveLength(5);
+    for (const maxChars of [512, 600, 1000, 6000]) {
+      const result = await client.callTool({ name: 'call_endpoint', arguments: {
+        endpointId: 'wiki.quality_check', arguments: { path: 'scope://model/codex/Concept.md', maxChars, prettyPrint: true, accessToken },
+      } });
+      expect(result.isError).toBeFalsy();
+      const text = (result.content as any)[0].text as string;
+      expect(text.length).toBeLessThanOrEqual(maxChars);
+      expect(text).not.toContain(accessToken);
+      expect(text).not.toContain('_scopes');
+      const quality = JSON.parse(text);
+      expect(quality).toMatchObject({ advisory: true, assessment: 'authoring_structure', revision: expect.any(String), nextAction: { endpointId: 'notes.read' } });
+      expect(quality.checks).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'projection_freshness', passed: false })]));
+      const read = await client.callTool({ name: 'call_endpoint', arguments: {
+        endpointId: quality.nextAction.endpointId, arguments: { ...quality.nextAction.arguments, accessToken },
+      } });
+      expect(read.isError).toBeFalsy();
+      const current = JSON.parse((read.content as any)[0].text);
+      expect(current.revision).toBe(quality.revision);
+    }
+  } finally { await client.close(); await server.close(); }
+});
+
+test('quality MCP rejects hidden notes without returning their title or diagnostics', async () => {
+  await writeFile(join(testVaultPath, 'Hidden.md'), '---\nllm_wiki_type: knowledge\nmoderation_status: hidden\ntitle: Private diagnostic title\n---\nDo not project this body.');
+  const { server, client, accessToken } = await connectClient();
+  try {
+    const result = await client.callTool({ name: 'call_endpoint', arguments: {
+      endpointId: 'wiki.quality_check', arguments: { path: 'Hidden.md', accessToken },
+    } });
+    expect(result.isError).toBe(true);
+    const text = (result.content as any)[0].text;
+    expect(text).not.toMatch(/Private diagnostic title|Do not project this body|"score"/);
+  } finally { await client.close(); await server.close(); }
+});
+
 test("search_notes bounds output and prioritizes Wiki notes", async () => {
   const { server, client } = await connectClient();
   try {
