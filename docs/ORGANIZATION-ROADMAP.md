@@ -572,6 +572,15 @@ do not prove a current, bounded, actionable response through its public adapter.
   once per body, including matching-close and body thematic-break behavior.
   These changes do not reduce whole-cohort ranking or work-graph memory costs;
   other organization endpoint response packers still require their own audits.
+- A 12,000-node work chain reproduced a recursive SCC stack overflow. The shared
+  work/MOC component classifier now uses explicit DFS frames and edge iterators,
+  preserving input-rank cycle order. Work-stage/propagation queues use cursors,
+  not repeated shift/sort. Tests cover a 30,000-node cycle, 150 deterministic
+  graph comparisons with a reachability oracle, excluded nodes, self-cycles,
+  deep stages and a 2,000-child unlock frontier. No classification cutoff was
+  introduced. Retained project bodies, full work/index memory and construction
+  of the full deepest-chain projection before response compaction remain open;
+  stack safety is not a whole-Vault memory or latency bound.
 
 Record new concrete gaps here when registered schema, dispatcher, service,
 persistent representation, guide, invalidation, or bounded failure evidence

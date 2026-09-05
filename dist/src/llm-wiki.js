@@ -10,6 +10,7 @@ import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference }
 import { packExceptionBoard } from './exception-board.js';
 import { packLintReport } from './lint-report.js';
 import { packProjectPacket } from './project-packet.js';
+import { classifyDependencyResidual } from './dependency-graph.js';
 import { CollectionHealthProjection } from './collection-health.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
 import { projectNoteOutline, projectNoteBlockLines, selectNoteHeading } from './note-projections.js';
@@ -265,59 +266,6 @@ function structuredClaimIdCount(frontmatter, targetClaimId) {
             count += 1;
     }
     return count;
-}
-/**
- * Split the residual of a failed topological sort into actual strongly
- * connected cycles and ordinary downstream nodes that are only blocked by a
- * cycle. Input order is preserved so every projection remains deterministic.
- */
-function classifyDependencyResidual(nodes, adjacency) {
-    const nodeSet = new Set(nodes);
-    const rank = new Map(nodes.map((node, index) => [node, index]));
-    const indices = new Map();
-    const lowLinks = new Map();
-    const stack = [];
-    const onStack = new Set();
-    const components = [];
-    let nextIndex = 0;
-    const visit = (node) => {
-        indices.set(node, nextIndex);
-        lowLinks.set(node, nextIndex);
-        nextIndex += 1;
-        stack.push(node);
-        onStack.add(node);
-        for (const target of adjacency.get(node) || []) {
-            if (!nodeSet.has(target))
-                continue;
-            if (!indices.has(target)) {
-                visit(target);
-                lowLinks.set(node, Math.min(lowLinks.get(node), lowLinks.get(target)));
-            }
-            else if (onStack.has(target)) {
-                lowLinks.set(node, Math.min(lowLinks.get(node), indices.get(target)));
-            }
-        }
-        if (lowLinks.get(node) !== indices.get(node))
-            return;
-        const component = [];
-        while (stack.length) {
-            const member = stack.pop();
-            onStack.delete(member);
-            component.push(member);
-            if (member === node)
-                break;
-        }
-        component.sort((left, right) => (rank.get(left) ?? Number.MAX_SAFE_INTEGER) - (rank.get(right) ?? Number.MAX_SAFE_INTEGER));
-        components.push(component);
-    };
-    for (const node of nodes)
-        if (!indices.has(node))
-            visit(node);
-    const cycles = components
-        .filter(component => component.length > 1 || Boolean(adjacency.get(component[0])?.has(component[0])))
-        .sort((left, right) => (rank.get(left[0]) ?? Number.MAX_SAFE_INTEGER) - (rank.get(right[0]) ?? Number.MAX_SAFE_INTEGER));
-    const cycleNodes = new Set(cycles.flat());
-    return { cycles, cycleNodes, blocked: nodes.filter(node => !cycleNodes.has(node)) };
 }
 /** Find direct prerequisite pairs for which a distinct path of two or more
  * edges already connects the same notes. This is only a graph-hygiene signal:
@@ -1343,8 +1291,8 @@ export class LlmWikiService {
         const propagateToDependents = (seeds) => {
             const affected = new Set(seeds);
             const queue = [...affected];
-            while (queue.length) {
-                const prerequisite = queue.shift();
+            for (let cursor = 0; cursor < queue.length; cursor++) {
+                const prerequisite = queue[cursor];
                 for (const dependent of dependents.get(prerequisite) || []) {
                     if (affected.has(dependent))
                         continue;
@@ -1379,12 +1327,14 @@ export class LlmWikiService {
             const count = [...(adjacency.get(key) || [])].filter(target => stageCandidateSet.has(target)).length;
             remainingPrerequisites.set(key, count);
             return count === 0;
-        }).sort();
-        while (ready.length) {
-            const prerequisite = ready.shift();
+        });
+        // Stage is the maximum prerequisite depth, independent of ready order.
+        // Public stage rows and unlock candidates are sorted at projection time.
+        for (let cursor = 0; cursor < ready.length; cursor++) {
+            const prerequisite = ready[cursor];
             const stage = maximumPrerequisiteStage.get(prerequisite) || 0;
             stageByPath.set(prerequisite, stage);
-            for (const dependent of [...(dependents.get(prerequisite) || [])].sort()) {
+            for (const dependent of dependents.get(prerequisite) || []) {
                 if (!stageCandidateSet.has(dependent))
                     continue;
                 maximumPrerequisiteStage.set(dependent, Math.max(maximumPrerequisiteStage.get(dependent) || 0, stage + 1));
@@ -1392,7 +1342,6 @@ export class LlmWikiService {
                 remainingPrerequisites.set(dependent, remaining);
                 if (remaining === 0) {
                     ready.push(dependent);
-                    ready.sort();
                 }
             }
         }

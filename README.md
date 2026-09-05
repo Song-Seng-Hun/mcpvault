@@ -593,6 +593,13 @@ the original request. At the response ceiling an unrepresentable identity fails
 explicitly; paths/links are never clipped to make it fit. `paginationLimited`
 marks the 100,000 offset ceiling. Fingerprints are view guards, not retained
 historical snapshots; each page still computes the whole project cohort.
+Dependency cycle classification shared by work and MOC projections uses an
+explicit traversal stack instead of recursive JS calls. Deep chains and cycles
+therefore do not depend on the engine call-stack limit. Work-stage and downstream
+queues advance by cursor without repeatedly shifting or sorting the ready list;
+public stage samples still sort by path and keep the same dependency semantics.
+This is exact graph processing, not a node cutoff: graph/index memory still
+grows with the Vault, and long-chain response construction is a separate cost.
 The MCP server exposes only a compact always-on constitution so its fixed five
 tools do not repeatedly consume the full organization manual. The dynamic
 `wiki.policy` endpoint

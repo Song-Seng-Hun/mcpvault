@@ -272,6 +272,11 @@ using omitted information. A row's `nextAction` is task text, while the packet's
 Changed views restart at offset 0; budget retries reuse the same position.
 Neither oversized identities nor the 100,000 offset ceiling silently skip rows.
 These guards do not retain historical snapshots or prove atomic filesystem IO.
+The shared dependency component classifier is iterative and preserves caller
+input-rank ordering, self-cycles and excluded-node semantics. Work stages retain
+maximum prerequisite depth and existing cycle/hold propagation. Cursor queues
+remove repeated ready-list sorting/shifting; public stage rows remain explicitly
+path-sorted. No approximate classification or graph-size cutoff is introduced.
 Source snapshots should keep `citation_key` unique; `lint_wiki` reports
 duplicate keys before source references become ambiguous.
 Optional
