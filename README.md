@@ -1621,6 +1621,21 @@ notes, without certifying the dependencies. Public learning diagnostics retain
 cycle entries for inspection. If a saved route becomes unsafe or truncated,
 resume returns `stale`, withholds the next read, and provides a learning-path
 repair action without rewriting the historical checkpoint.
+`navigationComplete` separately reports whether the requested-depth authored
+route was fully scanned without unresolved, ambiguous or inaccessible entries;
+it remains visible even in compact learning responses. Both authored and
+recommended checkpoints reject incomplete routes rather than marking only
+the reachable subset complete. Repair the links using `wiki.learning_path`,
+or omit `learningProgress` and save an ordinary work note recording the blocker.
+Authored dependency-cycle reading remains possible when navigation itself is
+complete; reading progress is not proof that the dependencies are correct.
+
+MOC `context_pack` reading order uses the same Markdown/wikilink resolver as
+learning paths, including source-relative links and exact extensions. It does
+not guess a missing Markdown target from a remote basename or alias. An entry
+must be visible to the reader and referenceable from the MOC's scope; skipped
+entries contribute to `navigation.unavailableEntries` without exposing their
+hidden metadata.
 
 MOC sequence health resolves claim prerequisites with the same file identity
 and source-to-target scope rules as learning paths. A reader owning both a

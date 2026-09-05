@@ -20,7 +20,7 @@ async function fixture(content: string) {
   return { fs, wiki, write };
 }
 
-test.each(['learning', 'health'])('%s projection resolves root-qualified Markdown without a nearer namesake', async mode => {
+test.each(['learning', 'health', 'context'])('%s projection resolves root-qualified Markdown without a nearer namesake', async mode => {
   const { wiki, write } = await fixture('# Map\n[root](Topics/Base.md#Basics)\n');
   await write('Topics/Base.md');
   await write('Mocs/Topics/Base.md');
@@ -28,6 +28,9 @@ test.each(['learning', 'health'])('%s projection resolves root-qualified Markdow
     const result = await wiki.learningPath(undefined, 'Mocs/Root.md', 2, 30, 16000);
     expect(result.authoredOrder.map(item => item.path)).toEqual(['Topics/Base.md']);
     expect(result.authoredOrder[0]?.targetHeading).toBe('Basics');
+  } else if (mode === 'context') {
+    const result = await wiki.contextPack(undefined, 'Mocs/Root.md', 16000, false);
+    expect(result.entrypoints.filter(item => item.role === 'moc_reading_order').map(item => item.path)).toEqual(['Topics/Base.md']);
   } else {
     const result = await wiki.graphHealth(undefined, 30, 16000);
     const uncovered = result.mocCoverage.uncoveredKnowledge.items.map(item => item.path);
@@ -36,7 +39,7 @@ test.each(['learning', 'health'])('%s projection resolves root-qualified Markdow
   }
 });
 
-test.each(['learning', 'health'])('%s projection never replaces a missing Markdown file with a remote basename or alias', async mode => {
+test.each(['learning', 'health', 'context'])('%s projection never replaces a missing Markdown file with a remote basename or alias', async mode => {
   const { wiki, write } = await fixture('# Map\n[missing](Missing.md)\n[not a file](<Concept alias>)\n');
   await write('Other/Missing.md');
   await write('Other/Concept.md', { aliases: ['Concept alias'] });
@@ -44,6 +47,10 @@ test.each(['learning', 'health'])('%s projection never replaces a missing Markdo
     const result = await wiki.learningPath(undefined, 'Mocs/Root.md', 2, 30, 16000);
     expect(result.authoredOrder).toEqual([]);
     expect(result.navigationIssues).toBeDefined();
+  } else if (mode === 'context') {
+    const result = await wiki.contextPack(undefined, 'Mocs/Root.md', 16000, false);
+    expect(result.entrypoints.filter(item => item.role === 'moc_reading_order')).toEqual([]);
+    expect(result.navigation.unavailableEntries).toBe(2);
   } else {
     const result = await wiki.graphHealth(undefined, 30, 16000);
     expect(result.mocCoverage.knowledgeLinkedFromMoc).toBe(0);
@@ -120,4 +127,15 @@ test('a model MOC cannot borrow an agent-private claim even when its reader owns
   expect(moc).toBeDefined();
   expect(moc?.externalPrerequisites).toMatchObject({ total: 0 });
   expect(moc?.unresolved).toMatchObject({ total: 1 });
+});
+
+test('model context-pack reading order does not borrow an agent-private Markdown target', async () => {
+  const { fs, wiki, write } = await fixture('# Map\n');
+  const principal = { accountId: 'worker', modelId: 'codex', agentId: 'worker', role: 'agent' as const };
+  const root = '_scopes/models/codex/Root.md';
+  await fs.writeNote({ path: root, content: '# Model map\n[private](../../agents/worker/Secret.md)\n', frontmatter: { note_kind: 'moc', llm_wiki_type: 'knowledge' } });
+  await write('_scopes/agents/worker/Secret.md');
+  const result = await wiki.contextPack(principal, root, 16000, false);
+  expect(result.entrypoints.filter(item => item.role === 'moc_reading_order')).toEqual([]);
+  expect(result.navigation.unavailableEntries).toBe(1);
 });

@@ -11229,6 +11229,8 @@ export class LlmWikiService {
       }
     };
     await visitMoc(path, rootNote, 0, [rootKey]);
+    const navigationComplete = !truncated && !navigationIssues.some(issue =>
+      issue.type === 'unresolved_or_inaccessible_body_link' || issue.type === 'ambiguous_body_link');
 
     const authoredIndex = new Map(entries.map((entry, index) => [normalizePath(entry.internalPath).toLowerCase(), index]));
     const edges: Array<{ prerequisite: string; dependent: string; dependencyType: 'note' | 'claim'; sourceClaimId?: string; targetClaimId?: string }> = [];
@@ -11522,6 +11524,7 @@ export class LlmWikiService {
         recommendedOrder: acyclicRecommendedKeys.map(key => entryByKey.get(key)!.path),
         summary: { entries: authoredOrder.length, omittedEntries },
         truncated,
+        navigationComplete,
       };
     }
     const result = {
@@ -11534,6 +11537,7 @@ export class LlmWikiService {
       orderChanged: recommendedOrder.some((item, index) => item !== authoredOrder[index]?.path),
       authoredOrderConsistent: latePrerequisites === 0 && cycleBlockedKeys.length === 0,
       prerequisiteCoverageComplete: incompletePrerequisites === 0,
+      navigationComplete,
       prerequisiteEdges: prerequisiteEdges.slice(0, boundedLimit),
       redundantPrerequisiteEdges: redundantPrerequisiteEdges.slice(0, boundedLimit),
       unlockPoints: unlockPoints.slice(0, Math.min(12, boundedLimit)),
@@ -11611,6 +11615,7 @@ export class LlmWikiService {
       authoredOrder: authoredOrder.slice(0, 3).map(entry => ({ path: entry.path, revision: entry.revision })),
       recommendedOrder: recommendedOrder.slice(0, 3),
       summary: result.summary,
+      navigationComplete,
       truncated: true,
     };
     while (JSON.stringify(minimal).length > boundedChars && minimal.authoredOrder.length > 0) {
@@ -11639,17 +11644,15 @@ export class LlmWikiService {
     const outline = rootNote.frontmatter.note_kind === 'moc' ? extractObsidianLinkOccurrences(rootNote.content, 25) : [];
     const orderedEntries: Array<Record<string, any>> = [];
     let unavailableEntries = 0;
-    const canAccess = (target: string) => this.access.canAccessPhysicalPath(target, principal);
+    const canAccess = (target: string) => this.access.canAccessPhysicalPath(target, principal)
+      && this.access.canReferenceFrom(path, target);
     // Resolve only this MOC's bounded link window; never scan/read all bodies.
     for (let offset = 0; offset < Math.min(24, outline.length); offset += 4) {
       const rows = await Promise.all(outline.slice(offset, Math.min(offset + 4, 24)).map(async link => {
         try {
-          let matches: string[] = [];
-          if (!link.link.startsWith('[[') && !link.link.startsWith('![[')) {
-            const relative = posix.normalize(posix.join(posix.dirname(normalizePath(path)), link.target));
-            if (canAccess(relative) && await this.fileSystem.noteExists(relative)) matches = [relative];
-          }
-          if (!matches.length) matches = await this.fileSystem.findPathForWikiLink(link.target.replace(/\.md$/i, ''), canAccess);
+          const matches = !link.link.startsWith('[[') && !link.link.startsWith('![[')
+            ? await this.fileSystem.findPathForMarkdownLink(link.target, path, canAccess)
+            : await this.fileSystem.findPathForWikiLink(link.target, canAccess, path);
           if (matches.length !== 1 || !canAccess(matches[0]!)) return undefined;
           const target = matches[0]!;
           const note = await this.fileSystem.readNote(target);

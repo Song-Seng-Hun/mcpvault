@@ -3348,6 +3348,7 @@ export declare class LlmWikiService {
             omittedEntries: number;
         };
         truncated: boolean;
+        navigationComplete: boolean;
     } | {
         mode: string;
         root: {
@@ -3380,6 +3381,7 @@ export declare class LlmWikiService {
             navigationIssues: number;
             omittedEntries: number;
         };
+        navigationComplete: boolean;
         truncated: boolean;
     }>;
     /**

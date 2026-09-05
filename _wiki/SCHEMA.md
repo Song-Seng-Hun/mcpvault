@@ -156,6 +156,12 @@ read-only: return stale state with a repair action and no next-read command.
 Claim prerequisites in MOC sequence health use the same exact/ambiguous file
 resolution and source-to-target scope predicate as learning paths; visibility
 to the reader alone does not authorize a cross-scope knowledge relationship.
+`navigationComplete` survives full and compact learning projections. False
+means the scanned route is partial or contains unresolved/ambiguous/inaccessible
+body links. Neither authored nor recommended checkpoints may certify that
+subset. Ordinary continuity notes without learningProgress remain available
+for recording the repair task. Context-pack MOC entries obey the same exact
+file resolution and source-to-target scope constraints as learning paths.
 Move rewrites never update their captured revisions or certify summary/review
 digests. Resolved upstream entries compare their actual path, not display
 target spelling; unresolved entries still compare the authored target.
