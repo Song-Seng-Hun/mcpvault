@@ -1441,16 +1441,19 @@ export class LlmWikiService {
      * Capture the revisions of notes linked by the current body/metadata. This
      * is a derived review baseline: Markdown and Git remain authoritative.
      */
-    async collectReviewBasisLinks(content, references, principal) {
+    async collectReviewBasisLinks(content, references, principal, sourcePath) {
         const candidates = new Set(references);
         for (const link of extractObsidianLinkOccurrences(content)) {
-            const matches = await this.fileSystem.findPathForWikiLink(link.target, path => this.access.canAccessPhysicalPath(path, principal));
+            const target = /^!?\[\[/.test(link.link) ? link.link : link.target;
+            const matches = await this.fileSystem.findPathForWikiLink(target, path => this.access.canAccessPhysicalPath(path, principal), sourcePath);
             if (matches.length === 1)
                 candidates.add(matches[0]);
         }
         const result = [];
         for (const path of [...candidates].slice(0, 50)) {
-            if (!this.access.canAccessPhysicalPath(path, principal) || !await this.fileSystem.noteExists(path))
+            if (!this.access.canAccessPhysicalPath(path, principal)
+                || (sourcePath && !this.access.canReferenceFrom(sourcePath, path))
+                || !await this.fileSystem.noteExists(path))
                 continue;
             const note = await this.fileSystem.readNote(path);
             result.push({ path, revision: note.revision });
@@ -1771,7 +1774,7 @@ export class LlmWikiService {
             const baseline = normalizeReviewBasisLinks(note.frontmatter.review_basis_links);
             if (note.frontmatter.review_basis_links === undefined)
                 return { policy, bodyChanged, linkChanged: true, upstreamChanged: false, upstreamChanges: [] };
-            const current = await this.collectReviewBasisLinks(note.content || '', Array.isArray(note.frontmatter.references) ? note.frontmatter.references : [], principal);
+            const current = await this.collectReviewBasisLinks(note.content || '', Array.isArray(note.frontmatter.references) ? note.frontmatter.references : [], principal, note.path);
             const previous = JSON.stringify(baseline);
             const next = JSON.stringify(current);
             return { policy, bodyChanged, linkChanged: previous !== next, upstreamChanged: false, upstreamChanges: [] };
@@ -2173,7 +2176,7 @@ export class LlmWikiService {
         }
         const timestamp = now();
         const references = await this.references.validateAndNormalize(params.references ?? existing?.frontmatter.references, params.path, params.principal, content);
-        const reviewBasisLinks = await this.collectReviewBasisLinks(content, references, params.principal);
+        const reviewBasisLinks = await this.collectReviewBasisLinks(content, references, params.principal, params.path);
         const relationFrontmatter = {
             ...(existing?.frontmatter || {}),
             ...knowledgeOrganization({
@@ -3880,7 +3883,7 @@ export class LlmWikiService {
         }
         const reviewChecks = params.reviewChecks === undefined ? undefined : normalizeReviewChecks(params.reviewChecks);
         const reviewOpenItems = params.reviewOpenItems === undefined ? undefined : (Array.isArray(params.reviewOpenItems) ? params.reviewOpenItems.slice(0, 8).map(item => boundedText(String(item), 500)) : (() => { throw new Error('reviewOpenItems must be an array'); })());
-        const reviewBasisLinks = await this.collectReviewBasisLinks(note.content, Array.isArray(note.frontmatter.references) ? note.frontmatter.references : [], params.principal);
+        const reviewBasisLinks = await this.collectReviewBasisLinks(note.content, Array.isArray(note.frontmatter.references) ? note.frontmatter.references : [], params.principal, params.path);
         const reviewBasisUpstream = await this.collectReviewBasisUpstream(params.path, note.frontmatter, params.principal);
         const timestamp = now();
         const reviewPolicy = String(note.frontmatter.review_policy || 'manual').toLowerCase();

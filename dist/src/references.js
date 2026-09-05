@@ -28,9 +28,9 @@ export class ReferenceService {
         this.fileSystem = fileSystem;
         this.access = access;
     }
-    async resolveWikiLinkTarget(target, principal) {
+    async resolveWikiLinkTarget(target, principal, sourcePath) {
         const name = target.trim().replace(/\.md$/i, '');
-        const matches = await this.fileSystem.findPathForWikiLink(name, path => this.access.canAccessPhysicalPath(path, principal));
+        const matches = await this.fileSystem.findPathForWikiLink(name, path => this.access.canAccessPhysicalPath(path, principal), sourcePath);
         if (matches.length === 0)
             throw new Error(`Obsidian reference does not resolve: [[${target}]]`);
         if (matches.length > 1)
@@ -47,7 +47,7 @@ export class ReferenceService {
         const explicit = normalize(value);
         const references = [];
         for (const raw of explicit) {
-            const path = /^!?\[\[.+\]\]$/.test(raw) ? await this.resolveWikiLinkTarget(parseWikiLink(raw.replace(/^!/, '')).document) : raw;
+            const path = /^!?\[\[.+\]\]$/.test(raw) ? await this.resolveWikiLinkTarget(parseWikiLink(raw.replace(/^!/, '')).document, principal, containerPath) : raw;
             if (!this.access.canAccessPhysicalPath(path, principal)) {
                 throw new Error(`Reference is not accessible in this scope: ${this.access.toPublicPath(path)}`);
             }
@@ -61,7 +61,10 @@ export class ReferenceService {
         }
         for (const link of extractObsidianLinkOccurrences(String(content || ''))) {
             try {
-                const path = await this.resolveWikiLinkTarget(link.target, principal);
+                // The occurrence's normalized target omits ./; keep authored wikilink
+                // spelling so a source-relative link cannot become a basename lookup.
+                const target = /^!?\[\[/.test(link.link) ? parseWikiLink(link.link.replace(/^!/, '')).document : link.target;
+                const path = await this.resolveWikiLinkTarget(target, principal, containerPath);
                 if (!this.access.canReferenceFrom(containerPath, path)) {
                     throw new Error(`A more-private note cannot be referenced from this note: ${this.access.toPublicPath(path)}`);
                 }

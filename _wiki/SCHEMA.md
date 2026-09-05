@@ -113,7 +113,12 @@ lint reports stale or invalid locators. Use `review_policy` (`manual`,
 when review should be triggered; it is a derived signal, not a hidden
 scheduler. Publication stores a compact body/link review baseline in
 regenerable frontmatter metadata, so `on_any_edit` and `on_link_change` can be
-detected later. The baseline never replaces Markdown or Git. Use
+detected later. Explicit `[[./Note]]` and `[[../Note#Heading|alias]]` references
+use the containing note's path for review baselines and later checks; bare
+names retain ordinary ambiguity rules. Baselines exclude targets that the
+caller cannot access or that are more private than the containing note.
+This does not sanitize existing authored links or reference metadata.
+The baseline never replaces Markdown or Git. Use
 `get_wiki_organization_health` for one bounded report of
 property, MOC coverage, atomic-note, Evergreen discoverability, summary
 freshness, typed evidence, alias/ID collision, and typed-link problems.

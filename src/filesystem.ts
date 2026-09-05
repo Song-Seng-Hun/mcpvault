@@ -2284,12 +2284,12 @@ export class FileSystemService {
    *
    * Throws only on caller misuse (empty name).
    */
-  async findPathForWikiLink(wikiLinkName: string, canAccessPath: (path: string) => boolean = () => true): Promise<string[]> {
+  async findPathForWikiLink(wikiLinkName: string, canAccessPath: (path: string) => boolean = () => true, sourcePath?: string): Promise<string[]> {
     if (!wikiLinkName.trim()) {
       throw new Error('Empty wiki link — provide a document name inside [[ ]].');
     }
     if (this.metadataIndex) {
-      const indexedMatches = await this.metadataIndex.resolveNoteReference(wikiLinkName, canAccessPath);
+      const indexedMatches = await this.metadataIndex.resolveNoteReference(wikiLinkName, canAccessPath, sourcePath);
       return indexedMatches.sort((a, b) => {
         const da = a.split('/').length;
         const db = b.split('/').length;
@@ -2321,10 +2321,10 @@ export class FileSystemService {
       for (const entry of batch) if (entry) descriptors.push(entry);
     }
 
-    const matches = resolveNoteReference(wikiLinkName, buildNoteReferenceIndex(descriptors));
+    const matches = resolveNoteReference(wikiLinkName, buildNoteReferenceIndex(descriptors), sourcePath === undefined ? {} : { sourcePath });
 
     // Depth-ascending (root-first), alphabetical tiebreak at equal depth.
-    // No current-folder context exists for a standalone MCP tool.
+    // Standalone callers omit sourcePath; note-bound readers can resolve ./ and ../.
     matches.sort((a, b) => {
       const da = a.split('/').length;
       const db = b.split('/').length;

@@ -345,7 +345,14 @@ than an upstream dependency of the supporter. Publication and completed review
 store a bounded upstream revision/state baseline as well as a body/link baseline,
 so later source, relation, status, link, or body
 changes can be reported as derived triggers. The baseline is regenerable
-metadata and never replaces Markdown or Git. Completing the review refreshes
+metadata and never replaces Markdown or Git.
+Explicit `[[./Sibling]]` and `[[../ParentNote#Heading|label]]` body links
+and explicit wikilink references resolve relative to the containing note
+when building and checking that baseline. Standalone name lookup keeps its
+existing ambiguity rules. The baseline never copies a more-private target's
+revision into a more-public note; this does not redact pre-existing authored
+content or references. Relative resolution does not grant scope access.
+Completing the review refreshes
 the upstream baseline, so a known retired or disputed prerequisite does not
 reopen the same review indefinitely until it changes again. The bounded
 review metadata also records the reviewed source revision, review count,

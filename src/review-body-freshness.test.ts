@@ -104,6 +104,52 @@ test('on_link_change reads real body links rather than interpreting omitted cont
   });
 });
 
+test.each([false, true])('relative wikilinks keep their source-relative review target (indexed=%s)', async indexed => {
+  await fixture(async (wiki, fs, seed) => {
+    await seed('Knowledge/Target.md', '# Target\n');
+    await seed('Elsewhere/Target.md', '# Not the target\n');
+    await seed('Elsewhere/Local.md', '# Not the local target\n');
+    await seed('Knowledge/Nested/Local.md', '# Local\n');
+    const path = 'Knowledge/Nested/Linked.md';
+    const body = '[[../Target#Heading|alias]] and [[./Local\\|local]]\n';
+    await seed(path, body, { review_policy: 'on_link_change' });
+    const references = new ReferenceService(fs, new ScopeAccessPolicy());
+    expect(await references.validateAndNormalize(undefined, path, undefined, body)).toEqual(['Knowledge/Target.md', 'Knowledge/Nested/Local.md']);
+    await wiki.review({ path, reviewOutcome: 'confirmed', reviewedBy: 'test', expectedRevision: (await fs.readNote(path)).revision });
+    const baseline = (await fs.readNote(path)).frontmatter.review_basis_links;
+    expect(baseline.map((item: { path: string }) => item.path).sort()).toEqual(['Knowledge/Nested/Local.md', 'Knowledge/Target.md']);
+    expect((await wiki.reviewQueue(undefined, 20, 12000)).items).toEqual([]);
+    await fs.writeNote({ path: 'Knowledge/Target.md', content: '# Changed target\n', expectedRevision: (await fs.readNote('Knowledge/Target.md')).revision });
+    const queue = await wiki.reviewQueue(undefined, 20, 12000);
+    expect(queue.items.find(item => item.path === path)?.reviewReasons).toContain('link_changed');
+    expect(JSON.stringify(queue)).not.toContain('Elsewhere/Target');
+  }, indexed);
+});
+
+test.each([false, true])('explicit private wikilinks retain the caller identity without widening visibility (indexed=%s)', async indexed => {
+  await fixture(async (_wiki, fs, seed) => {
+    await seed('_scopes/models/codex/Target.md', '# Own model\n');
+    await seed('_scopes/models/claude/Target.md', '# Other model\n');
+    const principal = { accountId: 'reader', modelId: 'codex', agentId: 'reader-worker', role: 'agent' as const };
+    const path = '_scopes/models/codex/Nested/Source.md';
+    const references = new ReferenceService(fs, new ScopeAccessPolicy());
+    expect(await references.validateAndNormalize(['[[../Target]]'], path, principal)).toEqual(['_scopes/models/codex/Target.md']);
+    await expect(references.validateAndNormalize(['[[../Target]]'], path)).rejects.toThrow(/does not resolve/);
+    expect(await fs.findPathForWikiLink('Target', candidate => new ScopeAccessPolicy().canAccessPhysicalPath(candidate, principal))).toEqual(['_scopes/models/codex/Target.md']);
+    await expect(references.validateAndNormalize(['[[_scopes/models/codex/Target]]'], 'Public.md', principal)).rejects.toThrow(/more-private/);
+  }, indexed);
+});
+
+test.each([false, true])('review baselines do not copy an authenticated reader\'s private targets into a public note (indexed=%s)', async indexed => {
+  await fixture(async (wiki, fs, seed) => {
+    const hidden = '_scopes/models/codex/Secret.md';
+    await seed(hidden, '# Secret\n');
+    await seed('Public.md', `[[${hidden}]]\n`, { references: [hidden], review_policy: 'on_link_change' });
+    await wiki.review({ path: 'Public.md', principal: { accountId: 'reader', modelId: 'codex', agentId: 'worker', role: 'agent' }, reviewOutcome: 'confirmed', reviewedBy: 'reader', expectedRevision: (await fs.readNote('Public.md')).revision });
+    expect((await fs.readNote('Public.md')).frontmatter.review_basis_links).toEqual([]);
+  }, indexed);
+});
+
 test('a body changed after metadata selection is rejected instead of paired with the old revision', async () => {
   await fixture(async (wiki, fs, seed) => {
     const body = '# Stable\n';
