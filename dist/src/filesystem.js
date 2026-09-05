@@ -654,6 +654,14 @@ export class FileSystemService {
         return fullPath;
     }
     async readNote(path) {
+        return this.readNoteData(path, content => ({ ...this.frontmatterHandler.parse(content), revision: this.revision(content) }));
+    }
+    /** Hash current decoded UTF-8 without parsing. Callers still enforce scope;
+     * a revision is not an access grant or a fresh moderation classification. */
+    async readNoteRevision(path) {
+        return this.readNoteData(path, content => this.revision(content));
+    }
+    async readNoteData(path, project) {
         path = this.normalizePath(path);
         const fullPath = this.resolvePath(path);
         if (!this.pathFilter.isAllowed(path)) {
@@ -666,7 +674,7 @@ export class FileSystemService {
         }
         try {
             const content = await this.vaultIo.readUtf8(fullPath);
-            return { ...this.frontmatterHandler.parse(content), revision: this.revision(content) };
+            return project(content);
         }
         catch (error) {
             if (error instanceof Error && 'code' in error) {

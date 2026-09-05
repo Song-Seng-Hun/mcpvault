@@ -704,6 +704,16 @@ export class FileSystemService {
   }
 
   async readNote(path: string): Promise<ParsedNote> {
+    return this.readNoteData(path, content => ({ ...this.frontmatterHandler.parse(content), revision: this.revision(content) }));
+  }
+
+  /** Hash current decoded UTF-8 without parsing. Callers still enforce scope;
+   * a revision is not an access grant or a fresh moderation classification. */
+  async readNoteRevision(path: string): Promise<string> {
+    return this.readNoteData(path, content => this.revision(content));
+  }
+
+  private async readNoteData<T>(path: string, project: (content: string) => T): Promise<T> {
     path = this.normalizePath(path);
     const fullPath = this.resolvePath(path);
 
@@ -719,7 +729,7 @@ export class FileSystemService {
 
     try {
       const content = await this.vaultIo.readUtf8(fullPath);
-      return { ...this.frontmatterHandler.parse(content), revision: this.revision(content) };
+      return project(content);
     } catch (error) {
       if (error instanceof Error && 'code' in error) {
         if (error.code === 'ENOENT') {

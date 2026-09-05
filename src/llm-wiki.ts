@@ -11530,10 +11530,20 @@ export class LlmWikiService {
     // This rejects observed drift; it is not an atomic whole-Vault snapshot.
     const capturedSources = [...capturedRevisions];
     for (let offset = 0; offset < capturedSources.length; offset += 4) {
-      await Promise.all(capturedSources.slice(offset, offset + 4).map(([target, revision]) => readCapturedSource(target, revision)));
+      await Promise.all(capturedSources.slice(offset, offset + 4).map(async ([target, revision]) => {
+        try {
+          if (!canAccess(target)) throw new Error('unavailable');
+          // These revisions came from visible parsed sources. Any subsequent
+          // moderation or content edit changes the hash; no reparse is needed.
+          const currentRevision = await this.fileSystem.readNoteRevision(target);
+          if (currentRevision !== revision || !canAccess(target)) throw new Error('changed');
+        } catch {
+          throw new Error('A learning-path source changed or became unavailable; re-read the MOC and retry.');
+        }
+      }));
     }
-    const latestRoot = await this.fileSystem.readNote(path);
-    if (latestRoot.revision !== rootNote.revision) throw new Error('The root MOC changed while building its learning path; re-read it and retry.');
+    const latestRootRevision = await this.fileSystem.readNoteRevision(path);
+    if (latestRootRevision !== rootNote.revision || !canAccess(path)) throw new Error('The root MOC changed while building its learning path; re-read it and retry.');
     if (checkpointOnly) {
       return {
         mode: 'learning_path_checkpoint_source',
