@@ -1636,6 +1636,21 @@ not guess a missing Markdown target from a remote basename or alias. An entry
 must be visible to the reader and referenceable from the MOC's scope; skipped
 entries contribute to `navigation.unavailableEntries` without exposing their
 hidden metadata.
+Learning-path reads revalidate the distinct notes whose revisions supplied the
+route and prerequisite analysis. A nested MOC must still match its captured
+revision before its body is traversed; changed, hidden, missing or unreadable
+sources abort with path-free retry guidance instead of mixing old metadata with
+new content. Checkpoint preparation uses the same guard and does not overwrite
+saved progress on failure. Unrelated notes are not revalidated.
+
+Revalidation runs at most four full-file reads concurrently, not four reads in
+total. With 50 entries and up to 150 prerequisites per entry, a pathological
+route can approach 7,550 distinct source checks before deduplication. Ordinary
+paths with shared prerequisites cost much less; keep large courses split into
+smaller MOCs. Existing metadata discovery may still scan all accessible notes
+and the no-index fallback reads bodies. This is observed revision-drift
+rejection, not a lock or atomic whole-Vault snapshot: changes after a source's
+check or to unselected resolution candidates can require a subsequent refresh.
 
 MOC sequence health resolves claim prerequisites with the same file identity
 and source-to-target scope rules as learning paths. A reader owning both a

@@ -162,6 +162,14 @@ body links. Neither authored nor recommended checkpoints may certify that
 subset. Ordinary continuity notes without learningProgress remain available
 for recording the repair task. Context-pack MOC entries obey the same exact
 file resolution and source-to-target scope constraints as learning paths.
+Before returning a learning route or preparing its checkpoint, revalidate the
+captured revisions and moderation state of selected entries and resolved
+prerequisites. Nested MOCs must match their captured revision before traversal.
+Observed changed/unavailable sources abort with path-free retry guidance;
+checkpoint writes must not occur after that failure. Deduplicate source checks
+and run them in batches of four. This is not an atomic multi-file snapshot and
+does not guarantee detection of changes after validation or to unselected
+reference candidates. Unrelated files are not part of this revalidation pass.
 Move rewrites never update their captured revisions or certify summary/review
 digests. Resolved upstream entries compare their actual path, not display
 target spelling; unresolved entries still compare the authored target.

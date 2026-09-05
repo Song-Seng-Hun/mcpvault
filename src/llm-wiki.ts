@@ -11115,6 +11115,17 @@ export class LlmWikiService {
       targetBlockId?: string;
     };
     const canAccess = (candidate: string) => this.access.canAccessPhysicalPath(candidate, principal);
+    const capturedRevisions = new Map<string, string>();
+    const readCapturedSource = async (target: string, expectedRevision?: string): Promise<ReadNoteResult> => {
+      try {
+        if (!canAccess(target)) throw new Error('unavailable');
+        const current = await this.fileSystem.readNote(target);
+        if (isModerationHidden(current.frontmatter) || (expectedRevision && current.revision !== expectedRevision)) throw new Error('changed');
+        return current;
+      } catch {
+        throw new Error('A learning-path source changed or became unavailable; re-read the MOC and retry.');
+      }
+    };
     const visibleByPath = new Map<string, VisibleNote>();
     for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
       if (isModerationHidden(note.frontmatter)) continue;
@@ -11199,7 +11210,8 @@ export class LlmWikiService {
             continue;
           }
           let revision = metadata.revision;
-          if (!revision) revision = (await this.fileSystem.readNote(targetPath)).revision;
+          if (!revision) revision = (await readCapturedSource(targetPath)).revision;
+          capturedRevisions.set(targetPath, revision);
           const createdEntry: PathEntry & { internalPath: string } = {
             internalPath: targetPath,
             path: this.access.toPublicPath(targetPath),
@@ -11221,9 +11233,8 @@ export class LlmWikiService {
           entry = createdEntry;
         }
         if (targetKind === 'moc' && depth < boundedDepth && cycleAt === -1) {
-          const nested = await this.fileSystem.readNote(targetPath);
           const resolvedEntry = entryByKey.get(targetKey)!;
-          if (nested.revision !== resolvedEntry.revision) resolvedEntry.revision = nested.revision;
+          const nested = await readCapturedSource(targetPath, resolvedEntry.revision);
           await visitMoc(targetPath, nested, depth + 1, [...ancestry, targetKey]);
         }
       }
@@ -11278,6 +11289,8 @@ export class LlmWikiService {
         }
         const prerequisitePath = matches[0]!;
         const prerequisiteKey = normalizePath(prerequisitePath).toLowerCase();
+        const prerequisiteSnapshotRevision = visibleByPath.get(prerequisiteKey)?.revision;
+        if (prerequisiteSnapshotRevision) capturedRevisions.set(prerequisitePath, prerequisiteSnapshotRevision);
         if (prerequisite.dependencyType === 'claim') {
           const targetClaimCount = structuredClaimIdCount(visibleByPath.get(prerequisiteKey)?.frontmatter || {}, prerequisite.reference.targetClaimId!);
           if (targetClaimCount === 0) {
@@ -11304,7 +11317,8 @@ export class LlmWikiService {
             externalSeen.add(externalKey);
             const prerequisiteNote = visibleByPath.get(prerequisiteKey);
             let prerequisiteRevision = prerequisiteNote?.revision;
-            if (!prerequisiteRevision) prerequisiteRevision = (await this.fileSystem.readNote(prerequisitePath)).revision;
+            if (!prerequisiteRevision) prerequisiteRevision = (await readCapturedSource(prerequisitePath)).revision;
+            capturedRevisions.set(prerequisitePath, prerequisiteRevision);
             externalPrerequisites.push({
               path: this.access.toPublicPath(prerequisitePath),
               revision: prerequisiteRevision,
@@ -11512,6 +11526,12 @@ export class LlmWikiService {
       'unresolved_or_inaccessible_prerequisite', 'ambiguous_prerequisite', 'invalid_claim_prerequisite',
       'missing_claim_prerequisite_target', 'ambiguous_claim_prerequisite_target', 'claim_prerequisites_truncated', 'note_prerequisites_truncated',
     ].includes(String(issue.type))).length + externalPrerequisites.length;
+    // Revalidate only the sources actually used, in small bounded batches.
+    // This rejects observed drift; it is not an atomic whole-Vault snapshot.
+    const capturedSources = [...capturedRevisions];
+    for (let offset = 0; offset < capturedSources.length; offset += 4) {
+      await Promise.all(capturedSources.slice(offset, offset + 4).map(([target, revision]) => readCapturedSource(target, revision)));
+    }
     const latestRoot = await this.fileSystem.readNote(path);
     if (latestRoot.revision !== rootNote.revision) throw new Error('The root MOC changed while building its learning path; re-read it and retry.');
     if (checkpointOnly) {
