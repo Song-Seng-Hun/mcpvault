@@ -2591,6 +2591,13 @@ export class FileSystemService {
             };
         });
     }
+    /** Hydrate one admitted metadata row without mixing revisions or reading an unbounded source. */
+    async readQueryNoteBody(note, canAccessPath, canReadNote) {
+        const path = this.normalizePath(note.path);
+        if (!note.revision || !this.pathFilter.isAllowed(path) || !canAccessPath(path) || !canReadNote(note))
+            throw new QuerySnapshotChangedError();
+        return this.hydrateQueryNote({ ...note, path }, canAccessPath, canReadNote, resolved => this.vaultIo.readUtf8Bounded(resolved, MAX_NOTE_CONTENT_BYTES));
+    }
     async hydrateQueryNote(note, canAccessPath, canReadNote, read) {
         let raw;
         try {

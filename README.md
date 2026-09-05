@@ -306,7 +306,15 @@ summary/remix) and bounded `summary_highlights` make the compression layer
 explicit while the complete Markdown body remains authoritative. Whenever a progressive
 field is present, store `summary_of_content_sha256` as the SHA-256 of the
 exact Markdown body; a body edit makes the projection stale until it is
-regenerated. Filing or review changes never refresh that fingerprint. When
+regenerated. Metadata-only review queues, impact reports and cascade detection
+do not hash an omitted body as an empty string. They hydrate only notes needing
+body/summary/link checks, verify the selected source revision and visibility,
+and read a complete source of at most 8 MiB. A changed query snapshot requires
+retrying; a read-limit error is not evidence that the summary is stale. Ordinary
+manual notes without projections need no additional body hydration. Cascade
+records keep digest/link-change facts, not a retained cohort of full bodies.
+This is per-source validation, not an atomic multi-view transaction.
+Filing or review changes never refresh that fingerprint. When
 several stored projection fields are stale, refresh them together: replacing
 only key points cannot certify an inherited old summary. For failed paths, use `knowledge_polarity: negative` with a
 `negative_type` such as `failure`, `rejected`, `counterexample`, or

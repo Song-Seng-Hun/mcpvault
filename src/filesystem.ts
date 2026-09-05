@@ -2684,6 +2684,14 @@ export class FileSystemService {
     });
   }
 
+  /** Hydrate one admitted metadata row without mixing revisions or reading an unbounded source. */
+  async readQueryNoteBody(note: QueryNote, canAccessPath: (path: string) => boolean, canReadNote: (note: QueryNote) => boolean): Promise<QueryNote> {
+    const path = this.normalizePath(note.path);
+    if (!note.revision || !this.pathFilter.isAllowed(path) || !canAccessPath(path) || !canReadNote(note)) throw new QuerySnapshotChangedError();
+    return this.hydrateQueryNote({ ...note, path }, canAccessPath, canReadNote,
+      resolved => this.vaultIo.readUtf8Bounded(resolved, MAX_NOTE_CONTENT_BYTES));
+  }
+
   private async hydrateQueryNote(note: QueryNote, canAccessPath: (path: string) => boolean, canReadNote: (note: QueryNote) => boolean, read: (path: string) => Promise<string>): Promise<QueryNote> {
     let raw: string;
     try { raw = await read(this.resolvePath(note.path)); }

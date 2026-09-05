@@ -84,7 +84,14 @@ body. Optional `summary_layer` (0-4) and bounded `summary_highlights` record
 which Progressive Summarization layer a projection represents; the full body
 remains authoritative. Whenever a progressive field is present, store
 `summary_of_content_sha256` as the SHA-256 of the exact Markdown body; a body
-edit makes the projection stale until it is regenerated. Use
+edit makes the projection stale until it is regenerated. Review/impact and
+cascade scans distinguish omitted query bodies from actual empty sources.
+Body-dependent policies and summary checks hydrate the needed source at its
+selected revision with scope/moderation checks, using a complete read capped
+at 8 MiB. Changed snapshots must be retried; unavailable/oversized sources
+must not be classified from a partial or guessed empty body. Cascade records
+retain digest/link-change facts only. No stored baseline is silently rebased,
+and these per-source checks do not promise a whole-Vault transaction. Use
 `knowledge_polarity: negative` with `negative_type` to preserve failures,
 rejected approaches, counterexamples, and non-reproducible results. Typed relationship properties explain why a link exists:
 `supports`, `contradicts`, `supersedes`, `derived_from`, `depends_on`,

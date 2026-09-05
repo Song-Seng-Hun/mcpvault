@@ -146,6 +146,7 @@ export declare class LlmWikiService {
      * disputed or retired. Incoming claim dependencies and the claim's outgoing
      * support/contradiction links are navigation signals, not automatic edits. */
     private collectClaimDownstreamKnowledgePaths;
+    private reviewBodyNote;
     private reviewChangeSignals;
     /**
      * Project direct invalidation through explicit typed note relations. This is

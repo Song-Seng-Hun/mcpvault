@@ -197,6 +197,8 @@ export declare class FileSystemService {
     private resolvePathPrefix;
     listTasks(params?: ListTasksParams, canAccessPath?: (path: string) => boolean): Promise<ListTasksResult>;
     updateTask(params: UpdateTaskParams): Promise<UpdateTaskResult>;
+    /** Hydrate one admitted metadata row without mixing revisions or reading an unbounded source. */
+    readQueryNoteBody(note: QueryNote, canAccessPath: (path: string) => boolean, canReadNote: (note: QueryNote) => boolean): Promise<QueryNote>;
     private hydrateQueryNote;
     queryNotesBounded(params: QueryNotesParams, maxChars: number, canAccessPath: (path: string) => boolean, canReadNote: (note: QueryNote) => boolean, prettyPrint?: boolean): Promise<PackedQueryPage>;
     /** Internal whole-inventory consumer. Unlike independent cursor pages, all

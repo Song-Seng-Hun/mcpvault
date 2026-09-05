@@ -13,6 +13,24 @@ import { LlmWikiService } from './llm-wiki.js';
 
 let vault: string;
 
+test('dynamic review and impact distinguish missing metadata bodies from real source edits', async () => {
+  const body = '# Current\nGrounded knowledge.\n';
+  const sha = createHash('sha256').update(body).digest('hex');
+  await writeFile(join(vault, 'Fresh.md'), `---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\nsummary: Current summary\nsummary_of_content_sha256: ${sha}\nreview_policy: on_any_edit\nreview_basis_content_sha256: ${sha}\n---\n${body}`);
+  await writeFile(join(vault, 'Changed.md'), `---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\nsummary: Old summary\nsummary_of_content_sha256: ${sha}\nreview_policy: on_any_edit\nreview_basis_content_sha256: ${sha}\n---\n# Actually changed\n`);
+  const { server, client } = await setup();
+  try {
+    const account = await callJson(client, 'register_scope_account', { accountId: 'body-freshness', modelId: 'codex', password: 'body-freshness-fixture' });
+    const accessToken = account.value.accessToken;
+    for (const name of ['get_wiki_review_queue', 'get_wiki_impact_report']) {
+      const result = await callJson(client, name, { maxChars: 12000, accessToken });
+      expect(result.result.isError).toBeFalsy();
+      expect(result.value.items.map((item: any) => item.path)).toEqual(['Changed.md']);
+      expect(result.value.items[0].reviewReasons || result.value.items[0].reasons).toEqual(expect.arrayContaining(['summary_stale', 'note_edited']));
+    }
+  } finally { await client.close(); await server.close(); }
+});
+
 test('dynamic organization queues preserve long first candidates and their current revisions', async () => {
   await mkdir(join(vault, 'Inbox'), { recursive: true });
   await mkdir(join(vault, 'Knowledge'), { recursive: true });

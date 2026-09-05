@@ -1892,13 +1892,23 @@ export class LlmWikiService {
     return { total: visible.length, paths: visible.slice(0, Math.max(1, limit)), truncated: visible.length > limit };
   }
 
+  private async reviewBodyNote(note: QueryNote, principal?: ScopePrincipal, includeSummary = false): Promise<QueryNote> {
+    const policy = String(note.frontmatter.review_policy || 'manual').toLowerCase();
+    const needsBody = policy === 'on_any_edit' || policy === 'on_link_change'
+      || (includeSummary && hasProgressiveProjection(note.frontmatter) && typeof note.frontmatter.summary_of_content_sha256 === 'string');
+    if (!needsBody || typeof note.content === 'string') return note;
+    return this.fileSystem.readQueryNoteBody(note, path => this.access.canAccessPhysicalPath(path, principal),
+      current => current.frontmatter.llm_wiki_type === 'knowledge' && !isModerationHidden(current.frontmatter));
+  }
+
   private async reviewChangeSignals(note: { path?: string; content?: string; frontmatter: Record<string, any> }, principal?: ScopePrincipal, referenceIndex?: KnowledgeReferenceIndex) {
     const policy = typeof note.frontmatter.review_policy === 'string' ? note.frontmatter.review_policy.toLowerCase() : 'manual';
-    const bodyDigest = hash(note.content || '');
+    const bodyDigest = typeof note.content === 'string' ? hash(note.content) : undefined;
     const baselineDigest = typeof note.frontmatter.review_basis_content_sha256 === 'string'
       ? note.frontmatter.review_basis_content_sha256
       : undefined;
-    const bodyChanged = baselineDigest !== undefined && baselineDigest !== bodyDigest;
+    const bodyChanged = baselineDigest !== undefined && bodyDigest !== undefined && baselineDigest !== bodyDigest;
+    if ((policy === 'on_any_edit' || policy === 'on_link_change') && bodyDigest === undefined) throw new Error('Review body is unavailable; retry with a current source revision.');
     if (policy === 'on_link_change') {
       const baseline = normalizeReviewBasisLinks(note.frontmatter.review_basis_links);
       if (note.frontmatter.review_basis_links === undefined) return { policy, bodyChanged, linkChanged: true, upstreamChanged: false, upstreamChanges: [] as string[] };
@@ -1943,19 +1953,20 @@ export class LlmWikiService {
     const maxNodes = 5000;
     const maxEdges = 20000;
     const canAccess = (candidate: string) => this.access.canAccessPhysicalPath(candidate, principal);
-    const records: Array<{ path: string; frontmatter: Record<string, any>; content?: string; contentDigest: string }> = [];
+    const records: Array<{ path: string; frontmatter: Record<string, any>; contentDigest?: string; linkChanged?: boolean }> = [];
     let scanned = 0;
     let truncated = false;
-    for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
-      if (note.frontmatter.llm_wiki_type !== 'knowledge' || isModerationHidden(note.frontmatter)) continue;
+    for await (const metadata of iterateNotes(this.fileSystem, {}, canAccess)) {
+      if (metadata.frontmatter.llm_wiki_type !== 'knowledge' || isModerationHidden(metadata.frontmatter)) continue;
       scanned += 1;
       if (records.length >= maxNodes) { truncated = true; break; }
+      const note = await this.reviewBodyNote(metadata, principal);
       const policy = String(note.frontmatter.review_policy || 'manual').trim().toLowerCase();
       records.push({
         path: normalizePath(note.path),
         frontmatter: note.frontmatter,
-        ...(policy === 'on_link_change' && { content: note.content }),
-        contentDigest: hash(note.content || ''),
+        ...(policy === 'on_link_change' && { linkChanged: (await this.reviewChangeSignals(note, principal)).linkChanged }),
+        ...(typeof note.content === 'string' && { contentDigest: hash(note.content) }),
       });
     }
     const recordByPath = new Map(records.map(record => [record.path.toLowerCase(), record]));
@@ -2006,12 +2017,9 @@ export class LlmWikiService {
       const reviewOutcome = String(record.frontmatter.last_review_outcome || '').trim().toLowerCase();
       if (['archived', 'superseded'].includes(lifecycle) || knowledgeStatus === 'superseded' || reviewOutcome === 'superseded') reasons.push('upstream_retired');
       if (knowledgeStatus === 'disputed' || reviewOutcome === 'disputed') reasons.push('upstream_disputed');
-      if (policy === 'on_any_edit' && typeof record.frontmatter.review_basis_content_sha256 === 'string'
+      if (policy === 'on_any_edit' && record.contentDigest !== undefined && typeof record.frontmatter.review_basis_content_sha256 === 'string'
         && record.frontmatter.review_basis_content_sha256 !== record.contentDigest) reasons.push('note_edited');
-      if (policy === 'on_link_change') {
-        const signals = await this.reviewChangeSignals({ path: record.path, content: record.content || '', frontmatter: record.frontmatter }, principal, referenceIndex);
-        if (signals.linkChanged) reasons.push('link_changed');
-      }
+      if (policy === 'on_link_change' && record.linkChanged) reasons.push('link_changed');
       if (policy === 'on_upstream_change') {
         const signals = await this.reviewChangeSignals({ path: record.path, frontmatter: record.frontmatter }, principal, referenceIndex);
         if (signals.upstreamChanged) reasons.push('upstream_changed');
@@ -3275,10 +3283,11 @@ export class LlmWikiService {
     let total = 0;
     let referenceIndex: KnowledgeReferenceIndex | undefined;
     const nowMs = Date.now();
-    for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
-      if (note.frontmatter.llm_wiki_type !== 'knowledge') continue;
-      const snoozedUntil = Date.parse(String(note.frontmatter.review_snoozed_until || ''));
+    for await (const metadata of iterateNotes(this.fileSystem, {}, canAccess)) {
+      if (metadata.frontmatter.llm_wiki_type !== 'knowledge') continue;
+      const snoozedUntil = Date.parse(String(metadata.frontmatter.review_snoozed_until || ''));
       if (Number.isFinite(snoozedUntil) && snoozedUntil > nowMs) continue;
+      const note = await this.reviewBodyNote(metadata, principal, true);
       const lifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
       const temporal = temporalValidity(note.frontmatter, nowMs);
       const reviewAt = note.frontmatter.review_at ? String(note.frontmatter.review_at) : undefined;
@@ -7909,8 +7918,9 @@ export class LlmWikiService {
     let total = 0;
     let referenceIndex: KnowledgeReferenceIndex | undefined;
     const nowMs = Date.now();
-    for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
-      if (note.frontmatter.llm_wiki_type !== 'knowledge') continue;
+    for await (const metadata of iterateNotes(this.fileSystem, {}, canAccess)) {
+      if (metadata.frontmatter.llm_wiki_type !== 'knowledge') continue;
+      const note = await this.reviewBodyNote(metadata, principal, true);
       const evidencePaths = Array.isArray(note.frontmatter.evidence_paths)
         ? note.frontmatter.evidence_paths.filter((item: unknown): item is string => typeof item === 'string')
         : [];
