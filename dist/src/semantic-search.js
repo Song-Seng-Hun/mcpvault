@@ -7,6 +7,8 @@ import { ScopeAccessPolicy } from './scope-access.js';
 import { boundSearchResults, normalizeSearchLimit, normalizeSearchMaxChars } from './search-limits.js';
 import { generateObsidianUri } from './uri.js';
 import { VaultIoCoordinator } from './vault-io.js';
+import { isMissingVaultPath, VaultReadUnavailableError } from './vault-read-errors.js';
+import { isMarkdownModerationHidden } from './moderation-policy.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 const MODEL_ID = 'Xenova/multilingual-e5-small';
 const EMBEDDING_DIMENSIONS = 384;
@@ -95,6 +97,11 @@ function normalizePath(value) {
 function isMarkdown(path) {
     return path.toLowerCase().endsWith('.md');
 }
+function isCanonicalSemanticPath(path) {
+    return typeof path === 'string' && path === normalizePath(path) && isMarkdown(path)
+        && !/[\\:\u0000-\u001f\u007f]/.test(path)
+        && path.split('/').every(segment => segment !== '' && segment !== '.' && segment !== '..');
+}
 function isUnder(path, prefix) {
     return path === prefix || path.startsWith(`${prefix}/`);
 }
@@ -161,7 +168,7 @@ async function resultFromRow(row, vaultPath, includeRevision, vaultIo) {
         const raw = await (vaultIo ? vaultIo.readUtf8(join(vaultPath, row.path)) : readFile(join(vaultPath, row.path), 'utf8'));
         // A vector row is disposable and may lag behind an Obsidian edit. Never
         // return a deleted note or an excerpt ranked from an older revision.
-        if (hashContent(raw) !== row.hash)
+        if (hashContent(raw) !== row.hash || isMarkdownModerationHidden(raw))
             return undefined;
         const content = stripFrontmatter(raw);
         const lines = content.split(/\r?\n/);
@@ -181,9 +188,11 @@ async function resultFromRow(row, vaultPath, includeRevision, vaultIo) {
             ...(includeRevision && { rv: row.hash }),
         };
     }
-    catch {
+    catch (error) {
         // The source may have been removed between vector query and response.
-        return undefined;
+        if (isMissingVaultPath(error))
+            return undefined;
+        throw new VaultReadUnavailableError();
     }
 }
 /**
@@ -310,7 +319,7 @@ export class SemanticSearchService {
         this.clearQueryCache();
         for (const change of changes) {
             const normalized = normalizePath(change.path);
-            if (!isMarkdown(normalized) || !this.pathFilter.isAllowed(normalized))
+            if (change.path.replace(/\\/g, '/').trim() !== normalized || !this.pathCanBeIndexed(normalized))
                 continue;
             if (this.pending.size < MAX_PENDING_CHANGES || this.pending.has(normalized)) {
                 this.pending.set(normalized, { kind: change.kind });
@@ -387,26 +396,31 @@ export class SemanticSearchService {
                 role: params.principal.role,
             } : null,
         });
-        const cached = this.queryCache.get(cacheKey);
-        if (cached && cached.generation === this.queryGeneration && cached.expiresAt > Date.now()) {
-            this.queryCache.delete(cacheKey);
-            this.queryCache.set(cacheKey, cached);
-            derivedCacheBudget.touch(this.queryCacheOwner, cacheKey);
-            return {
-                results: cached.results.map(result => ({ ...result })),
-                available: true,
-                indexed: this.indexedCount(),
-                pending: this.pending.size,
-            };
-        }
-        if (cached) {
-            this.queryCache.delete(cacheKey);
-            derivedCacheBudget.remove(this.queryCacheOwner, cacheKey);
-        }
-        if (Date.now() < this.unavailableUntil) {
-            return { results: [], available: false, indexed: this.indexedCount(), pending: this.pending.size, error: this.lastError };
-        }
         try {
+            await this.catalog?.flushPendingEvents();
+            const generation = this.queryGeneration;
+            const cached = this.queryCache.get(cacheKey);
+            if (cached && cached.generation === this.queryGeneration && cached.expiresAt > Date.now()) {
+                this.queryCache.delete(cacheKey);
+                this.queryCache.set(cacheKey, cached);
+                derivedCacheBudget.touch(this.queryCacheOwner, cacheKey);
+                const results = await this.hydrateRows(cached.rows, params);
+                if (generation !== this.queryGeneration)
+                    return this.changedQueryOutcome();
+                return {
+                    results,
+                    available: true,
+                    indexed: this.indexedCount(),
+                    pending: this.pending.size,
+                };
+            }
+            if (cached) {
+                this.queryCache.delete(cacheKey);
+                derivedCacheBudget.remove(this.queryCacheOwner, cacheKey);
+            }
+            if (Date.now() < this.unavailableUntil) {
+                return { results: [], available: false, indexed: this.indexedCount(), pending: this.pending.size, error: this.lastError };
+            }
             await this.manifestReady;
             // The first server process owns background indexing. Other server
             // processes may still perform bounded foreground queries against the
@@ -451,16 +465,16 @@ export class SemanticSearchService {
                 }
             }
             const ordered = diversifyRows([...bestByPath.values()], limit)
-                .map(item => item.row);
-            const hydrated = (await Promise.all(ordered.map(row => resultFromRow(row, this.vaultPath, params.includeRevisions === true, this.vaultIo))))
-                .filter((result) => result !== undefined);
-            const results = boundSearchResults(hydrated, maxChars);
+                .map(({ row }) => ({ path: row.path, hash: row.hash, title: row.title, line: row.line, wiki: row.wiki }));
+            const results = await this.hydrateRows(ordered, params);
+            if (generation !== this.queryGeneration)
+                return this.changedQueryOutcome();
             this.queryCache.set(cacheKey, {
                 expiresAt: Date.now() + SEMANTIC_QUERY_CACHE_TTL_MS,
-                generation: this.queryGeneration,
-                results: results.map(result => ({ ...result })),
+                generation,
+                rows: ordered,
             });
-            derivedCacheBudget.register(this.queryCacheOwner, cacheKey, estimateCacheBytes(results) + Buffer.byteLength(cacheKey, 'utf8') + 128, () => this.queryCache.delete(cacheKey));
+            derivedCacheBudget.register(this.queryCacheOwner, cacheKey, estimateCacheBytes(ordered) + Buffer.byteLength(cacheKey, 'utf8') + 128, () => this.queryCache.delete(cacheKey));
             while (this.queryCache.size > SEMANTIC_QUERY_CACHE_MAX_ENTRIES) {
                 const oldest = this.queryCache.keys().next();
                 if (oldest.done)
@@ -479,6 +493,15 @@ export class SemanticSearchService {
             this.markUnavailable(error);
             return { results: [], available: false, indexed: this.indexedCount(), pending: this.pending.size, error: this.lastError };
         }
+    }
+    async hydrateRows(rows, params) {
+        const visible = rows.filter(row => row.path === normalizePath(row.path) && this.pathIsVisible(row.path, params));
+        const hydrated = await Promise.all(visible.map(row => resultFromRow(row, this.vaultPath, params.includeRevisions === true, this.vaultIo)));
+        return boundSearchResults(hydrated.filter((result) => result !== undefined), normalizeSearchMaxChars(params.maxChars));
+    }
+    changedQueryOutcome() {
+        return { results: [], available: false, indexed: this.indexedCount(), pending: this.pending.size,
+            error: 'Semantic index changed during search; retry the same query. Lexical search remains available.' };
     }
     status() {
         return {
@@ -501,8 +524,7 @@ export class SemanticSearchService {
             const compressed = await readFile(this.manifestPath);
             const raw = await gunzipAsync(compressed);
             const parsed = JSON.parse(raw.toString('utf8'));
-            if (parsed && typeof parsed === 'object')
-                this.manifest = parsed;
+            this.manifest = this.validatedManifest(parsed);
         }
         catch {
             try {
@@ -510,13 +532,28 @@ export class SemanticSearchService {
                 // index update stores the compact binary form.
                 const raw = await readFile(join(this.indexPath, LEGACY_MANIFEST_FILE), 'utf8');
                 const parsed = JSON.parse(raw);
-                if (parsed && typeof parsed === 'object')
-                    this.manifest = parsed;
+                this.manifest = this.validatedManifest(parsed);
             }
             catch {
                 this.manifest = {};
             }
         }
+    }
+    validatedManifest(parsed) {
+        const result = Object.create(null);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+            return result;
+        for (const [path, value] of Object.entries(parsed)) {
+            if (!this.pathCanBeIndexed(path) || !value || typeof value !== 'object')
+                continue;
+            const item = value;
+            if (typeof item.hash !== 'string' || !/^[a-f0-9]{64}$/.test(item.hash))
+                continue;
+            result[path] = { hash: item.hash, scope: scopeForPath(path),
+                ...(typeof item.size === 'number' && Number.isFinite(item.size) && item.size >= 0 && { size: item.size }),
+                ...(typeof item.mtimeMs === 'number' && Number.isFinite(item.mtimeMs) && { mtimeMs: item.mtimeMs }) };
+        }
+        return result;
     }
     async saveManifest() {
         await mkdir(this.indexPath, { recursive: true });
@@ -535,9 +572,9 @@ export class SemanticSearchService {
                 if (!item || typeof item !== 'object')
                     continue;
                 const value = item;
-                const path = normalizePath(String(value.path || ''));
+                const path = value.path;
                 const kind = value.kind === 'delete' ? 'delete' : value.kind === 'upsert' ? 'upsert' : undefined;
-                if (!kind || !isMarkdown(path) || !this.pathFilter.isAllowed(path) || this.pending.has(path))
+                if (typeof path !== 'string' || !kind || !this.pathCanBeIndexed(path) || this.pending.has(path))
                     continue;
                 const attempt = Number.isInteger(value.attempt) ? Math.min(Math.max(Number(value.attempt), 0), 8) : 0;
                 const retryAt = Number.isFinite(Number(value.retryAt)) ? Number(value.retryAt) : undefined;
@@ -625,16 +662,24 @@ export class SemanticSearchService {
                 const sharedStats = this.catalog ? await this.catalog.statPaths(batch) : undefined;
                 const observations = await Promise.all(batch.map(async (path) => {
                     const normalized = normalizePath(path);
-                    if (!this.pathFilter.isAllowed(normalized))
+                    if (!this.pathCanBeIndexed(normalized))
                         return { normalized };
                     const fullPath = join(this.vaultPath, normalized);
-                    const info = sharedStats?.get(normalized) || await stat(fullPath).catch(() => undefined);
+                    const info = sharedStats?.get(normalized) || await stat(fullPath).catch(error => {
+                        if (isMissingVaultPath(error))
+                            return undefined;
+                        throw new VaultReadUnavailableError();
+                    });
                     if (!info)
                         return { normalized };
                     const entry = this.manifest[normalized];
                     if (entry && entry.size === info.size && entry.mtimeMs === info.mtimeMs)
                         return { normalized, info, entry };
-                    const content = await this.vaultIo.readUtf8(fullPath, 'background').catch(() => undefined);
+                    const content = await this.vaultIo.readUtf8(fullPath, 'background').catch(error => {
+                        if (isMissingVaultPath(error))
+                            return undefined;
+                        throw new VaultReadUnavailableError();
+                    });
                     return content === undefined ? { normalized, info, entry } : { normalized, info, entry, hash: hashContent(content) };
                 }));
                 for (const observation of observations) {
@@ -648,7 +693,7 @@ export class SemanticSearchService {
                         if (!this.pending.has(normalized))
                             this.pending.set(normalized, { kind: 'upsert' });
                     }
-                    else if (entry) {
+                    else if (entry && entry.hash === hash) {
                         // Timestamp-only changes do not require a new embedding. Persist the
                         // refreshed metadata so future scans stay stat-only.
                         this.manifest[normalized] = { ...entry, size: info.size, mtimeMs: info.mtimeMs };
@@ -678,8 +723,10 @@ export class SemanticSearchService {
         try {
             entries = await readdir(dir, { withFileTypes: true });
         }
-        catch {
-            return output;
+        catch (error) {
+            if (dir !== this.vaultPath && isMissingVaultPath(error))
+                return output;
+            throw new VaultReadUnavailableError();
         }
         const directories = [];
         for (const entry of entries) {
@@ -718,11 +765,32 @@ export class SemanticSearchService {
             try {
                 const prepared = [];
                 const deleted = [];
-                for (const [path, change] of batch) {
-                    if (change.kind === 'delete')
+                for (const [path] of batch) {
+                    if (!this.pathCanBeIndexed(path))
+                        continue;
+                    // Pending intents may survive a restart or race a recreated note.
+                    // Current Markdown existence, not the queued verb, chooses the write.
+                    try {
+                        const info = await stat(join(this.vaultPath, path));
+                        if (info.isFile())
+                            prepared.push(await this.prepareIndex(path));
+                        else
+                            deleted.push(path);
+                    }
+                    catch (error) {
+                        if (!isMissingVaultPath(error))
+                            throw new VaultReadUnavailableError();
                         deleted.push(path);
-                    else
-                        prepared.push(await this.prepareIndex(path));
+                    }
+                }
+                if (deleted.length) {
+                    try {
+                        if (!(await stat(this.vaultPath)).isDirectory())
+                            throw new VaultReadUnavailableError();
+                    }
+                    catch {
+                        throw new VaultReadUnavailableError();
+                    }
                 }
                 await this.applyIndexBatch(prepared, deleted);
                 await this.saveManifest();
@@ -990,9 +1058,14 @@ export class SemanticSearchService {
         }
     }
     async prepareIndex(path) {
+        if (!this.pathCanBeIndexed(path))
+            throw new VaultReadUnavailableError();
         const fullPath = join(this.vaultPath, path);
-        const content = await this.vaultIo.readUtf8(fullPath, 'background');
         const info = await stat(fullPath);
+        const content = await this.vaultIo.readUtf8(fullPath, 'background');
+        const afterRead = await stat(fullPath);
+        if (info.size !== afterRead.size || info.mtimeMs !== afterRead.mtimeMs)
+            throw new VaultReadUnavailableError();
         const contentHash = hashContent(content);
         const scope = scopeForPath(path);
         const chunks = chunkNote(path, content);
@@ -1016,6 +1089,10 @@ export class SemanticSearchService {
                 });
             }
         }
+        // Embedding can take longer than a source edit. Do not associate old vectors
+        // with a newer stat fingerprint which would suppress future reconciliation.
+        if (hashContent(await this.vaultIo.readUtf8(fullPath, 'background')) !== contentHash)
+            throw new VaultReadUnavailableError();
         return { path, scope, contentHash, size: info.size, mtimeMs: info.mtimeMs, rows };
     }
     async applyIndexBatch(prepared, deleted) {
@@ -1088,7 +1165,7 @@ export class SemanticSearchService {
         // externally supplied snapshot. Re-apply the authoritative file filter
         // before hydrating any result so a derived cache can never expose .git,
         // .obsidian, dotfiles, or other restricted paths.
-        if (!this.pathFilter.isAllowed(path) || !this.accessPolicy.canAccessPhysicalPath(path, params.principal))
+        if (!this.pathCanBeIndexed(path) || !this.accessPolicy.canAccessPhysicalPath(path, params.principal))
             return false;
         const prefix = normalizePath(params.pathPrefix || '');
         if (prefix && !isUnder(path, prefix))
@@ -1096,8 +1173,20 @@ export class SemanticSearchService {
         const excludes = (params.excludePaths || []).map(normalizePath).filter(Boolean);
         return !excludes.some(exclude => isUnder(path, exclude));
     }
+    pathCanBeIndexed(path) {
+        if (!isCanonicalSemanticPath(path) || !this.pathFilter.isAllowed(path))
+            return false;
+        if (/^_whispers(?:\/|$)/i.test(path))
+            return false;
+        if (/^_scopes(?:\/|$)/i.test(path) && !/^_scopes\/(?:models|agents)\/[^/]+\/.+/i.test(path))
+            return false;
+        return true;
+    }
     markUnavailable(error) {
-        this.lastError = error instanceof Error ? error.message : String(error);
+        this.clearQueryCache();
+        this.lastError = error instanceof VaultReadUnavailableError
+            ? 'Semantic source read unavailable; restore storage access and retry after the cooldown. Lexical search remains independent.'
+            : 'Semantic search unavailable; retry after the cooldown. Lexical search remains independent.';
         this.unavailableUntil = Date.now() + UNAVAILABLE_RETRY_MS;
     }
 }

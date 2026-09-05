@@ -395,8 +395,24 @@ undelivered tail, and failed dirty refreshes retain their paths for the next
 read. Failed startup loads can retry without a restart. Watcher errors invalidate
 both batch and legacy subscribers. No automatic write or busy retry loop occurs.
 Preserve the source and restore storage access before retrying; this error is
-not evidence of deletion. Semantic indexes and independent service projections
-are outside this IO failure contract and still require separate audits.
+not evidence of deletion. Semantic indexes use the separate contract below;
+other service projections still require independent audits.
+
+Semantic queries cache bounded path/hash/locator candidates, not verified text.
+Every return, including a cache hit without `includeRevisions`, rechecks selected
+source hashes and moderation. Delivered events invalidate candidate selection;
+mid-query generation changes return unavailable/retry rather than certifying
+old results. This is bounded source verification, not a complete vector census.
+Semantic backend/source faults return path-free unavailability with the existing
+cooldown; `wiki.search` can still return its independent lexical results.
+Scans reject IO/permission faults without advancing their completion watermark
+or inferring deletes from an incomplete inventory. Failed work keeps backoff.
+Pending deletion/upsert verbs are checked against current files and root
+availability before vector mutation. A full queue cannot mark an old hash's
+stat metadata current; source changes during embedding require retry.
+Vector/manifest/pending paths must be canonical relative Markdown paths, without
+dot traversal or platform stream syntax. Scope is reconstructed from the path;
+User, whisper and unknown private-root paths cannot enter the semantic worker.
 
 `wiki.organization_health.collectionHealth` is an optional derived child, not a
 separate endpoint. It accumulates the same visible coherent notes as lint and

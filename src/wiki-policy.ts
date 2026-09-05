@@ -19,7 +19,7 @@ export const WIKI_POLICY_TOPICS = [
 ] as const;
 
 export type WikiPolicyTopicId = typeof WIKI_POLICY_TOPICS[number];
-export const WIKI_POLICY_VERSION = 18;
+export const WIKI_POLICY_VERSION = 19;
 
 type WikiPolicyTopic = {
   purpose: string;
@@ -79,6 +79,7 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
       'Browse one classification with wiki.authority_map scheme plus an optional aroundAuthorityId; shelf order is advisory and every returned revision must be re-read before editing.',
       'Use wiki.canvas_view only when spatial arrangement materially helps; export through wiki.canvas_export so source and output revisions remain checked and the derived Canvas stays in the root scope.',
       'Before relying on an older managed map, use wiki.canvas_health or its exception-board entry; an unmanaged user Canvas is valid but makes no source-freshness claim.',
+      'Semantic hits, including cached candidates, recheck source hashes and moderation. An absent hit can mean stale or unavailable vectors, not missing knowledge; use lexical results during semantic cooldown.',
     ],
     routes: ['wiki.search', 'wiki.home', 'wiki.read_projection', 'wiki.neighborhood', 'wiki.context_pack', 'wiki.authority_map', 'wiki.canvas_view', 'wiki.canvas_health'],
     avoid: ['loading whole documents for a single section', 'treating vector similarity or Canvas proximity as evidence', 'following an ambiguous identity'],

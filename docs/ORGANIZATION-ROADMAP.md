@@ -324,10 +324,25 @@ do not prove a current, bounded, actionable response through its public adapter.
   is not permanently blanked by a failed reload. Controlled temporary-file
   failure/recovery and public MCP tests cover these paths.
 - **Open: independent IO and snapshot audits.** Semantic indexes and other
-  service-specific catches have not inherited this contract automatically.
+  service-specific catches do not inherit the core-index contract automatically.
   Cached files not selected for refresh are not continuously revalidated.
   Scope-aware graph/Canvas freshness and work-snapshot race audits remain open;
   core read-model fault tests are not proof of all derived views' completeness.
+- Semantic query hydration now checks current hashes/moderation even on cached
+  candidates, guards generation drift, and keeps backend faults bounded while
+  lexical search survives. Canonical vector/manifest/queue paths reject traversal
+  and host-only/whisper paths; stored scope labels are not authority. Scans reject
+  incomplete IO, and queue saturation/embedding edits cannot suppress later
+  indexing with a falsely current stat fingerprint. Current files/root gate
+  queued deletes; native write failure preserves manifest and retry backoff.
+  Tests cover these service workflows and the public lexical-fallback adapter
+  with controlled vector/model doubles; real model relevance is not established.
+- **Open: semantic storage completeness.** Cross-process manifest refresh,
+  compressed snapshot size/decompression limits, exact body line locators,
+  operational counts, scope-table partitioning and orphan-row reconciliation
+  still need dedicated audits. Multi-table vector writes are retryable, not
+  atomic; do not treat candidate revalidation as a proof of complete disk cleanup
+  or exhaustive nearest-neighbor recall.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

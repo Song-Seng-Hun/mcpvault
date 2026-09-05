@@ -81,9 +81,12 @@ export declare class SemanticSearchService {
     private clearQueryCache;
     private clearVectorCache;
     search(params: SemanticSearchParams): Promise<SemanticSearchOutcome>;
+    private hydrateRows;
+    private changedQueryOutcome;
     status(): SemanticIndexStatus;
     private indexedCount;
     private loadManifest;
+    private validatedManifest;
     private saveManifest;
     private loadPendingSnapshot;
     private queuePendingSnapshotSave;
@@ -111,6 +114,7 @@ export declare class SemanticSearchService {
     private prepareIndex;
     private applyIndexBatch;
     private pathIsVisible;
+    private pathCanBeIndexed;
     private markUnavailable;
 }
 export {};

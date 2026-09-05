@@ -20,7 +20,7 @@ describe('progressive Wiki policy', () => {
   });
 
   test('teaches bounded authority shelves and distinct relation strengths progressively', () => {
-    expect(WIKI_POLICY_VERSION).toBe(18);
+    expect(WIKI_POLICY_VERSION).toBe(19);
     const retrieval = getWikiPolicyTopic('retrieval', 2000);
     const knowledge = getWikiPolicyTopic('knowledge', 2000);
     expect(retrieval.routes).toEqual(expect.arrayContaining(['wiki.authority_map']));
@@ -46,6 +46,13 @@ describe('progressive Wiki policy', () => {
     expect(retrieval.rules.join(' ')).toContain('Vault read unavailable');
     expect(retrieval.rules.join(' ')).toContain('not evidence of deletion');
     expect(retrieval.rules.join(' ')).toContain('no retry loop');
+  });
+
+  test('semantic guidance distinguishes verified candidates from a complete knowledge census', () => {
+    const retrieval = getWikiPolicyTopic('retrieval', 4000);
+    expect(retrieval.rules.join(' ')).toContain('cached candidates');
+    expect(retrieval.rules.join(' ')).toContain('source hashes and moderation');
+    expect(retrieval.rules.join(' ')).toContain('not missing knowledge');
   });
 
   test('lint guidance explains snapshot costs and original-request retries progressively', () => {
