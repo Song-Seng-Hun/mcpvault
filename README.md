@@ -405,6 +405,12 @@ folder in graph, reference validation, review baselines, and move rewrites;
 `[guide](Guides/Guide.md)` (or `/Guides/Guide.md`) starts at the Vault root;
 `[guide](./Guides/Guide.md)` explicitly starts at the containing folder.
 They do not search aliases or substitute an explicitly written extension.
+MOC learning paths and graph-health coverage/sequence projections use this
+same Markdown rule, including inside nested MOCs. A missing sibling stays
+unresolved; a same-name file or alias elsewhere does not silently replace it.
+Use `[[Alias]]` when alias navigation is intended. After relocating a MOC with
+link updates, re-read its learning path; authored order and file identities
+remain distinct from any advisory prerequisite order.
 The `.md` extension may be omitted, following [Obsidian's link formats](https://obsidian.md/help/links).
 Hidden Markdown targets
 are also removed from graph context and heading previews. When relocating a

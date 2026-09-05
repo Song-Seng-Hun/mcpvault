@@ -8724,10 +8724,10 @@ export class LlmWikiService {
             preferredTerm: note.preferredTerm,
             stableId: note.stableId,
         })));
-        const resolveGraphDocument = (sourcePath, document, preferRelative = false) => {
+        const resolveGraphDocument = (sourcePath, document, markdown = false) => {
             return resolveNoteReference(relationDocument(document), graphReferenceIndex, {
                 sourcePath,
-                preferRelative,
+                ...(markdown && { syntax: 'markdown' }),
                 canReference: (source, target) => this.access.canReferenceFrom(source, target),
             });
         };
@@ -11205,7 +11205,7 @@ export class LlmWikiService {
         const resolveBodyLink = (sourcePath, link) => {
             return resolveNoteReference(link.target, learningReferenceIndex, {
                 sourcePath,
-                preferRelative: !link.link.startsWith('[[') && !link.link.startsWith('![['),
+                ...(!link.link.startsWith('[[') && !link.link.startsWith('![[') && { syntax: 'markdown' }),
                 canReference: (source, target) => this.access.canReferenceFrom(source, target),
             });
         };

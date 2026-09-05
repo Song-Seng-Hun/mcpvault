@@ -8783,10 +8783,10 @@ export class LlmWikiService {
       preferredTerm: note.preferredTerm,
       stableId: note.stableId,
     })));
-    const resolveGraphDocument = (sourcePath: string, document: string, preferRelative = false): string[] => {
+    const resolveGraphDocument = (sourcePath: string, document: string, markdown = false): string[] => {
       return resolveNoteReference(relationDocument(document), graphReferenceIndex, {
         sourcePath,
-        preferRelative,
+        ...(markdown && { syntax: 'markdown' as const }),
         canReference: (source, target) => this.access.canReferenceFrom(source, target),
       });
     };
@@ -11139,7 +11139,7 @@ export class LlmWikiService {
     const resolveBodyLink = (sourcePath: string, link: ReturnType<typeof extractObsidianLinkOccurrences>[number]): string[] => {
       return resolveNoteReference(link.target, learningReferenceIndex, {
         sourcePath,
-        preferRelative: !link.link.startsWith('[[') && !link.link.startsWith('![['),
+        ...(!link.link.startsWith('[[') && !link.link.startsWith('![[') && { syntax: 'markdown' as const }),
         canReference: (source, target) => this.access.canReferenceFrom(source, target),
       });
     };
