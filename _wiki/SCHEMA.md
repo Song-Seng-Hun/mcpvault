@@ -936,6 +936,17 @@ The shared task parser has a lazy iterator plus its compatibility array adapter.
 Inventory uses the iterator and does not allocate all task objects or lines for
 each note, while preserving the existing identity and Markdown parsing rules.
 
+`mcp.get_vault_stats` is advisory visible file inventory, not knowledge health.
+Markdown moderation is checked before note/byte/recent aggregation; hidden,
+quarantined and removed owners contribute nothing to those fields. Allowed
+Bases/Canvas/custom extensions still count under the legacy notes label. Visible
+allowed directories count independently, including empty ones. Source reads use
+the 8 MiB limit and non-absence failures reject rather than yield partial totals.
+Recent paths use public scope URIs; recentCount 0 means no sample and positives
+cap at 20. maxChars bounds the whole pretty/non-pretty response, omitting whole
+recent entries before sacrificing aggregates. returnedRecent/recentLimit and
+truncated describe this sample, never an exhaustive or atomic inventory.
+
 For renames, call `preview_move_note` first. `move_note` intentionally does not
 silently rewrite links. If the reviewed plan is correct, pass
 `updateLinks: true` and the source note's `expectedRevision`; the server then

@@ -3083,16 +3083,33 @@ Get metadata for notes without reading full content.
 
 ### `get_vault_stats`
 
-Get high-level vault statistics without reading note contents.
+Get advisory caller-visible file statistics. Markdown hidden/quarantined/removed
+owners are excluded before counts, byte totals and recent selection. The legacy
+`notes` count includes allowed Bases, Canvas and custom file types; it is not a
+count of verified knowledge. `folders` counts allowed visible directories, even
+empty ones, independently of hidden document membership.
+
+Markdown Properties are checked from bounded source reads through the shared I/O
+coordinator; this is more work than a stat-only filesystem inventory. Unavailable
+storage or a Markdown source above 8 MiB fails instead of reporting partial totals.
+This scan is not an atomic snapshot. Recent paths use public scope URIs and form
+a sample only. `recentCount: 0` requests no sample; positive values cap at 20.
+`maxChars` bounds the whole JSON including pretty indentation. Oversized recent
+entries are omitted whole and `truncated` marks sample omission, while aggregates
+and `returnedRecent` remain available. A non-truncated sample is not all files.
 
 **Request:**
 
 ```json
 {
-  "name": "get_vault_stats",
+  "name": "call_endpoint",
   "arguments": {
-    "recentCount": 5,
-    "prettyPrint": false
+    "endpointId": "mcp.get_vault_stats",
+    "arguments": {
+      "recentCount": 1,
+      "maxChars": 4000,
+      "prettyPrint": false
+    }
   }
 }
 ```
@@ -3107,10 +3124,12 @@ Get high-level vault statistics without reading note contents.
   "recent": [
     {
       "path": "Daily/2026-02-27.md",
-      "modified": 1772188800000,
-      "size": 2814
+      "modified": 1772188800000
     }
-  ]
+  ],
+  "returnedRecent": 1,
+  "recentLimit": 1,
+  "truncated": false
 }
 ```
 

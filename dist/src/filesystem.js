@@ -2372,12 +2372,23 @@ export class FileSystemService {
         return (await this.readNoteLineWindow(params)).content;
     }
     async getVaultStats(recentCount = 5, canAccessPath = () => true) {
+        if (!Number.isSafeInteger(recentCount) || recentCount < 0)
+            throw new Error('recentCount must be a non-negative safe integer');
+        recentCount = Math.min(recentCount, 20);
         let totalNotes = 0;
         let totalFolders = 0;
         let totalSize = 0;
         const recentFiles = [];
         const scanDirectory = async (dirPath, relativePath = '') => {
-            const entries = await readdir(dirPath, { withFileTypes: true });
+            let entries;
+            try {
+                entries = await readdir(this.resolvePath(relativePath), { withFileTypes: true });
+            }
+            catch (error) {
+                if (relativePath && isMissingVaultPath(error))
+                    return;
+                throw new VaultReadUnavailableError();
+            }
             for (const entry of entries) {
                 const entryRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
                 const fullEntryPath = join(dirPath, entry.name);
@@ -2393,13 +2404,31 @@ export class FileSystemService {
                     if (!this.pathFilter.isAllowed(entryRelativePath) || !canAccessPath(entryRelativePath)) {
                         continue;
                     }
+                    let stats;
+                    try {
+                        const checkedPath = this.resolvePath(entryRelativePath);
+                        stats = await stat(checkedPath);
+                        if (!stats.isFile())
+                            continue;
+                        if (/\.(?:md|markdown|txt)$/i.test(entryRelativePath)) {
+                            const content = await this.vaultIo.readUtf8Bounded(checkedPath, MAX_NOTE_CONTENT_BYTES);
+                            if (isModerationHidden(this.frontmatterHandler.parse(content).frontmatter))
+                                continue;
+                        }
+                    }
+                    catch (error) {
+                        if (isMissingVaultPath(error))
+                            continue;
+                        if (error instanceof SourceReadLimitError)
+                            throw new Error('Vault statistics require Markdown sources within the 8 MiB supported-note limit; no partial totals were returned.');
+                        throw new VaultReadUnavailableError();
+                    }
                     totalNotes++;
-                    const stats = await stat(fullEntryPath);
                     totalSize += stats.size;
                     // Track recent files
                     const fileInfo = { path: entryRelativePath, modified: stats.mtime.getTime() };
                     // Insert in sorted order (most recent first)
-                    const insertIndex = recentFiles.findIndex(f => f.modified < fileInfo.modified);
+                    const insertIndex = recentFiles.findIndex(f => f.modified < fileInfo.modified || (f.modified === fileInfo.modified && f.path > fileInfo.path));
                     if (insertIndex === -1) {
                         if (recentFiles.length < recentCount) {
                             recentFiles.push(fileInfo);

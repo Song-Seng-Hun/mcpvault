@@ -491,6 +491,14 @@ do not prove a current, bounded, actionable response through its public adapter.
   Lazy line/task iteration removes full per-note arrays from this scan while the
   array adapter preserves existing parser callers. Full scans, duplicate-identity
   maps, total process memory and source changes during reads remain limitations.
+- Vault statistics now check Markdown moderation before counts, byte totals and
+  recent selection, including hidden owners outside Community folders. Current
+  bounded reads use shared I/O; storage and source-size failures do not produce
+  partial successful totals. Public recent paths use scope URIs, zero sample size
+  is respected, and whole-JSON packing preserves aggregates while marking omitted
+  recent entries. Counts still include allowed non-Markdown inventory and visible
+  empty directories as documented. This correctness check costs source IO; an
+  atomic inventory or independently freshness-validated cheaper index is not proven.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

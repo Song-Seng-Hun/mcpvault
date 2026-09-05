@@ -690,11 +690,12 @@ export function createServer(vaultPath, options = {}) {
         },
         {
             name: "get_vault_stats",
-            description: "Get vault statistics including total notes, folders, size, and recently modified files. Useful for understanding vault scope before batch operations.",
+            description: "Advisory caller-visible file statistics; Markdown hidden/quarantined/removed owners are excluded before totals and recent selection. The legacy notes count includes allowed Bases/Canvas/custom file types, not just knowledge. Folders count allowed visible directories including empty ones. Recent is a bounded sample with public paths, not an exhaustive listing; maxChars may omit whole sample entries. Markdown sources over 8 MiB or unavailable storage fail rather than returning partial totals. Not an atomic snapshot.",
             inputSchema: {
                 type: "object",
                 properties: {
-                    recentCount: { type: "number", description: "Number of recently modified files to return (default: 5, max: 20)", default: 5 },
+                    recentCount: { type: "integer", minimum: 0, description: "Recently modified sample size (default 5, capped at 20); zero requests aggregates only", default: 5 },
+                    maxChars: { type: "integer", minimum: 512, maximum: 12000, description: "Total JSON response budget including pretty indentation; preserve aggregates and drop whole recent sample entries when needed", default: 4000 },
                     prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
                 }
             }
@@ -2360,11 +2361,22 @@ export function createServer(vaultPath, options = {}) {
                         };
                     }
                     case "get_vault_stats": {
-                        const recentCount = Math.min(trimmedArgs.recentCount || 5, 20);
+                        const maxChars = normalizeSearchMaxChars(trimmedArgs.maxChars);
+                        const recentCount = trimmedArgs.recentCount === undefined ? 5 : Number(trimmedArgs.recentCount);
                         const stats = await fileSystem.getVaultStats(recentCount, canAccessPath);
+                        const recent = stats.recentlyModified.map(item => ({ ...item, path: scopeAccess.toPublicPath(item.path) }));
                         const indent = trimmedArgs.prettyPrint ? 2 : undefined;
+                        const serialize = (count) => JSON.stringify({
+                            notes: stats.totalNotes, folders: stats.totalFolders, size: stats.totalSize,
+                            recent: recent.slice(0, count), returnedRecent: count,
+                            recentLimit: Math.min(recentCount, 20), truncated: count < recent.length,
+                        }, null, indent);
+                        let count = recent.length;
+                        let text = serialize(count);
+                        while (text.length > maxChars && count > 0)
+                            text = serialize(--count);
                         return {
-                            content: [{ type: "text", text: JSON.stringify({ notes: stats.totalNotes, folders: stats.totalFolders, size: stats.totalSize, recent: stats.recentlyModified }, null, indent) }]
+                            content: [{ type: "text", text }]
                         };
                     }
                     case "list_all_tags": {
