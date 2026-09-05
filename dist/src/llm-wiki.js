@@ -4220,12 +4220,21 @@ export class LlmWikiService {
      * concrete next action are pull-ready.  This is advisory: it never assigns,
      * moves, or changes a note.
      */
-    async flowHealth(principal, wipLimit = 3, blockedAfterDays = 7, waitingAfterDays = 14, limit = 20, maxChars = 7000) {
+    async flowHealth(principal, wipLimit = 3, blockedAfterDays = 7, waitingAfterDays = 14, limit = 20, maxChars = 7000, options = {}) {
         const boundedWipLimit = Math.min(Math.max(Number(wipLimit) || 3, 1), 50);
         const boundedBlockedAfterDays = Math.min(Math.max(Number(blockedAfterDays) || 7, 1), 3650);
         const boundedWaitingAfterDays = Math.min(Math.max(Number(waitingAfterDays) || 14, 1), 3650);
         const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
         const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 1024), 16000);
+        const fits = (value) => JSON.stringify(value, null, options.prettyPrint ? 2 : undefined).length <= boundedChars;
+        const retryAdvice = boundedChars < 16000 || options.prettyPrint || boundedLimit > 1 ? {
+            nextAction: { endpointId: 'wiki.flow_health', reuseOriginalArguments: true,
+                overrides: { maxChars: 16000, limit: 1, prettyPrint: false } },
+        } : {};
+        const compactCollection = (collection, count) => {
+            const items = collection.items.slice(0, count);
+            return { ...collection, items, truncated: Boolean(collection.truncated) || items.length < collection.total };
+        };
         const dependencySnapshot = await this.workDependencySnapshot(principal);
         const active = [];
         const ready = [];
@@ -4414,7 +4423,8 @@ export class LlmWikiService {
             },
             recommendedStages,
             unlockPoints: { total: unlockCandidates.length, items: unlockCandidates.slice(0, Math.min(8, boundedLimit)), truncated: unlockCandidates.length > Math.min(8, boundedLimit) },
-            ...(deepestChain.length > 1 && { deepestDependencyChain: deepestChainItems }),
+            ...(deepestChain.length > 1 && { deepestDependencyChain: deepestChainItems,
+                deepestDependencyChainTotal: deepestChain.length, deepestDependencyChainTruncated: !completeChainProjection }),
             dependencyCycles: { total: plan.cycles.length, items: cycleComponents, truncated: plan.cycles.length > cycleComponents.length },
             cycleBlockedDependents: { total: plan.blockedByCycles.size, items: [...plan.blockedByCycles].sort().slice(0, Math.min(8, boundedLimit)).map(planItem), truncated: plan.blockedByCycles.size > Math.min(8, boundedLimit) },
             incompletePrerequisites: { total: incompleteRoots.length, items: incompleteRoots.slice(0, Math.min(8, boundedLimit)).map(key => ({ ...planItem(key), dependencies: this.workDependencyProjection(dependencySnapshot.stateByPath.get(key), 3) })), truncated: incompleteRoots.length > Math.min(8, boundedLimit) },
@@ -4433,7 +4443,7 @@ export class LlmWikiService {
             nextActions: totalDependencyBlocked > 0 ? ['Inspect one dependency-blocked item and complete, repair, or explicitly replace its prerequisite before pulling it.'] : totalActive > boundedWipLimit ? ['Finish or unblock existing WIP before pulling another standard item.'] : totalReady > 0 ? ['Pull one ready item and set task_status=next_action with started_at.'] : ['Make one active item executable or identify its waiting/blocked dependency.'],
             generatedAt: now(),
         };
-        if (completeChainProjection && JSON.stringify(result).length <= boundedChars)
+        if (completeChainProjection && fits(result))
             return result;
         const compact = {
             ...result,
@@ -4441,19 +4451,20 @@ export class LlmWikiService {
             dependencyPlan: {
                 ...dependencyPlan,
                 recommendedStages: recommendedStages.slice(0, 2).map(stage => ({ ...stage, items: stage.items.slice(0, 2), truncated: stage.truncated || stage.items.length > 2 })),
-                unlockPoints: { ...dependencyPlan.unlockPoints, items: dependencyPlan.unlockPoints.items.slice(0, 2), truncated: dependencyPlan.unlockPoints.truncated || dependencyPlan.unlockPoints.items.length > 2 },
-                ...(dependencyPlan.deepestDependencyChain && { deepestDependencyChain: dependencyPlan.deepestDependencyChain.slice(0, 4) }),
-                dependencyCycles: { ...dependencyPlan.dependencyCycles, items: dependencyPlan.dependencyCycles.items.slice(0, 1) },
-                cycleBlockedDependents: { ...dependencyPlan.cycleBlockedDependents, items: dependencyPlan.cycleBlockedDependents.items.slice(0, 2) },
-                incompletePrerequisites: { ...dependencyPlan.incompletePrerequisites, items: dependencyPlan.incompletePrerequisites.items.slice(0, 2) },
-                incompleteBlockedDependents: { ...dependencyPlan.incompleteBlockedDependents, items: dependencyPlan.incompleteBlockedDependents.items.slice(0, 2) },
-                workflowHolds: { ...dependencyPlan.workflowHolds, items: dependencyPlan.workflowHolds.items.slice(0, 2) },
-                workflowHoldBlockedDependents: { ...dependencyPlan.workflowHoldBlockedDependents, items: dependencyPlan.workflowHoldBlockedDependents.items.slice(0, 2) },
+                unlockPoints: compactCollection(dependencyPlan.unlockPoints, 2),
+                ...(dependencyPlan.deepestDependencyChain && { deepestDependencyChain: dependencyPlan.deepestDependencyChain.slice(0, 4), deepestDependencyChainTruncated: deepestChain.length > 4 }),
+                dependencyCycles: compactCollection(dependencyPlan.dependencyCycles, 1),
+                cycleBlockedDependents: compactCollection(dependencyPlan.cycleBlockedDependents, 2),
+                incompletePrerequisites: compactCollection(dependencyPlan.incompletePrerequisites, 2),
+                incompleteBlockedDependents: compactCollection(dependencyPlan.incompleteBlockedDependents, 2),
+                workflowHolds: compactCollection(dependencyPlan.workflowHolds, 2),
+                workflowHoldBlockedDependents: compactCollection(dependencyPlan.workflowHoldBlockedDependents, 2),
             },
             observability: { ...result.observability, missingTimestamps: missingTimestamps.slice(0, 3) },
             truncated: true,
+            ...retryAdvice,
         };
-        if (JSON.stringify(compact).length <= boundedChars)
+        if (fits(compact))
             return compact;
         const stageCounts = recommendedStages.map(stage => ({ stage: stage.stage, total: stage.total })).slice(0, 12);
         const focus = [blocked[0], waiting[0], deferred[0], active[0], ready[0]].filter(Boolean).slice(0, 1);
@@ -4463,7 +4474,7 @@ export class LlmWikiService {
             dependencyPlan: {
                 stats: dependencyPlan.stats,
                 stageCounts,
-                unlockPoints: { total: dependencyPlan.unlockPoints.total, items: dependencyPlan.unlockPoints.items.slice(0, 1) },
+                unlockPoints: compactCollection(dependencyPlan.unlockPoints, 1),
                 dependencyCycles: { total: dependencyPlan.dependencyCycles.total },
                 cycleBlockedDependents: { total: dependencyPlan.cycleBlockedDependents.total },
                 incompletePrerequisites: { total: dependencyPlan.incompletePrerequisites.total },
@@ -4474,14 +4485,27 @@ export class LlmWikiService {
             focus,
             nextActions: result.nextActions,
             truncated: true,
+            ...retryAdvice,
         };
-        if (JSON.stringify(minimal).length > boundedChars)
+        if (!fits(minimal))
             minimal.focus = [];
-        if (JSON.stringify(minimal).length > boundedChars)
-            minimal.dependencyPlan.unlockPoints.items = [];
-        if (JSON.stringify(minimal).length > boundedChars)
+        if (!fits(minimal))
+            minimal.dependencyPlan.unlockPoints = compactCollection(dependencyPlan.unlockPoints, 0);
+        if (!fits(minimal))
             delete minimal.nextActions;
-        return minimal;
+        if (fits(minimal))
+            return minimal;
+        const summary = { flow: result.flow, dependencyPlan: { stats: dependencyPlan.stats },
+            truncated: true, detailsOmitted: true, ...retryAdvice };
+        if (fits(summary))
+            return summary;
+        // Final-format overhead can exceed a minimum budget even without rows.
+        // Omit whole sections explicitly; never cut JSON, paths or revisions.
+        const fallback = { flow: result.flow, truncated: true, detailsOmitted: ['dependencyPlan', 'lanes'],
+            message: 'Source rows omitted to fit this budget; counts are not a complete task listing.', ...retryAdvice };
+        if (fits(fallback))
+            return fallback;
+        throw new Error('Flow summary exceeds the response budget; retry with maxChars 16000 and prettyPrint false.');
     }
     /**
      * Return a portable organization contract and, when explicitly requested,

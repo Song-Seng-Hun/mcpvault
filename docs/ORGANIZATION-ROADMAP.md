@@ -600,8 +600,18 @@ do not prove a current, bounded, actionable response through its public adapter.
   performed 9,028 public-path conversions; it now stays below 3,150 while
   preserving depth/counts. Compiled baseline/current responses match across 24
   fixture/budget combinations after removing only generatedAt. Full graph/key
-  retention, stage/unlock candidate collections, very large scalar values and
-  final pretty-format flow budgets remain separate audits, not proven solved.
+  retention, stage/unlock candidate collections and large scalar construction
+  remain separate audits. Final-format flow response bounds are addressed below.
+- Flow's final-format budget audit reproduced 1,255 characters for a requested
+  1,024-character pretty response, and a compact eight-item prerequisite list
+  returning two items with truncated=false. The dispatcher now passes format
+  into all service fit checks, including summary fallbacks. Compacted dependency
+  collections and chain previews report omissions explicitly. Budget retries
+  preserve original arguments and apply only budget/limit/format overrides;
+  no identical retry at the ceiling. This dashboard remains a sample, not a
+  paginated task/chain browser, and omission must not be read as an empty queue.
+  Other dashboards' formatted budgets and graph/candidate construction costs
+  still require independent verification.
 
 Record new concrete gaps here when registered schema, dispatcher, service,
 persistent representation, guide, invalidation, or bounded failure evidence

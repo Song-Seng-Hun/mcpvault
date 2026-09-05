@@ -603,6 +603,15 @@ detail rows once that chain alone exceeds the response budget. It then uses
 the existing explicitly truncated response, never a partial chain labeled as
 complete. Blocked-lane details are built only for admitted rows; all work still
 contributes to counts. This reduces discarded projection work, not graph size.
+Flow `maxChars` includes final JSON indentation. Nested dependency collections
+update their `truncated` flag when compacted; a chain preview reports
+`deepestDependencyChainTotal` and `deepestDependencyChainTruncated`. Omitted
+sections are not empty workloads. Follow a budget `nextAction` by retaining the
+original request and applying only its overrides (16,000 characters, limit one,
+compact JSON); keep authentication and WIP/aging settings. This is a new current
+sample, not pagination or a retained historical snapshot. At that ceiling the
+server does not suggest an identical retry. Use `notes.read` on exact returned
+paths and compare revisions before relying on source details.
 Dependency cycle classification shared by work and MOC projections uses an
 explicit traversal stack instead of recursive JS calls. Deep chains and cycles
 therefore do not depend on the engine call-stack limit. Work-stage and downstream

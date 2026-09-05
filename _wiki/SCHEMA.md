@@ -282,6 +282,13 @@ chain alone cannot fit the response budget; the whole chain and stage counts
 are still computed. Such a partial projection cannot take the full-response
 branch and uses the existing truncated compact/minimal representation instead.
 Lane limits also precede blocked dependency detail conversion, not counting.
+Flow response bounds include `prettyPrint` indentation. Compacted nested
+collections update their own `truncated` flags; deepest-chain previews expose
+their total and truncation independently of the overall report. `detailsOmitted`
+marks summary-only fallbacks. Budget retry actions use `reuseOriginalArguments`
+and explicit overrides, never replace identity or WIP/aging policy. A retry is
+a fresh sample, not a next page; compare exact path revisions with `notes.read`.
+No identical retry is returned at maxChars 16,000, limit one, compact format.
 The shared dependency component classifier is iterative and preserves caller
 input-rank ordering, self-cycles and excluded-node semantics. Work stages retain
 maximum prerequisite depth and existing cycle/hold propagation. Cursor queues

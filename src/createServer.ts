@@ -1574,7 +1574,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "get_wiki_flow_health": {
-          return jsonResult(await llmWiki.flowHealth(principal, trimmedArgs.wipLimit, trimmedArgs.blockedAfterDays, trimmedArgs.waitingAfterDays, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+          return jsonResult(await llmWiki.flowHealth(principal, trimmedArgs.wipLimit, trimmedArgs.blockedAfterDays, trimmedArgs.waitingAfterDays, trimmedArgs.limit, trimmedArgs.maxChars, { prettyPrint: trimmedArgs.prettyPrint }), trimmedArgs.prettyPrint);
         }
 
         case "get_wiki_policy": {

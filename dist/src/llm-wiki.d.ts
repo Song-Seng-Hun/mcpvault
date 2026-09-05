@@ -1521,7 +1521,9 @@ export declare class LlmWikiService {
      * concrete next action are pull-ready.  This is advisory: it never assigns,
      * moves, or changes a note.
      */
-    flowHealth(principal?: ScopePrincipal, wipLimit?: number, blockedAfterDays?: number, waitingAfterDays?: number, limit?: number, maxChars?: number): Promise<Record<string, any> | {
+    flowHealth(principal?: ScopePrincipal, wipLimit?: number, blockedAfterDays?: number, waitingAfterDays?: number, limit?: number, maxChars?: number, options?: {
+        prettyPrint?: boolean;
+    }): Promise<Record<string, any> | {
         purpose: string;
         policy: {
             wipLimit: number;
@@ -1599,6 +1601,8 @@ export declare class LlmWikiService {
                 directDependents: number;
                 immediateUnlocks: number;
             }[];
+            deepestDependencyChainTotal?: number;
+            deepestDependencyChainTruncated?: boolean;
             dependencyCycles: {
                 total: number;
                 items: {
@@ -1848,6 +1852,8 @@ export declare class LlmWikiService {
                         directDependents: number;
                         immediateUnlocks: number;
                     }[];
+                    deepestDependencyChainTotal?: number;
+                    deepestDependencyChainTruncated?: boolean;
                     dependencyCycles: {
                         total: number;
                         items: {

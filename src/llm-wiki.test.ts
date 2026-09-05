@@ -1812,6 +1812,9 @@ test('projects expose bounded flow health and the organization policy contract',
     expect(flow.value.lanes.blocked).toEqual(expect.arrayContaining([expect.objectContaining({ aging: true })]));
     expect(flow.value.lanes.waiting).toEqual(expect.arrayContaining([expect.objectContaining({ aging: true, waitingFor: 'A source review' })]));
     expect(JSON.stringify(flow.value).length).toBeLessThanOrEqual(7000);
+    const prettyFlow = await callJson(client, 'get_wiki_flow_health', { maxChars: 1024, prettyPrint: true, accessToken });
+    expect(JSON.stringify(prettyFlow.value, null, 2).length).toBeLessThanOrEqual(1024);
+    expect(prettyFlow.value.nextAction).toMatchObject({ endpointId: 'wiki.flow_health', reuseOriginalArguments: true });
 
     const policy = await callJson(client, 'get_wiki_policy', { maxChars: 7000, accessToken });
     expect(policy.value).toMatchObject({
