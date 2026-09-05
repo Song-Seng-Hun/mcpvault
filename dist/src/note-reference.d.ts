@@ -10,6 +10,8 @@ export interface NoteReferenceDescriptor {
 export interface NoteReferenceIndex {
     paths: string[];
     qualified: Map<string, Set<string>>;
+    exact: Map<string, Set<string>>;
+    filenames: Map<string, Set<string>>;
     terms: Map<string, Set<string>>;
 }
 export interface ResolveNoteReferenceOptions {

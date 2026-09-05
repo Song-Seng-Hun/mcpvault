@@ -139,6 +139,8 @@ function resolveTargets(target: string, resolver: Resolver, sourcePath?: string,
       : resolver.basenameWithoutExtension.get(normalizedTarget) || [];
   }
   if (pathMatches.length > 0) return pathMatches;
+  // A written note suffix names a file, not an alias to a differently named note.
+  if (/\.(?:md|markdown|txt)$/i.test(normalizedTarget)) return [];
   for (const identityKey of noteReferenceTermKeys(normalizedTarget)) {
     const identityMatches = resolver.identity.get(identityKey);
     if (identityMatches?.length) return identityMatches;

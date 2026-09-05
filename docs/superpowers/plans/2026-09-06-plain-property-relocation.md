@@ -43,5 +43,5 @@ and only rewrote a moved target, never its source's relative destinations.
 
 This fixes managed plain reference relocation, not arbitrary strings that
 look like paths. It does not re-author invalid existing references or change
-authorization. Shared identity resolution still needs a separate audit of
-explicit note-extension collisions outside Markdown syntax.
+authorization. The subsequent explicit note-extension collision audit and
+fixes are recorded in `2026-09-06-explicit-extension-identity.md`.

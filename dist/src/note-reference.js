@@ -40,6 +40,8 @@ function add(index, key, path) {
 export function buildNoteReferenceIndex(notes) {
     const paths = [];
     const qualified = new Map();
+    const exact = new Map();
+    const filenames = new Map();
     const terms = new Map();
     const seenPaths = new Set();
     for (const note of notes) {
@@ -51,7 +53,9 @@ export function buildNoteReferenceIndex(notes) {
         paths.push(path);
         const withoutExtension = path.replace(NOTE_EXTENSION, '');
         add(qualified, pathKey, path);
+        add(exact, pathKey, path);
         add(qualified, withoutExtension.toLocaleLowerCase(), path);
+        add(filenames, path.split('/').at(-1).toLocaleLowerCase(), path);
         const alternatePaths = Array.isArray(note.qualifiedPaths)
             ? note.qualifiedPaths
             : note.qualifiedPaths === undefined || note.qualifiedPaths === null ? [] : [note.qualifiedPaths];
@@ -60,6 +64,7 @@ export function buildNoteReferenceIndex(notes) {
                 continue;
             const alternatePath = normalizeNoteReferencePath(alternate);
             add(qualified, alternatePath.toLocaleLowerCase(), path);
+            add(exact, alternatePath.toLocaleLowerCase(), path);
             add(qualified, alternatePath.replace(NOTE_EXTENSION, '').toLocaleLowerCase(), path);
         }
         for (const key of noteReferenceTermKeys(withoutExtension.split('/').at(-1)))
@@ -73,7 +78,7 @@ export function buildNoteReferenceIndex(notes) {
         }
     }
     paths.sort((left, right) => left.localeCompare(right));
-    return { paths, qualified, terms };
+    return { paths, qualified, exact, filenames, terms };
 }
 /**
  * Resolve one visible Obsidian-style document reference. Exact paths win over
@@ -97,11 +102,12 @@ export function resolveNoteReference(document, index, options = {}) {
     if (!target)
         return [];
     const normalized = normalizeNoteReferencePath(target);
+    const explicitNoteExtension = NOTE_EXTENSION.test(normalized);
     let matches = [];
     if (options.sourcePath && (options.preferRelative || target.startsWith('../') || target.startsWith('./'))) {
         const relative = normalizeNoteReferencePath(posix.normalize(posix.join(posix.dirname(normalizeNoteReferencePath(options.sourcePath)), target)));
-        const relativeMatches = index.qualified.get(relative.toLocaleLowerCase())
-            || index.qualified.get(relative.replace(NOTE_EXTENSION, '').toLocaleLowerCase());
+        const relativeMatches = (explicitNoteExtension ? index.exact : index.qualified).get(relative.toLocaleLowerCase())
+            || (!explicitNoteExtension ? index.qualified.get(relative.replace(NOTE_EXTENSION, '').toLocaleLowerCase()) : undefined);
         matches = [...(relativeMatches || [])];
         // An authored ./ or ../ path is an exact source-relative location, not
         // permission to silently choose a same-name note elsewhere when missing.
@@ -109,12 +115,14 @@ export function resolveNoteReference(document, index, options = {}) {
             return [];
     }
     if (!matches.length) {
-        const indexed = target.includes('/')
-            ? index.qualified.get(normalized.toLocaleLowerCase()) || index.qualified.get(normalized.replace(NOTE_EXTENSION, '').toLocaleLowerCase())
-            : noteReferenceTermKeys(normalized).map(key => index.terms.get(key)).find(values => values && values.size > 0);
+        const indexed = explicitNoteExtension
+            ? target.includes('/') ? index.exact.get(normalized.toLocaleLowerCase()) : index.filenames.get(normalized.toLocaleLowerCase())
+            : target.includes('/')
+                ? index.qualified.get(normalized.toLocaleLowerCase()) || index.qualified.get(normalized.replace(NOTE_EXTENSION, '').toLocaleLowerCase())
+                : noteReferenceTermKeys(normalized).map(key => index.terms.get(key)).find(values => values && values.size > 0);
         matches = [...(indexed || [])];
     }
-    if (!matches.length)
+    if (!matches.length && !explicitNoteExtension)
         matches = resolveWikiLinkTargets(target, index.paths);
     const sourcePath = options.sourcePath || '';
     return [...new Set(matches.filter(candidate => !options.canReference || options.canReference(sourcePath, candidate)))]

@@ -23,6 +23,20 @@ async function writeNote(path: string, content: string): Promise<void> {
 }
 
 describe('VaultGraphIndex', () => {
+  test('explicit note extensions do not use an alias for a missing filename', async () => {
+    vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-extension-graph-'));
+    await writeNote('Wiki/Target.md', '# Exact\n');
+    await writeNote('Wiki/Target.markdown', '# Separate note\n');
+    await writeNote('Wiki/Alias.md', '---\naliases: [Missing.md, Node.js]\n---\n');
+    await writeNote('Wiki/Source.md', '[[Target.md]] [[./Target.md]] [[Missing.md]] [[Node.js]]\n');
+    graph = new VaultGraphIndex(vaultPath, new PathFilter(), new FrontmatterHandler());
+    expect((await graph.getBacklinks('Wiki/Target.markdown', 10, () => true)).total).toBe(0);
+    expect((await graph.getBacklinks('Wiki/Target.md', 10, () => true)).total).toBe(2);
+    expect((await graph.getBacklinks('Wiki/Alias.md', 10, () => true)).total).toBe(1);
+    expect((await graph.findUnresolvedLinks(10, () => true)).unresolved).toEqual([
+      expect.objectContaining({ path: 'Wiki/Source.md', target: 'Missing.md' }),
+    ]);
+  });
   test('ordinary Markdown siblings resolve locally and hidden neighbors are redacted', async () => {
     vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-markdown-graph-'));
     await writeNote('Wiki/Target.md', '# Actual\n');

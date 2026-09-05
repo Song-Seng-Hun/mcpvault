@@ -940,6 +940,51 @@ describe("tasks", () => {
     expect(moved.frontmatter.depends_on).toEqual(["[[Wiki/Target.md#^proof|typed]]"]);
   });
 
+  test.each(['Wiki/./Target.md', 'Wiki/Nested/../Target.md'])("dot-segment move input %s preserves all inbound references", async sourcePath => {
+    await mkdir(join(testVaultPath, 'Wiki'), { recursive: true });
+    await writeFile(join(testVaultPath, 'Wiki/Target.md'), '# Target\n');
+    await writeFile(join(testVaultPath, 'Source.md'), '[[Wiki/Target.md]]\n');
+    const before = await fileSystem.readNote('Wiki/Target.md');
+    expect((await fileSystem.previewDeleteNote({ path: sourcePath })).total).toBe(1);
+    const result = await fileSystem.moveNote({ oldPath: sourcePath, newPath: 'Archive/./Renamed.md', updateLinks: true, expectedRevision: before.revision });
+    expect(result.success).toBe(true);
+    expect((await fileSystem.readNote('Source.md')).content).toContain('[[Archive/Renamed.md]]');
+    expect((await fileSystem.getBacklinks('Archive/Renamed.md')).total).toBe(1);
+  });
+
+  test("canonicalized move paths still enforce scope and restricted-directory boundaries", async () => {
+    await mkdir(join(testVaultPath, 'Private'), { recursive: true });
+    await writeFile(join(testVaultPath, 'Private/Source.md'), '# Private\n');
+    await writeFile(join(testVaultPath, 'Public.md'), '# Public\n');
+    const visible = (path: string) => !path.startsWith('Private/');
+    expect((await fileSystem.moveNote({ oldPath: 'Wiki/../Private/Source.md', newPath: 'Stolen.md' }, visible)).success).toBe(false);
+    expect((await fileSystem.moveNote({ oldPath: 'Public.md', newPath: 'Wiki/../Private/Overwrite.md' }, visible)).success).toBe(false);
+    expect((await fileSystem.moveNote({ oldPath: 'Public.md', newPath: 'Wiki/../.git/config.md' })).success).toBe(false);
+    await expect(fileSystem.moveNote({ oldPath: 'Public.md', newPath: '../Outside.md' })).rejects.toThrow(/traversal/);
+    expect(await readFile(join(testVaultPath, 'Private/Source.md'), 'utf8')).toBe('# Private\n');
+    expect(await readFile(join(testVaultPath, 'Public.md'), 'utf8')).toBe('# Public\n');
+    expect(await fileSystem.exists('Stolen.md')).toBe(false);
+  });
+
+  test("moving a note preserves a different-extension sibling and its inbound references", async () => {
+    await mkdir(join(testVaultPath, "Wiki"), { recursive: true });
+    await writeFile(join(testVaultPath, "Wiki/Target.md"), "# Markdown target\n");
+    const sibling = "---\ndepends_on: ['Wiki/Target.md']\n---\n[[Wiki/Target.md]]\n";
+    await writeFile(join(testVaultPath, "Wiki/Target.markdown"), sibling);
+    const source = "---\ndepends_on: ['Wiki/Target.markdown']\n---\n[[Wiki/Target.markdown]] [sibling](Wiki/Target.markdown)\n";
+    await writeFile(join(testVaultPath, "Source.md"), source);
+    const deletion = await fileSystem.previewDeleteNote({ path: "Wiki/Target.md" });
+    expect(deletion.total).toBe(2);
+    expect(deletion.affectedLinks.map(item => item.path)).toEqual(['Wiki/Target.markdown']);
+    const before = await fileSystem.readNote('Wiki/Target.md');
+    expect((await fileSystem.moveNote({ oldPath: 'Wiki/Target.md', newPath: 'Archive/Renamed.md', updateLinks: true, expectedRevision: before.revision })).success).toBe(true);
+    expect(await readFile(join(testVaultPath, 'Source.md'), 'utf8')).toBe(source);
+    const updatedSibling = await fileSystem.readNote('Wiki/Target.markdown');
+    expect(updatedSibling.frontmatter.depends_on).toEqual(['Archive/Renamed.md']);
+    expect(updatedSibling.content).toContain('[[Archive/Renamed.md]]');
+    expect((await fileSystem.readNote('Archive/Renamed.md')).content).toContain('# Markdown target');
+  });
+
   test("plain relative Properties track target moves and deletion impact without basename guessing", async () => {
     await mkdir(join(testVaultPath, "Wiki"), { recursive: true });
     await mkdir(join(testVaultPath, "Other"), { recursive: true });

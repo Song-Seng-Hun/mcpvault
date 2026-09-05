@@ -120,6 +120,11 @@ caller cannot access or that are more private than the containing note.
 This does not sanitize existing authored links or reference metadata.
 Link occurrences retain explicit `./` and `../` prefixes for graph and move
 readers. Missing source-relative targets do not select same-name notes elsewhere.
+An explicit `.md`, `.markdown`, or `.txt` suffix selects that filename, never a
+different suffix or an identity alias. Extensionless names retain ambiguity
+when multiple files match; dotted non-note aliases such as `Node.js` still work.
+The same rule applies to reference validation, review baselines, and managed
+plain Properties. Move/delete identity includes the physical file extension.
 Revision-checked moves with link updates preserve both incoming and outgoing
 relative wikilink targets, including links in typed Properties; use the preview
 to inspect replacements before execution.

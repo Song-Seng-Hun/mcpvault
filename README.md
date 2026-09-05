@@ -355,6 +355,16 @@ content or references. Relative resolution does not grant scope access.
 Graph/backlink readers preserve explicit relative prefixes too: `[[./Note]]`
 cannot create an edge to a same-named note in another folder. A missing explicit
 relative target stays unresolved rather than falling back to a global name.
+Written note extensions (`.md`, `.markdown`, `.txt`) identify the exact filename:
+`[[Target.md]]` must not bind to `Target.markdown` or an alias named `Target.md`.
+Omitting the extension remains supported, but multiple matching files require
+disambiguation. Dotted concept aliases such as `Node.js` remain valid. This rule
+also applies to managed Property references and review baselines. Move/delete
+identity compares complete physical paths, keeping different-extension notes
+and their references separate.
+Equivalent in-vault path spellings with `.` or `..` are normalized for note
+move/delete and their previews before access checks and reference comparisons; this does not permit
+Vault escape or bypass restricted folders or caller scope.
 With link updates enabled, a note move rewrites incoming relative wikilinks and
 the moved note's outgoing relative wikilinks, including typed Properties, to
 keep the original target and heading/block/alias. Preview the move first;

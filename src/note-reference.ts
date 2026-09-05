@@ -16,6 +16,8 @@ export interface NoteReferenceDescriptor {
 export interface NoteReferenceIndex {
   paths: string[];
   qualified: Map<string, Set<string>>;
+  exact: Map<string, Set<string>>;
+  filenames: Map<string, Set<string>>;
   terms: Map<string, Set<string>>;
 }
 
@@ -67,6 +69,8 @@ function add(index: Map<string, Set<string>>, key: string, path: string): void {
 export function buildNoteReferenceIndex(notes: Iterable<NoteReferenceDescriptor>): NoteReferenceIndex {
   const paths: string[] = [];
   const qualified = new Map<string, Set<string>>();
+  const exact = new Map<string, Set<string>>();
+  const filenames = new Map<string, Set<string>>();
   const terms = new Map<string, Set<string>>();
   const seenPaths = new Set<string>();
   for (const note of notes) {
@@ -77,7 +81,9 @@ export function buildNoteReferenceIndex(notes: Iterable<NoteReferenceDescriptor>
     paths.push(path);
     const withoutExtension = path.replace(NOTE_EXTENSION, '');
     add(qualified, pathKey, path);
+    add(exact, pathKey, path);
     add(qualified, withoutExtension.toLocaleLowerCase(), path);
+    add(filenames, path.split('/').at(-1)!.toLocaleLowerCase(), path);
     const alternatePaths = Array.isArray(note.qualifiedPaths)
       ? note.qualifiedPaths
       : note.qualifiedPaths === undefined || note.qualifiedPaths === null ? [] : [note.qualifiedPaths];
@@ -85,6 +91,7 @@ export function buildNoteReferenceIndex(notes: Iterable<NoteReferenceDescriptor>
       if (typeof alternate !== 'string' || !alternate.trim()) continue;
       const alternatePath = normalizeNoteReferencePath(alternate);
       add(qualified, alternatePath.toLocaleLowerCase(), path);
+      add(exact, alternatePath.toLocaleLowerCase(), path);
       add(qualified, alternatePath.replace(NOTE_EXTENSION, '').toLocaleLowerCase(), path);
     }
     for (const key of noteReferenceTermKeys(withoutExtension.split('/').at(-1))) add(terms, key, path);
@@ -95,7 +102,7 @@ export function buildNoteReferenceIndex(notes: Iterable<NoteReferenceDescriptor>
     }
   }
   paths.sort((left, right) => left.localeCompare(right));
-  return { paths, qualified, terms };
+  return { paths, qualified, exact, filenames, terms };
 }
 
 /**
@@ -118,23 +125,26 @@ export function resolveNoteReference(document: string, index: NoteReferenceIndex
   const target = noteReferenceDocument(document);
   if (!target) return [];
   const normalized = normalizeNoteReferencePath(target);
+  const explicitNoteExtension = NOTE_EXTENSION.test(normalized);
   let matches: string[] = [];
   if (options.sourcePath && (options.preferRelative || target.startsWith('../') || target.startsWith('./'))) {
     const relative = normalizeNoteReferencePath(posix.normalize(posix.join(posix.dirname(normalizeNoteReferencePath(options.sourcePath)), target)));
-    const relativeMatches = index.qualified.get(relative.toLocaleLowerCase())
-      || index.qualified.get(relative.replace(NOTE_EXTENSION, '').toLocaleLowerCase());
+    const relativeMatches = (explicitNoteExtension ? index.exact : index.qualified).get(relative.toLocaleLowerCase())
+      || (!explicitNoteExtension ? index.qualified.get(relative.replace(NOTE_EXTENSION, '').toLocaleLowerCase()) : undefined);
     matches = [...(relativeMatches || [])];
     // An authored ./ or ../ path is an exact source-relative location, not
     // permission to silently choose a same-name note elsewhere when missing.
     if (!matches.length && (target.startsWith('../') || target.startsWith('./'))) return [];
   }
   if (!matches.length) {
-    const indexed = target.includes('/')
+    const indexed = explicitNoteExtension
+      ? target.includes('/') ? index.exact.get(normalized.toLocaleLowerCase()) : index.filenames.get(normalized.toLocaleLowerCase())
+      : target.includes('/')
       ? index.qualified.get(normalized.toLocaleLowerCase()) || index.qualified.get(normalized.replace(NOTE_EXTENSION, '').toLocaleLowerCase())
       : noteReferenceTermKeys(normalized).map(key => index.terms.get(key)).find(values => values && values.size > 0);
     matches = [...(indexed || [])];
   }
-  if (!matches.length) matches = resolveWikiLinkTargets(target, index.paths);
+  if (!matches.length && !explicitNoteExtension) matches = resolveWikiLinkTargets(target, index.paths);
   const sourcePath = options.sourcePath || '';
   return [...new Set(matches.filter(candidate => !options.canReference || options.canReference(sourcePath, candidate)))]
     .sort((left, right) => left.localeCompare(right));

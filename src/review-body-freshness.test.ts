@@ -104,6 +104,24 @@ test('on_link_change reads real body links rather than interpreting omitted cont
   });
 });
 
+test.each([false, true])('explicit wikilink extensions retain the same exact review target (indexed=%s)', async indexed => {
+  await fixture(async (wiki, fs, seed) => {
+    await seed('Wiki/Target.md', '# Target\n');
+    await seed('Wiki/Target.markdown', '# Separate\n');
+    const path = 'Wiki/Reader.md', body = '[[./Target.md#Heading]]\n';
+    await seed(path, body, { review_policy: 'on_link_change' });
+    expect(await new ReferenceService(fs, new ScopeAccessPolicy()).validateAndNormalize(undefined, path, undefined, body)).toEqual(['Wiki/Target.md']);
+    await wiki.review({ path, reviewOutcome: 'confirmed', reviewedBy: 'reader', expectedRevision: (await fs.readNote(path)).revision });
+    expect((await fs.readNote(path)).frontmatter.review_basis_links.map((item: {path: string}) => item.path)).toEqual(['Wiki/Target.md']);
+    const other = await fs.readNote('Wiki/Target.markdown');
+    await fs.writeNote({ path: 'Wiki/Target.markdown', content: '# Other edited\n', expectedRevision: other.revision });
+    expect((await wiki.reviewQueue()).items).toEqual([]);
+    const actual = await fs.readNote('Wiki/Target.md');
+    await fs.writeNote({ path: 'Wiki/Target.md', content: '# Actual edited\n', expectedRevision: actual.revision });
+    expect((await wiki.reviewQueue()).items.map(item => item.path)).toEqual([path]);
+  }, indexed);
+});
+
 test.each([false, true])('ordinary Markdown links use source-relative reference and review targets (indexed=%s)', async indexed => {
   await fixture(async (wiki, fs, seed) => {
     await seed('Wiki/Target.md', '# Target\n');

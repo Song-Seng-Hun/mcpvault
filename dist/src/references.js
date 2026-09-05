@@ -29,7 +29,7 @@ export class ReferenceService {
         this.access = access;
     }
     async resolveWikiLinkTarget(target, principal, sourcePath, syntax) {
-        const name = syntax === 'markdown' ? target : target.trim().replace(/\.md$/i, '');
+        const name = target.trim();
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
         const matches = syntax === 'markdown'
             ? await this.fileSystem.findPathForMarkdownLink(name, sourcePath || '', canAccess)

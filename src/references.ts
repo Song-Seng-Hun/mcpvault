@@ -31,7 +31,7 @@ export class ReferenceService {
   ) {}
 
   private async resolveWikiLinkTarget(target: string, principal?: ScopePrincipal, sourcePath?: string, syntax?: 'markdown'): Promise<string> {
-    const name = syntax === 'markdown' ? target : target.trim().replace(/\.md$/i, '');
+    const name = target.trim();
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
     const matches = syntax === 'markdown'
       ? await this.fileSystem.findPathForMarkdownLink(name, sourcePath || '', canAccess)

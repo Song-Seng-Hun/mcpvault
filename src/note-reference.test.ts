@@ -2,6 +2,26 @@ import { describe, expect, test } from 'vitest';
 import { buildNoteReferenceIndex, resolveNoteReference } from './note-reference.js';
 
 describe('note reference resolver', () => {
+  test('explicit note extensions distinguish siblings and never substitute another suffix', () => {
+    const index = buildNoteReferenceIndex([
+      { path: 'Wiki/Target.md' }, { path: 'Wiki/Target.markdown' },
+      { path: 'Wiki/Only.markdown' }, { path: 'Other/Alias.md', aliases: ['Only.md', 'Node.js'] },
+    ]);
+    for (const target of ['Target.md', 'Wiki/Target.md', './Target.md']) {
+      expect(resolveNoteReference(target, index, { sourcePath: 'Wiki/Source.md' })).toEqual(['Wiki/Target.md']);
+    }
+    for (const target of ['Only.md', 'Wiki/Only.md', './Only.md']) {
+      expect(resolveNoteReference(target, index, { sourcePath: 'Wiki/Source.md' })).toEqual([]);
+    }
+    expect(resolveNoteReference('./Target', index, { sourcePath: 'Wiki/Source.md' })).toEqual(['Wiki/Target.markdown', 'Wiki/Target.md']);
+    expect(resolveNoteReference('Node.js', index)).toEqual(['Other/Alias.md']);
+  });
+  test('qualified explicit suffixes do not select a double-extension namesake', () => {
+    const index = buildNoteReferenceIndex([{ path: 'Wiki/Target.md.md' }]);
+    expect(resolveNoteReference('./Target.md', index, { sourcePath: 'Wiki/Source.md' })).toEqual([]);
+    expect(resolveNoteReference('Wiki/Target.md', index)).toEqual([]);
+    expect(resolveNoteReference('Wiki/Target.md.md', index)).toEqual(['Wiki/Target.md.md']);
+  });
   test('Markdown paths are exact source-relative locations, never aliases or basename guesses', () => {
     const index = buildNoteReferenceIndex([{ path: 'Wiki/Target.md' }, { path: 'Other/Target.md' }, { path: 'Root.md' }, { path: 'Wiki/Only.markdown' }, { path: 'Wiki/Alias.md', aliases: ['Missing.md'] }]);
     expect(resolveNoteReference('Target.md', index, { sourcePath: 'Wiki/Source.md', syntax: 'markdown' })).toEqual(['Wiki/Target.md']);

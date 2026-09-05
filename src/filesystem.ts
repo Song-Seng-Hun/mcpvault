@@ -84,7 +84,8 @@ function compareQueryNotes(a: QueryNote, b: QueryNote, sortBy: string, sortOrder
 }
 
 function normalizeNoteTarget(path: string): string {
-  return path.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').replace(/\.(?:md|markdown|txt)$/i, '').toLowerCase();
+  // Callers compare resolved physical paths, not extensionless link names.
+  return path.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').toLowerCase();
 }
 
 function rewriteLinkText(link: string, sourcePath: string, newPath: string): string {
@@ -587,6 +588,13 @@ export class FileSystemService {
       p = p.slice(1);
     }
     return p;
+  }
+
+  private normalizeReferenceMutationPath(inputPath: string): string {
+    // Structural moves/deletes must compare the same lexical path used by IO.
+    // Do not change authored response spellings for unrelated operations.
+    const separated = this.normalizePath(inputPath).replace(/\\/g, '/');
+    return !separated || separated.startsWith('//') ? separated : posix.normalize(separated);
   }
 
   private resolvePath(relativePath: string): string {
@@ -1463,7 +1471,7 @@ export class FileSystemService {
   }
 
   async previewDeleteNote(params: DeleteNotePreviewParams, canAccessPath: (path: string) => boolean = () => true): Promise<DeleteNotePreviewResult> {
-    const path = this.normalizePath(params.path);
+    const path = this.normalizeReferenceMutationPath(params.path);
     if (!this.pathFilter.isAllowed(path) || !canAccessPath(path)) throw new Error(`Access denied: ${path}`);
     const requestedLimit = params.limit ?? 100;
     if (!Number.isInteger(requestedLimit) || requestedLimit < 1) throw new Error('limit must be a positive integer');
@@ -1525,8 +1533,8 @@ export class FileSystemService {
   }
 
   async deleteNote(params: DeleteNoteParams, canAccessPath: (path: string) => boolean = () => true): Promise<DeleteResult> {
-    const path = this.normalizePath(params.path);
-    const confirmPath = this.normalizePath(params.confirmPath);
+    const path = this.normalizeReferenceMutationPath(params.path);
+    const confirmPath = this.normalizeReferenceMutationPath(params.confirmPath);
     return this.withMutationLock(path, () => this.deleteNoteUnlocked({ ...params, path, confirmPath }, canAccessPath));
   }
 
@@ -1657,8 +1665,8 @@ export class FileSystemService {
   }
 
   async moveNote(params: MoveNoteParams, canAccessPath: (path: string) => boolean = () => true): Promise<MoveResult> {
-    const oldPath = this.normalizePath(params.oldPath);
-    const newPath = this.normalizePath(params.newPath);
+    const oldPath = this.normalizeReferenceMutationPath(params.oldPath);
+    const newPath = this.normalizeReferenceMutationPath(params.newPath);
     return this.withMutationLocks([oldPath, newPath], () => this.moveNoteUnlocked({ ...params, oldPath, newPath }, canAccessPath));
   }
 
@@ -2040,8 +2048,8 @@ export class FileSystemService {
    * revision-checked through moveNote(updateLinks=true).
    */
   async previewMoveNote(params: MoveNotePreviewParams, canAccessPath: (path: string) => boolean = () => true): Promise<MoveNotePreviewResult> {
-    const oldPath = this.normalizePath(params.oldPath);
-    const newPath = this.normalizePath(params.newPath);
+    const oldPath = this.normalizeReferenceMutationPath(params.oldPath);
+    const newPath = this.normalizeReferenceMutationPath(params.newPath);
     if (!this.pathFilter.isAllowed(oldPath) || !canAccessPath(oldPath)) throw new Error(`Access denied: ${oldPath}`);
     if (!this.pathFilter.isAllowed(newPath) || !canAccessPath(newPath)) throw new Error(`Access denied: ${newPath}`);
     const requestedLimit = params.limit ?? 100;

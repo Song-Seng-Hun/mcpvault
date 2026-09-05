@@ -44,6 +44,7 @@ export declare class FileSystemService {
      * (e.g. "/Users/me/vault/wiki/note.md" instead of "wiki/note.md").
      */
     private normalizePath;
+    private normalizeReferenceMutationPath;
     private resolvePath;
     /**
      * Mutation-only symlink defense. Reads may follow an in-vault symlink for
