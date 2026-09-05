@@ -561,8 +561,17 @@ do not prove a current, bounded, actionable response through its public adapter.
   8 MiB source limits; a no-index reader parses one path inventory once, without
   the previous repeated scans per 500 rows. Scope-invisible changes do not leak
   through cohort validation. Unobserved filesystem races, whole-inventory/selected
-  body memory, and project-packet response packing remain separate audit topics;
+  body memory remain separate audit topics;
   this is not an OS transaction, globally retained snapshot or partial plan.
+- Project packets now budget final formatted JSON, retain exact public source
+  identities, flag omitted detail with a bounded source read, and continue by
+  emitted row count with a visible-result fingerprint. At a smaller budget the
+  same-position retry cannot skip the oversized first record; at the ceiling an
+  unrepresentable identity fails explicitly. Authored next-action text and tool
+  follow-ups use distinct fields. Planning sections reuse the fence-aware outline
+  once per body, including matching-close and body thematic-break behavior.
+  These changes do not reduce whole-cohort ranking or work-graph memory costs;
+  other organization endpoint response packers still require their own audits.
 
 Record new concrete gaps here when registered schema, dispatcher, service,
 persistent representation, guide, invalidation, or bounded failure evidence

@@ -581,6 +581,18 @@ visible cohort. No-index readers parse one captured path inventory once.
 This removes page mixing, not external-writer races or OS notification limits;
 the whole work graph and selected project bodies still consume vault-dependent
 memory. No client setup or new MCP tool is required.
+Project packet budgets include the final pretty/compact JSON. Real headings
+outside matching backtick/tilde fences count toward planning readiness; fenced
+examples do not. Large records return `detailsOmitted: true` with exact path,
+revision and `readAction` (`notes.read`, bounded): compare the fresh revision
+before relying on details. The row's `nextAction` remains authored task text.
+Follow the packet-level `nextAction` for subsequent ranked projects, keeping
+`expectedSnapshot`; a changed visible view requires restarting at offset 0.
+An empty budget retry keeps the same position and merges its overrides into
+the original request. At the response ceiling an unrepresentable identity fails
+explicitly; paths/links are never clipped to make it fit. `paginationLimited`
+marks the 100,000 offset ceiling. Fingerprints are view guards, not retained
+historical snapshots; each page still computes the whole project cohort.
 The MCP server exposes only a compact always-on constitution so its fixed five
 tools do not repeatedly consume the full organization manual. The dynamic
 `wiki.policy` endpoint

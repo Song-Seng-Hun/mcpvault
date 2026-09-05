@@ -9,6 +9,7 @@ import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference } from './property-references.js';
 import { packExceptionBoard } from './exception-board.js';
 import { packLintReport } from './lint-report.js';
+import { packProjectPacket } from './project-packet.js';
 import { CollectionHealthProjection } from './collection-health.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
 import { projectNoteOutline, projectNoteBlockLines, selectNoteHeading } from './note-projections.js';
@@ -6792,26 +6793,21 @@ export class LlmWikiService {
      * day-to-day next action separate from purpose, outcome, brainstorming, and
      * reference material, and never mutates the project note.
      */
-    async projectPacket(principal, limit = 12, maxChars = 8000) {
+    async projectPacket(principal, limit = 12, maxChars = 8000, options = {}) {
         const boundedLimit = Math.min(Math.max(Number(limit) || 12, 1), 40);
         const boundedChars = Math.min(Math.max(Number(maxChars) || 8000, 512), 16000);
         const dependencySnapshot = await this.workDependencySnapshot(principal, true);
         const candidates = [];
-        let total = 0;
         let dependencyBlocked = 0;
-        const heading = (content, names) => {
-            const wanted = new Set(names.map(name => name.toLowerCase()));
-            return content.split(/\r?\n/).some(line => {
-                const match = line.match(/^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/);
-                return Boolean(match && wanted.has(match[1].trim().toLowerCase()));
-            });
-        };
         const concreteNextAction = (value) => Boolean(value && value.length >= 8 && !/^(?:research|investigate|review|improve|handle|work on|continue|look into|figure out|explore)\b/i.test(value.trim()));
         for (const note of dependencySnapshot.workNotes) {
             if (!isPlanningProject(note))
                 continue;
+            // Properties were already removed. A leading body thematic break must
+            // not be parsed as a second frontmatter block by the raw-note projector.
+            const headings = new Set(projectNoteOutline('\n' + (note.content || '')).map(item => item.text.trim().toLowerCase()));
+            const heading = (names) => names.some(name => headings.has(name.toLowerCase()));
             const lifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
-            total += 1;
             const nextActions = Array.isArray(note.frontmatter.next_actions) ? note.frontmatter.next_actions.filter((item) => typeof item === 'string').slice(0, 8) : [];
             const nextAction = typeof note.frontmatter.next_action === 'string' ? note.frontmatter.next_action : undefined;
             const waitingFor = typeof note.frontmatter.waiting_for === 'string' ? note.frontmatter.waiting_for : undefined;
@@ -6826,14 +6822,14 @@ export class LlmWikiService {
                 missing.push('desired_outcome');
             if (!nextAction && nextActions.length === 0 && !waitingFor)
                 missing.push('next_action');
-            const hasOutcomeCriteria = completionCriteria.length > 0 || heading(note.content || '', ['Outcome', 'Desired outcome', 'Definition of done', 'Completion criteria', '완료 조건']);
+            const hasOutcomeCriteria = completionCriteria.length > 0 || heading(['Outcome', 'Desired outcome', 'Definition of done', 'Completion criteria', '완료 조건']);
             if (note.frontmatter.desired_outcome && !hasOutcomeCriteria)
                 missing.push('outcome_criteria');
             if (nextAction && !concreteNextAction(nextAction))
                 missing.push('next_action_detail');
-            if (!heading(note.content || '', ['Brainstorm']))
+            if (!heading(['Brainstorm']))
                 missing.push('brainstorm_section');
-            if (support.length === 0 && !heading(note.content || '', ['Project support']))
+            if (support.length === 0 && !heading(['Project support']))
                 missing.push('project_support');
             const dependencyState = dependencySnapshot.stateByPath.get(normalizePath(note.path).toLowerCase());
             const dependencyKey = normalizePath(note.path).toLowerCase();
@@ -6843,8 +6839,11 @@ export class LlmWikiService {
             if (!dependencyState.executable && !workflowClosed)
                 dependencyBlocked += 1;
             const score = (!dependencyState.executable && !workflowClosed ? 60 : 0) + (missing.includes('next_action') ? 100 : 0) + (missing.includes('next_action_detail') ? 35 : 0) + (missing.includes('desired_outcome') ? 20 : 0) + (missing.includes('outcome_criteria') ? 15 : 0) + (missing.includes('purpose') ? 10 : 0) + (missing.includes('project_support') ? 5 : 0);
+            const detailsOmitted = ['next_actions', 'project_support', 'completion_criteria'].some(key => Array.isArray(note.frontmatter[key]) && note.frontmatter[key].length > 8)
+                || ['project_purpose', 'desired_outcome', 'next_action', 'waiting_for'].some(key => note.frontmatter[key] !== undefined && (typeof note.frontmatter[key] !== 'string' || note.frontmatter[key].length > 500));
             candidates.push({
                 path: this.access.toPublicPath(note.path),
+                ...(detailsOmitted && { detailsOmitted: true, readAction: { endpointId: 'notes.read', arguments: { path: this.access.toPublicPath(note.path), maxChars: 8000 } } }),
                 title: note.frontmatter.title || note.path.split('/').at(-1),
                 ...(note.revision && { revision: note.revision }),
                 lifecycle,
@@ -6858,7 +6857,7 @@ export class LlmWikiService {
                 ...(completionCriteria.length > 0 && { completionCriteria }),
                 ...(missing.length > 0 && { missing }),
                 planningNeedsAttention: missing.length > 0,
-                planning: { purpose: Boolean(note.frontmatter.project_purpose), desiredOutcome: Boolean(note.frontmatter.desired_outcome), outcomeCriteria: hasOutcomeCriteria, completionCriteria: completionCriteria.length > 0, brainstormSection: heading(note.content || '', ['Brainstorm']), projectSupport: support.length > 0 || heading(note.content || '', ['Project support']), nextActionConcrete: !nextAction || concreteNextAction(nextAction), ready: missing.length === 0 },
+                planning: { purpose: Boolean(note.frontmatter.project_purpose), desiredOutcome: Boolean(note.frontmatter.desired_outcome), outcomeCriteria: hasOutcomeCriteria, completionCriteria: completionCriteria.length > 0, brainstormSection: heading(['Brainstorm']), projectSupport: support.length > 0 || heading(['Project support']), nextActionConcrete: !nextAction || concreteNextAction(nextAction), ready: missing.length === 0 },
                 execution: {
                     ready: !workflowClosed && !waitingFor && !['waiting', 'blocked'].includes(taskStatus) && dependencyState.executable,
                     workflowState: taskStatus,
@@ -6877,19 +6876,13 @@ export class LlmWikiService {
             });
         }
         candidates.sort((left, right) => right.score - left.score || String(left.path).localeCompare(String(right.path)));
-        const items = candidates.slice(0, boundedLimit).map(({ score: _score, ...item }) => item);
-        const result = {
+        const items = candidates.map(({ score: _score, ...item }) => item);
+        return packProjectPacket(items, {
             purpose: 'A bounded project-planning packet. Separate purpose/outcome/support from the independent next-action list; this is advisory and does not replace Git history.',
-            items,
-            total,
             needsPlanning: candidates.filter(item => item.planningNeedsAttention === true).length,
             dependencyBlocked,
-            truncated: total > items.length,
             generatedAt: now(),
-        };
-        if (JSON.stringify(result).length <= boundedChars)
-            return result;
-        return { ...result, items: items.slice(0, Math.min(5, boundedLimit)), truncated: true };
+        }, boundedLimit, boundedChars, options);
     }
     /**
      * Return executable GTD actions by context rather than burying them in

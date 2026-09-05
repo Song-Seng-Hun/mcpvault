@@ -4,6 +4,7 @@ import type { ScopePrincipal } from './scope-auth.js';
 import type { ReferenceService } from './references.js';
 import type { SemanticSearchService } from './semantic-search.js';
 import { type AnswerPacketIntent, type CatalogOrder, type TemporalValidityState, type WikiProjectionView } from './organization.js';
+import { type ProjectPacketOptions } from './project-packet.js';
 export { SOURCE_TRUST_LEVELS } from './organization.js';
 export interface WikiCatalogOptions {
     summaryOnly?: boolean;
@@ -2741,17 +2742,7 @@ export declare class LlmWikiService {
      * day-to-day next action separate from purpose, outcome, brainstorming, and
      * reference material, and never mutates the project note.
      */
-    projectPacket(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
-        purpose: string;
-        items: {
-            [x: string]: unknown;
-        }[];
-        total: number;
-        needsPlanning: number;
-        dependencyBlocked: number;
-        truncated: boolean;
-        generatedAt: string;
-    }>;
+    projectPacket(principal?: ScopePrincipal, limit?: number, maxChars?: number, options?: ProjectPacketOptions): Promise<Record<string, any>>;
     /**
      * Return executable GTD actions by context rather than burying them in
      * project-support material. The source remains ordinary Markdown

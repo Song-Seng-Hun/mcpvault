@@ -1478,7 +1478,9 @@ export function createServer(vaultPath, options = {}) {
                         return jsonResult(await llmWiki.reviewPacket(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_project_packet": {
-                        return jsonResult(await llmWiki.projectPacket(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+                        return jsonResult(await llmWiki.projectPacket(principal, trimmedArgs.limit, trimmedArgs.maxChars, {
+                            offset: trimmedArgs.offset, expectedSnapshot: trimmedArgs.expectedSnapshot, prettyPrint: trimmedArgs.prettyPrint,
+                        }), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_next_actions": {
                         return jsonResult(await llmWiki.nextActions(principal, trimmedArgs.context, trimmedArgs.limit, trimmedArgs.maxChars, {

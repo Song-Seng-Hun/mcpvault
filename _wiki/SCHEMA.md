@@ -263,6 +263,15 @@ not returning a mixed plan. Private invisible changes are outside this cohort.
 The no-index fallback captures paths once and parses each source once. Neither
 path is an atomic filesystem transaction or a guarantee of OS event delivery;
 the inventory and selected bodies still have vault-dependent total memory cost.
+Project packets count only real headings outside matching code fences and
+measure the final serialized response including optional indentation. Large
+records may omit details explicitly (`detailsOmitted`); exact path/revision and
+`readAction` locate a bounded current source read. Compare revisions before
+using omitted information. A row's `nextAction` is task text, while the packet's
+`nextAction` continues the ranked page with its `expectedSnapshot` guard.
+Changed views restart at offset 0; budget retries reuse the same position.
+Neither oversized identities nor the 100,000 offset ceiling silently skip rows.
+These guards do not retain historical snapshots or prove atomic filesystem IO.
 Source snapshots should keep `citation_key` unique; `lint_wiki` reports
 duplicate keys before source references become ambiguous.
 Optional
