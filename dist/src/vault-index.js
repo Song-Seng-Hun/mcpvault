@@ -611,6 +611,7 @@ export class VaultMetadataIndex {
     async ensureFresh() {
         await this.ready;
         this.startWatcher();
+        await this.catalog?.flushPendingEvents();
         // The server may have been constructed before Obsidian or a direct
         // filesystem writer created notes. Reconcile once at first use so the
         // initial async refresh cannot produce a false empty result.

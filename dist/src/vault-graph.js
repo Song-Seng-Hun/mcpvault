@@ -333,6 +333,7 @@ export class VaultGraphIndex {
             .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
     }
     async ensure() {
+        await this.catalog?.flushPendingEvents();
         this.startWatcher();
         if (this.refreshPromise)
             await this.refreshPromise;

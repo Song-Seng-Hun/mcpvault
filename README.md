@@ -3081,6 +3081,17 @@ revision checks, auto-move notes, or turn a generated summary into truth.
 
 ## Organization learning workflows
 
+Organization reads drain filesystem notifications already received by the
+shared catalog before metadata, backlinks, or lexical search choose cached
+results. A new waiting note, changed Properties, deleted link, or newly hidden
+search result therefore does not wait for the watcher debounce timer. Concurrent
+reads share that drain; unchanged reads do not trigger a recursive Vault scan.
+Search requests after invalidation also stop sharing pre-change computations.
+This is not an atomic filesystem snapshot: OS-delayed/missing notifications,
+changes during a read, and asynchronous semantic indexing remain separate
+freshness boundaries. Use returned revisions and `expectedRevision` when editing.
+No client installation, new endpoint, or configuration is needed.
+
 The organization layer now connects five maintenance loops without adding a
 second source of truth:
 

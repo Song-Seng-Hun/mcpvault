@@ -35,6 +35,7 @@ export declare class VaultFileCatalog {
     private pendingFullRefresh;
     private pendingTimer;
     private flushPromise;
+    private readBarrier;
     private closed;
     private readonly directoryCache;
     private readonly dirtyDirectories;
@@ -54,6 +55,11 @@ export declare class VaultFileCatalog {
     listAllPaths(): Promise<string[]>;
     /** Return the current immutable-by-convention all-path snapshot for read models. */
     allPathsSnapshot(): Promise<readonly string[]>;
+    /** Drain received notifications before an index decides it is clean.
+     * This joins the active batch; it neither sleeps for the debounce timer nor
+     * waits indefinitely for future OS events/writers. Concurrent reads coalesce.
+     */
+    flushPendingEvents(): Promise<void>;
     /** Share concurrent file stat calls between read models without retaining file metadata. */
     statPaths(paths: readonly string[]): Promise<ReadonlyMap<string, VaultCatalogFileStat>>;
     private listInventory;

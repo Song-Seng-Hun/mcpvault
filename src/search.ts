@@ -735,6 +735,10 @@ export class SearchService {
   invalidateMany(changes?: readonly VaultCatalogChange[]): void {
     this.cacheGeneration += 1;
     this.cache.clear();
+    // Existing readers may finish, but later readers must not share a
+    // computation that selected its index before this invalidation. The
+    // generation guard prevents old work from repopulating the result cache.
+    this.inFlight.clear();
     derivedCacheBudget.clearOwner(this.cacheOwner);
     this.corpusStatsCache.clear();
     derivedCacheBudget.clearOwner(this.corpusCacheOwner);
@@ -998,6 +1002,9 @@ export class SearchService {
       includeRevisions: params.includeRevisions === true,
       expandAuthority: params.expandAuthority === true,
     });
+    // Delivered filesystem changes must invalidate even the result-cache fast
+    // path (including cached misses and notes newly hidden by moderation).
+    await this.catalog?.flushPendingEvents();
     const cached = this.cache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
       this.cache.delete(cacheKey);

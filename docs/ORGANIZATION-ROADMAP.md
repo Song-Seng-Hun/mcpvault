@@ -295,12 +295,27 @@ do not prove a current, bounded, actionable response through its public adapter.
   run, passed alone in 1.68s, and passed on the next unmodified full run. Its
   assertions/time limit were not relaxed. Reproduce under controlled filesystem
   load before claiming this intermittent timing issue fixed.
-- **Observed inventory timing risk.** One combined collection-validation run
-  omitted a newly externally written waiting project from reviewDashboard.
-  Focused reruns and the subsequent full suite passed. That dashboard uses
-  workDependencySnapshot's query inventory, not the new lint collection
-  accumulator. Investigate deterministic new-file reconciliation and snapshot
-  freshness; do not infer this symptom is fixed from the later green run.
+  The read-barrier full run also timed out chat/community/ideation/moderation
+  tests and then raced three temporary-directory cleanups; all 47 affected-group
+  tests and the next unchanged full suite passed. Preserve this evidence when
+  investigating runner load and cancellation/teardown; do not erase timeouts
+  by only reporting the passing rerun.
+- Received-event inventory lag now has a deterministic reproduction and common
+  fix: the catalog's 50ms subscriber debounce could leave metadata, backlinks
+  and even lexical result-cache hits stale after notification delivery. Read
+  preparation now drains that queue, coalesces concurrent callers, and preserves
+  incremental updates. Tests cover waiting-note discovery, Properties changes,
+  link deletion, negative search caching, moderation hiding, pre-change in-flight
+  searches, unknown-path reconciliation, close/failure recovery and clean-read IO.
+  This resolves that proven delivery-to-index gap, not every possible cause of
+  the earlier intermittent waiting-item omission. OS-undelivered notifications
+  and workDependencySnapshot's independent snapshot consistency remain open.
+- **Open: notification failure semantics.** Catalog stat failures currently
+  classify all errors as deletions, not only missing files. The watcher error
+  handler also notifies legacy listeners without notifying batch subscribers.
+  Add controlled IO/watcher-failure coverage and safe reconciliation before
+  claiming fail-safe behavior during NAS/permission outages. Received-event
+  read barriers do not by themselves repair these separate failure paths.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish

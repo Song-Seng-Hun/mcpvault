@@ -41,6 +41,7 @@ export class VaultFileCatalog {
     pendingFullRefresh = false;
     pendingTimer;
     flushPromise = Promise.resolve();
+    readBarrier;
     closed = false;
     directoryCache = new Map();
     dirtyDirectories = new Set();
@@ -104,6 +105,38 @@ export class VaultFileCatalog {
     async allPathsSnapshot() {
         return (await this.listInventory()).all;
     }
+    /** Drain received notifications before an index decides it is clean.
+     * This joins the active batch; it neither sleeps for the debounce timer nor
+     * waits indefinitely for future OS events/writers. Concurrent reads coalesce.
+     */
+    flushPendingEvents() {
+        if (this.readBarrier)
+            return this.readBarrier;
+        const operation = (async () => {
+            await this.flushPromise;
+            if (this.closed)
+                return;
+            if (this.pendingTimer)
+                clearTimeout(this.pendingTimer);
+            this.pendingTimer = undefined;
+            if (!this.pendingFullRefresh && this.pendingChanges.size === 0)
+                return;
+            const flush = this.flushPendingChanges();
+            this.flushPromise = flush.catch(() => {
+                // Keep the serialization chain usable and reconcile after a failed
+                // batch. The reading caller still receives the original rejection.
+                this.invalidate();
+                this.pendingFullRefresh = true;
+            });
+            await flush;
+        })();
+        const barrier = operation.finally(() => {
+            if (this.readBarrier === barrier)
+                this.readBarrier = undefined;
+        });
+        this.readBarrier = barrier;
+        return barrier;
+    }
     /** Share concurrent file stat calls between read models without retaining file metadata. */
     async statPaths(paths) {
         const unique = [...new Set(paths.map(normalizePath).filter(path => path && this.pathFilter.isAllowed(path)))];
@@ -121,6 +154,7 @@ export class VaultFileCatalog {
     }
     async listInventory() {
         this.startWatcher();
+        await this.flushPendingEvents();
         const interval = this.watcher ? WATCH_RECONCILE_INTERVAL_MS : NO_WATCHER_RECONCILE_INTERVAL_MS;
         if (!this.needsRefresh && this.paths && this.allPaths && Date.now() - this.lastRefreshAt < interval) {
             return { notes: this.paths, all: this.allPaths };

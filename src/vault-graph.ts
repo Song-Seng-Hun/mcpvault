@@ -352,6 +352,7 @@ export class VaultGraphIndex {
   }
 
   private async ensure(): Promise<void> {
+    await this.catalog?.flushPendingEvents();
     this.startWatcher();
     if (this.refreshPromise) await this.refreshPromise;
     const interval = this.watcher ? GRAPH_RECONCILE_INTERVAL_MS : NO_WATCHER_RECONCILE_INTERVAL_MS;

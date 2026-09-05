@@ -377,6 +377,16 @@ retry instruction. The private known-file guard requires metadata reads and
 is not an atomic new-file census or a certificate for derived graph snapshots.
 Unresolved-link graph findings without source provenance carry no owner revision.
 
+Metadata inventory, graph read preparation, and lexical search's result-cache
+lookup drain already-received shared-catalog filesystem events first. Drains
+coalesce concurrent callers and join an active notification batch; they do not
+sleep for the debounce timer, wait for future writers, or force a full scan on
+clean reads. Known-file edits/deletes stay incremental. Search invalidation
+detaches pre-change in-flight computations from later callers and prevents old
+work from repopulating the cache. This is not a global atomic snapshot or an
+immediate guarantee for OS-undelivered events/semantic embedding updates.
+Revision checks and scope/visibility checks remain required independently.
+
 `wiki.organization_health.collectionHealth` is an optional derived child, not a
 separate endpoint. It accumulates the same visible coherent notes as lint and
 shares their private source guards. Its earliest future `review_at` deadline
