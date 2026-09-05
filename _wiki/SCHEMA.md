@@ -118,6 +118,11 @@ use the containing note's path for review baselines and later checks; bare
 names retain ordinary ambiguity rules. Baselines exclude targets that the
 caller cannot access or that are more private than the containing note.
 This does not sanitize existing authored links or reference metadata.
+Link occurrences retain explicit `./` and `../` prefixes for graph and move
+readers. Missing source-relative targets do not select same-name notes elsewhere.
+Revision-checked moves with link updates preserve both incoming and outgoing
+relative wikilink targets, including links in typed Properties; use the preview
+to inspect replacements before execution.
 The baseline never replaces Markdown or Git. Use
 `get_wiki_organization_health` for one bounded report of
 property, MOC coverage, atomic-note, Evergreen discoverability, summary

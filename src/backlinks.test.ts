@@ -2,6 +2,9 @@ import { describe, expect, test } from 'vitest';
 import { extractObsidianLinkOccurrences, extractWikiLinkOccurrences, findBacklinkMatches, findUnresolvedLinkMatches } from './backlinks.js';
 
 describe('Obsidian link extraction', () => {
+  test('preserves explicit relative prefixes for source-bound graph and move readers', () => {
+    expect(extractObsidianLinkOccurrences('[[./Sibling#^proof|alias]] [parent](../Parent.md#Heading) [sibling](./Sibling.md)\n`[[./Example]]`').map(({ target }) => target)).toEqual(['./Sibling', '../Parent.md', './Sibling.md']);
+  });
   test('bounded reading order preserves mixed link positions and ignores complete fences', () => {
     const content = '## Real\n~~~md\n## Example\n[[Ignore]]\n~~~\n[first](First.md#Start) [[Second#^claim]] [third](Third.md)';
     expect(extractObsidianLinkOccurrences(content, 2)).toEqual([

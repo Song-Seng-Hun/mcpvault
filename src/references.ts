@@ -62,8 +62,8 @@ export class ReferenceService {
     }
     for (const link of extractObsidianLinkOccurrences(String(content || ''))) {
       try {
-        // The occurrence's normalized target omits ./; keep authored wikilink
-        // spelling so a source-relative link cannot become a basename lookup.
+        // Keep authored wikilink spelling, including relative prefixes and
+        // table escapes, through the shared wikilink parser.
         const target = /^!?\[\[/.test(link.link) ? parseWikiLink(link.link.replace(/^!/, '')).document : link.target;
         const path = await this.resolveWikiLinkTarget(target, principal, containerPath);
         if (!this.access.canReferenceFrom(containerPath, path)) {

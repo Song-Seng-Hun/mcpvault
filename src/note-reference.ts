@@ -102,6 +102,9 @@ export function resolveNoteReference(document: string, index: NoteReferenceIndex
     const relativeMatches = index.qualified.get(relative.toLocaleLowerCase())
       || index.qualified.get(relative.replace(NOTE_EXTENSION, '').toLocaleLowerCase());
     matches = [...(relativeMatches || [])];
+    // An authored ./ or ../ path is an exact source-relative location, not
+    // permission to silently choose a same-name note elsewhere when missing.
+    if (!matches.length && (target.startsWith('../') || target.startsWith('./'))) return [];
   }
   if (!matches.length) {
     const indexed = target.includes('/')

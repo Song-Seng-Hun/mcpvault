@@ -171,7 +171,7 @@ function resolveMarkdownLinkTargets(target: string, sourcePath: string, referenc
 
 function resolveOccurrenceTargets(link: string, target: string, sourcePath: string, referenceIndex: NoteReferenceIndex): string[] {
   return isWikiSyntax(link)
-    ? resolveNoteReference(target, referenceIndex)
+    ? resolveNoteReference(target, referenceIndex, { sourcePath })
     : resolveMarkdownLinkTargets(target, sourcePath, referenceIndex);
 }
 
@@ -207,7 +207,8 @@ function rewriteExplicitLinks(
     const targetPath = targets[0]!;
     const targetIsMoved = normalizeNoteTarget(targetPath) === normalizeNoteTarget(oldPath);
     const sourceIsMoved = normalizeNoteTarget(sourcePath) === normalizeNoteTarget(oldPath);
-    if (!targetIsMoved && !(sourceIsMoved && !isWikiSyntax(occurrence.link))) continue;
+    const sourceRelative = !isWikiSyntax(occurrence.link) || /^\.\.?\//.test(occurrence.target);
+    if (!targetIsMoved && !(sourceIsMoved && sourceRelative)) continue;
     const renderedTarget = targetIsMoved ? newPath : targetPath;
     const replacement = rewriteLinkText(occurrence.link, renderedSourcePath, renderedTarget);
     if (replacement === occurrence.link) continue;

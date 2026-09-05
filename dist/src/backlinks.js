@@ -255,9 +255,9 @@ export function resolveWikiLinkTargets(target, vaultFiles) {
 function parseAnchor(document) {
     const hashIndex = document.indexOf('#');
     if (hashIndex === -1)
-        return { document: document.trim().replace(/^\.\//, '') };
+        return { document: document.trim() };
     const target = document.slice(hashIndex + 1).trim();
-    const result = { document: document.slice(0, hashIndex).trim().replace(/^\.\//, '') };
+    const result = { document: document.slice(0, hashIndex).trim() };
     if (!target)
         return result;
     let decodedTarget = target;

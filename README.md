@@ -352,6 +352,13 @@ when building and checking that baseline. Standalone name lookup keeps its
 existing ambiguity rules. The baseline never copies a more-private target's
 revision into a more-public note; this does not redact pre-existing authored
 content or references. Relative resolution does not grant scope access.
+Graph/backlink readers preserve explicit relative prefixes too: `[[./Note]]`
+cannot create an edge to a same-named note in another folder. A missing explicit
+relative target stays unresolved rather than falling back to a global name.
+With link updates enabled, a note move rewrites incoming relative wikilinks and
+the moved note's outgoing relative wikilinks, including typed Properties, to
+keep the original target and heading/block/alias. Preview the move first;
+plain ambiguous names still require disambiguation.
 Completing the review refreshes
 the upstream baseline, so a known retired or disputed prerequisite does not
 reopen the same review indefinitely until it changes again. The bounded

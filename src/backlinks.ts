@@ -280,9 +280,9 @@ interface ParsedLinkTarget {
 
 function parseAnchor(document: string): ParsedLinkTarget {
   const hashIndex = document.indexOf('#');
-  if (hashIndex === -1) return { document: document.trim().replace(/^\.\//, '') };
+  if (hashIndex === -1) return { document: document.trim() };
   const target = document.slice(hashIndex + 1).trim();
-  const result: ParsedLinkTarget = { document: document.slice(0, hashIndex).trim().replace(/^\.\//, '') };
+  const result: ParsedLinkTarget = { document: document.slice(0, hashIndex).trim() };
   if (!target) return result;
   let decodedTarget = target;
   try { decodedTarget = decodeURIComponent(target); } catch { /* retain the safe raw anchor */ }

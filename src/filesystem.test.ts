@@ -904,6 +904,41 @@ describe("tasks", () => {
     await expect(access(join(testVaultPath, "Moved.md"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
+  test("moves a relative link target without mistaking same-name sibling targets for ambiguity", async () => {
+    await mkdir(join(testVaultPath, "Wiki/Nested"), { recursive: true });
+    await mkdir(join(testVaultPath, "Other"), { recursive: true });
+    await writeFile(join(testVaultPath, "Wiki/Target.md"), "# Target\n");
+    await writeFile(join(testVaultPath, "Other/Target.md"), "# Other\n");
+    await writeFile(join(testVaultPath, "Wiki/Source.md"), "[[./Target#^proof|alias]]\n");
+    await writeFile(join(testVaultPath, "Wiki/Nested/Source.md"), "[[../Target]]\n");
+    const before = await fileSystem.readNote("Wiki/Target.md");
+    const preview = await fileSystem.previewMoveNote({ oldPath: "Wiki/Target.md", newPath: "Archive/Renamed.md" });
+    expect(preview.ambiguousTotal).toBe(0);
+    expect(preview.affectedLinks.map(item => item.sourcePath).sort()).toEqual(["Wiki/Nested/Source.md", "Wiki/Source.md"]);
+    expect((await fileSystem.moveNote({ oldPath: "Wiki/Target.md", newPath: "Archive/Renamed.md", expectedRevision: before.revision, updateLinks: true })).success).toBe(true);
+    expect((await fileSystem.readNote("Wiki/Source.md")).content).toContain("[[Archive/Renamed.md#^proof|alias]]");
+    expect((await fileSystem.readNote("Wiki/Nested/Source.md")).content).toContain("[[Archive/Renamed.md]]");
+    expect((await fileSystem.getBacklinks("Archive/Renamed.md")).total).toBe(2);
+    expect((await fileSystem.getBacklinks("Other/Target.md")).total).toBe(0);
+  });
+
+  test.each(["Wiki", "Wiki/Nested"])("moving the source from %s preserves relative outgoing wikilinks in body and typed Properties", async sourceFolder => {
+    await mkdir(join(testVaultPath, sourceFolder), { recursive: true });
+    const sourcePath = `${sourceFolder}/Source.md`;
+    const targetLink = sourceFolder === "Wiki" ? "./Target" : "../Target";
+    await writeFile(join(testVaultPath, "Wiki/Target.md"), "# Target\n");
+    await writeFile(join(testVaultPath, sourcePath), `---\ndepends_on: ['[[${targetLink}#^proof|typed]]']\n---\n[[${targetLink}#Heading|target]]\n~~~md\n[[./Example]]\n~~~\n`);
+    const before = await fileSystem.readNote(sourcePath);
+    const preview = await fileSystem.previewMoveNote({ oldPath: sourcePath, newPath: "Archive/Source.md" });
+    expect(preview.affectedLinks).toEqual(expect.arrayContaining([expect.objectContaining({ direction: "outgoing", replacement: "[[Wiki/Target.md#Heading|target]]" })]));
+    expect(preview.affectedProperties).toEqual(expect.arrayContaining([expect.objectContaining({ propertyPath: "depends_on[0]", replacement: "[[Wiki/Target.md#^proof|typed]]" })]));
+    expect((await fileSystem.moveNote({ oldPath: sourcePath, newPath: "Archive/Source.md", expectedRevision: before.revision, updateLinks: true })).success).toBe(true);
+    const moved = await fileSystem.readNote("Archive/Source.md");
+    expect(moved.content).toContain("[[Wiki/Target.md#Heading|target]]");
+    expect(moved.content).toContain("[[./Example]]");
+    expect(moved.frontmatter.depends_on).toEqual(["[[Wiki/Target.md#^proof|typed]]"]);
+  });
+
   test("blocks a move rather than leaking or breaking references from an inaccessible scope", async () => {
     await mkdir(join(testVaultPath, "Private"), { recursive: true });
     await writeFile(join(testVaultPath, "Target.md"), "# Target\n");

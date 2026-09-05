@@ -23,6 +23,27 @@ async function writeNote(path: string, content: string): Promise<void> {
 }
 
 describe('VaultGraphIndex', () => {
+  test('relative sibling links do not create backlinks to same-name notes elsewhere', async () => {
+    vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-relative-graph-'));
+    await writeNote('Wiki/Target.md', '# Actual target\n');
+    await writeNote('Other/Target.md', '# Unrelated target\n');
+    await writeNote('Wiki/Source.md', '[[./Target#^proof|alias]]\n[local](./Target.md)\n');
+    graph = new VaultGraphIndex(vaultPath, new PathFilter(), new FrontmatterHandler());
+    expect((await graph.getBacklinks('Wiki/Target.md', 10, () => true)).total).toBe(2);
+    expect((await graph.getBacklinks('Other/Target.md', 10, () => true)).total).toBe(0);
+    expect((await graph.findOrphanNotes(10, () => true)).orphans.map(item => item.path)).toContain('Other/Target.md');
+    expect((await graph.getOutlinks('Wiki/Source.md', 10, path => path !== 'Wiki/Target.md')).outlinks).toEqual([]);
+    await writeNote('Wiki/Source.md', '[[../Other/Target]]\n');
+    graph.invalidate('Wiki/Source.md', 'upsert');
+    expect((await graph.getBacklinks('Wiki/Target.md', 10, () => true)).total).toBe(0);
+    expect((await graph.getBacklinks('Other/Target.md', 10, () => true)).total).toBe(1);
+    await writeNote('Wiki/Source.md', '[[./Missing]]\n');
+    await writeNote('Other/Missing.md', '# Not a fallback\n');
+    graph.invalidate('Wiki/Source.md', 'upsert');
+    graph.invalidate('Other/Missing.md', 'upsert');
+    expect((await graph.getBacklinks('Other/Missing.md', 10, () => true)).total).toBe(0);
+    expect((await graph.findUnresolvedLinks(10, () => true)).unresolved).toEqual([expect.objectContaining({ path: 'Wiki/Source.md', target: './Missing' })]);
+  });
   test('builds bounded graph queries and refreshes only changed notes', async () => {
     vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-graph-'));
     await writeNote('Wiki/Target.md', 'target\n');

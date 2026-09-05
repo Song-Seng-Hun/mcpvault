@@ -2,6 +2,12 @@ import { describe, expect, test } from 'vitest';
 import { buildNoteReferenceIndex, resolveNoteReference } from './note-reference.js';
 
 describe('note reference resolver', () => {
+  test('an explicit missing relative target never falls back to another folder', () => {
+    const index = buildNoteReferenceIndex([{ path: 'Other/Target.md' }]);
+    expect(resolveNoteReference('./Target', index, { sourcePath: 'Wiki/Source.md' })).toEqual([]);
+    expect(resolveNoteReference('../Target', index, { sourcePath: 'Wiki/Nested/Source.md' })).toEqual([]);
+    expect(resolveNoteReference('Target', index, { sourcePath: 'Wiki/Source.md' })).toEqual(['Other/Target.md']);
+  });
   test('resolves paths, aliases, stable IDs, preferred terms, dotted aliases, and relative links', () => {
     const index = buildNoteReferenceIndex([
       { path: 'Knowledge/Canonical.md', qualifiedPaths: ['scope://model/codex/Canonical.md'], title: 'Canonical title', aliases: ['Friendly name', 'Node.js'], preferredTerm: 'Preferred concept', stableId: 'canonical-id' },
