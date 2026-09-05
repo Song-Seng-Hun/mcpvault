@@ -689,6 +689,14 @@ context omitted. Never quote these placeholders as evidence or use them as patch
 text: read the actual authorized source revision. Graph views remain advisory,
 event/reconciliation-refreshed and not a whole-vault deletion certificate.
 
+Tag discovery and per-note tag management use the same body extractor. Tags in
+matching fences, closed backtick spans or escaped hashes are examples, not
+classification. Preserve complete nested tags (`#topic/subtopic`) and Unicode
+letters/marks/emoji; numeric-only hashtags are not tags. Graph counts normalize
+case and count occurrences, not unique notes. Existing Properties are not
+automatically repaired. HTML/indented-code parsing and complete Obsidian symbol
+equivalence are not claimed by this bounded-scope literal scanner.
+
 Heading and block targets are preserved by graph reads, so
 `[[folder/Source#Heading]]` and `[[folder/Source#^block-id]]` can take an agent
 directly to the intended passage without rereading the entire source note.

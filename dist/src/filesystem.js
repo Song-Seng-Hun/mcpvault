@@ -16,6 +16,7 @@ import { validateJsonCanvasDocument } from './json-canvas.js';
 import { acceptsPlainReference, propertyPathText } from './property-references.js';
 import { assertLegacyDiscussionMutationAllowed } from './scope-access.js';
 import { extractMarkdownTasks } from './markdown-tasks.js';
+import { extractInlineTags } from './markdown-tags.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { projectNoteOutline, projectNoteLineWindow } from './note-projections.js';
 import { isMissingVaultPath, QuerySnapshotChangedError, VaultReadUnavailableError } from './vault-read-errors.js';
@@ -2042,8 +2043,7 @@ export class FileSystemService {
                 }
             }
             // Also extract inline tags from content
-            const inlineTagMatches = note.content.match(/#[a-zA-Z0-9_-]+/g) || [];
-            const inlineTags = inlineTagMatches.map(tag => tag.slice(1)); // Remove #
+            const inlineTags = extractInlineTags(note.content);
             currentTags = [...new Set([...currentTags, ...inlineTags])]; // Deduplicate
             if (operation === 'list') {
                 return {

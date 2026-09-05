@@ -2174,6 +2174,15 @@ the same graph parser even without an injected index. Tags count occurrences,
 not distinct notes. Graph refresh follows received changes/reconciliation; this
 is not an atomic whole-vault snapshot or a general redactor of public prose.
 
+Body tag discovery and per-note tag management share literal-aware extraction:
+matching backtick/tilde fences, closed backtick spans and escaped hashes are not
+classification tags. Nested tags retain their full slash path; Korean, combining
+marks and emoji are preserved, while numeric-only hashtags and word/URL fragments
+are excluded. Graph occurrence counts still normalize case. Adding a tag no
+longer imports code-example tags into Properties. Existing Properties are not
+automatically cleaned or renamed. This is not a full HTML/indented-code parser
+or a promise of every Obsidian symbol rule. See [Obsidian tag syntax](https://obsidian.md/help/tags).
+
 **Request:**
 
 ```json

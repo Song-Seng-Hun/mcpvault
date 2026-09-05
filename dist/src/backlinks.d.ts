@@ -1,5 +1,12 @@
 import type { BacklinkMatch, OutlinkMatch, UnresolvedLinkMatch } from './types.js';
 /**
+ * Build an offset-preserving mask for Markdown regions that cannot create an
+ * Obsidian graph edge or inline tag. The scan is deliberately smaller than a full Markdown
+ * parser, but it handles the literal forms used in notes and examples:
+ * matching fences, closed backtick code spans, and escaped link openers.
+ */
+export declare function buildMarkdownLiteralMask(content: string): Uint8Array;
+/**
  * Find Obsidian internal links in a note that refer to a target note.
  *
  * This deliberately works on raw lines so the result can point an agent to

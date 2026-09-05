@@ -13,12 +13,12 @@ import { RELATION_FIELDS } from './organization.js';
 import { noteReferenceDocument, noteReferenceTermKeys } from './note-reference.js';
 import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference } from './property-references.js';
 import { isModerationHidden } from './moderation-policy.js';
+import { extractInlineTags } from './markdown-tags.js';
 
 const GRAPH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
 const REVERSE_LINK_CACHE_LIMIT = 16_384;
 const NOTE_PATTERN = /\.(?:md|markdown|txt)$/i;
-const INLINE_TAG_PATTERN = /(?:^|\s)#([a-zA-Z][a-zA-Z0-9_\/\-]*)/g;
 
 interface GraphEntry {
   path: string;
@@ -566,9 +566,7 @@ export class VaultGraphIndex {
           if (typeof tag === 'string' && tag.trim()) tags.push(tag.trim().toLowerCase());
         }
       }
-      INLINE_TAG_PATTERN.lastIndex = 0;
-      let match: RegExpExecArray | null;
-      while ((match = INLINE_TAG_PATTERN.exec(parsed.content)) !== null) tags.push(match[1]!.toLowerCase());
+      tags.push(...extractInlineTags(parsed.content).map(tag => tag.toLowerCase()));
       const links = extractObsidianLinkOccurrences(raw);
       for (const relation of RELATION_FIELDS) {
         const values = Array.isArray(parsed.frontmatter[relation]) ? parsed.frontmatter[relation] : [];

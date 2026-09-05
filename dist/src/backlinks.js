@@ -25,11 +25,11 @@ function startsParagraphInterruptingBlock(line) {
 }
 /**
  * Build an offset-preserving mask for Markdown regions that cannot create an
- * Obsidian graph edge. The scan is deliberately smaller than a full Markdown
+ * Obsidian graph edge or inline tag. The scan is deliberately smaller than a full Markdown
  * parser, but it handles the literal forms used in notes and examples:
  * matching fences, closed backtick code spans, and escaped link openers.
  */
-function buildLinkLiteralMask(content) {
+export function buildMarkdownLiteralMask(content) {
     const mask = new Uint8Array(content.length);
     const backtickRuns = [];
     let fenceChar = '';
@@ -161,7 +161,7 @@ export function extractObsidianLinkOccurrences(content, limit = Number.POSITIVE_
 function extractLinkOccurrences(content, includeMarkdown, limit = Number.POSITIVE_INFINITY) {
     const matches = [];
     const lines = content.split('\n');
-    const literalMask = buildLinkLiteralMask(content);
+    const literalMask = buildMarkdownLiteralMask(content);
     let lineOffset = 0;
     let currentHeading;
     for (let index = 0; index < lines.length && matches.length < limit; index += 1) {

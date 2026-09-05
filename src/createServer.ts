@@ -716,7 +716,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "manage_tags",
-          description: "Add, remove, or list tags in a note",
+          description: "List combined Properties/body tags, or add/remove Properties tags. Body extraction preserves nested/Unicode tags and ignores literal examples. Add includes recognized body tags in Properties; remove does not rewrite inline hashtags, which remain discoverable until the body is edited. Re-read the note after writing.",
           inputSchema: {
             type: "object",
             properties: {
@@ -760,7 +760,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getIdeationTools(),
         {
           name: "list_all_tags",
-          description: "List tags from caller-visible, non-hidden notes with occurrence counts, not distinct-note counts. Combines frontmatter tags and inline #hashtags, sorted by frequency. An advisory discovery view, not a complete vault inventory.",
+          description: "List tags from caller-visible, non-hidden notes with occurrence counts, not distinct-note counts. Combines Properties and body tags, including nested/Unicode tags. Body tags ignore matching fences, closed inline backticks and escaped hashes. Sorted by frequency; advisory, not a complete vault inventory.",
           inputSchema: {
             type: "object",
             properties: {

@@ -414,6 +414,15 @@ do not prove a current, bounded, actionable response through its public adapter.
   certify every edge against current raw content, arbitrary prose redaction,
   a vault-wide snapshot, inline-tag fence parsing, vault-stat moderation or
   aggregate memory budgets; these remain separate audits.
+- Body tags now share the graph's Markdown literal mask across graph discovery
+  and per-note management. Matching fences, closed inline spans, escaped hashes,
+  word/URL fragments and numeric-only hashtags no longer pollute classification;
+  full nested paths and Unicode letters/marks/emoji survive extraction. Tag add
+  no longer promotes literal examples or clipped nested prefixes to Properties.
+  Real-file regressions cover indexed/unindexed parity, repeat counts, warm
+  invalidation and public MCP output. Existing Properties cleanup, full HTML/
+  indented-code rendering equivalence and per-note mutation concurrency remain
+  independent work, not claims of this parser change.
 - **Remaining scale trade-off: archive rediscovery.** `wiki.resurface_archives`
   now provides safe scan continuation and revision-checked previews, but inventory
   counts still scan metadata and recommendation rank is window-local. Establish
