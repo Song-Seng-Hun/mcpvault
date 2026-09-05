@@ -3255,10 +3255,10 @@ export class LlmWikiService {
     const fromNote = await this.fileSystem.readNote(from), toNote = await this.fileSystem.readNote(to);
     if (isModerationHidden(fromNote.frontmatter) || isModerationHidden(toNote.frontmatter)) throw new Error('A trail endpoint is unavailable');
 
-    type TrailEdge = { from: string; to: string; line: number; link: string; context: string; relation?: string };
+    type TrailEdge = { from: string; to: string; sourceRevision: string; line: number; link: string; context: string; relation?: string };
     type QueueItem = { path: string; nodes: string[]; edges: TrailEdge[] };
     const queue: QueueItem[] = [{ path: from, nodes: [from], edges: [] }];
-    const visited = new Set<string>([from.toLowerCase()]);
+    const graphReads = new Map<string, Awaited<ReturnType<FileSystemService['getOutlinks']>>>();
     const paths: Array<{ nodes: string[]; edges: TrailEdge[]; length: number }> = [];
     let exploredNodes = 0;
     let exploredEdges = 0;
@@ -3275,7 +3275,17 @@ export class LlmWikiService {
         truncated = true;
         continue;
       }
-      const outlinks = await this.fileSystem.getOutlinks(current.path, 24, target => canAccess(target) && this.access.canReferenceFrom(current.path, target));
+      const sourceKey = current.path.toLowerCase();
+      let outlinks = graphReads.get(sourceKey);
+      if (!outlinks) {
+        try {
+          outlinks = await this.fileSystem.getOutlinks(current.path, 24, target => canAccess(target) && this.access.canReferenceFrom(current.path, target), 0, { includeSourceRevision: true });
+          if (typeof outlinks.sourceRevision !== 'string' || !/^[a-f0-9]{64}$/.test(outlinks.sourceRevision)) throw new Error('invalid snapshot');
+          graphReads.set(sourceKey, outlinks);
+        } catch {
+          throw new Error('A trail source changed or became unavailable; re-read the endpoints and retry.');
+        }
+      }
       if (outlinks.truncated) truncated = true;
       for (const link of outlinks.outlinks) {
         if (exploredEdges >= 200) { truncated = true; break; }
@@ -3285,18 +3295,26 @@ export class LlmWikiService {
           exploredEdges += 1;
           const key = match.toLowerCase();
           if (current.nodes.some(node => node.toLowerCase() === key)) continue;
-          const nextEdges = [...current.edges, { from: this.access.toPublicPath(current.path), to: this.access.toPublicPath(match), line: link.line, link: link.link, context: boundedText(link.context, 240), ...(link.relation && { relation: link.relation }) }];
+          const nextEdges = [...current.edges, { from: this.access.toPublicPath(current.path), to: this.access.toPublicPath(match), sourceRevision: outlinks.sourceRevision!, line: link.line, link: link.link, context: boundedText(link.context, 240), ...(link.relation && { relation: link.relation }) }];
           if (key === to.toLowerCase()) {
             paths.push({ nodes: [...current.nodes.map(item => this.access.toPublicPath(item)), this.access.toPublicPath(match)], edges: nextEdges, length: nextEdges.length });
             if (paths.length >= pathLimit) break;
             continue;
           }
-          if (visited.has(key)) continue;
-          visited.add(key);
+          // Cycle protection is path-local: another branch may validly reach
+          // this same intermediate note. Graph reads remain request-local.
           queue.push({ path: match, nodes: [...current.nodes, match], edges: nextEdges });
         }
         if (paths.length >= pathLimit) break;
       }
+    }
+    try {
+      await this.assertCurrentContextSources(principal, [
+        { path: this.access.toPublicPath(from), revision: fromNote.revision }, { path: this.access.toPublicPath(to), revision: toNote.revision },
+        ...paths.flatMap(path => path.edges.map(edge => ({ path: edge.from, revision: edge.sourceRevision }))),
+      ]);
+    } catch {
+      throw new Error('A trail source changed or became unavailable; re-read the endpoints and retry.');
     }
     const result = { mode: 'bounded_wiki_trail', from: this.access.toPublicPath(from), to: this.access.toPublicPath(to), maxDepth: depthLimit, paths: paths.slice(0, pathLimit), totalPaths: paths.length, exploredNodes, exploredEdges, truncated: truncated || queue.length > 0 };
     if (JSON.stringify(result).length <= boundedChars) return result;
@@ -10951,7 +10969,8 @@ export class LlmWikiService {
         if (existing && existing.revision !== source.revision) throw new Error('mixed revisions');
         snapshots.set(key, { path, revision: source.revision });
       }
-      // Root + at most 24 MOC entries + the bounded answer-packet neighbors.
+      // Root + at most 24 MOC entries + bounded packet neighbors, or at most
+      // 26 distinct trail sources (two endpoints + 8 paths * 3 intermediates).
       if (snapshots.size > 32) throw new Error('too many sources');
       const entries = [...snapshots.values()];
       for (let offset = 0; offset < entries.length; offset += 4) {

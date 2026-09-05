@@ -461,6 +461,7 @@ export declare class LlmWikiService {
             edges: {
                 from: string;
                 to: string;
+                sourceRevision: string;
                 line: number;
                 link: string;
                 context: string;

@@ -1048,7 +1048,17 @@ unresolved/ambiguous link counts; hidden candidates are not enumerated. Scope
 rules apply in the direction of each link, including backlinks. Hidden roots
 are rejected. maxChars applies to the entire serialized response: omit full
 rows, then optional metadata, while retaining exact identities and marking
-truncation, or ask for a larger budget. `get_wiki_placement_candidates`
+truncation, or ask for a larger budget. Trail edges include `sourceRevision`
+from the graph's captured source, not a later parse. Both endpoints and the
+discovered paths' source revisions are checked before return, including
+endpoint checks for empty/zero-hop results. Changed or unavailable sources
+require a fresh request; no stale route is returned as current. Final source
+checks deduplicate paths and use at most four concurrent reads. Distinct
+simple paths may share intermediate notes; cycle rejection is path-local,
+while graph reads are reused only within the request. Depth (4), paths (8),
+outgoing rows (24 per source), edge expansions (200), and maxChars remain
+bounded. These checks do not promise an atomic or exhaustive Vault snapshot.
+`get_wiki_placement_candidates`
 reports lifecycle/`note_kind` versus PARA-folder disagreements as advisory
 repair candidates. Review the current revision before any triage or move; no
 automatic relocation occurs.

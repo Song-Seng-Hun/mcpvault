@@ -1122,6 +1122,16 @@ filtering backlink authors must not change the target resolution. Hidden roots a
 unavailable, including zero-hop trails. Small budgets omit complete rows and
 mark truncation; canonical endpoint paths are never shortened. If identity
 itself cannot fit, increase maxChars.
+`wiki.trail` preserves distinct simple routes that converge on a shared note,
+with path-local cycle protection and request-local reuse of graph reads. Each
+edge carries its captured `sourceRevision`. Before returning, it checks both
+endpoints and the discovered routes' source revisions; concurrent edits,
+deletions, hidden-source changes, or access loss produce a bounded retry error
+instead of a stale route. An empty or zero-hop result still checks endpoints.
+The scan remains bounded (depth 4, 8 routes, 24 outgoing rows per source and
+200 edge expansions); it is neither an exhaustive search nor an atomic Vault
+snapshot. Final revision reads are deduplicated and run at concurrency four;
+unrelated dead ends do not trigger final revision reads.
 `get_wiki_vocabulary_health` adds a bounded library-style hygiene view for tag
 spelling/case variants, subject terms without a local authority note, and terms
 used by multiple notes. It suggests review only; it never renames or retags
