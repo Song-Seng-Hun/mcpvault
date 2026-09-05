@@ -1,6 +1,8 @@
 import type { NoteHeading, ReadNoteLinesParams } from './types.js';
 /** Pure projection of one already-authorized raw Markdown snapshot. */
 export declare function projectNoteOutline(raw: string): NoteHeading[];
+/** Retain only requested normalized names, not a complete outline. */
+export declare function projectNoteHeadingPresence(raw: string, requested: ReadonlySet<string>): Set<string>;
 /** Exact terminal block anchors, not ID prefixes, mentions or code examples. */
 export declare function projectNoteBlockLines(raw: string, blockId: string): number[];
 /** Prefer an exact heading; a partial match is useful only when unambiguous. */

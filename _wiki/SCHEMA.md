@@ -260,9 +260,14 @@ with matching revisions (at most 16 reads per batch; 8 MiB per complete source).
 It validates the visible inventory again after hydration; changed dependency,
 alias-candidate, membership or visibility metadata requires restarting the query,
 not returning a mixed plan. Private invisible changes are outside this cohort.
-The no-index fallback captures paths once and parses each source once. Neither
+The no-index fallback captures paths once and parses each source once. Both
+planning paths consume bodies into three request-local section-presence flags
+and retain metadata rather than the full body cohort. The internal consumer
+runs only on admitted sources; indexed hydration checks revisions before calling
+it, and its projections must be discarded if final cohort validation fails.
+Consumer failures drain the current batch and return a path-free error. Neither
 path is an atomic filesystem transaction or a guarantee of OS event delivery;
-the inventory and selected bodies still have vault-dependent total memory cost.
+metadata, the work graph and transient source parsing still consume memory.
 Project packets count only real headings outside matching code fences and
 measure the final serialized response including optional indentation. Large
 records may omit details explicitly (`detailsOmitted`); exact path/revision and

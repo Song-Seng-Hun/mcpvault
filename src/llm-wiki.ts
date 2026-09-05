@@ -18,7 +18,7 @@ import { packProjectPacket, type ProjectPacketOptions } from './project-packet.j
 import { classifyDependencyResidual } from './dependency-graph.js';
 import { CollectionHealthProjection } from './collection-health.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
-import { projectNoteOutline, projectNoteBlockLines, selectNoteHeading } from './note-projections.js';
+import { projectNoteOutline, projectNoteHeadingPresence, projectNoteBlockLines, selectNoteHeading } from './note-projections.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
 import { buildNoteReferenceIndex, normalizeNoteReferenceTerm, resolveNoteReference, type NoteReferenceIndex } from './note-reference.js';
@@ -117,6 +117,7 @@ type WorkDependencyState = {
 type WorkDependencySnapshot = {
   notes: QueryNote[];
   workNotes: QueryNote[];
+  projectSections: Map<string, { outcome: boolean; brainstorm: boolean; support: boolean }>;
   stateByPath: Map<string, WorkDependencyState>;
   plan: {
     adjacency: Map<string, Set<string>>;
@@ -1370,8 +1371,19 @@ export class LlmWikiService {
    */
   private async workDependencySnapshot(principal?: ScopePrincipal, includeContent = false): Promise<WorkDependencySnapshot> {
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+    const projectSections: WorkDependencySnapshot['projectSections'] = new Map();
+    const outcomeNames = ['outcome', 'desired outcome', 'definition of done', 'completion criteria', '완료 조건'];
+    const requestedHeadings = new Set([...outcomeNames, 'brainstorm', 'project support']);
     const notes = await this.fileSystem.readQueryInventory(canAccess,
-      note => !isModerationHidden(note.frontmatter), includeContent ? isPlanningProject : undefined);
+      note => !isModerationHidden(note.frontmatter), includeContent ? isPlanningProject : undefined,
+      includeContent ? note => {
+        // This is a parsed body: a leading thematic break is not Properties.
+        const headings = projectNoteHeadingPresence('\n' + (note.content || ''), requestedHeadings);
+        projectSections.set(normalizePath(note.path).toLowerCase(), {
+          outcome: outcomeNames.some(name => headings.has(name)),
+          brainstorm: headings.has('brainstorm'), support: headings.has('project support'),
+        });
+      } : undefined);
     const isWorkNote = (note: QueryNote) => isActionableKnowledge(note.frontmatter);
     const workNotes = notes.filter(isWorkNote);
     const visibleByPath = new Map(notes.map(note => [normalizePath(note.path).toLowerCase(), note]));
@@ -1534,6 +1546,7 @@ export class LlmWikiService {
     return {
       notes,
       workNotes,
+      projectSections,
       stateByPath,
       plan: {
         adjacency,
@@ -6741,10 +6754,8 @@ export class LlmWikiService {
     const concreteNextAction = (value: string | undefined) => Boolean(value && value.length >= 8 && !/^(?:research|investigate|review|improve|handle|work on|continue|look into|figure out|explore)\b/i.test(value.trim()));
     for (const note of dependencySnapshot.workNotes) {
       if (!isPlanningProject(note)) continue;
-      // Properties were already removed. A leading body thematic break must
-      // not be parsed as a second frontmatter block by the raw-note projector.
-      const headings = new Set(projectNoteOutline('\n' + (note.content || '')).map(item => item.text.trim().toLowerCase()));
-      const heading = (names: string[]) => names.some(name => headings.has(name.toLowerCase()));
+      const sections = dependencySnapshot.projectSections.get(normalizePath(note.path).toLowerCase());
+      if (!sections) throw new Error('Project section snapshot unavailable; retry the request.');
       const lifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
       const nextActions = Array.isArray(note.frontmatter.next_actions) ? note.frontmatter.next_actions.filter((item: unknown): item is string => typeof item === 'string').slice(0, 8) : [];
       const nextAction = typeof note.frontmatter.next_action === 'string' ? note.frontmatter.next_action : undefined;
@@ -6757,11 +6768,11 @@ export class LlmWikiService {
       if (!note.frontmatter.project_purpose) missing.push('purpose');
       if (!note.frontmatter.desired_outcome) missing.push('desired_outcome');
       if (!nextAction && nextActions.length === 0 && !waitingFor) missing.push('next_action');
-      const hasOutcomeCriteria = completionCriteria.length > 0 || heading(['Outcome', 'Desired outcome', 'Definition of done', 'Completion criteria', '완료 조건']);
+      const hasOutcomeCriteria = completionCriteria.length > 0 || sections.outcome;
       if (note.frontmatter.desired_outcome && !hasOutcomeCriteria) missing.push('outcome_criteria');
       if (nextAction && !concreteNextAction(nextAction)) missing.push('next_action_detail');
-      if (!heading(['Brainstorm'])) missing.push('brainstorm_section');
-      if (support.length === 0 && !heading(['Project support'])) missing.push('project_support');
+      if (!sections.brainstorm) missing.push('brainstorm_section');
+      if (support.length === 0 && !sections.support) missing.push('project_support');
       const dependencyState = dependencySnapshot.stateByPath.get(normalizePath(note.path).toLowerCase())!;
       const dependencyKey = normalizePath(note.path).toLowerCase();
       const plannedStage = dependencySnapshot.plan.stageByPath.get(dependencyKey);
@@ -6789,7 +6800,7 @@ export class LlmWikiService {
         ...(completionCriteria.length > 0 && { completionCriteria }),
         ...(missing.length > 0 && { missing }),
         planningNeedsAttention: missing.length > 0,
-        planning: { purpose: Boolean(note.frontmatter.project_purpose), desiredOutcome: Boolean(note.frontmatter.desired_outcome), outcomeCriteria: hasOutcomeCriteria, completionCriteria: completionCriteria.length > 0, brainstormSection: heading(['Brainstorm']), projectSupport: support.length > 0 || heading(['Project support']), nextActionConcrete: !nextAction || concreteNextAction(nextAction), ready: missing.length === 0 },
+        planning: { purpose: Boolean(note.frontmatter.project_purpose), desiredOutcome: Boolean(note.frontmatter.desired_outcome), outcomeCriteria: hasOutcomeCriteria, completionCriteria: completionCriteria.length > 0, brainstormSection: sections.brainstorm, projectSupport: support.length > 0 || sections.support, nextActionConcrete: !nextAction || concreteNextAction(nextAction), ready: missing.length === 0 },
         execution: {
           ready: !workflowClosed && !waitingFor && !['waiting', 'blocked'].includes(taskStatus) && dependencyState.executable,
           workflowState: taskStatus,

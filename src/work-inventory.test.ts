@@ -136,3 +136,53 @@ test('oversized project sources fail completely with a path-free budget error', 
   const realFs = new FileSystemService(vault, new PathFilter(), new FrontmatterHandler(), undefined, index);
   await expect(realFs.readQueryInventory(() => true, () => true, () => true)).rejects.toThrow('Source exceeds query read budget');
 });
+
+test.each([true, false])('planning snapshots retain metadata and section facts, not full bodies (indexed=%s)', async indexed => {
+  await seed('Project.md', project() + '\n' + 'body payload '.repeat(10000));
+  const targetFs = indexed ? fs : new FileSystemService(vault);
+  const access = new ScopeAccessPolicy();
+  const target = new LlmWikiService(targetFs, access, new ReferenceService(targetFs, access));
+  const snapshot = await (target as any).workDependencySnapshot(undefined, true);
+  expect(snapshot.notes).toHaveLength(1);
+  expect(typeof snapshot.notes[0].content).toBe('undefined');
+  expect(snapshot.workNotes[0].revision).toMatch(/^[a-f0-9]{64}$/);
+  const packet = await target.projectPacket();
+  expect(packet.items[0].planning).toMatchObject({ brainstormSection: true, projectSupport: true });
+});
+
+test('changed body revisions are rejected before a content consumer sees them', async () => {
+  await seed('Project.md', project()); await index.list();
+  await writeFile(join(vault, 'Project.md'), project() + '\nChanged');
+  const consume = vi.fn();
+  await expect(fs.readQueryInventory(() => true, () => true, () => true, consume)).rejects.toThrow(/Query snapshot changed/);
+  expect(consume).not.toHaveBeenCalled();
+});
+
+test('metadata changes during consumption still invalidate the entire projection', async () => {
+  await seed('Project.md', project());
+  const consume = vi.fn(async () => { await seed('New.md', '# New'); });
+  await expect(fs.readQueryInventory(() => true, () => true, note => note.path === 'Project.md', consume)).rejects.toThrow(/Query snapshot changed/);
+  expect(consume).toHaveBeenCalledTimes(1);
+});
+
+test('a failed consumer drains its batch and returns a path-free error', async () => {
+  await seed('A.md', project()); await seed('B.md', project());
+  let release!: () => void, started!: () => void, failed!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const beginning = new Promise<void>(resolve => { started = resolve; });
+  const failure = new Promise<void>(resolve => { failed = resolve; });
+  let settled = false;
+  const reading = fs.readQueryInventory(() => true, () => true, () => true, async note => {
+    if (note.path === 'A.md') { failed(); throw new Error('secret-driver/A.md'); }
+    started(); await gate;
+  }).then(value => { settled = true; return value; }, error => { settled = true; return error; });
+  await Promise.all([beginning, failure]);
+  await new Promise<void>(resolve => setImmediate(resolve));
+  const earlySettlement = settled; release();
+  const result = await reading;
+  expect(earlySettlement).toBe(false);
+  expect(result.message).toBe('Inventory content projection failed; retry the request.');
+  const retried = await fs.readQueryInventory(() => true, () => true, () => true, () => undefined);
+  expect(retried).toHaveLength(2);
+  expect(retried.every(note => note.content === undefined)).toBe(true);
+});

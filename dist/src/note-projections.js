@@ -52,16 +52,32 @@ function* visibleNoteLines(raw) {
         yield { text: trimmed, line: i + 1 };
     }
 }
-/** Pure projection of one already-authorized raw Markdown snapshot. */
-export function projectNoteOutline(raw) {
-    const headings = [];
+function* noteHeadings(raw) {
     const headingRegex = /^ {0,3}(#{1,6})(?:[ \t]+(.*))?$/;
     for (const { text, line } of visibleNoteLines(raw)) {
         const match = headingRegex.exec(text);
         if (match)
-            headings.push({ level: match[1].length, text: stripAtxClosingSequence((match[2] ?? '').trim()), line });
+            yield { level: match[1].length, text: stripAtxClosingSequence((match[2] ?? '').trim()), line };
     }
-    return headings;
+}
+/** Pure projection of one already-authorized raw Markdown snapshot. */
+export function projectNoteOutline(raw) {
+    return [...noteHeadings(raw)];
+}
+/** Retain only requested normalized names, not a complete outline. */
+export function projectNoteHeadingPresence(raw, requested) {
+    const wanted = new Set([...requested].map(name => name.trim().toLowerCase()));
+    const found = new Set();
+    if (!wanted.size)
+        return found;
+    for (const heading of noteHeadings(raw)) {
+        const name = heading.text.trim().toLowerCase();
+        if (wanted.has(name))
+            found.add(name);
+        if (found.size === wanted.size)
+            break;
+    }
+    return found;
 }
 /** Exact terminal block anchors, not ID prefixes, mentions or code examples. */
 export function projectNoteBlockLines(raw, blockId) {

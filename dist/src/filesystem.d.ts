@@ -201,7 +201,7 @@ export declare class FileSystemService {
     queryNotesBounded(params: QueryNotesParams, maxChars: number, canAccessPath: (path: string) => boolean, canReadNote: (note: QueryNote) => boolean, prettyPrint?: boolean): Promise<PackedQueryPage>;
     /** Internal whole-inventory consumer. Unlike independent cursor pages, all
      * rows belong to one captured metadata cohort. This is not an OS transaction. */
-    readQueryInventory(canAccessPath: (path: string) => boolean, canReadNote: (note: QueryNote) => boolean, includeContentFor?: (note: QueryNote) => boolean): Promise<QueryNote[]>;
+    readQueryInventory(canAccessPath: (path: string) => boolean, canReadNote: (note: QueryNote) => boolean, includeContentFor?: (note: QueryNote) => boolean, consumeContent?: (note: QueryNote) => void | Promise<void>): Promise<QueryNote[]>;
     queryNotes(params?: QueryNotesParams, canAccessPath?: (path: string) => boolean, canReadNote?: (note: QueryNote) => boolean): Promise<QueryNotesResult>;
     queryAuthorityShelf(params: {
         scheme: string;

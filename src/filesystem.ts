@@ -2731,7 +2731,17 @@ export class FileSystemService {
     canAccessPath: (path: string) => boolean,
     canReadNote: (note: QueryNote) => boolean,
     includeContentFor?: (note: QueryNote) => boolean,
+    consumeContent?: (note: QueryNote) => void | Promise<void>,
   ): Promise<QueryNote[]> {
+    // Consumers collect request-local projections only. Their results are not
+    // valid unless this method's final cohort validation succeeds.
+    const consume = async (note: QueryNote): Promise<QueryNote> => {
+      if (!consumeContent) return note;
+      try { await consumeContent(note); }
+      catch { throw new Error('Inventory content projection failed; retry the request.'); }
+      const { content: _content, ...metadata } = note;
+      return metadata;
+    };
     const admitted = (note: QueryNote) => this.pathFilter.isAllowed(note.path)
       && canAccessPath(note.path) && canReadNote(note);
     const captureMetadata = async (): Promise<QueryNote[]> => (await this.metadataIndex!.list())
@@ -2751,7 +2761,7 @@ export class FileSystemService {
         }
         const parsed = this.frontmatterHandler.parse(raw);
         const note: QueryNote = { path, frontmatter: parsed.frontmatter, revision: this.revision(raw) };
-        if (admitted(note)) notes.push(includeContentFor?.(note) ? { ...note, content: parsed.content } : note);
+        if (admitted(note)) notes.push(includeContentFor?.(note) ? await consume({ ...note, content: parsed.content }) : note);
       }
       if (notes.some(note => !admitted(note))) throw new QuerySnapshotChangedError();
       return notes;
@@ -2762,9 +2772,9 @@ export class FileSystemService {
     if (!selected.length) return notes;
     const hydrated = new Map<string, QueryNote>();
     for (let start = 0; start < selected.length; start += 16) {
-      const batch = await Promise.allSettled(selected.slice(start, start + 16).map(note =>
-        this.hydrateQueryNote(note, canAccessPath, canReadNote,
-          path => this.vaultIo.readUtf8Bounded(path, MAX_NOTE_CONTENT_BYTES))));
+      const batch = await Promise.allSettled(selected.slice(start, start + 16).map(async note =>
+        consume(await this.hydrateQueryNote(note, canAccessPath, canReadNote,
+          path => this.vaultIo.readUtf8Bounded(path, MAX_NOTE_CONTENT_BYTES)))));
       const failure = batch.find(result => result.status === 'rejected');
       if (failure?.status === 'rejected') throw failure.reason;
       for (const result of batch) if (result.status === 'fulfilled') hydrated.set(result.value.path, result.value);

@@ -41,15 +41,30 @@ function* visibleNoteLines(raw: string): Generator<{ text: string; line: number 
   }
 }
 
-/** Pure projection of one already-authorized raw Markdown snapshot. */
-export function projectNoteOutline(raw: string): NoteHeading[] {
-  const headings: NoteHeading[] = [];
+function* noteHeadings(raw: string): Generator<NoteHeading> {
   const headingRegex = /^ {0,3}(#{1,6})(?:[ \t]+(.*))?$/;
   for (const { text, line } of visibleNoteLines(raw)) {
     const match = headingRegex.exec(text);
-    if (match) headings.push({ level: match[1]!.length, text: stripAtxClosingSequence((match[2] ?? '').trim()), line });
+    if (match) yield { level: match[1]!.length, text: stripAtxClosingSequence((match[2] ?? '').trim()), line };
   }
-  return headings;
+}
+
+/** Pure projection of one already-authorized raw Markdown snapshot. */
+export function projectNoteOutline(raw: string): NoteHeading[] {
+  return [...noteHeadings(raw)];
+}
+
+/** Retain only requested normalized names, not a complete outline. */
+export function projectNoteHeadingPresence(raw: string, requested: ReadonlySet<string>): Set<string> {
+  const wanted = new Set([...requested].map(name => name.trim().toLowerCase()));
+  const found = new Set<string>();
+  if (!wanted.size) return found;
+  for (const heading of noteHeadings(raw)) {
+    const name = heading.text.trim().toLowerCase();
+    if (wanted.has(name)) found.add(name);
+    if (found.size === wanted.size) break;
+  }
+  return found;
 }
 
 /** Exact terminal block anchors, not ID prefixes, mentions or code examples. */

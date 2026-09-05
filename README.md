@@ -578,9 +578,14 @@ prerequisites and reference candidates. A query-snapshot error means discard
 the result and rerun the same endpoint after writes settle; it is not evidence
 that a task is executable. Other models' hidden changes do not invalidate the
 visible cohort. No-index readers parse one captured path inventory once.
-This removes page mixing, not external-writer races or OS notification limits;
-the whole work graph and selected project bodies still consume vault-dependent
-memory. No client setup or new MCP tool is required.
+After each validated project read, planning retains metadata and three section
+presence flags, not the full body or complete heading list. These request-local
+flags are usable only if the inventory check succeeds; failed projections drain
+their batch before returning an error. This removes cohort-wide body retention
+and page mixing, not external-writer races or OS notification limits. The whole
+work graph, metadata and transient source parsing still consume memory; no fixed
+process-memory bound or measured heap reduction is claimed. No client setup or
+new MCP tool is required.
 Project packet budgets include the final pretty/compact JSON. Real headings
 outside matching backtick/tilde fences count toward planning readiness; fenced
 examples do not. Large records return `detailsOmitted: true` with exact path,

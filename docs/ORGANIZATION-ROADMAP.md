@@ -560,16 +560,16 @@ do not prove a current, bounded, actionable response through its public adapter.
   changes also reject the plan. Reads use drained 16-source batches with complete
   8 MiB source limits; a no-index reader parses one path inventory once, without
   the previous repeated scans per 500 rows. Scope-invisible changes do not leak
-  through cohort validation. Unobserved filesystem races, whole-inventory/selected
-  body memory remain separate audit topics;
+  through cohort validation. Unobserved filesystem races and whole-inventory
+  memory remain separate audit topics; selected-body retention is addressed below;
   this is not an OS transaction, globally retained snapshot or partial plan.
 - Project packets now budget final formatted JSON, retain exact public source
   identities, flag omitted detail with a bounded source read, and continue by
   emitted row count with a visible-result fingerprint. At a smaller budget the
   same-position retry cannot skip the oversized first record; at the ceiling an
   unrepresentable identity fails explicitly. Authored next-action text and tool
-  follow-ups use distinct fields. Planning sections reuse the fence-aware outline
-  once per body, including matching-close and body thematic-break behavior.
+  follow-ups use distinct fields. Planning sections reuse the fence-aware heading
+  parser, including matching-close and body thematic-break behavior.
   These changes do not reduce whole-cohort ranking or work-graph memory costs;
   other organization endpoint response packers still require their own audits.
 - A 12,000-node work chain reproduced a recursive SCC stack overflow. The shared
@@ -578,9 +578,19 @@ do not prove a current, bounded, actionable response through its public adapter.
   not repeated shift/sort. Tests cover a 30,000-node cycle, 150 deterministic
   graph comparisons with a reachability oracle, excluded nodes, self-cycles,
   deep stages and a 2,000-child unlock frontier. No classification cutoff was
-  introduced. Retained project bodies, full work/index memory and construction
+  introduced. Full work/index memory and construction
   of the full deepest-chain projection before response compaction remain open;
   stack safety is not a whole-Vault memory or latency bound.
+- Project planning now consumes each validated body into three section flags
+  before retaining its batch result, on indexed and no-index paths. Work
+  snapshots retain metadata only, and requested heading presence shares the
+  outline parser without collecting unrelated headings. Existing inventory
+  callers that request content without a consumer keep that contract. Revision
+  drift is rejected before consumption; metadata drift during consumption still
+  rejects the cohort. Failed consumers drain their batch and suppress internal
+  error details. This removes application references to the entire body cohort,
+  not transient parser allocations, source-size/batch costs, or metadata/graph
+  memory. Heap/GC and production latency improvements remain unmeasured.
 
 Record new concrete gaps here when registered schema, dispatcher, service,
 persistent representation, guide, invalidation, or bounded failure evidence

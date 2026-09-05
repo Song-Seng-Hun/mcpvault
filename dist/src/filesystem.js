@@ -2642,7 +2642,21 @@ export class FileSystemService {
     }
     /** Internal whole-inventory consumer. Unlike independent cursor pages, all
      * rows belong to one captured metadata cohort. This is not an OS transaction. */
-    async readQueryInventory(canAccessPath, canReadNote, includeContentFor) {
+    async readQueryInventory(canAccessPath, canReadNote, includeContentFor, consumeContent) {
+        // Consumers collect request-local projections only. Their results are not
+        // valid unless this method's final cohort validation succeeds.
+        const consume = async (note) => {
+            if (!consumeContent)
+                return note;
+            try {
+                await consumeContent(note);
+            }
+            catch {
+                throw new Error('Inventory content projection failed; retry the request.');
+            }
+            const { content: _content, ...metadata } = note;
+            return metadata;
+        };
         const admitted = (note) => this.pathFilter.isAllowed(note.path)
             && canAccessPath(note.path) && canReadNote(note);
         const captureMetadata = async () => (await this.metadataIndex.list())
@@ -2667,7 +2681,7 @@ export class FileSystemService {
                 const parsed = this.frontmatterHandler.parse(raw);
                 const note = { path, frontmatter: parsed.frontmatter, revision: this.revision(raw) };
                 if (admitted(note))
-                    notes.push(includeContentFor?.(note) ? { ...note, content: parsed.content } : note);
+                    notes.push(includeContentFor?.(note) ? await consume({ ...note, content: parsed.content }) : note);
             }
             if (notes.some(note => !admitted(note)))
                 throw new QuerySnapshotChangedError();
@@ -2681,7 +2695,7 @@ export class FileSystemService {
             return notes;
         const hydrated = new Map();
         for (let start = 0; start < selected.length; start += 16) {
-            const batch = await Promise.allSettled(selected.slice(start, start + 16).map(note => this.hydrateQueryNote(note, canAccessPath, canReadNote, path => this.vaultIo.readUtf8Bounded(path, MAX_NOTE_CONTENT_BYTES))));
+            const batch = await Promise.allSettled(selected.slice(start, start + 16).map(async (note) => consume(await this.hydrateQueryNote(note, canAccessPath, canReadNote, path => this.vaultIo.readUtf8Bounded(path, MAX_NOTE_CONTENT_BYTES)))));
             const failure = batch.find(result => result.status === 'rejected');
             if (failure?.status === 'rejected')
                 throw failure.reason;
