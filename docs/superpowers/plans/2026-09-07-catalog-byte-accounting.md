@@ -33,7 +33,7 @@ classification and tree merges; cached counts travel with their arrays.
   lifecycle/accounting review. Fix findings with regression coverage.
 - [x] Run full npm test -- --maxWorkers=1; git -c core.safecrlf=false diff --check.
   Record exact results.
-- [ ] Commit explicit files including generated dist; push
+- [x] Commit explicit files including generated dist; push
   origin main only, verify HEAD agreement and preserve unrelated files.
 
 ## Evidence
@@ -54,3 +54,6 @@ classification and tree merges; cached counts travel with their arrays.
   304.73s, successful process exit. Build and whitespace checks passed. No
   measured RSS/CPU improvement or live server activation is claimed; fixed
   margins may trigger somewhat earlier eviction.
+- Implementation `73ac35c` pushed to user fork `Song-Seng-Hun/mcpvault` main.
+  Local HEAD and origin/main matched afterward; unrelated `.agents/` and
+  `.mcpvault/` remained untracked. No upstream contribution or live restart.
