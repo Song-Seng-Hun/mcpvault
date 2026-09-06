@@ -630,7 +630,13 @@ completion time.
 For waiting work, optionally preserve the handoff start in `waiting_since`.
 The dashboard reports a bounded waiting age and marks items waiting at least
 14 days with `followUpNeeded`; this is a review signal, not an automatic
-message or status transition.
+message or status transition. Flow and Reflect use only the matching authored
+ISO timestamp (`started_at`, `blocked_since`, `waiting_since`) for elapsed time;
+they never substitute `updated_at`, creation time, file metadata, or Git.
+Missing, malformed, or future timestamps mean unknown age, not zero, and do not
+trigger age-based follow-up. Flow's `missingTimestamps` lists missing usable
+evidence (including invalid/future values). Inspect the current source before
+repairing it; never fabricate when work entered a lane.
 
 `read_wiki_projection` accepts `view: progressive` for one bounded context
 packet containing the compact summary, selected highlights, claims, and open

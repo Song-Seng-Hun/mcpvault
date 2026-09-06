@@ -898,7 +898,12 @@ does not assign work or create a second task database. Optional
 ordering, while `completion_criteria` gives any actionable note observable stop
 conditions. Optional `started_at`, `blocked_since`, `waiting_since`, and
 `completed_at` timestamps improve flow measurement without replacing Git
-history.
+history. Flow and Reflect compute elapsed time only from the matching authored
+`started_at`, `blocked_since`, or `waiting_since` ISO timestamp. Neither falls
+back to `updated_at`, creation dates, file metadata, or Git. Missing, malformed,
+or future timestamps leave age unknown, not zero, and cannot trigger age-based
+escalation. Flow's `missingTimestamps` means missing *usable* timing evidence;
+read the source revision to repair it rather than inventing a start date.
 The flow response also contains a request-local `dependencyPlan`: stage 0 is
 structurally ready now (not a safety or feasibility guarantee), later stages assume earlier prerequisites complete,
 `unlockPoints` shows work that immediately releases another item, and one

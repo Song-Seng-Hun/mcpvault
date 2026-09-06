@@ -36,6 +36,22 @@ function isPlanningProject(note) {
     return note.frontmatter.llm_wiki_type === 'knowledge' && note.frontmatter.note_kind === 'project'
         && !['archived', 'superseded'].includes(String(note.frontmatter.lifecycle || '').toLowerCase());
 }
+/** Elapsed workflow time requires its own authored ISO timestamp. Missing,
+ * malformed or future evidence is unknown, never a file-age guess or zero. */
+function authoredFlowAgeDays(value, nowMs) {
+    if (typeof value !== 'string')
+        return undefined;
+    try {
+        const normalized = normalizeIsoDate(value, 'flow timestamp');
+        if (!normalized)
+            return undefined;
+        const timestamp = Date.parse(normalized);
+        return timestamp <= nowMs ? Math.floor((nowMs - timestamp) / 86400000) : undefined;
+    }
+    catch {
+        return undefined;
+    }
+}
 const claimStatuses = new Set(CLAIM_STATUSES);
 const claimRoles = new Set(CLAIM_ROLES);
 const CLAIM_RELATION_FIELDS = [
@@ -4179,11 +4195,8 @@ export class LlmWikiService {
                     if (waiting) {
                         const waitingSince = typeof note.frontmatter.waiting_since === 'string'
                             ? note.frontmatter.waiting_since
-                            : typeof note.frontmatter.updated_at === 'string' ? note.frontmatter.updated_at : undefined;
-                        const waitingSinceMs = waitingSince ? Date.parse(waitingSince) : NaN;
-                        const waitingAgeDays = Number.isFinite(waitingSinceMs)
-                            ? Math.max(0, Math.floor((nowMs - waitingSinceMs) / (24 * 60 * 60 * 1000)))
                             : undefined;
+                        const waitingAgeDays = authoredFlowAgeDays(waitingSince, nowMs);
                         const followUpNeeded = waitingAgeDays !== undefined && waitingAgeDays >= 14;
                         totalWaiting += 1;
                         pushBounded(waitingItems, {
@@ -4324,12 +4337,6 @@ export class LlmWikiService {
         let totalDeferred = 0;
         let totalOverdue = 0;
         const nowMs = Date.now();
-        const ageDays = (value) => {
-            if (typeof value !== 'string' || !value.trim())
-                return undefined;
-            const timestamp = Date.parse(value);
-            return Number.isFinite(timestamp) ? Math.max(0, Math.floor((nowMs - timestamp) / 86400000)) : undefined;
-        };
         const serviceClass = (value) => {
             const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
             return SERVICE_CLASSES.includes(normalized) ? normalized : 'standard';
@@ -4359,12 +4366,12 @@ export class LlmWikiService {
             const dependencyBlocked = !dependencyState.executable;
             const missingActionState = !hasNextAction && !waitingState && !blockedState && !dependencyBlocked && !deferredState;
             const startedAt = typeof note.frontmatter.started_at === 'string' ? note.frontmatter.started_at : undefined;
-            const waitingSince = typeof note.frontmatter.waiting_since === 'string' ? note.frontmatter.waiting_since : waitingState && typeof note.frontmatter.updated_at === 'string' ? note.frontmatter.updated_at : undefined;
-            const blockedSince = typeof note.frontmatter.blocked_since === 'string' ? note.frontmatter.blocked_since : blockedState && typeof note.frontmatter.updated_at === 'string' ? note.frontmatter.updated_at : undefined;
+            const waitingSince = typeof note.frontmatter.waiting_since === 'string' ? note.frontmatter.waiting_since : undefined;
+            const blockedSince = typeof note.frontmatter.blocked_since === 'string' ? note.frontmatter.blocked_since : undefined;
             // Never infer cycle/blocked/waiting age from updated_at: a later edit is
             // not evidence that work entered a lane at that time. Missing explicit
             // flow timestamps must remain visible to the caller.
-            const age = missingActionState ? undefined : ageDays(waitingState ? waitingSince : blockedState || dependencyBlocked ? blockedSince : startedAt);
+            const age = missingActionState ? undefined : authoredFlowAgeDays(waitingState ? waitingSince : blockedState || dependencyBlocked ? blockedSince : startedAt, nowMs);
             const item = {
                 path: this.access.toPublicPath(note.path), title, kind, taskStatus,
                 ...(note.revision && { revision: note.revision }),
@@ -4543,7 +4550,7 @@ export class LlmWikiService {
             flow: { totalWork, activeWip: totalActive, wipOverflow: Math.max(0, totalActive - boundedWipLimit), pullAllowed: totalActive < boundedWipLimit, readyToPull: totalReady, blocked: totalBlocked, dependencyBlocked: totalDependencyBlocked, waiting: totalWaiting, deferred: totalDeferred, overdue: totalOverdue },
             lanes: { active, ready, blocked, waiting, deferred },
             dependencyPlan,
-            observability: { missingTimestamps, cycleTimeAvailable: 'started_at + completed_at', note: 'Timestamps are optional. When absent, age is not guessed from a Git commit.' },
+            observability: { missingTimestamps, cycleTimeAvailable: 'started_at + completed_at', note: 'missingTimestamps means no usable elapsed-time evidence: absent, malformed, or future. Age is never inferred from updated_at, created_at, file metadata, or Git; unknown age is not zero.' },
             nextActions: totalDependencyBlocked > 0 ? ['Inspect one dependency-blocked item and complete, repair, or explicitly replace its prerequisite before pulling it.'] : totalActive > boundedWipLimit ? ['Finish or unblock existing WIP before pulling another standard item.'] : totalReady > 0 ? ['Pull one ready item and set task_status=next_action with started_at.'] : ['Make one active item executable or identify its waiting/blocked dependency.'],
             generatedAt: now(),
         };
