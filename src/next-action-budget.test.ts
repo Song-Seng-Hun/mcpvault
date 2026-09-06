@@ -19,7 +19,7 @@ test.each([false, true])('small final JSON keeps an exact actionable locator (pr
     const result = await wiki.nextActions(undefined, undefined, 20, 512, { prettyPrint });
     expect(JSON.stringify(result, null, prettyPrint ? 2 : undefined).length).toBeLessThanOrEqual(512);
     expect(result.items[0]).toMatchObject({ path: 'A.md', revision: 'a'.repeat(64), action: 'Check the evidence',
-      readAction: { endpointId: 'notes.read', arguments: { path: 'A.md' } } });
+      readAction: { endpointId: 'notes.read', arguments: { path: 'A.md', expectedRevision: 'a'.repeat(64) } } });
     expect(result.detailsOmitted).toBe(true);
   });
 });
@@ -28,7 +28,7 @@ test('long authored actions are explicitly previews with a source read', async (
   await withWiki([task('A.md', { next_action: 'x'.repeat(700) })], async wiki => {
     const result: any = await wiki.nextActions(undefined, undefined, 1, 16000);
     expect(result.items[0]).toMatchObject({ actionTruncated: true,
-      readAction: { endpointId: 'notes.read', arguments: { path: 'A.md' } } });
+      readAction: { endpointId: 'notes.read', arguments: { path: 'A.md', expectedRevision: 'a'.repeat(64) } } });
     expect(result.items[0].action.length).toBeLessThanOrEqual(600);
   });
 });
@@ -70,7 +70,7 @@ test('an action that cannot fit is a locator requiring a read, not an executable
     const result = await wiki.nextActions(undefined, undefined, 1, 512, { prettyPrint: true });
     expect(JSON.stringify(result, null, 2).length).toBeLessThanOrEqual(512);
     expect(result.items[0]).toMatchObject({ path: 'A.md', actionOmitted: true,
-      readAction: { endpointId: 'notes.read', arguments: { path: 'A.md' } } });
+      readAction: { endpointId: 'notes.read', arguments: { path: 'A.md', expectedRevision: 'a'.repeat(64) } } });
     expect(result.items[0]).not.toHaveProperty('action');
   });
 });

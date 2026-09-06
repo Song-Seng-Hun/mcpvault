@@ -373,3 +373,32 @@ test('project MCP compact detail action also pins the selected source revision',
   expect(value.items[0].detailsOmitted).toBe(true);
   expect(value.items[0].readAction.arguments.expectedRevision).toBe(digest(raw));
 });
+
+test.each([512, 16000])('action MCP source recovery rejects changed work at budget %i', async maxChars => {
+  const raw = '---\nllm_wiki_type: knowledge\nnote_kind: task\nnext_action: "' + 'Verify the evidence '.repeat(60) + '"\n---\n# Task';
+  await writeFile(join(vault, path), raw);
+  const { value } = await call({ maxChars, prettyPrint: true }, 'wiki.next_actions');
+  const action = value.items[0].readAction;
+  expect(action.arguments.expectedRevision).toBe(digest(raw));
+  const unchanged = await call(action.arguments, action.endpointId);
+  expect(unchanged.result.isError).not.toBe(true);
+  await writeFile(join(vault, path), raw + '\nNEW-WORK-CONTEXT');
+  const changed = await call(action.arguments, action.endpointId);
+  expect(changed.result.isError).toBe(true);
+  expect(changed.value.error).toBe('revision_conflict');
+  expect(changed.text).not.toContain('NEW-WORK-CONTEXT');
+});
+
+test.each(['hidden', 'deleted'])('saved action recovery does not bypass a now %s source', async state => {
+  const raw = '---\nllm_wiki_type: knowledge\nnote_kind: task\nnext_action: "' + 'Verify the evidence '.repeat(60) + '"\n---\n# Task';
+  await writeFile(join(vault, path), raw);
+  const { value } = await call({ maxChars: 16000 }, 'wiki.next_actions');
+  const action = value.items[0].readAction;
+  expect(action.arguments.expectedRevision).toBe(digest(raw));
+  if (state === 'hidden') await writeFile(join(vault, path), raw.replace('note_kind: task', 'note_kind: task\nmoderation_status: hidden') + '\nHIDDEN-WORK-CONTEXT');
+  else await rm(join(vault, path));
+  const rejected = await call(action.arguments, action.endpointId);
+  expect(rejected.result.isError).toBe(true);
+  expect(rejected.text).not.toContain('HIDDEN-WORK-CONTEXT');
+  expect(rejected.text).not.toContain('Verify the evidence');
+});

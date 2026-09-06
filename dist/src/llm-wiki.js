@@ -7080,7 +7080,7 @@ export class LlmWikiService {
                         ...(note.revision && { revision: note.revision }),
                         action: boundedText(action, 600),
                         ...(action.length > 600 && { actionTruncated: true,
-                            readAction: { endpointId: 'notes.read', arguments: { path: this.access.toPublicPath(note.path), maxChars: 8000 } } }),
+                            readAction: { endpointId: 'notes.read', arguments: { path: this.access.toPublicPath(note.path), expectedRevision: note.revision, maxChars: 8000 } } }),
                         context: actionContext,
                         ...(taskStatus && { taskStatus }),
                         ...(typeof note.frontmatter.project === 'string' && { project: note.frontmatter.project }),

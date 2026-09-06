@@ -485,8 +485,11 @@ deadline. Existing context, capacity, workflow and dependency gates are unchange
 Next-action `maxChars` includes final JSON indentation. Budget compaction sets
 `detailsOmitted` and preserves a ranked prefix, with exact paths and revisions.
 `actionTruncated` marks a preview; `actionOmitted` marks a locator-only row.
-Follow `readAction` and compare the current source revision before acting;
-continue bounded source reads if necessary. No lower-ranked action replaces an
+Every generated `readAction` carries the captured `expectedRevision`, including
+compact and locator-only rows. Follow it without removing that guard. On a
+source revision conflict, rerun `wiki.next_actions` and reassess current work;
+this source guard is not a transaction over prerequisites. Continue bounded
+source reads if necessary. No lower-ranked action replaces an
 oversized head. A positive `total` with empty `items` requires the returned
 same-request `nextAction`: retain original identity/context/capacity arguments
 and apply its overrides. It re-evaluates current work, not a cursor or lock.

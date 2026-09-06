@@ -811,8 +811,11 @@ The next-action budget includes final JSON indentation. On overflow, the view
 keeps a ranked prefix with exact paths/revisions and marks `detailsOmitted`;
 it never substitutes a cheaper lower-ranked action for an oversized first one.
 `actionTruncated` means the action is only a preview; `actionOmitted` means only
-a locator fits. Follow the row's `readAction`, compare its current revision,
-and follow bounded read continuation as needed before acting. If even the exact
+a locator fits. Follow the row's `readAction`, which carries the exact captured
+`expectedRevision`, and continue bounded reads as needed before acting. A source
+revision conflict requires a fresh `wiki.next_actions` query and reassessment;
+never remove the guard to force a read. The guard protects the selected source,
+not a reservation or lock on its entire prerequisite graph. If even the exact
 locator cannot fit, `items: []` with positive `total` is not an empty workload:
 follow `nextAction` by reusing the original arguments (including context,
 capacity filters and authentication) and applying its overrides. This is a

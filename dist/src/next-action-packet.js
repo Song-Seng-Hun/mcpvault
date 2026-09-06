@@ -16,7 +16,7 @@ export function packNextActionPacket(result, maxChars, prettyPrint = false) {
     const compact = (row) => ({
         path: row.path, ...(row.revision && { revision: row.revision }), action: row.action,
         ...(row.actionTruncated && { actionTruncated: true }),
-        readAction: { endpointId: 'notes.read', arguments: { path: row.path, maxChars: 8000 } },
+        readAction: { endpointId: 'notes.read', arguments: { path: row.path, expectedRevision: row.revision, maxChars: 8000 } },
     });
     // Collapse oversized descriptions once, not repeatedly for every prefix.
     const concise = result.items.map(compact);
