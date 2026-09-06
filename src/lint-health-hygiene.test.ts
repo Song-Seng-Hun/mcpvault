@@ -79,7 +79,7 @@ test('lint does not combine stale inventory Properties with a current body', asy
 test('cached lint verification propagates genuine IO failure', async () => {
   await seed('Concept.md');
   await service.lint();
-  vi.spyOn((fs as any).vaultIo, 'readUtf8').mockRejectedValue(Object.assign(new Error('storage offline'), { code: 'EIO' }));
+  vi.spyOn((fs as any).vaultIo, 'readUtf8Metadata').mockRejectedValue(Object.assign(new Error('storage offline'), { code: 'EIO' }));
   await expect(service.lint()).rejects.toThrow('storage offline');
 });
 

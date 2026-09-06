@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { FileSystemService, MAX_NOTE_CONTENT_BYTES } from './filesystem.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import { readBoundedSource } from './bounded-source-read.js';
+import { readUtf8MetadataSource } from './streaming-metadata.js';
 import { ScopeAccessPolicy } from './scope-access.js';
 import { ReferenceService } from './references.js';
 import { LlmWikiService } from './llm-wiki.js';
@@ -42,6 +43,7 @@ test.each(['post', 'task', 'legacy'] as const)('%s reference storage failure mus
   };
   vi.spyOn(io, 'readUtf8').mockImplementation(async path => { fail(path); return readFile(path, 'utf8'); });
   vi.spyOn(io, 'readUtf8Bounded').mockImplementation(async (path, maxBytes) => { fail(path); return readBoundedSource(path, maxBytes); });
+  vi.spyOn(io, 'readUtf8Metadata').mockImplementation(async (path, maxBytes) => { fail(path); return readUtf8MetadataSource(path, maxBytes); });
   await expect(wiki.promotionCandidates()).rejects.toThrow(/^A promotion source changed or became unavailable; retry the candidate query\.$/);
 });
 
@@ -73,10 +75,12 @@ test.each(['source', 'reference'] as const)('oversized %s is rejected at initial
     return read(...args);
   });
   const bounded = vi.spyOn(io, 'readUtf8Bounded');
+  const projected = vi.spyOn(io, 'readUtf8Metadata');
   const revisions = vi.spyOn(fs, 'readNoteRevision');
   await expect(wiki.promotionCandidates()).rejects.toThrow(/promotion source changed or became unavailable/);
   expect(revisions).not.toHaveBeenCalled();
-  expect(bounded.mock.calls.some(([p, cap]) => p === join(vault, path) && cap === MAX_NOTE_CONTENT_BYTES)).toBe(true);
+  const calls = target === 'source' ? bounded.mock.calls : projected.mock.calls;
+  expect(calls.some(([p, cap]) => p === join(vault, path) && cap === MAX_NOTE_CONTENT_BYTES)).toBe(true);
 });
 
 test('valid hydration preserves the existing-knowledge review and caps both initial reads', async () => {

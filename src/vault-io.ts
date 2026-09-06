@@ -1,15 +1,17 @@
 import { readFile } from 'node:fs/promises';
 import { readBoundedSource, SourceReadLimitError } from './bounded-source-read.js';
 import { hashUtf8Source } from './streaming-revision.js';
+import { readUtf8MetadataSource, type Utf8MetadataSource } from './streaming-metadata.js';
 
 export type VaultIoPriority = 'foreground' | 'background';
 const BACKGROUND_MAX_WAIT_MS = 500;
+type IoResult = string | Utf8MetadataSource;
 
 interface IoJob {
   path: string;
   priority: VaultIoPriority;
-  run: () => Promise<string>;
-  resolve: (value: string) => void;
+  run: () => Promise<IoResult>;
+  resolve: (value: IoResult) => void;
   reject: (reason?: unknown) => void;
   queuedAt: number;
   startedAt?: number;
@@ -22,6 +24,7 @@ export interface VaultIoCoordinatorOptions {
   reader?: (path: string) => Promise<string>;
   boundedReader?: (path: string, maxBytes: number) => Promise<string>;
   revisionReader?: (path: string, maxBytes?: number) => Promise<string>;
+  metadataReader?: (path: string, maxBytes?: number) => Promise<Utf8MetadataSource>;
 }
 
 /**
@@ -33,18 +36,20 @@ export class VaultIoCoordinator {
   private readonly reader: (path: string) => Promise<string>;
   private readonly boundedReader: (path: string, maxBytes: number) => Promise<string>;
   private readonly revisionReader: (path: string, maxBytes?: number) => Promise<string>;
+  private readonly metadataReader: (path: string, maxBytes?: number) => Promise<Utf8MetadataSource>;
   private readonly minConcurrency: number;
   private readonly maxConcurrency: number;
   private targetConcurrency: number;
   private active = 0;
   private readonly queue: IoJob[] = [];
-  private readonly inFlight = new Map<string, Promise<string>>();
+  private readonly inFlight = new Map<string, Promise<IoResult>>();
   private latencyEmaMs = 0;
 
   constructor(options: VaultIoCoordinatorOptions = {}) {
     this.reader = options.reader || (path => readFile(path, 'utf8'));
     this.boundedReader = options.boundedReader || readBoundedSource;
     this.revisionReader = options.revisionReader || hashUtf8Source;
+    this.metadataReader = options.metadataReader || readUtf8MetadataSource;
     this.minConcurrency = Math.max(1, Math.floor(options.minConcurrency || 2));
     this.maxConcurrency = Math.max(this.minConcurrency, Math.floor(options.maxConcurrency || 32));
     this.targetConcurrency = Math.min(
@@ -70,12 +75,21 @@ export class VaultIoCoordinator {
     return this.schedule(JSON.stringify(['revision', maxBytes ?? null, path]), () => this.revisionReader(path, maxBytes), priority);
   }
 
-  private schedule(path: string, run: () => Promise<string>, priority: VaultIoPriority): Promise<string> {
-    const existing = this.inFlight.get(path);
-    if (existing) return existing;
+  readUtf8Metadata(path: string, maxBytes?: number, priority: VaultIoPriority = 'foreground'): Promise<Utf8MetadataSource> {
+    if (maxBytes !== undefined && (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 0x7fffffff)) {
+      return Promise.reject(new TypeError('Invalid source byte limit'));
+    }
+    return this.schedule(JSON.stringify(['metadata', maxBytes ?? null, path]), () => this.metadataReader(path, maxBytes), priority);
+  }
 
-    const promise = new Promise<string>((resolve, reject) => {
-      this.queue.push({ path, priority, run, resolve, reject, queuedAt: Date.now() });
+  private schedule<T extends IoResult>(path: string, run: () => Promise<T>, priority: VaultIoPriority): Promise<T> {
+    const existing = this.inFlight.get(path);
+    // Private callers use disjoint operation namespaces; a key always has one
+    // result type. Share only immutable strings/projections, never parsed data.
+    if (existing) return existing as Promise<T>;
+
+    const promise = new Promise<T>((resolve, reject) => {
+      this.queue.push({ path, priority, run, resolve: value => resolve(value as T), reject, queuedAt: Date.now() });
       this.pump();
     });
     this.inFlight.set(path, promise);

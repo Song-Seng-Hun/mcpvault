@@ -3,6 +3,37 @@ import { VaultIoCoordinator } from './vault-io.js';
 import { SourceReadLimitError } from './bounded-source-read.js';
 
 describe('VaultIoCoordinator', () => {
+  test('metadata admission deduplicates only identical keys and shares the existing scheduler', async () => {
+    let active = 0, peak = 0; const calls: string[] = [];
+    const read = async (key: string) => {
+      calls.push(key); peak = Math.max(peak, ++active); await new Promise(resolve => setTimeout(resolve, 2)); active--; return key;
+    };
+    const io = new VaultIoCoordinator({ minConcurrency: 1, maxConcurrency: 1,
+      reader: path => read(`body:${path}`), revisionReader: path => read(`digest:${path}`),
+      metadataReader: async (path, cap) => Object.freeze({ header: await read(`${cap}:${path}`), revision: 'revision' }),
+    });
+    const a = io.readUtf8Metadata('same', 10), b = io.readUtf8Metadata('same', 10);
+    expect(a).toBe(b);
+    const values = await Promise.all([a, b, io.readUtf8Metadata('same', 20), io.readUtf8Metadata('same'), io.readUtf8('same'), io.readUtf8Revision('same')]);
+    expect(values).toEqual([{ header: '10:same', revision: 'revision' }, { header: '10:same', revision: 'revision' },
+      { header: '20:same', revision: 'revision' }, { header: 'undefined:same', revision: 'revision' }, 'body:same', 'digest:same']);
+    expect(peak).toBe(1); expect(calls).toHaveLength(5); expect(io.status()).toMatchObject({ active: 0, queued: 0 });
+  });
+  test('invalid metadata limits never alias unbounded reads and failed reads release admission', async () => {
+    let fail = false;
+    const io = new VaultIoCoordinator({ metadataReader: async () => {
+      if (fail) throw new SourceReadLimitError(); return Object.freeze({ header: '', revision: 'r' });
+    } });
+    const valid = io.readUtf8Metadata('same');
+    for (const limit of [Infinity, NaN, -Infinity, 0, -1, 1.5, 0x80000000]) {
+      await expect(io.readUtf8Metadata('same', limit)).rejects.toThrow('Invalid source byte limit');
+    }
+    await expect(valid).resolves.toEqual({ header: '', revision: 'r' });
+    fail = true; const before = io.status().targetConcurrency;
+    await expect(io.readUtf8Metadata('same')).rejects.toBeInstanceOf(SourceReadLimitError);
+    expect(io.status().targetConcurrency).toBe(before);
+    fail = false; await expect(io.readUtf8Metadata('same')).resolves.toMatchObject({ revision: 'r' });
+  });
   test('invalid revision limits cannot coalesce with an unbounded in-flight digest', async () => {
     const io = new VaultIoCoordinator({ revisionReader: async () => 'digest' });
     const valid = io.readUtf8Revision('same');

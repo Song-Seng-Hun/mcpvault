@@ -4248,6 +4248,7 @@ MCPVault applies these checks before file operations:
 
 - **Data-only Frontmatter:** Leading YAML/YML and JSON data headers are supported; JavaScript and unsupported engine labels remain inert text, including empty unsupported headers. Engine selection is checked before parsing, with executable engines also disabled in the wrapper. Malformed data retains the raw-text fallback.
 - **Parser Copy Reduction:** Plain notes bypass the frontmatter library; closed headers are parsed without passing the entire body into its input Buffer. Original Markdown still defines revisions. Huge or unclosed headers retain the caller's existing read-budget constraints; this is not a total process-memory limit.
+- **Fresh Metadata Retention:** Non-index metadata lookups stream the whole source for its revision while retaining only the leading header. Header and revision come from the same decoded read, under the shared I/O scheduler; parsed Properties are independent per caller. Bodies are not retained, but are still read/hashed. Unclosed headers can retain the remaining source under the caller's byte budget. This does not provide snapshot isolation from external in-place edits.
 - **YAML Frontmatter Validation:** Frontmatter is parsed and validated before writing
 - **Function/Symbol Prevention:** Dangerous JavaScript objects are blocked from frontmatter
 - **Data Type Checking:** Only safe data types (strings, numbers, arrays, objects) allowed

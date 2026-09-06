@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { FileSystemService } from './filesystem.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import { hashUtf8Source } from './streaming-revision.js';
+import { readUtf8MetadataSource } from './streaming-metadata.js';
 import { SourceReadLimitError } from './bounded-source-read.js';
 
 const probe = vi.hoisted(() => ({ path: '', grow: false, failRead: false, closed: false,
@@ -33,6 +34,21 @@ vi.mock('node:fs/promises', async importOriginal => {
 });
 
 const oldHash = (bytes: Buffer) => createHash('sha256').update(bytes.toString('utf8'), 'utf8').digest('hex');
+test.each(['grow', 'oversize', 'read-error'])('metadata failure closes without publishing a partial projection: %s', async mode => {
+  await fixture(async root => {
+    probe.path = join(root, 'Note.md'); await writeFile(probe.path, mode === 'oversize' ? 'x'.repeat(65) : 'a');
+    probe.grow = mode === 'grow'; probe.failRead = mode === 'read-error';
+    await expect(readUtf8MetadataSource(probe.path, 64)).rejects.toThrow(mode === 'read-error' ? 'injected read failure' : 'read budget');
+    expect(probe.closed).toBe(true); expect(probe.bytes).toBe(mode === 'grow' ? 65 : 0);
+  });
+});
+test('a synchronous decoded consumer failure still closes the source handle', async () => {
+  await fixture(async root => {
+    probe.path = join(root, 'Note.md'); await writeFile(probe.path, 'content');
+    await expect(hashUtf8Source(probe.path, 64, () => { throw new Error('consumer failed'); })).rejects.toThrow('consumer failed');
+    expect(probe.closed).toBe(true);
+  });
+});
 async function fixture(run: (root: string) => Promise<void>) {
   const base = await realpath(tmpdir()), prefix = 'mcpvault-stream-revision-', root = await mkdtemp(join(base, prefix));
   try { await run(root); }

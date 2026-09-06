@@ -18,6 +18,13 @@ keeps the existing raw-text fallback. A closed header is parsed without copying
 its whole body into the frontmatter library; huge/unclosed headers still depend
 on the caller's read budget. Original Markdown still defines the revision.
 
+Fresh metadata lookups retain the leading header, not a complete closed-header
+note body, while hashing the entire same decoded read for its revision. This
+does not turn a revision into a header-only fingerprint or skip current body
+changes. Per-caller parsed Properties are not shared mutable objects. Ordinary
+byte budgets, access checks and strict storage-error handling still apply;
+huge/unclosed headers remain subject to the caller's source limit.
+
 ## Layers
 
 - `_sources/`: immutable source snapshots created only by `ingest_source`.

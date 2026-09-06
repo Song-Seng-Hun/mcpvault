@@ -1,1 +1,1 @@
-{"version":3,"file":"streaming-revision.d.ts","sourceRoot":"","sources":["../../src/streaming-revision.ts"],"names":[],"mappings":"AAKA;gFACgF;AAChF,wBAAsB,cAAc,CAAC,IAAI,EAAE,MAAM,EAAE,QAAQ,CAAC,EAAE,MAAM,GAAG,OAAO,CAAC,MAAM,CAAC,CAqBrF"}
+{"version":3,"file":"streaming-revision.d.ts","sourceRoot":"","sources":["../../src/streaming-revision.ts"],"names":[],"mappings":"AAKA;;;wDAGwD;AACxD,wBAAsB,cAAc,CAAC,IAAI,EAAE,MAAM,EAAE,QAAQ,CAAC,EAAE,MAAM,EAAE,OAAO,CAAC,EAAE,CAAC,IAAI,EAAE,MAAM,KAAK,IAAI,GAAG,OAAO,CAAC,MAAM,CAAC,CA2BvH"}

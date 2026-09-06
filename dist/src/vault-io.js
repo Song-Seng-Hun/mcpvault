@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { readBoundedSource, SourceReadLimitError } from './bounded-source-read.js';
 import { hashUtf8Source } from './streaming-revision.js';
+import { readUtf8MetadataSource } from './streaming-metadata.js';
 const BACKGROUND_MAX_WAIT_MS = 500;
 /**
  * Deduplicates concurrent note reads and applies adaptive backpressure to
@@ -11,6 +12,7 @@ export class VaultIoCoordinator {
     reader;
     boundedReader;
     revisionReader;
+    metadataReader;
     minConcurrency;
     maxConcurrency;
     targetConcurrency;
@@ -22,6 +24,7 @@ export class VaultIoCoordinator {
         this.reader = options.reader || (path => readFile(path, 'utf8'));
         this.boundedReader = options.boundedReader || readBoundedSource;
         this.revisionReader = options.revisionReader || hashUtf8Source;
+        this.metadataReader = options.metadataReader || readUtf8MetadataSource;
         this.minConcurrency = Math.max(1, Math.floor(options.minConcurrency || 2));
         this.maxConcurrency = Math.max(this.minConcurrency, Math.floor(options.maxConcurrency || 32));
         this.targetConcurrency = Math.min(this.maxConcurrency, Math.max(this.minConcurrency, Math.floor(options.initialConcurrency || 8)));
@@ -40,12 +43,20 @@ export class VaultIoCoordinator {
         }
         return this.schedule(JSON.stringify(['revision', maxBytes ?? null, path]), () => this.revisionReader(path, maxBytes), priority);
     }
+    readUtf8Metadata(path, maxBytes, priority = 'foreground') {
+        if (maxBytes !== undefined && (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 0x7fffffff)) {
+            return Promise.reject(new TypeError('Invalid source byte limit'));
+        }
+        return this.schedule(JSON.stringify(['metadata', maxBytes ?? null, path]), () => this.metadataReader(path, maxBytes), priority);
+    }
     schedule(path, run, priority) {
         const existing = this.inFlight.get(path);
+        // Private callers use disjoint operation namespaces; a key always has one
+        // result type. Share only immutable strings/projections, never parsed data.
         if (existing)
             return existing;
         const promise = new Promise((resolve, reject) => {
-            this.queue.push({ path, priority, run, resolve, reject, queuedAt: Date.now() });
+            this.queue.push({ path, priority, run, resolve: value => resolve(value), reject, queuedAt: Date.now() });
             this.pump();
         });
         this.inFlight.set(path, promise);

@@ -3180,12 +3180,10 @@ export class FileSystemService {
     const notes: QueryNote[] = [];
     for (const path of normalizedPaths) {
       try {
-        const raw = options.maxBytes === undefined
-          ? await this.vaultIo.readUtf8(this.resolvePath(path))
-          : await this.vaultIo.readUtf8Bounded(this.resolvePath(path), options.maxBytes);
-        const parsed = this.frontmatterHandler.parse(raw);
+        const source = await this.vaultIo.readUtf8Metadata(this.resolvePath(path), options.maxBytes);
+        const parsed = this.frontmatterHandler.parse(source.header);
         if (!canAccessPath(path)) continue;
-        notes.push({ path, frontmatter: parsed.frontmatter, revision: this.revision(raw) });
+        notes.push({ path, frontmatter: parsed.frontmatter, revision: source.revision });
       } catch (error) {
         // A projected candidate may be deleted between the source scan and
         // this metadata read. Omit it rather than returning stale authority.

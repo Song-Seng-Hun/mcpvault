@@ -11,6 +11,7 @@ import { VaultGraphIndex } from './vault-graph.js';
 import { VaultMetadataIndex } from './vault-index.js';
 import { PathFilter } from './pathfilter.js';
 import { FrontmatterHandler } from './frontmatter.js';
+import { VaultIoCoordinator } from './vault-io.js';
 
 let vault: string;
 let fs: FileSystemService;
@@ -467,10 +468,12 @@ test('raw backlinks hash each source once per validation phase rather than once 
   await seed('Old.md');
   const raw = await seed('Reader.md', '', Array.from({ length: 100 }, () => '[[Old]]').join('\n'));
   const hashes = vi.spyOn(fs as any, 'revision');
+  const metadataReads = vi.spyOn((fs as any).vaultIo as VaultIoCoordinator, 'readUtf8Metadata');
   const finalHashes = vi.spyOn(fs, 'readNoteRevision');
   const result = await fs.getBacklinks('Old.md', 4, () => true, 0, { includeSourceRevision: true });
   expect(result).toMatchObject({ total: 100, truncated: true });
   expect(result.backlinks.every(link => link.sourceRevision === digest(raw))).toBe(true);
-  expect(hashes.mock.calls.filter(([content]) => content === raw)).toHaveLength(1); // pre-count metadata
+  expect(hashes.mock.calls.filter(([content]) => content === raw)).toHaveLength(0); // no full-string metadata hash
+  expect(metadataReads.mock.calls.filter(([path]) => path === join(vault, 'Reader.md'))).toHaveLength(1); // streamed pre-count metadata + hash
   expect(finalHashes.mock.calls.filter(([path]) => path === 'Reader.md')).toHaveLength(1); // streamed final page validation
 });

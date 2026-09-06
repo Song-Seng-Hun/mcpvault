@@ -109,7 +109,7 @@ test('exception board propagates fresh source IO errors', async () => {
   const canvas = service.canvasHealth.bind(service);
   vi.spyOn(service, 'canvasHealth').mockImplementation(async (...args) => {
     const result = await canvas(...args);
-    vi.spyOn((fs as any).vaultIo, 'readUtf8').mockRejectedValue(Object.assign(new Error('storage offline'), { code: 'EIO' }));
+    vi.spyOn((fs as any).vaultIo, 'readUtf8Metadata').mockRejectedValue(Object.assign(new Error('storage offline'), { code: 'EIO' }));
     return result;
   });
   await expect(service.exceptionBoard()).rejects.toThrow('storage offline');

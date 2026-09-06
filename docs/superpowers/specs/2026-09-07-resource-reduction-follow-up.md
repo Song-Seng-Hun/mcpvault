@@ -34,9 +34,14 @@ not mean all underlying body bytes are skipped or hashing is streaming.
 
 Follow-up implementation: `2026-09-07-streaming-revision-design.md` replaces that
 hash-only full-string path with streaming decoded-UTF8 hashing under the existing
-coordinator. Metadata projection is unchanged. Its separate plan records tests,
+coordinator. At that increment metadata projection was unchanged. Its separate plan records tests,
 benchmark limitations and publication; do not confuse it with the earlier
-review-route operation-count improvement.
+review-route operation-count improvement. The subsequent
+`2026-09-07-streaming-metadata-design.md` increment also projects fresh metadata
+through a single decoded stream: all bytes are still hashed/read, but only the
+header is retained. It preserves the existing index fast-path and leaves
+index-rebuild/query body reads outside its scope. No whole-Vault memory ceiling
+or header-only disk-I/O claim follows from this change.
 
 ## Ranked follow-up with acceptance gates
 
@@ -60,8 +65,18 @@ review-route operation-count improvement.
    for plain/closed-header inputs and blocks a separately confirmed executable
    default engine. Metadata reads still obtain the original decoded text; this
    does not make metadata I/O header-only. Its plan records isolated measurements
-   and verification. Do not claim a parser cache leak: explicit
+   and verification. The later streaming-metadata increment removes the decoded
+   body retention from fresh metadata service reads, not every index producer.
+   Do not claim a parser cache leak: explicit
    options currently prevent gray-matter from populating its content cache.
+   Remaining concrete consumer: `VaultMetadataIndex.readEntry` still calls
+   `readUtf8`, parses Properties and hashes the complete string (currently near
+   lines 804-835), even though its entry contains no body. Reusing the new
+   projection there requires separate dirty-event/reset-during-read tests,
+   same-size/mtime refresh checks, bounded-batch and snapshot correctness checks;
+   it is not included in the fresh-metadata service change. Existing injectable
+   full-reader probes in `metadata-refresh-integrity.test.ts` will need to follow
+   the actual projection I/O boundary without suppressing those race scenarios.
 3. **Only then offload proven synchronous CPU hotspots.** A small reusable pool
    with a bounded admission queue can isolate parsing/graph computations, but
    serial I/O and already-native inference do not automatically benefit. Compare

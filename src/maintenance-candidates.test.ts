@@ -226,7 +226,7 @@ test('summary report propagates body read failure for a still-existing note', as
 test('strict fresh metadata reads preserve storage errors but tolerate missing notes', async () => {
   await seed('Unreadable.md');
   const io = (fs as any).vaultIo;
-  vi.spyOn(io, 'readUtf8').mockRejectedValue(Object.assign(new Error('storage unavailable'), { code: 'EIO' }));
+  vi.spyOn(io, 'readUtf8Metadata').mockRejectedValue(Object.assign(new Error('storage unavailable'), { code: 'EIO' }));
   await expect(fs.readNoteMetadata(['Unreadable.md'], () => true, { fresh: true, strict: true })).rejects.toThrow('storage unavailable');
   vi.restoreAllMocks();
   await expect(fs.readNoteMetadata(['Missing.md'], () => true, { fresh: true, strict: true })).resolves.toEqual([]);
