@@ -12,6 +12,12 @@ tools; new behaviors belong in the endpoint catalog.
 
 ## Verified mechanisms in the current batch
 
+- Learning-path compaction now budgets final pretty JSON, retains an exact
+  authored prefix and heading/block anchors, or returns an explicit same-query
+  recovery instead of silently removing every target. Cycle/coverage warnings
+  survive minimal previews. Recovery preserves original depth/limit and switches
+  to root inspection at the compact ceiling. Checkpoint snapshots are unchanged;
+  this is not whole-curriculum pagination or a graph construction cost bound.
 - Backlink context/heading projection now validates its known authorized target
   revisions, including clipped same-line references and off-page fingerprint
   rows. Hide/unhide and alias-fallback drift reject stale views without reading
@@ -709,8 +715,9 @@ do not prove a current, bounded, actionable response through its public adapter.
   and cached hidden fallbacks are included without reading scope-denied bodies.
   Eight-way 8 MiB target reads drain failures and invalidate stale entries for
   retry. This closes reproduced hide/unhide/delete/alias-drift cases, not newly
-  gained aliases on unrelated notes, attachment bodies or backlinks' neighboring
-  target projection freshness. Per-query verification is not a global I/O cap.
+  gained aliases on unrelated notes or attachment bodies. Backlinks' neighboring
+  target projection freshness is covered by the later validation described above.
+  Per-query verification is not a global I/O cap.
 
 Record new concrete gaps here when registered schema, dispatcher, service,
 persistent representation, guide, invalidation, or bounded failure evidence

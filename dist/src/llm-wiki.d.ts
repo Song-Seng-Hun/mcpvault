@@ -3314,7 +3314,8 @@ export declare class LlmWikiService {
      * path. The Markdown order remains authoritative; the topological order is
      * returned separately as an advisory projection and never mutates notes.
      */
-    learningPath(principal: ScopePrincipal | undefined, path: string, maxDepth?: number, limit?: number, maxChars?: number, checkpointOnly?: boolean): Promise<{
+    learningPath(principal: ScopePrincipal | undefined, path: string, maxDepth?: number, limit?: number, maxChars?: number, checkpointOnly?: boolean, prettyPrint?: boolean): Promise<{
+        nextAction?: never;
         mode: string;
         root: {
             path: string;
@@ -3343,17 +3344,94 @@ export declare class LlmWikiService {
         };
         truncated: boolean;
         navigationComplete: boolean;
+        authoredOrderConsistent?: never;
+        prerequisiteCoverageComplete?: never;
+        detailsOmitted?: never;
+        omittedEntries?: never;
+        message?: never;
     } | {
         mode: string;
+        purpose: string;
         root: {
             path: string;
+            title: string;
             revision: string;
         };
         authoredOrder: {
             path: string;
             revision: string;
+            title: string;
+            noteKind: string;
+            lifecycle?: string;
+            knowledgeRole?: string;
+            authoredPosition: number;
+            depth: number;
+            parentMoc: string;
+            line: number;
+            section?: string;
+            targetHeading?: string;
+            targetBlockId?: string;
         }[];
         recommendedOrder: string[];
+        recommendedStages: {
+            stage: number;
+            entries: {
+                path: string;
+                revision: string;
+                authoredPosition: number;
+                internalPrerequisiteCount: number;
+                externalPrerequisiteCount: number;
+            }[];
+        }[];
+        orderChanged: boolean;
+        authoredOrderConsistent: boolean;
+        prerequisiteCoverageComplete: boolean;
+        navigationComplete: boolean;
+        prerequisiteEdges: Record<string, unknown>[];
+        redundantPrerequisiteEdges: {
+            prerequisite: string;
+            prerequisiteRevision: string;
+            dependent: string;
+            dependentRevision: string;
+            directDependencyTypes: ("claim" | "note")[];
+            alternatePath: {
+                path: string;
+                revision: string;
+            }[];
+            guidance: string;
+        }[];
+        unlockPoints: {
+            path: string;
+            revision: string;
+            stage: number | undefined;
+            directDependents: number;
+            downstreamDependents: number;
+        }[];
+        dependencyCycles: {
+            cycleId: string;
+            notes: {
+                path: string;
+                revision: string;
+                authoredPosition: number;
+            }[];
+            edges: {
+                prerequisite: string;
+                dependent: string;
+                dependencyType: "claim" | "note";
+                sourceClaimId?: string;
+                targetClaimId?: string;
+            }[];
+            truncated: boolean;
+        }[];
+        cycleBlockedDependents: {
+            path: string;
+            revision: string;
+            blockedByCycleIds: string[];
+            guidance: string;
+        }[];
+        externalPrerequisites: Record<string, unknown>[];
+        orderIssues: Record<string, unknown>[];
+        navigationIssues: Record<string, unknown>[];
         summary: {
             entries: number;
             mocsVisited: number;
@@ -3375,8 +3453,93 @@ export declare class LlmWikiService {
             navigationIssues: number;
             omittedEntries: number;
         };
-        navigationComplete: boolean;
+        checkpointAction: {
+            endpointId: string;
+            learningProgress: {
+                rootPath: string;
+                order: string;
+                maxDepth: number;
+            };
+        };
+        guidance: string;
         truncated: boolean;
+    } | {
+        mode: string;
+        root: {
+            path: string;
+            revision: string;
+        };
+        authoredOrder: {
+            path: string;
+            revision: string;
+            targetHeading?: string;
+            targetBlockId?: string;
+        }[];
+        recommendedOrder: string[];
+        summary: {
+            entries: number;
+            omittedEntries: number;
+            dependencyCycles: number;
+            orderIssues: number;
+        };
+        authoredOrderConsistent: boolean;
+        prerequisiteCoverageComplete: boolean;
+        navigationComplete: boolean;
+        nextAction: {
+            arguments?: never;
+            endpointId: string;
+            reuseOriginalArguments: boolean;
+            overrides: {
+                maxChars: number;
+                prettyPrint: boolean;
+            };
+        } | {
+            reuseOriginalArguments?: never;
+            overrides?: never;
+            endpointId: string;
+            arguments: {
+                path: string;
+                maxChars: number;
+            };
+        };
+        detailsOmitted: boolean;
+        truncated: boolean;
+    } | {
+        root?: never;
+        sourceRevisionFingerprint?: never;
+        mode: string;
+        authoredOrder: never[];
+        recommendedOrder: never[];
+        navigationComplete: boolean;
+        authoredOrderConsistent: boolean;
+        prerequisiteCoverageComplete: boolean;
+        summary: {
+            entries: number;
+            omittedEntries: number;
+            dependencyCycles: number;
+            orderIssues: number;
+        };
+        truncated: boolean;
+        detailsOmitted: boolean;
+        omittedEntries: number;
+        message: string;
+        nextAction: {
+            arguments?: never;
+            endpointId: string;
+            reuseOriginalArguments: boolean;
+            overrides: {
+                maxChars: number;
+                prettyPrint: boolean;
+            };
+        } | {
+            reuseOriginalArguments?: never;
+            overrides?: never;
+            endpointId: string;
+            arguments: {
+                path: string;
+                maxChars: number;
+            };
+        };
     }>;
     /**
      * Build a reusable shelf-like context projection without persisting a

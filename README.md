@@ -251,6 +251,17 @@ revision-checked edit.
 Every readable entry includes its current revision. The projection never
 rewrites the MOC, and a recommendation is navigation—not proof or permission
 to discard a deliberate narrative order.
+Learning-path `maxChars` includes final pretty-JSON formatting. Budget-compacted
+responses preserve an exact authored prefix with revisions and heading/block
+locators, plus cycle/coverage warning signals. `detailsOmitted` and `truncated`
+mean omitted diagnostics are not an empty or certified-safe route. Follow the
+returned `nextAction`: when `reuseOriginalArguments` is true, merge `overrides`
+into the same original arguments (retain path, depth, limit and authentication).
+An oversized first identity requests that same position rather than skipping
+to a shorter later entry. At the 16000-character compact ceiling, inspect the
+root MOC through the returned `notes.read` action; no identical retry loop is
+offered. This is a bounded preview, not pagination of an entire curriculum.
+
 For a route that spans sessions, copy `wiki.learning_path.checkpointAction`
 into `continuity.save`, add the last fully read path as
 `learningProgress.completedThrough`, and later call `continuity.resume`.

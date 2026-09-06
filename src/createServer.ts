@@ -1462,7 +1462,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "get_wiki_learning_path": {
-          return jsonResult(await llmWiki.learningPath(principal, trimmedArgs.path, trimmedArgs.maxDepth, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+          return jsonResult(await llmWiki.learningPath(principal, trimmedArgs.path, trimmedArgs.maxDepth, trimmedArgs.limit, trimmedArgs.maxChars, false, trimmedArgs.prettyPrint), trimmedArgs.prettyPrint);
         }
 
         case "get_wiki_authority_map": {

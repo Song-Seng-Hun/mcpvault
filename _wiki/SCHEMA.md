@@ -568,6 +568,15 @@ revision-stamped proposal. It honors authored headings and source-line order
 before exact structural signals and exposes leftovers and cross-branch
 dependencies; it never rewrites the parent or invents branches for a healthy
 map.
+Learning-path response budgets include pretty formatting. Budget-compacted
+views retain an exact authored prefix with revisions and heading/block anchors,
+or an explicit same-argument retry without skipping the first oversized identity.
+`detailsOmitted` does not mean omitted cycles/prerequisites are absent. Apply
+`nextAction.overrides` to original arguments when `reuseOriginalArguments` is
+true; preserve depth, limit and scope. At the compact ceiling, inspect the root
+MOC via the returned read action rather than looping on an identical request.
+Durable checkpoint construction is independent of this display compaction.
+
 When a learning path crosses sessions, use the `checkpointAction` returned by
 `wiki.learning_path` with `continuity.save` and set `completedThrough` to the
 last fully read entry. `continuity.resume` recomputes the path and refuses to

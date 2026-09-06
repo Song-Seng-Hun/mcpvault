@@ -1370,7 +1370,7 @@ export function createServer(vaultPath, options = {}) {
                         return jsonResult(await llmWiki.contextPack(principal, trimmedArgs.path, trimmedArgs.maxChars, trimmedArgs.includeSemantic === true, trimmedArgs.intent), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_learning_path": {
-                        return jsonResult(await llmWiki.learningPath(principal, trimmedArgs.path, trimmedArgs.maxDepth, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+                        return jsonResult(await llmWiki.learningPath(principal, trimmedArgs.path, trimmedArgs.maxDepth, trimmedArgs.limit, trimmedArgs.maxChars, false, trimmedArgs.prettyPrint), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_authority_map": {
                         return jsonResult(await llmWiki.authorityMap(principal, {

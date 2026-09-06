@@ -11341,7 +11341,7 @@ export class LlmWikiService {
      * path. The Markdown order remains authoritative; the topological order is
      * returned separately as an advisory projection and never mutates notes.
      */
-    async learningPath(principal, path, maxDepth = 2, limit = 30, maxChars = 7000, checkpointOnly = false) {
+    async learningPath(principal, path, maxDepth = 2, limit = 30, maxChars = 7000, checkpointOnly = false, prettyPrint = false) {
         const boundedDepth = Math.min(Math.max(Number(maxDepth) || 0, 0), 6);
         const boundedLimit = Math.min(Math.max(Number(limit) || 30, 1), 50);
         const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 1024), 16000);
@@ -11869,10 +11869,16 @@ export class LlmWikiService {
             guidance: 'Preserve deliberate pedagogy in authored order. Same-stage entries may be read in parallel, but external or incomplete prerequisites still need inspection. Unlock and redundant-edge hints are advisory. Repair dependencyCycles before cycleBlockedDependents. Add completedThrough to checkpointAction.learningProgress after each finished entry; continuity.resume validates drift.',
             truncated: truncated || recommendedStages.length > Math.min(12, boundedLimit) || prerequisiteEdges.length > boundedLimit || redundantPrerequisiteEdges.length > boundedLimit || unlockPoints.length > Math.min(12, boundedLimit) || dependencyCycles.length > Math.min(8, boundedLimit) || cycleBlockedDependents.length > boundedLimit || externalPrerequisites.length > boundedLimit || orderIssues.length > boundedLimit || navigationIssues.length > boundedLimit,
         };
-        if (JSON.stringify(result).length <= boundedChars)
+        const fits = (value) => JSON.stringify(value, null, prettyPrint ? 2 : undefined).length <= boundedChars;
+        if (fits(result))
             return result;
+        const nextAction = boundedChars < 16000 || prettyPrint
+            ? { endpointId: 'wiki.learning_path', reuseOriginalArguments: true, overrides: { maxChars: 16000, prettyPrint: false } }
+            : { endpointId: 'notes.read', arguments: { path: result.root.path, maxChars: 8000 } };
         const compact = {
             ...result,
+            nextAction,
+            detailsOmitted: true,
             authoredOrder: authoredOrder.slice(0, Math.min(20, authoredOrder.length)),
             recommendedOrder: recommendedOrder.slice(0, 20),
             recommendedStages: result.recommendedStages.slice(0, 6).map(stage => ({ ...stage, entries: stage.entries.slice(0, 6) })),
@@ -11888,51 +11894,67 @@ export class LlmWikiService {
         };
         // Preserve the authored path and its revision guards as long as possible.
         // Derived convenience views can be requested again with a larger budget.
-        while (JSON.stringify(compact).length > boundedChars && compact.unlockPoints.length)
+        while (!fits(compact) && compact.unlockPoints.length)
             compact.unlockPoints.pop();
-        while (JSON.stringify(compact).length > boundedChars && compact.redundantPrerequisiteEdges.length)
+        while (!fits(compact) && compact.redundantPrerequisiteEdges.length)
             compact.redundantPrerequisiteEdges.pop();
-        while (JSON.stringify(compact).length > boundedChars && compact.prerequisiteEdges.length)
+        while (!fits(compact) && compact.prerequisiteEdges.length)
             compact.prerequisiteEdges.pop();
-        while (JSON.stringify(compact).length > boundedChars && compact.recommendedStages.length > 1)
+        while (!fits(compact) && compact.recommendedStages.length > 1)
             compact.recommendedStages.pop();
-        while (JSON.stringify(compact).length > boundedChars && compact.recommendedStages.length > 0 && compact.recommendedStages[0].entries.length > 1)
+        while (!fits(compact) && compact.recommendedStages.length > 0 && compact.recommendedStages[0].entries.length > 1)
             compact.recommendedStages[0].entries.pop();
-        while (JSON.stringify(compact).length > boundedChars && compact.cycleBlockedDependents.length)
+        while (!fits(compact) && compact.cycleBlockedDependents.length)
             compact.cycleBlockedDependents.pop();
-        while (JSON.stringify(compact).length > boundedChars && compact.dependencyCycles.length > 1)
+        while (!fits(compact) && compact.dependencyCycles.length > 1)
             compact.dependencyCycles.pop();
-        while (JSON.stringify(compact).length > boundedChars && compact.dependencyCycles.length > 0 && compact.dependencyCycles[0].edges.length > 1)
+        while (!fits(compact) && compact.dependencyCycles.length > 0 && compact.dependencyCycles[0].edges.length > 1)
             compact.dependencyCycles[0].edges.pop();
-        while (JSON.stringify(compact).length > boundedChars && compact.dependencyCycles.length > 0 && compact.dependencyCycles[0].notes.length > 1)
+        while (!fits(compact) && compact.dependencyCycles.length > 0 && compact.dependencyCycles[0].notes.length > 1)
             compact.dependencyCycles[0].notes.pop();
-        while (JSON.stringify(compact).length > boundedChars && compact.navigationIssues.length)
+        while (!fits(compact) && compact.navigationIssues.length)
             compact.navigationIssues.pop();
-        while (JSON.stringify(compact).length > boundedChars && compact.externalPrerequisites.length)
+        while (!fits(compact) && compact.externalPrerequisites.length)
             compact.externalPrerequisites.pop();
-        while (JSON.stringify(compact).length > boundedChars && compact.orderIssues.length)
+        while (!fits(compact) && compact.orderIssues.length)
             compact.orderIssues.pop();
-        while (JSON.stringify(compact).length > boundedChars && compact.authoredOrder.length > 1) {
+        while (!fits(compact) && compact.authoredOrder.length > 1) {
             compact.authoredOrder.pop();
             compact.recommendedOrder.pop();
         }
-        if (JSON.stringify(compact).length <= boundedChars)
+        if (fits(compact))
             return compact;
         const minimal = {
             mode: result.mode,
             root: { path: result.root.path, revision: result.root.revision },
-            authoredOrder: authoredOrder.slice(0, 3).map(entry => ({ path: entry.path, revision: entry.revision })),
+            authoredOrder: authoredOrder.slice(0, 3).map(entry => ({ path: entry.path, revision: entry.revision,
+                ...(entry.targetHeading && { targetHeading: entry.targetHeading }),
+                ...(entry.targetBlockId && { targetBlockId: entry.targetBlockId }) })),
             recommendedOrder: recommendedOrder.slice(0, 3),
-            summary: result.summary,
+            summary: { entries: result.summary.entries, omittedEntries: result.summary.omittedEntries,
+                dependencyCycles: result.summary.dependencyCycles, orderIssues: result.summary.orderIssues },
+            authoredOrderConsistent: result.authoredOrderConsistent,
+            prerequisiteCoverageComplete: result.prerequisiteCoverageComplete,
             navigationComplete,
+            nextAction,
+            detailsOmitted: true,
             truncated: true,
         };
-        while (JSON.stringify(minimal).length > boundedChars && minimal.authoredOrder.length > 0) {
+        while (!fits(minimal) && minimal.authoredOrder.length > 1) {
             minimal.authoredOrder.pop();
             minimal.recommendedOrder.pop();
         }
-        if (JSON.stringify(minimal).length > boundedChars)
-            throw new Error('maxChars is too small to preserve this MOC path and revision; increase the read budget.');
+        if (!fits(minimal)) {
+            if (boundedChars < 16000 || prettyPrint) {
+                return { mode: result.mode, authoredOrder: [], recommendedOrder: [], navigationComplete,
+                    authoredOrderConsistent: result.authoredOrderConsistent,
+                    prerequisiteCoverageComplete: result.prerequisiteCoverageComplete,
+                    summary: minimal.summary,
+                    truncated: true, detailsOmitted: true, omittedEntries: result.summary.entries,
+                    message: 'Retry the same MOC path. No reading targets skipped.', nextAction };
+            }
+            throw new Error('Learning path identity exceeds the response ceiling; no reading targets skipped. Inspect the MOC directly.');
+        }
         return minimal;
     }
     /**
