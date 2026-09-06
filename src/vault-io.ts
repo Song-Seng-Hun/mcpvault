@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { readBoundedSource, SourceReadLimitError } from './bounded-source-read.js';
 import { hashUtf8Source } from './streaming-revision.js';
-import { readUtf8MetadataSource, type Utf8MetadataSource } from './streaming-metadata.js';
+import { readUtf8HeaderSource, readUtf8MetadataSource, type Utf8MetadataSource } from './streaming-metadata.js';
 
 export type VaultIoPriority = 'foreground' | 'background';
 const BACKGROUND_MAX_WAIT_MS = 500;
@@ -25,6 +25,7 @@ export interface VaultIoCoordinatorOptions {
   boundedReader?: (path: string, maxBytes: number) => Promise<string>;
   revisionReader?: (path: string, maxBytes?: number) => Promise<string>;
   metadataReader?: (path: string, maxBytes?: number) => Promise<Utf8MetadataSource>;
+  headerReader?: (path: string) => Promise<string>;
 }
 
 /**
@@ -37,6 +38,7 @@ export class VaultIoCoordinator {
   private readonly boundedReader: (path: string, maxBytes: number) => Promise<string>;
   private readonly revisionReader: (path: string, maxBytes?: number) => Promise<string>;
   private readonly metadataReader: (path: string, maxBytes?: number) => Promise<Utf8MetadataSource>;
+  private readonly headerReader: (path: string) => Promise<string>;
   private readonly minConcurrency: number;
   private readonly maxConcurrency: number;
   private targetConcurrency: number;
@@ -50,6 +52,7 @@ export class VaultIoCoordinator {
     this.boundedReader = options.boundedReader || readBoundedSource;
     this.revisionReader = options.revisionReader || hashUtf8Source;
     this.metadataReader = options.metadataReader || readUtf8MetadataSource;
+    this.headerReader = options.headerReader || readUtf8HeaderSource;
     this.minConcurrency = Math.max(1, Math.floor(options.minConcurrency || 2));
     this.maxConcurrency = Math.max(this.minConcurrency, Math.floor(options.maxConcurrency || 32));
     this.targetConcurrency = Math.min(
@@ -60,6 +63,10 @@ export class VaultIoCoordinator {
 
   readUtf8(path: string, priority: VaultIoPriority = 'foreground'): Promise<string> {
     return this.schedule(JSON.stringify(['full', path]), () => this.reader(path), priority);
+  }
+
+  readUtf8Header(path: string, priority: VaultIoPriority = 'foreground'): Promise<string> {
+    return this.schedule(JSON.stringify(['header', path]), () => this.headerReader(path), priority);
   }
 
   readUtf8Bounded(path: string, maxBytes: number, priority: VaultIoPriority = 'foreground'): Promise<string> {

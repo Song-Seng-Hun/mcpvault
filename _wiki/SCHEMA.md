@@ -31,6 +31,12 @@ the optimization does not skip body hashing, change the original revision, or
 introduce a new index source-size limit. Graph and full-note reads may still
 need body content. No new client setup or authoring format is required.
 
+Non-index link identity discovery may read only the leading Properties and stop
+before the body. Its result is a candidate path, not a revision-bearing read or
+proof of current body contents. The caller still uses a normal guarded read for
+content or edits. Visibility is rechecked before returning candidates; the
+optimization does not make a revoked/private identity a public match.
+
 ## Layers
 
 - `_sources/`: immutable source snapshots created only by `ingest_source`.

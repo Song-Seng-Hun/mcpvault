@@ -1,4 +1,6 @@
 import { hashUtf8Source } from './streaming-revision.js';
+import { open } from 'node:fs/promises';
+import { StringDecoder } from 'node:string_decoder';
 
 /** Collect only the existing frontmatter parser's leading input. A header may
  * be arbitrarily long/unclosed: the source reader, not this projection, caps it.
@@ -42,6 +44,25 @@ export class HeaderCollector {
   }
 
   finish(): string { return this.decided ? this.parts.join('') : this.opener; }
+  get complete(): boolean { return this.done; }
+}
+
+/** For non-revision identity discovery only. Stops at a closed header or a
+ * non-opener; does not claim to read/verify the remaining body or its revision.
+ * Unclosed headers preserve legacy EOF behavior, without a new truncation cap. */
+export async function readUtf8HeaderSource(path: string): Promise<string> {
+  const handle = await open(path, 'r');
+  try {
+    if (!(await handle.stat()).isFile()) throw new Error('Source is not a regular file');
+    const collector = new HeaderCollector(), decoder = new StringDecoder('utf8');
+    const buffer = Buffer.allocUnsafe(64 * 1024);
+    while (!collector.complete) {
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, null);
+      if (!bytesRead) { collector.write(decoder.end()); break; }
+      collector.write(decoder.write(buffer.subarray(0, bytesRead)));
+    }
+    return collector.finish();
+  } finally { await handle.close(); }
 }
 
 export interface Utf8MetadataSource { readonly header: string; readonly revision: string }

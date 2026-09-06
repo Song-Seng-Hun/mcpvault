@@ -10,7 +10,12 @@ export declare class HeaderCollector {
     write(text: string): void;
     private capture;
     finish(): string;
+    get complete(): boolean;
 }
+/** For non-revision identity discovery only. Stops at a closed header or a
+ * non-opener; does not claim to read/verify the remaining body or its revision.
+ * Unclosed headers preserve legacy EOF behavior, without a new truncation cap. */
+export declare function readUtf8HeaderSource(path: string): Promise<string>;
 export interface Utf8MetadataSource {
     readonly header: string;
     readonly revision: string;

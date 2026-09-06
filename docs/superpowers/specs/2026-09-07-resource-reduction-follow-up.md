@@ -79,6 +79,13 @@ whole-Vault memory ceiling or header-only disk-I/O claim follows from this.
    are verified separately; injectable race hooks follow the projection boundary
    without suppressing mutation/error scenarios. Do not extrapolate this to
    graph parsing or body-bearing query hydration, or to an index memory cap.
+   A further non-index consumer, `findPathsForNoteReference`, needs only identity
+   Properties and no revision. `2026-09-07-reference-header-read-design.md` uses
+   an early-closing header reader under the same coordinator instead of adding
+   unused full-body hashing. It retains only header input and stops disk reads
+   once a header closes/non-opener is recognized, with revocation checks around
+   asynchronous discovery. Long/unclosed headers preserve prior EOF behavior;
+   do not reuse this non-revision result as a guarded source receipt.
 3. **Only then offload proven synchronous CPU hotspots.** A small reusable pool
    with a bounded admission queue can isolate parsing/graph computations, but
    serial I/O and already-native inference do not automatically benefit. Compare

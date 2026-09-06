@@ -2372,8 +2372,12 @@ export class FileSystemService {
         for (let offset = 0; offset < notePaths.length; offset += readBatchSize) {
             const batch = await Promise.all(notePaths.slice(offset, offset + readBatchSize).map(async (path) => {
                 try {
-                    const raw = await readFile(this.resolvePath(path), 'utf-8');
-                    const frontmatter = this.frontmatterHandler.parse(raw).frontmatter || {};
+                    if (!this.pathFilter.isAllowed(path) || !canAccessPath(path))
+                        return undefined;
+                    const header = await this.vaultIo.readUtf8Header(this.resolvePath(path));
+                    if (!this.pathFilter.isAllowed(path) || !canAccessPath(path))
+                        return undefined;
+                    const frontmatter = this.frontmatterHandler.parse(header).frontmatter || {};
                     return {
                         path,
                         title: frontmatter.title,
@@ -2391,7 +2395,12 @@ export class FileSystemService {
                 if (entry)
                     descriptors.push(entry);
         }
-        const matches = resolveNoteReference(wikiLinkName, buildNoteReferenceIndex(descriptors), options);
+        const visible = descriptors.filter(({ path }) => this.pathFilter.isAllowed(path) && canAccessPath(path));
+        const matches = resolveNoteReference(wikiLinkName, buildNoteReferenceIndex(visible), {
+            ...options,
+            canReference: (source, target) => this.pathFilter.isAllowed(target) && canAccessPath(target)
+                && (!options.canReference || options.canReference(source, target)),
+        });
         // Depth-ascending (root-first), alphabetical tiebreak at equal depth.
         // Standalone callers omit sourcePath; note-bound readers can resolve ./ and ../.
         matches.sort((a, b) => {

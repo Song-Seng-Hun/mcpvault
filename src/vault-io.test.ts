@@ -3,6 +3,19 @@ import { VaultIoCoordinator } from './vault-io.js';
 import { SourceReadLimitError } from './bounded-source-read.js';
 
 describe('VaultIoCoordinator', () => {
+  test('header-only reads coalesce without aliasing full, metadata, or revision reads', async () => {
+    const calls: string[] = []; let active = 0, peak = 0;
+    const read = async (key: string) => { calls.push(key); peak = Math.max(peak, ++active); await new Promise(resolve => setTimeout(resolve, 2)); active--; return key; };
+    const io = new VaultIoCoordinator({ minConcurrency: 1, maxConcurrency: 1,
+      headerReader: path => read(`header:${path}`), reader: path => read(`body:${path}`), revisionReader: path => read(`digest:${path}`),
+      metadataReader: async path => ({ header: await read(`metadata:${path}`), revision: 'r' }),
+    });
+    const a = io.readUtf8Header('same'), b = io.readUtf8Header('same'); expect(a).toBe(b);
+    expect(await Promise.all([a, b, io.readUtf8('same'), io.readUtf8Revision('same'), io.readUtf8Metadata('same')]))
+      .toEqual(['header:same', 'header:same', 'body:same', 'digest:same', { header: 'metadata:same', revision: 'r' }]);
+    expect(calls).toHaveLength(4); expect(peak).toBe(1);
+    await io.readUtf8Header('same'); expect(calls).toHaveLength(5); expect(io.status()).toMatchObject({ active: 0, queued: 0 });
+  });
   test('metadata admission deduplicates only identical keys and shares the existing scheduler', async () => {
     let active = 0, peak = 0; const calls: string[] = [];
     const read = async (key: string) => {

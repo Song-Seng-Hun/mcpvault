@@ -8,6 +8,7 @@ export interface VaultIoCoordinatorOptions {
     boundedReader?: (path: string, maxBytes: number) => Promise<string>;
     revisionReader?: (path: string, maxBytes?: number) => Promise<string>;
     metadataReader?: (path: string, maxBytes?: number) => Promise<Utf8MetadataSource>;
+    headerReader?: (path: string) => Promise<string>;
 }
 /**
  * Deduplicates concurrent note reads and applies adaptive backpressure to
@@ -19,6 +20,7 @@ export declare class VaultIoCoordinator {
     private readonly boundedReader;
     private readonly revisionReader;
     private readonly metadataReader;
+    private readonly headerReader;
     private readonly minConcurrency;
     private readonly maxConcurrency;
     private targetConcurrency;
@@ -28,6 +30,7 @@ export declare class VaultIoCoordinator {
     private latencyEmaMs;
     constructor(options?: VaultIoCoordinatorOptions);
     readUtf8(path: string, priority?: VaultIoPriority): Promise<string>;
+    readUtf8Header(path: string, priority?: VaultIoPriority): Promise<string>;
     readUtf8Bounded(path: string, maxBytes: number, priority?: VaultIoPriority): Promise<string>;
     readUtf8Revision(path: string, maxBytes?: number, priority?: VaultIoPriority): Promise<string>;
     readUtf8Metadata(path: string, maxBytes?: number, priority?: VaultIoPriority): Promise<Utf8MetadataSource>;
