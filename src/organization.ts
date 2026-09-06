@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { extractMarkdownTasks } from './markdown-tasks.js';
+import { extractObsidianLinkOccurrences } from './backlinks.js';
 
 /**
  * Lightweight knowledge-organization vocabulary.
@@ -151,6 +152,14 @@ export function isOpenActionableKnowledge(frontmatter: Record<string, unknown>):
   const taskStatus = authoredTaskStatus(frontmatter.task_status);
   return !['archived', 'superseded'].includes(lifecycle)
     && !['completed', 'cancelled', 'someday'].includes(taskStatus);
+}
+
+/** Authored plan completeness, not execution readiness or permission. */
+export function needsAuthoredNextAction(frontmatter: Record<string, unknown>): boolean {
+  return isOpenActionableKnowledge(frontmatter)
+    && String(frontmatter.lifecycle || '').trim().toLowerCase() === 'active'
+    && !hasAuthoredNextAction(frontmatter) && !hasAuthoredText(frontmatter.waiting_for)
+    && !['waiting', 'blocked'].includes(authoredTaskStatus(frontmatter.task_status));
 }
 
 /**
@@ -1775,7 +1784,7 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
       if (frontmatter.summary_of_content_sha256 !== digest) issues.push({ code: 'stale_summary', detail: 'The note body changed after its stored progressive summary; regenerate the summary before relying on it.' });
     }
   }
-  if (kind === 'project' && lifecycle === 'active' && !hasAuthoredNextAction(frontmatter) && !hasAuthoredText(frontmatter.waiting_for)) {
+  if (kind === 'project' && needsAuthoredNextAction(frontmatter)) {
     issues.push({ code: 'active_project_without_next_action', detail: 'An active project should declare next_action/next_actions or waiting_for so another agent can move it forward.' });
   }
   if (kind === 'project' && lifecycle === 'active' && !frontmatter.project_purpose && !frontmatter.desired_outcome) {
@@ -1790,8 +1799,7 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
   if (actionable) {
     const taskStatus = authoredTaskStatus(frontmatter.task_status);
     const waiting = taskStatus === 'waiting' || hasAuthoredText(frontmatter.waiting_for);
-    const hasNextAction = hasAuthoredNextAction(frontmatter);
-    if (kind !== 'project' && lifecycle === 'active' && !hasNextAction && !waiting && !['blocked', 'someday', 'completed', 'cancelled'].includes(taskStatus)) {
+    if (kind !== 'project' && needsAuthoredNextAction(frontmatter)) {
       issues.push({ code: 'active_work_without_next_action', detail: 'Active actionable work should declare next_action/next_actions or waiting_for so another agent can move it forward.' });
     }
     if (taskStatus === 'next_action' && !frontmatter.started_at) issues.push({ code: 'active_work_without_started_at', detail: 'Executable work should record started_at when it enters the next_action lane; do not infer it from updated_at.' });
@@ -1856,8 +1864,8 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
     issues.push({ code: 'review_date_missing', detail: 'Notes in review should set review_at so the next agent can find them again.' });
   }
 
-  if (kind === 'moc' && !/\[\[[^\]]+\]\]/.test(content)) {
-    issues.push({ code: 'moc_without_links', detail: 'A MOC should link to at least one related note with Obsidian [[wikilinks]].' });
+  if (kind === 'moc' && extractObsidianLinkOccurrences(content, 1).length === 0) {
+    issues.push({ code: 'moc_without_links', detail: 'A MOC should contain an Obsidian wikilink or relative Markdown note link outside literal code examples. Link presence alone does not verify the target.' });
   }
   if (kind === 'moc') {
     if (!frontmatter.moc_purpose) issues.push({ code: 'moc_purpose_missing', detail: 'A MOC should state what navigation or question it is meant to serve.' });

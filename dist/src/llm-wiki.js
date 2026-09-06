@@ -21,7 +21,7 @@ import { CollectionHealthProjection } from './collection-health.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
 import { projectNoteOutline, projectNoteParagraphs, projectNoteHeadingSummary, projectNoteHeadingPresence, projectNoteBlockPresence, projectNoteBlockLines, selectNoteHeading, hasUnclosedNoteFence, noteSectionHasContent } from './note-projections.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
-import { authoredTaskStatus, hasAuthoredText, hasAuthoredNextAction, normalizeEpistemicStatus } from './organization.js';
+import { authoredTaskStatus, hasAuthoredText, hasAuthoredNextAction, needsAuthoredNextAction, normalizeEpistemicStatus } from './organization.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
 import { buildNoteReferenceIndex, normalizeNoteReferenceTerm, noteReferenceDocument, resolveNoteReference } from './note-reference.js';
 import { buildJsonCanvasProjection, canvasFileNodeId, readJsonCanvasMetadata, validateJsonCanvasDocument } from './json-canvas.js';
@@ -10491,8 +10491,9 @@ export class LlmWikiService {
         const candidates = [];
         const nowMs = Date.now();
         const curationRoute = (path, revision, reasons) => {
-            const inspect = reasons.includes('project_without_next_action')
-                ? { endpointId: endpointIdForTool('get_wiki_project_packet'), arguments: { path, maxChars: 5000 } }
+            const missingAction = reasons.some(reason => ['project_without_next_action', 'work_without_next_action'].includes(reason));
+            const inspect = missingAction
+                ? { endpointId: endpointIdForTool('read_wiki_projection'), arguments: { path, view: 'full', maxChars: 5000 } }
                 : reasons.includes('empty_moc') || reasons.includes('no_primary_moc')
                     ? { endpointId: endpointIdForTool('get_wiki_moc_candidates'), arguments: { maxChars: 5000, limit: 8 } }
                     : { endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path, intent: reasons.includes('inbox_capture') ? 'capture' : 'review', maxChars: 5000 } };
@@ -10528,7 +10529,7 @@ export class LlmWikiService {
                 };
             return {
                 inspect,
-                then: { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path, expectedRevision: revision }, requiredArguments: reasons.includes('project_without_next_action') ? ['nextAction'] : ['primaryMoc or mocs or another justified repair'] },
+                then: { endpointId: endpointIdForTool('triage_wiki_note'), arguments: { path, expectedRevision: revision }, requiredArguments: missingAction ? ['nextAction or nextActions or waitingFor'] : ['primaryMoc or mocs or another justified repair'] },
             };
         };
         const addDebt = (note, reasons, score, updatedAt) => {
@@ -10555,8 +10556,8 @@ export class LlmWikiService {
         for await (const note of iterateNoteBodies(this.fileSystem, {}, canAccess, current => !isModerationHidden(current.frontmatter))) {
             scanned += 1;
             const frontmatter = note.frontmatter;
-            const kind = String(frontmatter.note_kind || '').toLowerCase();
-            const lifecycle = String(frontmatter.lifecycle || '').toLowerCase();
+            const kind = String(frontmatter.note_kind || '').trim().toLowerCase();
+            const lifecycle = String(frontmatter.lifecycle || '').trim().toLowerCase();
             const reasons = [];
             let score = 0;
             const updatedAt = Date.parse(String(frontmatter.updated_at || frontmatter.created_at || ''));
@@ -10598,11 +10599,11 @@ export class LlmWikiService {
                 reasons.push('unprocessed_literature');
                 score += 6;
             }
-            if (kind === 'project' && lifecycle === 'active' && !frontmatter.next_action && !frontmatter.waiting_for) {
-                reasons.push('project_without_next_action');
+            if (needsAuthoredNextAction(frontmatter)) {
+                reasons.push(kind === 'project' ? 'project_without_next_action' : 'work_without_next_action');
                 score += 7;
             }
-            if (kind === 'moc' && !/\[\[[^\]]+\]\]/.test(note.content || '')) {
+            if (kind === 'moc' && extractObsidianLinkOccurrences(note.content || '', 1).length === 0) {
                 reasons.push('empty_moc');
                 score += 6;
             }

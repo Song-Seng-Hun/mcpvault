@@ -363,7 +363,7 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_maintenance_debt',
-      description: 'Return a bounded derived 5S maintenance ledger for Inbox captures, stale summaries, due or never-reviewed knowledge, missing primary MOCs, unfinished literature, incomplete projects, and empty MOCs. It never moves, archives, deletes, or rewrites notes.',
+      description: 'Return a bounded derived 5S maintenance ledger for Inbox, stale summaries, reviews, missing MOCs, literature, and incomplete active work including actionable questions or hypotheses. Nonempty next_action/next_actions and explicit waiting/blocked/terminal lanes follow shared organization rules; missing-action debt is planning guidance, not permission to execute. Empty MOCs use the graph parser: code examples do not count, relative Markdown note links do, and link presence does not prove target validity. Follow the exact-source curationPlan only when its checked revision is present. It never moves, archives, deletes, or rewrites notes.',
       inputSchema: { type: 'object', properties: {
         olderThanDays: { type: 'integer', minimum: 1, maximum: 3650, default: 30, description: 'Age threshold for aging and never-reviewed signals' },
         limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 },
@@ -499,6 +499,7 @@ export function getLlmWikiTools(): Tool[] {
         ...temporalProperties,
         ...knowledgeDispositionProperties,
         path: { type: 'string' }, noteKind: organizationPropertySchema('note_kind'),
+        nextAction: { type: 'string', maxLength: 500, description: 'One concrete next action on this actionable note; alternative to nextActions' },
         lifecycle: organizationPropertySchema('lifecycle', { enum: [...ACTIVE_LIFECYCLES], description: 'Retired states are managed only by wiki.lifecycle_transition' }),
         decisionStatus: organizationPropertySchema('decision_status', { description: 'Metadata-only migration/repair for an existing Decision Record; use wiki.decision_record for an actual state transition' }),
         moc: { type: 'string' }, mocs: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12, description: 'Additional Obsidian [[MOC]] links for multi-context discovery; navigation only' }, primaryMoc: { type: 'string', maxLength: 500, description: 'Preferred Obsidian MOC entry point for this note; navigation only' }, navOrder: { type: 'integer', minimum: 0, maximum: 1000000, description: 'Optional order among sibling MOCs; lower numbers appear first' }, project: { type: 'string' }, reviewAt: { type: 'string' },

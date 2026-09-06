@@ -24,7 +24,10 @@ Preserve project reason/code identifiers. Add work_without_next_action for other
 actionable notes at the same score. The existing project packet inspect action
 passes path to a schema that does not accept path; replace work-debt inspection
 with an exact-path wiki projection. Repair hints accept nextAction, nextActions
-or waitingFor, using the already checked revision. No extra MCP tools or writes.
+or waitingFor, using the already checked revision. The published wiki.triage
+schema must expose all three alternatives with the existing service constraints;
+nextAction was missing and is added as a string of at most500 characters. No
+extra MCP tools or automatic writes.
 
 Alternatives rejected: duplicate fixes would drift again; running full lint for
 every maintenance row would add unrelated work and blur lightweight priorities.

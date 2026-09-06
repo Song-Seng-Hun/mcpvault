@@ -240,6 +240,8 @@ export declare function isActionableKnowledge(frontmatter: Record<string, unknow
  * knowledge, while `isActionableKnowledge` still identifies their historical
  * work facet for audits and retrospectives. */
 export declare function isOpenActionableKnowledge(frontmatter: Record<string, unknown>): boolean;
+/** Authored plan completeness, not execution readiness or permission. */
+export declare function needsAuthoredNextAction(frontmatter: Record<string, unknown>): boolean;
 /**
  * The small, stable subset of frontmatter that MCPVault owns.  Custom
  * Properties remain allowed; this contract only gives agents and lint a common

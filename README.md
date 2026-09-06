@@ -1046,7 +1046,18 @@ fabricates a successful recall attempt.
 The maintenance endpoint
 `get_wiki_maintenance_debt` adds a derived 5S ledger for Inbox, stale
 projections, aging reviews, missing MOCs, unfinished literature, incomplete
-projects, and empty maps. `get_wiki_authority_map` provides a library-style
+active work, and empty maps. Missing-action debt uses the same authored-text rule
+as organization lint: `next_action` or a nonempty string in `next_actions` counts;
+blank/non-text values do not. Waiting, blocked, terminal, someday and retired
+work is not asked to invent another action. Tasks and actionable questions or
+hypotheses retain their note kind and use `work_without_next_action`; projects
+keep `project_without_next_action`. This checks plan completeness, not dependency
+or defer-date execution readiness. Its inspect action opens the exact source,
+then accepts `nextAction`, `nextActions` or `waitingFor` as appropriate.
+MOC link presence uses the Obsidian graph parser: fenced/inline/escaped code
+examples do not count, while wikilinks and relative Markdown note links do.
+Unresolved links still express navigation intent; lint resolution checks their
+targets separately. `get_wiki_authority_map` provides a library-style
 preferred-term/alias/stable-ID view and makes terminology collisions visible
 without renaming notes. `get_wiki_answer_packet` combines one progressive
 source projection with a few supporting neighbors and counterpoints, keeping
@@ -4134,8 +4145,9 @@ adds bounded navigation signals instead of a second database.
   Global claim resolution, cycles, duplicate IDs, anchors, roles, and scope
   violations also flow into the ordinary lint/exception/review projections;
   those projections route inspection back here rather than duplicating a graph.
-- `get_wiki_maintenance_debt` gives each returned repair a current revision and
-  a `curationPlan`; `get_wiki_review_packet` coalesces every finding for the
+- `get_wiki_maintenance_debt` gives unchanged revalidated repairs a revision and
+  a `curationPlan`; changed/deleted candidates stay advisory without a mutation
+  plan. `get_wiki_review_packet` coalesces every finding for the
   same path into one bounded slot, chooses one priority, and returns its
   issue-specific inspect-then-repair route. Active recall remains separate
   from evidence review, blocked work opens the project packet, MOC sequence
