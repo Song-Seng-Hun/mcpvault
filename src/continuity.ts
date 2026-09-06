@@ -70,6 +70,75 @@ function fingerprint(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
+type ResumeState = {
+  exists: true; path: string; revision?: string; fm: Record<string, any>;
+  content: string; truncated: boolean; learningProgress?: Record<string, any>;
+  nextAction?: { endpointId: string; arguments: Record<string, unknown> };
+};
+
+/** Project a read, never rewrite its canonical checkpoint or shorten edit guards. */
+function packResumeState(full: ResumeState, maxChars: number, prettyPrint: boolean): ResumeState {
+  const fits = (value: ResumeState) => JSON.stringify(value, null, prettyPrint ? 2 : undefined).length <= maxChars;
+  if (fits(full)) return full;
+  const result: ResumeState = {
+    ...full, fm: {}, content: '', truncated: true,
+    nextAction: { endpointId: 'mcp.read_note_lines', arguments: { path: full.path, expectedRevision: full.revision, startLine: 1, endLine: 40, maxChars: 6000 } },
+  };
+  // Keep the validated next target before optional history and duplicate prose.
+  if (!fits(result) && result.learningProgress?.drift) {
+    const { drift: _drift, ...progress } = result.learningProgress;
+    result.learningProgress = { ...progress, detailsOmitted: true };
+  }
+  if (!fits(result)) {
+    result.nextAction = { endpointId: 'continuity.resume', arguments: { maxChars: 12000, prettyPrint: false } };
+  }
+  if (!fits(result) && result.learningProgress) {
+    // A partial next target is not executable. Require revalidation at a larger
+    // budget rather than claiming that a missing action is ready to resume.
+    result.learningProgress = { state: result.learningProgress.state, canResume: false, detailsOmitted: true };
+  }
+  if (!fits(result)) throw new Error('Resume identity and safety state exceed maxChars; retry continuity.resume with maxChars=12000 and prettyPrint=false.');
+
+  const fitBody = (length: number) => {
+    let low = 0, high = length;
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2);
+      result.content = full.content.slice(0, mid);
+      if (fits(result)) low = mid; else high = mid - 1;
+    }
+    result.content = full.content.slice(0, low);
+    if (/[\uD800-\uDBFF]$/.test(result.content)) result.content = result.content.slice(0, -1);
+  };
+
+  const priority = ['topic', 'next_action', 'cursors', 'pending_edits', 'research_trail', 'focus_questions', 'focus_projects', 'focus_notes', 'open_questions', 'references'];
+  const keys = [...priority.filter(key => Object.hasOwn(full.fm, key)), ...Object.keys(full.fm).filter(key => !priority.includes(key))];
+  let bodyReserved = false;
+  for (const key of keys) {
+    if (!bodyReserved && key !== 'topic' && key !== 'next_action') {
+      // Metadata must not consume every character and leave an unusable '# W'.
+      fitBody(Math.min(full.content.length, 400, Math.floor(maxChars / 4)));
+      bodyReserved = true;
+    }
+    const value = full.fm[key];
+    Object.defineProperty(result.fm, key, { value, enumerable: true, writable: true, configurable: true });
+    if (fits(result)) continue;
+    if (Array.isArray(value)) {
+      // Preserve an ordered prefix of whole entries, especially revision guards.
+      let low = 0, high = value.length;
+      while (low < high) {
+        const mid = Math.ceil((low + high) / 2);
+        result.fm[key] = value.slice(0, mid);
+        if (fits(result)) low = mid; else high = mid - 1;
+      }
+      result.fm[key] = value.slice(0, low);
+      if (fits(result)) continue;
+    }
+    delete result.fm[key];
+  }
+  fitBody(full.content.length);
+  return result;
+}
+
 function pendingEdits(value: unknown): PendingEdit[] | undefined {
   if (value === undefined) return undefined;
   if (!Array.isArray(value)) throw new Error('pendingEdits must be an array');
@@ -366,24 +435,25 @@ export class ContinuityService {
     return { success: true, path: `scope://${principal.agentId ? 'agent' : 'model'}/${principal.agentId || principal.modelId}/_continuity/work-state.md`, updatedAt, revision: receipt.revision, ...(learningProgress && { learningProgress: this.compactLearningProgress(learningProgress, learningState) }) };
   }
 
-  async read(params: { principal?: ScopePrincipal; maxChars?: number; validateLearningProgress?: boolean }) {
+  async read(params: { principal?: ScopePrincipal; maxChars?: number; validateLearningProgress?: boolean; prettyPrint?: boolean }) {
     const principal = requiredPrincipal(params.principal);
     const path = ownerPath(principal);
     if (!await this.fileSystem.noteExists(path)) return { exists: false, path: `scope://${principal.agentId ? 'agent' : 'model'}/${principal.agentId || principal.modelId}/_continuity/work-state.md` };
     const note = await this.fileSystem.readNote(path);
-    const maxChars = Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 12000);
+    const requestedChars = Number(params.maxChars ?? 6000);
+    const maxChars = Number.isFinite(requestedChars) ? Math.min(Math.max(Math.floor(requestedChars), 512), 12000) : 6000;
     const { learning_progress: rawLearningProgress, ...frontmatter } = note.frontmatter;
     const learningProgress = rawLearningProgress === undefined
       ? undefined
       : await this.validateLearningProgress(principal, rawLearningProgress, params.validateLearningProgress !== false);
-    return {
+    return packResumeState({
       exists: true,
       path: `scope://${principal.agentId ? 'agent' : 'model'}/${principal.agentId || principal.modelId}/_continuity/work-state.md`,
       fm: frontmatter,
-      content: note.content.slice(0, maxChars),
-      truncated: note.content.length > maxChars,
+      content: note.content,
+      truncated: false,
       revision: note.revision,
       ...(learningProgress && { learningProgress }),
-    };
+    }, maxChars, params.prettyPrint === true);
   }
 }

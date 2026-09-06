@@ -1766,6 +1766,18 @@ Its optional `learningProgress` needs only `rootPath`, authored/recommended
 `order`, optional `maxDepth`, and the last `completedThrough` path. The server
 builds the revision snapshot; routine pulses return an unchecked compact hint,
 while explicit `continuity.resume` performs the more expensive drift check.
+Its `maxChars` is a total JSON budget (including Properties and pretty
+indentation), not just a body allowance. A compact response prioritizes the
+validated learning action, topic/next action and some body context. Metadata
+arrays are ordered prefixes of whole entries; paths, revisions and cursor
+values are never shortened. `truncated: true` means omitted fields/items are
+unknown, not absent. Follow the revision-pinned `mcp.read_note_lines` action
+for checkpoint source detail; a concurrent save rejects that continuation.
+If the budget cannot preserve a complete learning target, `canResume: false`
+and `detailsOmitted: true` require the returned larger-budget resume action.
+Reading historical source lines does not validate learning progress: use
+`continuity.resume` before advancing. Stored Markdown is never shortened by
+this projection. These are response limits, not total source-I/O or heap caps.
 The snapshot covers at most 50 entries within the requested depth. A truncated
 link/dependency scan cannot be saved as a complete route, even if duplicate
 links left fewer than 50 distinct entries. Simplify that MOC or checkpoint a

@@ -21,7 +21,10 @@ test('continuity checkpoint is private, revisioned, and bounded', async () => {
   const principal = { accountId: 'codex-account', modelId: 'codex', agentId: 'codex-worker', role: 'agent' as const, capabilities: ['journal'] as const };
 
   const saved = await continuity.save({ principal, topic: 'Search review', summary: 'The lexical search is bounded.', nextAction: 'Review semantic fallback.', openQuestions: ['Should the index be warmed lazily?'], focusQuestions: ['Which cache is authoritative?'], focusProjects: ['MCPVault scale-up'], focusNotes: ['[[Knowledge/Search]]'], pendingEdits: [{ path: 'Knowledge/Search.md', expectedRevision: 'a'.repeat(64), endpointId: 'notes.patch', purpose: 'Apply the reviewed summary without overwriting a peer edit.' }], researchTrail: [{ kind: 'query', summary: 'Looked for stale cache handling.' }, { kind: 'read', summary: 'The search note defines generation invalidation.', path: 'Knowledge/Search.md', revision: 'b'.repeat(64) }], cursors: { mention: 'mention-2' } });
-  const resumed = await continuity.read({ principal, maxChars: 1200 });
+  // A complete metadata/body fixture needs a whole-response budget, not the
+  // old body-only 1200-character allowance. Compact projection is tested below.
+  const resumed = await continuity.read({ principal, maxChars: 6000 });
+  expect(JSON.stringify(resumed).length).toBeLessThanOrEqual(6000);
 
   expect(saved.path).toBe('scope://agent/codex-worker/_continuity/work-state.md');
   expect(resumed.exists).toBe(true);

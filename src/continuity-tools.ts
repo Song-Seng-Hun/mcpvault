@@ -29,8 +29,8 @@ export function getContinuityTools(): Tool[] {
     },
     {
       name: 'resume_work_state',
-      description: 'Read the private resume checkpoint for the authenticated model or agent. Returns bounded state and, for learningProgress, recomputes the MOC path to detect changed structure, aliases, or revisions before returning the next unread note. Returns exists=false when no checkpoint has been saved.',
-      inputSchema: { type: 'object', properties: { maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 6000 }, accessToken, prettyPrint }, required: ['accessToken'] },
+      description: 'Read the private resume checkpoint for the authenticated model or agent. maxChars caps the whole JSON response including Properties and pretty indentation. Learning progress is revalidated before a next unread note is returned. Truncated metadata arrays contain whole ordered-prefix entries, never shortened edit guards; omitted fields are not empty state. Follow nextAction for source lines or a larger resume budget. Raw checkpoint lines are historical data, not validated learning instructions; when canResume=false, use continuity.resume before advancing. Returns exists=false when no checkpoint has been saved.',
+      inputSchema: { type: 'object', properties: { maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 6000, description: 'Hard total JSON response budget, including metadata and pretty indentation' }, accessToken, prettyPrint }, required: ['accessToken'] },
     },
   ];
 }

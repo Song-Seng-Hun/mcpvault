@@ -7,6 +7,19 @@ export type ContinuityServiceOptions = {
     access?: ScopeAccessPolicy;
     buildLearningPath?: LearningPathBuilder;
 };
+type ResumeState = {
+    exists: true;
+    path: string;
+    revision?: string;
+    fm: Record<string, any>;
+    content: string;
+    truncated: boolean;
+    learningProgress?: Record<string, any>;
+    nextAction?: {
+        endpointId: string;
+        arguments: Record<string, unknown>;
+    };
+};
 export declare class ContinuityService {
     private readonly fileSystem;
     private readonly access;
@@ -75,56 +88,10 @@ export declare class ContinuityService {
         principal?: ScopePrincipal;
         maxChars?: number;
         validateLearningProgress?: boolean;
-    }): Promise<{
+        prettyPrint?: boolean;
+    }): Promise<ResumeState | {
         exists: boolean;
         path: string;
-    } | {
-        exists: boolean;
-        path: string;
-        fm: {
-            [x: string]: any;
-        };
-        content: string;
-        truncated: boolean;
-        revision: string;
-        learningProgress?: {
-            state: "complete" | "ready" | "saved_unchecked" | "stale";
-            root: {
-                path: string;
-                revision: string;
-            };
-            order: LearningOrder;
-            maxDepth: number;
-            entriesTracked: number;
-            completedCount: number;
-            completedThrough?: string;
-            next?: {
-                path: string;
-                revision: string;
-                endpointId: string;
-                arguments: {
-                    path: string;
-                    maxChars: number;
-                };
-            };
-            drift?: Record<string, unknown>;
-            canResume?: boolean;
-            nextAction?: {
-                endpointId: string;
-                arguments: {
-                    path: string;
-                    maxDepth: number;
-                    limit: number;
-                    maxChars: number;
-                };
-            };
-            complete?: boolean;
-            revalidateWith?: string;
-        } | {
-            state: string;
-            canResume: boolean;
-            reason: string;
-        };
     }>;
 }
 export {};

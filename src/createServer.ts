@@ -1265,6 +1265,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           return jsonResult(await continuity.read({
             ...(principal && { principal }),
             ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars as number }),
+            prettyPrint: trimmedArgs.prettyPrint === true,
           }), trimmedArgs.prettyPrint);
         }
 

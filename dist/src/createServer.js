@@ -1196,6 +1196,7 @@ export function createServer(vaultPath, options = {}) {
                         return jsonResult(await continuity.read({
                             ...(principal && { principal }),
                             ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
+                            prettyPrint: trimmedArgs.prettyPrint === true,
                         }), trimmedArgs.prettyPrint);
                     }
                     case "create_agent_scope": {

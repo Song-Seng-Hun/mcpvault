@@ -602,6 +602,17 @@ last fully read entry. `continuity.resume` recomputes the path and refuses to
 advance when structure, identity resolution, or any tracked revision changed.
 This private progress pointer stores no note bodies and never proves knowledge.
 
+Resume `maxChars` caps the complete JSON result, including metadata, learning
+state and pretty indentation. Compact metadata arrays contain ordered prefixes
+of whole entries; revision guards, paths and cursor values are not shortened.
+When `truncated` is true, omitted state must not be interpreted as empty or
+complete. Source-line continuation carries the checkpoint's `expectedRevision`
+and rejects a concurrent save. Learning validation takes priority over optional
+history; if its action cannot fit intact, `canResume: false` and
+`detailsOmitted: true` require a larger-budget resume. Historical source-line
+reads are not permission to advance a stale/unchecked learning route. Projection
+never edits the private checkpoint and does not impose a process-wide heap cap.
+
 To make question coverage explicit, write each `moc_questions` item as a
 Markdown list item under a Questions section and put one or more answer
 `[[wikilinks]]` on that line or within the next three lines. Graph health
