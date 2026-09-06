@@ -26,7 +26,7 @@
   existing streaming tests for changed revision and hidden aggregate handling.
 - [x] Update README/tool guidance. Build, focused tests, independent review,
   full npm test -- --maxWorkers=1, git diff --check.
-- [ ] Commit explicit source/tests/docs/dist; push user fork main and verify.
+- [x] Commit explicit source/tests/docs/dist; push user fork main and verify.
 
 ## Evidence
 
@@ -40,3 +40,5 @@
   delta review found no actionable defects; reviewer closed. Full suite:
   2,634 passed / 1 skipped across 172 files, 309.27s, exit 0, one worker.
 - Source bytes were checked unchanged; no live Vault/model/server operations.
+- Implementation ad6e8cc pushed to Song-Seng-Hun/mcpvault main; local HEAD and
+  origin/main matched after push. Unrelated untracked directories preserved.
