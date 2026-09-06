@@ -1307,6 +1307,7 @@ export class LlmWikiService {
             const status = taskStatus(note);
             const deferUntil = typeof note.frontmatter.defer_until === 'string' ? Date.parse(note.frontmatter.defer_until) : NaN;
             return ['waiting', 'blocked', 'invalid'].includes(status)
+                || !hasAuthoredNextAction(note.frontmatter)
                 || hasAuthoredText(note.frontmatter.waiting_for)
                 || (Number.isFinite(deferUntil) && deferUntil > currentTime);
         }));
@@ -4356,18 +4357,19 @@ export class LlmWikiService {
             const dependencyKey = normalizePath(note.path).toLowerCase();
             const dependencyState = dependencySnapshot.stateByPath.get(dependencyKey);
             const dependencyBlocked = !dependencyState.executable;
+            const missingActionState = !hasNextAction && !waitingState && !blockedState && !dependencyBlocked && !deferredState;
             const startedAt = typeof note.frontmatter.started_at === 'string' ? note.frontmatter.started_at : undefined;
             const waitingSince = typeof note.frontmatter.waiting_since === 'string' ? note.frontmatter.waiting_since : waitingState && typeof note.frontmatter.updated_at === 'string' ? note.frontmatter.updated_at : undefined;
             const blockedSince = typeof note.frontmatter.blocked_since === 'string' ? note.frontmatter.blocked_since : blockedState && typeof note.frontmatter.updated_at === 'string' ? note.frontmatter.updated_at : undefined;
             // Never infer cycle/blocked/waiting age from updated_at: a later edit is
             // not evidence that work entered a lane at that time. Missing explicit
             // flow timestamps must remain visible to the caller.
-            const age = ageDays(waitingState ? waitingSince : blockedState || dependencyBlocked ? blockedSince : startedAt);
+            const age = missingActionState ? undefined : ageDays(waitingState ? waitingSince : blockedState || dependencyBlocked ? blockedSince : startedAt);
             const item = {
                 path: this.access.toPublicPath(note.path), title, kind, taskStatus,
                 ...(note.revision && { revision: note.revision }),
                 serviceClass: serviceClass(note.frontmatter.service_class),
-                ...(hasNextAction && { hasNextAction: true }), ...(dueAt && { dueAt }),
+                ...(hasNextAction ? { hasNextAction: true } : { needsNextAction: true }), ...(dueAt && { dueAt }),
                 ...(deferUntil && { deferUntil }),
                 ...(overdue && { overdue: true }), ...(age !== undefined && { ageDays: age }),
                 ...(startedAt && { startedAt }), ...(blockedSince && { blockedSince }), ...(waitingSince && { waitingSince }),
@@ -4392,6 +4394,10 @@ export class LlmWikiService {
                 totalDeferred += 1;
                 push(deferred, { ...item, deferred: true });
             }
+            else if (missingActionState) {
+                totalBlocked += 1;
+                push(blocked, { ...item, blockedReason: 'missing_next_action' });
+            }
             else if (taskStatus === 'next_action') {
                 totalActive += 1;
                 push(active, item);
@@ -4400,7 +4406,7 @@ export class LlmWikiService {
                 totalReady += 1;
                 push(ready, { ...item, pullReady: true });
             }
-            if ((taskStatus === 'next_action' || taskStatus === 'blocked' || waitingState || dependencyBlocked) && age === undefined && missingTimestamps.length < boundedLimit) {
+            if (!missingActionState && (taskStatus === 'next_action' || taskStatus === 'blocked' || waitingState || dependencyBlocked) && age === undefined && missingTimestamps.length < boundedLimit) {
                 missingTimestamps.push({ path: this.access.toPublicPath(note.path), title, taskStatus, missing: waitingState ? 'waiting_since' : blockedState || dependencyBlocked ? 'blocked_since' : 'started_at' });
             }
         }
@@ -4413,6 +4419,7 @@ export class LlmWikiService {
                 title: note.frontmatter.title || note.path.split('/').at(-1),
                 ...(note.revision && { revision: note.revision }),
                 taskStatus: authoredTaskStatus(note.frontmatter.task_status),
+                ...(!hasAuthoredNextAction(note.frontmatter) && { needsNextAction: true }),
                 directDependents: plan.dependents.get(key)?.size || 0,
                 immediateUnlocks: plan.immediateUnlockByPath.get(key) || 0,
             };
@@ -4504,7 +4511,7 @@ export class LlmWikiService {
         const workflowHeldRoots = [...plan.workflowHeldNodes].sort();
         const workflowHeldDownstream = [...plan.blockedByWorkflowHolds].sort();
         const dependencyPlan = {
-            purpose: 'A request-local dependency forecast derived from visible work Properties on any actionable note. Stage 0 is executable now; later stages assume earlier work completes without metadata changes.',
+            purpose: 'A request-local dependency forecast over visible work Properties with authored action text. Stage 0 is structurally ready now, not a safety or feasibility guarantee; later stages assume earlier work completes without metadata changes.',
             stats: {
                 edges: plan.edgeCount,
                 stageable: plan.stageByPath.size,
@@ -4528,11 +4535,11 @@ export class LlmWikiService {
             incompleteBlockedDependents: { total: incompleteDownstream.length, items: incompleteDownstream.slice(0, Math.min(8, boundedLimit)).map(planItem), truncated: incompleteDownstream.length > Math.min(8, boundedLimit) },
             workflowHolds: { total: workflowHeldRoots.length, items: workflowHeldRoots.slice(0, Math.min(8, boundedLimit)).map(planItem), truncated: workflowHeldRoots.length > Math.min(8, boundedLimit) },
             workflowHoldBlockedDependents: { total: workflowHeldDownstream.length, items: workflowHeldDownstream.slice(0, Math.min(8, boundedLimit)).map(planItem), truncated: workflowHeldDownstream.length > Math.min(8, boundedLimit) },
-            guidance: 'Finish a stage-0 item with high immediateUnlocks when priorities are otherwise equal. Repair an edge inside dependencyCycles before editing downstream items. Waiting, blocked, or future-deferred workflow holds remain off the execution plan. Unresolved, ambiguous, cancelled, inactive, or non-work hard blockers require deliberate metadata review and cannot be scheduled safely.',
+            guidance: 'Finish a stage-0 item with high immediateUnlocks when priorities are otherwise equal. Repair an edge inside dependencyCycles before editing downstream items. Waiting, blocked, invalid, future-deferred, or missing-action workflow holds remain off the execution plan. Add a concrete next_action or next_actions entry before scheduling actionless work. Unresolved, ambiguous, cancelled, inactive, or non-work hard blockers require deliberate metadata review.',
         };
         const result = {
             purpose: 'A bounded Kanban-style flow projection. It makes WIP, pull-ready work, blocked/waiting aging, and missing flow timestamps visible without creating a task database or mutating notes.',
-            policy: { wipLimit: boundedWipLimit, blockedAfterDays: boundedBlockedAfterDays, waitingAfterDays: boundedWaitingAfterDays, wipDefinition: 'task_status=next_action with no unresolved work dependency or future defer_until', pullDefinition: 'task_status=open with a concrete next_action and no waiting/blocked/deferred/dependency-blocked state', classesOfService: [...SERVICE_CLASSES] },
+            policy: { wipLimit: boundedWipLimit, blockedAfterDays: boundedBlockedAfterDays, waitingAfterDays: boundedWaitingAfterDays, wipDefinition: 'task_status=next_action with a nonempty string next_action or next_actions entry and no waiting/dependency/future-defer hold', pullDefinition: 'task_status=open with a nonempty string next_action or next_actions entry and no waiting/blocked/deferred/dependency hold', classesOfService: [...SERVICE_CLASSES] },
             flow: { totalWork, activeWip: totalActive, wipOverflow: Math.max(0, totalActive - boundedWipLimit), pullAllowed: totalActive < boundedWipLimit, readyToPull: totalReady, blocked: totalBlocked, dependencyBlocked: totalDependencyBlocked, waiting: totalWaiting, deferred: totalDeferred, overdue: totalOverdue },
             lanes: { active, ready, blocked, waiting, deferred },
             dependencyPlan,
@@ -6962,7 +6969,9 @@ export class LlmWikiService {
                 planningNeedsAttention: missing.length > 0,
                 planning: { purpose: Boolean(purpose), desiredOutcome: Boolean(desiredOutcome), outcomeCriteria: hasOutcomeCriteria, completionCriteria: completionCriteria.length > 0, brainstormSection: sections.brainstorm, projectSupport: support.length > 0 || sections.support, nextActionConcrete: !nextAction || concreteNextAction(nextAction), ready: missing.length === 0 },
                 execution: {
-                    ready: validTaskStatus && !workflowClosed && !waitingFor && !['waiting', 'blocked'].includes(taskStatus) && dependencyState.executable,
+                    ready: plannedStage === 0 && dependencyState.executable,
+                    ...(dependencySnapshot.plan.workflowHeldNodes.has(dependencyKey) && { workflowHeld: true }),
+                    ...(!nextAction && nextActions.length === 0 && { needsNextAction: true }),
                     ...(!validTaskStatus && { invalidWorkflowState: true }),
                     workflowState: taskStatus,
                     ...(plannedStage !== undefined && { plannedStage }),

@@ -888,8 +888,9 @@ access grant. Every overview and topic carries the same `policyVersion` and
 `policyFingerprint`, so a client may retain a previously read slice until the
 fingerprint changes without maintaining another configuration file.
 `get_wiki_flow_health` adds the missing
-Kanban flow layer: `task_status: next_action` is executable WIP only when its
-work prerequisites are satisfied, an `open` item with a concrete `next_action`
+Kanban flow layer: `task_status: next_action` is executable WIP only when it
+has a nonempty string `next_action` or `next_actions` entry and its
+work prerequisites are satisfied, an `open` item with a concrete action
 is pull-ready only when no dependency blocks it, and blocked/waiting work is
 reported with bounded aging. Its WIP limit is advisory and configurable; it
 does not assign work or create a second task database. Optional
@@ -899,12 +900,19 @@ conditions. Optional `started_at`, `blocked_since`, `waiting_since`, and
 `completed_at` timestamps improve flow measurement without replacing Git
 history.
 The flow response also contains a request-local `dependencyPlan`: stage 0 is
-safe to execute now, later stages assume earlier prerequisites complete,
+structurally ready now (not a safety or feasibility guarantee), later stages assume earlier prerequisites complete,
 `unlockPoints` shows work that immediately releases another item, and one
 deepest dependency chain exposes long sequencing. Actual cycle members are
 separated from downstream work blocked by a cycle; unresolved/inactive gates
 and their downstream dependents are separated again from ordinary
-waiting/blocked/future-`defer_until` holds. These are forecasts over current
+waiting/blocked/future-`defer_until` holds. Unfinished work without authored action
+text is also held, including its downstream forecast. Otherwise unheld actionless
+work appears in the blocked lane with `blockedReason: missing_next_action` and
+`needsNextAction: true`; this repair condition invents no age from `updated_at`
+or `started_at`. Existing waiting, blocked, and deferred lanes retain precedence.
+Completed prerequisites need no new action. Project `execution.ready` uses the
+same stage-0 eligibility, so future-deferred work cannot appear ready there.
+These are forecasts over current
 revisions, never assignments or a persisted scheduler. When deadlines and
 workflow state are otherwise equal, `wiki.next_actions` uses service class and
 immediate unlock impact as stable tie-breakers.

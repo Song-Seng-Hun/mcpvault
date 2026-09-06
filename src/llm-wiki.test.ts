@@ -2407,8 +2407,10 @@ test('relation-set previews replace complete directional and focus-support sets 
   await writeFile(join(vault, 'Knowledge', 'Question.md'), '---\nllm_wiki_type: knowledge\nnote_kind: question\nepistemic_status: open\n---\n# Question\n');
   await writeFile(join(vault, 'Knowledge', 'Not Question.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\n---\n# Not Question\n');
   await writeFile(join(vault, 'Knowledge', 'Map.md'), '---\nllm_wiki_type: knowledge\nnote_kind: moc\n---\n# Map\n\n[[Knowledge/Answer]]\n');
-  await writeFile(join(vault, 'Projects', 'Project.md'), '---\nllm_wiki_type: knowledge\nnote_kind: project\nfocus_horizon: project\nfocus_supports:\n  - "[[Projects/Peer]]"\n---\n# Project\n');
-  await writeFile(join(vault, 'Projects', 'Peer.md'), '---\nllm_wiki_type: knowledge\nnote_kind: project\nfocus_horizon: project\n---\n# Peer\n');
+  // Keep these projects actionable so this test isolates focus-relation repair,
+  // rather than the higher-priority missing-action workflow repair.
+  await writeFile(join(vault, 'Projects', 'Project.md'), '---\nllm_wiki_type: knowledge\nnote_kind: project\nnext_action: Inspect project support\nfocus_horizon: project\nfocus_supports:\n  - "[[Projects/Peer]]"\n---\n# Project\n');
+  await writeFile(join(vault, 'Projects', 'Peer.md'), '---\nllm_wiki_type: knowledge\nnote_kind: project\nnext_action: Inspect peer support\nfocus_horizon: project\n---\n# Peer\n');
   await writeFile(join(vault, 'Goals', 'Goal.md'), '---\nllm_wiki_type: knowledge\nnote_kind: knowledge\nfocus_horizon: goal\n---\n# Goal\n');
   const { server, client } = await setup();
   try {

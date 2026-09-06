@@ -286,11 +286,19 @@ and matching code fences are inconsistent with that state. Lint emits
 revision-safe inspection and repair, but never reopens work or changes a
 checkbox automatically.
 `get_wiki_flow_health.dependencyPlan` topologically groups dependency-safe work:
-stage 0 is executable now and later stages assume all earlier prerequisites
+stage 0 is structurally ready now and later stages assume all earlier prerequisites
 complete. It reports immediate unlock points, one deepest dependency chain,
 actual cycle components, downstream cycle-blocked work, incomplete prerequisite
 roots/downstream effects, and workflow holds such as waiting, blocked, or a
-future `defer_until`. Every sample remains bounded and revision-stamped. This
+future `defer_until`. Unfinished work also requires a nonempty string
+`next_action` or string entry in `next_actions`; absent action text holds it and
+its downstream forecast. Otherwise unheld actionless work appears blocked with
+`blockedReason: missing_next_action` and `needsNextAction: true`, without an
+invented age. Waiting/blocked/deferred lanes keep precedence. Completed
+prerequisites remain satisfied without new action text. Project
+`execution.ready` follows the same captured stage-0 eligibility. Authored action
+presence is not proof of safety or feasibility.
+Every sample remains bounded and revision-stamped. This
 is a forecast, not an assignment, lock, or automatic status transition.
 Purpose, project support, and waiting information stay separate from the
 action itself. `resurface_wiki_knowledge` is a small deterministic daily

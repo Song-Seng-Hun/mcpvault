@@ -807,6 +807,7 @@ export declare class LlmWikiService {
                     title: any;
                     revision?: string;
                     taskStatus: "blocked" | "cancelled" | "completed" | "invalid" | "next_action" | "open" | "someday" | "waiting";
+                    needsNextAction?: boolean;
                     directDependents: number;
                     immediateUnlocks: number;
                 }[];
@@ -819,6 +820,7 @@ export declare class LlmWikiService {
                     title: any;
                     revision?: string;
                     taskStatus: "blocked" | "cancelled" | "completed" | "invalid" | "next_action" | "open" | "someday" | "waiting";
+                    needsNextAction?: boolean;
                     directDependents: number;
                     immediateUnlocks: number;
                 }[];
@@ -829,6 +831,7 @@ export declare class LlmWikiService {
                 title: any;
                 revision?: string;
                 taskStatus: "blocked" | "cancelled" | "completed" | "invalid" | "next_action" | "open" | "someday" | "waiting";
+                needsNextAction?: boolean;
                 directDependents: number;
                 immediateUnlocks: number;
             }[];
@@ -843,6 +846,7 @@ export declare class LlmWikiService {
                         title: any;
                         revision?: string;
                         taskStatus: "blocked" | "cancelled" | "completed" | "invalid" | "next_action" | "open" | "someday" | "waiting";
+                        needsNextAction?: boolean;
                         directDependents: number;
                         immediateUnlocks: number;
                     }[];
@@ -857,6 +861,7 @@ export declare class LlmWikiService {
                     title: any;
                     revision?: string;
                     taskStatus: "blocked" | "cancelled" | "completed" | "invalid" | "next_action" | "open" | "someday" | "waiting";
+                    needsNextAction?: boolean;
                     directDependents: number;
                     immediateUnlocks: number;
                 }[];
@@ -869,6 +874,7 @@ export declare class LlmWikiService {
                     title: any;
                     revision?: string;
                     taskStatus: "blocked" | "cancelled" | "completed" | "invalid" | "next_action" | "open" | "someday" | "waiting";
+                    needsNextAction?: boolean;
                     directDependents: number;
                     immediateUnlocks: number;
                     dependencies: {
@@ -897,6 +903,7 @@ export declare class LlmWikiService {
                     title: any;
                     revision?: string;
                     taskStatus: "blocked" | "cancelled" | "completed" | "invalid" | "next_action" | "open" | "someday" | "waiting";
+                    needsNextAction?: boolean;
                     directDependents: number;
                     immediateUnlocks: number;
                 }[];
@@ -909,6 +916,7 @@ export declare class LlmWikiService {
                     title: any;
                     revision?: string;
                     taskStatus: "blocked" | "cancelled" | "completed" | "invalid" | "next_action" | "open" | "someday" | "waiting";
+                    needsNextAction?: boolean;
                     directDependents: number;
                     immediateUnlocks: number;
                 }[];
@@ -921,6 +929,7 @@ export declare class LlmWikiService {
                     title: any;
                     revision?: string;
                     taskStatus: "blocked" | "cancelled" | "completed" | "invalid" | "next_action" | "open" | "someday" | "waiting";
+                    needsNextAction?: boolean;
                     directDependents: number;
                     immediateUnlocks: number;
                 }[];
@@ -1058,6 +1067,7 @@ export declare class LlmWikiService {
                             title: any;
                             revision?: string;
                             taskStatus: "blocked" | "cancelled" | "completed" | "invalid" | "next_action" | "open" | "someday" | "waiting";
+                            needsNextAction?: boolean;
                             directDependents: number;
                             immediateUnlocks: number;
                         }[];
@@ -1070,6 +1080,7 @@ export declare class LlmWikiService {
                             title: any;
                             revision?: string;
                             taskStatus: "blocked" | "cancelled" | "completed" | "invalid" | "next_action" | "open" | "someday" | "waiting";
+                            needsNextAction?: boolean;
                             directDependents: number;
                             immediateUnlocks: number;
                         }[];
@@ -1080,6 +1091,7 @@ export declare class LlmWikiService {
                         title: any;
                         revision?: string;
                         taskStatus: "blocked" | "cancelled" | "completed" | "invalid" | "next_action" | "open" | "someday" | "waiting";
+                        needsNextAction?: boolean;
                         directDependents: number;
                         immediateUnlocks: number;
                     }[];
@@ -1094,6 +1106,7 @@ export declare class LlmWikiService {
                                 title: any;
                                 revision?: string;
                                 taskStatus: "blocked" | "cancelled" | "completed" | "invalid" | "next_action" | "open" | "someday" | "waiting";
+                                needsNextAction?: boolean;
                                 directDependents: number;
                                 immediateUnlocks: number;
                             }[];
@@ -1108,6 +1121,7 @@ export declare class LlmWikiService {
                             title: any;
                             revision?: string;
                             taskStatus: "blocked" | "cancelled" | "completed" | "invalid" | "next_action" | "open" | "someday" | "waiting";
+                            needsNextAction?: boolean;
                             directDependents: number;
                             immediateUnlocks: number;
                         }[];
@@ -1120,6 +1134,7 @@ export declare class LlmWikiService {
                             title: any;
                             revision?: string;
                             taskStatus: "blocked" | "cancelled" | "completed" | "invalid" | "next_action" | "open" | "someday" | "waiting";
+                            needsNextAction?: boolean;
                             directDependents: number;
                             immediateUnlocks: number;
                             dependencies: {
@@ -1148,6 +1163,7 @@ export declare class LlmWikiService {
                             title: any;
                             revision?: string;
                             taskStatus: "blocked" | "cancelled" | "completed" | "invalid" | "next_action" | "open" | "someday" | "waiting";
+                            needsNextAction?: boolean;
                             directDependents: number;
                             immediateUnlocks: number;
                         }[];
@@ -1160,6 +1176,7 @@ export declare class LlmWikiService {
                             title: any;
                             revision?: string;
                             taskStatus: "blocked" | "cancelled" | "completed" | "invalid" | "next_action" | "open" | "someday" | "waiting";
+                            needsNextAction?: boolean;
                             directDependents: number;
                             immediateUnlocks: number;
                         }[];
@@ -1172,6 +1189,7 @@ export declare class LlmWikiService {
                             title: any;
                             revision?: string;
                             taskStatus: "blocked" | "cancelled" | "completed" | "invalid" | "next_action" | "open" | "someday" | "waiting";
+                            needsNextAction?: boolean;
                             directDependents: number;
                             immediateUnlocks: number;
                         }[];
