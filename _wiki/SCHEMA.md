@@ -755,6 +755,18 @@ revision-stamped proposal. It honors authored headings and source-line order
 before exact structural signals and exposes leftovers and cross-branch
 dependencies; it never rewrites the parent or invents branches for a healthy
 map.
+Rebalance drafts use exact physical Obsidian links, never `scope://` aliases;
+root basenames and reserved characters use explicitly relative Markdown.
+Root and observed visible member/relation/destination revisions are rechecked,
+and returned identity matches are revalidated against admitted properties,
+with bounded reads and at most256 request-local metadata admissions. Unindexed
+alias resolution shares this budget; path namespace enumeration is separate.
+Trimming entries also regenerates their draft and prunes dangling displayed
+dependencies. `memberCount` is observed, `entriesTruncated` marks the subset.
+New destinations require `expectedRevision: missing`; visible collisions give
+a `notes.read` nextAction. Unsafe parent filenames omit `moc_parent` and return
+`parentLinkWarning`. A compact `rootPathOmitted` response retains revision and
+refers the caller to its original requested path rather than exceeding maxChars.
 Learning-path response budgets include pretty formatting. Budget-compacted
 views retain an exact authored prefix with revisions and heading/block anchors,
 or an explicit same-argument retry without skipping the first oversized identity.

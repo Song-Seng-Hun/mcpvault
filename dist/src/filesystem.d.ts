@@ -5,6 +5,7 @@ import { type DailyDateInput } from './daily.js';
 import type { VaultMetadataIndex } from './vault-index.js';
 import { VaultGraphIndex } from './vault-graph.js';
 import { VaultIoCoordinator } from './vault-io.js';
+import { type ResolveNoteReferenceOptions } from './note-reference.js';
 import { ScopeAccessPolicy } from './scope-access.js';
 import { type PackedQueryPage } from './query-page.js';
 /** Hard per-note write limit so stdio callers cannot exhaust the vault disk. */
@@ -181,6 +182,10 @@ export declare class FileSystemService {
      */
     findPathForWikiLink(wikiLinkName: string, canAccessPath?: (path: string) => boolean, sourcePath?: string): Promise<string[]>;
     findPathForMarkdownLink(target: string, sourcePath: string, canAccessPath?: (path: string) => boolean): Promise<string[]>;
+    /** Request-local resolver for bounded multi-note workflows. Without an index,
+     * enumerate paths once; only bare identity terms require alias metadata, and
+     * all such reads go through the caller's visibility/budget/revision reader. */
+    createNoteReferenceResolver(canAccessPath: (path: string) => boolean, readMetadata: (path: string) => Promise<QueryNote | undefined>): (target: string, options?: Pick<ResolveNoteReferenceOptions, 'sourcePath' | 'syntax'>) => Promise<string[]>;
     private findPathsForNoteReference;
     getBacklinks(path: string, limit?: number, canAccessPath?: (path: string) => boolean, offset?: number, options?: {
         includeSourceRevision?: boolean;

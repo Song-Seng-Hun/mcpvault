@@ -59,10 +59,11 @@ test('uses bounded exact metadata admission instead of a second whole-vault quer
 });
 
 test('same-topic global, community, model and agent knowledge stay in separate scopes', async () => {
-  await fixture(async (wiki, _fs, access, seed) => {
+  await fixture(async (wiki, fs, access, seed) => {
     const principal = { accountId: 'worker', modelId: 'codex', agentId: 'worker', role: 'agent' as const };
     const roots = ['', 'Community', '_scopes/models/codex', '_scopes/agents/worker'];
     for (const root of roots) await seed(`${root ? root + '/' : ''}Note.md`);
+    await seed('Other/Note.md', { note_kind: 'moc' });
     await seed('_scopes/users/host/Secret.md', { title: 'HOST-SECRET' });
     const result = await wiki.mocCandidates(principal, 10, 16000);
     expect(result.candidates).toHaveLength(4);
@@ -73,7 +74,9 @@ test('same-topic global, community, model and agent knowledge stay in separate s
       expect(candidate).toMatchObject({ suggestedPath: target, notePaths: [notePath], creationPlan: { endpointId: 'notes.write', arguments: { path: target, expectedRevision: 'missing' } } });
       const links = extractObsidianLinkOccurrences(String(candidate?.draftMarkdown));
       expect(links).toHaveLength(1);
-      expect(links[0]?.target).toBe(`${root ? root + '/' : ''}Note.md`);
+      const link = links[0]!, source = access.resolveExternalPath(target, principal);
+      const resolved = await (link.link.startsWith('[[') ? fs.findPathForWikiLink(link.target, undefined, source) : fs.findPathForMarkdownLink(link.target, source));
+      expect(resolved).toEqual([`${root ? root + '/' : ''}Note.md`]);
       expect(String(candidate?.draftMarkdown)).not.toContain('scope://');
     }
     expect(JSON.stringify(result)).not.toContain('HOST-SECRET');
@@ -82,11 +85,13 @@ test('same-topic global, community, model and agent knowledge stay in separate s
 });
 
 test('source title and grouping text cannot insert extra draft links', async () => {
-  await fixture(async (wiki, _fs, _access, seed) => {
+  await fixture(async (wiki, fs, _access, seed) => {
     await seed('Note.md', { title: 'Alias]]\n[[Forged]]', domain: 'Research\n[[Injected]]' });
     const result = await wiki.mocCandidates(undefined, 10, 16000);
     expect(result.candidates).toHaveLength(1);
-    expect(extractObsidianLinkOccurrences(String(result.candidates[0]?.draftMarkdown)).map(link => link.target)).toEqual(['Note.md']);
+    const candidate = result.candidates[0]!, links = extractObsidianLinkOccurrences(String(candidate.draftMarkdown));
+    expect(links).toHaveLength(1);
+    expect(await fs.findPathForMarkdownLink(links[0]!.target, String(candidate.suggestedPath))).toEqual(['Note.md']);
   });
 });
 

@@ -678,6 +678,22 @@ function canonicalRelationWikiLink(path: string): string {
   return `[[${document}]]`;
 }
 
+function proposalDocumentLink(targetPath: string, sourcePath: string): string {
+  targetPath = normalizePath(targetPath);
+  sourcePath = normalizePath(sourcePath);
+  try {
+    canonicalRelationWikiLink(targetPath);
+    if (targetPath.includes('/')) return `[[${targetPath}]]`; // A bare filename is not an exact root identity.
+  } catch { /* Special filenames use exact Markdown destinations below. */ }
+  const relativePath = posix.relative(posix.dirname(sourcePath), targetPath);
+  const explicitRelative = relativePath.startsWith('../') || relativePath.startsWith('./') ? relativePath : `./${relativePath}`;
+  return `[Note](<${explicitRelative.split('/').map(segment => encodeURIComponent(segment)).join('/')}>)`;
+}
+
+function proposalDisplayText(value: string): string {
+  return value.replace(/[\r\n]+/g, ' ').replace(/[\\`*_\[\]<>]/g, '\\$&');
+}
+
 function compareMocNavigation(left: { navOrder?: unknown; nav_order?: unknown; title?: unknown; path?: unknown }, right: { navOrder?: unknown; nav_order?: unknown; title?: unknown; path?: unknown }): number {
   return navigationOrder(left.navOrder ?? left.nav_order) - navigationOrder(right.navOrder ?? right.nav_order)
     || String(left.title || left.path).localeCompare(String(right.title || right.path))
@@ -9930,7 +9946,7 @@ export class LlmWikiService {
       .slice(0, boundedLimit);
     const selected: Array<Record<string, unknown>> = [];
     const targetSnapshots = new Map<string, { path: string; revision: string }>();
-    const displayText = (value: string) => value.replace(/[\r\n]+/g, ' ').replace(/[\\`*_\[\]<>]/g, '\\$&');
+    const displayText = proposalDisplayText;
     for (const group of candidateGroups) {
       group.entries.sort((left, right) => navigationOrder(left.navOrder) - navigationOrder(right.navOrder) || left.title.localeCompare(right.title) || left.path.localeCompare(right.path));
       group.entries.splice(12); // Apply the cap after authored priority, within the bounded graph sample.
@@ -9947,16 +9963,7 @@ export class LlmWikiService {
       }
       const links = group.entries.map(entry => {
         const physicalSource = this.access.resolveExternalPath(entry.path, principal);
-        try {
-          canonicalRelationWikiLink(physicalSource); // Validate wikilink-safe document syntax.
-          return `- [[${physicalSource}]]`; // Keep extensions to avoid same-stem ambiguity.
-        }
-        catch {
-          const relativePath = posix.relative(posix.dirname(physicalTarget), physicalSource);
-          const explicitRelativePath = relativePath.startsWith('../') || relativePath.startsWith('./') ? relativePath : `./${relativePath}`;
-          const destination = explicitRelativePath.split('/').map(segment => encodeURIComponent(segment)).join('/');
-          return `- [Note](<${destination}>)`;
-        }
+        return `- ${proposalDocumentLink(physicalSource, physicalTarget)}`;
       }).join('\n');
       const draftMarkdown = `# ${displayText(group.title)}\n\n## Purpose\n\nOrient an agent through notes grouped by ${group.basisKind}: ${displayText(group.basis)}.\n\n## Questions\n\n${suggestedQuestions.map(question => `- ${question}`).join('\n')}\n\n## Reading order\n\n${links}\n`;
       const item = {
@@ -9995,8 +10002,9 @@ export class LlmWikiService {
    * it. Existing sections remain the first organizing signal, followed by
    * explicit Obsidian/Properties structure. */
   async mocRebalance(principal: ScopePrincipal | undefined, path: string, maxBranches = 4, limit = 30, maxChars = 8000, saturationThreshold = 25) {
+    path = normalizePath(path);
     if (!this.access.canAccessPhysicalPath(path, principal)) throw new Error(`Access denied: ${this.access.toPublicPath(path)}`);
-    const moc = await this.fileSystem.readNote(path);
+    const moc = await this.fileSystem.readNote(path, MAX_NOTE_CONTENT_BYTES);
     if (isModerationHidden(moc.frontmatter) || String(moc.frontmatter.note_kind || '').trim().toLowerCase() !== 'moc') {
       throw new Error('wiki.moc_rebalance requires one visible note_kind: moc note');
     }
@@ -10005,6 +10013,45 @@ export class LlmWikiService {
     const boundedChars = Math.min(Math.max(Number(maxChars) || 8000, 700), 16000);
     const boundedThreshold = Math.min(Math.max(Number(saturationThreshold) || 25, 3), 200);
     const canAccess = (candidate: string) => this.access.canAccessPhysicalPath(candidate, principal);
+    type Metadata = Awaited<ReturnType<FileSystemService['readNoteMetadata']>>[number];
+    const metadata = new Map<string, Metadata | undefined>();
+    const readMetadata = async (candidate: string): Promise<Metadata | undefined> => {
+      if (!canAccess(candidate)) return undefined;
+      const key = normalizePath(candidate).toLowerCase();
+      if (metadata.has(key)) return metadata.get(key);
+      if (metadata.size >= 256) throw new Error('MOC rebalance inspection budget exhausted; use exact note paths or a smaller map and retry.');
+      let note: Metadata | undefined;
+      try {
+        note = (await this.fileSystem.readNoteMetadata([candidate], canAccess,
+          { fresh: true, strict: true, maxBytes: MAX_NOTE_CONTENT_BYTES }))[0];
+      } catch { throw new Error('MOC rebalance input unavailable or too large; reduce scope and retry.'); }
+      if (note && isModerationHidden(note.frontmatter)) note = undefined;
+      if (note && (typeof note.revision !== 'string' || !/^[a-f0-9]{64}$/.test(note.revision))) throw new Error('MOC rebalance input changed; refresh and retry.');
+      metadata.set(key, note);
+      return note;
+    };
+    const validateSnapshots = () => this.assertCurrentContextSources(principal, [
+      { path: this.access.toPublicPath(path), revision: moc.revision },
+      ...[...metadata.values()].flatMap(note => note ? [{ path: this.access.toPublicPath(note.path), revision: note.revision! }] : []),
+    ], 257, MAX_NOTE_CONTENT_BYTES);
+    const resolveReference = this.fileSystem.createNoteReferenceResolver(canAccess, readMetadata);
+    const resolveVisible = async (target: string, sourcePath: string, syntax?: 'markdown') => {
+      const matches = await resolveReference(target, { sourcePath, ...(syntax && { syntax }) });
+      const visible: string[] = [];
+      for (const candidate of matches) {
+        if (canAccess(candidate) && this.access.canReferenceFrom(sourcePath, candidate) && await readMetadata(candidate)) visible.push(candidate);
+      }
+      const admittedIndex = buildNoteReferenceIndex(visible.map(candidate => {
+        const note = metadata.get(normalizePath(candidate).toLowerCase())!;
+        return { path: candidate, title: note.frontmatter.title, aliases: note.frontmatter.aliases,
+          preferredTerm: note.frontmatter.preferred_term, stableId: note.frontmatter.stable_id };
+      }));
+      const currentMatches = resolveNoteReference(target, admittedIndex, { sourcePath, ...(syntax && { syntax }) });
+      if (currentMatches.length !== visible.length || visible.some(candidate => !currentMatches.includes(candidate))) {
+        throw new Error('MOC rebalance identity changed; refresh the reference and retry.');
+      }
+      return visible;
+    };
     const mocTitle = String(moc.frontmatter.title || moc.content.match(/^#\s+(.+?)\s*$/m)?.[1] || path.split('/').at(-1)?.replace(/\.md$/i, '') || 'MOC').trim();
     const occurrences = extractObsidianLinkOccurrences(moc.content, Math.min(1000, boundedLimit * 4 + 1));
     type Member = { path: string; title: string; revision: string; line: number; authoredLink: string; reason: string };
@@ -10017,16 +10064,15 @@ export class LlmWikiService {
     let memberTotal = 0;
     let scanTruncated = occurrences.length > boundedLimit * 4;
     for (const occurrence of occurrences) {
-      const matches = (await this.fileSystem.findPathForWikiLink(occurrence.target, canAccess))
-        .filter(candidate => this.access.canReferenceFrom(path, candidate));
+      const isMarkdown = !occurrence.link.startsWith('[[') && !occurrence.link.startsWith('![[');
+      const matches = await resolveVisible(occurrence.target, path, isMarkdown ? 'markdown' : undefined);
       if (matches.length === 0) { unresolvedTotal += 1; continue; }
       if (matches.length > 1) { ambiguousTotal += 1; continue; }
       const memberPath = normalizePath(matches[0]!);
       const key = memberPath.toLowerCase();
       if (key === normalizePath(path).toLowerCase() || seen.has(key)) continue;
-      let memberNote;
-      try { memberNote = await this.fileSystem.readNote(memberPath); } catch { unresolvedTotal += 1; continue; }
-      if (isModerationHidden(memberNote.frontmatter)) continue;
+      const memberNote = await readMetadata(memberPath);
+      if (!memberNote) continue;
       seen.add(key);
       memberTotal += 1;
       if (resolvedMembers.length >= boundedLimit) { scanTruncated = true; continue; }
@@ -10038,7 +10084,7 @@ export class LlmWikiService {
         physicalPath: memberPath,
         path: this.access.toPublicPath(memberPath),
         title: boundedText(memberNote.frontmatter.title || memberPath.split('/').at(-1)?.replace(/\.md$/i, '') || memberPath, 160),
-        revision: memberNote.revision,
+        revision: memberNote.revision!,
         line: occurrence.line,
         authoredLink: boundedText(occurrence.link, 300),
         reason: '',
@@ -10056,18 +10102,13 @@ export class LlmWikiService {
       for (const relation of RELATION_FIELDS) {
         for (const raw of Array.isArray(resolved.frontmatter[relation]) ? resolved.frontmatter[relation].slice(0, 20) : []) {
           if (typeof raw !== 'string') continue;
-          const matches = (await this.fileSystem.findPathForWikiLink(relationDocument(raw), canAccess))
-            .filter(candidate => this.access.canReferenceFrom(resolved.physicalPath, candidate));
+          const matches = await resolveVisible(relationDocument(raw), resolved.physicalPath);
           if (matches.length !== 1) continue;
           const targetPath = normalizePath(matches[0]!);
           let targetTitle = targetPath.split('/').at(-1)?.replace(/\.md$/i, '') || targetPath;
-          try {
-            const target = await this.fileSystem.readNote(targetPath);
-            if (isModerationHidden(target.frontmatter)) continue;
-            targetTitle = String(target.frontmatter.title || targetTitle).trim();
-          } catch {
-            continue;
-          }
+          const target = await readMetadata(targetPath);
+          if (!target) continue;
+          targetTitle = String(target.frontmatter.title || targetTitle).trim();
           relationNeighborhood = { relation, targetPath: this.access.toPublicPath(targetPath), targetTitle: boundedText(targetTitle, 120) };
           break;
         }
@@ -10123,12 +10164,17 @@ export class LlmWikiService {
     const selectedKeys = new Set(selectedGroups.map(group => `${group.priority}|${group.basis.value.toLowerCase()}`));
     const leftovers = orderedGroups.filter(group => !selectedKeys.has(`${group.priority}|${group.basis.value.toLowerCase()}`)).flatMap(group => group.members);
     const outputBranches: Array<Record<string, any>> = [];
+    let parentLink: string | undefined;
+    try { canonicalRelationWikiLink(path); parentLink = `[[${path.includes('/') ? path : `./${path}`}]]`; } catch { /* Explicit warning below; do not invent a malformed hierarchy property. */ }
+    const renderDraft = (title: string, label: string, entries: Member[], target: string) =>
+      `# ${proposalDisplayText(title)}\n\n## Purpose\n\nNavigate ${proposalDisplayText(label)} within ${proposalDocumentLink(path, target)}.\n\n## Reading order\n\n${entries.map(member => `- ${proposalDocumentLink(this.access.resolveExternalPath(member.path, principal), target)}`).join('\n')}\n`;
     for (const group of selectedGroups) {
       const groupStem = group.label.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Unclassified';
       const suggestedPhysicalPath = `${mocDirectory ? `${mocDirectory}/` : ''}${mocStem} - ${groupStem}.md`;
       const suggestedPath = this.access.toPublicPath(suggestedPhysicalPath);
       const suggestedTitle = `${mocTitle}: ${group.label}`;
-      const memberLinks = group.members.map(member => `- [[${member.path.replace(/\.md$/i, '')}|${member.title}]]`).join('\n');
+      if (!canAccess(suggestedPhysicalPath) || !this.access.canReferenceFrom(suggestedPhysicalPath, path)) throw new Error('MOC rebalance destination unavailable; refresh and retry.');
+      const existing = await readMetadata(suggestedPhysicalPath);
       outputBranches.push({
         label: group.label,
         basis: group.basis,
@@ -10140,9 +10186,13 @@ export class LlmWikiService {
         suggestedSubMoc: {
           title: suggestedTitle,
           path: suggestedPath,
-          targetExists: await this.fileSystem.noteExists(suggestedPhysicalPath),
-          frontmatter: { note_kind: 'moc', lifecycle: 'active', moc_parent: `[[${this.access.toPublicPath(path).replace(/\.md$/i, '')}]]`, moc_purpose: `Navigate ${group.label} within ${mocTitle}`, moc_scope: `${group.basis.kind}:${group.basis.value}` },
-          draftMarkdown: `# ${suggestedTitle}\n\n## Purpose\n\nNavigate ${group.label} within [[${this.access.toPublicPath(path).replace(/\.md$/i, '')}|${mocTitle}]].\n\n## Reading order\n\n${memberLinks}\n`,
+          targetExists: Boolean(existing),
+          ...(existing
+            ? { nextAction: { endpointId: 'notes.read', arguments: { path: suggestedPath, maxChars: 4000 } } }
+            : { expectedRevision: 'missing' }),
+          ...(!parentLink && { parentLinkWarning: 'The parent filename cannot be safely represented in moc_parent. Draft Markdown navigation is exact; resolve the filename before applying hierarchy.' }),
+          frontmatter: { note_kind: 'moc', lifecycle: 'active', ...(parentLink && { moc_parent: parentLink }), moc_purpose: `Navigate ${group.label} within ${mocTitle}`, moc_scope: `${group.basis.kind}:${group.basis.value}` },
+          draftMarkdown: renderDraft(suggestedTitle, group.label, group.members, suggestedPhysicalPath),
         },
       });
     }
@@ -10155,7 +10205,7 @@ export class LlmWikiService {
       for (const relation of UPSTREAM_DEPENDENCY_RELATIONS) {
         for (const raw of Array.isArray(resolved.frontmatter[relation]) ? resolved.frontmatter[relation].slice(0, 20) : []) {
           if (typeof raw !== 'string') continue;
-          const matches = await this.fileSystem.findPathForWikiLink(relationDocument(raw), canAccess);
+          const matches = await resolveVisible(relationDocument(raw), resolved.physicalPath);
           if (matches.length !== 1) continue;
           const toPath = this.access.toPublicPath(matches[0]!);
           const toBranch = branchByPath.get(normalizePath(toPath).toLowerCase());
@@ -10189,6 +10239,11 @@ export class LlmWikiService {
         ? 'Review heading provenance, source-line order, leftovers, and cross-branch dependencies. Create accepted sub-MOCs, then use revision-safe planners and a dry-run notes.change_set; this endpoint never rewrites the parent.'
         : 'This MOC is below the saturation threshold. Keep the authored map unless another explicit navigation problem justifies restructuring.',
     };
+    const pruneDependencies = () => {
+      const displayed = new Set<string>(report.branches.flatMap((branch: any) => branch.entries.map((entry: Member) => entry.path)));
+      report.crossBranchDependencies = report.crossBranchDependencies.filter((dependency: any) => displayed.has(dependency.from) && displayed.has(dependency.to));
+    };
+    pruneDependencies();
     while (JSON.stringify(report).length > boundedChars) {
       const largest = report.branches
         .filter((branch: any) => branch.entries.length > 0)
@@ -10196,6 +10251,9 @@ export class LlmWikiService {
       if (largest) {
         largest.entries.pop();
         largest.entriesTruncated = true;
+        largest.suggestedSubMoc.draftMarkdown = renderDraft(largest.suggestedSubMoc.title, largest.label, largest.entries,
+          this.access.resolveExternalPath(largest.suggestedSubMoc.path, principal));
+        pruneDependencies();
         report.truncated = true;
         continue;
       }
@@ -10210,12 +10268,12 @@ export class LlmWikiService {
         continue;
       }
       const compact = { mode: 'explainable_moc_rebalance_plan', root: { path: this.access.toPublicPath(path), revision: moc.revision }, memberTotal, saturationThreshold: boundedThreshold, rebalanceRecommended, mutates: false, truncated: true };
-      const current = await this.fileSystem.readNote(path);
-      if (current.revision !== moc.revision) throw new Error('MOC changed while the rebalance plan was being built; read the current revision and retry.');
+      await validateSnapshots();
+      if (JSON.stringify(compact).length > boundedChars) return { ...compact, root: { revision: moc.revision }, rootPathOmitted: true,
+        nextStep: 'Read the originally requested MOC path with notes.read; this compact response omits its long path.' };
       return compact;
     }
-    const current = await this.fileSystem.readNote(path);
-    if (current.revision !== moc.revision) throw new Error('MOC changed while the rebalance plan was being built; read the current revision and retry.');
+    await validateSnapshots();
     return report;
   }
 

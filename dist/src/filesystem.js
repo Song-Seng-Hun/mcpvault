@@ -11,7 +11,7 @@ import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { buildDailyNotePath, resolveDailyDate } from './daily.js';
 import { VaultGraphIndex } from './vault-graph.js';
 import { VaultIoCoordinator } from './vault-io.js';
-import { buildNoteReferenceIndex, markdownNotePath, resolveNoteReference } from './note-reference.js';
+import { buildNoteReferenceIndex, markdownNotePath, noteReferenceDocument, resolveNoteReference } from './note-reference.js';
 import { validateJsonCanvasDocument } from './json-canvas.js';
 import { acceptsPlainReference, isReferenceSnapshotPath, propertyPathText } from './property-references.js';
 import { assertLegacyDiscussionMutationAllowed, ScopeAccessPolicy } from './scope-access.js';
@@ -2313,6 +2313,40 @@ export class FileSystemService {
     }
     async findPathForMarkdownLink(target, sourcePath, canAccessPath = () => true) {
         return this.findPathsForNoteReference(target, canAccessPath, { sourcePath, syntax: 'markdown' });
+    }
+    /** Request-local resolver for bounded multi-note workflows. Without an index,
+     * enumerate paths once; only bare identity terms require alias metadata, and
+     * all such reads go through the caller's visibility/budget/revision reader. */
+    createNoteReferenceResolver(canAccessPath, readMetadata) {
+        let pathIndex;
+        let aliasIndex;
+        const getPaths = () => pathIndex ||= this.collectVaultFiles().then(paths => buildNoteReferenceIndex(paths
+            .filter(path => this.pathFilter.isAllowed(path) && canAccessPath(path) && /\.(?:md|markdown|txt)$/i.test(path))
+            .map(path => ({ path }))));
+        return async (target, options = {}) => {
+            if (!target.trim())
+                return [];
+            if (this.metadataIndex)
+                return this.metadataIndex.resolveNoteReference(target, canAccessPath, options.sourcePath, options.syntax);
+            const document = noteReferenceDocument(target).replace(/\\/g, '/');
+            const needsAliases = options.syntax !== 'markdown' && !document.includes('/') && !/\.(?:md|markdown|txt)$/i.test(document);
+            if (needsAliases && !aliasIndex)
+                aliasIndex = (async () => {
+                    const descriptors = [];
+                    for (const path of (await getPaths()).paths) {
+                        if (!this.pathFilter.isAllowed(path) || !canAccessPath(path))
+                            continue;
+                        const note = await readMetadata(path);
+                        if (!note || isModerationHidden(note.frontmatter))
+                            continue;
+                        descriptors.push({ path: note.path, title: note.frontmatter.title, aliases: note.frontmatter.aliases,
+                            preferredTerm: note.frontmatter.preferred_term, stableId: note.frontmatter.stable_id });
+                    }
+                    return buildNoteReferenceIndex(descriptors);
+                })();
+            return resolveNoteReference(target, await (needsAliases ? aliasIndex : getPaths()), options)
+                .filter(path => this.pathFilter.isAllowed(path) && canAccessPath(path));
+        };
     }
     async findPathsForNoteReference(wikiLinkName, canAccessPath, options) {
         if (!wikiLinkName.trim()) {

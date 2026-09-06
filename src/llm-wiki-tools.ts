@@ -565,7 +565,7 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_moc_rebalance',
-      description: 'Produce a revision-stamped, explainable split plan for one saturated MOC. It preserves authored sections first, then uses child MOCs, typed relations, domain, subject terms, and a deterministic Unclassified group. The plan returns metadata and links only, respects visibility, is bounded, and never rewrites any note.',
+      description: 'Produce an explainable split plan for a saturated MOC: authored sections, child MOCs, typed relations, domain, subject terms, then Unclassified. Rechecks observed root/member/relation/destination revisions; refresh on drift. Bounded metadata reads and request-local resolution; on inspection-budget exhaustion use exact paths or a smaller map. Drafts use exact Obsidian navigation; entry trimming also trims links/dependencies. Hidden collisions are not disclosed: new paths require expectedRevision:missing, visible targets get notes.read. Follow parentLinkWarning before applying hierarchy. If rootPathOmitted, retain the original requested path. Advisory, bounded, non-mutating; not a Vault-wide transaction.',
       inputSchema: { type: 'object', properties: {
         path: { type: 'string', description: 'Visible note_kind:moc path' },
         maxBranches: { type: 'integer', minimum: 2, maximum: 5, default: 4, description: 'Maximum proposed sub-MOC branches' },

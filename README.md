@@ -1520,8 +1520,8 @@ rechecks at most50 exact metadata rows instead of scanning the Vault again,
 rejects changed/hidden/missing sources, and revalidates returned inputs. It is
 not an atomic Vault-wide graph snapshot. Same-topic Global, Community, model
 and agent notes form separate groups with destinations inside their own scope.
-Drafts contain ordinary physical-path Obsidian links (relative Markdown for
-special filenames), not MCP scope URIs or untrusted title aliases. Destination
+Drafts contain ordinary physical-path Obsidian links (explicit relative Markdown
+for root filenames or special characters), not MCP scope URIs or untrusted title aliases. Destination
 collision state describes visible notes only: `expectedRevision: missing` is
 mandatory and may still reject a collision during creation. Partial graph or
 group samples and full-response budget trimming are explicitly truncated.
@@ -1548,6 +1548,25 @@ preserves authored headings and source-line order first, then groups exact
 child-MOC, typed-relation-neighborhood, domain, and subject signals. Review
 leftovers and cross-branch dependencies before applying any existing
 revision-safe MOC planner; a healthy map returns no fabricated branches.
+Rebalance resolves Markdown relative to its authored source and checks root,
+member, relation-label and visible destination revisions before returning.
+Resolved identity candidates must also still match their freshly read aliases
+and properties; an indexed old alias cannot silently bind to a new revision.
+Root/metadata/revision reads have per-file byte caps, and a request-local cache
+admits at most256 metadata identities. Without the normal server metadata index,
+path lookup enumerates the allowed namespace once without reading all bodies;
+only bare alias terms need descriptor reads through that same cache. If the
+inspection budget is exhausted, use exact note paths or a smaller map. Namespace
+enumeration still scales with the visible file count; it is not a256-file bound.
+Budget trimming regenerates draft links and removes dependencies to omitted
+entries. `memberCount` remains the observed group count; `entriesTruncated`
+marks a partial draft. Collision hints disclose only visible destinations:
+create using `expectedRevision: missing`, or follow the visible target's
+`notes.read` nextAction before planning any change. A parent filename that cannot
+form a safe `moc_parent` yields `parentLinkWarning` and exact Markdown navigation,
+not an invented hierarchy property. On very long paths, a compact response can
+set `rootPathOmitted`; retain the request's original path and the returned
+revision. All suggestions remain advisory, not a Vault-wide transaction.
 
 `get_wiki_bases_view` can generate standard local Obsidian Bases projections:
 `all`, `inbox`, `inbox_oldest`, `projects`, `project_next_actions`, `review`,
