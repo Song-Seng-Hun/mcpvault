@@ -2715,6 +2715,22 @@ not cross-process coordination or hard-link/Unicode-filesystem identity proof.
 
 ### `get_outlinks`
 
+Before returning counts or a page, the filesystem adapter checks distinct
+known authorized note targets against their indexed revisions, including
+off-page references, visible alias fallbacks and cached hidden fallbacks needed
+to discover an unhide. Scope-denied candidates are never read. Changed, missing
+or unreadable targets invalidate their entries and return a path-free retry
+error; the next query refreshes them. Target reads use an 8 MiB limit and at
+most eight concurrent checks per query, draining failures before returning.
+This adds one bounded body hash per distinct target, not per link occurrence.
+Separate simultaneous queries can exceed eight combined reads. No target body
+or extra target-revision fields are appended to the response.
+
+These checks are optimistic: newly gained aliases on previously unrelated
+notes, attachment contents, and unobserved edits after validation are not a
+complete resolver/corpus snapshot. Authored unresolved links remain valid
+outlink rows. `sourceRevision` still identifies the link's source, not its target.
+
 List the Obsidian internal links contained in a note. Each occurrence includes its
 destination, source line, raw link, and compact context. Embeds, aliases, and
 heading/block fragments are preserved in the raw link while the `target` field

@@ -1016,7 +1016,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "get_outlinks",
-          description: "List one bounded page of a visible, non-hidden note's Obsidian/relative Markdown links. Excludes known invisible-only targets before counts; readable attachments and genuine missing links remain. Context may mask unavailable references; inspect the source before editing. Matching fences, closed inline backticks and escaped openers are ignored; top-level indented code is outside the scanner. sourceRevision identifies the parsed source. Source drift invalidates its graph entry and rejects the read; retry to refresh. Final validation also guards visibility changes." + NAVIGATION_READ_GUIDANCE,
+          description: "List one bounded page of a visible, non-hidden note's Obsidian/relative Markdown links. Excludes known invisible-only targets before counts; readable attachments and genuine missing links remain. Context may mask unavailable references; inspect the source before editing. Matching fences, closed inline backticks and escaped openers are ignored; top-level indented code is outside the scanner. sourceRevision identifies the parsed source. Source or known authorized target drift invalidates the entry and rejects the read; retry to refresh. Target checks include off-page and alias fallback dependencies, with an 8 MiB source-read limit per target. Final validation also guards visibility changes; this is not a full resolver census." + NAVIGATION_READ_GUIDANCE,
           inputSchema: {
             type: "object",
             properties: {

@@ -698,6 +698,14 @@ do not prove a current, bounded, actionable response through its public adapter.
   cache reuse. This closes the reproduced directory-membership gaps above,
   not all-stat-preserved body edits or an atomic cross-file snapshot.
 
+- Outlink projections now validate the distinct known authorized target-note
+  revisions as well as their source. Off-page targets, visible alias fallbacks
+  and cached hidden fallbacks are included without reading scope-denied bodies.
+  Eight-way 8 MiB target reads drain failures and invalidate stale entries for
+  retry. This closes reproduced hide/unhide/delete/alias-drift cases, not newly
+  gained aliases on unrelated notes, attachment bodies or backlinks' neighboring
+  target projection freshness. Per-query verification is not a global I/O cap.
+
 Record new concrete gaps here when registered schema, dispatcher, service,
 persistent representation, guide, invalidation, or bounded failure evidence
 disagrees; remove a gap only after checking that complete workflow.

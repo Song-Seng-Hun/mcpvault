@@ -34,7 +34,7 @@ export declare class VaultGraphIndex {
     /** Keep caller-side asynchronous source validation inside the same view. */
     withStableRead<T>(canAccessPath: (path: string) => boolean, read: () => Promise<T>): Promise<T>;
     getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, canIncludeSource?: (path: string, revision: string) => Promise<boolean>, includeSourceRevision?: boolean, includeSnapshot?: boolean): Promise<BacklinksResult>;
-    getOutlinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, includeSourceRevision?: boolean, includeSnapshot?: boolean): Promise<{
+    getOutlinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, includeSourceRevision?: boolean, includeSnapshot?: boolean, validateTargets?: (targets: ReadonlyMap<string, string>) => Promise<void>): Promise<{
         source: string;
         sourceRevision?: string;
         snapshotFingerprint?: string;

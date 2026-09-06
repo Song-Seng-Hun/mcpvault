@@ -88,10 +88,19 @@ test('neighborhood supports 40 neighbors with bounded final validation and no un
   await write('Unrelated.md', '# Leave alone');
   const read = fs.readNoteRevision.bind(fs);
   let active = 0, peak = 0;
+  let inFinal = false, finalActive = 0, finalPeak = 0;
+  const finalChecked: string[] = [];
+  const validate = (wiki as any).assertCurrentContextSources.bind(wiki);
+  vi.spyOn(wiki as any, 'assertCurrentContextSources').mockImplementation(async (...args: unknown[]) => {
+    inFinal = true;
+    try { return await validate(...args); } finally { inFinal = false; }
+  });
   const checked: string[] = [];
   vi.spyOn(fs, 'readNoteRevision').mockImplementation(async path => {
+    const final = inFinal;
+    if (final) { finalChecked.push(path); finalActive++; finalPeak = Math.max(finalPeak, finalActive); }
     checked.push(path); active++; peak = Math.max(peak, active);
-    try { return await read(path); } finally { active--; }
+    try { return await read(path); } finally { active--; if (final) finalActive--; }
   });
   const result = await wiki.neighborhood(undefined, 'Root.md', 40, 16000);
   expect(result.totalCandidates).toBe(41); // 40 outgoing peers plus Back.md.
@@ -99,7 +108,12 @@ test('neighborhood supports 40 neighbors with bounded final validation and no un
   // even though its lower rank excludes it from the final 40-neighbor view.
   expect(new Set(checked).size).toBe(42); // root, top 40 peers, and Back.md.
   expect(checked).not.toContain('Unrelated.md');
-  expect(peak).toBeLessThanOrEqual(4);
+  // Parallel graph queries can overlap eight outgoing-target checks with a
+  // backlink root check; the neighborhood's final snapshot stays at four.
+  expect(peak).toBeLessThanOrEqual(9);
+  expect(finalPeak).toBeLessThanOrEqual(4);
+  expect(finalChecked).toHaveLength(41);
+  expect(new Set(finalChecked).size).toBe(41);
   expect(JSON.stringify(result, null, 2).length).toBeLessThanOrEqual(16000);
 });
 

@@ -709,11 +709,11 @@ export class FileSystemService {
 
   /** Hash current decoded UTF-8 without parsing. Callers still enforce scope;
    * a revision is not an access grant or a fresh moderation classification. */
-  async readNoteRevision(path: string): Promise<string> {
-    return this.readNoteData(path, content => this.revision(content));
+  async readNoteRevision(path: string, maxBytes?: number): Promise<string> {
+    return this.readNoteData(path, content => this.revision(content), maxBytes);
   }
 
-  private async readNoteData<T>(path: string, project: (content: string) => T): Promise<T> {
+  private async readNoteData<T>(path: string, project: (content: string) => T, maxBytes?: number): Promise<T> {
     path = this.normalizePath(path);
     const fullPath = this.resolvePath(path);
 
@@ -728,7 +728,9 @@ export class FileSystemService {
     }
 
     try {
-      const content = await this.vaultIo.readUtf8(fullPath);
+      const content = maxBytes === undefined
+        ? await this.vaultIo.readUtf8(fullPath)
+        : await this.vaultIo.readUtf8Bounded(fullPath, maxBytes);
       return project(content);
     } catch (error) {
       if (error instanceof Error && 'code' in error) {
@@ -2470,11 +2472,11 @@ export class FileSystemService {
     }));
   }
 
-  private async assertGraphReadRevision(graph: VaultGraphIndex, path: string, revision: string | undefined, canAccessPath: (path: string) => boolean, capturedRevision?: string): Promise<void> {
+  private async assertGraphReadRevision(graph: VaultGraphIndex, path: string, revision: string | undefined, canAccessPath: (path: string) => boolean, capturedRevision?: string, maxBytes?: number): Promise<void> {
     try {
       if (!revision || (capturedRevision !== undefined && revision !== capturedRevision)
         || !this.pathFilter.isAllowed(path) || !canAccessPath(path)
-        || await this.readNoteRevision(path) !== revision || !canAccessPath(path)) throw new Error('stale graph source');
+        || await this.readNoteRevision(path, maxBytes) !== revision || !canAccessPath(path)) throw new Error('stale graph source');
     } catch {
       graph.invalidate(path);
       throw new Error('Graph source changed or became unavailable; retry the query to refresh its snapshot.');
@@ -2494,7 +2496,17 @@ export class FileSystemService {
     const note = await this.readNote(source);
     if (isModerationHidden(note.frontmatter)) throw new Error(`Access denied: ${source}`);
     return this.withGraphRead(graph => graph.withStableRead(canAccessPath, async () => {
-      const result = await graph.getOutlinks(source, limit, canAccessPath, offset, true, options.includeSnapshot);
+      const result = await graph.getOutlinks(source, limit, canAccessPath, offset, true, options.includeSnapshot, async targets => {
+        const entries = [...targets];
+        for (let offset = 0; offset < entries.length; offset += 8) {
+          // Drain failures before the graph (including temporary indexes) can
+          // be released. Counts and projection depend on off-page targets too.
+          const checked = await Promise.allSettled(entries.slice(offset, offset + 8)
+            .map(([path, revision]) => this.assertGraphReadRevision(graph, path, revision, canAccessPath, undefined, MAX_NOTE_CONTENT_BYTES)));
+          const failed = checked.find(result => result.status === 'rejected');
+          if (failed?.status === 'rejected') throw failed.reason;
+        }
+      });
       await this.assertGraphReadRevision(graph, source, result.sourceRevision, canAccessPath, note.revision);
       if (options.includeSourceRevision) return result;
       const { sourceRevision: _sourceRevision, ...publicResult } = result;

@@ -287,8 +287,9 @@ export class VaultGraphIndex {
         const page = backlinks.slice(offset, offset + limit).map(link => project(sourceEntries.get(link.path), link));
         return { target, ...(includeSourceRevision && { targetRevision: targetEntry.revision }), ...(snapshot && { snapshotFingerprint: snapshot.finish() }), backlinks: page, total, truncated: total > offset + page.length };
     }
-    async getOutlinks(path, limit, canAccessPath, offset = 0, includeSourceRevision = false, includeSnapshot = false) {
+    async getOutlinks(path, limit, canAccessPath, offset = 0, includeSourceRevision = false, includeSnapshot = false, validateTargets) {
         await this.ensure();
+        const startGeneration = this.changeGeneration;
         const source = normalizePath(path);
         const entry = this.entries.get(source);
         if (!entry)
@@ -298,14 +299,43 @@ export class VaultGraphIndex {
         const visible = this.visibilityContext(canAccessPath);
         const allResolver = buildResolver([...this.allPaths], this.entries);
         const project = this.linkProjector(visible.resolver, allResolver);
+        let validationResolver = visible.resolver;
+        if (validateTargets) {
+            const hiddenPaths = [];
+            for (const candidate of this.entries.values()) {
+                if (candidate.moderationHidden && this.allPaths.has(candidate.path) && canAccessPath(candidate.path))
+                    hiddenPaths.push(candidate.path);
+            }
+            // Exclude other scopes' shadowing names, but include authorized cached
+            // hidden aliases so an unhide can be discovered before the next census.
+            if (hiddenPaths.length)
+                validationResolver = buildResolver([...visible.paths, ...hiddenPaths], this.entries);
+        }
+        const targetRevisions = new Map();
         const outlinks = entry.links.filter(link => {
             if (/^scope:\/\/(?:model|agent|user)\//i.test(link.target.trim()))
                 return false;
             const anyMatches = resolveTargets(link.target, allResolver, entry.path, link.link);
+            const visibleMatches = resolveTargets(link.target, visible.resolver, entry.path, link.link);
+            const validationMatches = validationResolver === visible.resolver ? visibleMatches
+                : resolveTargets(link.target, validationResolver, entry.path, link.link);
+            if (validateTargets)
+                for (const path of [...anyMatches, ...visibleMatches, ...validationMatches]) {
+                    // Include cached moderation-hidden matches so newly unhidden notes
+                    // can be refreshed too, but never read another caller's scope.
+                    const target = this.entries.get(path);
+                    if (target && path !== source && canAccessPath(path))
+                        targetRevisions.set(path, target.revision);
+                }
             if (anyMatches.length === 0)
                 return true;
-            return resolveTargets(link.target, visible.resolver, entry.path, link.link).length > 0;
+            return visibleMatches.length > 0;
         });
+        if (validateTargets)
+            await validateTargets(targetRevisions);
+        if (this.changeGeneration !== startGeneration || this.visibilityContext(canAccessPath) !== visible) {
+            throw new Error('Graph changed or visibility changed during navigation; retry the query. No stable navigation view was returned.');
+        }
         const snapshot = includeSnapshot ? new NavigationViewFingerprint(['outlinks', source, entry.revision]) : undefined;
         if (snapshot)
             for (const link of outlinks)

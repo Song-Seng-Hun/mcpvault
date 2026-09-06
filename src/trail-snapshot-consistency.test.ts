@@ -56,10 +56,15 @@ test('converging simple paths remain distinct while shared graph reads and final
     ['Start.md', 'B.md', 'Mid.md', 'End.md'],
   ]);
   for (const path of ['Start.md', 'A.md', 'B.md', 'Mid.md']) expect(get.mock.calls.filter(call => call[0] === path)).toHaveLength(1);
-  // Each graph read now validates its own source; the final trail validation
-  // separately deduplicates the complete returned path snapshot.
+  // Each graph query validates its source and distinct known targets. The
+  // final trail validation separately deduplicates the returned snapshot.
+  const targets: Record<string, string[]> = {
+    'Start.md': ['A.md', 'B.md'], 'A.md': ['Start.md', 'Mid.md'],
+    'B.md': ['Mid.md'], 'Mid.md': ['End.md'],
+  };
   expect(checked.sort()).toEqual([
-    ...get.mock.calls.map(call => call[0]), 'Start.md', 'A.md', 'B.md', 'Mid.md', 'End.md',
+    ...get.mock.calls.flatMap(([path]) => [path, ...targets[path]!]),
+    'Start.md', 'A.md', 'B.md', 'Mid.md', 'End.md',
   ].sort());
   expect(peak).toBeGreaterThan(1); expect(peak).toBeLessThanOrEqual(4);
   for (const path of result.paths) for (const edge of path.edges) expect(edge.sourceRevision).toMatch(/^[a-f0-9]{64}$/);
@@ -94,7 +99,10 @@ test('an empty route checks queried graph sources and endpoints without a duplic
   const get = vi.spyOn(fs, 'getOutlinks');
   const result = await wiki.trail(undefined, 'Start.md', 'End.md');
   expect(result.paths).toEqual([]);
-  expect(check.mock.calls.map(call => call[0]).sort()).toEqual([...get.mock.calls.map(call => call[0]), 'End.md', 'Start.md'].sort());
+  expect(check.mock.calls.map(call => call[0]).sort()).toEqual([
+    ...get.mock.calls.map(call => call[0]), 'Mid.md', // Start's target guard
+    'End.md', 'Start.md', // final empty-route endpoints
+  ].sort());
 });
 
 test('authorized private trails preserve public scope identities through snapshot checks', async () => {

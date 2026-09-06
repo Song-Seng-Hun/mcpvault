@@ -58,7 +58,7 @@ export declare class FileSystemService {
     readNote(path: string): Promise<ParsedNote>;
     /** Hash current decoded UTF-8 without parsing. Callers still enforce scope;
      * a revision is not an access grant or a fresh moderation classification. */
-    readNoteRevision(path: string): Promise<string>;
+    readNoteRevision(path: string, maxBytes?: number): Promise<string>;
     private readNoteData;
     noteExists(path: string): Promise<boolean>;
     private assertExpectedRevision;

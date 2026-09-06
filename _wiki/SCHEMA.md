@@ -305,6 +305,15 @@ scan require another pass; three unstable passes return a retry error instead
 of an uncommitted inventory. This repairs missed nested file membership, not
 cross-file content freshness or caller authorization. No note body is read by
 the inventory census, and no new MCP endpoint or client setup is required.
+Filesystem outlink reads also validate known authorized target revisions before
+returning counts/projections, including off-page and alias fallback dependencies.
+Cached hidden authorized fallbacks are checked for unhide recovery, without
+granting visibility. Scope-denied target bodies are not read. Target hashing
+is limited to 8 MiB per file, in drained batches of eight; a changed/unavailable
+target invalidates itself and returns a path-free retry error. Newly gained
+aliases, attachment bodies and edits after validation remain outside this
+optimistic check. Public `sourceRevision` and authored unresolved rows retain
+their previous meaning; no target bodies are added to MCP responses.
 Selected candidates and replacement targets are revision-checked. Reference
 resolution also checks the target revision, including its indexed aliases.
 Reference

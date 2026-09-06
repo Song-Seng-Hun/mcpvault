@@ -658,10 +658,10 @@ export class FileSystemService {
     }
     /** Hash current decoded UTF-8 without parsing. Callers still enforce scope;
      * a revision is not an access grant or a fresh moderation classification. */
-    async readNoteRevision(path) {
-        return this.readNoteData(path, content => this.revision(content));
+    async readNoteRevision(path, maxBytes) {
+        return this.readNoteData(path, content => this.revision(content), maxBytes);
     }
-    async readNoteData(path, project) {
+    async readNoteData(path, project, maxBytes) {
         path = this.normalizePath(path);
         const fullPath = this.resolvePath(path);
         if (!this.pathFilter.isAllowed(path)) {
@@ -673,7 +673,9 @@ export class FileSystemService {
             throw new Error(`Cannot read directory as file: ${path}. Use list_directory tool instead.`);
         }
         try {
-            const content = await this.vaultIo.readUtf8(fullPath);
+            const content = maxBytes === undefined
+                ? await this.vaultIo.readUtf8(fullPath)
+                : await this.vaultIo.readUtf8Bounded(fullPath, maxBytes);
             return project(content);
         }
         catch (error) {
@@ -2375,11 +2377,11 @@ export class FileSystemService {
             return { ...publicResult, backlinks: result.backlinks.map(({ sourceRevision: _sourceRevision, ...link }) => link) };
         }));
     }
-    async assertGraphReadRevision(graph, path, revision, canAccessPath, capturedRevision) {
+    async assertGraphReadRevision(graph, path, revision, canAccessPath, capturedRevision, maxBytes) {
         try {
             if (!revision || (capturedRevision !== undefined && revision !== capturedRevision)
                 || !this.pathFilter.isAllowed(path) || !canAccessPath(path)
-                || await this.readNoteRevision(path) !== revision || !canAccessPath(path))
+                || await this.readNoteRevision(path, maxBytes) !== revision || !canAccessPath(path))
                 throw new Error('stale graph source');
         }
         catch {
@@ -2406,7 +2408,18 @@ export class FileSystemService {
         if (isModerationHidden(note.frontmatter))
             throw new Error(`Access denied: ${source}`);
         return this.withGraphRead(graph => graph.withStableRead(canAccessPath, async () => {
-            const result = await graph.getOutlinks(source, limit, canAccessPath, offset, true, options.includeSnapshot);
+            const result = await graph.getOutlinks(source, limit, canAccessPath, offset, true, options.includeSnapshot, async (targets) => {
+                const entries = [...targets];
+                for (let offset = 0; offset < entries.length; offset += 8) {
+                    // Drain failures before the graph (including temporary indexes) can
+                    // be released. Counts and projection depend on off-page targets too.
+                    const checked = await Promise.allSettled(entries.slice(offset, offset + 8)
+                        .map(([path, revision]) => this.assertGraphReadRevision(graph, path, revision, canAccessPath, undefined, MAX_NOTE_CONTENT_BYTES)));
+                    const failed = checked.find(result => result.status === 'rejected');
+                    if (failed?.status === 'rejected')
+                        throw failed.reason;
+                }
+            });
             await this.assertGraphReadRevision(graph, source, result.sourceRevision, canAccessPath, note.revision);
             if (options.includeSourceRevision)
                 return result;
