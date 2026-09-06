@@ -3795,12 +3795,33 @@ export class LlmWikiService {
         if (!this.access.canAccessPhysicalPath(params.path, params.principal))
             throw new Error(`Access denied: ${this.access.toPublicPath(params.path)}`);
         this.access.assertMutationAllowed(params.path, 'record_wiki_recall');
-        const note = await this.fileSystem.readNote(params.path);
+        const canAccess = (path) => this.access.canAccessPhysicalPath(path, params.principal);
+        const readMetadata = async (path) => (await this.fileSystem.readNoteMetadata([path], canAccess, { fresh: true, strict: true, maxBytes: MAX_NOTE_CONTENT_BYTES }))[0];
+        const note = await readMetadata(params.path);
+        if (!note || isModerationHidden(note.frontmatter))
+            throw new Error('Recall source is unavailable');
+        if (!/^[a-f0-9]{64}$/i.test(params.expectedRevision) || params.expectedRevision.toLowerCase() !== note.revision)
+            throw new Error('Recall source revision conflict; read the current question before recording an attempt');
         if (note.frontmatter.llm_wiki_type !== 'knowledge')
             throw new Error('record_wiki_recall requires an LLM Wiki knowledge note');
-        const prompt = params.recallPrompt === undefined
-            ? (typeof note.frontmatter.recall_prompt === 'string' ? boundedText(note.frontmatter.recall_prompt, 1000) : '')
-            : boundedText(params.recallPrompt, 1000);
+        const privatePath = this.privateRecallPath(params.principal, params.path);
+        const existingState = privatePath ? await readMetadata(privatePath) : undefined;
+        if (existingState && isModerationHidden(existingState.frontmatter))
+            throw new Error('Private recall state is unavailable');
+        if (privatePath) {
+            const expectedState = params.expectedStateRevision;
+            if (existingState
+                ? typeof expectedState !== 'string' || !/^[a-f0-9]{64}$/i.test(expectedState) || expectedState.toLowerCase() !== existingState.revision
+                : expectedState !== undefined && expectedState !== 'missing') {
+                throw new Error('Private recall revision conflict: pass expectedStateRevision from queue stateRevision or the last receipt; refresh before retrying');
+            }
+        }
+        const promptValue = params.recallPrompt ?? existingState?.frontmatter.recall_prompt ?? note.frontmatter.recall_prompt;
+        if (typeof promptValue !== 'string')
+            throw new Error('recallPrompt is required on the note or in the request');
+        if (params.recallPrompt !== undefined && promptValue.length > 1000)
+            throw new Error('An explicit recallPrompt must be at most 1000 characters');
+        const prompt = promptValue.trim();
         if (!prompt)
             throw new Error('recallPrompt is required on the note or in the request');
         const quality = normalizeRecallQuality(params.recallQuality);
@@ -3815,18 +3836,16 @@ export class LlmWikiService {
         if (params.repairPath && !this.access.canAccessPhysicalPath(params.repairPath, params.principal))
             throw new Error(`Access denied: ${this.access.toPublicPath(params.repairPath)}`);
         const suppliedInterval = params.recallIntervalDays === undefined ? undefined : normalizeReviewIntervalDays(params.recallIntervalDays);
-        const existingInterval = params.recallIntervalDays === undefined ? normalizeReviewIntervalDays(note.frontmatter.recall_interval_days) : undefined;
+        const existingInterval = params.recallIntervalDays === undefined ? normalizeReviewIntervalDays(existingState?.frontmatter.recall_interval_days ?? note.frontmatter.recall_interval_days) : undefined;
         const adaptiveInterval = suppliedInterval === undefined && existingInterval === undefined
             ? quality === 'failed' ? 1 : quality === 'partial' ? 3 : quality === 'good' ? 14 : 7
             : undefined;
         const interval = suppliedInterval ?? existingInterval ?? adaptiveInterval;
         const timestamp = now();
-        const privatePath = this.privateRecallPath(params.principal, params.path);
-        let updatedRevision = params.expectedRevision;
+        let updatedRevision = note.revision;
         let privateStateRevision;
         let privateState;
         if (privatePath) {
-            const existingState = await this.fileSystem.noteExists(privatePath) ? await this.fileSystem.readNote(privatePath) : undefined;
             const previousHistory = Array.isArray(existingState?.frontmatter.recall_history) ? existingState.frontmatter.recall_history : [];
             const history = [{ quality, at: timestamp, ...(interval !== undefined && { intervalDays: interval }), ...(confusion && { confusion }), ...(params.repairPath && { repairPath: this.access.toPublicPath(params.repairPath) }), ...(repairStatus !== 'none' && { repairStatus }) }, ...previousHistory]
                 .filter((item) => item && typeof item === 'object')
@@ -3854,18 +3873,17 @@ export class LlmWikiService {
                 ...(params.repairPath && { recall_repair_path: this.access.toPublicPath(params.repairPath) }),
                 updated_at: timestamp,
             };
-            await this.fileSystem.writeNote({
+            const receipt = await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt({
                 path: privatePath,
                 content: `# Recall state\n\nNote: ${this.access.toPublicPath(params.path)}\n\nLast result: ${quality}\n`,
                 frontmatter: state,
                 expectedRevision: existingState?.revision || 'missing',
-            });
-            const updatedState = await this.fileSystem.readNote(privatePath);
-            privateState = updatedState.frontmatter;
-            privateStateRevision = updatedState.revision;
+            }, [{ path: params.path, expectedRevision: note.revision }], { maxBytes: MAX_NOTE_CONTENT_BYTES });
+            privateState = state;
+            privateStateRevision = receipt.revision;
         }
         else {
-            await this.fileSystem.updateFrontmatter({
+            const receipt = await this.fileSystem.updateFrontmatterWithReceipt({
                 path: params.path,
                 frontmatter: {
                     recall_prompt: prompt,
@@ -3878,9 +3896,9 @@ export class LlmWikiService {
                     updated_at: timestamp,
                 },
                 merge: true,
-                expectedRevision: params.expectedRevision,
-            });
-            updatedRevision = (await this.fileSystem.readNote(params.path)).revision;
+                expectedRevision: note.revision,
+            }, { maxBytes: MAX_NOTE_CONTENT_BYTES });
+            updatedRevision = receipt.revision;
         }
         const nextRecallAt = interval === undefined ? undefined : new Date(Date.parse(timestamp) + interval * 24 * 60 * 60 * 1000).toISOString();
         return {
@@ -3888,7 +3906,7 @@ export class LlmWikiService {
             path: this.access.toPublicPath(params.path),
             revision: updatedRevision,
             recallQuality: quality,
-            recallPrompt: prompt,
+            ...(prompt.length <= 1000 ? { recallPrompt: prompt } : { promptOmitted: true }),
             recalledAt: timestamp,
             ...(privatePath && {
                 isolatedTo: this.access.toPublicPath(privatePath),
@@ -5275,7 +5293,7 @@ export class LlmWikiService {
                 const path = typeof item.path === 'string' ? item.path : typeof item.mocPath === 'string' ? item.mocPath : undefined;
                 if (!path)
                     continue;
-                const details = Object.fromEntries(['title', 'question', 'recallPrompt', 'repairStatus', 'repairPath', 'dateRepairAction', 'state', 'target', 'relation', 'field', 'sourceHorizon', 'targetHorizon', 'line']
+                const details = Object.fromEntries(['title', 'question', 'recallPrompt', 'repairStatus', 'repairPath', 'dateRepairAction', 'stateRevision', 'state', 'target', 'relation', 'field', 'sourceHorizon', 'targetHorizon', 'line']
                     .filter(key => item[key] !== undefined)
                     .map(key => [key, item[key]]));
                 const existing = priorityByPath.get(path);
@@ -5451,7 +5469,8 @@ export class LlmWikiService {
                             targetPath: selectedPriority.path,
                             instruction: 'Use the selected recallPrompt before opening the note body. If a repair is pending, inspect its bounded repairPath only after attempting recall.',
                         };
-                        mutation = { endpointId: endpointIdForTool('record_wiki_recall'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['recallQuality'] };
+                        mutation = { endpointId: endpointIdForTool('record_wiki_recall'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision,
+                                ...(typeof selectedPriority.stateRevision === 'string' && { expectedStateRevision: selectedPriority.stateRevision }) }, requiredArguments: ['recallQuality'] };
                     }
                     else if (reason === 'completed_work_with_open_checkboxes') {
                         inspect = {

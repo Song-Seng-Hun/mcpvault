@@ -22,6 +22,11 @@ mutations, not a filesystem-wide transaction against arbitrary external editors.
 
 - Fresh strict metadata reads have an 8 MiB source cap. Hidden source or private
   state is unavailable; access and path rules remain in force.
+- The existing filesystem revision assertion used parsed unbounded readNote.
+  Reuse readNoteRevision(path, maxBytes) instead. Recall passes an explicit
+  maxBytes policy through guarded writes and Properties receipts; ordinary
+  operations omit it so oversized-note shrinking/trashing remains possible.
+  Preserve path/lock checks. Avoid parsed copies solely to compare a hash.
 - expectedRevision is the SHA-256 of the knowledge note for both branches.
 - For agents, a new record allows omitted expectedStateRevision or 'missing'.
   Updating an existing record requires its current SHA-256; queue stateRevision

@@ -162,6 +162,7 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
     purpose: 'Retain useful personal continuity and strengthen recall without turning memory signals into shared truth.',
     rules: [
       'Attempt a due recall prompt before opening its note, then record failed, partial, or good only for the current authenticated reader.',
+      'For wiki.record_recall, use the knowledge expectedRevision and, when private state exists, expectedStateRevision from queue stateRevision or the last receipt. Refresh both after conflicts. Omission or missing is only for first creation; existing private questions/cadence are preserved unless explicitly replaced.',
       'Use resurfacing as a small deterministic rediscovery sample; re-read the current note revision before relying on it.',
       'Before interruption or handoff, save only bounded focus, cursors, revision guards, research summaries, and optional MOC learningProgress in the private continuity checkpoint; resume it to detect path or note drift before reading on.',
       'Recall history, reading continuity, evidence review, and knowledge status are separate signals; none proves a claim.',

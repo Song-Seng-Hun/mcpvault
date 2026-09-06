@@ -4242,8 +4242,12 @@ test('agent active recall state is isolated from the shared knowledge note', asy
     const before = await callJson(client, 'read_note', { path: 'Knowledge/Shared recall.md', includeContent: false, accessToken: agentToken });
     const recalled = await callJson(client, 'record_wiki_recall', { path: 'Knowledge/Shared recall.md', recallQuality: 'good', expectedRevision: before.value.revision, accessToken: agentToken });
     expect(recalled.value).toMatchObject({ recallQuality: 'good', recallHistoryCount: 1, recallStreak: 1, recallSuccessCount: 1, isolatedTo: expect.stringMatching(/^scope:\/\/agent\/recall-isolation-worker\/_continuity\/recall\/[a-f0-9]{64}\.md$/) });
-    const recalledAgain = await callJson(client, 'record_wiki_recall', { path: 'Knowledge/Shared recall.md', recallQuality: 'good', expectedRevision: before.value.revision, accessToken: agentToken });
+    const unguarded = await client.callTool({ name: 'record_wiki_recall', arguments: { path: 'Knowledge/Shared recall.md', recallQuality: 'good', expectedRevision: before.value.revision, accessToken: agentToken } });
+    expect(unguarded.isError).toBe(true);
+    const recalledAgain = await callJson(client, 'record_wiki_recall', { path: 'Knowledge/Shared recall.md', recallQuality: 'good', expectedRevision: before.value.revision, expectedStateRevision: recalled.value.stateRevision, accessToken: agentToken });
     expect(recalledAgain.value).toMatchObject({ recallHistoryCount: 2, recallStreak: 2, recallSuccessCount: 2 });
+    const stale = await client.callTool({ name: 'record_wiki_recall', arguments: { path: 'Knowledge/Shared recall.md', recallQuality: 'good', expectedRevision: before.value.revision, expectedStateRevision: recalled.value.stateRevision, accessToken: agentToken } });
+    expect(stale.isError).toBe(true);
     const after = await callJson(client, 'read_note', { path: 'Knowledge/Shared recall.md', includeContent: false, accessToken: ownerToken });
     expect(after.value.fm).not.toHaveProperty('last_recalled_at');
     expect(after.value.fm).not.toHaveProperty('recall_quality');

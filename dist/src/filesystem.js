@@ -706,7 +706,7 @@ export class FileSystemService {
             throw new VaultReadUnavailableError();
         }
     }
-    async assertExpectedRevision(path, expectedRevision) {
+    async assertExpectedRevision(path, expectedRevision, maxBytes) {
         if (!expectedRevision)
             return;
         const exists = await this.noteExists(path);
@@ -717,7 +717,8 @@ export class FileSystemService {
         }
         if (!exists)
             throw new Error(`Revision conflict for ${path}: expected ${expectedRevision}, but the note is missing`);
-        const current = (await this.readNote(path)).revision;
+        // A guard needs the exact content hash, not a parsed body/Properties copy.
+        const current = await this.readNoteRevision(path, maxBytes);
         if (current !== expectedRevision) {
             throw new Error(`Revision conflict for ${path}: expected ${expectedRevision}, current ${current}. Read the note again before changing it.`);
         }
@@ -740,7 +741,7 @@ export class FileSystemService {
         await this.writeNoteWithRevisionGuardsAndReceipt(params, guards);
     }
     /** Same related-note assertions/locks, with the target's own write revision. */
-    async writeNoteWithRevisionGuardsAndReceipt(params, guards) {
+    async writeNoteWithRevisionGuardsAndReceipt(params, guards, policy = {}) {
         const path = this.normalizePath(params.path);
         if (!Array.isArray(guards) || guards.length < 1 || guards.length > 9) {
             throw new Error('A guarded note write requires between 1 and 9 related-note revision guards');
@@ -764,8 +765,8 @@ export class FileSystemService {
         });
         return this.withMutationLocks([path, ...normalizedGuards.map(guard => guard.path)], async () => {
             for (const guard of normalizedGuards)
-                await this.assertExpectedRevision(guard.path, guard.expectedRevision);
-            const receipt = await this.writeNoteUnlocked({ ...params, path });
+                await this.assertExpectedRevision(guard.path, guard.expectedRevision, policy.maxBytes);
+            const receipt = await this.writeNoteUnlocked({ ...params, path }, policy.maxBytes);
             return { revision: receipt.revision };
         });
     }
@@ -842,14 +843,14 @@ export class FileSystemService {
         }
         return { path, revision: this.revision(content), document };
     }
-    async writeNoteUnlocked(params) {
+    async writeNoteUnlocked(params, revisionMaxBytes) {
         const { content, frontmatter, mode = 'overwrite', expectedRevision } = params;
         const path = this.normalizePath(params.path);
         const fullPath = this.resolveWritablePath(path);
         if (!this.pathFilter.isAllowed(path)) {
             throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
         }
-        await this.assertExpectedRevision(path, expectedRevision);
+        await this.assertExpectedRevision(path, expectedRevision, revisionMaxBytes);
         // Validate content is a defined string to prevent writing literal "undefined"
         if (content === undefined || content === null) {
             throw new Error(`Content is required for writing a note: ${path}. The content parameter must be a string.`);
@@ -2047,9 +2048,9 @@ export class FileSystemService {
         await this.withMutationLock(path, () => this.updateFrontmatterUnlocked({ ...params, path }));
     }
     /** Parsed Properties and revision from this write, without a later disk read. */
-    async updateFrontmatterWithReceipt(params) {
+    async updateFrontmatterWithReceipt(params, policy = {}) {
         const path = this.normalizePath(params.path);
-        const receipt = await this.withMutationLock(path, () => this.updateFrontmatterUnlocked({ ...params, path }));
+        const receipt = await this.withMutationLock(path, () => this.updateFrontmatterUnlocked({ ...params, path }, policy.maxBytes));
         return { revision: receipt.revision, frontmatter: this.frontmatterHandler.parse(receipt.originalContent).frontmatter };
     }
     /**
@@ -2107,15 +2108,15 @@ export class FileSystemService {
                         : 'No visible body or Property reference requires rewriting. The move still requires normal revision and Git review.',
         };
     }
-    async updateFrontmatterUnlocked(params) {
+    async updateFrontmatterUnlocked(params, maxBytes) {
         const { frontmatter, merge = true, expectedRevision } = params;
         const path = this.normalizePath(params.path);
         if (!this.pathFilter.isAllowed(path)) {
             throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
         }
-        await this.assertExpectedRevision(path, expectedRevision);
+        await this.assertExpectedRevision(path, expectedRevision, maxBytes);
         // Read the existing note
-        const note = await this.readNote(path);
+        const note = await this.readNote(path, maxBytes);
         // Prepare new frontmatter
         const newFrontmatter = merge
             ? { ...note.frontmatter, ...frontmatter }

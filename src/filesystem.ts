@@ -759,7 +759,7 @@ export class FileSystemService {
     }
   }
 
-  private async assertExpectedRevision(path: string, expectedRevision?: string): Promise<void> {
+  private async assertExpectedRevision(path: string, expectedRevision?: string, maxBytes?: number): Promise<void> {
     if (!expectedRevision) return;
     const exists = await this.noteExists(path);
     if (expectedRevision === 'missing') {
@@ -767,7 +767,8 @@ export class FileSystemService {
       return;
     }
     if (!exists) throw new Error(`Revision conflict for ${path}: expected ${expectedRevision}, but the note is missing`);
-    const current = (await this.readNote(path)).revision;
+    // A guard needs the exact content hash, not a parsed body/Properties copy.
+    const current = await this.readNoteRevision(path, maxBytes);
     if (current !== expectedRevision) {
       throw new Error(`Revision conflict for ${path}: expected ${expectedRevision}, current ${current}. Read the note again before changing it.`);
     }
@@ -800,6 +801,7 @@ export class FileSystemService {
   async writeNoteWithRevisionGuardsAndReceipt(
     params: NoteWriteParams,
     guards: Array<{ path: string; expectedRevision: string }>,
+    policy: { maxBytes?: number } = {},
   ): Promise<{ revision: string }> {
     const path = this.normalizePath(params.path);
     if (!Array.isArray(guards) || guards.length < 1 || guards.length > 9) {
@@ -820,8 +822,8 @@ export class FileSystemService {
       return { path: guardPath, expectedRevision: guard.expectedRevision };
     });
     return this.withMutationLocks([path, ...normalizedGuards.map(guard => guard.path)], async () => {
-      for (const guard of normalizedGuards) await this.assertExpectedRevision(guard.path, guard.expectedRevision);
-      const receipt = await this.writeNoteUnlocked({ ...params, path });
+      for (const guard of normalizedGuards) await this.assertExpectedRevision(guard.path, guard.expectedRevision, policy.maxBytes);
+      const receipt = await this.writeNoteUnlocked({ ...params, path }, policy.maxBytes);
       return { revision: receipt.revision };
     });
   }
@@ -887,7 +889,7 @@ export class FileSystemService {
     return { path, revision: this.revision(content), document };
   }
 
-  private async writeNoteUnlocked(params: NoteWriteParams): Promise<{ revision: string; originalContent: string }> {
+  private async writeNoteUnlocked(params: NoteWriteParams, revisionMaxBytes?: number): Promise<{ revision: string; originalContent: string }> {
     const { content, frontmatter, mode = 'overwrite', expectedRevision } = params;
     const path = this.normalizePath(params.path);
     const fullPath = this.resolveWritablePath(path);
@@ -896,7 +898,7 @@ export class FileSystemService {
       throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
     }
 
-    await this.assertExpectedRevision(path, expectedRevision);
+    await this.assertExpectedRevision(path, expectedRevision, revisionMaxBytes);
 
     // Validate content is a defined string to prevent writing literal "undefined"
     if (content === undefined || content === null) {
@@ -2115,9 +2117,9 @@ export class FileSystemService {
   }
 
   /** Parsed Properties and revision from this write, without a later disk read. */
-  async updateFrontmatterWithReceipt(params: UpdateFrontmatterParams): Promise<{ revision: string; frontmatter: Record<string, any> }> {
+  async updateFrontmatterWithReceipt(params: UpdateFrontmatterParams, policy: { maxBytes?: number } = {}): Promise<{ revision: string; frontmatter: Record<string, any> }> {
     const path = this.normalizePath(params.path);
-    const receipt = await this.withMutationLock(path, () => this.updateFrontmatterUnlocked({ ...params, path }));
+    const receipt = await this.withMutationLock(path, () => this.updateFrontmatterUnlocked({ ...params, path }, policy.maxBytes));
     return { revision: receipt.revision, frontmatter: this.frontmatterHandler.parse(receipt.originalContent).frontmatter };
   }
 
@@ -2174,7 +2176,7 @@ export class FileSystemService {
     };
   }
 
-  private async updateFrontmatterUnlocked(params: UpdateFrontmatterParams): Promise<{ revision: string; originalContent: string }> {
+  private async updateFrontmatterUnlocked(params: UpdateFrontmatterParams, maxBytes?: number): Promise<{ revision: string; originalContent: string }> {
     const { frontmatter, merge = true, expectedRevision } = params;
     const path = this.normalizePath(params.path);
 
@@ -2182,10 +2184,10 @@ export class FileSystemService {
       throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
     }
 
-    await this.assertExpectedRevision(path, expectedRevision);
+    await this.assertExpectedRevision(path, expectedRevision, maxBytes);
 
     // Read the existing note
-    const note = await this.readNote(path);
+    const note = await this.readNote(path, maxBytes);
 
     // Prepare new frontmatter
     const newFrontmatter = merge

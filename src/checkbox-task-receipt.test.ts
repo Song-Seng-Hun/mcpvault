@@ -45,12 +45,11 @@ test('no-op receipt uses the inspected revision instead of a later unrelated edi
   const original = '- [x] Done ^done\n', later = '- [ ] Reopened ^done\n';
   await writeFile(join(vault, 'Tasks.md'), original);
   const read = fs.readNote.bind(fs);
-  let reads = 0;
-  vi.spyOn(fs, 'readNote').mockImplementation(async (...args) => {
+  vi.spyOn(fs, 'readNote').mockImplementationOnce(async (...args) => {
     const note = await read(...args);
-    // First read belongs to expected-revision validation; second is the
-    // inspected task snapshot. Race only after that snapshot was captured.
-    if (++reads === 2) await writeFile(join(vault, 'Tasks.md'), later);
+    // Revision validation now hashes without parsing. This is the inspected
+    // task snapshot: race after capture, not after an ordinal guard read.
+    await writeFile(join(vault, 'Tasks.md'), later);
     return note;
   });
   const receipt = await fs.updateTask({ path: 'Tasks.md', taskId: 'task:block:done', status: 'completed', expectedRevision: hash(original) });

@@ -620,6 +620,23 @@ not overwrite one another; the private record retains only a bounded recent
 history and streak. Model-owner identities retain the shared frontmatter
 compatibility path.
 
+Both recording paths require the attempted knowledge note's current
+`expectedRevision`. For an agent's existing private record, additionally pass
+`expectedStateRevision` from the queue's `stateRevision` or the previous receipt.
+First creation allows omission or `"missing"`; a conflict requires re-reading,
+not blindly retrying. Review packets carry the private guard in their suggested
+record action. Private prompt/cadence take precedence over shared defaults.
+Inherited long prompts are stored intact; `promptOmitted` in a receipt is not a
+shortened question. Explicit replacement questions must be nonempty and at most
+1000 characters. Receipt revisions/counts describe this write, not a later read.
+Recording uses bounded metadata and opts its private guard/shared Properties
+write into 8 MiB reads. Revision assertions use hash-only reads rather than
+parsing another body/Properties copy. Ordinary recovery operations retain their
+existing ability to shrink or trash an oversized note with a revision guard;
+the recall-specific cap is not a new global deletion limit. Existing
+in-process mutation locks do not provide an atomic multi-file transaction
+against arbitrary external editors.
+
 `get_wiki_recall_queue` turns these fields into a bounded reader-specific due
 queue and exposes the prompt before the body. It reads fresh metadata with an
 8 MiB per-file cap from discovery onward, without retaining answer bodies or

@@ -585,6 +585,14 @@ optional `recall_prompt`, `recall_interval_days`, `last_recalled_at`, and
 are intentionally separate from `review_wiki_note`. Agent identities keep a
 bounded private recall history and streak; this never becomes shared knowledge
 frontmatter or a truth score.
+`record_wiki_recall` checks the knowledge `expectedRevision` for both shared and
+private recording. Existing private records also require `expectedStateRevision`
+(the queue/receipt `stateRevision`); first creation permits omission or `missing`.
+Conflicts do not append history. Preserve private prompt/cadence when no override
+is supplied. An inherited prompt is never truncated in storage; a receipt may
+mark `promptOmitted`. Explicit replacement questions are nonempty <=1000 chars.
+Source/private metadata and revision guard reads are bounded to 8 MiB. Receipts
+identify this operation's revision, not the current revision after another edit.
 `get_wiki_recall_queue` provides the due prompts as a bounded reader-specific
 projection, so an agent can attempt recall before opening the body. Queue reads
 use fresh bounded metadata from discovery onward. Source/private-state and

@@ -81,7 +81,9 @@ export declare class FileSystemService {
     writeNoteWithRevisionGuardsAndReceipt(params: NoteWriteParams, guards: Array<{
         path: string;
         expectedRevision: string;
-    }>): Promise<{
+    }>, policy?: {
+        maxBytes?: number;
+    }): Promise<{
         revision: string;
     }>;
     private writeDerivedViewFile;
@@ -148,7 +150,9 @@ export declare class FileSystemService {
     readMultipleNotes(params: BatchReadParams): Promise<BatchReadResult>;
     updateFrontmatter(params: UpdateFrontmatterParams): Promise<void>;
     /** Parsed Properties and revision from this write, without a later disk read. */
-    updateFrontmatterWithReceipt(params: UpdateFrontmatterParams): Promise<{
+    updateFrontmatterWithReceipt(params: UpdateFrontmatterParams, policy?: {
+        maxBytes?: number;
+    }): Promise<{
         revision: string;
         frontmatter: Record<string, any>;
     }>;

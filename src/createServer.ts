@@ -1562,6 +1562,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             ...(typeof trimmedArgs.confusion === 'string' && { confusion: trimmedArgs.confusion }),
             ...(typeof trimmedArgs.repairPath === 'string' && { repairPath: trimmedArgs.repairPath }),
             ...(typeof trimmedArgs.repairStatus === 'string' && { repairStatus: trimmedArgs.repairStatus }),
+            ...(typeof trimmedArgs.expectedStateRevision === 'string' && { expectedStateRevision: trimmedArgs.expectedStateRevision }),
             expectedRevision: trimmedArgs.expectedRevision,
           }), trimmedArgs.prettyPrint);
         }

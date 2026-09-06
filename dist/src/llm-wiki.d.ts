@@ -644,12 +644,33 @@ export declare class LlmWikiService {
         repairPath?: string;
         repairStatus?: string;
         expectedRevision: string;
+        expectedStateRevision?: string;
     }): Promise<{
         success: boolean;
         path: string;
         revision: string;
         recallQuality: "failed" | "good" | "partial" | "unseen";
         recallPrompt: string;
+        recalledAt: string;
+        isolatedTo?: string;
+        stateRevision?: string | undefined;
+        recallHistoryCount?: any;
+        recallStreak?: any;
+        recallSuccessCount?: any;
+        recallIntervalDays?: number;
+        nextRecallAt?: string | undefined;
+        adaptiveRecallInterval?: boolean;
+        confusion?: string;
+        repairStatus: string;
+        repairPath?: string;
+        repairAction?: string;
+        nextAction: string;
+    } | {
+        success: boolean;
+        path: string;
+        revision: string;
+        recallQuality: "failed" | "good" | "partial" | "unseen";
+        promptOmitted: boolean;
         recalledAt: string;
         isolatedTo?: string;
         stateRevision?: string | undefined;
