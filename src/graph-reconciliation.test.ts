@@ -59,9 +59,17 @@ async function fixture(sharedCatalog = false, source = '[[Former]] #old', active
 async function rewritePreservingMtime(vault: string, content: string) {
   const path = join(vault, 'Root.md');
   const before = await stat(path);
-  await writeFile(path, content);
-  await utimes(path, stamp, stamp);
-  const after = await stat(path);
+  let after = before;
+  // Same-tick rewrites can retain ctime on Windows. This fixture specifically
+  // exercises a changed-ctime reconciliation, so establish that precondition
+  // with bounded real I/O retries (Date.now is mocked by the graph fixture).
+  for (let attempt = 0; attempt < 25; attempt++) {
+    if (attempt) await new Promise<void>(resolve => setTimeout(resolve, 10));
+    await writeFile(path, content);
+    await utimes(path, stamp, stamp);
+    after = await stat(path);
+    if (after.ctimeMs !== before.ctimeMs) break;
+  }
   expect(after.size).toBe(before.size);
   expect(after.mtimeMs).toBe(before.mtimeMs);
   expect(after.ctimeMs).not.toBe(before.ctimeMs);

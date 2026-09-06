@@ -700,8 +700,10 @@ export class FileSystemService {
         try {
             return (await stat(this.resolvePath(path))).isFile();
         }
-        catch {
-            return false;
+        catch (error) {
+            if (isMissingVaultPath(error))
+                return false;
+            throw new VaultReadUnavailableError();
         }
     }
     async assertExpectedRevision(path, expectedRevision) {
@@ -908,11 +910,17 @@ export class FileSystemService {
             assertNoteContentSize(finalContent, path);
             // Create directories if they don't exist
             await mkdir(dirname(fullPath), { recursive: true });
-            await writeFile(fullPath, finalContent, 'utf-8');
+            // The missing guard must survive another process creating the target
+            // after our existence check. Exclusive creation never truncates it.
+            await writeFile(fullPath, finalContent, expectedRevision === 'missing'
+                ? { encoding: 'utf-8', flag: 'wx' } : 'utf-8');
             this.notifyNoteChanged(path, 'upsert');
             return { revision: this.revision(finalContent), originalContent: finalContent };
         }
         catch (error) {
+            if (expectedRevision === 'missing' && error instanceof Error && 'code' in error && error.code === 'EEXIST') {
+                throw new Error(`Revision conflict for ${path}: expected a new note, but it already exists`);
+            }
             throw classifyWriteError(error, path);
         }
     }

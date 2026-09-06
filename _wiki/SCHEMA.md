@@ -22,6 +22,12 @@ cannot authorize recreation after deletion. The actual merge source must match
 that guard, including rejecting newly appeared content under `missing`. On a
 conflict, re-read before deciding; on storage failure, restore access before
 retrying. This does not establish an atomic transaction across external editors.
+File existence checks return absence only for confirmed missing paths (or
+non-file/filtered targets), never an inaccessible or unavailable storage result.
+A `missing` revision guard uses exclusive creation, including new `notes.write`
+requests without an explicit revision. If another writer creates the target
+before the write, reject the collision and preserve that file. Do not infer
+crash-atomic replacement or cross-process revision CAS for existing files.
 
 ## Organization inside a scope
 

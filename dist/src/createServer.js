@@ -2035,7 +2035,9 @@ export function createServer(vaultPath, options = {}) {
                             content: trimmedArgs.content,
                             ...(fm !== undefined && { frontmatter: fm }),
                             mode: trimmedArgs.mode || 'overwrite',
-                            expectedRevision: trimmedArgs.expectedRevision,
+                            // The helper permits omission only for a new note. Preserve that
+                            // decision through the filesystem's exclusive-creation guard.
+                            expectedRevision: String(trimmedArgs.expectedRevision ?? '').trim() || 'missing',
                         });
                         return jsonResult({ success: true, path: scopeAccess.toPublicPath(trimmedArgs.path), mode: trimmedArgs.mode || 'overwrite',
                             revision: receipt.revision, message: 'Successfully wrote note' }, trimmedArgs.prettyPrint);

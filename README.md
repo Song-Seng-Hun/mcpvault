@@ -1532,6 +1532,13 @@ authenticated edge in front of it.
   replacement or creation after the initial guard requires a fresh read instead
   of recreating a deleted note or modifying an unseen revision. These are
   optimistic guards, not an OS-wide editing transaction.
+- Existence checks distinguish confirmed absence from storage failure; failed
+  checks return a path-free unavailable error rather than authorize creation or
+  report missing knowledge. `expectedRevision: missing` uses exclusive file
+  creation so a late-arriving file is not truncated. `notes.write` supplies that
+  guard internally when a new-file request omits its revision. Collisions require
+  a fresh read; existing-file replacement remains optimistically guarded, not
+  a cross-process compare-and-swap or crash-atomic transaction.
 - `delete_note` and `move_file` require matching confirmation paths.
 - Path arguments are trimmed before validation.
 - Search and batch tools return compact fields by default; set `prettyPrint: true` for expanded output. `maxChars` is a hard final response budget, including pretty-printed JSON. Oversized full-note reads set `truncated: true` and retain only a bounded prefix, so use the returned `mcp.get_note_outline` route and then `mcp.read_note_lines` for the needed section.
