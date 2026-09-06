@@ -724,6 +724,14 @@ unchanged. For MOCs, record `moc_purpose`, `moc_scope`, `moc_questions`, and
 optional `moc_parent` alongside ordinary `[[wikilinks]]` or relative Markdown
 links; nested MOCs are followed to bounded depth by graph health; use
 `get_wiki_moc_candidates` for bounded suggestions, not automatic map creation.
+Candidates use revision-stamped uncovered rows and at most50 fresh exact
+metadata reads, with final checks of returned inputs. Refresh after any drift;
+the graph scan is not a Vault-wide transaction. Grouping and suggested paths
+remain inside each source scope, including Community/model/agent boundaries.
+Draft links use Obsidian syntax, never MCP scope URIs; encoded filename `#` is
+not a heading anchor. Collision hints disclose visible targets only, and new
+maps retain `expectedRevision: missing`. Truncated samples do not prove that no
+other knowledge needs organization.
 Root MOCs need no parent or `primary_moc`; nested MOCs use `moc_parent` through
 `wiki.hierarchy_change`, not `wiki.moc_membership`. Maintenance placement debt
 applies to non-retired ordinary knowledge without nonempty scalar `primary_moc`

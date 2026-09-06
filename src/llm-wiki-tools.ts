@@ -560,7 +560,7 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_moc_candidates',
-      description: 'Suggest bounded MOC structure notes for non-map knowledge that is not currently reached through authored MOC links. Existing root/nested maps are not uncovered-knowledge candidates; a map-only inventory needs no artificial parent. Suggestions include revision-stamped authored order, an Obsidian Markdown draft, destination collision state, and an optional notes.write plan, but never create or rewrite notes.',
+      description: 'Suggest bounded scope-local MOC structure notes for non-map knowledge not reached through authored MOC links. Existing maps are not candidates. Source revisions are rechecked; refresh on drift. Same-topic Global/Community/model/agent groups never mix. Draft links are ordinary Obsidian syntax, not MCP URIs. Collisions report visible targets only; creation always requires expectedRevision:missing. Truncated output is a sample, not proof of no more work. Proposals include authored order and an optional notes.write plan but never create or rewrite notes; graph coverage is advisory, not a Vault-wide transaction.',
       inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 30, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint } },
     },
     {

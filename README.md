@@ -1515,6 +1515,16 @@ has a real question and useful boundary. Each suggestion contains current note
 revisions, deterministic authored order, a small Obsidian Markdown draft, and
 destination collision state. Its `notes.write` plan is an optional scaffold,
 not an automatic MOC or a reason to overwrite an existing map.
+Uncovered rows carry the graph-observed source revision. Candidate generation
+rechecks at most50 exact metadata rows instead of scanning the Vault again,
+rejects changed/hidden/missing sources, and revalidates returned inputs. It is
+not an atomic Vault-wide graph snapshot. Same-topic Global, Community, model
+and agent notes form separate groups with destinations inside their own scope.
+Drafts contain ordinary physical-path Obsidian links (relative Markdown for
+special filenames), not MCP scope URIs or untrusted title aliases. Destination
+collision state describes visible notes only: `expectedRevision: missing` is
+mandatory and may still reject a collision during creation. Partial graph or
+group samples and full-response budget trimming are explicitly truncated.
 
 MOC coverage measures visible **non-MOC knowledge** reached through authored
 map links. Root and nested maps remain in the full graph and knowledge-usage

@@ -3073,6 +3073,7 @@ export declare class LlmWikiService {
                 total: number;
                 items: {
                     path: string;
+                    revision: string | undefined;
                 }[];
                 truncated: boolean;
             };
@@ -3378,9 +3379,7 @@ export declare class LlmWikiService {
         total: number;
         note: string;
         truncated: boolean;
-        uncoveredKnowledgeTotal?: never;
     } | {
-        note?: never;
         candidates: Record<string, unknown>[];
         total: number;
         uncoveredKnowledgeTotal: number;

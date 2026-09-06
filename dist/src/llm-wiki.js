@@ -9756,7 +9756,7 @@ export class LlmWikiService {
             .filter(path => isCoverageKnowledge(normalizePath(path).toLowerCase()) && !mocCoveredKnowledge.has(normalizePath(path).toLowerCase()))
             .sort((left, right) => left.localeCompare(right))
             .slice(0, boundedLimit)
-            .map(path => ({ path: this.access.toPublicPath(path) }));
+            .map(path => ({ path: this.access.toPublicPath(path), revision: graphByPath.get(normalizePath(path).toLowerCase())?.revision }));
         const includeExtendedGraph = boundedChars >= 8000;
         const includeMocHierarchy = includeExtendedGraph
             || mocHierarchy.missingParents.total > 0
@@ -9906,49 +9906,97 @@ export class LlmWikiService {
         if (!('mocCoverage' in graph))
             return { candidates: [], total: 0, note: graph.note, truncated: true };
         const uncovered = Array.isArray(graph.mocCoverage.uncoveredKnowledge?.items) ? graph.mocCoverage.uncoveredKnowledge.items : [];
-        const paths = new Set(uncovered.map(item => typeof item.path === 'string' ? normalizePath(item.path).toLowerCase() : '').filter(Boolean));
-        const groups = new Map();
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
-        for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
-            if (!paths.has(normalizePath(note.path).toLowerCase()))
-                continue;
-            if (isModerationHidden(note.frontmatter))
-                continue;
-            const current = await this.fileSystem.readNote(note.path);
+        const refreshError = () => new Error('MOC candidate inputs changed or became unavailable; refresh the candidates and retry.');
+        const snapshots = new Map();
+        for (const item of uncovered) {
+            if (typeof item.path !== 'string' || typeof item.revision !== 'string' || !/^[a-f0-9]{64}$/.test(item.revision))
+                throw refreshError();
+            let path;
+            try {
+                path = this.access.resolveExternalPath(item.path, principal);
+            }
+            catch {
+                throw refreshError();
+            }
+            if (!canAccess(path))
+                throw refreshError();
+            const key = normalizePath(path).toLowerCase();
+            if (snapshots.has(key) && snapshots.get(key).revision !== item.revision)
+                throw refreshError();
+            snapshots.set(key, { path, revision: item.revision });
+        }
+        if (snapshots.size > 50)
+            throw refreshError();
+        const freshOptions = { fresh: true, strict: true, maxBytes: MAX_NOTE_CONTENT_BYTES };
+        const notes = await this.fileSystem.readNoteMetadata([...snapshots.values()].map(item => item.path), canAccess, freshOptions);
+        if (notes.length !== snapshots.size)
+            throw refreshError();
+        const groups = new Map();
+        for (const note of notes) {
+            if (isModerationHidden(note.frontmatter) || note.revision !== snapshots.get(normalizePath(note.path).toLowerCase())?.revision)
+                throw refreshError();
+            const scopeRoot = canvasScopeRoot(note.path);
             const project = typeof note.frontmatter.project === 'string' ? note.frontmatter.project.trim() : '';
             const domain = typeof note.frontmatter.domain === 'string' ? note.frontmatter.domain.trim() : '';
             const subjectTerm = Array.isArray(note.frontmatter.subject_terms) ? note.frontmatter.subject_terms.find((item) => typeof item === 'string' && item.trim()) : undefined;
             const tag = Array.isArray(note.frontmatter.tags) ? note.frontmatter.tags.find((item) => typeof item === 'string' && item.trim()) : undefined;
-            const folder = normalizePath(note.path).split('/')[0] || 'Knowledge';
+            const logicalPath = scopeRoot ? normalizePath(note.path).slice(scopeRoot.length + 1) : normalizePath(note.path);
+            const folder = logicalPath.split('/')[0] || 'Knowledge';
             const basisKind = domain ? 'domain' : subjectTerm ? 'subject_term' : project ? 'project' : tag ? 'tag' : 'folder';
             const basis = String(domain || subjectTerm || project || tag || folder).trim();
             const basisTitle = relationDocument(basis).replace(/^#/, '').trim() || folder;
-            const key = `${basisKind}:${basis.toLocaleLowerCase()}`;
-            const group = groups.get(key) || { title: `MOC: ${basisTitle}`, basis, basisKind, entries: [] };
+            const key = JSON.stringify([scopeRoot.toLowerCase(), basisKind, basis.toLocaleLowerCase()]);
+            const group = groups.get(key) || { title: `MOC: ${basisTitle}`, basis, basisKind, scopeRoot, entryTotal: 0, entries: [] };
+            group.entryTotal += 1;
             if (group.entries.length < 12) {
                 const ordered = navigationOrder(note.frontmatter.nav_order);
                 const navOrder = ordered === Number.MAX_SAFE_INTEGER ? undefined : ordered;
                 group.entries.push({
                     path: this.access.toPublicPath(note.path),
                     title: boundedText(note.frontmatter.title || note.path.split('/').at(-1)?.replace(/\.md$/i, '') || note.path, 160),
-                    revision: current.revision,
+                    revision: note.revision,
                     ...(navOrder !== undefined && { navOrder }),
                 });
             }
             groups.set(key, group);
         }
         const candidateGroups = [...groups.values()]
-            .sort((left, right) => right.entries.length - left.entries.length || left.basis.localeCompare(right.basis))
+            .sort((left, right) => right.entryTotal - left.entryTotal || left.basis.localeCompare(right.basis) || left.scopeRoot.localeCompare(right.scopeRoot))
             .slice(0, boundedLimit);
         const selected = [];
+        const targetSnapshots = new Map();
+        const displayText = (value) => value.replace(/[\r\n]+/g, ' ').replace(/[\\`*_\[\]<>]/g, '\\$&');
         for (const group of candidateGroups) {
             group.entries.sort((left, right) => navigationOrder(left.navOrder) - navigationOrder(right.navOrder) || left.title.localeCompare(right.title) || left.path.localeCompare(right.path));
             const suggestedQuestions = [`What is the durable idea shared by these notes?`, `Which note should be the next link or source of truth?`];
             const stem = group.title.replace(/^MOC:\s*/i, '').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 100) || 'Knowledge';
-            const suggestedPath = `Knowledge/MOCs/${stem}.md`;
-            const targetExists = await this.fileSystem.noteExists(suggestedPath);
-            const links = group.entries.slice(0, 8).map(entry => `- [[${entry.path.replace(/\.md$/i, '')}|${entry.title}]]`).join('\n');
-            const draftMarkdown = `# ${group.title}\n\n## Purpose\n\nOrient an agent through notes grouped by ${group.basisKind}: ${group.basis}.\n\n## Questions\n\n${suggestedQuestions.map(question => `- ${question}`).join('\n')}\n\n## Reading order\n\n${links}\n`;
+            const physicalTarget = joinRoot(group.scopeRoot, `Knowledge/MOCs/${stem}.md`);
+            if (!canAccess(physicalTarget))
+                throw refreshError();
+            const suggestedPath = this.access.toPublicPath(physicalTarget);
+            const target = (await this.fileSystem.readNoteMetadata([physicalTarget], canAccess, freshOptions))[0];
+            const targetExists = Boolean(target && !isModerationHidden(target.frontmatter));
+            if (targetExists)
+                targetSnapshots.set(suggestedPath, { path: suggestedPath, revision: target.revision });
+            for (const entry of group.entries) {
+                if (!this.access.canReferenceFrom(physicalTarget, this.access.resolveExternalPath(entry.path, principal)))
+                    throw refreshError();
+            }
+            const links = group.entries.slice(0, 8).map(entry => {
+                const physicalSource = this.access.resolveExternalPath(entry.path, principal);
+                try {
+                    canonicalRelationWikiLink(physicalSource); // Validate wikilink-safe document syntax.
+                    return `- [[${physicalSource}]]`; // Keep extensions to avoid same-stem ambiguity.
+                }
+                catch {
+                    const relativePath = posix.relative(posix.dirname(physicalTarget), physicalSource);
+                    const explicitRelativePath = relativePath.startsWith('../') || relativePath.startsWith('./') ? relativePath : `./${relativePath}`;
+                    const destination = explicitRelativePath.split('/').map(segment => encodeURIComponent(segment)).join('/');
+                    return `- [Note](<${destination}>)`;
+                }
+            }).join('\n');
+            const draftMarkdown = `# ${displayText(group.title)}\n\n## Purpose\n\nOrient an agent through notes grouped by ${group.basisKind}: ${displayText(group.basis)}.\n\n## Questions\n\n${suggestedQuestions.map(question => `- ${question}`).join('\n')}\n\n## Reading order\n\n${links}\n`;
             const item = {
                 suggestedTitle: group.title,
                 suggestedPath,
@@ -9958,9 +10006,10 @@ export class LlmWikiService {
                 basis: { kind: group.basisKind, value: group.basis },
                 notePaths: group.entries.map(entry => entry.path),
                 orderedEntries: group.entries,
+                entriesTruncated: group.entryTotal > group.entries.length,
                 draftMarkdown,
                 creationPlan: targetExists
-                    ? { endpointId: endpointIdForTool('read_note'), arguments: { path: suggestedPath }, instruction: 'The suggested MOC path already exists. Read its current revision and extend it deliberately instead of overwriting it.' }
+                    ? { endpointId: endpointIdForTool('read_note'), arguments: { path: suggestedPath, maxChars: 5000 }, instruction: 'The suggested MOC path already exists. Read its current revision and extend it deliberately instead of overwriting it.' }
                     : { endpointId: endpointIdForTool('write_note'), arguments: { path: suggestedPath, content: draftMarkdown, frontmatter: { note_kind: 'moc', lifecycle: 'active', moc_purpose: `Navigate ${group.basis}`, moc_scope: `${group.basisKind}:${group.basis}`, moc_questions: suggestedQuestions }, expectedRevision: 'missing' }, instruction: 'This is an optional Obsidian Markdown scaffold. Review its purpose, questions, and authored link order before writing it.' },
                 reason: 'uncovered_knowledge',
             };
@@ -9968,7 +10017,24 @@ export class LlmWikiService {
                 break;
             selected.push(item);
         }
-        return { candidates: selected, total: groups.size, uncoveredKnowledgeTotal: Number(graph.mocCoverage.uncoveredKnowledge?.total || 0), truncated: groups.size > selected.length || selected.length < candidateGroups.length };
+        const graphPartial = Boolean(graph.mocCoverage.uncoveredKnowledge?.truncated)
+            || Number(graph.mocCoverage.uncoveredKnowledge?.total || 0) > uncovered.length;
+        const result = { candidates: selected, total: groups.size, uncoveredKnowledgeTotal: Number(graph.mocCoverage.uncoveredKnowledge?.total || 0), truncated: graphPartial || groups.size > selected.length || selected.some(item => item.entriesTruncated) };
+        while (selected.length && JSON.stringify(result).length > boundedChars) {
+            selected.pop();
+            result.truncated = true;
+        }
+        const returnedSnapshots = selected.flatMap(item => [
+            ...item.orderedEntries,
+            ...(targetSnapshots.has(String(item.suggestedPath)) ? [targetSnapshots.get(String(item.suggestedPath))] : []),
+        ]);
+        try {
+            await this.assertCurrentContextSources(principal, returnedSnapshots, 80, MAX_NOTE_CONTENT_BYTES);
+        }
+        catch {
+            throw refreshError();
+        }
+        return result;
     }
     /** Explain how an overloaded authored MOC could be split without changing
      * it. Existing sections remain the first organizing signal, followed by
@@ -11317,7 +11383,7 @@ export class LlmWikiService {
             note: 'Increase maxChars to receive the bounded claim argument map.',
         };
     }
-    async assertCurrentContextSources(principal, sources, maxSources = 32) {
+    async assertCurrentContextSources(principal, sources, maxSources = 32, maxBytes) {
         try {
             const snapshots = new Map();
             for (const source of sources) {
@@ -11342,7 +11408,9 @@ export class LlmWikiService {
                 await Promise.all(entries.slice(offset, offset + 4).map(async (source) => {
                     if (!this.access.canAccessPhysicalPath(source.path, principal))
                         throw new Error('unavailable');
-                    const revision = await this.fileSystem.readNoteRevision(source.path);
+                    const revision = maxBytes === undefined
+                        ? await this.fileSystem.readNoteRevision(source.path)
+                        : await this.fileSystem.readNoteRevision(source.path, maxBytes);
                     if (revision !== source.revision || !this.access.canAccessPhysicalPath(source.path, principal))
                         throw new Error('changed');
                 }));

@@ -312,7 +312,8 @@ function markdownLinkDocument(rawDestination: string): ParsedLinkTarget {
   const queryIndex = document.indexOf('?');
   if (queryIndex !== -1) document = document.slice(0, queryIndex);
   try { document = decodeURIComponent(document); } catch { /* retain the raw safe path */ }
-  return parseAnchor(`${document}${anchor}`);
+  // Encoded # belongs to the filename; only a literal URL fragment is an anchor.
+  return { ...parseAnchor(anchor), document: document.trim() };
 }
 
 function normalizeTarget(path: string): string {

@@ -25,15 +25,20 @@ the generated Markdown.
    Require canReferenceFrom for every member. The human-only User scope remains
    inaccessible. Never combine same-topic private, Community and Global groups.
 3. Generate plain canonical Obsidian wikilinks from physical paths (not MCP
-   URIs), without untrusted aliases. For paths not representable as wikilinks,
-   use a percent-encoded relative Markdown link. Escape single-line displayed
+   URIs), without untrusted aliases. Retain all file extensions so same-stem
+   .md/.txt/.markdown notes remain unambiguous. For paths not representable as
+   wikilinks, use a percent-encoded explicitly relative (./ or ../) Markdown
+   link, including children of the proposed MOC folder. Escape single-line displayed
    basis/title text so source metadata cannot inject extra scaffold links.
+   The shared Markdown parser must separate URL fragments before decoding path
+   escapes, so a filename's encoded # is not reinterpreted as an anchor.
 4. Destination collision reads use fresh visible metadata. A hidden destination
    is not disclosed; absent/not-visible gets only conditional expectedRevision:
    missing creation. Visible collision gets bounded notes.read, not overwrite.
    Creation always rechecks current permissions/revision in existing services.
 5. Validate all returned source and visible destination revisions once more
-   with assertCurrentContextSources (bounded up to80 identities). This checks
+   with assertCurrentContextSources (bounded up to80 identities, each read
+   capped at MAX_NOTE_CONTENT_BYTES even if it grew after admission). This checks
    observed inputs, not a Vault-wide atomic graph snapshot; suggestions remain
    advisory. Preserve graph partialness and group-entry truncation in the output.
    Fit the complete response envelope by dropping tail suggestions; if even one
