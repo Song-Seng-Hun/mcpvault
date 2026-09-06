@@ -12,17 +12,31 @@ export class DerivedCacheBudget {
     entries = new Map();
     entriesByOwner = new Map();
     lruHeap = [];
-    totalBytes = 0;
+    // Intermediate sums can exceed MAX_SAFE_INTEGER before LRU eviction even
+    // when every individual charge and the final public total are safe integers.
+    totalBytes = 0n;
+    maxAccountedBytes;
     clock = 0;
     constructor(maxBytes = DEFAULT_DERIVED_CACHE_BUDGET_BYTES) {
         this.maxBytes = maxBytes;
-        if (!Number.isFinite(maxBytes) || maxBytes <= 0)
-            throw new Error('maxBytes must be a positive finite number');
+        if (!Number.isFinite(maxBytes) || maxBytes <= 0 || maxBytes > Number.MAX_SAFE_INTEGER) {
+            throw new Error('maxBytes must be a positive finite number no greater than Number.MAX_SAFE_INTEGER');
+        }
+        this.maxAccountedBytes = BigInt(Math.floor(maxBytes));
     }
     register(owner, key, bytes, onEvict, options = {}) {
         const id = this.id(owner, key);
         this.removeById(id);
-        const boundedBytes = Math.max(0, Math.ceil(bytes));
+        const boundedBytes = Number.isFinite(bytes) && bytes >= 0 ? Math.ceil(bytes) : NaN;
+        if (!Number.isSafeInteger(boundedBytes)) {
+            // Callers store the new value before registration. Do not leave it
+            // untracked by throwing or treating an invalid estimate as zero bytes.
+            try {
+                onEvict();
+            }
+            catch { /* Disposal cannot break authoritative work. */ }
+            return;
+        }
         const entry = { owner, bytes: boundedBytes, lastUsed: ++this.clock, allowOversized: options.allowOversized === true, onEvict, heapIndex: this.lruHeap.length };
         this.entries.set(id, entry);
         let ownerEntries = this.entriesByOwner.get(owner);
@@ -33,7 +47,7 @@ export class DerivedCacheBudget {
         ownerEntries.add(id);
         this.lruHeap.push({ id, lastUsed: entry.lastUsed });
         this.heapMoveUp(entry.heapIndex);
-        this.totalBytes += boundedBytes;
+        this.totalBytes += BigInt(boundedBytes);
         this.enforce();
     }
     touch(owner, key) {
@@ -57,7 +71,7 @@ export class DerivedCacheBudget {
             this.removeById(id);
     }
     snapshot() {
-        return { maxBytes: this.maxBytes, totalBytes: this.totalBytes, entries: this.entries.size };
+        return { maxBytes: this.maxBytes, totalBytes: Number(this.totalBytes), entries: this.entries.size };
     }
     id(owner, key) {
         return `${owner}\u0000${key}`;
@@ -71,7 +85,7 @@ export class DerivedCacheBudget {
         ownerEntries?.delete(id);
         if (ownerEntries?.size === 0)
             this.entriesByOwner.delete(entry.owner);
-        this.totalBytes -= entry.bytes;
+        this.totalBytes -= BigInt(entry.bytes);
         const lastIndex = this.lruHeap.length - 1;
         if (entry.heapIndex !== lastIndex) {
             const replacement = this.lruHeap[lastIndex];
@@ -85,7 +99,7 @@ export class DerivedCacheBudget {
         this.lruHeap.pop();
     }
     enforce() {
-        while (this.totalBytes > this.maxBytes && this.entries.size > 0) {
+        while (this.totalBytes > this.maxAccountedBytes && this.entries.size > 0) {
             const oldestId = this.lruHeap[0]?.id;
             if (!oldestId)
                 break;

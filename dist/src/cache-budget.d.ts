@@ -16,6 +16,7 @@ export declare class DerivedCacheBudget {
     private readonly entriesByOwner;
     private readonly lruHeap;
     private totalBytes;
+    private readonly maxAccountedBytes;
     private clock;
     constructor(maxBytes?: number);
     register(owner: string, key: string, bytes: number, onEvict: () => void, options?: DerivedCacheRegistrationOptions): void;

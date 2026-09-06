@@ -2892,6 +2892,20 @@ measurement; the margin can evict caches earlier than the previous approximation
 Budget eviction and reconstruction retain current path results. Other cache
 owners still use their existing estimator; this is not a global replacement.
 
+The shared derived-cache budget rejects invalid size accounting by disposing the
+new cache value instead of admitting it: negative/non-number/nonfinite charges
+or ceilings beyond `Number.MAX_SAFE_INTEGER` cannot poison the total or claim zero
+bytes. The prior registration for that owner/key is removed first; the new value's
+disposer runs once, with errors isolated as for ordinary eviction. Normal zero
+charges and upward rounding remain supported. The configured maximum must be
+positive, finite and at most `Number.MAX_SAFE_INTEGER`. Internal totals use exact
+integer arithmetic, including intermediate sums during nested eviction; public
+snapshots remain JSON-safe numbers. Completed outermost operations report exact
+totals, while snapshots taken inside eviction callbacks may reflect a transient
+over-budget state and round an unsafe intermediate total. This does not make the
+soft estimated-byte budget an exact process-RSS ceiling or recover a payload if
+its supplied disposer itself fails.
+
 Model-free reuse also starts the resource idle timer: DB/table references are
 released after inactivity, while active searches and indexing batches defer
 release. This does not require loading an embedding model just to start cleanup.
