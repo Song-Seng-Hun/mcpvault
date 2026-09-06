@@ -653,8 +653,8 @@ export class FileSystemService {
         }
         return fullPath;
     }
-    async readNote(path) {
-        return this.readNoteData(path, content => ({ ...this.frontmatterHandler.parse(content), revision: this.revision(content) }));
+    async readNote(path, maxBytes) {
+        return this.readNoteData(path, content => ({ ...this.frontmatterHandler.parse(content), revision: this.revision(content) }), maxBytes);
     }
     /** Hash current decoded UTF-8 without parsing. Callers still enforce scope;
      * a revision is not an access grant or a fresh moderation classification. */
@@ -681,7 +681,7 @@ export class FileSystemService {
         catch (error) {
             if (error instanceof Error && 'code' in error) {
                 if (error.code === 'ENOENT') {
-                    throw new Error(`File not found: ${path}. Use list_directory to see available files, or check the path spelling.`);
+                    throw new Error(`File not found: ${path}. Use list_directory to see available files, or check the path spelling.`, { cause: error });
                 }
                 if (error.code === 'EACCES') {
                     throw new Error(`Permission denied: ${path}. The file exists but cannot be read due to filesystem permissions.`);
@@ -690,7 +690,7 @@ export class FileSystemService {
                     throw new Error(`Cannot read directory as file: ${path}. Use list_directory tool instead.`);
                 }
             }
-            throw new Error(`Failed to read file: ${path} - ${error instanceof Error ? error.message : 'Unknown error'}`);
+            throw new Error(`Failed to read file: ${path} - ${error instanceof Error ? error.message : 'Unknown error'}`, { cause: error });
         }
     }
     async noteExists(path) {
@@ -3024,14 +3024,16 @@ export class FileSystemService {
                 continue;
             normalizedPaths.push(path);
         }
-        if (this.metadataIndex && !options.fresh) {
+        if (this.metadataIndex && !options.fresh && options.maxBytes === undefined) {
             return (await this.metadataIndex.getMany(normalizedPaths, canAccessPath))
                 .map(entry => ({ path: entry.path, frontmatter: entry.frontmatter, revision: entry.revision }));
         }
         const notes = [];
         for (const path of normalizedPaths) {
             try {
-                const raw = await this.vaultIo.readUtf8(this.resolvePath(path));
+                const raw = options.maxBytes === undefined
+                    ? await this.vaultIo.readUtf8(this.resolvePath(path))
+                    : await this.vaultIo.readUtf8Bounded(this.resolvePath(path), options.maxBytes);
                 const parsed = this.frontmatterHandler.parse(raw);
                 if (!canAccessPath(path))
                     continue;

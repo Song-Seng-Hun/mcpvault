@@ -55,7 +55,7 @@ export declare class FileSystemService {
      * where a validated path is used as a mutation target.
      */
     private resolveWritablePath;
-    readNote(path: string): Promise<ParsedNote>;
+    readNote(path: string, maxBytes?: number): Promise<ParsedNote>;
     /** Hash current decoded UTF-8 without parsing. Callers still enforce scope;
      * a revision is not an access grant or a fresh moderation classification. */
     readNoteRevision(path: string, maxBytes?: number): Promise<string>;
@@ -242,6 +242,7 @@ export declare class FileSystemService {
     readNoteMetadata(paths: readonly string[], canAccessPath?: (path: string) => boolean, options?: {
         fresh?: boolean;
         strict?: boolean;
+        maxBytes?: number;
     }): Promise<QueryNote[]>;
     /** Count metadata rows without reading note bodies; used by bounded windows. */
     countNotes(params?: QueryNotesParams, canAccessPath?: (path: string) => boolean, predicate?: (note: QueryNote) => boolean): Promise<number>;

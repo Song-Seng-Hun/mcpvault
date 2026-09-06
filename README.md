@@ -3831,10 +3831,13 @@ second source of truth:
   existing, non-hidden public targets. A caller's private access does not permit
   copying private references into a public promotion plan. Task review actions
   use surviving linked knowledge, otherwise offer a new lesson publication.
-  Selected source/reference drift returns a path-free retry error. Final revision
-  verification is deduplicated in drained batches of eight with an 8 MiB read cap
-  per file; this cap does not describe the older metadata inventory/hydration
-  pipeline or whole-process memory. Ranking remains an authored-metadata hint,
+  Selected source/reference drift returns a path-free retry error. Initial
+  selected-source and reference hydration reads complete files of at most 8 MiB;
+  unreadable or oversized references fail instead of masquerading as absent
+  knowledge and triggering a new publication plan. Final revision verification
+  is deduplicated in drained batches of eight with the same per-file read cap.
+  This does not bound the metadata inventory pipeline or whole-process memory.
+  Ranking remains an authored-metadata hint,
   not verified evidence quality or an atomic multi-file snapshot. Post/task IDs
   are checked against the actual canonical source path before managed-record
   reads are suggested. Missing, malformed or mismatched IDs produce

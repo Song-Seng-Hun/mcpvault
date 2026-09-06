@@ -967,7 +967,11 @@ completed-task lessons and historical discussions. Own-private and foreign-scope
 references are not public promotion context, even when the caller has private
 access. Missing, moderated, invalid and service references are excluded before
 plans are returned. Task review routes require surviving visible knowledge notes;
-other cases propose publication with filtered references. Current known source
+other cases propose publication with filtered references. Initial selected-source
+and reference hydration uses complete reads capped at 8 MiB per file. Storage
+failures and oversized files return a path-free retry error, never a claim that
+existing linked knowledge is absent. Genuinely missing references remain omitted.
+This cap is not a whole-inventory or process-memory bound. Current known source
 and reference revisions are checked before all response branches; drift requires
 a fresh query. Post/task metadata IDs must normalize to the exact canonical
 source file before managed-record inspection is offered. Otherwise the plan

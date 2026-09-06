@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { posix } from 'node:path';
 import { stringify as stringifyYaml } from 'yaml';
+import { MAX_NOTE_CONTENT_BYTES } from './filesystem.js';
 import { normalizeScopeId } from './scopes.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { iterateNotes } from './paged-query.js';
@@ -14128,8 +14129,16 @@ export class LlmWikiService {
                 }
                 catch { /* Invalid or private references are not public promotion context. */ }
             }
-            const notes = (await this.fileSystem.readNoteMetadata(referencePaths, path => canAccess(path) && this.access.canAccessPhysicalPath(path) && this.access.canReferenceFrom(containerPath, path), { fresh: true }))
-                .filter(note => !isModerationHidden(note.frontmatter));
+            let notes;
+            try {
+                notes = (await this.fileSystem.readNoteMetadata(referencePaths, path => canAccess(path) && this.access.canAccessPhysicalPath(path) && this.access.canReferenceFrom(containerPath, path), { fresh: true, strict: true, maxBytes: MAX_NOTE_CONTENT_BYTES }))
+                    .filter(note => !isModerationHidden(note.frontmatter));
+            }
+            catch {
+                // Unreadable evidence is not absent evidence. Never suggest a new
+                // lesson merely because its existing knowledge could not be loaded.
+                throw new Error('A promotion source changed or became unavailable; retry the candidate query.');
+            }
             for (const note of notes)
                 capture(note.path, note.revision);
             return notes;
@@ -14247,11 +14256,15 @@ export class LlmWikiService {
                     total -= 1;
                     continue;
                 }
-                source = await this.fileSystem.readNote(physicalPath);
+                source = await this.fileSystem.readNote(physicalPath, MAX_NOTE_CONTENT_BYTES);
             }
-            catch {
-                total -= 1;
-                continue;
+            catch (error) {
+                const code = error instanceof Error ? error.cause?.code : undefined;
+                if (code === 'ENOENT' || code === 'ENOTDIR') {
+                    total -= 1;
+                    continue;
+                }
+                throw new Error('A promotion source changed or became unavailable; retry the candidate query.');
             }
             if (!canAccess(physicalPath) || isModerationHidden(source.frontmatter)) {
                 total -= 1;

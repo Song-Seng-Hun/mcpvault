@@ -1053,7 +1053,7 @@ test.each(['deleted', 'hidden', 'wrong-type', 'wrong-status', 'changed', 'access
     await mkdir(join(vault, '_collaboration/discussions'), { recursive: true });
     await writeFile(join(vault, path), '---\nmcpvault_type: discussion\nstatus: open\ntitle: Old title\n---\nOld excerpt');
     const read = fileSystem.readNote.bind(fileSystem);
-    const hydration = vi.spyOn(fileSystem, 'readNote').mockImplementation(async target => {
+    const hydration = vi.spyOn(fileSystem, 'readNote').mockImplementation(async (target, maxBytes) => {
       if (target === path) {
         if (change === 'deleted') await rm(join(vault, path));
         else if (change === 'access-revoked') vi.spyOn(access, 'canAccessPhysicalPath').mockImplementation(target => target !== path);
@@ -1065,11 +1065,11 @@ test.each(['deleted', 'hidden', 'wrong-type', 'wrong-status', 'changed', 'access
           '---', 'Current excerpt',
         ].join('\n'));
       }
-      return read(target);
+      return read(target, maxBytes);
     });
     try {
       const result: any = await service.promotionCandidates(undefined, 1, 6000);
-      expect(hydration).toHaveBeenCalledWith(path);
+      expect(hydration).toHaveBeenCalledWith(path, 8 * 1024 * 1024);
       if (change === 'changed') {
         expect(result.items).toHaveLength(1);
         expect(result.items[0]).toMatchObject({

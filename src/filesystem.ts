@@ -703,8 +703,8 @@ export class FileSystemService {
     return fullPath;
   }
 
-  async readNote(path: string): Promise<ParsedNote> {
-    return this.readNoteData(path, content => ({ ...this.frontmatterHandler.parse(content), revision: this.revision(content) }));
+  async readNote(path: string, maxBytes?: number): Promise<ParsedNote> {
+    return this.readNoteData(path, content => ({ ...this.frontmatterHandler.parse(content), revision: this.revision(content) }), maxBytes);
   }
 
   /** Hash current decoded UTF-8 without parsing. Callers still enforce scope;
@@ -735,7 +735,7 @@ export class FileSystemService {
     } catch (error) {
       if (error instanceof Error && 'code' in error) {
         if (error.code === 'ENOENT') {
-          throw new Error(`File not found: ${path}. Use list_directory to see available files, or check the path spelling.`);
+          throw new Error(`File not found: ${path}. Use list_directory to see available files, or check the path spelling.`, { cause: error });
         }
         if (error.code === 'EACCES') {
           throw new Error(`Permission denied: ${path}. The file exists but cannot be read due to filesystem permissions.`);
@@ -744,7 +744,7 @@ export class FileSystemService {
           throw new Error(`Cannot read directory as file: ${path}. Use list_directory tool instead.`);
         }
       }
-      throw new Error(`Failed to read file: ${path} - ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to read file: ${path} - ${error instanceof Error ? error.message : 'Unknown error'}`, { cause: error });
     }
   }
 
@@ -3091,7 +3091,7 @@ export class FileSystemService {
   }
 
   /** Fresh bypasses indexes; strict preserves storage failures instead of treating them as missing notes. */
-  async readNoteMetadata(paths: readonly string[], canAccessPath: (path: string) => boolean = () => true, options: { fresh?: boolean; strict?: boolean } = {}): Promise<QueryNote[]> {
+  async readNoteMetadata(paths: readonly string[], canAccessPath: (path: string) => boolean = () => true, options: { fresh?: boolean; strict?: boolean; maxBytes?: number } = {}): Promise<QueryNote[]> {
     if (paths.length > 500) throw new Error('note metadata lookup supports at most 500 paths');
     const normalizedPaths: string[] = [];
     const seen = new Set<string>();
@@ -3103,14 +3103,16 @@ export class FileSystemService {
       if (!this.pathFilter.isAllowed(path) || !canAccessPath(path)) continue;
       normalizedPaths.push(path);
     }
-    if (this.metadataIndex && !options.fresh) {
+    if (this.metadataIndex && !options.fresh && options.maxBytes === undefined) {
       return (await this.metadataIndex.getMany(normalizedPaths, canAccessPath))
         .map(entry => ({ path: entry.path, frontmatter: entry.frontmatter, revision: entry.revision }));
     }
     const notes: QueryNote[] = [];
     for (const path of normalizedPaths) {
       try {
-        const raw = await this.vaultIo.readUtf8(this.resolvePath(path));
+        const raw = options.maxBytes === undefined
+          ? await this.vaultIo.readUtf8(this.resolvePath(path))
+          : await this.vaultIo.readUtf8Bounded(this.resolvePath(path), options.maxBytes);
         const parsed = this.frontmatterHandler.parse(raw);
         if (!canAccessPath(path)) continue;
         notes.push({ path, frontmatter: parsed.frontmatter, revision: this.revision(raw) });

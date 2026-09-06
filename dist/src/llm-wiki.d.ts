@@ -1,4 +1,4 @@
-import type { FileSystemService } from './filesystem.js';
+import { type FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ReferenceService } from './references.js';
