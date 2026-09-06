@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { mkdtemp, writeFile, readFile, rm, utimes } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm, utimes } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { VaultMetadataIndex } from './vault-index.js';
 import { VaultIoCoordinator } from './vault-io.js';
+import { readUtf8MetadataSource } from './streaming-metadata.js';
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
 import { FileSystemService } from './filesystem.js';
@@ -22,14 +23,14 @@ vi.mock('node:fs', async original => ({
 }));
 let vault: string;
 let index: VaultMetadataIndex;
-let afterRead: undefined | ((path: string, raw: string) => Promise<void>);
+let afterRead: undefined | ((path: string) => Promise<void>);
 const content = (status: string) => `---\nllm_wiki_type: knowledge\nnote_kind: project\nlifecycle: active\ntask_status: ${status}\nnext_action: Perform the prerequisite task\n---\n# Gate`;
 beforeEach(async () => {
   vault = await mkdtemp(join(tmpdir(), 'mcpvault-metadata-refresh-'));
   await writeFile(join(vault, 'Gate.md'), content('open'));
   afterRead = undefined;
   index = new VaultMetadataIndex(vault, new PathFilter(), new FrontmatterHandler(), undefined,
-    new VaultIoCoordinator({ reader: async path => { const raw = await readFile(path, 'utf8'); await afterRead?.(path, raw); return raw; } }));
+    new VaultIoCoordinator({ metadataReader: async path => { const source = await readUtf8MetadataSource(path); await afterRead?.(path); return source; } }));
   await index.list();
 });
 afterEach(async () => { await index.close(); vi.restoreAllMocks(); watches.changed = undefined; await rm(vault, { recursive: true, force: true }); });
@@ -131,14 +132,14 @@ test('catalog events received during IO reach metadata before the response', asy
   vi.spyOn(catalog as any, 'startWatcher').mockImplementation(() => undefined);
   let change = false;
   index = new VaultMetadataIndex(vault, filter, new FrontmatterHandler(), catalog,
-    new VaultIoCoordinator({ reader: async path => {
-      const raw = await readFile(path, 'utf8');
+    new VaultIoCoordinator({ metadataReader: async path => {
+      const source = await readUtf8MetadataSource(path);
       if (change) {
         change = false;
         await writeFile(join(vault, 'Gate.md'), content('open'));
         (catalog as any).onFilesystemEvent('Gate.md');
       }
-      return raw;
+      return source;
     } }));
   try {
     await index.list();

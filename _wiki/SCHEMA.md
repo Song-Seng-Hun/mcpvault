@@ -25,6 +25,12 @@ changes. Per-caller parsed Properties are not shared mutable objects. Ordinary
 byte budgets, access checks and strict storage-error handling still apply;
 huge/unclosed headers remain subject to the caller's source limit.
 
+Metadata index entry rebuilds reuse this same-stream projection too. Existing
+generation barriers, bounded batches and binary snapshot compatibility remain;
+the optimization does not skip body hashing, change the original revision, or
+introduce a new index source-size limit. Graph and full-note reads may still
+need body content. No new client setup or authoring format is required.
+
 ## Layers
 
 - `_sources/`: immutable source snapshots created only by `ingest_source`.

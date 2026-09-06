@@ -1,5 +1,4 @@
 import { watch } from 'node:fs';
-import { createHash } from 'node:crypto';
 import { join, relative, resolve } from 'node:path';
 import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { VaultIoCoordinator } from './vault-io.js';
@@ -44,9 +43,6 @@ function pathKeys(path) {
     for (let index = 1; index <= parts.length; index += 1)
         keys.push(parts.slice(0, index).join('/'));
     return keys;
-}
-function revision(content) {
-    return createHash('sha256').update(content, 'utf8').digest('hex');
 }
 function isFilterScalar(value) {
     return value === null || typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value)) || typeof value === 'boolean';
@@ -836,11 +832,11 @@ export class VaultMetadataIndex {
             // the whole vault while preserving the existing metadata object.
             if (existing && existing.size === size && existing.mtimeMs === mtimeMs)
                 return existing;
-            const raw = await this.vaultIo.readUtf8(fullPath);
+            const source = await this.vaultIo.readUtf8Metadata(fullPath);
             return {
                 path: normalized,
-                frontmatter: this.frontmatter.parse(raw).frontmatter,
-                revision: revision(raw),
+                frontmatter: this.frontmatter.parse(source.header).frontmatter,
+                revision: source.revision,
                 size,
                 mtimeMs,
             };

@@ -40,8 +40,11 @@ review-route operation-count improvement. The subsequent
 `2026-09-07-streaming-metadata-design.md` increment also projects fresh metadata
 through a single decoded stream: all bytes are still hashed/read, but only the
 header is retained. It preserves the existing index fast-path and leaves
-index-rebuild/query body reads outside its scope. No whole-Vault memory ceiling
-or header-only disk-I/O claim follows from this change.
+index-rebuild/query body reads outside that increment's scope. The subsequent
+`2026-09-07-index-metadata-projection-design.md` applies the shared projection
+to metadata index entry rebuilding as well, retaining generation/barrier and
+snapshot behavior. Graph/full-note/query hydration remains distinct. No
+whole-Vault memory ceiling or header-only disk-I/O claim follows from this.
 
 ## Ranked follow-up with acceptance gates
 
@@ -69,14 +72,13 @@ or header-only disk-I/O claim follows from this change.
    body retention from fresh metadata service reads, not every index producer.
    Do not claim a parser cache leak: explicit
    options currently prevent gray-matter from populating its content cache.
-   Remaining concrete consumer: `VaultMetadataIndex.readEntry` still calls
-   `readUtf8`, parses Properties and hashes the complete string (currently near
-   lines 804-835), even though its entry contains no body. Reusing the new
-   projection there requires separate dirty-event/reset-during-read tests,
-   same-size/mtime refresh checks, bounded-batch and snapshot correctness checks;
-   it is not included in the fresh-metadata service change. Existing injectable
-   full-reader probes in `metadata-refresh-integrity.test.ts` will need to follow
-   the actual projection I/O boundary without suppressing those race scenarios.
+   The concrete `VaultMetadataIndex.readEntry` follow-up is now implemented by
+   the index-metadata-projection increment: it uses the same coordinated header
+   and digest instead of its old full-string read/hash. Dirty-event and reset
+   races, same-size/mtime invalidation, batch draining and binary snapshot reuse
+   are verified separately; injectable race hooks follow the projection boundary
+   without suppressing mutation/error scenarios. Do not extrapolate this to
+   graph parsing or body-bearing query hydration, or to an index memory cap.
 3. **Only then offload proven synchronous CPU hotspots.** A small reusable pool
    with a bounded admission queue can isolate parsing/graph computations, but
    serial I/O and already-native inference do not automatically benefit. Compare
