@@ -86,6 +86,14 @@ whole-Vault memory ceiling or header-only disk-I/O claim follows from this.
    once a header closes/non-opener is recognized, with revocation checks around
    asynchronous discovery. Long/unclosed headers preserve prior EOF behavior;
    do not reuse this non-revision result as a guarded source receipt.
+   Snapshot output copying is also addressed in
+   `2026-09-07-metadata-snapshot-allocation-design.md`: synchronous serialization
+   prepares scalar/string rows, checks the existing loader ceilings before
+   output allocation, and writes a single exact v1 Buffer. Tests count allocations
+   and verify byte compatibility, failure preservation and recovery. This removes
+   encoded field/final concatenation copies, not every retained representation;
+   prepared rows and frontmatter JSON still have memory cost. It does not claim
+   a measured whole-process RSS reduction or add compression/workers.
 3. **Only then offload proven synchronous CPU hotspots.** A small reusable pool
    with a bounded admission queue can isolate parsing/graph computations, but
    serial I/O and already-native inference do not automatically benefit. Compare

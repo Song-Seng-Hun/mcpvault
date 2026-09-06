@@ -5,6 +5,7 @@ import { VaultIoCoordinator } from './vault-io.js';
 import { isMissingVaultPath, VaultReadUnavailableError } from './vault-read-errors.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 import { buildNoteReferenceIndex, resolveNoteReference as resolveIndexedNoteReference } from './note-reference.js';
+import { encodeMetadataSnapshot, decodeMetadataSnapshot, METADATA_SNAPSHOT_MAX_BYTES } from './metadata-snapshot.js';
 const FULL_REFRESH_INTERVAL_MS = 60_000;
 const READ_BATCH_SIZE = 32;
 const QUERY_CACHE_TTL_MS = 2_000;
@@ -14,11 +15,7 @@ const SORTED_QUERY_CACHE_MAX_ENTRIES = 64;
 const SORTED_QUERY_CACHE_MAX_ROWS = 100_000;
 const TOP_K_MAX = 1_024;
 const METADATA_SNAPSHOT_FILE = '.mcpvault/metadata-index.snapshot.bin';
-const METADATA_SNAPSHOT_VERSION = 1;
-const METADATA_SNAPSHOT_MAX_ENTRIES = 1_000_000;
-const METADATA_SNAPSHOT_MAX_BYTES = 128 * 1024 * 1024;
 const METADATA_SNAPSHOT_SAVE_DEBOUNCE_MS = 1_000;
-const METADATA_SNAPSHOT_MAGIC = Buffer.from('MCPVMETA', 'ascii');
 function normalizePath(value) {
     return value.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
 }
@@ -109,76 +106,6 @@ function compareEntryToCursor(entry, cursor, sortBy, sortOrder) {
     if (comparison !== 0)
         return sortOrder === 'asc' ? comparison : -comparison;
     return entry.path.localeCompare(cursor.path);
-}
-function encodeSnapshotString(value) {
-    const bytes = Buffer.from(value, 'utf8');
-    const length = Buffer.allocUnsafe(4);
-    length.writeUInt32LE(bytes.length, 0);
-    return Buffer.concat([length, bytes]);
-}
-function encodeMetadataSnapshot(entries) {
-    const chunks = [METADATA_SNAPSHOT_MAGIC];
-    const header = Buffer.allocUnsafe(8);
-    header.writeUInt32LE(METADATA_SNAPSHOT_VERSION, 0);
-    header.writeUInt32LE(entries.length, 4);
-    chunks.push(header);
-    for (const entry of entries) {
-        chunks.push(encodeSnapshotString(entry.path), encodeSnapshotString(entry.revision));
-        const frontmatter = JSON.stringify(entry.frontmatter);
-        if (frontmatter === undefined)
-            throw new Error('frontmatter is not serializable');
-        chunks.push(encodeSnapshotString(frontmatter));
-        const numbers = Buffer.allocUnsafe(16);
-        numbers.writeDoubleLE(entry.size, 0);
-        numbers.writeDoubleLE(entry.mtimeMs, 8);
-        chunks.push(numbers);
-    }
-    return Buffer.concat(chunks);
-}
-function decodeMetadataSnapshot(buffer) {
-    if (buffer.length < METADATA_SNAPSHOT_MAGIC.length + 8 || !buffer.subarray(0, METADATA_SNAPSHOT_MAGIC.length).equals(METADATA_SNAPSHOT_MAGIC))
-        return undefined;
-    let offset = METADATA_SNAPSHOT_MAGIC.length;
-    const version = buffer.readUInt32LE(offset);
-    const count = buffer.readUInt32LE(offset + 4);
-    offset += 8;
-    if (version !== METADATA_SNAPSHOT_VERSION || count > METADATA_SNAPSHOT_MAX_ENTRIES)
-        return undefined;
-    const readString = () => {
-        if (offset + 4 > buffer.length)
-            return undefined;
-        const length = buffer.readUInt32LE(offset);
-        offset += 4;
-        if (length > buffer.length - offset)
-            return undefined;
-        const value = buffer.toString('utf8', offset, offset + length);
-        offset += length;
-        return value;
-    };
-    const entries = [];
-    for (let index = 0; index < count; index += 1) {
-        const path = readString();
-        const revisionValue = readString();
-        const frontmatterText = readString();
-        if (path === undefined || revisionValue === undefined || frontmatterText === undefined || offset + 16 > buffer.length)
-            return undefined;
-        let frontmatter;
-        try {
-            frontmatter = JSON.parse(frontmatterText);
-        }
-        catch {
-            return undefined;
-        }
-        if (!path || !isNote(path) || !frontmatter || typeof frontmatter !== 'object' || Array.isArray(frontmatter))
-            return undefined;
-        const size = buffer.readDoubleLE(offset);
-        const mtimeMs = buffer.readDoubleLE(offset + 8);
-        offset += 16;
-        if (![size, mtimeMs].every(value => Number.isFinite(value)))
-            return undefined;
-        entries.push({ path, frontmatter: frontmatter, revision: revisionValue, size, mtimeMs });
-    }
-    return offset === buffer.length ? entries : undefined;
 }
 /**
  * A disposable, metadata-only read model for repeated structured queries.

@@ -26,7 +26,7 @@ ceilings (small tests need not allocate 128 MiB). Decode retains prior validatio
 and adds the same byte ceiling at its entry. No new dependency or public MCP API.
 
 Malformed/nonserializable or oversized snapshots stay optional failures: preserve
-the previous disk file and current authoritative in-memory index/source notes.
+the previous disk file, current in-memory index and authoritative source notes.
 No filesystem write begins if encoding fails. No need to change snapshot locks,
 debounce, close behavior, or permissions. This caps snapshot output, not total
 process memory or the transient JSON string of one giant entry.
