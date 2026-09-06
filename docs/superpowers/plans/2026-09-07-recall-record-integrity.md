@@ -26,7 +26,7 @@ guarded filesystem write -> own-write receipt.
   to pass the previous stateRevision. Add real executor coverage.
 - [x] Review changes independently; run focused tests, `npm run build`,
   `npm test -- --maxWorkers=1`, and `git diff --check`.
-- [ ] Stage only changed source/tests/docs/dist, commit and push fork main.
+- [x] Stage only changed source/tests/docs/dist, commit and push fork main.
   Verify HEAD, origin/main and live remote hash. Preserve .agents/.mcpvault.
 
 ## Evidence
@@ -54,7 +54,10 @@ guarded filesystem write -> own-write receipt.
   external edit. Focused checkbox/recall tests: 24 passed (4.10s).
 - Final full regression after the test-harness adjustment: 181 files passed,
   2810 tests passed and 1 skipped; 324.08s, exit 0, starting 2026-09-07 05:52:32
-  local. Build and staged diff check passed. Publication is pending below.
+  local. Build and staged diff check passed. Implementation commit
+  e94f6b91622d711316911328a3b59e9fd1fb86b9 was pushed to Song-Seng-Hun/mcpvault
+  main; local HEAD, origin/main and live ls-remote matched. Only pre-existing
+  .agents/ and .mcpvault/ remained untracked. No live Vault/server change occurred.
 
 ## Next audit candidate (not part of this delivery)
 
