@@ -1,4 +1,4 @@
-import { watch, type FSWatcher } from 'node:fs';
+import { watch, type Dirent, type FSWatcher } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
 import type { PathFilter } from './pathfilter.js';
@@ -431,6 +431,9 @@ export class VaultFileCatalog {
     const generation = this.changeGeneration;
     const inventory = await this.findPaths(this.vaultPath, reconcile);
     this.assertOpen();
+    // A delivered invalidation already makes this census unpublishable. Let
+    // listInventory reconcile without sorting arrays it must discard.
+    if (generation !== this.changeGeneration) return;
     inventory.notes.sort((a, b) => a.localeCompare(b));
     inventory.all.sort((a, b) => a.localeCompare(b));
     if (generation === this.changeGeneration) {
@@ -523,15 +526,27 @@ export class VaultFileCatalog {
     return { notes, all };
   }
 
+  private async normalizeDirectoryEntries(listed: readonly Dirent[]): Promise<DirectoryCacheEntry['entries']> {
+    const entries: DirectoryCacheEntry['entries'] = [];
+    await forEachInventoryItem(listed, entry => {
+      entries.push({ name: entry.name, directory: entry.isDirectory(), file: entry.isFile() });
+    }, () => this.assertOpen());
+    this.assertOpen();
+    return entries;
+  }
+
   private async readDirectoryEntries(directory: string, reconcile = false): Promise<Array<{ name: string; directory: boolean; file: boolean }>> {
     this.assertOpen();
+    const generation = this.changeGeneration;
     // Keep full reconciliation when recursive watching is unavailable. The
     // cache is safe only when watcher events can mark changed ancestors.
     if (!this.watcher) {
       try {
         const entries = await readdir(directory, { withFileTypes: true });
         this.assertOpen();
-        return entries.map(entry => ({ name: entry.name, directory: entry.isDirectory(), file: entry.isFile() }));
+        const normalized = await this.normalizeDirectoryEntries(entries);
+        this.assertOpen();
+        return normalized;
       } catch (error) {
         this.assertOpen();
         if (directory !== this.vaultPath && isMissingVaultPath(error)) return [];
@@ -559,12 +574,16 @@ export class VaultFileCatalog {
     try {
       const listed = await readdir(directory, { withFileTypes: true });
       this.assertOpen();
-      entries = listed.map(entry => ({ name: entry.name, directory: entry.isDirectory(), file: entry.isFile() }));
+      entries = await this.normalizeDirectoryEntries(listed);
     } catch (error) {
       this.assertOpen();
       if (directory !== this.vaultPath && isMissingVaultPath(error)) return [];
       throw new VaultReadUnavailableError();
     }
+    this.assertOpen();
+    // Preserve invalidation delivered while IO/conversion was in flight. This
+    // census may finish locally, but refresh will reject its old generation.
+    if (generation !== this.changeGeneration) return entries;
     this.dirtyDirectories.delete(directory);
     const cacheEntry: DirectoryCacheEntry = { mtimeMs: info.mtimeMs, size: info.size, entries };
     this.directoryCache.set(directory, cacheEntry);

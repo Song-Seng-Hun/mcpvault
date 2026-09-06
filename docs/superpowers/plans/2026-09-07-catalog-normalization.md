@@ -11,7 +11,7 @@ guards before cache publication and native sorting. No new public API.
 
 **Tech Stack:** TypeScript, real filesystem Dirents, Vitest, node setImmediate.
 
-- [ ] Add src/catalog-normalization.test.ts. Wrap actual readdir, instrument
+- [x] Add src/catalog-normalization.test.ts. Wrap actual readdir, instrument
   actual isDirectory on the first root census; schedule an immediate at call1.
   Watched/unwatched: assert observed256, close rejection with256calls and empty
   caches, mutation Late.md included in601 final paths. Observe entry cache after
@@ -19,7 +19,7 @@ guards before cache publication and native sorting. No new public API.
   root results to observe actual sort methods: obsolete first [0,0], stable
   second [1,1]. Run `npm test -- src/catalog-normalization.test.ts --maxWorkers=1`
   and observe missing-behavior failures before editing source.
-- [ ] In src/vault-catalog.ts import Dirent type. Add private helper:
+- [x] In src/vault-catalog.ts import Dirent type. Add private helper:
   ```ts
   private async normalizeDirectoryEntries(listed: readonly Dirent[]): Promise<DirectoryCacheEntry['entries']> {
     const entries: DirectoryCacheEntry['entries'] = [];
@@ -35,9 +35,36 @@ guards before cache publication and native sorting. No new public API.
   cache writes return entries if drifted. In refresh after assertOpen add
   `if (generation !== this.changeGeneration) return;` before sorts. Preserve
   existing IO error translation and root/child missing semantics.
-- [ ] Run new tests plus cooperative/close/reconciliation/traversal tests with
+- [x] Run new tests plus cooperative/close/reconciliation/traversal tests with
   maxWorkers1. Update README normalization/obsolete-work claims and synchronous
   sort caveat. Run npm run build. Request read-only lifecycle/generation review.
-- [ ] Run full npm test -- --maxWorkers=1 after any review fixes, and
-  git -c core.safecrlf=false diff --check. Record exact results, commit explicit
-  source/tests/docs/dist, push only origin main, and verify remote tracking HEAD.
+- [x] Run full npm test -- --maxWorkers=1 after any review fixes, and
+  git -c core.safecrlf=false diff --check. Record exact results.
+- [ ] Commit explicit source/tests/docs/dist, push only origin main, and verify
+  remote tracking HEAD.
+
+## Evidence
+
+- Initial seven tests failed for the intended missing behavior: conversion
+  observed 600 rather than 256 calls; close happened after all 600 conversions;
+  obsolete inventories still sorted both arrays; stale entry-cache state was
+  not retained as dirty during conversion (the callback ran later).
+- Implementation passed 48 focused tests across five files and npm run build.
+- Independent read-only Astra lifecycle/generation review: no blocking findings.
+  Added coverage for empty/one-file conversion completion close boundaries and
+  populated-cache invalidation with a reentrant public reader. Both readers
+  receive the same current 601-note result with only two new root reads; old
+  frozen entry records remain untouched. Final new-test file: 12 passed.
+- Full one-worker regression passed: 2,435 passed, one skipped, 162 files,
+  306.78s, successful process exit. Build and whitespace checks passed. No
+  production activation or whole-PC performance claim is made. Review worker
+  was closed after completing review.
+
+## Next measured opportunity (not implemented here)
+
+`src/cache-budget.ts` estimateCacheBytes serializes its entire value with
+JSON.stringify before Buffer.byteLength. Catalog cache registration still uses
+this synchronous whole-string allocation. Assess incremental/specialized size
+accounting without weakening budget enforcement in a separate tested change;
+neither that temporary allocation nor valid-census native sorting is removed
+by this normalization batch.

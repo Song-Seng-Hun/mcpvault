@@ -76,6 +76,7 @@ export declare class VaultFileCatalog {
     private emitBatch;
     private refresh;
     private findPaths;
+    private normalizeDirectoryEntries;
     private readDirectoryEntries;
     private markDirtyDirectories;
 }
