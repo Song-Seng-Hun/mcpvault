@@ -1347,7 +1347,12 @@ Discovery and update share the same frontmatter/fence-aware extractor. A duplica
 block-derived ID is ambiguous; update rejects it instead of choosing a checkbox.
 After inspecting the current note, use an explicit line without taskId or repair
 the IDs. The listed source revision can supply expectedRevision; re-read after
-mutation. This does not turn the multi-note listing into an atomic snapshot.
+mutation. The update receipt's revision identifies this operation's written
+bytes, or the inspected snapshot when the task was already in the requested
+state. It is not a post-write freshness claim: subsequent external edits,
+moderation or deletion do not relabel the receipt or turn an acknowledged write
+into a failed write. This does not turn the multi-note listing or OS editing
+into an atomic snapshot.
 
 Task pages use ordinal path/line order, `offset`, and `snapshotFingerprint`.
 A positive offset requires `expectedSnapshot`; changing the visible filtered

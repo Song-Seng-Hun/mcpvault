@@ -828,7 +828,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "update_task",
-          description: "Toggle one visible Markdown checkbox task in place. Inspect the note context and pass its current revision; identify the task with taskId from list_tasks or an explicit path+line without taskId. Rejects duplicate task IDs, hidden owners, frontmatter/code examples and stale revisions. Keeps GTD execution state in ordinary Obsidian Markdown; reread the affected note after writing.",
+          description: "Toggle one visible Markdown checkbox task in place. Inspect the note context and pass its current revision; identify the task with taskId from list_tasks or an explicit path+line without taskId. Rejects duplicate task IDs, hidden owners, frontmatter/code examples and stale revisions. The returned revision identifies this write, or the inspected snapshot for a no-op, not a guarantee of latest state. Keeps GTD execution state in ordinary Obsidian Markdown; reread the affected note before further edits.",
           inputSchema: {
             type: "object",
             properties: {

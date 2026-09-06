@@ -2725,15 +2725,19 @@ export class FileSystemService {
                 throw new Error(`Line ${targetLine} is not a Markdown checkbox task outside frontmatter/code fences`);
             const previousStatus = targetMatch[2].toLowerCase() === 'x' ? 'completed' : 'open';
             const marker = params.status === 'completed' ? 'x' : ' ';
+            let revision = note.revision;
             if (previousStatus !== params.status) {
                 const rawLine = lines[targetIndex];
                 const checkboxOffset = (targetMatch.index || 0) + targetMatch[1].length;
                 lines[targetIndex] = `${rawLine.slice(0, checkboxOffset)}${marker}${rawLine.slice(checkboxOffset + 1)}`;
                 // We already hold this path's mutation lock. Calling the public
                 // writeNote wrapper here would queue behind our own lock forever.
-                await this.writeNoteUnlocked({ path, content: lines.join('\n'), expectedRevision: params.expectedRevision });
+                const receipt = await this.writeNoteUnlocked({ path, content: lines.join('\n'), expectedRevision: params.expectedRevision });
+                revision = receipt.revision;
             }
-            const updated = await this.readNote(path);
+            // A receipt describes this operation, not a subsequent external edit.
+            // For a no-op it identifies the inspected snapshot; callers re-read for
+            // current state before making another decision.
             const resultingTaskId = locatedTask?.taskId;
             return {
                 success: true,
@@ -2743,7 +2747,7 @@ export class FileSystemService {
                 ...(resultingTaskId ? { taskId: resultingTaskId } : {}),
                 previousStatus,
                 previousRevision: note.revision,
-                revision: updated.revision,
+                revision,
                 message: previousStatus === params.status ? 'Task already had the requested status; no write was needed.' : `Task status updated to ${params.status}.`,
             };
         });
