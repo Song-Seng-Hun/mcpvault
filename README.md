@@ -329,6 +329,19 @@ retrying; a read-limit error is not evidence that the summary is stale. Ordinary
 manual notes without projections need no additional body hydration. Cascade
 records keep digest/link-change facts, not a retained cohort of full bodies.
 This is per-source validation, not an atomic multi-view transaction.
+When summary/progressive metadata is unavailable, `wiki.read_projection` returns
+a leading body excerpt, not an AI-written summary. `key_points` prefers claims,
+then up to eight nonempty authored `key_points`, then up to five body paragraphs;
+summary/progressive fallback selects at most one. Blank/whitespace-only metadata
+does not block a useful fallback; it is ignored for selection, not erased from
+Properties. The fallback shares physical
+paragraph boundaries with composition inspection, so ATX/Setext titles and
+matching fenced examples are not substituted for prose below a heading.
+`contentSource: body_excerpt` and `excerptRange` identify its source envelope.
+That envelope may include headings, blanks or examples between selected
+paragraphs: a guarded continuation returns source context, not an identical
+generated summary. Replace the clipped preview rather than append it. Character
+limits still apply, and an excerpt does not certify complete coverage of a note.
 Filing or review changes never refresh that fingerprint. When
 several stored projection fields are stale, refresh them together: replacing
 only key points cannot certify an inherited old summary. For failed paths, use `knowledge_polarity: negative` with a

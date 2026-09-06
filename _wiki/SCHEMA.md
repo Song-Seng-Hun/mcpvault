@@ -769,10 +769,26 @@ are not anchors. Their existing one-line block projection remains an anchor-line
 view, not automatic expansion of an entire preceding multiline block. Nearby
 context is strictly outside the target range and within actual file boundaries.
 
+When a summary/progressive read falls back to the body, select at most one
+paragraph from the same original snapshot using the shared heading/fence-aware
+paragraph projection. Key-points reads prefer claims, then at most eight
+nonempty string `key_points` Properties, then at most five body paragraphs.
+Blank claim/summary/highlight/question/evidence-path text does not prevent body
+fallback; this selection filter does not rewrite or certify stored metadata.
+The body fallback returns `contentSource: body_excerpt` and an `excerptRange`
+with the first/last selected physical source line. This is a source envelope,
+not a guarantee that every intervening line appears in the excerpt. It can
+include skipped headings, fences or blanks between paragraphs. It is not a
+synthesized summary or proof of comprehensive coverage. Metadata precedence
+and freshness reporting remain independent; no stored summary is rewritten.
+
 If total serialized Wiki projection/preview output exceeds its budget, its compact
 envelope retains source revision, selected range and a guarded read action. That
-action starts at the beginning of the selected range (or returns an outline when
-no section was selected); replace the preview, do not append overlapping text.
+action starts at the beginning of the selected section/excerpt envelope (or
+returns an outline when neither exists); replace the preview, do not append
+overlapping text. Body-excerpt identity and range survive response compaction,
+including for headingless notes. Excerpt recovery returns original source
+context rather than recomputing a summary from a different revision.
 Never publish truncated extraction content. Extra metadata/context can be omitted
 in this compact view. Oversized identifiers produce a same-request budget retry,
 not shortened executable paths. Repeating a Wiki projection after such an error

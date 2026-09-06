@@ -2348,6 +2348,11 @@ export declare class LlmWikiService {
                 text: string;
             }>;
         };
+        contentSource?: string;
+        excerptRange?: {
+            startLine: number;
+            endLine: number;
+        };
         headings?: import("./types.js").NoteHeading[];
         content: string;
         truncated: boolean;

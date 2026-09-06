@@ -7713,6 +7713,7 @@ export class LlmWikiService {
     const headings = projectNoteOutline(note.originalContent);
     const lines = note.originalContent.split('\n');
     let content = '';
+    let excerptRange: { startLine: number; endLine: number } | undefined;
     let sectionRange: { startLine: number; endLine: number } | undefined;
     let sectionContext: { before: Array<{ line: number; text: string }>; target: { startLine: number; endLine: number }; after: Array<{ line: number; text: string }> } | undefined;
     if (view === 'full') {
@@ -7759,28 +7760,47 @@ export class LlmWikiService {
     } else {
       const claims = Array.isArray(note.frontmatter.claims) ? note.frontmatter.claims : [];
       const claimPoints = claims
-        .filter((claim: any) => claim && typeof claim.text === 'string')
+        .filter((claim: any) => claim && typeof claim.text === 'string' && claim.text.trim())
         .slice(0, 8)
         .map((claim: any) => {
           const paths = Array.isArray(claim.evidence_paths) ? claim.evidence_paths.filter((path: unknown): path is string => typeof path === 'string').slice(0, 3) : [];
           return `- ${claim.text} [${claim.status || 'unverified'}]${paths.length > 0 ? ` (evidence: ${paths.join(', ')})` : ''}`;
         });
       const evidencePaths = Array.isArray(note.frontmatter.evidence_paths)
-        ? note.frontmatter.evidence_paths.filter((path: unknown): path is string => typeof path === 'string').slice(0, 8)
+        ? note.frontmatter.evidence_paths.filter((path: unknown): path is string => typeof path === 'string' && Boolean(path.trim())).slice(0, 8)
         : [];
-      const paragraphs = note.content
-        .split(/\n\s*\n/)
-        .map(block => block.trim())
-        .filter(block => block && !block.startsWith('#') && !block.startsWith('```'));
-      const summary = typeof note.frontmatter.summary === 'string' ? note.frontmatter.summary : '';
+      // A fallback is an extract, not a synthesized or authored summary. Keep
+      // its physical source envelope so compact clients can recover real prose
+      // even when the note has no headings. Parse only if metadata cannot serve.
+      const bodyExcerpt = (limit: number) => {
+        const paragraphs: string[] = [];
+        let used = 0;
+        for (const paragraph of projectNoteParagraphs(note.originalContent)) {
+          const separator = paragraphs.length ? 2 : 0;
+          // A separator can itself cross the ceiling. Keep it (and this
+          // paragraph's recovery envelope) so truncation cannot look complete.
+          const room = Math.max(0, maxChars + 1 - used - separator);
+          const text = paragraph.text.slice(0, room);
+          paragraphs.push(text);
+          used += text.length + separator;
+          excerptRange = { startLine: excerptRange?.startLine ?? paragraph.startLine, endLine: paragraph.endLine };
+          if (paragraphs.length >= limit || used >= maxChars + 1) break;
+        }
+        return paragraphs.join('\n\n');
+      };
+      const summary = typeof note.frontmatter.summary === 'string' && note.frontmatter.summary.trim() ? note.frontmatter.summary : '';
+      const keyPoints = Array.isArray(note.frontmatter.key_points)
+        ? note.frontmatter.key_points.filter((item: unknown): item is string => typeof item === 'string' && Boolean(item.trim()))
+          .slice(0, 8).map(item => `- ${item}`)
+        : [];
       const highlights = Array.isArray(note.frontmatter.summary_highlights)
-        ? note.frontmatter.summary_highlights.filter((item: any) => item && typeof item.text === 'string').slice(0, 8).map((item: any) => `- ${item.text}`)
+        ? note.frontmatter.summary_highlights.filter((item: any) => item && typeof item.text === 'string' && item.text.trim()).slice(0, 8).map((item: any) => `- ${item.text}`)
         : [];
       const questions = Array.isArray(note.frontmatter.open_questions)
-        ? note.frontmatter.open_questions.filter((item: unknown): item is string => typeof item === 'string').slice(0, 8).map(item => `- ${item}`)
+        ? note.frontmatter.open_questions.filter((item: unknown): item is string => typeof item === 'string' && Boolean(item.trim())).slice(0, 8).map(item => `- ${item}`)
         : [];
       if (view === 'key_points') {
-        content = claimPoints.length > 0 ? claimPoints.join('\n') : paragraphs.slice(0, 5).join('\n\n');
+        content = claimPoints.length > 0 ? claimPoints.join('\n') : keyPoints.length > 0 ? keyPoints.join('\n') : bodyExcerpt(5);
       } else if (view === 'progressive') {
         content = [
           summary && `Summary: ${summary}`,
@@ -7788,9 +7808,9 @@ export class LlmWikiService {
           claimPoints.length > 0 && `Claims:\n${claimPoints.join('\n')}`,
           evidencePaths.length > 0 && `Evidence:\n${evidencePaths.map(path => `- ${path}`).join('\n')}`,
           questions.length > 0 && `Open questions:\n${questions.join('\n')}`,
-        ].filter(Boolean).join('\n\n') || paragraphs[0] || '';
+        ].filter(Boolean).join('\n\n') || bodyExcerpt(1);
       } else {
-        content = summary || (claimPoints.length > 0 ? claimPoints.join('\n') : paragraphs[0] || '');
+        content = summary || (claimPoints.length > 0 ? claimPoints.join('\n') : bodyExcerpt(1));
       }
     }
     const bounded = boundedText(content, maxChars);
@@ -7995,6 +8015,7 @@ export class LlmWikiService {
         .map(field => [field, note.frontmatter[field].slice(0, 30)])),
       ...(sectionRange && { section: { requested: params.section, ...sectionRange } }),
       ...(sectionContext && { context: sectionContext }),
+      ...(excerptRange && { contentSource: 'body_excerpt', excerptRange }),
       ...(view !== 'full' && headings.length > 0 && { headings: headings.slice(0, 50) }),
       content: bounded,
       truncated: bounded.length < content.length,

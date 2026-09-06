@@ -3214,10 +3214,12 @@ function boundedWikiProjectionResult(value: Record<string, any>, args: Record<st
   if (minified.length <= maxChars) return { content: [{ type: 'text' as const, text: minified }] };
   const path = split ? value.sourcePath : value.path;
   const revision = split ? value.sourceRevision : value.revision;
-  const sourceRange = split ? value.range : value.section;
+  const excerpt = !split && value.contentSource === 'body_excerpt' && value.excerptRange;
+  const sourceRange = split ? value.range : value.section || excerpt;
   const range = sourceRange && { startLine: sourceRange.startLine, endLine: sourceRange.endLine };
   const compact = {
-    ...(split ? { mode: 'preview', sourcePath: path, sourceRevision: revision, range } : { path, revision, view: value.view, ...(range && { section: range }) }),
+    ...(split ? { mode: 'preview', sourcePath: path, sourceRevision: revision, range } : { path, revision, view: value.view,
+      ...(range && (excerpt ? { contentSource: 'body_excerpt', excerptRange: range } : { section: range })) }),
     ...(split && typeof value.targetPath === 'string' && {
       targetPath: value.targetPath, targetExists: value.targetExists,
       targetUsable: value.targetUsable, collision: value.collision,
