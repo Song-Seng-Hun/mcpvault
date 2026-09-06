@@ -715,7 +715,7 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'export_wiki_canvas',
-      description: 'Regenerate and save one validated scope-local Views/*.canvas file from the current MOC or neighborhood. Requires a Canvas file revision (use missing when new), optionally guards the root revision, rechecks every included source before writing, and never copies note bodies or changes authoritative Markdown.',
+      description: 'Regenerate and save one validated scope-local Views/*.canvas file. Replay the preview exportAction unchanged: its settings and expectedSnapshotFingerprint reject child/graph drift. Re-preview on conflict, do not remove the guard. Direct export without a fingerprint deliberately derives a fresh map. Requires the output revision, optionally guards the root, and rechecks included sources before writing. Never copies note bodies or changes authoritative Markdown.',
       inputSchema: { type: 'object', properties: {
         path: { type: 'string', description: 'Visible Markdown/text root note' },
         mode: { type: 'string', enum: ['auto', 'moc', 'neighborhood'], default: 'auto' },
@@ -725,6 +725,7 @@ export function getLlmWikiTools(): Tool[] {
         maxChars: { type: 'integer', minimum: 2048, maximum: 24000, default: 12000 },
         outputPath: { type: 'string', description: 'Optional single Views/*.canvas path in the same scope as the root; defaults to the preview suggestedPath' },
         expectedSourceRevision: { type: 'string', pattern: '^[a-fA-F0-9]{64}$', description: 'Optional root revision returned by the preview' },
+        expectedSnapshotFingerprint: { type: 'string', pattern: '^[a-fA-F0-9]{64}$', description: 'Preview exportAction supplies this exact graph fingerprint and projection settings. Rejects child or graph drift; re-run the preview on conflict. Omit only for a deliberately fresh export without a previous preview.' },
         expectedRevision: { type: 'string', description: "Required Canvas file revision; use 'missing' for a new file" },
         accessToken, prettyPrint,
       }, required: ['path', 'expectedRevision'] },

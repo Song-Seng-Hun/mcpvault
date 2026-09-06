@@ -301,7 +301,7 @@ do not prove a current, bounded, actionable response through its public adapter.
   oversized labels/paths, hidden/foreign groups, mutable-response isolation and
   public MCP actions have dedicated coverage. Collection health is an internal
   child of organization health, not a separately registered endpoint.
-- **Open: independently derived child views.** Standalone graph/Canvas
+- **Open: independently derived child views.** Standalone graph
   views still need direct audits for source/target freshness, visibility and
   actionable minimum budgets. A checked lint inventory does not prove every
   separately cached graph edge current. The new lint guard scans known metadata;
@@ -646,7 +646,19 @@ do not prove a current, bounded, actionable response through its public adapter.
   imply multi-claim prose. Shared organization queue packing preserves an
   inspectable leading candidate or explicit same-query retry in either format.
   This does not establish semantic atomicity, an atomic Vault census, or a
-  whole-Vault memory bound; full candidate ranking remains a separate audit.
+  whole-Vault memory bound. Composition selection now retains only bounded
+  top-K candidates with stable scan-order ties and eight heading locators,
+  while counting all headings/candidates (aca34fa). Metadata/body loading is
+  still not a whole-Vault streaming-memory guarantee.
+
+- Canvas previews now revalidate included sources after asynchronous budget
+  fitting. Their exportAction carries effective depth, node count, budget,
+  semantic setting and expectedSnapshotFingerprint; export rejects a changed
+  selected graph before writing. Short responses retain executable guards
+  while dropping redundant labels. Dedicated disk-race and action-replay
+  tests cover edits, hidden/deleted sources and bounded previews. These are
+  optimistic checks, not cross-process atomic snapshots; independent graph
+  APIs and source changes after the final check remain separate concerns.
 
 Record new concrete gaps here when registered schema, dispatcher, service,
 persistent representation, guide, invalidation, or bounded failure evidence

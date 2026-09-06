@@ -2439,6 +2439,7 @@ export declare class LlmWikiService {
     private fitSpatialCanvasGraph;
     /** Preview one bounded MOC or neighborhood as an Obsidian JSON Canvas. */
     canvasView(principal: ScopePrincipal | undefined, path: string, mode?: unknown, maxDepth?: unknown, limit?: unknown, maxChars?: unknown, includeSemantic?: boolean): Promise<Record<string, any>>;
+    private assertCurrentCanvasSources;
     /** Persist a fresh derived Canvas after rechecking every included revision. */
     writeCanvasView(params: {
         principal?: ScopePrincipal;
@@ -2450,6 +2451,7 @@ export declare class LlmWikiService {
         includeSemantic?: boolean;
         outputPath?: string;
         expectedSourceRevision?: string;
+        expectedSnapshotFingerprint?: string;
         expectedRevision: string;
     }): Promise<{
         persisted: boolean;

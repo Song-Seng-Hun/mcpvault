@@ -1024,7 +1024,16 @@ private nodes so a derived view cannot weaken synchronization boundaries.
 `export_wiki_canvas` writes the preview only beneath the root scope's
 `Views/*.canvas`, validates node/edge integrity, checks the root revision and
 the destination revision, then rechecks every included source immediately
-before writing. A standard hidden text-node marker records the snapshot
+before writing. Follow the returned `exportAction` unchanged: it carries the
+preview's depth, node limit, character budget, semantic setting, and
+`expectedSnapshotFingerprint`. A changed child or selected graph causes a
+conflict instead of silently saving a different map; request a new preview.
+Preview responses also recheck included sources after budget fitting. These
+short previews may omit the duplicate legend/metadata node (`metadataOmitted`);
+the saved Canvas always retains it. These
+are optimistic checks, not an atomic snapshot against external file writers.
+A direct export without a snapshot guard deliberately derives a fresh map.
+A standard hidden text-node marker records the snapshot
 fingerprint and each file-node revision without adding a proprietary top-level
 Canvas shape. `get_wiki_canvas_health` reads only bounded scope-local views,
 distinguishes fresh, stale, missing-source, invalid, partially checked, and

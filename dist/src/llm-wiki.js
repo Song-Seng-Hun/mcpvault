@@ -8188,6 +8188,7 @@ export class LlmWikiService {
     }
     async buildSpatialCanvasGraph(principal, path, requestedMode, maxDepth, limit, includeSemantic) {
         const boundedLimit = Math.min(Math.max(Number(limit) || 24, 1), 50);
+        const boundedDepth = maxDepth === undefined ? 2 : Math.min(Math.max(Number(maxDepth) || 0, 0), 6);
         const sourcePath = normalizePath(path);
         if (!this.access.canAccessPhysicalPath(sourcePath, principal))
             throw new Error('Access denied');
@@ -8228,7 +8229,7 @@ export class LlmWikiService {
             }
         };
         if (mode === 'moc') {
-            const learning = await this.learningPath(principal, sourcePath, maxDepth, Math.max(1, boundedLimit - 1), 16000);
+            const learning = await this.learningPath(principal, sourcePath, boundedDepth, Math.max(1, boundedLimit - 1), 16000);
             const authored = Array.isArray(learning.authoredOrder) ? learning.authoredOrder : [];
             totalCandidates = Number(learning.summary?.entries || authored.length) + 1;
             upstreamTruncated = Boolean(learning.truncated);
@@ -8316,6 +8317,7 @@ export class LlmWikiService {
             notes,
             edges,
             suggestedInternalPath: canvasSuggestedPath(sourcePath),
+            options: { maxDepth: boundedDepth, limit: boundedLimit, includeSemantic },
             totalCandidates,
             excludedCrossScope,
             upstreamTruncated,
@@ -8350,7 +8352,9 @@ export class LlmWikiService {
                 outputRevision,
                 exportAction: {
                     endpointId: endpointIdForTool('export_wiki_canvas'),
-                    arguments: { path: graph.root.publicPath, mode: graph.mode, expectedSourceRevision: graph.root.revision, outputPath: this.access.toPublicPath(outputInternalPath), expectedRevision: outputRevision },
+                    arguments: { path: graph.root.publicPath, mode: graph.mode, ...graph.options, maxChars: boundedChars,
+                        expectedSourceRevision: graph.root.revision, expectedSnapshotFingerprint: rendered.snapshotFingerprint,
+                        outputPath: this.access.toPublicPath(outputInternalPath), expectedRevision: outputRevision },
                 },
                 truncated,
                 note: 'Preview paths are scope-safe. Use exportAction to resolve them to vault-relative file nodes and persist one revision-checked Views/*.canvas file in the same scope as the root.',
@@ -8362,13 +8366,13 @@ export class LlmWikiService {
             if (notes.length <= 1) {
                 const minimal = {
                     mode: response.mode,
-                    standard: response.standard,
                     root: response.root,
-                    canvas: publicCanvas,
+                    // The full persisted Canvas retains its legend and revision marker.
+                    // A compact preview already carries those guards in exportAction.
+                    canvas: { nodes: publicCanvas.nodes.filter(node => node.type === 'file'), edges: publicCanvas.edges },
+                    metadataOmitted: true,
                     snapshotFingerprint: rendered.snapshotFingerprint,
-                    counts: response.counts,
-                    suggestedPath: response.suggestedPath,
-                    outputRevision,
+                    counts: { ...response.counts, canvasNodes: notes.length, persistedCanvasNodes: rendered.canvas.nodes.length },
                     exportAction: response.exportAction,
                     truncated: true,
                 };
@@ -8382,12 +8386,36 @@ export class LlmWikiService {
     /** Preview one bounded MOC or neighborhood as an Obsidian JSON Canvas. */
     async canvasView(principal, path, mode = 'auto', maxDepth = 2, limit = 24, maxChars = 12000, includeSemantic = false) {
         const graph = await this.buildSpatialCanvasGraph(principal, path, mode, maxDepth, limit, includeSemantic);
-        return (await this.fitSpatialCanvasGraph(graph, maxChars)).response;
+        const fitted = await this.fitSpatialCanvasGraph(graph, maxChars);
+        await this.assertCurrentCanvasSources(principal, graph.root.path, fitted.notes);
+        return fitted.response;
+    }
+    async assertCurrentCanvasSources(principal, rootPath, notes) {
+        for (let offset = 0; offset < notes.length; offset += 8) {
+            const current = await Promise.all(notes.slice(offset, offset + 8).map(async (note) => {
+                if (!canvasMayInclude(this.access, principal, rootPath, note.path))
+                    return false;
+                try {
+                    const latest = await this.fileSystem.readNote(note.path);
+                    return latest.revision === note.revision && !isModerationHidden(latest.frontmatter)
+                        && canvasMayInclude(this.access, principal, rootPath, note.path);
+                }
+                catch {
+                    return false;
+                }
+            }));
+            // Do not disclose paths which may have become unavailable since capture.
+            if (current.some(valid => !valid))
+                throw new Error('Canvas sources changed or became unavailable. Re-run the preview.');
+        }
     }
     /** Persist a fresh derived Canvas after rechecking every included revision. */
     async writeCanvasView(params) {
         if (!params.expectedRevision)
             throw new Error("expectedRevision is required; use 'missing' for a new Canvas file");
+        if (params.expectedSnapshotFingerprint !== undefined && !/^[a-fA-F0-9]{64}$/.test(params.expectedSnapshotFingerprint)) {
+            throw new Error('Canvas expectedSnapshotFingerprint must be a SHA-256 fingerprint from the preview');
+        }
         const graph = await this.buildSpatialCanvasGraph(params.principal, params.path, params.mode, params.maxDepth, params.limit, params.includeSemantic === true);
         if (params.expectedSourceRevision && params.expectedSourceRevision !== graph.root.revision) {
             throw new Error(`Canvas source revision conflict: expected ${params.expectedSourceRevision}, current ${graph.root.revision}. Re-run the preview before exporting.`);
@@ -8399,13 +8427,10 @@ export class LlmWikiService {
             throw new Error('Canvas output must stay in the same Global, Community, model, or agent scope as its root note');
         }
         const fitted = await this.fitSpatialCanvasGraph(graph, params.maxChars, outputPath);
-        for (let offset = 0; offset < fitted.notes.length; offset += 8) {
-            const batch = fitted.notes.slice(offset, offset + 8);
-            const current = await Promise.all(batch.map(async (note) => ({ note, current: await this.fileSystem.readNote(note.path) })));
-            const changed = current.find(item => item.current.revision !== item.note.revision);
-            if (changed)
-                throw new Error(`Canvas source changed during export: ${changed.note.publicPath}. Re-run the preview.`);
+        if (params.expectedSnapshotFingerprint !== undefined && params.expectedSnapshotFingerprint.toLowerCase() !== fitted.response.snapshotFingerprint) {
+            throw new Error('Canvas snapshot no longer matches the preview. Re-run the preview before exporting.');
         }
+        await this.assertCurrentCanvasSources(params.principal, graph.root.path, fitted.notes);
         const content = `${JSON.stringify(fitted.canvas, null, 2)}\n`;
         const written = await this.fileSystem.writeCanvasFile({ path: outputPath, content, expectedRevision: params.expectedRevision });
         this.invalidate();
@@ -8416,7 +8441,7 @@ export class LlmWikiService {
             revision: written.revision,
             source: fitted.response.root,
             snapshotFingerprint: fitted.response.snapshotFingerprint,
-            counts: fitted.response.counts,
+            counts: { ...fitted.response.counts, canvasNodes: fitted.canvas.nodes.length },
             truncated: fitted.response.truncated,
             note: 'Saved as a validated, derived JSON Canvas view. Regenerate it when source revisions change; it never replaces Markdown, evidence, MOCs, or Git history.',
         };

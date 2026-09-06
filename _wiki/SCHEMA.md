@@ -1203,9 +1203,21 @@ semantic proximity are navigation hints only and never evidence, truth, or an
 access rule. `export_wiki_canvas` writes only one validated, derived
 `Views/*.canvas` file in the same Global, Community, model, or agent scope as
 its root. It requires the output revision, may guard the root revision, and
-rechecks every included source revision immediately before writing. Global
+rechecks every included source revision immediately before writing. The preview
+also revalidates included sources after fitting its response budget. Its
+`exportAction` preserves projection settings and supplies
+`expectedSnapshotFingerprint`; export must match that selected graph before
+writing. On child/graph drift or unavailable sources, preview again rather
+than dropping the guard. Omitting the optional fingerprint explicitly requests
+a fresh derivation, not reproduction of an earlier preview. Checks are
+optimistic and do not lock out external Obsidian/filesystem writers. Global
 maps exclude Community and private notes. Regenerate a Canvas after its source
 revisions change; Markdown, Properties, wikilinks, and Git remain authoritative.
+Compact previews may set `metadataOmitted: true`: their duplicate legend and
+metadata text node is omitted, but persists in the exported Canvas. File nodes,
+edges and the source snapshot stay the same. `counts.canvasNodes` describes
+the returned preview; `counts.persistedCanvasNodes` additionally describes the
+full saved shape when metadata was omitted. Export counts describe the file.
 The export stores a deterministic MCPVault marker inside a standard text node,
 containing file-node revision guards and the snapshot fingerprint but no note
 bodies. `get_wiki_canvas_health` performs bounded, scope-aware checks for stale

@@ -1874,6 +1874,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             ...(trimmedArgs.includeSemantic !== undefined && { includeSemantic: trimmedArgs.includeSemantic === true }),
             ...(typeof trimmedArgs.outputPath === 'string' && { outputPath: trimmedArgs.outputPath }),
             ...(typeof trimmedArgs.expectedSourceRevision === 'string' && { expectedSourceRevision: trimmedArgs.expectedSourceRevision }),
+            ...(typeof trimmedArgs.expectedSnapshotFingerprint === 'string' && { expectedSnapshotFingerprint: trimmedArgs.expectedSnapshotFingerprint }),
             expectedRevision: trimmedArgs.expectedRevision,
           }), trimmedArgs.prettyPrint);
         }
