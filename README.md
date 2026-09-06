@@ -2865,8 +2865,20 @@ or conversion preserves dirty markers and prevents publishing those obsolete
 entry records to the directory cache. An already-invalidated census skips both
 native sorts before the existing bounded reconciliation retry. Stable results
 retain the same locale ordering. Native directory enumeration, corpus-sized
-inventories, cache-size accounting and valid-census sorting costs remain; no overall memory or latency
+inventories and valid-census sorting costs remain; no overall RSS or latency
 reduction is inferred from these operation-count and checkpoint tests.
+
+Catalog cache accounting accumulates byte counters while entries and paths are
+already being visited. A cached child's counters travel with its arrays and are
+added during parent merges, avoiding a second scan of its strings. Registration
+no longer constructs a whole-cache JSON string. The string counter matches JSON
+UTF-8 quoted lengths, including controls, Unicode and isolated surrogates, without
+serializing or allocating a Buffer. It charges 48 bytes per entry for fixed fields
+and margin, a separator per path and 256 bytes per directory envelope, in addition
+to string bytes. This conservative serialized-size proxy is not an exact V8 heap
+measurement; the margin can evict caches earlier than the previous approximation.
+Budget eviction and reconstruction retain current path results. Other cache
+owners still use their existing estimator; this is not a global replacement.
 
 Model-free reuse also starts the resource idle timer: DB/table references are
 released after inactivity, while active searches and indexing batches defer

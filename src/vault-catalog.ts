@@ -3,8 +3,9 @@ import { join, relative, resolve } from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
 import type { PathFilter } from './pathfilter.js';
 import { isMissingVaultPath, VaultReadUnavailableError } from './vault-read-errors.js';
-import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
+import { createDerivedCacheOwner, derivedCacheBudget } from './cache-budget.js';
 import { forEachInventoryItem } from './inventory-work.js';
+import { jsonStringBytes } from './json-string-bytes.js';
 
 const WATCH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
@@ -19,8 +20,23 @@ interface DirectoryCacheEntry {
   mtimeMs: number;
   size: number;
   entries: Array<{ name: string; directory: boolean; file: boolean }>;
+  entryBytes: number;
   notes?: string[];
   all?: string[];
+  noteBytes?: number;
+  allBytes?: number;
+}
+
+interface CatalogInventory {
+  notes: string[];
+  all: string[];
+  noteBytes: number;
+  allBytes: number;
+}
+
+interface DirectoryListing {
+  entries: DirectoryCacheEntry['entries'];
+  entryBytes: number;
 }
 
 interface StatCacheEntry {
@@ -448,7 +464,7 @@ export class VaultFileCatalog {
     }
   }
 
-  private async findPaths(directory: string, reconcile = false, budget = DIRECTORY_SCAN_BATCH_SIZE): Promise<{ notes: string[]; all: string[] }> {
+  private async findPaths(directory: string, reconcile = false, budget = DIRECTORY_SCAN_BATCH_SIZE): Promise<CatalogInventory> {
     this.assertOpen();
     // An unchanged ancestor's stat says nothing about nested membership.
     // Periodic reconciliation must bypass both subtree and entry caches.
@@ -461,21 +477,24 @@ export class VaultFileCatalog {
           && cached
           && cached.notes
           && cached.all
+          && cached.noteBytes !== undefined
+          && cached.allBytes !== undefined
           && cached.mtimeMs === info.mtimeMs
           && cached.size === info.size) {
           this.directoryCache.delete(directory);
           this.directoryCache.set(directory, cached);
           derivedCacheBudget.touch(this.cacheOwner, directory);
-          return { notes: cached.notes, all: cached.all };
+          return { notes: cached.notes, all: cached.all, noteBytes: cached.noteBytes, allBytes: cached.allBytes };
         }
       } catch (error) {
         this.assertOpen();
-        if (directory !== this.vaultPath && isMissingVaultPath(error)) return { notes: [], all: [] };
+        if (directory !== this.vaultPath && isMissingVaultPath(error)) return { notes: [], all: [], noteBytes: 0, allBytes: 0 };
         throw new VaultReadUnavailableError();
       }
     }
     const notes: string[] = [];
     const all: string[] = [];
+    let noteBytes = 0, allBytes = 0;
     const entries = await this.readDirectoryEntries(directory, reconcile);
     this.assertOpen();
     const directories: Array<{ fullPath: string; relativePath: string }> = [];
@@ -487,8 +506,10 @@ export class VaultFileCatalog {
           directories.push({ fullPath, relativePath });
         }
       } else if (entry.file && this.pathFilter.isAllowedForListing(relativePath)) {
+        const bytes = jsonStringBytes(relativePath) + 1; // Include array separator.
         all.push(relativePath);
-        if (isNote(relativePath) && this.pathFilter.isAllowed(relativePath)) notes.push(relativePath);
+        allBytes += bytes;
+        if (isNote(relativePath) && this.pathFilter.isAllowed(relativePath)) { notes.push(relativePath); noteBytes += bytes; }
       }
     }, () => this.assertOpen());
     this.assertOpen();
@@ -508,6 +529,8 @@ export class VaultFileCatalog {
         if (result.status !== 'fulfilled') continue;
         await forEachInventoryItem(result.value.notes, path => { notes.push(path); }, () => this.assertOpen());
         await forEachInventoryItem(result.value.all, path => { all.push(path); }, () => this.assertOpen());
+        noteBytes += result.value.noteBytes;
+        allBytes += result.value.allBytes;
       }
     }
     this.assertOpen();
@@ -515,24 +538,30 @@ export class VaultFileCatalog {
     if (this.watcher && cached) {
       cached.notes = notes;
       cached.all = all;
+      cached.noteBytes = noteBytes;
+      cached.allBytes = allBytes;
       this.directoryCache.delete(directory);
       this.directoryCache.set(directory, cached);
-      derivedCacheBudget.register(this.cacheOwner, directory, estimateCacheBytes(cached) + 64, () => {
+      derivedCacheBudget.register(this.cacheOwner, directory, 256 + cached.entryBytes + noteBytes + allBytes, () => {
         if (this.directoryCache.get(directory) !== cached) return;
         this.directoryCache.delete(directory);
       });
       derivedCacheBudget.touch(this.cacheOwner, directory);
     }
-    return { notes, all };
+    return { notes, all, noteBytes, allBytes };
   }
 
-  private async normalizeDirectoryEntries(listed: readonly Dirent[]): Promise<DirectoryCacheEntry['entries']> {
+  private async normalizeDirectoryEntries(listed: readonly Dirent[]): Promise<DirectoryListing> {
     const entries: DirectoryCacheEntry['entries'] = [];
+    let entryBytes = 0;
     await forEachInventoryItem(listed, entry => {
       entries.push({ name: entry.name, directory: entry.isDirectory(), file: entry.isFile() });
+      // Conservative serialized-size proxy: name bytes plus record fields,
+      // booleans/separator/margin. Never create the whole cache JSON string.
+      entryBytes += jsonStringBytes(entry.name) + 48;
     }, () => this.assertOpen());
     this.assertOpen();
-    return entries;
+    return { entries, entryBytes };
   }
 
   private async readDirectoryEntries(directory: string, reconcile = false): Promise<Array<{ name: string; directory: boolean; file: boolean }>> {
@@ -546,7 +575,7 @@ export class VaultFileCatalog {
         this.assertOpen();
         const normalized = await this.normalizeDirectoryEntries(entries);
         this.assertOpen();
-        return normalized;
+        return normalized.entries;
       } catch (error) {
         this.assertOpen();
         if (directory !== this.vaultPath && isMissingVaultPath(error)) return [];
@@ -570,11 +599,11 @@ export class VaultFileCatalog {
       derivedCacheBudget.touch(this.cacheOwner, directory);
       return cached.entries;
     }
-    let entries: Array<{ name: string; directory: boolean; file: boolean }>;
+    let normalized: DirectoryListing;
     try {
       const listed = await readdir(directory, { withFileTypes: true });
       this.assertOpen();
-      entries = await this.normalizeDirectoryEntries(listed);
+      normalized = await this.normalizeDirectoryEntries(listed);
     } catch (error) {
       this.assertOpen();
       if (directory !== this.vaultPath && isMissingVaultPath(error)) return [];
@@ -583,11 +612,12 @@ export class VaultFileCatalog {
     this.assertOpen();
     // Preserve invalidation delivered while IO/conversion was in flight. This
     // census may finish locally, but refresh will reject its old generation.
+    const { entries, entryBytes } = normalized;
     if (generation !== this.changeGeneration) return entries;
     this.dirtyDirectories.delete(directory);
-    const cacheEntry: DirectoryCacheEntry = { mtimeMs: info.mtimeMs, size: info.size, entries };
+    const cacheEntry: DirectoryCacheEntry = { mtimeMs: info.mtimeMs, size: info.size, entries, entryBytes };
     this.directoryCache.set(directory, cacheEntry);
-    derivedCacheBudget.register(this.cacheOwner, directory, estimateCacheBytes(cacheEntry) + 64, () => {
+    derivedCacheBudget.register(this.cacheOwner, directory, 256 + entryBytes, () => {
       if (this.directoryCache.get(directory) !== cacheEntry) return;
       this.directoryCache.delete(directory);
     });
