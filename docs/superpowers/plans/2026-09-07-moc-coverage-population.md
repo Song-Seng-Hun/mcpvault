@@ -31,7 +31,7 @@ without duplicating the full knowledge set or changing graph usage semantics.
   graph/candidate descriptions in src/llm-wiki-tools.ts. No new endpoint.
 - [x] Focused tests, npm run build, independent review, full
   `npm test -- --maxWorkers=1`, `git -c core.safecrlf=false diff --check`.
-- [ ] Commit explicit files plus generated dist; push origin main and verify.
+- [x] Commit explicit files plus generated dist; push origin main and verify.
 
 ## Evidence
 
@@ -44,3 +44,5 @@ without duplicating the full knowledge set or changing graph usage semantics.
 - Independent scoped review found no actionable introduced defects; reviewer
   closed. Full single-worker suite: 2,682 passed / 1 skipped across174 files,
   336.12s, exit0.
+- Implementation71bfa02 pushed to Song-Seng-Hun/mcpvault main. Local HEAD and
+  origin/main matched after push; unrelated .agents/ and .mcpvault/ preserved.
