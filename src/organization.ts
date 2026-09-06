@@ -113,6 +113,16 @@ export const ORGANIZATION_LIST_FIELDS = ['aliases', 'tags', 'mocs', 'key_points'
  * participate even before one of these fields is filled in. */
 export const ACTIONABLE_WORK_PROPERTIES = ['task_status', 'next_action', 'next_actions', 'waiting_for'] as const;
 
+/** Read-only interpretation, not a repair: only an absent state defaults to
+ * open. Invalid declarations remain visible for review but cannot prove work
+ * completion or execution readiness. */
+export function authoredTaskStatus(value: unknown): typeof TASK_STATUSES[number] | 'invalid' {
+  if (value === undefined) return 'open';
+  if (typeof value !== 'string') return 'invalid';
+  const status = value.trim().toLowerCase();
+  return (TASK_STATUSES as readonly string[]).includes(status) ? status as typeof TASK_STATUSES[number] : 'invalid';
+}
+
 export function isActionableKnowledge(frontmatter: Record<string, unknown>): boolean {
   const type = String(frontmatter.llm_wiki_type || '').trim().toLowerCase();
   if (type && type !== 'knowledge') return false;
@@ -127,7 +137,7 @@ export function isActionableKnowledge(frontmatter: Record<string, unknown>): boo
 export function isOpenActionableKnowledge(frontmatter: Record<string, unknown>): boolean {
   if (!isActionableKnowledge(frontmatter)) return false;
   const lifecycle = String(frontmatter.lifecycle || '').trim().toLowerCase();
-  const taskStatus = String(frontmatter.task_status || 'open').trim().toLowerCase() || 'open';
+  const taskStatus = authoredTaskStatus(frontmatter.task_status);
   return !['archived', 'superseded'].includes(lifecycle)
     && !['completed', 'cancelled', 'someday'].includes(taskStatus);
 }
@@ -1589,7 +1599,7 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
       }
     } catch (error) { issues.push({ code: 'invalid_summary_highlights', detail: error instanceof Error ? error.message : 'summary_highlights must be bounded highlight objects.' }); }
   }
-  if (frontmatter.task_status !== undefined && !taskStatusSet.has(String(frontmatter.task_status).trim().toLowerCase())) {
+  if (authoredTaskStatus(frontmatter.task_status) === 'invalid') {
     issues.push({ code: 'invalid_task_status', detail: `task_status must be one of: ${TASK_STATUSES.join(', ')}` });
   }
   if (frontmatter.service_class !== undefined && !serviceClassSet.has(String(frontmatter.service_class).trim().toLowerCase())) {
@@ -1738,7 +1748,7 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
   }
   const actionable = isActionableKnowledge(frontmatter);
   if (actionable) {
-    const taskStatus = String(frontmatter.task_status || '').trim().toLowerCase();
+    const taskStatus = authoredTaskStatus(frontmatter.task_status);
     const waiting = taskStatus === 'waiting' || Boolean(String(frontmatter.waiting_for || '').trim());
     const hasNextAction = Boolean(
       String(frontmatter.next_action || '').trim()
@@ -1774,7 +1784,7 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
       issues.push({ code: 'waiting_work_without_owner', detail: 'Waiting work should identify the person, event, or resource it is waiting for.' });
     }
   }
-  if (kind === 'project' && lifecycle === 'active' && String(frontmatter.task_status || '').toLowerCase() === 'waiting' && !frontmatter.waiting_for) {
+  if (kind === 'project' && lifecycle === 'active' && authoredTaskStatus(frontmatter.task_status) === 'waiting' && !frontmatter.waiting_for) {
     issues.push({ code: 'waiting_project_without_owner', detail: 'A waiting project should identify the person, event, or resource it is waiting for.' });
   }
   if (frontmatter.triage_disposition !== undefined && !clarifyDispositionSet.has(String(frontmatter.triage_disposition).trim().toLowerCase())) {

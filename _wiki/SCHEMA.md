@@ -462,6 +462,14 @@ exact snapshot-guarded `readAction` recovers omitted source details. Explicitly
 invalid `task_status` adds a `task_status` planning finding and
 `execution.invalidWorkflowState: true`, with `execution.ready: false`. Absence
 still defaults to open in the project view. No authored Properties are rewritten.
+The shared work-state projection accepts only valid scalar strings, normalizing
+case and surrounding whitespace. Only an absent Property defaults to open.
+The returned `invalid` marker is derived, not an additional allowed status.
+Malformed work remains available for repair, never proves a dependency complete,
+and is excluded from next actions and forecast stages. Its workflow hold also
+excludes dependent stages. Reflect returns `readiness: invalid_task_status`;
+flow uses the blocked lane with `blockedReason: invalid_task_status`. Repair
+the source at its current revision; reading these views does not change notes.
 Work dependency projections use a single captured metadata inventory per
 request. `wiki.next_actions` ranks all eligible visible action candidates,
 retaining only the top requested rows rather than cutting off candidate input.

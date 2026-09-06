@@ -104,6 +104,17 @@ export const ORGANIZATION_LIST_FIELDS = ['aliases', 'tags', 'mocs', 'key_points'
  * system without changing its epistemic/content role. Project and task kinds
  * participate even before one of these fields is filled in. */
 export const ACTIONABLE_WORK_PROPERTIES = ['task_status', 'next_action', 'next_actions', 'waiting_for'];
+/** Read-only interpretation, not a repair: only an absent state defaults to
+ * open. Invalid declarations remain visible for review but cannot prove work
+ * completion or execution readiness. */
+export function authoredTaskStatus(value) {
+    if (value === undefined)
+        return 'open';
+    if (typeof value !== 'string')
+        return 'invalid';
+    const status = value.trim().toLowerCase();
+    return TASK_STATUSES.includes(status) ? status : 'invalid';
+}
 export function isActionableKnowledge(frontmatter) {
     const type = String(frontmatter.llm_wiki_type || '').trim().toLowerCase();
     if (type && type !== 'knowledge')
@@ -119,7 +130,7 @@ export function isOpenActionableKnowledge(frontmatter) {
     if (!isActionableKnowledge(frontmatter))
         return false;
     const lifecycle = String(frontmatter.lifecycle || '').trim().toLowerCase();
-    const taskStatus = String(frontmatter.task_status || 'open').trim().toLowerCase() || 'open';
+    const taskStatus = authoredTaskStatus(frontmatter.task_status);
     return !['archived', 'superseded'].includes(lifecycle)
         && !['completed', 'cancelled', 'someday'].includes(taskStatus);
 }
@@ -1504,7 +1515,7 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
             issues.push({ code: 'invalid_summary_highlights', detail: error instanceof Error ? error.message : 'summary_highlights must be bounded highlight objects.' });
         }
     }
-    if (frontmatter.task_status !== undefined && !taskStatusSet.has(String(frontmatter.task_status).trim().toLowerCase())) {
+    if (authoredTaskStatus(frontmatter.task_status) === 'invalid') {
         issues.push({ code: 'invalid_task_status', detail: `task_status must be one of: ${TASK_STATUSES.join(', ')}` });
     }
     if (frontmatter.service_class !== undefined && !serviceClassSet.has(String(frontmatter.service_class).trim().toLowerCase())) {
@@ -1677,7 +1688,7 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
     }
     const actionable = isActionableKnowledge(frontmatter);
     if (actionable) {
-        const taskStatus = String(frontmatter.task_status || '').trim().toLowerCase();
+        const taskStatus = authoredTaskStatus(frontmatter.task_status);
         const waiting = taskStatus === 'waiting' || Boolean(String(frontmatter.waiting_for || '').trim());
         const hasNextAction = Boolean(String(frontmatter.next_action || '').trim()
             || (Array.isArray(frontmatter.next_actions) && frontmatter.next_actions.some((item) => typeof item === 'string' && item.trim())));
@@ -1716,7 +1727,7 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
             issues.push({ code: 'waiting_work_without_owner', detail: 'Waiting work should identify the person, event, or resource it is waiting for.' });
         }
     }
-    if (kind === 'project' && lifecycle === 'active' && String(frontmatter.task_status || '').toLowerCase() === 'waiting' && !frontmatter.waiting_for) {
+    if (kind === 'project' && lifecycle === 'active' && authoredTaskStatus(frontmatter.task_status) === 'waiting' && !frontmatter.waiting_for) {
         issues.push({ code: 'waiting_project_without_owner', detail: 'A waiting project should identify the person, event, or resource it is waiting for.' });
     }
     if (frontmatter.triage_disposition !== undefined && !clarifyDispositionSet.has(String(frontmatter.triage_disposition).trim().toLowerCase())) {

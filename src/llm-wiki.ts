@@ -24,7 +24,7 @@ import { CollectionHealthProjection } from './collection-health.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
 import { projectNoteOutline, projectNoteParagraphs, projectNoteHeadingSummary, projectNoteHeadingPresence, projectNoteBlockPresence, projectNoteBlockLines, selectNoteHeading, hasUnclosedNoteFence, noteSectionHasContent } from './note-projections.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
-import { normalizeEpistemicStatus, type NoteKind } from './organization.js';
+import { authoredTaskStatus, normalizeEpistemicStatus, type NoteKind } from './organization.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
 import { buildNoteReferenceIndex, normalizeNoteReferenceTerm, noteReferenceDocument, resolveNoteReference, type NoteReferenceIndex } from './note-reference.js';
 import type { QueryNote } from './types.js';
@@ -1395,7 +1395,7 @@ export class LlmWikiService {
         canReference: (source, target) => this.access.canReferenceFrom(source, target),
       });
     };
-    const taskStatus = (note: QueryNote) => String(note.frontmatter.task_status || 'open').trim().toLowerCase() || 'open';
+    const taskStatus = (note: QueryNote) => authoredTaskStatus(note.frontmatter.task_status);
     const lifecycle = (note: QueryNote) => String(note.frontmatter.lifecycle || '').trim().toLowerCase();
     const findingsByPath = new Map<string, WorkDependencyFinding[]>();
     const adjacency = new Map<string, Set<string>>();
@@ -1489,7 +1489,7 @@ export class LlmWikiService {
       const note = workByPath.get(key)!;
       const status = taskStatus(note);
       const deferUntil = typeof note.frontmatter.defer_until === 'string' ? Date.parse(note.frontmatter.defer_until) : NaN;
-      return ['waiting', 'blocked'].includes(status)
+      return ['waiting', 'blocked', 'invalid'].includes(status)
         || Boolean(String(note.frontmatter.waiting_for || '').trim())
         || (Number.isFinite(deferUntil) && deferUntil > currentTime);
     }));
@@ -4333,7 +4333,7 @@ export class LlmWikiService {
     for (const note of dependencySnapshot.notes) {
       const kind = String(note.frontmatter.note_kind || '').toLowerCase();
       const lifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
-      const taskStatus = String(note.frontmatter.task_status || '').toLowerCase();
+      const taskStatus = authoredTaskStatus(note.frontmatter.task_status);
       const title = note.frontmatter.title || note.path.split('/').at(-1);
       const item = { path: this.access.toPublicPath(note.path), title, kind, ...(note.revision && { revision: note.revision }), ...(note.frontmatter.task_status && { taskStatus }) };
       const actionable = isActionableKnowledge(note.frontmatter);
@@ -4348,13 +4348,13 @@ export class LlmWikiService {
           const deferUntil = typeof note.frontmatter.defer_until === 'string' ? note.frontmatter.defer_until : undefined;
           const overdue = Boolean(dueAt && !Number.isNaN(Date.parse(dueAt)) && Date.parse(dueAt) <= nowMs);
           const waiting = taskStatus === 'waiting' || Boolean(note.frontmatter.waiting_for);
-          const blocked = taskStatus === 'blocked';
+          const blocked = taskStatus === 'blocked' || taskStatus === 'invalid';
           const dependencyState = dependencySnapshot.stateByPath.get(normalizePath(note.path).toLowerCase())!;
           const dependencyBlocked = !dependencyState.executable;
           const deferred = Boolean(deferUntil && !Number.isNaN(Date.parse(deferUntil)) && Date.parse(deferUntil) > nowMs);
           const hasNextAction = Boolean(note.frontmatter.next_action || (Array.isArray(note.frontmatter.next_actions) && note.frontmatter.next_actions.length > 0));
           const missingNextAction = lifecycle === 'active' && !hasNextAction && !waiting && !blocked && !dependencyBlocked && !deferred;
-          const readiness = blocked ? 'blocked' : waiting ? 'waiting' : dependencyBlocked ? 'dependency_blocked' : deferred ? 'deferred' : hasNextAction ? 'ready' : 'needs_next_action';
+          const readiness = taskStatus === 'invalid' ? 'invalid_task_status' : blocked ? 'blocked' : waiting ? 'waiting' : dependencyBlocked ? 'dependency_blocked' : deferred ? 'deferred' : hasNextAction ? 'ready' : 'needs_next_action';
           const workItem = { ...item, ...(dueAt && { dueAt }), ...(scheduledAt && { scheduledAt }), ...(deferUntil && { deferUntil }), readiness, ...(dependencyBlocked && { dependencies: this.workDependencyProjection(dependencyState) }) };
           totalWorkNotes += 1;
           pushBounded(projectReadinessItems, workItem);
@@ -4529,7 +4529,7 @@ export class LlmWikiService {
     };
     for (const note of dependencySnapshot.workNotes) {
       const kind = String(note.frontmatter.note_kind || '').trim().toLowerCase();
-      const taskStatus = String(note.frontmatter.task_status || '').trim().toLowerCase() || 'open';
+      const taskStatus = authoredTaskStatus(note.frontmatter.task_status);
       if (!isOpenActionableKnowledge(note.frontmatter)) continue;
       totalWork += 1;
       const title = note.frontmatter.title || note.path.split('/').at(-1) || note.path;
@@ -4538,8 +4538,8 @@ export class LlmWikiService {
       const deferUntil = typeof note.frontmatter.defer_until === 'string' ? note.frontmatter.defer_until : undefined;
       const overdue = Boolean(dueAt && Number.isFinite(Date.parse(dueAt)) && Date.parse(dueAt) <= nowMs);
       if (overdue) totalOverdue += 1;
-      const waitingState = taskStatus === 'waiting' || Boolean(String(note.frontmatter.waiting_for || '').trim());
-      const blockedState = taskStatus === 'blocked';
+      const waitingState = taskStatus !== 'invalid' && (taskStatus === 'waiting' || Boolean(String(note.frontmatter.waiting_for || '').trim()));
+      const blockedState = taskStatus === 'blocked' || taskStatus === 'invalid';
       const deferredState = Boolean(deferUntil && Number.isFinite(Date.parse(deferUntil)) && Date.parse(deferUntil) > nowMs);
       const dependencyKey = normalizePath(note.path).toLowerCase();
       const dependencyState = dependencySnapshot.stateByPath.get(dependencyKey)!;
@@ -4568,7 +4568,7 @@ export class LlmWikiService {
         totalBlocked += 1;
         if (blocked.length < boundedLimit) push(blocked, {
           ...item,
-          blockedReason: blockedState ? 'explicit_status' : 'dependency',
+          blockedReason: taskStatus === 'invalid' ? 'invalid_task_status' : blockedState ? 'explicit_status' : 'dependency',
           ...(dependencyBlocked && { dependencies: this.workDependencyProjection(dependencyState) }),
           ...(age !== undefined && age >= boundedBlockedAfterDays && { aging: true, agingReason: `blocked_${boundedBlockedAfterDays}_days_or_more` }),
         });
@@ -4594,7 +4594,7 @@ export class LlmWikiService {
         path: publicPath,
         title: note.frontmatter.title || note.path.split('/').at(-1),
         ...(note.revision && { revision: note.revision }),
-        taskStatus: String(note.frontmatter.task_status || 'open').trim().toLowerCase() || 'open',
+        taskStatus: authoredTaskStatus(note.frontmatter.task_status),
         directDependents: plan.dependents.get(key)?.size || 0,
         immediateUnlocks: plan.immediateUnlockByPath.get(key) || 0,
       };
@@ -6899,9 +6899,8 @@ export class LlmWikiService {
       const dependencyState = dependencySnapshot.stateByPath.get(normalizePath(note.path).toLowerCase())!;
       const dependencyKey = normalizePath(note.path).toLowerCase();
       const plannedStage = dependencySnapshot.plan.stageByPath.get(dependencyKey);
-      const taskStatus = String(note.frontmatter.task_status || 'open').trim().toLowerCase() || 'open';
-      const validTaskStatus = note.frontmatter.task_status === undefined
-        || (hasAuthoredText(note.frontmatter.task_status) && (TASK_STATUSES as readonly string[]).includes(taskStatus));
+      const taskStatus = authoredTaskStatus(note.frontmatter.task_status);
+      const validTaskStatus = taskStatus !== 'invalid';
       if (!validTaskStatus) missing.push('task_status');
       const workflowClosed = ['completed', 'cancelled', 'someday'].includes(taskStatus);
       if (!dependencyState.executable && !workflowClosed) dependencyBlocked += 1;
@@ -6977,7 +6976,7 @@ export class LlmWikiService {
     const nowMs = Date.now();
     const candidates = function* (this: LlmWikiService): Generator<Record<string, unknown>> {
       for (const note of dependencySnapshot.workNotes) {
-        const taskStatus = String(note.frontmatter.task_status || '').toLowerCase();
+        const taskStatus = authoredTaskStatus(note.frontmatter.task_status);
         if (!isOpenActionableKnowledge(note.frontmatter)) continue;
         const actions = [
           ...(typeof note.frontmatter.next_action === 'string' ? [note.frontmatter.next_action] : []),
@@ -6999,7 +6998,7 @@ export class LlmWikiService {
         if (requestedEffort && effort === undefined) { filterDiagnostics.unknownEffort += uniqueActions.length; continue; }
         if (requestedEffort && effort !== requestedEffort) continue;
         const waitingState = taskStatus === 'waiting' || Boolean(String(note.frontmatter.waiting_for || '').trim());
-        if (taskStatus === 'blocked' || waitingState) {
+        if (taskStatus === 'invalid' || taskStatus === 'blocked' || waitingState) {
           filterDiagnostics.workflowBlocked += uniqueActions.length;
           continue;
         }
@@ -15047,7 +15046,7 @@ export class LlmWikiService {
       const candidateKey = normalizePath(candidate.path).toLocaleLowerCase('en-US');
       if (completionDispositionIssuePaths.has(candidateKey)
         || !isActionableKnowledge(candidate.frontmatter)
-        || String(candidate.frontmatter.task_status || '').trim().toLowerCase() !== 'completed') continue;
+        || authoredTaskStatus(candidate.frontmatter.task_status) !== 'completed') continue;
       let invalidReference = false;
       for (const [field, expected] of [['knowledge_notes', 'durable'], ['negative_knowledge_notes', 'negative']] as const) {
         const values = Array.isArray(candidate.frontmatter[field]) ? candidate.frontmatter[field] : [];

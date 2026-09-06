@@ -227,6 +227,10 @@ export declare const ORGANIZATION_LIST_FIELDS: readonly ["aliases", "tags", "moc
  * system without changing its epistemic/content role. Project and task kinds
  * participate even before one of these fields is filled in. */
 export declare const ACTIONABLE_WORK_PROPERTIES: readonly ['task_status', 'next_action', 'next_actions', 'waiting_for'];
+/** Read-only interpretation, not a repair: only an absent state defaults to
+ * open. Invalid declarations remain visible for review but cannot prove work
+ * completion or execution readiness. */
+export declare function authoredTaskStatus(value: unknown): typeof TASK_STATUSES[number] | 'invalid';
 export declare function isActionableKnowledge(frontmatter: Record<string, unknown>): boolean;
 /** Current executable/reviewable work excludes terminal lanes and retired
  * knowledge, while `isActionableKnowledge` still identifies their historical

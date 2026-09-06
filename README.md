@@ -780,6 +780,15 @@ An explicitly invalid `task_status` is a planning problem and makes that
 project's `execution.ready` false. An absent project state still defaults to
 `open`. Planning structure and dependency eligibility remain separate advisory
 signals; neither is a command to perform the authored task.
+Work projections accept only scalar `task_status` values from the documented
+vocabulary (case and surrounding whitespace are normalized). Missing state
+defaults to `open`; arrays, objects, null, empty strings and unknown values do
+not. They appear as the derived marker `invalid`, remain discoverable in
+Reflect/flow for repair, and cannot execute or satisfy a prerequisite. Their
+workflow hold excludes downstream work from forecast stages until repaired.
+Flow reports `blockedReason: invalid_task_status`; lint reports the malformed
+declaration. Do not write `invalid` back as a status: read the current note and
+deliberately repair its Property with a revision-checked edit.
 Work, flow, review and project projections capture one request-local metadata
 inventory instead of stitching independently refreshed 500-row pages together.
 `wiki.next_actions` evaluates the entire eligible visible action cohort before
