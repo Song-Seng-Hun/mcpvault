@@ -924,13 +924,21 @@ export class FileSystemService {
         try {
           existingNote = await this.readNote(path);
         } catch (error) {
-          // File doesn't exist, treat as overwrite
+          // Only confirmed absence permits creation. An unreadable source is
+          // not an empty note: dropping it would destroy its body/Properties.
+          if (!isMissingVaultPath(error instanceof Error ? error.cause : undefined)) throw error;
+          if (expectedRevision && expectedRevision !== 'missing') {
+            throw new Error(`Revision conflict for ${path}: the source disappeared before append/prepend; read it again before changing it.`);
+          }
           finalContent = frontmatter
             ? this.frontmatterHandler.stringify(frontmatter, content)
             : content;
         }
 
         if (existingNote!) {
+          if (expectedRevision && existingNote.revision !== expectedRevision) {
+            throw new Error(`Revision conflict for ${path}: the source changed before append/prepend; read it again before changing it.`);
+          }
           // Merge frontmatter if provided
           const mergedFrontmatter = frontmatter
             ? { ...existingNote.frontmatter, ...frontmatter }

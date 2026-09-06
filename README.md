@@ -1526,7 +1526,12 @@ authenticated edge in front of it.
 - `read_multiple_notes` accepts an optional `knownRevisions` map for one-round-trip freshness checks: unchanged visible notes return only identity/revision metadata, while changed notes return the requested body/frontmatter and new revision. Public batch reads check current raw snapshots (up to 10 notes) before suppressing unchanged bodies; they do not authorize from cached metadata alone. Hidden notes are excluded even with `includeFrontmatter=false`. This saves response tokens, not those source reads.
 - Direct note, Properties, outline and line-window reads use the same folder-independent moderation check as Wiki projections. A hidden knowledge note cannot be read through these fallback endpoints merely because it is outside `Community/`. Scope authorization remains a separate check; this is not a claim that every aggregate/index endpoint has completed its freshness audit.
 - `sync_note_revisions` and `read_multiple_notes` are server-side optimizations; clients only need to call the documented endpoints. No local cache, Worker, vector database, compression codec, or additional runtime is required.
-- `write_note` supports overwrite, append, and prepend modes.
+- `write_note` supports overwrite, append, and prepend modes. Append/prepend
+  preserve the source on read failures: only confirmed absence can create a
+  new note. Their merge source must still match `expectedRevision`; deletion,
+  replacement or creation after the initial guard requires a fresh read instead
+  of recreating a deleted note or modifying an unseen revision. These are
+  optimistic guards, not an OS-wide editing transaction.
 - `delete_note` and `move_file` require matching confirmation paths.
 - Path arguments are trimmed before validation.
 - Search and batch tools return compact fields by default; set `prettyPrint: true` for expanded output. `maxChars` is a hard final response budget, including pretty-printed JSON. Oversized full-note reads set `truncated: true` and retain only a bounded prefix, so use the returned `mcp.get_note_outline` route and then `mcp.read_note_lines` for the needed section.

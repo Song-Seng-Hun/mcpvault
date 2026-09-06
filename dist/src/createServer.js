@@ -436,7 +436,7 @@ export function createServer(vaultPath, options = {}) {
         },
         {
             name: "write_note",
-            description: "Write a note to the Obsidian vault. Returns a compact JSON receipt with success, path, mode and this write's revision, without echoing the body. Re-read the same target; inspect any intervening edit before using its new revision.",
+            description: "Write a note to the Obsidian vault. Returns a compact JSON receipt with success, path, mode and this write's revision, without echoing the body. Append/prepend stop on source read failures and recheck the merge source against expectedRevision; never replace unreadable content with only the addition. Re-read the same target; inspect any intervening edit before using its new revision.",
             inputSchema: {
                 type: "object",
                 properties: {

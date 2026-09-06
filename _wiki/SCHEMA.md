@@ -16,6 +16,13 @@ This vault uses ordinary Markdown, YAML frontmatter, Obsidian links, and Git as 
 - `_wiki/issues/`: durable contradictions, unsupported claims, stale knowledge, and other repair work.
 - Git: the authoritative author/reason/change history and rollback mechanism. Do not duplicate it in a hand-written edit log.
 
+Append/prepend note writes must not interpret a failed source read as an empty
+note. Only confirmed absence can create a file; an existing `expectedRevision`
+cannot authorize recreation after deletion. The actual merge source must match
+that guard, including rejecting newly appeared content under `missing`. On a
+conflict, re-read before deciding; on storage failure, restore access before
+retrying. This does not establish an atomic transaction across external editors.
+
 ## Organization inside a scope
 
 Use PARA as a lightweight filing aid, never as a security boundary:
