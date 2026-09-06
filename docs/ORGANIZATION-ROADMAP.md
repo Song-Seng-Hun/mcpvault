@@ -667,6 +667,13 @@ do not prove a current, bounded, actionable response through its public adapter.
   all result branches enforce pretty-JSON budgets. This does not close the
   independent standalone graph-cache/target-resolution freshness audit.
 
+- Graph visibility-cache authorization is now re-evaluated from current path
+  membership before resolver/incoming-cache reuse. Reused predicates no longer
+  preserve revoked targets or suppress granted targets; same-size swaps also
+  invalidate the view. Asynchronous backlink checks reject graph/visibility
+  drift with or without fingerprint output. Filesystem content/moderation
+  freshness and missed watcher events still require independent inspection.
+
 Record new concrete gaps here when registered schema, dispatcher, service,
 persistent representation, guide, invalidation, or bounded failure evidence
 disagrees; remove a gap only after checking that complete workflow.

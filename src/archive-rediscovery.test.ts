@@ -396,18 +396,26 @@ test('archive freshness scan overlaps IO with a bounded eight-read fanout', asyn
   expect(maximum).toBeLessThanOrEqual(8);
 });
 
-test('indexed backlinks reuse a scope-local reverse view instead of rescanning every author per target', async () => {
+test('indexed backlinks recheck authorization while reusing scope-local reverse edges and parsed sources', async () => {
   setup(true);
   await Promise.all(Array.from({ length: 21 }, (_, i) => seed(`A${i}.md`)));
   await seed('Reader.md', '', '[[A20]]');
   const canAccess = vi.fn(() => true);
+  const reverse = vi.spyOn(graph as any, 'incomingBacklinks');
   await fs.getBacklinks('A0.md', 4, canAccess);
+  const cachedReverse = reverse.mock.results[0]!.value;
+  expect(cachedReverse).toBeInstanceOf(Map);
+  const parse = vi.spyOn(graph as any, 'readEntry');
   const initialCalls = canAccess.mock.calls.length;
   for (let i = 1; i < 21; i++) {
     const result = await fs.getBacklinks(`A${i}.md`, 4, canAccess);
     expect(result.total).toBe(i === 20 ? 1 : 0);
   }
-  expect(canAccess.mock.calls.length - initialCalls).toBeLessThan(100);
+  // Cheap authorization membership must be reevaluated, even with the same
+  // predicate. Expensive reverse-edge construction/parsing still stays cached.
+  expect(canAccess.mock.calls.length - initialCalls).toBeGreaterThanOrEqual(20 * 22 * 2);
+  expect(reverse.mock.results.every(result => result.value === cachedReverse)).toBe(true);
+  expect(parse).not.toHaveBeenCalled();
   // A distinct caller predicate must not reuse another scope's resolver.
   expect(await fs.getBacklinks('A20.md', 4, path => path !== 'Reader.md')).toMatchObject({ total: 0, backlinks: [] });
 });

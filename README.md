@@ -1146,7 +1146,8 @@ item pagination, or an atomic snapshot. Inventory counting still scans current
 visible metadata; cursor continuation bounds graph probes, not total scan cost.
 Freshness reads overlap in batches of at most eight without changing scan order.
 Repeated backlink probes reuse a lazy reverse view only for the same access
-predicate and graph generation. The view holds at most 16,384 resolved edges;
+predicate, current visible path membership, and graph generation. Membership
+is re-evaluated even for reused predicates. The view holds at most 16,384 resolved edges;
 larger/dense graphs fall back to the complete scan rather than incomplete counts.
 Matching authors still receive live scope and moderation checks.
 Concurrent edits can shift windows; restart without `afterPath` if its note was
@@ -1183,6 +1184,14 @@ drift rejects the view instead of relabeling old context with a new revision.
 The final check reads at most the root plus 40 selected neighbors, four at a
 time; it is not an atomic Vault-wide snapshot. Character budgets cover pretty
 JSON too; omitted neighbors remain marked truncated.
+
+Graph resolver and incoming-edge caches reuse a caller view only while its
+evaluated visible path membership and graph generation remain unchanged.
+Reusing an access-predicate function does not freeze its permissions: revocation,
+grants and same-size membership swaps are re-evaluated without rereading note
+bodies. Backlink queries also reject visibility/graph changes during asynchronous
+source checks, even when no snapshot fingerprint was requested. This does not
+make the filesystem inventory or moderation watcher an atomic snapshot.
 
 `wiki.neighborhood` and `wiki.trail` resolve Markdown links from their source
 note and keep explicit file extensions. Ambiguous wikilinks are not definite

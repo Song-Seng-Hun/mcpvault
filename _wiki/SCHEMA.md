@@ -281,7 +281,8 @@ and advances to the next **scan window**; `selectionTruncated` indicates omitted
 recommendations within the current window, not ranked-item pagination. The
 ranking is window-local and inventory counts still require a metadata scan,
 using at most eight concurrent freshness reads while preserving inventory order.
-Backlink probes may reuse a predicate-local, generation-bound reverse view, capped
+Backlink probes may reuse a predicate-local, generation-bound reverse view only
+while its freshly evaluated visible path membership is unchanged, capped
 at 16,384 resolved edges. Overflow uses the complete scan. Access and moderation
 checks on matching authors still run before counting or pagination.
 Selected candidates and replacement targets are revision-checked. Reference
@@ -1060,6 +1061,11 @@ graph, shared metadata and semantic reads must agree with current selected
 sources; mixed/changed snapshots fail with a retry. Final verification covers
 at most 41 distinct notes with four concurrent reads, not an atomic census.
 Both compact and pretty JSON respect maxChars, with truncation reported.
+Graph visibility caches are keyed by current visible path membership as well
+as graph generation, not access-function identity alone. Permission revocation
+and grants take effect on the next query even if the caller reuses a closure.
+An asynchronous backlink query rejects a changed visibility/graph view rather
+than mixing counts, locators and redaction from different permission states.
 `get_wiki_answer_packet` is the compact follow-up projection: it combines the
 selected note with a few supporting neighbors and counterpoints or negative
 knowledge. Answer/context packets revalidate returned live note snapshots;

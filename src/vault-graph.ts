@@ -291,8 +291,8 @@ export class VaultGraphIndex {
         snapshot?.add(entry.path, entry.revision, project(entry, backlink));
         addTopMatch(backlinks, backlink, offset + limit, compare);
     }
-    if (includeSnapshot && this.changeGeneration !== startGeneration) {
-      throw new Error('Graph changed during navigation; retry the query. No stable navigation view was returned.');
+    if (this.changeGeneration !== startGeneration || this.visibilityContext(canAccessPath) !== visible) {
+      throw new Error('Graph changed or visibility changed during navigation; retry the query. No stable navigation view was returned.');
     }
     backlinks.sort(compare);
     const page = backlinks.slice(offset, offset + limit).map(link => project(sourceEntries.get(link.path)!, link));
@@ -416,10 +416,14 @@ export class VaultGraphIndex {
 
   private visibilityContext(canAccessPath: (path: string) => boolean): VisibilityContext {
     const cached = this.visibilityCache.get(canAccessPath);
-    if (cached && cached.generation === this.changeGeneration) return cached;
+    // Predicate identity is not an authorization snapshot: its closure may
+    // have changed without a filesystem event. Recheck membership, but retain
+    // the resolver and incoming-edge cache when the visible set is unchanged.
     const paths = [...this.allPaths].filter(path => canAccessPath(path)
-      && (!isNote(path) || (this.entries.has(path) && !this.entries.get(path)!.moderationHidden)))
-      .sort((a, b) => a.localeCompare(b));
+      && (!isNote(path) || (this.entries.has(path) && !this.entries.get(path)!.moderationHidden)));
+    if (cached && cached.generation === this.changeGeneration
+      && paths.length === cached.pathSet.size && paths.every(path => cached.pathSet.has(path))) return cached;
+    paths.sort((a, b) => a.localeCompare(b));
     const context: VisibilityContext = {
       generation: this.changeGeneration,
       paths,
