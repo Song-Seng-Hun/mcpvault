@@ -25,7 +25,7 @@ enrichment -> source/state revision check -> whole-response packing.
   in-memory MCP budget verification and source/private/target drift tests.
 - [x] Run focused suites, npm run build, npm test -- --maxWorkers=1, independent
   integrity review, git diff --check. Record exact results before publication.
-- [ ] Commit explicit source/test/docs/dist files, push origin main only and
+- [x] Commit explicit source/test/docs/dist files, push origin main only and
   verify local HEAD/tracking/live remote match. No actual Vault/server actions.
 
 ## Evidence
@@ -57,7 +57,10 @@ The preceding MOC work is already pushed as aa5c95b; design commit 670105a.
   Focused 37 tests passed (7.49s), followed by a successful build.
   Final whole-suite verification: 180 files passed; 2791 passed, 1 skipped;
   323.22s (2026-09-07 05:15:37 local start), exit 0. Build and staged diff check
-  passed. Publication remains pending below.
+  passed. Implementation committed as 92fe468a70cc0114441b5b25c01a2f07ec5d97ec
+  and pushed to Song-Seng-Hun/mcpvault main. Local HEAD, origin/main and live
+  ls-remote main matched that hash. Only pre-existing .agents/ and .mcpvault/
+  remained untracked; no actual Vault/server or client configuration was changed.
 
 ## Resource follow-up (investigated, not implemented in this increment)
 
