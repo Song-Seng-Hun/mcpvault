@@ -32,7 +32,7 @@ through the shared coordinator, and retain reference semantics/visibility.
 - [x] Run focused tests, build, independent read-only integrity review, then
   full `npm test -- --maxWorkers=1` sequentially. Fix genuine regressions, update
   docs with the non-revision boundary and diff check.
-- [ ] Stage explicit source/dist/
+- [x] Stage explicit source/dist/
   tests/docs, commit and push origin main only, verify SHA and record results.
 
 ## Verification in progress
@@ -55,3 +55,11 @@ through the shared coordinator, and retain reference semantics/visibility.
 - This is an I/O-count fixture, not a whole-server performance benchmark. Header
   discovery deliberately provides no body digest, new memory ceiling, or claim
   that unseen body changes have been verified.
+
+## Delivery
+
+Implementation `5b10030aada93c633444f042cc2fd6e58c2ed308` was pushed to
+`https://github.com/Song-Seng-Hun/mcpvault.git` main. Live `git ls-remote`
+matched local HEAD. Only unrelated untracked `.agents/` and `.mcpvault/` remained;
+neither was staged. No upstream contribution, release, package publish or runtime
+restart. This completed increment does not close the broader active Goal.
