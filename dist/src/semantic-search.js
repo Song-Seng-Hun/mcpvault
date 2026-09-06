@@ -733,6 +733,11 @@ export class SemanticSearchService {
                     const entry = this.manifest[normalized];
                     if (entry && entry.embeddingProfile === SEMANTIC_EMBEDDING_PROFILE && entry.size === info.size && entry.mtimeMs === info.mtimeMs)
                         return { normalized, info, entry };
+                    // A pending intent already requires current-source preparation at
+                    // drain time. Do not reread/hash it on every reconciliation scan or
+                    // advance the manifest before the authoritative validation succeeds.
+                    if (this.pending.has(normalized))
+                        return { normalized, info, entry };
                     const content = await this.vaultIo.readUtf8(fullPath, 'background').catch(error => {
                         if (isMissingVaultPath(error))
                             return undefined;
@@ -810,12 +815,15 @@ export class SemanticSearchService {
         this.syncPromise = (async () => {
             const batch = [];
             const now = Date.now();
-            while (this.pending.size > 0 && batch.length < maxFiles) {
-                const first = [...this.pending.entries()].find(([, change]) => !change.retryAt || change.retryAt <= now);
-                if (!first)
+            for (const [path, change] of this.pending.entries()) {
+                if (batch.length >= maxFiles)
                     break;
-                this.pending.delete(first[0]);
-                batch.push(first);
+                if (change.retryAt && change.retryAt > now)
+                    continue;
+                this.pending.delete(path);
+                batch.push([path, change]);
+                if (batch.length >= maxFiles)
+                    break;
             }
             if (batch.length === 0)
                 return;

@@ -2805,6 +2805,16 @@ client cache. Corrupt/oversized lookup results and lookup errors fall back to
 normal embedding; failed table writes remain retryable without advancing the
 manifest.
 
+Pending batch selection uses one Map iterator, skipping delayed retries without
+cloning the entire queue for each selected path. A 5,000-entry ready-queue test
+visits four entries to select four paths (previously 19,994); with 1,000 delayed
+entries first it visits 1,004. This is an operation count, not a measured runtime
+or RSS improvement. Reconciliation still validates paths and stats, but avoids
+re-reading bodies already queued for preparation. It does not advance their
+manifest or reset retries: drain checks current existence, reads the latest
+Markdown and validates the final source hash before applying vectors. Unqueued
+changed sources are still read and discovered normally.
+
 Model-free reuse also starts the resource idle timer: DB/table references are
 released after inactivity, while active searches and indexing batches defer
 release. This does not require loading an embedding model just to start cleanup.

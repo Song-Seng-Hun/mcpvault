@@ -21,6 +21,13 @@ Missing/read-failing/recreated sources remain governed by that same drain path.
 No unqueued path receives the shortcut. Do not skip authoritative validation or
 infer successful indexing from a queued event.
 
+Scheduling invariant: the only production drain caller is runIdleWork, which
+awaits the shared scanPromise first. An existing drain removes its complete batch
+synchronously before doing asynchronous preparation. Therefore a source seen as
+pending by a scan is not part of an already-running drain; a new drain waits for
+that scan. Preserve this ordering if adding future callers. An edit after any
+scan observation still relies on watcher delivery or a subsequent scan, as before.
+
 Alternatives rejected: a priority heap adds synchronization/invalidation overhead
 for a bounded 5,000-entry queue; extra read-result caches introduce freshness and
 memory costs; more workers increase pressure without removing duplicate work.

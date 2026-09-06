@@ -10,17 +10,17 @@ to a single bounded iterator and skip redundant scan reads only for queued paths
 
 **Tech Stack:** TypeScript, Map iterators, temporary Markdown, Vitest.
 
-- [ ] Extend `src/semantic-integrity.test.ts` with a counted entries iterator over
+- [x] Extend `src/semantic-integrity.test.ts` with a counted entries iterator over
   5,000 pending paths. Real `drain(4)` must consume four entries for all-ready
   work and a delayed prefix plus four for mixed work; capture native apply args
   to check FIFO and untouched retries. Add a failed-batch newer-event check.
-- [ ] Add queued changed-note scan tests: spy on the real vaultIo readUtf8,
+- [x] Add queued changed-note scan tests: spy on the real vaultIo readUtf8,
   assert zero scan reads and unchanged manifest/attempt, then drain and inspect
   current prepared hash. Read failure must remain retryable at drain; an
   unqueued changed source must still be read and queued.
-- [ ] Run `npm test -- src/semantic-integrity.test.ts --maxWorkers=1` and observe
+- [x] Run `npm test -- src/semantic-integrity.test.ts --maxWorkers=1` and observe
   RED for the new work-count invariants before source changes.
-- [ ] Replace drain selection in `src/semantic-search.ts` with:
+- [x] Replace drain selection in `src/semantic-search.ts` with:
   ```ts
   for (const [path, change] of this.pending.entries()) {
     if (batch.length >= maxFiles) break;
@@ -34,7 +34,23 @@ to a single bounded iterator and skip redundant scan reads only for queued paths
   ```ts
   if (this.pending.has(normalized)) return { normalized, info, entry };
   ```
-- [ ] Run focused integrity/inference/reuse tests and build. Document precise
+- [x] Run focused integrity/inference/reuse tests and build. Document precise
   work-count/unchanged validation semantics in README. Review the diff; run
   `npm test -- --maxWorkers=1` and `git -c core.safecrlf=false diff --check`.
-  Commit explicit source/tests/docs/dist and push only origin main.
+  Integration follows verification: commit explicit source/tests/docs/dist and
+  push only origin main; verify remote tracking status in the handoff.
+
+## Evidence
+
+- RED: four new assertions failed on existing code; all-ready and delayed-prefix
+  selections both consumed 19,994 entries, pending scan reread its body, and a
+  pending unreadable body failed at redundant scan rather than actual drain.
+- GREEN: integrity/inference/reuse suites passed 72 tests across three files;
+  original retry/newer-intent and source-hash regressions remain covered.
+- Build passed. README distinguishes iterator/read operation counts from measured
+  speed or memory. Full one-worker suite: 2,391 passed, one skipped, 156 files,
+  278.38 seconds. Whitespace validation passed.
+- Independent Terra review approved after rechecking production scheduling. Its
+  initial hypothetical scan/drain concern was withdrawn: all production drains
+  await scanForChanges; an active drain removes its complete selected batch before
+  any await. This invariant is recorded in the spec. Reviewer closed.

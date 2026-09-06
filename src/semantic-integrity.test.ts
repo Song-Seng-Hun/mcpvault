@@ -353,3 +353,75 @@ test('public MCP retains bounded lexical results when the vector backend fails',
     await server.close();
   }
 });
+
+test.each([0, 1000, 5000])('pending selection visits only the required prefix with %i delayed paths', async delayed => {
+  const pending = (service as any).pending as Map<string, any>;
+  const later = Date.now() + 60_000;
+  for (let i = 0; i < 5000; i++) pending.set(`Queued${i}.md`, { kind: 'delete', ...(i < delayed && { retryAt: later, attempt: 3 }) });
+  const entries = pending.entries.bind(pending);
+  let visits = 0;
+  vi.spyOn(pending, 'entries').mockImplementation(function* () {
+    for (const entry of entries()) { visits++; yield entry; }
+  });
+  const apply = vi.spyOn(service as any, 'applyIndexBatch').mockResolvedValue(undefined);
+  vi.spyOn(service as any, 'saveManifest').mockResolvedValue(undefined);
+  await (service as any).drain(4);
+  const count = Math.min(4, 5000 - delayed);
+  expect(visits).toBe(delayed + count);
+  expect(pending.size).toBe(5000 - count);
+  if (count) expect(apply).toHaveBeenCalledWith([], Array.from({ length: count }, (_, i) => `Queued${delayed + i}.md`));
+  else expect(apply).not.toHaveBeenCalled();
+  if (delayed) expect(pending.get('Queued0.md')).toEqual({ kind: 'delete', retryAt: later, attempt: 3 });
+});
+
+test('a failed selected batch preserves a newer watcher intent and retries other selected paths', async () => {
+  service.notifyChange('MissingA.md', 'delete'); service.notifyChange('MissingB.md', 'delete');
+  vi.spyOn(service as any, 'applyIndexBatch').mockImplementation(async () => {
+    service.notifyChange('MissingA.md', 'upsert');
+    throw new Error('native apply failed');
+  });
+  await expect((service as any).drain(2)).rejects.toThrow('native apply failed');
+  expect((service as any).pending.get('MissingA.md')).toEqual({ kind: 'upsert' });
+  expect((service as any).pending.get('MissingB.md')).toMatchObject({ kind: 'delete', attempt: 1 });
+});
+
+test('scanning an already queued source skips body reads without blessing its old manifest', async () => {
+  const before = { ...(service as any).manifest['Area/Note.md'] };
+  const queued = { kind: 'upsert', attempt: 3, retryAt: Date.now() + 60_000 };
+  (service as any).pending.set('Area/Note.md', queued);
+  await writeFile(join(vault, 'Area/Note.md'), '# Changed while queued');
+  const reads = vi.spyOn((service as any).vaultIo, 'readUtf8');
+  await (service as any).scanForChanges();
+  expect(reads).not.toHaveBeenCalled();
+  expect((service as any).pending.get('Area/Note.md')).toBe(queued);
+  expect((service as any).manifest['Area/Note.md']).toEqual(before);
+  const latest = '# Changed again before the actual drain';
+  await writeFile(join(vault, 'Area/Note.md'), latest);
+  queued.retryAt = 0;
+  const apply = vi.spyOn(service as any, 'applyIndexBatch').mockResolvedValue(undefined);
+  vi.spyOn(service as any, 'saveManifest').mockResolvedValue(undefined);
+  await (service as any).drain(4);
+  expect(apply.mock.calls[0]?.[0]).toEqual([expect.objectContaining({ path: 'Area/Note.md', contentHash: hash(latest) })]);
+  expect(reads).toHaveBeenCalledTimes(2); // Preparation and final revision validation.
+});
+
+test('a skipped queued scan still rejects an unreadable source when drain validates it', async () => {
+  service.notifyChange('Area/Note.md', 'upsert');
+  await writeFile(join(vault, 'Area/Note.md'), '# Changed unreadable source');
+  faults.readFile.set(join(vault, 'Area/Note.md'), 'EACCES');
+  const before = { ...(service as any).manifest['Area/Note.md'] };
+  await expect((service as any).scanForChanges()).resolves.toBeUndefined();
+  const apply = vi.spyOn(service as any, 'applyIndexBatch').mockResolvedValue(undefined);
+  await expect((service as any).drain(4)).rejects.toThrow(/unavailable.*retry/i);
+  expect(apply).not.toHaveBeenCalled();
+  expect((service as any).manifest['Area/Note.md']).toEqual(before);
+  expect((service as any).pending.get('Area/Note.md')).toMatchObject({ kind: 'upsert', attempt: 1 });
+});
+
+test('an unqueued changed source is still read and discovered by reconciliation', async () => {
+  await writeFile(join(vault, 'Area/Note.md'), '# Unqueued changed source');
+  const reads = vi.spyOn((service as any).vaultIo, 'readUtf8');
+  await (service as any).scanForChanges();
+  expect(reads).toHaveBeenCalledTimes(1);
+  expect((service as any).pending.get('Area/Note.md')).toEqual({ kind: 'upsert' });
+});
