@@ -24,6 +24,7 @@ export declare class VaultGraphIndex {
     private needsFullRefresh;
     private forceFullRead;
     private lastFullRefreshAt;
+    private lastContentAuditAt;
     private changeGeneration;
     private readonly visibilityCache;
     private readonly catalogUnsubscribe;

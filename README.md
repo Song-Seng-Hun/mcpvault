@@ -2663,12 +2663,22 @@ Explicit full resets reread source text even when size/mtime are unchanged;
 ordinary periodic reconciliation reuses a parsed body only when size, mtime
 and ctime all match. This detects missed edits from sync tools that preserve
 size/mtime but change ctime, including new incoming links, aliases, tags and
-moderation state. Unchanged notes incur stat checks, not repeated body reads.
+moderation state. Between content audits, unchanged notes incur stat checks,
+not repeated body reads.
 Reconciliation runs on a subsequent query after the interval (60 seconds with
 the graph's own watcher, 5 seconds without it, including a catalog-backed
 graph); it is not an autonomous timer or immediate whole-vault freshness.
-Filesystems that preserve/coarsen all three values and missed inventory changes
-still require separate handling; stat equality is not content verification.
+An independent 15-minute content-audit deadline bypasses stat equality on the
+next graph query. It hashes all eligible source bodies, recovering missed
+edits even when size/mtime/ctime collide; matching hashes reuse parsed fields.
+Ordinary full/dirty refreshes do not postpone this deadline. Failed or
+generation-aborted audits do not certify freshness or postpone the next retry.
+Concurrent callers share one pass, with at most 16 reads per batch and 8 MiB
+per source. The triggering request still pays total source-byte I/O and latency:
+these are not whole-vault memory/latency bounds, and 15 minutes is a default,
+not a benchmark-derived optimum. This is query-triggered, not a daemon, an
+atomic filesystem snapshot, or an authorization grant. Catalog reconciliation
+handles inventory independently; other indexes retain their own guarantees.
 
 Metadata refreshes use the same observed-change rule for work/review queries:
 full and dirty results are staged, newer invalidations trigger another read,

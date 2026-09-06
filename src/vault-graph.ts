@@ -20,6 +20,7 @@ import { createGraphLinkProjector } from './graph-link-projection.js';
 
 const GRAPH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
+const GRAPH_CONTENT_AUDIT_INTERVAL_MS = 15 * 60_000;
 const REVERSE_LINK_CACHE_LIMIT = 16_384;
 const NOTE_PATTERN = /\.(?:md|markdown|txt)$/i;
 const GRAPH_READ_BATCH_SIZE = 16;
@@ -178,6 +179,7 @@ export class VaultGraphIndex {
   private needsFullRefresh = true;
   private forceFullRead = true;
   private lastFullRefreshAt = 0;
+  private lastContentAuditAt = 0;
   private changeGeneration = 0;
   private readonly visibilityCache = new WeakMap<(path: string) => boolean, VisibilityContext>();
   private readonly catalogUnsubscribe: (() => void) | undefined;
@@ -465,7 +467,8 @@ export class VaultGraphIndex {
     for (let attempt = 0; attempt < 3; attempt++) {
       if (this.refreshPromise) await this.refreshPromise;
       const interval = this.watcher ? GRAPH_RECONCILE_INTERVAL_MS : NO_WATCHER_RECONCILE_INTERVAL_MS;
-      if (!this.initialized || this.needsFullRefresh || Date.now() - this.lastFullRefreshAt >= interval) await this.refreshAll();
+      const auditContent = this.initialized && Date.now() - this.lastContentAuditAt >= GRAPH_CONTENT_AUDIT_INTERVAL_MS;
+      if (!this.initialized || this.needsFullRefresh || auditContent || Date.now() - this.lastFullRefreshAt >= interval) await this.refreshAll(auditContent);
       else if (this.dirty.size > 0) await this.refreshDirty();
       // A shared catalog may still be debouncing events received during IO.
       await this.catalog?.flushPendingEvents();
@@ -557,10 +560,11 @@ export class VaultGraphIndex {
     }
   }
 
-  private async refreshAll(): Promise<void> {
+  private async refreshAll(auditContent = false): Promise<void> {
     if (this.refreshPromise) return this.refreshPromise;
     this.refreshPromise = (async () => {
       const generation = this.changeGeneration;
+      const verifyContent = auditContent || this.forceFullRead || !this.initialized;
       const paths = this.catalog
         ? await this.catalog.allPathsSnapshot()
         : await this.findNotePaths(this.vaultPath);
@@ -568,7 +572,7 @@ export class VaultGraphIndex {
       const next = new Map<string, GraphEntry>();
       for (let start = 0; start < paths.length; start += GRAPH_READ_BATCH_SIZE) {
         const batch = paths.slice(start, start + GRAPH_READ_BATCH_SIZE);
-        const entries = await this.readBatch(batch, true);
+        const entries = await this.readBatch(batch, true, verifyContent);
         for (const entry of entries) if (entry) next.set(entry.path, entry);
         if (generation !== this.changeGeneration) {
           this.needsFullRefresh = true;
@@ -585,6 +589,7 @@ export class VaultGraphIndex {
       this.forceFullRead = false;
       this.initialized = true;
       this.lastFullRefreshAt = Date.now();
+      if (verifyContent) this.lastContentAuditAt = this.lastFullRefreshAt;
     })();
     try {
       await this.refreshPromise;
@@ -630,16 +635,16 @@ export class VaultGraphIndex {
     }
   }
 
-  private async readBatch(paths: string[], reuseExisting = false): Promise<Array<GraphEntry | undefined>> {
+  private async readBatch(paths: string[], reuseExisting = false, verifyContent = false): Promise<Array<GraphEntry | undefined>> {
     // Drain a failed batch before allowing another refresh to share its reads.
     const results = await Promise.allSettled(paths.map(path => this.readEntry(path,
-      reuseExisting && !this.forceFullRead && !this.dirty.has(path) ? this.entries.get(path) : undefined)));
+      reuseExisting && !this.forceFullRead && !this.dirty.has(path) ? this.entries.get(path) : undefined, verifyContent)));
     const failed = results.find(result => result.status === 'rejected');
     if (failed?.status === 'rejected') throw failed.reason;
     return results.map(result => result.status === 'fulfilled' ? result.value : undefined);
   }
 
-  private async readEntry(path: string, existing?: GraphEntry): Promise<GraphEntry | undefined> {
+  private async readEntry(path: string, existing?: GraphEntry, verifyContent = false): Promise<GraphEntry | undefined> {
     const normalized = normalizePath(path);
     if (!isNote(normalized) || !this.pathFilter.isAllowed(normalized)) return undefined;
     try {
@@ -650,9 +655,14 @@ export class VaultGraphIndex {
       // ctime lets periodic reconciliation detect those missed watcher edits
       // without reading every unchanged body. This remains a stat heuristic,
       // not a content proof on filesystems that preserve all three values.
-      if (existing && existing.size === info.size && existing.mtimeMs === info.mtimeMs
+      // The independent content audit bypasses this shortcut periodically.
+      if (existing && !verifyContent && existing.size === info.size && existing.mtimeMs === info.mtimeMs
         && existing.ctimeMs === info.ctimeMs) return existing;
       const raw = await this.vaultIo.readUtf8Bounded(fullPath, GRAPH_SOURCE_MAX_BYTES);
+      const revision = createHash('sha256').update(raw).digest('hex');
+      if (existing && existing.revision === revision) {
+        return { ...existing, size: info.size, mtimeMs: info.mtimeMs, ctimeMs: info.ctimeMs };
+      }
       const parsed = this.frontmatter.parse(raw);
       const tags: string[] = [];
       const identityTerms: string[] = [];
@@ -749,7 +759,7 @@ export class VaultGraphIndex {
           }
         }
       }
-      return { path: normalized, moderationHidden: isModerationHidden(parsed.frontmatter), revision: createHash('sha256').update(raw).digest('hex'), size: info.size, mtimeMs: info.mtimeMs, ctimeMs: info.ctimeMs, links, tags, identityTerms };
+      return { path: normalized, moderationHidden: isModerationHidden(parsed.frontmatter), revision, size: info.size, mtimeMs: info.mtimeMs, ctimeMs: info.ctimeMs, links, tags, identityTerms };
     } catch (error) {
       if (isMissingVaultPath(error)) return undefined;
       if (error instanceof SourceReadLimitError) throw new Error('Graph source exceeds the 8 MiB read limit; split oversized notes before retrying. No partial graph view was returned.');

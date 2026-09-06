@@ -307,10 +307,16 @@ path-free retry error; revision response fields remain opt-in. This does not
 detect every new/missing edge outside the query or provide an atomic census.
 Periodic graph reconciliation also compares ctime alongside size/mtime before
 reusing parsed bodies. Missed edits preserving size/mtime are reparsed when
-ctime changes, refreshing links, aliases, tags and moderation. This is a
-query-triggered fallback, not a content proof when all stat values match or
-a guarantee that the file inventory is current. Existing source-revision
-validation and caller visibility checks remain independent requirements.
+ctime changes, refreshing links, aliases, tags and moderation. Independently,
+the next graph query after 15 minutes performs a source-content hash audit,
+including entries whose size/mtime/ctime all match. Equal hashes reuse parsed
+fields. Ordinary full/dirty refreshes cannot postpone this audit; failures or
+observed generation changes cannot certify an incomplete pass. Readers share
+one pass, capped at 16 concurrent reads and 8 MiB per source, but the initiating
+request pays total source I/O and latency. This is not an autonomous timer,
+whole-vault resource bound, atomic snapshot, or file-inventory guarantee.
+Existing source-revision validation and caller visibility checks remain
+independent requirements; this audit does not alter other index contracts.
 Catalog inventory reconciliation re-enumerates allowed directories on a query
 after its interval, even when ancestor/directory stats match. Incremental
 refreshes do not reset the full-census deadline. Received changes during a
