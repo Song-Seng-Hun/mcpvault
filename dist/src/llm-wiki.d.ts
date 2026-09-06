@@ -90,6 +90,7 @@ export declare class LlmWikiService {
     private readonly access;
     private readonly references;
     private readonly semanticSearch?;
+    private workDateProjection;
     private generation;
     private readonly catalogSummaryCache;
     private readonly catalogSummaryInFlight;
@@ -803,6 +804,19 @@ export declare class LlmWikiService {
                 meaning: string;
                 total: number;
                 items: {
+                    dueAt?: string;
+                    scheduledAt?: string;
+                    deferUntil?: string;
+                    dateIssues?: string[];
+                    dateRepairAction?: {
+                        endpointId: string;
+                        arguments: {
+                            path: string;
+                            expectedRevision: string | undefined;
+                            maxChars: number;
+                        };
+                    };
+                    dateRepairGuidance?: string;
                     path: string;
                     title: any;
                     revision?: string;
@@ -816,6 +830,19 @@ export declare class LlmWikiService {
             unlockPoints: {
                 total: number;
                 items: {
+                    dueAt?: string;
+                    scheduledAt?: string;
+                    deferUntil?: string;
+                    dateIssues?: string[];
+                    dateRepairAction?: {
+                        endpointId: string;
+                        arguments: {
+                            path: string;
+                            expectedRevision: string | undefined;
+                            maxChars: number;
+                        };
+                    };
+                    dateRepairGuidance?: string;
                     path: string;
                     title: any;
                     revision?: string;
@@ -827,6 +854,19 @@ export declare class LlmWikiService {
                 truncated: boolean;
             };
             deepestDependencyChain?: {
+                dueAt?: string;
+                scheduledAt?: string;
+                deferUntil?: string;
+                dateIssues?: string[];
+                dateRepairAction?: {
+                    endpointId: string;
+                    arguments: {
+                        path: string;
+                        expectedRevision: string | undefined;
+                        maxChars: number;
+                    };
+                };
+                dateRepairGuidance?: string;
                 path: string;
                 title: any;
                 revision?: string;
@@ -842,6 +882,19 @@ export declare class LlmWikiService {
                 items: {
                     cycle: number;
                     notes: {
+                        dueAt?: string;
+                        scheduledAt?: string;
+                        deferUntil?: string;
+                        dateIssues?: string[];
+                        dateRepairAction?: {
+                            endpointId: string;
+                            arguments: {
+                                path: string;
+                                expectedRevision: string | undefined;
+                                maxChars: number;
+                            };
+                        };
+                        dateRepairGuidance?: string;
                         path: string;
                         title: any;
                         revision?: string;
@@ -857,6 +910,19 @@ export declare class LlmWikiService {
             cycleBlockedDependents: {
                 total: number;
                 items: {
+                    dueAt?: string;
+                    scheduledAt?: string;
+                    deferUntil?: string;
+                    dateIssues?: string[];
+                    dateRepairAction?: {
+                        endpointId: string;
+                        arguments: {
+                            path: string;
+                            expectedRevision: string | undefined;
+                            maxChars: number;
+                        };
+                    };
+                    dateRepairGuidance?: string;
                     path: string;
                     title: any;
                     revision?: string;
@@ -870,6 +936,19 @@ export declare class LlmWikiService {
             incompletePrerequisites: {
                 total: number;
                 items: {
+                    dueAt?: string;
+                    scheduledAt?: string;
+                    deferUntil?: string;
+                    dateIssues?: string[];
+                    dateRepairAction?: {
+                        endpointId: string;
+                        arguments: {
+                            path: string;
+                            expectedRevision: string | undefined;
+                            maxChars: number;
+                        };
+                    };
+                    dateRepairGuidance?: string;
                     path: string;
                     title: any;
                     revision?: string;
@@ -899,6 +978,19 @@ export declare class LlmWikiService {
             incompleteBlockedDependents: {
                 total: number;
                 items: {
+                    dueAt?: string;
+                    scheduledAt?: string;
+                    deferUntil?: string;
+                    dateIssues?: string[];
+                    dateRepairAction?: {
+                        endpointId: string;
+                        arguments: {
+                            path: string;
+                            expectedRevision: string | undefined;
+                            maxChars: number;
+                        };
+                    };
+                    dateRepairGuidance?: string;
                     path: string;
                     title: any;
                     revision?: string;
@@ -912,6 +1004,19 @@ export declare class LlmWikiService {
             workflowHolds: {
                 total: number;
                 items: {
+                    dueAt?: string;
+                    scheduledAt?: string;
+                    deferUntil?: string;
+                    dateIssues?: string[];
+                    dateRepairAction?: {
+                        endpointId: string;
+                        arguments: {
+                            path: string;
+                            expectedRevision: string | undefined;
+                            maxChars: number;
+                        };
+                    };
+                    dateRepairGuidance?: string;
                     path: string;
                     title: any;
                     revision?: string;
@@ -925,6 +1030,19 @@ export declare class LlmWikiService {
             workflowHoldBlockedDependents: {
                 total: number;
                 items: {
+                    dueAt?: string;
+                    scheduledAt?: string;
+                    deferUntil?: string;
+                    dateIssues?: string[];
+                    dateRepairAction?: {
+                        endpointId: string;
+                        arguments: {
+                            path: string;
+                            expectedRevision: string | undefined;
+                            maxChars: number;
+                        };
+                    };
+                    dateRepairGuidance?: string;
                     path: string;
                     title: any;
                     revision?: string;
@@ -1063,6 +1181,19 @@ export declare class LlmWikiService {
                         meaning: string;
                         total: number;
                         items: {
+                            dueAt?: string;
+                            scheduledAt?: string;
+                            deferUntil?: string;
+                            dateIssues?: string[];
+                            dateRepairAction?: {
+                                endpointId: string;
+                                arguments: {
+                                    path: string;
+                                    expectedRevision: string | undefined;
+                                    maxChars: number;
+                                };
+                            };
+                            dateRepairGuidance?: string;
                             path: string;
                             title: any;
                             revision?: string;
@@ -1076,6 +1207,19 @@ export declare class LlmWikiService {
                     unlockPoints: {
                         total: number;
                         items: {
+                            dueAt?: string;
+                            scheduledAt?: string;
+                            deferUntil?: string;
+                            dateIssues?: string[];
+                            dateRepairAction?: {
+                                endpointId: string;
+                                arguments: {
+                                    path: string;
+                                    expectedRevision: string | undefined;
+                                    maxChars: number;
+                                };
+                            };
+                            dateRepairGuidance?: string;
                             path: string;
                             title: any;
                             revision?: string;
@@ -1087,6 +1231,19 @@ export declare class LlmWikiService {
                         truncated: boolean;
                     };
                     deepestDependencyChain?: {
+                        dueAt?: string;
+                        scheduledAt?: string;
+                        deferUntil?: string;
+                        dateIssues?: string[];
+                        dateRepairAction?: {
+                            endpointId: string;
+                            arguments: {
+                                path: string;
+                                expectedRevision: string | undefined;
+                                maxChars: number;
+                            };
+                        };
+                        dateRepairGuidance?: string;
                         path: string;
                         title: any;
                         revision?: string;
@@ -1102,6 +1259,19 @@ export declare class LlmWikiService {
                         items: {
                             cycle: number;
                             notes: {
+                                dueAt?: string;
+                                scheduledAt?: string;
+                                deferUntil?: string;
+                                dateIssues?: string[];
+                                dateRepairAction?: {
+                                    endpointId: string;
+                                    arguments: {
+                                        path: string;
+                                        expectedRevision: string | undefined;
+                                        maxChars: number;
+                                    };
+                                };
+                                dateRepairGuidance?: string;
                                 path: string;
                                 title: any;
                                 revision?: string;
@@ -1117,6 +1287,19 @@ export declare class LlmWikiService {
                     cycleBlockedDependents: {
                         total: number;
                         items: {
+                            dueAt?: string;
+                            scheduledAt?: string;
+                            deferUntil?: string;
+                            dateIssues?: string[];
+                            dateRepairAction?: {
+                                endpointId: string;
+                                arguments: {
+                                    path: string;
+                                    expectedRevision: string | undefined;
+                                    maxChars: number;
+                                };
+                            };
+                            dateRepairGuidance?: string;
                             path: string;
                             title: any;
                             revision?: string;
@@ -1130,6 +1313,19 @@ export declare class LlmWikiService {
                     incompletePrerequisites: {
                         total: number;
                         items: {
+                            dueAt?: string;
+                            scheduledAt?: string;
+                            deferUntil?: string;
+                            dateIssues?: string[];
+                            dateRepairAction?: {
+                                endpointId: string;
+                                arguments: {
+                                    path: string;
+                                    expectedRevision: string | undefined;
+                                    maxChars: number;
+                                };
+                            };
+                            dateRepairGuidance?: string;
                             path: string;
                             title: any;
                             revision?: string;
@@ -1159,6 +1355,19 @@ export declare class LlmWikiService {
                     incompleteBlockedDependents: {
                         total: number;
                         items: {
+                            dueAt?: string;
+                            scheduledAt?: string;
+                            deferUntil?: string;
+                            dateIssues?: string[];
+                            dateRepairAction?: {
+                                endpointId: string;
+                                arguments: {
+                                    path: string;
+                                    expectedRevision: string | undefined;
+                                    maxChars: number;
+                                };
+                            };
+                            dateRepairGuidance?: string;
                             path: string;
                             title: any;
                             revision?: string;
@@ -1172,6 +1381,19 @@ export declare class LlmWikiService {
                     workflowHolds: {
                         total: number;
                         items: {
+                            dueAt?: string;
+                            scheduledAt?: string;
+                            deferUntil?: string;
+                            dateIssues?: string[];
+                            dateRepairAction?: {
+                                endpointId: string;
+                                arguments: {
+                                    path: string;
+                                    expectedRevision: string | undefined;
+                                    maxChars: number;
+                                };
+                            };
+                            dateRepairGuidance?: string;
                             path: string;
                             title: any;
                             revision?: string;
@@ -1185,6 +1407,19 @@ export declare class LlmWikiService {
                     workflowHoldBlockedDependents: {
                         total: number;
                         items: {
+                            dueAt?: string;
+                            scheduledAt?: string;
+                            deferUntil?: string;
+                            dateIssues?: string[];
+                            dateRepairAction?: {
+                                endpointId: string;
+                                arguments: {
+                                    path: string;
+                                    expectedRevision: string | undefined;
+                                    maxChars: number;
+                                };
+                            };
+                            dateRepairGuidance?: string;
                             path: string;
                             title: any;
                             revision?: string;

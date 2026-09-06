@@ -478,6 +478,23 @@ and is excluded from next actions and forecast stages. Its workflow hold also
 excludes dependent stages. Reflect returns `readiness: invalid_task_status`;
 flow uses the blocked lane with `blockedReason: invalid_task_status`. Repair
 the source at its current revision; reading these views does not change notes.
+Work-date projections validate `due_at`, `scheduled_at` and `defer_until` as
+scalar ISO calendar dates/times, including real month/day validity. An absent
+Property is unspecified; null, blank, arrays and malformed dates produce
+`dateIssues: ["invalid_<field>"]`, not a coerced timestamp. Invalid deadline or
+calendar metadata is omitted from date ordering, due counts and calendar
+entries without making otherwise executable work unavailable. Invalid defer
+is different: it is an unknown hold, excluded from next actions and forecast
+stages along with its dependents. Otherwise-unheld work uses Reflect readiness
+and flow blockedReason `invalid_defer_until`; existing waiting/dependency/status
+holds retain their own reasons. `dateRepairAction` reads the owning note with
+its revision; deliberately correct/remove the Property with `notes.patch`
+dry-run and `expectedRevision`, never invent a date. Next-action `invalidDefer`
+counts excluded actions, while `invalidDeferNotes` counts affected sources even
+without action text. Repair discovery respects task context but is independent
+of execution-capacity filters. Bounded `dateRepairItems` locate sources, and
+compact packets provide a flow continuation when those rows are omitted.
+No read rewrites metadata or releases a hold in Markdown.
 Work text presence is shared across Reflect, flow, action selection and lint.
 Only nonempty scalar strings count as waiting owners or scalar next actions;
 `next_actions` needs at least one such entry. Malformed/blank waiting text does

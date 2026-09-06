@@ -323,6 +323,17 @@ export declare function normalizeReviewIntervalDays(value: unknown, fallback?: n
 export declare function normalizeNavOrder(value: unknown, fallback?: number): number | undefined;
 /** Read-side validation: malformed authored dates are unknown, never coerced. */
 export declare function organizationDateTimestamp(value: unknown): number;
+/** Deadlines/calendar dates are advisory; an unreadable deferral is an unknown
+ * hold, never permission to execute. Only an absent property means no hold. */
+export declare function workDateState(frontmatter: Record<string, unknown>, asOfMs?: number): {
+    dueAt: string | undefined;
+    scheduledAt: string | undefined;
+    deferUntil: string | undefined;
+    dateIssues: string[];
+    invalidDefer: boolean;
+    deferred: boolean;
+    overdue: boolean;
+};
 export declare function normalizeIsoDate(value: unknown, field: string): string | undefined;
 /**
  * Derive a claim-validity card without confusing it with file, source, task,

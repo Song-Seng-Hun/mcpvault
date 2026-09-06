@@ -794,6 +794,20 @@ workflow hold excludes downstream work from forecast stages until repaired.
 Flow reports `blockedReason: invalid_task_status`; lint reports the malformed
 declaration. Do not write `invalid` back as a status: read the current note and
 deliberately repair its Property with a revision-checked edit.
+Work dates use the same strict scalar/calendar validation in Reflect, flow,
+project planning and next actions. Malformed `due_at`/`scheduled_at` are
+`dateIssues`, not overdue dates or calendar entries, and do not by themselves
+hold execution. A malformed `defer_until` (including null or blank) is an
+unknown hold: `invalid_defer_until` keeps the work and dependent forecast
+stages off the executable plan. Only absence means no authored defer hold;
+a valid future date remains deferred. Rows expose `dateRepairAction` to read
+the current source at `expectedRevision`; inspect and deliberately correct or
+remove the Property with a dry-run, revision-checked `notes.patch`. Never guess
+a replacement or clear a hold merely to make a task run. Tiny next-action
+packets retain `invalidDefer` exclusions and a flow continuation when repair
+rows do not fit. `invalidDeferNotes` also counts sources without action text;
+repair discovery respects context but is not hidden by capacity filters.
+Requery after edits; these are advisory views, not task locks.
 Reflect, flow, dependency holds and the action list use the same authored-text
 rule: only a nonempty scalar `waiting_for` creates an implicit waiting hold;
 empty or malformed values do not invent an owner. An explicit `task_status:

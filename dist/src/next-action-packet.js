@@ -4,11 +4,14 @@ export function packNextActionPacket(result, maxChars, prettyPrint = false) {
     if (fits(result))
         return result;
     const counters = (value) => Object.fromEntries(Object.entries(value || {}).filter(([, count]) => typeof count === 'number'));
+    const repairContinuation = Number(result.exclusions?.invalidDeferNotes || result.exclusions?.invalidDefer || 0) > 0
+        ? { nextAction: { endpointId: 'wiki.flow_health', arguments: { maxChars: 16000, limit: 20 } } } : {};
     const metadata = {
         ...(result.context && { context: result.context }),
         ...(result.selection && { selection: result.selection }),
         ...(result.filterDiagnostics && { filterDiagnostics: result.filterDiagnostics }),
         ...(result.exclusions && { exclusions: counters(result.exclusions) }),
+        ...repairContinuation,
     };
     const packet = (items, extra = {}) => ({
         ...extra, items, total: result.total, truncated: true, detailsOmitted: true,
@@ -34,6 +37,7 @@ export function packNextActionPacket(result, maxChars, prettyPrint = false) {
         const empty = packet([], {
             ...(result.filterDiagnostics && { filterDiagnostics: counters(result.filterDiagnostics) }),
             ...(result.exclusions && { exclusions: counters(result.exclusions) }),
+            ...repairContinuation,
         });
         if (fits(empty))
             return empty;

@@ -811,6 +811,26 @@ function isIsoDateText(value) {
 export function organizationDateTimestamp(value) {
     return isIsoDateText(value) ? Date.parse(value.trim()) : NaN;
 }
+/** Deadlines/calendar dates are advisory; an unreadable deferral is an unknown
+ * hold, never permission to execute. Only an absent property means no hold. */
+export function workDateState(frontmatter, asOfMs = Date.now()) {
+    const dateIssues = [];
+    const read = (field) => {
+        const value = frontmatter[field];
+        if (value === undefined)
+            return undefined;
+        if (!Number.isFinite(organizationDateTimestamp(value))) {
+            dateIssues.push(`invalid_${field}`);
+            return undefined;
+        }
+        return value.trim();
+    };
+    const dueAt = read('due_at'), scheduledAt = read('scheduled_at'), deferUntil = read('defer_until');
+    const invalidDefer = dateIssues.includes('invalid_defer_until');
+    const deferred = invalidDefer || organizationDateTimestamp(deferUntil) > asOfMs;
+    const overdue = organizationDateTimestamp(dueAt) <= asOfMs;
+    return { dueAt, scheduledAt, deferUntil, dateIssues, invalidDefer, deferred, overdue };
+}
 export function normalizeIsoDate(value, field) {
     if (value !== undefined && value !== null && typeof value !== 'string')
         throw new Error(`${field} must be an ISO date or date-time`);

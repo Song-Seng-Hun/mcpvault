@@ -120,6 +120,7 @@ const POLICY_TOPICS = {
             'Use task_status and one concrete next_action for execution while lifecycle describes the note, not the task lane.',
             'blocked_by is a hard gate; depends_on gates only when it resolves to unfinished actionable work, while non-work knowledge is informational.',
             'Respect WIP limits, distinguish dueAt from scheduledAt, and record waiting/blocked/start/completion timestamps when known.',
+            'Work dates must be real scalar ISO dates. dateIssues/dateRepairAction identify malformed Properties; inspect the owning source revision before a deliberate notes.patch dry-run. Invalid defer_until, including null/blank, keeps work and descendant stages held. Invalid due_at/scheduled_at are repair metadata, not usable deadlines or separate execution holds. Never guess a date or clear a hold just to run work.',
             'Use the dependency plan stages and current revisions as advice; repair cycles or prerequisites instead of auto-changing downstream status.',
             'Before completing an agent task or ordinary actionable Wiki note, record an auditable knowledge disposition: knowledge_notes, negative_knowledge_notes, retrospective, or no_reusable_knowledge with a reason. Useful artifacts may be combined; no_reusable_knowledge is exclusive.',
             'A direct Obsidian or Git edit remains authoritative but may bypass the preventive gate; wiki.review_packet surfaces an incomplete completion record for one revision-safe wiki.triage repair.',

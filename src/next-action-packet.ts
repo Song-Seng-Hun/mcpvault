@@ -5,11 +5,14 @@ export function packNextActionPacket(result: Record<string, any> & { items: Arra
   if (fits(result)) return result;
   const counters = (value: Record<string, unknown> | undefined) => Object.fromEntries(
     Object.entries(value || {}).filter(([, count]) => typeof count === 'number'));
+  const repairContinuation = Number(result.exclusions?.invalidDeferNotes || result.exclusions?.invalidDefer || 0) > 0
+    ? { nextAction: { endpointId: 'wiki.flow_health', arguments: { maxChars: 16000, limit: 20 } } } : {};
   const metadata = {
     ...(result.context && { context: result.context }),
     ...(result.selection && { selection: result.selection }),
     ...(result.filterDiagnostics && { filterDiagnostics: result.filterDiagnostics }),
     ...(result.exclusions && { exclusions: counters(result.exclusions) }),
+    ...repairContinuation,
   };
   const packet = (items: Array<Record<string, any>>, extra: Record<string, unknown> = {}) => ({
     ...extra, items, total: result.total, truncated: true, detailsOmitted: true,
@@ -34,6 +37,7 @@ export function packNextActionPacket(result: Record<string, any> & { items: Arra
     const empty = packet([], {
       ...(result.filterDiagnostics && { filterDiagnostics: counters(result.filterDiagnostics) }),
       ...(result.exclusions && { exclusions: counters(result.exclusions) }),
+      ...repairContinuation,
     });
     if (fits(empty)) return empty;
   } else {

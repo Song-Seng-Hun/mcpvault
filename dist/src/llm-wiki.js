@@ -4,7 +4,7 @@ import { stringify as stringifyYaml } from 'yaml';
 import { MAX_NOTE_CONTENT_BYTES } from './filesystem.js';
 import { normalizeScopeId } from './scopes.js';
 import { endpointIdForTool } from './endpoint-registry.js';
-import { organizationDateTimestamp } from './organization.js';
+import { organizationDateTimestamp, workDateState } from './organization.js';
 import { iterateNotes } from './paged-query.js';
 import { getOrganizationPropertyContract, getOrganizationRelationContract, hasExplicitKnowledgeDisposition, inapplicableOrganizationProperties, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeKnowledgeDisposition, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeTaskStatus, normalizeVolatilityClass, organizationLintIssues, organizationNoteTemplate, organizationPropertyAppliesTo, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, COMPLETION_DISPOSITION_REQUIRED_MESSAGE, CONFIDENCE_LEVELS, DECISION_STATUSES, FOCUS_HORIZONS, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, VOLATILITY_CLASSES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS } from './organization.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
@@ -1093,6 +1093,21 @@ export class LlmWikiService {
     access;
     references;
     semanticSearch;
+    workDateProjection(note, dates = workDateState(note.frontmatter)) {
+        return {
+            ...(dates.dueAt && { dueAt: dates.dueAt }),
+            ...(dates.scheduledAt && { scheduledAt: dates.scheduledAt }),
+            ...(dates.deferUntil && { deferUntil: dates.deferUntil }),
+            ...(dates.dateIssues.length > 0 && {
+                dateIssues: dates.dateIssues,
+                dateRepairAction: {
+                    endpointId: 'notes.read',
+                    arguments: { path: this.access.toPublicPath(note.path), expectedRevision: note.revision, maxChars: 8000 },
+                },
+                dateRepairGuidance: 'Inspect the authored Properties, then deliberately correct or remove malformed dates using revision-checked notes.patch with dryRun. Never guess a date or erase a hold just to make work executable.',
+            }),
+        };
+    }
     generation = 0;
     catalogSummaryCache = new Map();
     catalogSummaryInFlight = new Map();
@@ -1322,11 +1337,11 @@ export class LlmWikiService {
         const workflowHeldNodes = new Set(unfinishedKeys.filter(key => {
             const note = workByPath.get(key);
             const status = taskStatus(note);
-            const deferUntil = typeof note.frontmatter.defer_until === 'string' ? Date.parse(note.frontmatter.defer_until) : NaN;
+            const dates = workDateState(note.frontmatter, currentTime);
             return ['waiting', 'blocked', 'invalid'].includes(status)
                 || !hasAuthoredNextAction(note.frontmatter)
                 || hasAuthoredText(note.frontmatter.waiting_for)
-                || (Number.isFinite(deferUntil) && deferUntil > currentTime);
+                || dates.deferred;
         }));
         const workflowHoldImpact = propagateToDependents(workflowHeldNodes);
         const blockedByWorkflowHolds = new Set([...workflowHoldImpact].filter(key => !workflowHeldNodes.has(key)));
@@ -4218,19 +4233,16 @@ export class LlmWikiService {
                     pushBounded(somedayItems, item);
                 }
                 if (isOpenActionableKnowledge(note.frontmatter)) {
-                    const dueAt = typeof note.frontmatter.due_at === 'string' ? note.frontmatter.due_at : undefined;
-                    const scheduledAt = typeof note.frontmatter.scheduled_at === 'string' ? note.frontmatter.scheduled_at : undefined;
-                    const deferUntil = typeof note.frontmatter.defer_until === 'string' ? note.frontmatter.defer_until : undefined;
-                    const overdue = Boolean(dueAt && !Number.isNaN(Date.parse(dueAt)) && Date.parse(dueAt) <= nowMs);
+                    const dates = workDateState(note.frontmatter, nowMs);
+                    const { scheduledAt, overdue, deferred } = dates;
                     const waiting = taskStatus === 'waiting' || hasAuthoredText(note.frontmatter.waiting_for);
                     const blocked = taskStatus === 'blocked' || taskStatus === 'invalid';
                     const dependencyState = dependencySnapshot.stateByPath.get(normalizePath(note.path).toLowerCase());
                     const dependencyBlocked = !dependencyState.executable;
-                    const deferred = Boolean(deferUntil && !Number.isNaN(Date.parse(deferUntil)) && Date.parse(deferUntil) > nowMs);
                     const hasNextAction = hasAuthoredNextAction(note.frontmatter);
                     const missingNextAction = lifecycle === 'active' && !hasNextAction && !waiting && !blocked && !dependencyBlocked && !deferred;
-                    const readiness = taskStatus === 'invalid' ? 'invalid_task_status' : blocked ? 'blocked' : waiting ? 'waiting' : dependencyBlocked ? 'dependency_blocked' : deferred ? 'deferred' : hasNextAction ? 'ready' : 'needs_next_action';
-                    const workItem = { ...item, ...(dueAt && { dueAt }), ...(scheduledAt && { scheduledAt }), ...(deferUntil && { deferUntil }), readiness, ...(dependencyBlocked && { dependencies: this.workDependencyProjection(dependencyState) }) };
+                    const readiness = taskStatus === 'invalid' ? 'invalid_task_status' : blocked ? 'blocked' : waiting ? 'waiting' : dependencyBlocked ? 'dependency_blocked' : dates.invalidDefer ? 'invalid_defer_until' : deferred ? 'deferred' : hasNextAction ? 'ready' : 'needs_next_action';
+                    const workItem = { ...item, ...this.workDateProjection(note, dates), readiness, ...(dependencyBlocked && { dependencies: this.workDependencyProjection(dependencyState) }) };
                     totalWorkNotes += 1;
                     pushBounded(projectReadinessItems, workItem);
                     if (overdue) {
@@ -4402,17 +4414,17 @@ export class LlmWikiService {
             totalWork += 1;
             const title = note.frontmatter.title || note.path.split('/').at(-1) || note.path;
             const hasNextAction = hasAuthoredNextAction(note.frontmatter);
-            const dueAt = typeof note.frontmatter.due_at === 'string' ? note.frontmatter.due_at : undefined;
-            const deferUntil = typeof note.frontmatter.defer_until === 'string' ? note.frontmatter.defer_until : undefined;
-            const overdue = Boolean(dueAt && Number.isFinite(Date.parse(dueAt)) && Date.parse(dueAt) <= nowMs);
+            const dates = workDateState(note.frontmatter, nowMs);
+            const { overdue } = dates;
             if (overdue)
                 totalOverdue += 1;
             const waitingState = taskStatus !== 'invalid' && (taskStatus === 'waiting' || hasAuthoredText(note.frontmatter.waiting_for));
             const blockedState = taskStatus === 'blocked' || taskStatus === 'invalid';
-            const deferredState = Boolean(deferUntil && Number.isFinite(Date.parse(deferUntil)) && Date.parse(deferUntil) > nowMs);
+            const deferredState = dates.deferred;
             const dependencyKey = normalizePath(note.path).toLowerCase();
             const dependencyState = dependencySnapshot.stateByPath.get(dependencyKey);
             const dependencyBlocked = !dependencyState.executable;
+            const unknownDeferLane = dates.invalidDefer && !waitingState && !blockedState && !dependencyBlocked;
             const missingActionState = !hasNextAction && !waitingState && !blockedState && !dependencyBlocked && !deferredState;
             const startedAt = typeof note.frontmatter.started_at === 'string' ? note.frontmatter.started_at : undefined;
             const waitingSince = typeof note.frontmatter.waiting_since === 'string' ? note.frontmatter.waiting_since : undefined;
@@ -4420,13 +4432,13 @@ export class LlmWikiService {
             // Never infer cycle/blocked/waiting age from updated_at: a later edit is
             // not evidence that work entered a lane at that time. Missing explicit
             // flow timestamps must remain visible to the caller.
-            const age = missingActionState ? undefined : authoredFlowAgeDays(waitingState ? waitingSince : blockedState || dependencyBlocked ? blockedSince : startedAt, nowMs);
+            const age = missingActionState || unknownDeferLane ? undefined : authoredFlowAgeDays(waitingState ? waitingSince : blockedState || dependencyBlocked ? blockedSince : startedAt, nowMs);
             const item = {
                 path: this.access.toPublicPath(note.path), title, kind, taskStatus,
                 ...(note.revision && { revision: note.revision }),
                 serviceClass: serviceClass(note.frontmatter.service_class),
-                ...(hasNextAction ? { hasNextAction: true } : { needsNextAction: true }), ...(dueAt && { dueAt }),
-                ...(deferUntil && { deferUntil }),
+                ...(hasNextAction ? { hasNextAction: true } : { needsNextAction: true }),
+                ...this.workDateProjection(note, dates),
                 ...(overdue && { overdue: true }), ...(age !== undefined && { ageDays: age }),
                 ...(startedAt && { startedAt }), ...(blockedSince && { blockedSince }), ...(waitingSince && { waitingSince }),
             };
@@ -4436,12 +4448,12 @@ export class LlmWikiService {
                 totalWaiting += 1;
                 push(waiting, { ...item, ...(hasAuthoredText(note.frontmatter.waiting_for) && { waitingFor: boundedText(note.frontmatter.waiting_for, 300) }), ...(age !== undefined && age >= boundedWaitingAfterDays && { aging: true, agingReason: `waiting_${boundedWaitingAfterDays}_days_or_more` }) });
             }
-            else if (blockedState || dependencyBlocked) {
+            else if (blockedState || dependencyBlocked || dates.invalidDefer) {
                 totalBlocked += 1;
                 if (blocked.length < boundedLimit)
                     push(blocked, {
                         ...item,
-                        blockedReason: taskStatus === 'invalid' ? 'invalid_task_status' : blockedState ? 'explicit_status' : 'dependency',
+                        blockedReason: taskStatus === 'invalid' ? 'invalid_task_status' : blockedState ? 'explicit_status' : dependencyBlocked ? 'dependency' : 'invalid_defer_until',
                         ...(dependencyBlocked && { dependencies: this.workDependencyProjection(dependencyState) }),
                         ...(age !== undefined && age >= boundedBlockedAfterDays && { aging: true, agingReason: `blocked_${boundedBlockedAfterDays}_days_or_more` }),
                     });
@@ -4462,7 +4474,7 @@ export class LlmWikiService {
                 totalReady += 1;
                 push(ready, { ...item, pullReady: true });
             }
-            if (!missingActionState && (taskStatus === 'next_action' || taskStatus === 'blocked' || waitingState || dependencyBlocked) && age === undefined && missingTimestamps.length < boundedLimit) {
+            if (!missingActionState && !unknownDeferLane && (taskStatus === 'next_action' || taskStatus === 'blocked' || waitingState || dependencyBlocked) && age === undefined && missingTimestamps.length < boundedLimit) {
                 missingTimestamps.push({ path: this.access.toPublicPath(note.path), title, taskStatus, missing: waitingState ? 'waiting_since' : blockedState || dependencyBlocked ? 'blocked_since' : 'started_at' });
             }
         }
@@ -4475,6 +4487,7 @@ export class LlmWikiService {
                 title: note.frontmatter.title || note.path.split('/').at(-1),
                 ...(note.revision && { revision: note.revision }),
                 taskStatus: authoredTaskStatus(note.frontmatter.task_status),
+                ...this.workDateProjection(note),
                 ...(!hasAuthoredNextAction(note.frontmatter) && { needsNextAction: true }),
                 directDependents: plan.dependents.get(key)?.size || 0,
                 immediateUnlocks: plan.immediateUnlockByPath.get(key) || 0,
@@ -7023,6 +7036,7 @@ export class LlmWikiService {
                 || !validTaskStatus;
             candidates.push({
                 path: this.access.toPublicPath(note.path),
+                ...this.workDateProjection(note),
                 ...(detailsOmitted && { detailsOmitted: true, readAction: { endpointId: 'notes.read', arguments: { path: this.access.toPublicPath(note.path), expectedRevision: note.revision, maxChars: 8000 } } }),
                 title: note.frontmatter.title || note.path.split('/').at(-1),
                 ...(note.revision && { revision: note.revision }),
@@ -7082,7 +7096,8 @@ export class LlmWikiService {
         const dependencySnapshot = await this.workDependencySnapshot(principal);
         const contextCounts = new Map();
         const dependencyBlockedItems = [];
-        const filterDiagnostics = { unknownDuration: 0, unknownEnergy: 0, unknownEffort: 0, workflowBlocked: 0, deferred: 0, dependencyBlocked: 0, unresolvedDependencies: 0, dependencyCycles: 0 };
+        const filterDiagnostics = { unknownDuration: 0, unknownEnergy: 0, unknownEffort: 0, workflowBlocked: 0, deferred: 0, invalidDefer: 0, invalidDeferNotes: 0, dependencyBlocked: 0, unresolvedDependencies: 0, dependencyCycles: 0 };
+        const dateRepairItems = [];
         let total = 0;
         const nowMs = Date.now();
         const candidates = function* () {
@@ -7095,12 +7110,23 @@ export class LlmWikiService {
                     ...(Array.isArray(note.frontmatter.next_actions) ? note.frontmatter.next_actions.filter((item) => typeof item === 'string') : []),
                 ].map(action => action.trim()).filter(Boolean);
                 const uniqueActions = [...new Set(actions)].slice(0, 20);
-                if (uniqueActions.length === 0)
-                    continue;
                 const actionContext = typeof note.frontmatter.task_context === 'string' && note.frontmatter.task_context.trim()
                     ? note.frontmatter.task_context.trim()
                     : 'unclassified';
                 if (requestedContext && actionContext.toLowerCase() !== requestedContext)
+                    continue;
+                const dates = workDateState(note.frontmatter, nowMs);
+                // Repair is not executable work: do not hide an unknown hold merely
+                // because its source has no action text or exceeds execution capacity.
+                // Keep the caller's context and visibility boundaries intact.
+                if (dates.invalidDefer) {
+                    filterDiagnostics.invalidDefer += uniqueActions.length;
+                    filterDiagnostics.invalidDeferNotes += 1;
+                    if (dateRepairItems.length < boundedLimit)
+                        dateRepairItems.push({ path: this.access.toPublicPath(note.path), revision: note.revision, ...this.workDateProjection(note, dates) });
+                    continue;
+                }
+                if (uniqueActions.length === 0)
                     continue;
                 const estimatedMinutes = frontmatterNumber(note.frontmatter, ['time_estimate_minutes', 'estimated_minutes', 'duration_minutes', 'time_minutes']);
                 const energy = frontmatterWorkLabel(note.frontmatter, ['energy', 'energy_level']);
@@ -7128,8 +7154,7 @@ export class LlmWikiService {
                     filterDiagnostics.workflowBlocked += uniqueActions.length;
                     continue;
                 }
-                const deferUntil = typeof note.frontmatter.defer_until === 'string' ? Date.parse(note.frontmatter.defer_until) : NaN;
-                if (Number.isFinite(deferUntil) && deferUntil > nowMs) {
+                if (dates.deferred) {
                     filterDiagnostics.deferred += uniqueActions.length;
                     continue;
                 }
@@ -7163,8 +7188,7 @@ export class LlmWikiService {
                         context: actionContext,
                         ...(taskStatus && { taskStatus }),
                         ...(typeof note.frontmatter.project === 'string' && { project: note.frontmatter.project }),
-                        ...(typeof note.frontmatter.due_at === 'string' && { dueAt: note.frontmatter.due_at }),
-                        ...(typeof note.frontmatter.scheduled_at === 'string' && { scheduledAt: note.frontmatter.scheduled_at }),
+                        ...this.workDateProjection(note, dates),
                         ...(hasAuthoredText(note.frontmatter.waiting_for) && { waitingFor: note.frontmatter.waiting_for.trim() }),
                         ...(estimatedMinutes !== undefined && { estimatedMinutes }),
                         ...(energy && { energy }),
@@ -7178,7 +7202,7 @@ export class LlmWikiService {
             }
         }.call(this);
         const priorityTime = (item) => {
-            const timestamp = Date.parse(String(item.dueAt || item.scheduledAt || ''));
+            const timestamp = organizationDateTimestamp(item.dueAt || item.scheduledAt);
             return Number.isFinite(timestamp) ? timestamp : Number.MAX_SAFE_INTEGER;
         };
         const statusRank = (item) => item.taskStatus === 'next_action' ? 0 : 1;
@@ -7200,10 +7224,13 @@ export class LlmWikiService {
             .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
             .slice(0, 30)
             .map(([name, count]) => ({ name, count }));
-        const hasWorkExclusions = filterDiagnostics.workflowBlocked > 0 || filterDiagnostics.deferred > 0 || filterDiagnostics.dependencyBlocked > 0;
+        const hasWorkExclusions = filterDiagnostics.workflowBlocked > 0 || filterDiagnostics.deferred > 0 || filterDiagnostics.invalidDeferNotes > 0 || filterDiagnostics.dependencyBlocked > 0;
         const workExclusions = {
             workflowBlocked: filterDiagnostics.workflowBlocked,
             deferred: filterDiagnostics.deferred,
+            invalidDefer: filterDiagnostics.invalidDefer,
+            invalidDeferNotes: filterDiagnostics.invalidDeferNotes,
+            ...(dateRepairItems.length > 0 && { dateRepairItems }),
             dependencyBlocked: filterDiagnostics.dependencyBlocked,
             unresolvedDependencies: filterDiagnostics.unresolvedDependencies,
             dependencyCycles: filterDiagnostics.dependencyCycles,

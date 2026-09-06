@@ -95,3 +95,39 @@ Remaining follow-ups: work defer/due scheduling and next-action ordering;
 date-repair discoverability outside these fields; stale index negative-prefilter
 decisions in other readers. This batch does not claim those are resolved or
 that an advisory read is an atomic live-Vault snapshot.
+
+## Follow-up batch: work dates
+
+- Shared strict due/calendar/defer classification for dependency forecasts,
+  Reflect, flow, project packets and next actions. Invalid defer is an unknown
+  hold, never automatic release; invalid deadline/calendar metadata is a repair
+  finding, not a made-up date and not itself an execution hold.
+- Keep absent versus malformed Properties distinct, preserve valid offsets and
+  leap days, and expose revision-stamped owning-source repair reads. No new MCP
+  tool, client setup, cache or live Vault mutation.
+- RED: 27/28 new real-Vault tests failed as expected. GREEN: all 28 passed;
+  broader work/inventory/ranking/dashboard coverage passed 142 tests in ten
+  files with one worker. Build passed. Added private-scope isolation to actual
+  fixed-five-tool MCP budget checks; final verification/review pending.
+- Performance research separately identified chunk reuse, streaming snapshots,
+  bounded queues, native thread budgets and optional GPU experiments. Those
+  remain research proposals, not changes in this work-date batch.
+- Follow-up RED/GREEN: two regressions protect independently authored waiting
+  and blocked ages when defer metadata is invalid; a completed-prerequisite
+  control preserves release semantics. The intermediate full run was explicitly
+  cancelled (owned exec session exited 1), not treated as verification.
+- Independent review found actionless/capacity-filtered work hid invalid-defer
+  repair. Four further RED tests now pass: `invalidDeferNotes` counts affected
+  sources separately from excluded actions, and repair discovery happens before
+  action/capacity filtering while retaining exact requested task context.
+  Full focused date suite: 35 passed, including pretty MCP budgets and private
+  scope/hidden-note exclusion. Final build passed; full suite/re-review pending.
+- Final verification: `npm test -- --maxWorkers=1` passed 2,249 tests with one
+  existing skip across 148 files in 271.31 seconds. `npm run build` and
+  `git diff --check` passed. The independent narrow re-review found no remaining
+  blockers and its worker was closed. Generated dist accompanies source.
+- This batch completes the recorded execution-date consumer follow-up, not the
+  entire organization goal. Raw descriptive date fields in other projections,
+  stale negative-prefilter behavior and the separate resource-cost proposals
+  still need their own evidence-driven audit. No live server restart or Vault
+  mutation was performed.
