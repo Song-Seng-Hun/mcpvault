@@ -1002,7 +1002,15 @@ Use `orderBy: location|alphabet|time|category|hierarchy` on the catalog for
 LATCH-style browse projections; this reorders the live view without moving or
 duplicating notes. The authority map exposes a stable address from
 `stable_id` when available, while collisions remain repair candidates.
-`get_wiki_review_queue` finds bounded due or disputed knowledge, and
+`wiki.review_queue` finds bounded due or disputed knowledge. It also surfaces
+malformed review, snooze, retention, preservation and last-review dates as
+`invalid_<property>` repair reasons, without fabricating overdue days. An invalid
+`preserve_until` does not permit a retention-due proposal. Hidden notes are
+excluded from queue rows and totals; reading the queue never rewrites dates.
+Metadata-only review admission checks the current Markdown even when file
+watching is delayed. Hidden or deleted notes do not contribute to cascade
+counts; body-derived evidence still rejects a changed source revision.
+The maintenance endpoint
 `get_wiki_maintenance_debt` adds a derived 5S ledger for Inbox, stale
 projections, aging reviews, missing MOCs, unfinished literature, incomplete
 projects, and empty maps. `get_wiki_authority_map` provides a library-style

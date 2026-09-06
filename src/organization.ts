@@ -858,6 +858,11 @@ function isIsoDateText(value: unknown): value is string {
   return days !== undefined && day >= 1 && day <= days && Number.isFinite(Date.parse(text));
 }
 
+/** Read-side validation: malformed authored dates are unknown, never coerced. */
+export function organizationDateTimestamp(value: unknown): number {
+  return isIsoDateText(value) ? Date.parse(value.trim()) : NaN;
+}
+
 export function normalizeIsoDate(value: unknown, field: string): string | undefined {
   if (value !== undefined && value !== null && typeof value !== 'string') throw new Error(`${field} must be an ISO date or date-time`);
   const date = optionalText(value, field, 40);

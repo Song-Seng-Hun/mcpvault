@@ -321,6 +321,8 @@ export declare function normalizeKnowledgeDisposition(input: KnowledgeDispositio
 export declare function normalizeReviewAt(value: unknown): string | undefined;
 export declare function normalizeReviewIntervalDays(value: unknown, fallback?: number): number | undefined;
 export declare function normalizeNavOrder(value: unknown, fallback?: number): number | undefined;
+/** Read-side validation: malformed authored dates are unknown, never coerced. */
+export declare function organizationDateTimestamp(value: unknown): number;
 export declare function normalizeIsoDate(value: unknown, field: string): string | undefined;
 /**
  * Derive a claim-validity card without confusing it with file, source, task,

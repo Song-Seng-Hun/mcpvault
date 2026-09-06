@@ -8,6 +8,7 @@ import { normalizeScopeId } from './scopes.js';
 import type { ReferenceService } from './references.js';
 import type { SemanticSearchService } from './semantic-search.js';
 import { endpointIdForTool } from './endpoint-registry.js';
+import { organizationDateTimestamp } from './organization.js';
 import { iterateNotes } from './paged-query.js';
 import { getOrganizationPropertyContract, getOrganizationRelationContract, hasExplicitKnowledgeDisposition, inapplicableOrganizationProperties, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeKnowledgeDisposition, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeTaskStatus, normalizeVolatilityClass, organizationLintIssues, organizationNoteTemplate, organizationPropertyAppliesTo, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, COMPLETION_DISPOSITION_REQUIRED_MESSAGE, CONFIDENCE_LEVELS, DECISION_STATUSES, FOCUS_HORIZONS, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, VOLATILITY_CLASSES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS, type AnswerPacketIntent, type CatalogOrder, type KnowledgeDispositionResult, type TemporalValidityState, type WikiProjectionView } from './organization.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
@@ -1894,13 +1895,26 @@ export class LlmWikiService {
     return { total: visible.length, paths: visible.slice(0, Math.max(1, limit)), truncated: visible.length > limit };
   }
 
-  private async reviewBodyNote(note: QueryNote, principal?: ScopePrincipal, includeSummary = false): Promise<QueryNote> {
-    const policy = String(note.frontmatter.review_policy || 'manual').toLowerCase();
-    const needsBody = policy === 'on_any_edit' || policy === 'on_link_change'
-      || (includeSummary && hasProgressiveProjection(note.frontmatter) && typeof note.frontmatter.summary_of_content_sha256 === 'string');
-    if (!needsBody || typeof note.content === 'string') return note;
-    return this.fileSystem.readQueryNoteBody(note, path => this.access.canAccessPhysicalPath(path, principal),
-      current => current.frontmatter.llm_wiki_type === 'knowledge' && !isModerationHidden(current.frontmatter));
+  private async reviewBodyNote(note: QueryNote, principal?: ScopePrincipal, includeSummary = false): Promise<QueryNote | undefined> {
+    const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
+    const admitted = (current: QueryNote) => current.frontmatter.llm_wiki_type === 'knowledge' && !isModerationHidden(current.frontmatter);
+    const needsBody = (current: QueryNote) => {
+      const policy = String(current.frontmatter.review_policy || 'manual').toLowerCase();
+      return policy === 'on_any_edit' || policy === 'on_link_change'
+        || (includeSummary && hasProgressiveProjection(current.frontmatter) && typeof current.frontmatter.summary_of_content_sha256 === 'string');
+    };
+    if (!needsBody(note) || !admitted(note)) {
+      // Even a metadata-only review decision must consult the source before
+      // admitting/hiding/snoozing it. A watcher is not a freshness guarantee.
+      const current = (await this.fileSystem.readNoteMetadata([note.path], canAccess,
+        { fresh: true, strict: true, maxBytes: MAX_NOTE_CONTENT_BYTES }))[0];
+      if (!current || !admitted(current)) return undefined;
+      note = current;
+    }
+    if (!needsBody(note) || typeof note.content === 'string') return note;
+    // Preserve the revision barrier for body-derived evidence, including a
+    // newly enabled body policy discovered by the current metadata read.
+    return this.fileSystem.readQueryNoteBody(note, canAccess, admitted);
   }
 
   private async reviewChangeSignals(note: { path?: string; content?: string; frontmatter: Record<string, any> }, principal?: ScopePrincipal, referenceIndex?: KnowledgeReferenceIndex) {
@@ -1962,10 +1976,11 @@ export class LlmWikiService {
     let scanned = 0;
     let truncated = false;
     for await (const metadata of iterateNotes(this.fileSystem, {}, canAccess)) {
-      if (metadata.frontmatter.llm_wiki_type !== 'knowledge' || isModerationHidden(metadata.frontmatter)) continue;
+      if (metadata.frontmatter.llm_wiki_type !== 'knowledge') continue;
+      const note = await this.reviewBodyNote(metadata, principal);
+      if (!note) continue;
       scanned += 1;
       if (records.length >= maxNodes) { truncated = true; break; }
-      const note = await this.reviewBodyNote(metadata, principal);
       const policy = String(note.frontmatter.review_policy || 'manual').trim().toLowerCase();
       records.push({
         path: normalizePath(note.path),
@@ -3370,18 +3385,21 @@ export class LlmWikiService {
     const nowMs = Date.now();
     for await (const metadata of iterateNotes(this.fileSystem, {}, canAccess)) {
       if (metadata.frontmatter.llm_wiki_type !== 'knowledge') continue;
-      const snoozedUntil = Date.parse(String(metadata.frontmatter.review_snoozed_until || ''));
-      if (Number.isFinite(snoozedUntil) && snoozedUntil > nowMs) continue;
       const note = await this.reviewBodyNote(metadata, principal, true);
+      if (!note) continue;
+      const snoozedUntil = organizationDateTimestamp(note.frontmatter.review_snoozed_until);
+      if (Number.isFinite(snoozedUntil) && snoozedUntil > nowMs) continue;
       const lifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
       const temporal = temporalValidity(note.frontmatter, nowMs);
-      const reviewAt = note.frontmatter.review_at ? String(note.frontmatter.review_at) : undefined;
-      const due = reviewAt !== undefined && !Number.isNaN(Date.parse(reviewAt)) && Date.parse(reviewAt) <= nowMs;
-      const retentionAt = note.frontmatter.retention_at ? String(note.frontmatter.retention_at) : undefined;
-      const preserveUntil = note.frontmatter.preserve_until ? String(note.frontmatter.preserve_until) : undefined;
+      const reviewTime = organizationDateTimestamp(note.frontmatter.review_at);
+      const reviewAt = Number.isFinite(reviewTime) ? String(note.frontmatter.review_at).trim() : undefined;
+      const due = Number.isFinite(reviewTime) && reviewTime <= nowMs;
+      const retentionTime = organizationDateTimestamp(note.frontmatter.retention_at);
+      const retentionAt = Number.isFinite(retentionTime) ? String(note.frontmatter.retention_at).trim() : undefined;
+      const preserveTime = organizationDateTimestamp(note.frontmatter.preserve_until);
       const legalHold = note.frontmatter.legal_hold === true || String(note.frontmatter.legal_hold).trim().toLowerCase() === 'true';
-      const retentionDue = retentionAt !== undefined && !Number.isNaN(Date.parse(retentionAt)) && Date.parse(retentionAt) <= nowMs
-        && (preserveUntil === undefined || Number.isNaN(Date.parse(preserveUntil)) || Date.parse(preserveUntil) <= nowMs)
+      const retentionDue = Number.isFinite(retentionTime) && retentionTime <= nowMs
+        && (note.frontmatter.preserve_until === undefined || (Number.isFinite(preserveTime) && preserveTime <= nowMs))
         && !legalHold
         && lifecycle !== 'archived' && lifecycle !== 'superseded';
       const reviewPolicy = typeof note.frontmatter.review_policy === 'string' ? note.frontmatter.review_policy.toLowerCase() : 'manual';
@@ -3405,6 +3423,11 @@ export class LlmWikiService {
       const reviewSignals = await this.reviewChangeSignals(note, principal, referenceIndex);
       const cascadeSignal = cascadeProjection.signals.get(normalizePath(note.path).toLowerCase());
       const reviewTriggers: string[] = [];
+      for (const field of ['review_at', 'review_snoozed_until', 'retention_at', 'preserve_until', 'last_reviewed_at']) {
+        if (note.frontmatter[field] !== undefined && !Number.isFinite(organizationDateTimestamp(note.frontmatter[field]))) {
+          reviewTriggers.push(`invalid_${field}`);
+        }
+      }
       if (reviewPolicy === 'on_source_change' && sourceChanged) reviewTriggers.push('source_changed');
       if (reviewPolicy === 'on_link_change' && reviewSignals.linkChanged) reviewTriggers.push('link_changed');
       if (reviewPolicy === 'on_any_edit' && reviewSignals.bodyChanged) reviewTriggers.push('note_edited');
@@ -3416,12 +3439,11 @@ export class LlmWikiService {
       if (retentionDue) reviewTriggers.push('retention_due');
       if (String(note.frontmatter.knowledge_status || '').toLowerCase() === 'disputed') reviewTriggers.push('disputed_knowledge');
       if (String(note.frontmatter.knowledge_polarity || '').toLowerCase() === 'negative') reviewTriggers.push('negative_knowledge');
-      const lastReviewedAt = Date.parse(String(note.frontmatter.last_reviewed_at || ''));
-      const updatedAt = Date.parse(String(note.frontmatter.updated_at || note.frontmatter.created_at || ''));
-      if (!Number.isFinite(lastReviewedAt) && Number.isFinite(updatedAt) && nowMs - updatedAt >= 30 * 24 * 60 * 60 * 1000) reviewTriggers.push('never_reviewed');
+      const updatedAt = organizationDateTimestamp(note.frontmatter.updated_at ?? note.frontmatter.created_at);
+      if (note.frontmatter.last_reviewed_at === undefined && Number.isFinite(updatedAt) && nowMs - updatedAt >= 30 * 24 * 60 * 60 * 1000) reviewTriggers.push('never_reviewed');
       if (lifecycle !== 'review' && !due && !sourceChanged && reviewTriggers.length === 0) continue;
       total += 1;
-      const overdueDays = due && reviewAt ? Math.max(0, Math.floor((nowMs - Date.parse(reviewAt)) / (24 * 60 * 60 * 1000))) : 0;
+      const overdueDays = due ? Math.max(0, Math.floor((nowMs - reviewTime) / (24 * 60 * 60 * 1000))) : 0;
       const reviewReasons = [...reviewTriggers];
       if (due) reviewReasons.unshift(overdueDays > 0 ? 'overdue' : 'due_today');
       const reviewScore = overdueDays * 3
@@ -8040,6 +8062,7 @@ export class LlmWikiService {
     for await (const metadata of iterateNotes(this.fileSystem, {}, canAccess)) {
       if (metadata.frontmatter.llm_wiki_type !== 'knowledge') continue;
       const note = await this.reviewBodyNote(metadata, principal, true);
+      if (!note) continue;
       const evidencePaths = Array.isArray(note.frontmatter.evidence_paths)
         ? note.frontmatter.evidence_paths.filter((item: unknown): item is string => typeof item === 'string')
         : [];

@@ -650,6 +650,22 @@ Properties remain unspecified; optional normalization treats null/blank as no
 date where the endpoint input contract permits it. Lint reports invalid source dates for explicit revision-safe repair,
 without rewriting them. Catalog rows, totals and facets exclude hidden notes.
 
+`wiki.review_queue` applies the same scalar/calendar validation to `review_at`,
+`review_snoozed_until`, `retention_at`, `preserve_until`, and `last_reviewed_at`.
+Malformed authored fields produce `invalid_<property>` review reasons, not
+coerced deadlines. A malformed snooze cannot postpone the repair candidate;
+a valid future snooze still postpones review. Invalid preservation holds back
+`retention_due`, and invalid last-review evidence is not called `never_reviewed`.
+Moderated notes are excluded before rows and totals. These are derived review
+signals, not permission to delete, change lifecycle, or repair source metadata.
+Metadata-only review decisions re-read bounded source metadata before applying
+moderation or snoozes; a delayed index cannot grant visibility or extend an old
+snooze. Cascade scan counts likewise exclude hidden, deleted, or no-longer-knowledge
+sources. Body-dependent policies retain revision-checked hydration; a source
+change during that read requires retry instead of mixing revisions. This also
+applies to the shared cascade and impact projections. Source verification adds
+I/O but does not retain full note bodies for metadata-only decisions.
+
 `read_wiki_projection` accepts `view: progressive` for one bounded context
 packet containing the compact summary, selected highlights, claims, and open
 questions. It also reports `summaryFresh`/`summaryStale`; never treat a stale

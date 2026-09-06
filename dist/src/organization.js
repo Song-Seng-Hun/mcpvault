@@ -807,6 +807,10 @@ function isIsoDateText(value) {
     const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
     return days !== undefined && day >= 1 && day <= days && Number.isFinite(Date.parse(text));
 }
+/** Read-side validation: malformed authored dates are unknown, never coerced. */
+export function organizationDateTimestamp(value) {
+    return isIsoDateText(value) ? Date.parse(value.trim()) : NaN;
+}
 export function normalizeIsoDate(value, field) {
     if (value !== undefined && value !== null && typeof value !== 'string')
         throw new Error(`${field} must be an ISO date or date-time`);
