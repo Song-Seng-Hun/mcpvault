@@ -1,5 +1,5 @@
 import { Server } from "@modelcontextprotocol/server";
-import { FileSystemService } from "./filesystem.js";
+import { FileSystemService, MAX_NOTE_CONTENT_BYTES } from "./filesystem.js";
 import { projectNoteOutline, projectNoteLineWindow } from './note-projections.js';
 import { packTaskPage } from './task-page.js';
 import { packTagPage } from './tag-page.js';
@@ -422,11 +422,13 @@ export function createServer(vaultPath, options = {}) {
     const buildInternalTools = () => [
         {
             name: "read_note",
-            description: "Read a note from the Obsidian vault",
+            description: "Read a note from the Obsidian vault. Set property to read only one string Property, without the body or other Properties; follow its revision-guarded offset continuation for long values.",
             inputSchema: {
                 type: "object",
                 properties: {
                     path: { type: "string", description: "Path to the note relative to vault root" },
+                    property: { type: "string", minLength: 1, maxLength: 128, description: "Optional exact string Property name, for example recall_prompt. Excludes the body and all other Properties; missing/non-string values return an error." },
+                    offset: { type: "integer", minimum: 0, description: "UTF-16 character offset within property only. Nonzero continuations require expectedRevision; use the returned nextAction unchanged." },
                     knownRevision: { type: "string", description: "Optional response-cache hint. After reading the current snapshot and checking visibility, unchanged notes return notModified without a body. This saves response tokens, not source reads; it does not reject changed notes." },
                     expectedRevision: { type: "string", pattern: "^[a-fA-F0-9]{64}$", description: "Optional SHA-256 snapshot guard. A different current revision returns revision_conflict without a body, even when knownRevision matches. Preserve this value when following a candidate or retry action." },
                     maxChars: { type: "integer", minimum: 512, maximum: 20000, default: 12000, description: "Hard response budget. Oversized note bodies return a bounded prefix, revision, total length, and an outline next action." },
@@ -1461,7 +1463,7 @@ export function createServer(vaultPath, options = {}) {
                         }), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_recall_queue": {
-                        return jsonResult(await llmWiki.recallQueue(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+                        return jsonResult(await llmWiki.recallQueue(principal, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.prettyPrint), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_duplicate_candidates": {
                         return jsonResult(await llmWiki.duplicateCandidates(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
@@ -2017,6 +2019,29 @@ export function createServer(vaultPath, options = {}) {
                         return jsonResult(await ideation.synthesizeWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, synthesis: trimmedArgs.synthesis, references: trimmedArgs.references, expectedRevision: trimmedArgs.expectedRevision }), trimmedArgs.prettyPrint);
                     }
                     case "read_note": {
+                        if (trimmedArgs.property !== undefined) {
+                            const property = trimmedArgs.property;
+                            const offset = trimmedArgs.offset ?? 0;
+                            if (typeof property !== 'string' || !property.length || property.length > 128)
+                                throw new Error('property must be a string of 1 to 128 characters');
+                            if (!Number.isInteger(offset) || offset < 0)
+                                throw new Error('offset must be a nonnegative integer');
+                            if (offset > 0 && !trimmedArgs.expectedRevision)
+                                throw new Error('Property continuation requires expectedRevision');
+                            const maxChars = noteReadMaxChars(trimmedArgs.maxChars);
+                            const note = (await fileSystem.readNoteMetadata([trimmedArgs.path], canAccessPath, { fresh: true, strict: true, maxBytes: MAX_NOTE_CONTENT_BYTES }))[0];
+                            if (!note?.revision)
+                                throw new Error('Property source is unavailable');
+                            assertReadableNote(note.frontmatter);
+                            const conflict = noteContinuationConflict(scopeAccess.toPublicPath(trimmedArgs.path), note.revision, { ...trimmedArgs, maxChars }, property);
+                            if (conflict)
+                                return conflict;
+                            if (!Object.hasOwn(note.frontmatter, property) || typeof note.frontmatter[property] !== 'string')
+                                throw new Error('Requested Property is missing or is not a string');
+                            return boundedPropertyReadResult(scopeAccess.toPublicPath(trimmedArgs.path), property, note.frontmatter[property], note.revision, offset, maxChars, trimmedArgs.prettyPrint === true);
+                        }
+                        if (trimmedArgs.offset !== undefined)
+                            throw new Error('offset is only supported with property');
                         const note = await fileSystem.readNote(trimmedArgs.path);
                         assertReadableNote(note.frontmatter);
                         const maxChars = noteReadMaxChars(trimmedArgs.maxChars);
@@ -2829,6 +2854,37 @@ function noteReadMaxChars(requestedMaxChars) {
         throw new Error('maxChars must be an integer between 512 and 20000');
     return parsed;
 }
+/** Page only the requested string, never a body/summary fallback. */
+function boundedPropertyReadResult(path, property, value, revision, offset, maxChars, prettyPrint) {
+    if (offset > value.length)
+        throw new Error('offset exceeds the Property length');
+    const serialize = (end) => JSON.stringify({ path, property, revision, offset, value: value.slice(offset, end),
+        totalChars: value.length, truncated: end < value.length,
+        ...(end < value.length && { nextAction: { endpointId: 'notes.read', arguments: { path, property, offset: end, expectedRevision: revision, maxChars, prettyPrint } } }),
+    }, null, prettyPrint ? 2 : undefined);
+    // Full responses omit continuation overhead, so try them before prefix search.
+    if (value.length - offset <= maxChars) {
+        const full = serialize(value.length);
+        if (full.length <= maxChars)
+            return { content: [{ type: 'text', text: full }] };
+    }
+    let low = offset + 1, high = Math.min(value.length - 1, offset + maxChars), end = offset;
+    while (low <= high) {
+        const middle = Math.floor((low + high) / 2);
+        if (serialize(middle).length <= maxChars) {
+            end = middle;
+            low = middle + 1;
+        }
+        else
+            high = middle - 1;
+    }
+    // Avoid splitting surrogate pairs while retaining the UTF-16 offset contract.
+    if (end > offset && /[\uD800-\uDBFF]/.test(value[end - 1]) && /[\uDC00-\uDFFF]/.test(value[end]))
+        end--;
+    if (end <= offset)
+        return noteReadBudgetError(Math.min(20000, Math.max(maxChars + 512, serialize(Math.min(offset + 2, value.length)).length)), revision);
+    return { content: [{ type: 'text', text: serialize(end) }] };
+}
 function boundedNoteReadResult(path, note, requestedMaxChars, prettyPrint) {
     const maxChars = noteReadMaxChars(requestedMaxChars);
     const full = { path, fm: note.frontmatter, content: note.content, revision: note.revision };
@@ -3003,7 +3059,7 @@ function noteReadBudgetError(requiredMaxChars, revision) {
                 }) }] };
 }
 // Called only after the current snapshot has passed visibility checks.
-function noteContinuationConflict(path, revision, args) {
+function noteContinuationConflict(path, revision, args, property) {
     if (args.expectedRevision === undefined)
         return undefined;
     if (typeof args.expectedRevision !== 'string' || !/^[a-fA-F0-9]{64}$/.test(args.expectedRevision)) {
@@ -3014,8 +3070,10 @@ function noteContinuationConflict(path, revision, args) {
     const maxChars = args.maxChars === undefined ? 4000 : Number(args.maxChars);
     const text = JSON.stringify({
         error: 'revision_conflict', restartRequired: true,
-        message: 'Source changed. Discard previous pages and restart from this fresh outline.',
-        nextAction: { endpointId: endpointIdForTool('get_note_outline'), arguments: { path, maxChars: Math.min(12000, maxChars) } },
+        message: property ? 'Source changed. Discard previous pages and restart this Property at the fresh revision.' : 'Source changed. Discard previous pages and restart from this fresh outline.',
+        nextAction: property
+            ? { endpointId: 'notes.read', arguments: { path, property, offset: 0, expectedRevision: revision, maxChars: Math.min(12000, maxChars) } }
+            : { endpointId: endpointIdForTool('get_note_outline'), arguments: { path, maxChars: Math.min(12000, maxChars) } },
     });
     // Preserve the conflict (and the caller's old guard) when its restart path
     // cannot fit; retrying with a larger budget must not silently read new text.

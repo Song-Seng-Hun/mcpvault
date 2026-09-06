@@ -183,9 +183,12 @@ export declare class FileSystemService {
     findPathForWikiLink(wikiLinkName: string, canAccessPath?: (path: string) => boolean, sourcePath?: string): Promise<string[]>;
     findPathForMarkdownLink(target: string, sourcePath: string, canAccessPath?: (path: string) => boolean): Promise<string[]>;
     /** Request-local resolver for bounded multi-note workflows. Without an index,
+     * or with fresh:true (which bypasses it without refreshing),
      * enumerate paths once; only bare identity terms require alias metadata, and
      * all such reads go through the caller's visibility/budget/revision reader. */
-    createNoteReferenceResolver(canAccessPath: (path: string) => boolean, readMetadata: (path: string) => Promise<QueryNote | undefined>): (target: string, options?: Pick<ResolveNoteReferenceOptions, 'sourcePath' | 'syntax'>) => Promise<string[]>;
+    createNoteReferenceResolver(canAccessPath: (path: string) => boolean, readMetadata: (path: string) => Promise<QueryNote | undefined>, policy?: {
+        fresh?: boolean;
+    }): (target: string, options?: Pick<ResolveNoteReferenceOptions, 'sourcePath' | 'syntax'>) => Promise<string[]>;
     private findPathsForNoteReference;
     getBacklinks(path: string, limit?: number, canAccessPath?: (path: string) => boolean, offset?: number, options?: {
         includeSourceRevision?: boolean;
@@ -233,6 +236,10 @@ export declare class FileSystemService {
     readQueryNoteBody(note: QueryNote, canAccessPath: (path: string) => boolean, canReadNote: (note: QueryNote) => boolean): Promise<QueryNote>;
     private hydrateQueryNote;
     queryNotesBounded(params: QueryNotesParams, maxChars: number, canAccessPath: (path: string) => boolean, canReadNote: (note: QueryNote) => boolean, prettyPrint?: boolean): Promise<PackedQueryPage>;
+    /** Fresh sequential metadata scan with bounded reads from the first file.
+     * Discovery retains path names, not all note metadata or bodies. No index
+     * refresh or unrestricted query fallback occurs in this iterator. */
+    iterateFreshNoteMetadata(canAccessPath: (path: string) => boolean): AsyncGenerator<QueryNote>;
     /** Internal whole-inventory consumer. Unlike independent cursor pages, all
      * rows belong to one captured metadata cohort. This is not an OS transaction. */
     readQueryInventory(canAccessPath: (path: string) => boolean, canReadNote: (note: QueryNote) => boolean, includeContentFor?: (note: QueryNote) => boolean, consumeContent?: (note: QueryNote) => void | Promise<void>): Promise<QueryNote[]>;

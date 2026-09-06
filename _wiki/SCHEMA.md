@@ -586,7 +586,29 @@ are intentionally separate from `review_wiki_note`. Agent identities keep a
 bounded private recall history and streak; this never becomes shared knowledge
 frontmatter or a truth score.
 `get_wiki_recall_queue` provides the due prompts as a bounded reader-specific
-projection, so an agent can attempt recall before opening the body. Use
+projection, so an agent can attempt recall before opening the body. Queue reads
+use fresh bounded metadata from discovery onward. Source/private-state and
+visible reference revisions are rechecked; refresh on drift. The private prompt
+may override the shared prompt, including when no shared prompt exists. Plain
+stored repair paths are exact; authored wikilinks remain source-relative.
+Hidden/missing/foreign targets never become actionable pointers.
+
+Complete compact/pretty JSON obeys maxChars. `detailsOmitted` keeps the task's
+prompt/revision and required private/repair context, or the queue returns a
+larger-budget retry that preserves the original arguments. `promptOmitted`
+means an authored prompt exceeds 1000 characters: nextAction reads only the
+owning record's `recall_prompt` via `notes.read` `property`. Its revision-guarded
+UTF-16 `offset` continuations return the exact string, never the body or other
+Properties. A new page is not suppressed by `knownRevision`; nonzero offsets
+require `expectedRevision`. Missing/non-string Properties fail explicitly.
+Do not read an answer and claim recall. Invalid date/interval metadata uses revision-bearing
+`dateRepairAction`, not a successful recall. Resolved repairs obey normal due
+dates. Review packets admit bounded full recall context before outer response
+compaction, preserving private invalid-interval repair priority.
+At most limit-squared rich candidates and 256 reference metadata records
+are retained; path enumeration and distinct group keys still scale with the
+inventory. Per-file reads are capped at 8 MiB. Counts are observed, not atomic.
+Use
 `get_wiki_duplicate_candidates` for near-duplicate review beyond exact
 title/alias collisions; similarity never authorizes an automatic merge.
 `get_wiki_home` endpoint returns a bounded live Home/JDex-style launchpad;

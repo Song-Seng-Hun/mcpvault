@@ -24,6 +24,7 @@ import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { authoredTaskStatus, hasAuthoredText, hasAuthoredNextAction, needsAuthoredNextAction, normalizeEpistemicStatus } from './organization.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
 import { allocateProposalPaths } from './proposal-paths.js';
+import { createRecallCollector, packRecallQueue } from './recall-queue.js';
 import { buildNoteReferenceIndex, normalizeNoteReferenceTerm, noteReferenceDocument, resolveNoteReference } from './note-reference.js';
 import { buildJsonCanvasProjection, canvasFileNodeId, readJsonCanvasMetadata, validateJsonCanvasDocument } from './json-canvas.js';
 export { SOURCE_TRUST_LEVELS } from './organization.js';
@@ -3910,17 +3911,38 @@ export class LlmWikiService {
      * Agent sessions use their private continuity record; model-owner sessions
      * retain the legacy note Properties path for compatibility.
      */
-    async recallQueue(principal, limit = 10, maxChars = 6000) {
-        const boundedLimit = Math.min(Math.max(Number(limit) || 10, 1), 30);
+    async recallQueue(principal, limit = 10, maxChars = 6000, prettyPrint = false) {
+        const boundedLimit = Math.floor(Math.min(Math.max(Number(limit) || 10, 1), 30));
         const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 12000);
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        const freshOptions = { fresh: true, strict: true, maxBytes: MAX_NOTE_CONTENT_BYTES };
+        const changed = () => new Error('Recall inputs changed or became unavailable; refresh the queue and retry.');
+        const readMetadata = async (path) => {
+            if (!canAccess(path))
+                return undefined;
+            try {
+                return (await this.fileSystem.readNoteMetadata([path], canAccess, freshOptions))[0];
+            }
+            catch {
+                throw changed();
+            }
+        };
         const current = Date.now();
-        const candidates = [];
+        const collector = createRecallCollector(boundedLimit, (left, right) => right.priority - left.priority || left.path.localeCompare(right.path));
         let total = 0;
-        for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
-            if (note.frontmatter.llm_wiki_type !== 'knowledge' || isModerationHidden(note.frontmatter) || typeof note.frontmatter.recall_prompt !== 'string' || !note.frontmatter.recall_prompt.trim())
+        for await (const metadata of this.fileSystem.iterateFreshNoteMetadata(canAccess)) {
+            if (metadata.frontmatter.llm_wiki_type !== 'knowledge' || isModerationHidden(metadata.frontmatter))
                 continue;
-            const privateState = await this.readPrivateRecall(principal, note.path);
+            const note = await readMetadata(metadata.path);
+            if (!note || note.frontmatter.llm_wiki_type !== 'knowledge' || isModerationHidden(note.frontmatter))
+                continue;
+            const statePath = this.privateRecallPath(principal, note.path);
+            const stateNote = statePath ? await readMetadata(statePath) : undefined;
+            const privateState = stateNote && !isModerationHidden(stateNote.frontmatter) ? stateNote.frontmatter : undefined;
+            const promptValue = privateState?.recall_prompt ?? note.frontmatter.recall_prompt;
+            if (typeof promptValue !== 'string' || !promptValue.trim())
+                continue;
+            const prompt = promptValue.trim();
             const quality = String(privateState?.recall_quality || note.frontmatter.recall_quality || 'unseen').toLowerCase();
             const repairStatus = String(privateState?.recall_repair_status || note.frontmatter.recall_repair_status || (quality === 'failed' || quality === 'partial' ? 'needed' : 'none')).toLowerCase();
             const lastRecalledValue = privateState?.last_recalled_at !== undefined ? privateState.last_recalled_at : note.frontmatter.last_recalled_at;
@@ -3928,118 +3950,159 @@ export class LlmWikiService {
             const invalidRecallDate = lastRecalledValue !== undefined && !Number.isFinite(lastMs);
             const lastRecalledAt = Number.isFinite(lastMs) ? String(lastRecalledValue).trim() : undefined;
             const intervalValue = privateState?.recall_interval_days ?? note.frontmatter.recall_interval_days;
-            const intervalDays = Number(intervalValue);
-            const nextMs = Number.isFinite(lastMs) && Number.isFinite(intervalDays) && intervalDays > 0
-                ? lastMs + intervalDays * 24 * 60 * 60 * 1000
-                : 0;
-            // An unfinished repair is actionable immediately, even when the normal
-            // spaced-repetition interval has not elapsed yet.
-            if (nextMs > current && repairStatus === 'none')
+            let intervalDays, invalidInterval = false;
+            try {
+                intervalDays = normalizeReviewIntervalDays(intervalValue);
+            }
+            catch {
+                invalidInterval = true;
+            }
+            const nextMs = Number.isFinite(lastMs) && intervalDays !== undefined ? lastMs + intervalDays * 86400000 : 0;
+            const repairNeeded = repairStatus === 'needed' || repairStatus === 'in_progress';
+            if (!invalidRecallDate && !invalidInterval && nextMs > current && !repairNeeded)
                 continue;
             total += 1;
-            const ageDays = Number.isFinite(lastMs) ? Math.max(0, Math.floor((current - lastMs) / (24 * 60 * 60 * 1000))) : undefined;
-            // First recall may receive a scheduling boost, but unknown history is
-            // never presented as thousands of elapsed days.
-            const priority = (invalidRecallDate ? 600 : repairStatus === 'needed' ? 500 : repairStatus === 'in_progress' ? 450 : quality === 'failed' ? 400 : quality === 'partial' ? 300 : quality === 'unseen' ? 200 : 100)
+            const ageDays = Number.isFinite(lastMs) ? Math.max(0, Math.floor((current - lastMs) / 86400000)) : undefined;
+            const priority = (invalidRecallDate || invalidInterval ? 600 : repairStatus === 'needed' ? 500 : repairStatus === 'in_progress' ? 450 : quality === 'failed' ? 400 : quality === 'partial' ? 300 : quality === 'unseen' ? 200 : 100)
                 + (lastRecalledValue === undefined ? 365 : Math.min(ageDays ?? 0, 365));
-            const dateRepairPath = privateState?.last_recalled_at !== undefined
-                ? this.privateRecallPath(principal, note.path) || note.path : note.path;
-            const contrastWith = [];
-            for (const relation of ['contradicts', 'same_as', 'version_of', 'refines']) {
-                const values = Array.isArray(note.frontmatter[relation]) ? note.frontmatter[relation] : [];
-                for (const raw of values.slice(0, 4)) {
-                    if (typeof raw !== 'string' || !raw.trim())
-                        continue;
-                    let target = relationDocument(raw);
-                    try {
-                        if (/^!?\[\[.+\]\]$/.test(raw)) {
-                            const matches = await this.fileSystem.findPathForWikiLink(target, canAccess);
-                            if (matches.length !== 1)
-                                continue;
-                            target = matches[0];
-                        }
-                    }
-                    catch {
-                        continue;
-                    }
-                    if (!canAccess(target) || !await this.fileSystem.noteExists(target))
-                        continue;
-                    contrastWith.push({ relation, target: this.access.toPublicPath(target) });
-                    if (contrastWith.length >= 4)
-                        break;
+            const invalidPrivateField = invalidRecallDate ? privateState?.last_recalled_at !== undefined : privateState?.recall_interval_days != null;
+            const dateRepairPath = invalidPrivateField && statePath ? statePath : note.path;
+            const dateRepairRevision = invalidPrivateField && statePath ? stateNote?.revision : note.revision;
+            const oversizedPrivatePrompt = prompt.length > 1000 && privateState?.recall_prompt != null && statePath;
+            const contrastReferences = ['contradicts', 'same_as', 'version_of', 'refines'].flatMap(relation => (Array.isArray(note.frontmatter[relation]) ? note.frontmatter[relation] : []).slice(0, 4)
+                .filter((raw) => typeof raw === 'string' && Boolean(raw.trim()) && raw.length <= 2048)
+                .map((raw) => ({ relation, raw })));
+            const repairRaw = privateState?.recall_repair_path || note.frontmatter.recall_repair_path;
+            const neighborhood = [note.frontmatter.domain, note.frontmatter.moc, note.frontmatter.project]
+                .find(value => typeof value === 'string' && value.trim()) || 'ungrouped';
+            const candidate = {
+                path: this.access.toPublicPath(note.path), revision: note.revision,
+                title: boundedText(note.frontmatter.title || note.path.split('/').at(-1), 160),
+                noteKind: boundedText(note.frontmatter.note_kind || 'knowledge', 80),
+                recallQuality: boundedText(quality, 40), ...(repairStatus !== 'none' && { repairStatus: boundedText(repairStatus, 40) }),
+                ...(typeof (privateState?.recall_confusion || note.frontmatter.recall_confusion) === 'string' && { confusion: boundedText(privateState?.recall_confusion || note.frontmatter.recall_confusion, 600) }),
+                ...Object.fromEntries(['domain', 'moc', 'project'].flatMap(key => typeof note.frontmatter[key] === 'string' && note.frontmatter[key].trim() ? [[key, boundedText(note.frontmatter[key].trim(), 160)]] : [])),
+                ...(lastRecalledAt && { lastRecalledAt }), ...(intervalDays !== undefined && { recallIntervalDays: intervalDays }),
+                ...(nextMs > 0 && Number.isFinite(new Date(nextMs).getTime()) && { nextRecallAt: new Date(nextMs).toISOString() }),
+                ...(ageDays !== undefined && { ageDays }),
+                reason: invalidRecallDate ? 'invalid_last_recalled_at' : invalidInterval ? 'invalid_recall_interval_days' : quality === 'failed' ? 'previous_recall_failed' : quality === 'partial' ? 'previous_recall_partial' : !lastRecalledAt ? 'never_recalled' : 'recall_due',
+                ...(invalidRecallDate || invalidInterval ? { dateRepairAction: { endpointId: 'notes.read', arguments: { path: this.access.toPublicPath(dateRepairPath), expectedRevision: dateRepairRevision, maxChars: 3000 } } } : {}),
+                ...(prompt.length <= 1000 ? { recallPrompt: prompt } : { promptOmitted: true }),
+                nextAction: { endpointId: 'notes.read', arguments: { path: this.access.toPublicPath(oversizedPrivatePrompt || note.path), expectedRevision: oversizedPrivatePrompt ? stateNote?.revision : note.revision, ...(prompt.length > 1000 && { property: 'recall_prompt' }), maxChars: 3000 } },
+                suggestedAction: invalidRecallDate || invalidInterval
+                    ? 'Repair the metadata using dateRepairAction and its revision; do not record an attempt that did not happen.'
+                    : repairNeeded ? 'Inspect confusion and the verified repair target; resolve only after checking the repair and attempting recall again.'
+                        : prompt.length > 1000 ? 'Read only recall_prompt via nextAction and its continuations before attempting recall; no answer or other Properties are returned.'
+                            : 'Attempt recallPrompt before opening the note body, then record the result.',
+                ...(stateNote && privateState && { stateRevision: stateNote.revision }),
+                priority, _physicalPath: note.path, _statePath: statePath, _stateRevision: stateNote?.revision,
+                _contrastReferences: contrastReferences,
+                _repairRaw: typeof repairRaw === 'string' && repairRaw.length <= 2048 ? repairRaw : undefined,
+                _repairSource: privateState?.recall_repair_path && statePath ? statePath : note.path,
+            };
+            collector.add(hash(String(neighborhood).trim()), candidate);
+        }
+        const selected = collector.values();
+        const references = new Map();
+        const readReference = async (path) => {
+            const key = normalizePath(path).toLowerCase();
+            if (references.has(key))
+                return references.get(key);
+            if (references.size >= 256)
+                throw new Error('Recall reference inspection budget exhausted; use exact links or a smaller limit.');
+            const note = await readMetadata(path);
+            const visible = note && !isModerationHidden(note.frontmatter) ? note : undefined;
+            references.set(key, visible);
+            return visible;
+        };
+        const resolver = this.fileSystem.createNoteReferenceResolver(canAccess, readReference, { fresh: true });
+        const resolveReference = async (raw, sourcePath, storedPath = false) => {
+            if (storedPath && !/^!?\[\[/.test(raw.trim())) {
+                let exact;
+                try {
+                    exact = this.access.resolveExternalPath(raw.trim(), principal);
                 }
+                catch {
+                    return undefined;
+                }
+                return canAccess(exact) && this.access.canReferenceFrom(sourcePath, exact) ? readReference(exact) : undefined;
+            }
+            const target = relationDocument(raw);
+            let paths;
+            if (/^scope:\/\//i.test(target)) {
+                try {
+                    paths = [this.access.resolveExternalPath(target, principal)];
+                }
+                catch {
+                    return undefined;
+                }
+            }
+            else
+                paths = await resolver(target, { sourcePath });
+            const visible = [];
+            for (const path of paths) {
+                if (!canAccess(path) || !this.access.canReferenceFrom(sourcePath, path))
+                    continue;
+                const note = await readReference(path);
+                if (note)
+                    visible.push(note);
+            }
+            if (visible.length !== 1)
+                return undefined;
+            if (!/^scope:\/\//i.test(target)) {
+                const admittedIndex = buildNoteReferenceIndex(visible.map(note => ({ path: note.path,
+                    title: note.frontmatter.title, aliases: note.frontmatter.aliases,
+                    preferredTerm: note.frontmatter.preferred_term, stableId: note.frontmatter.stable_id })));
+                const currentMatch = resolveNoteReference(target, admittedIndex, { sourcePath });
+                if (currentMatch.length !== 1 || normalizePath(currentMatch[0]).toLowerCase() !== normalizePath(visible[0].path).toLowerCase())
+                    throw changed();
+            }
+            return visible[0];
+        };
+        const items = [];
+        for (const candidate of selected) {
+            const { priority: _priority, _physicalPath, _statePath, _stateRevision, _contrastReferences, _repairRaw, _repairSource, ...item } = candidate;
+            const contrastWith = [];
+            for (const reference of _contrastReferences) {
+                const note = await resolveReference(reference.raw, _physicalPath);
+                if (note)
+                    contrastWith.push({ relation: reference.relation, target: this.access.toPublicPath(note.path), revision: note.revision });
                 if (contrastWith.length >= 4)
                     break;
             }
-            candidates.push({
-                path: this.access.toPublicPath(note.path),
-                title: note.frontmatter.title || note.path.split('/').at(-1),
-                noteKind: note.frontmatter.note_kind || 'knowledge',
-                recallQuality: quality,
-                ...(repairStatus !== 'none' && { repairStatus }),
-                ...(typeof (privateState?.recall_confusion || note.frontmatter.recall_confusion) === 'string' && { confusion: boundedText(privateState?.recall_confusion || note.frontmatter.recall_confusion, 600) }),
-                ...(typeof (privateState?.recall_repair_path || note.frontmatter.recall_repair_path) === 'string' && { repairPath: boundedText(privateState?.recall_repair_path || note.frontmatter.recall_repair_path, 500) }),
-                ...(typeof note.frontmatter.domain === 'string' && note.frontmatter.domain.trim() && { domain: note.frontmatter.domain.trim() }),
-                ...(typeof note.frontmatter.moc === 'string' && note.frontmatter.moc.trim() && { moc: note.frontmatter.moc.trim() }),
-                ...(typeof note.frontmatter.project === 'string' && note.frontmatter.project.trim() && { project: note.frontmatter.project.trim() }),
-                ...(lastRecalledAt && { lastRecalledAt }),
-                ...(Number.isFinite(intervalDays) && intervalDays > 0 && { recallIntervalDays: intervalDays }),
-                ...(nextMs > 0 && { nextRecallAt: new Date(nextMs).toISOString() }),
-                ...(ageDays !== undefined && { ageDays }),
-                // Keep the original reason contract stable; repairStatus and
-                // suggestedAction carry the richer repair signal for new clients.
-                reason: invalidRecallDate ? 'invalid_last_recalled_at' : quality === 'failed' ? 'previous_recall_failed' : quality === 'partial' ? 'previous_recall_partial' : !lastRecalledAt ? 'never_recalled' : 'recall_due',
-                ...(invalidRecallDate && { dateRepairAction: { endpointId: 'notes.read', arguments: { path: this.access.toPublicPath(dateRepairPath), maxChars: 3000 } } }),
-                recallPrompt: boundedText(note.frontmatter.recall_prompt, 500),
-                suggestedAction: invalidRecallDate
-                    ? 'Follow dateRepairAction and repair the invalid date from evidence and the returned revision; do not invent elapsed time or record a recall attempt that did not happen.'
-                    : repairStatus === 'needed' || repairStatus === 'in_progress'
-                        ? 'Inspect the confusion, create or update the linked repair note, then record another recall with repairStatus=resolved only after the repair is verified.'
-                        : 'Attempt recallPrompt before opening the note body, then record the result.',
-                ...(contrastWith.length > 0 && { contrastWith }),
-                priority,
-            });
-        }
-        candidates.sort((left, right) => right.priority - left.priority || String(left.path).localeCompare(String(right.path)));
-        // Interleave distinct knowledge neighborhoods before filling the remaining
-        // slots. This keeps one heavily populated project or topic from consuming
-        // the whole recall window while preserving deterministic ordering.
-        const groups = new Map();
-        for (const candidate of candidates) {
-            const group = [candidate.domain, candidate.moc, candidate.project].find(value => typeof value === 'string' && value.trim()) || 'ungrouped';
-            const bucket = groups.get(String(group)) || [];
-            bucket.push(candidate);
-            groups.set(String(group), bucket);
-        }
-        const mixedCandidates = [];
-        const buckets = [...groups.values()];
-        for (let index = 0; mixedCandidates.length < candidates.length; index += 1) {
-            let added = false;
-            for (const bucket of buckets) {
-                const candidate = bucket[index];
-                if (!candidate)
-                    continue;
-                mixedCandidates.push(candidate);
-                added = true;
+            if (contrastWith.length)
+                item.contrastWith = contrastWith;
+            if (_repairRaw) {
+                const repair = await resolveReference(_repairRaw, _repairSource, true);
+                if (repair) {
+                    item.repairPath = this.access.toPublicPath(repair.path);
+                    item.repairRevision = repair.revision;
+                }
+                else
+                    item.repairState = 'unavailable';
             }
-            if (!added)
-                break;
-        }
-        const items = [];
-        for (const candidate of mixedCandidates.slice(0, boundedLimit)) {
-            const { priority: _priority, ...item } = candidate;
-            if (JSON.stringify([...items, item]).length + 2 > boundedChars)
-                break;
             items.push(item);
         }
-        return {
-            purpose: 'A private-reader, bounded active-recall queue. Repair invalid history through dateRepairAction first; for normal recall, attempt recallPrompt before reading the note body. This queue is not an evidence or truth score.',
-            total,
-            items,
-            diversity: { groups: groups.size, strategy: 'priority_with_neighborhood_interleaving' },
-            truncated: total > items.length,
-            generatedAt: now(),
-        };
+        // Verify selected observations, including absent private state. This is not
+        // an atomic census of every note scanned or an alias namespace transaction.
+        for (const candidate of selected) {
+            const source = await readMetadata(candidate._physicalPath);
+            if (!source || isModerationHidden(source.frontmatter) || source.revision !== candidate.revision)
+                throw changed();
+            if (candidate._statePath) {
+                const state = await readMetadata(candidate._statePath);
+                if (state?.revision !== candidate._stateRevision)
+                    throw changed();
+            }
+        }
+        for (const note of references.values()) {
+            if (!note)
+                continue;
+            const currentNote = await readMetadata(note.path);
+            if (!currentNote || isModerationHidden(currentNote.frontmatter) || currentNote.revision !== note.revision)
+                throw changed();
+        }
+        return packRecallQueue(items, total, collector.groupCount, boundedChars, prettyPrint);
     }
     async review(params) {
         if (!params.expectedRevision)
@@ -5157,7 +5220,8 @@ export class LlmWikiService {
         }
         const lint = await this.lint(principal, Math.max(200, boundedLimit * 4));
         const [recall, vocabulary, executionFlow] = await Promise.all([
-            this.recallQueue(principal, Math.min(priorityScanLimit, 32), Math.min(3200, boundedChars)),
+            // Admit exact recall/repair context before the outer projection is packed.
+            this.recallQueue(principal, Math.min(priorityScanLimit, 32), 12000),
             this.vocabularyHealth(principal, Math.min(priorityScanLimit, 32), Math.min(3200, boundedChars)),
             // Keep a rich internal flow projection so blocked/waiting lanes remain
             // available for prioritization even when the outer packet is compact.
@@ -5167,7 +5231,11 @@ export class LlmWikiService {
         const vocabularyIssueCounts = vocabulary.issueCounts || {};
         const fragmentedFacetCount = Number(vocabularyFacetHealth.fragmentedTotal ?? vocabularyIssueCounts.fragmentedFacets ?? (Array.isArray(vocabularyFacetHealth.fragmentedFacets) ? vocabularyFacetHealth.fragmentedFacets.length : 0));
         const lowSelectivityFacetCount = Number(vocabularyFacetHealth.lowSelectivityTotal ?? vocabularyIssueCounts.lowSelectivityValues ?? (Array.isArray(vocabularyFacetHealth.lowSelectivityValues) ? vocabularyFacetHealth.lowSelectivityValues.length : 0));
+        const recallAction = recall.total > 0 && recall.items.length === 0
+            ? recall.nextAction || { taskUnavailable: true, instruction: recall.instruction }
+            : undefined;
         const crossVaultActions = [
+            ...(recallAction ? [{ reason: 'recall_task_needs_detail', count: recall.total, inspect: recallAction }] : []),
             ...(fragmentedFacetCount > 0 ? [{
                     reason: 'facet_fragmentation_needs_review',
                     count: fragmentedFacetCount,
@@ -5283,8 +5351,9 @@ export class LlmWikiService {
         add(graph.evergreenQuality?.items?.filter((item) => item?.state === 'needs_attention'), 'evergreen_quality_hint', 'wiki.graph_health', 5);
         add(graph.unresolvedLinks?.items, 'broken_link', 'wiki.graph_health', 6);
         add(graph.orphanNotes?.items, 'orphan_note', 'wiki.graph_health', 7);
-        add(recall.items.filter(item => item.reason !== 'invalid_last_recalled_at'), 'active_recall_due', 'wiki.recall_queue', 2);
+        add(recall.items.filter(item => !['invalid_last_recalled_at', 'invalid_recall_interval_days'].includes(String(item.reason))), 'active_recall_due', 'wiki.recall_queue', 2);
         add(recall.items.filter(item => item.reason === 'invalid_last_recalled_at'), 'invalid_last_recalled_at', 'wiki.recall_queue', 0);
+        add(recall.items.filter(item => item.reason === 'invalid_recall_interval_days'), 'invalid_recall_interval_days', 'wiki.recall_queue', 0);
         add(vocabulary.tagVariants.map((item) => ({ path: item.paths?.[0], title: `#${item.key}` })), 'tag_variant', 'wiki.vocabulary_health', 8);
         add(vocabulary.unresolvedSubjectTerms.map((item) => ({ path: item.paths?.[0], title: item.term })), 'subject_term_needs_authority', 'wiki.vocabulary_health', 8);
         add(vocabulary.termCollisions.map((item) => ({ path: item.paths?.[0], title: item.term })), 'authority_term_collision', 'wiki.vocabulary_health', 8);
@@ -5354,7 +5423,7 @@ export class LlmWikiService {
                         : [reason];
                     let inspect;
                     let mutation;
-                    if (reason === 'invalid_last_recalled_at') {
+                    if (reason === 'invalid_last_recalled_at' || reason === 'invalid_recall_interval_days') {
                         const repairAction = selectedPriority.dateRepairAction;
                         const repairPath = this.access.resolveExternalPath(repairAction.arguments.path, principal);
                         if (!this.access.canAccessPhysicalPath(repairPath, principal))
@@ -5365,7 +5434,7 @@ export class LlmWikiService {
                         inspect = { ...repairAction, arguments: { ...repairAction.arguments, expectedRevision: repairNote.revision } };
                         mutation = { endpointId: endpointIdForTool('patch_note'), arguments: { path: repairAction.arguments.path, expectedRevision: repairNote.revision, dryRun: true },
                             requiredArguments: ['oldString and newString, or patches'],
-                            instruction: 'Repair only the invalid recall date in this inspected record from actual evidence. Preserve recall history; do not create a successful recall or invent a timestamp to clear this issue.' };
+                            instruction: 'Repair only the invalid recall date or interval in this inspected record from actual evidence. Preserve recall history; do not create a successful recall or invent a timestamp to clear this issue.' };
                     }
                     else if (reason === 'oldest_inbox_capture') {
                         inspect = { endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path: selectedPriority.path, intent: 'capture', maxChars: 5000 } };
@@ -5574,7 +5643,7 @@ export class LlmWikiService {
                 mocQuestions: graph.mocQuestionCoverage ? { total: graph.mocQuestionCoverage.total, linked: graph.mocQuestionCoverage.linked, ratio: graph.mocQuestionCoverage.ratio, unlinked: { ...graph.mocQuestionCoverage.unlinked, items: graph.mocQuestionCoverage.unlinked.items?.slice(0, 2) || [], truncated: true } } : undefined,
                 mocSequences: graph.mocSequenceHealth ? { mocsAnalyzed: graph.mocSequenceHealth.mocsAnalyzed, needsAttention: graph.mocSequenceHealth.needsAttention, items: graph.mocSequenceHealth.items?.slice(0, 2) || [], truncated: true } : undefined,
                 evergreenQuality: graph.evergreenQuality ? { total: graph.evergreenQuality.total, needsAttention: graph.evergreenQuality.needsAttention, ready: graph.evergreenQuality.ready, items: graph.evergreenQuality.items?.slice(0, 2) || [], truncated: true } : undefined,
-                recall: { total: recall.total, items: recall.items.slice(0, 2), truncated: true },
+                recall: { ...recall, items: recall.items.slice(0, 2), truncated: true },
                 vocabulary: { tagVariants: vocabulary.tagVariants.slice(0, 2), unresolvedSubjectTerms: vocabulary.unresolvedSubjectTerms.slice(0, 2), termCollisions: vocabulary.termCollisions.slice(0, 2), facetHealth: { fragmentedFacets: vocabularyFacetHealth.fragmentedFacets?.slice(0, 2) || [], lowSelectivityValues: vocabularyFacetHealth.lowSelectivityValues?.slice(0, 2) || [], advisory: true }, truncated: true },
                 graph: { unresolvedLinks: graph.unresolvedLinks ? { total: graph.unresolvedLinks.total, items: graph.unresolvedLinks.items?.slice(0, 2) || [], truncated: true } : undefined, orphanNotes: graph.orphanNotes ? { total: graph.orphanNotes.total, items: graph.orphanNotes.items?.slice(0, 2) || [], truncated: true } : undefined },
             },
@@ -5586,6 +5655,7 @@ export class LlmWikiService {
             return compactResult;
         const minimal = {
             purpose: result.purpose,
+            ...(recallAction && { recallAction }),
             counts: result.counts,
             ...(attentionRouting && { attentionRouting }),
             ...(nextSnoozedReviewAt && { nextSnoozedReviewAt }),
@@ -5602,6 +5672,7 @@ export class LlmWikiService {
             const inspect = curationPlan.inspect;
             const then = curationPlan.then;
             const tiny = {
+                ...(recallAction && { recallAction }),
                 selected: selected ? { path: selected.path, revision: selected.revision, reason: selected.reason } : undefined,
                 nextAction: inspect ? { endpointId: inspect.endpointId, arguments: inspect.arguments } : undefined,
                 then: then ? { endpointId: then.endpointId } : undefined,
@@ -5613,6 +5684,8 @@ export class LlmWikiService {
             if (JSON.stringify(tiny).length <= boundedChars)
                 return tiny;
         }
+        if (recallAction && JSON.stringify({ truncated: true, nextAction: recallAction }).length <= boundedChars)
+            return { truncated: true, nextAction: recallAction };
         return { truncated: true, nextAction: { endpointId: endpointIdForTool('get_wiki_review_packet'), arguments: { limit: 1, maxChars: Math.min(16000, Math.max(1600, boundedChars * 2)) } } };
     }
     /**

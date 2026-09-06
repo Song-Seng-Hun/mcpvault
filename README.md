@@ -621,7 +621,40 @@ history and streak. Model-owner identities retain the shared frontmatter
 compatibility path.
 
 `get_wiki_recall_queue` turns these fields into a bounded reader-specific due
-queue and exposes the prompt before the body. `get_wiki_duplicate_candidates`
+queue and exposes the prompt before the body. It reads fresh metadata with an
+8 MiB per-file cap from discovery onward, without retaining answer bodies or
+refreshing the metadata index. It retains at most `limit * limit` detailed
+candidates while preserving priority/subject round-robin order; file names and
+distinct neighborhood keys still scale with inventory size. This is not a
+constant-memory or constant-time Vault scan.
+
+Selected source/private-state and visible contrast/repair revisions are checked
+again before return; refresh after drift. Contrast links resolve relative to the
+authored note. Plain stored repair paths are exact, never basename substitutes.
+Hidden/missing targets are unavailable, not disclosed. Reference metadata has
+a separate 256-identity inspection cap; use exact links or a smaller limit if it
+is exceeded. Counts are sequential observations, not an atomic census.
+
+`maxChars` includes the complete JSON and pretty indentation. `detailsOmitted`
+keeps the exact prompt/revision and applicable private/repair context, or returns
+larger-budget `retry.overrides` to apply to the original arguments. Do not treat
+omitted details as a resolved repair. A prompt longer than 1000 characters returns
+`promptOmitted` and a guarded `notes.read` of its owning record with
+`property: "recall_prompt"`. Follow its offset continuations to read the exact
+question without the body or other Properties. Do not claim recall after reading
+an answer. Property-only reads always inspect current bounded metadata; they do
+not use `knownRevision` to skip a new field/page. `offset > 0` requires
+`expectedRevision`; missing or non-string Properties return errors, never a body
+fallback. The full compact/pretty response respects `maxChars`.
+`invalid_last_recalled_at` and `invalid_recall_interval_days` use
+`dateRepairAction` (also in the review packet); never record a fabricated success
+to clear malformed metadata. Review packets admit recall context within an
+internal 12000-character budget before packing their own response, so a long
+private repair does not vanish under a smaller nested budget. Resolved repairs
+follow their normal next due date.
+The queue is read-only and does not prove knowledge or update recall history.
+
+`get_wiki_duplicate_candidates`
 adds near-duplicate suggestions beyond exact title/alias collisions; it never
 merges automatically and should be followed by revision reads and
 `preview_wiki_merge`.

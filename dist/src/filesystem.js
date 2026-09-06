@@ -2315,9 +2315,10 @@ export class FileSystemService {
         return this.findPathsForNoteReference(target, canAccessPath, { sourcePath, syntax: 'markdown' });
     }
     /** Request-local resolver for bounded multi-note workflows. Without an index,
+     * or with fresh:true (which bypasses it without refreshing),
      * enumerate paths once; only bare identity terms require alias metadata, and
      * all such reads go through the caller's visibility/budget/revision reader. */
-    createNoteReferenceResolver(canAccessPath, readMetadata) {
+    createNoteReferenceResolver(canAccessPath, readMetadata, policy = {}) {
         let pathIndex;
         let aliasIndex;
         const getPaths = () => pathIndex ||= this.collectVaultFiles().then(paths => buildNoteReferenceIndex(paths
@@ -2326,7 +2327,7 @@ export class FileSystemService {
         return async (target, options = {}) => {
             if (!target.trim())
                 return [];
-            if (this.metadataIndex)
+            if (this.metadataIndex && !policy.fresh)
                 return this.metadataIndex.resolveNoteReference(target, canAccessPath, options.sourcePath, options.syntax);
             const document = noteReferenceDocument(target).replace(/\\/g, '/');
             const needsAliases = options.syntax !== 'markdown' && !document.includes('/') && !/\.(?:md|markdown|txt)$/i.test(document);
@@ -2860,6 +2861,25 @@ export class FileSystemService {
                 }
             },
         });
+    }
+    /** Fresh sequential metadata scan with bounded reads from the first file.
+     * Discovery retains path names, not all note metadata or bodies. No index
+     * refresh or unrestricted query fallback occurs in this iterator. */
+    async *iterateFreshNoteMetadata(canAccessPath) {
+        const paths = await this.collectVaultFiles();
+        for (const path of paths) {
+            if (!/\.(?:md|markdown|txt)$/i.test(path) || !this.pathFilter.isAllowed(path) || !canAccessPath(path))
+                continue;
+            let notes;
+            try {
+                notes = await this.readNoteMetadata([path], canAccessPath, { fresh: true, strict: true, maxBytes: MAX_NOTE_CONTENT_BYTES });
+            }
+            catch {
+                throw new Error('Bounded metadata inventory unavailable or too large; inspect sources before retrying.');
+            }
+            if (notes[0])
+                yield notes[0];
+        }
     }
     /** Internal whole-inventory consumer. Unlike independent cursor pages, all
      * rows belong to one captured metadata cohort. This is not an OS transaction. */

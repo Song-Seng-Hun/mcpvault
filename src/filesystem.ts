@@ -2412,9 +2412,10 @@ export class FileSystemService {
   }
 
   /** Request-local resolver for bounded multi-note workflows. Without an index,
+   * or with fresh:true (which bypasses it without refreshing),
    * enumerate paths once; only bare identity terms require alias metadata, and
    * all such reads go through the caller's visibility/budget/revision reader. */
-  createNoteReferenceResolver(canAccessPath: (path: string) => boolean, readMetadata: (path: string) => Promise<QueryNote | undefined>) {
+  createNoteReferenceResolver(canAccessPath: (path: string) => boolean, readMetadata: (path: string) => Promise<QueryNote | undefined>, policy: { fresh?: boolean } = {}) {
     let pathIndex: Promise<NoteReferenceIndex> | undefined;
     let aliasIndex: Promise<NoteReferenceIndex> | undefined;
     const getPaths = () => pathIndex ||= this.collectVaultFiles().then(paths => buildNoteReferenceIndex(paths
@@ -2422,7 +2423,7 @@ export class FileSystemService {
       .map(path => ({ path }))));
     return async (target: string, options: Pick<ResolveNoteReferenceOptions, 'sourcePath' | 'syntax'> = {}): Promise<string[]> => {
       if (!target.trim()) return [];
-      if (this.metadataIndex) return this.metadataIndex.resolveNoteReference(target, canAccessPath, options.sourcePath, options.syntax);
+      if (this.metadataIndex && !policy.fresh) return this.metadataIndex.resolveNoteReference(target, canAccessPath, options.sourcePath, options.syntax);
       const document = noteReferenceDocument(target).replace(/\\/g, '/');
       const needsAliases = options.syntax !== 'markdown' && !document.includes('/') && !/\.(?:md|markdown|txt)$/i.test(document);
       if (needsAliases && !aliasIndex) aliasIndex = (async () => {
@@ -2939,6 +2940,20 @@ export class FileSystemService {
         }
       },
     });
+  }
+
+  /** Fresh sequential metadata scan with bounded reads from the first file.
+   * Discovery retains path names, not all note metadata or bodies. No index
+   * refresh or unrestricted query fallback occurs in this iterator. */
+  async *iterateFreshNoteMetadata(canAccessPath: (path: string) => boolean): AsyncGenerator<QueryNote> {
+    const paths = await this.collectVaultFiles();
+    for (const path of paths) {
+      if (!/\.(?:md|markdown|txt)$/i.test(path) || !this.pathFilter.isAllowed(path) || !canAccessPath(path)) continue;
+      let notes: QueryNote[];
+      try { notes = await this.readNoteMetadata([path], canAccessPath, { fresh: true, strict: true, maxBytes: MAX_NOTE_CONTENT_BYTES }); }
+      catch { throw new Error('Bounded metadata inventory unavailable or too large; inspect sources before retrying.'); }
+      if (notes[0]) yield notes[0];
+    }
   }
 
   /** Internal whole-inventory consumer. Unlike independent cursor pages, all

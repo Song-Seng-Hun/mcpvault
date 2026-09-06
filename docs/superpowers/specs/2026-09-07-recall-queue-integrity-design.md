@@ -38,8 +38,15 @@ Pack the entire compact/pretty JSON response within maxChars. Keep a prefix of
 whole candidates; compact the first item to its prompt/revision and repair action
 when appropriate. If exact prompt/identity cannot fit, return bounded retry
 overrides, never shorten a path or prompt into a different task. At the ceiling,
-explain that an exact notes.read of the original candidate is needed, rather than
-an identical retry loop. No queue read records a recall or reveals answer bodies.
+return a metadata repair or prompt-only action when it fits, otherwise an
+explicit unavailable task, rather than an identical retry loop. No queue read
+records a recall or reveals answer bodies. Oversized prompts use the existing
+notes.read endpoint's optional string Property projection, with UTF-16 offset
+pagination, whole JSON budgets and expectedRevision on continuations. Read only
+fresh bounded metadata, not the answer or other Properties; do not suppress a
+field/page using knownRevision. Missing/non-string values fail explicitly.
+Review packets admit up to 12000 characters of recall context internally before
+outer packing, preserving invalid-interval repair priority and follow-up actions.
 
 ## Alternatives and proof
 Simple top-K would remove diversity; unbounded per-group lists keep the memory
