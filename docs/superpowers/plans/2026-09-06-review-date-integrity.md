@@ -131,3 +131,22 @@ that an advisory read is an atomic live-Vault snapshot.
   stale negative-prefilter behavior and the separate resource-cost proposals
   still need their own evidence-driven audit. No live server restart or Vault
   mutation was performed.
+
+## Follow-up batch: individual note date projections
+
+- [x] Validate eight root date fields in all six read views and share owning-source
+  date repair actions with work projections. Preserve source revisions, visibility,
+  summary freshness facts and a warning at compact response budgets.
+- [x] Skip unused full-view outline parsing and allocate section line arrays only
+  when selecting a section. No measured RSS reduction is claimed.
+- [x] Add 28 regression tests; 27 initially failed, then all passed. Seven targeted
+  suites passed 175 tests. A reviewer found oversized Properties made the repair
+  continuation body-only; reproduced it and fixed raw line-one continuation.
+  Follow-up focused suites passed 41 tests. No live Vault changes.
+- [x] Final build and full suite passed: 2,277 passed, one existing skip across
+  149 files, 275.37 seconds with one worker. The narrow re-review found no
+  remaining important issues and its worker was closed. Generated output and
+  fork-only commit/push follow these verified checks.
+
+Nested claim timestamps are outside this root-field batch. Chunk-level embedding
+reuse design approval was explicitly granted by the user in the next turn.

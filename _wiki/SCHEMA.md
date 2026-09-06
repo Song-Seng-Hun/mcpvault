@@ -918,6 +918,18 @@ claim or staleness of a current body excerpt. An absent basis remains stale;
 absence of progressive metadata does not invent a freshness claim. Content is
 shortened before dropping these facts; if the mandatory envelope cannot fit,
 return the existing same-request budget error instead of stripping the warning.
+Root `due_at`, `scheduled_at`, `defer_until`, `last_recalled_at`, `retention_at`,
+`preserve_until`, `last_reviewed_at` and `clarified_at` use strict calendar/scalar
+validation in every `wiki.read_projection` view. Missing dates remain absent;
+malformed dates are not projected as usable timestamps. Nonempty `dateIssues`
+carry a revision-guarded `dateRepairAction` to `notes.read`. In compact responses
+this metadata repair overrides the ordinary body/outline `nextAction`. If the
+list cannot fit, `dateIssuesOmitted: true` and `dateIssuesCount` retain the warning
+alongside the read action and summary freshness facts. Oversized Properties in
+`notes.read` return `frontmatterOmitted` with a guarded `mcp.read_note_lines`
+action from line one; its bounded line/column pagination preserves raw YAML
+access. These reads never change dates or bypass immutable/read-only sources.
+
 Never publish truncated extraction content. Extra metadata/context can be omitted
 in this compact view. Oversized identifiers produce a same-request budget retry,
 not shortened executable paths. Repeating a Wiki projection after such an error

@@ -3108,7 +3108,7 @@ function noteReadMaxChars(requestedMaxChars: unknown): number {
 
 function boundedNoteReadResult(
   path: string,
-  note: { frontmatter: Record<string, unknown>; content: string; revision: string },
+  note: { frontmatter: Record<string, unknown>; content: string; originalContent: string; revision: string },
   requestedMaxChars: unknown,
   prettyPrint?: boolean,
 ) {
@@ -3132,7 +3132,12 @@ function boundedNoteReadResult(
     nextAction,
   };
   if (JSON.stringify(base).length > maxChars) {
-    base = { path, frontmatterOmitted: true, content: '', revision: note.revision, totalContentChars: note.content.length, returnedContentChars: 0, truncated: true, nextAction };
+    // Outline headings exclude YAML. Page the original source from line one
+    // when its Properties cannot fit, including intra-line continuations.
+    let totalLines = 1;
+    for (let i = 0; i < note.originalContent.length; i++) if (note.originalContent.charCodeAt(i) === 10) totalLines++;
+    base = { path, frontmatterOmitted: true, content: '', revision: note.revision, totalContentChars: note.content.length, returnedContentChars: 0, truncated: true,
+      nextAction: { endpointId: endpointIdForTool('read_note_lines'), arguments: { path, startLine: 1, endLine: totalLines, expectedRevision: note.revision, maxChars: Math.min(8000, maxChars) } } };
   }
   if (JSON.stringify(base).length > maxChars) {
     return noteReadBudgetError(JSON.stringify(base).length + 64, note.revision);
@@ -3221,7 +3226,8 @@ function boundedWikiProjectionResult(value: Record<string, any>, args: Record<st
   const excerpt = !split && value.contentSource === 'body_excerpt' && value.excerptRange;
   const sourceRange = split ? value.range : value.section || excerpt;
   const range = sourceRange && { startLine: sourceRange.startLine, endLine: sourceRange.endLine };
-  const compact = {
+  const dateIssues = Array.isArray(value.dateIssues) ? value.dateIssues : [];
+  let compact: Record<string, any> = {
     ...(split ? { mode: 'preview', sourcePath: path, sourceRevision: revision, range } : { path, revision, view: value.view,
       ...(range && (excerpt ? { contentSource: 'body_excerpt', excerptRange: range } : { section: range })) }),
     ...(split && typeof value.targetPath === 'string' && {
@@ -3232,15 +3238,25 @@ function boundedWikiProjectionResult(value: Record<string, any>, args: Record<st
     // not optional display metadata. Preserve false as well as true.
     ...(typeof value.summaryFresh === 'boolean' && { summaryFresh: value.summaryFresh }),
     ...(typeof value.summaryStale === 'boolean' && { summaryStale: value.summaryStale }),
+    ...(dateIssues.length > 0 && { dateIssues }),
     content: '', truncated: true,
-    nextAction: {
+    // A body-only continuation cannot recover malformed Properties. Preserve
+    // the same revision, but inspect metadata before interpreting these dates.
+    nextAction: dateIssues.length > 0 ? {
+      endpointId: 'notes.read', arguments: { path, expectedRevision: revision, maxChars: 8000 },
+    } : {
       endpointId: endpointIdForTool(range ? 'read_note_lines' : 'get_note_outline'),
       arguments: { path, ...(range || {}), expectedRevision: revision, maxChars: Math.min(12000, maxChars) },
     },
   };
   // This action re-reads the whole selected range, not a character continuation:
   // agents must replace the preview rather than append it or publish its prefix.
-  const minimum = JSON.stringify(compact);
+  let minimum = JSON.stringify(compact);
+  if (minimum.length > maxChars && dateIssues.length > 0) {
+    const { dateIssues: _issues, ...rest } = compact;
+    compact = { ...rest, dateIssuesOmitted: true, dateIssuesCount: dateIssues.length };
+    minimum = JSON.stringify(compact);
+  }
   if (minimum.length > maxChars) return noteReadBudgetError(minimum.length + 64);
   let text = minimum;
   let low = 0;

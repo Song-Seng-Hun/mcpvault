@@ -349,6 +349,15 @@ notes without progressive metadata do not acquire an invented freshness flag.
 A current `body_excerpt` can coexist with stale stored metadata. When a stored
 projection is stale, inspect revision-checked source context before relying on
 it; never refresh its fingerprint without actually reviewing its contents.
+Malformed root scheduling, recall, retention and review dates are omitted as
+usable dates and reported through `dateIssues`. Follow `dateRepairAction` (or
+the compact `nextAction`) to read the same revision's authored Properties.
+Tiny responses retain `dateIssuesOmitted` and `dateIssuesCount` if the list
+cannot fit; that is not a clean bill of health. Oversized Properties in
+`notes.read` continue through bounded raw source lines from line one, not a
+body-only outline. Correct dates deliberately with a revision-checked dry-run;
+never guess or remove a hold to unblock work. Full body projections skip unused
+outline parsing, and only section views allocate a line array for selection.
 Filing or review changes never refresh that fingerprint. When
 several stored projection fields are stale, refresh them together: replacing
 only key points cannot certify an inherited old summary. For failed paths, use `knowledge_polarity: negative` with a

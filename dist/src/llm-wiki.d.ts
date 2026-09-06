@@ -91,6 +91,7 @@ export declare class LlmWikiService {
     private readonly references;
     private readonly semanticSearch?;
     private workDateProjection;
+    private dateRepairProjection;
     private generation;
     private readonly catalogSummaryCache;
     private readonly catalogSummaryInFlight;
@@ -2458,6 +2459,24 @@ export declare class LlmWikiService {
         contextAfter?: number;
         maxChars?: number;
     }): Promise<{
+        dateIssues?: string[];
+        dateRepairAction?: {
+            endpointId: string;
+            arguments: {
+                path: string;
+                expectedRevision: string | undefined;
+                maxChars: number;
+            };
+        };
+        dateRepairGuidance?: string;
+        dueAt: string | undefined;
+        scheduledAt: string | undefined;
+        deferUntil: string | undefined;
+        lastRecalledAt: string | undefined;
+        retentionAt: string | undefined;
+        preserveUntil: string | undefined;
+        reviewedAt: string | undefined;
+        clarifiedAt: string | undefined;
         path: string;
         title: string;
         view: "full" | "key_points" | "outline" | "progressive" | "section" | "summary";
@@ -2525,19 +2544,13 @@ export declare class LlmWikiService {
         projectPurpose?: string;
         projectSupport?: any[];
         taskContext?: string;
-        dueAt?: string;
-        scheduledAt?: string;
-        deferUntil?: string;
         stableId?: string;
         canonicalPath?: string;
         recallPrompt?: string;
         recallIntervalDays?: any;
-        lastRecalledAt?: string;
         recallQuality?: string;
         retentionPolicy?: string;
         retentionEvent?: string;
-        retentionAt?: string;
-        preserveUntil?: string;
         legalHold?: boolean;
         retrievalCues?: any[];
         useWhen?: string;
@@ -2545,7 +2558,6 @@ export declare class LlmWikiService {
         reviewPolicy?: string;
         reviewOutcome?: string;
         reviewedBy?: string;
-        reviewedAt?: string;
         reviewNote?: string;
         reviewChecks?: any[];
         reviewOpenItems?: any[];
@@ -2556,7 +2568,6 @@ export declare class LlmWikiService {
         interpretationStatus?: string;
         disposition?: string;
         clarifiedBy?: string;
-        clarifiedAt?: string;
         clarifyNote?: string;
         targetPath?: string;
         mocPurpose?: string;

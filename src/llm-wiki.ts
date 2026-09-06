@@ -1257,8 +1257,14 @@ export class LlmWikiService {
       ...(dates.dueAt && { dueAt: dates.dueAt }),
       ...(dates.scheduledAt && { scheduledAt: dates.scheduledAt }),
       ...(dates.deferUntil && { deferUntil: dates.deferUntil }),
-      ...(dates.dateIssues.length > 0 && {
-        dateIssues: dates.dateIssues,
+      ...this.dateRepairProjection(note, dates.dateIssues),
+    };
+  }
+
+  private dateRepairProjection(note: QueryNote, dateIssues: string[]) {
+    return {
+      ...(dateIssues.length > 0 && {
+        dateIssues,
         dateRepairAction: {
           endpointId: 'notes.read',
           arguments: { path: this.access.toPublicPath(note.path), expectedRevision: note.revision, maxChars: 8000 },
@@ -7789,8 +7795,7 @@ export class LlmWikiService {
     const note = await this.fileSystem.readNote(params.path);
     if (isModerationHidden(note.frontmatter)) throw new Error('The source note is unavailable');
     const title = String(note.frontmatter.title || params.path.split('/').at(-1) || params.path);
-    const headings = projectNoteOutline(note.originalContent);
-    const lines = note.originalContent.split('\n');
+    const headings = view === 'full' ? [] : projectNoteOutline(note.originalContent);
     let content = '';
     let excerptRange: { startLine: number; endLine: number } | undefined;
     let sectionRange: { startLine: number; endLine: number } | undefined;
@@ -7800,6 +7805,7 @@ export class LlmWikiService {
     } else if (view === 'outline') {
       content = headings.map(heading => `${'#'.repeat(heading.level)} ${heading.text} (line ${heading.line})`).join('\n');
     } else if (view === 'section') {
+      const lines = note.originalContent.split('\n');
       if (params.blockId?.trim()) {
         const blockId = params.blockId.trim().replace(/^\^/, '');
         if (!/^[A-Za-z0-9_-]+$/.test(blockId)) throw new Error('blockId must contain only letters, numbers, underscores, and hyphens');
@@ -7986,11 +7992,29 @@ export class LlmWikiService {
       }
       : undefined;
     const temporal = temporalValidity(note.frontmatter);
+    const dateIssues: string[] = [];
+    const projectDate = (field: string): string | undefined => {
+      const value = note.frontmatter[field];
+      if (value === undefined) return undefined;
+      if (!Number.isFinite(organizationDateTimestamp(value))) {
+        dateIssues.push(`invalid_${field}`);
+        return undefined;
+      }
+      return (value as string).trim();
+    };
+    const projectedDates = {
+      dueAt: projectDate('due_at'), scheduledAt: projectDate('scheduled_at'),
+      deferUntil: projectDate('defer_until'), lastRecalledAt: projectDate('last_recalled_at'),
+      retentionAt: projectDate('retention_at'), preserveUntil: projectDate('preserve_until'),
+      reviewedAt: projectDate('last_reviewed_at'), clarifiedAt: projectDate('clarified_at'),
+    };
     return {
       path: this.access.toPublicPath(params.path),
       title,
       view,
       revision: note.revision,
+      ...projectedDates,
+      ...this.dateRepairProjection({ path: params.path, frontmatter: note.frontmatter, revision: note.revision }, dateIssues),
       noteKind: note.frontmatter.note_kind,
       lifecycle: note.frontmatter.lifecycle,
       ...(redirect && { redirect }),
@@ -8029,19 +8053,13 @@ export class LlmWikiService {
       ...(typeof note.frontmatter.project_purpose === 'string' && { projectPurpose: note.frontmatter.project_purpose }),
       ...(Array.isArray(note.frontmatter.project_support) && { projectSupport: note.frontmatter.project_support.slice(0, 30) }),
       ...(typeof note.frontmatter.task_context === 'string' && { taskContext: note.frontmatter.task_context }),
-      ...(typeof note.frontmatter.due_at === 'string' && { dueAt: note.frontmatter.due_at }),
-      ...(typeof note.frontmatter.scheduled_at === 'string' && { scheduledAt: note.frontmatter.scheduled_at }),
-      ...(typeof note.frontmatter.defer_until === 'string' && { deferUntil: note.frontmatter.defer_until }),
       ...(typeof note.frontmatter.stable_id === 'string' && { stableId: note.frontmatter.stable_id }),
       ...(typeof note.frontmatter.canonical_path === 'string' && { canonicalPath: note.frontmatter.canonical_path }),
       ...(typeof note.frontmatter.recall_prompt === 'string' && { recallPrompt: note.frontmatter.recall_prompt }),
       ...(Number.isInteger(note.frontmatter.recall_interval_days) && { recallIntervalDays: note.frontmatter.recall_interval_days }),
-      ...(typeof note.frontmatter.last_recalled_at === 'string' && { lastRecalledAt: note.frontmatter.last_recalled_at }),
       ...(typeof note.frontmatter.recall_quality === 'string' && { recallQuality: note.frontmatter.recall_quality }),
       ...(typeof note.frontmatter.retention_policy === 'string' && { retentionPolicy: note.frontmatter.retention_policy }),
       ...(typeof note.frontmatter.retention_event === 'string' && { retentionEvent: note.frontmatter.retention_event }),
-      ...(typeof note.frontmatter.retention_at === 'string' && { retentionAt: note.frontmatter.retention_at }),
-      ...(typeof note.frontmatter.preserve_until === 'string' && { preserveUntil: note.frontmatter.preserve_until }),
       ...(legalHold !== undefined && { legalHold }),
       ...(Array.isArray(note.frontmatter.retrieval_cues) && { retrievalCues: note.frontmatter.retrieval_cues.slice(0, 8) }),
       ...(typeof note.frontmatter.use_when === 'string' && { useWhen: note.frontmatter.use_when }),
@@ -8049,7 +8067,6 @@ export class LlmWikiService {
       ...(typeof note.frontmatter.review_policy === 'string' && { reviewPolicy: note.frontmatter.review_policy }),
       ...(typeof note.frontmatter.last_review_outcome === 'string' && { reviewOutcome: note.frontmatter.last_review_outcome }),
       ...(typeof note.frontmatter.last_reviewed_by === 'string' && { reviewedBy: note.frontmatter.last_reviewed_by }),
-      ...(typeof note.frontmatter.last_reviewed_at === 'string' && { reviewedAt: note.frontmatter.last_reviewed_at }),
       ...(typeof note.frontmatter.review_note === 'string' && { reviewNote: note.frontmatter.review_note }),
       ...(Array.isArray(note.frontmatter.review_checks) && { reviewChecks: note.frontmatter.review_checks.slice(0, 7) }),
       ...(Array.isArray(note.frontmatter.review_open_items) && { reviewOpenItems: note.frontmatter.review_open_items.slice(0, 8) }),
@@ -8060,7 +8077,6 @@ export class LlmWikiService {
       ...(typeof note.frontmatter.interpretation_status === 'string' && { interpretationStatus: note.frontmatter.interpretation_status }),
       ...(typeof note.frontmatter.triage_disposition === 'string' && { disposition: note.frontmatter.triage_disposition }),
       ...(typeof note.frontmatter.clarified_by === 'string' && { clarifiedBy: note.frontmatter.clarified_by }),
-      ...(typeof note.frontmatter.clarified_at === 'string' && { clarifiedAt: note.frontmatter.clarified_at }),
       ...(typeof note.frontmatter.clarify_note === 'string' && { clarifyNote: note.frontmatter.clarify_note }),
       ...(typeof note.frontmatter.triage_target === 'string' && { targetPath: note.frontmatter.triage_target }),
       ...(typeof note.frontmatter.moc_purpose === 'string' && { mocPurpose: note.frontmatter.moc_purpose }),
