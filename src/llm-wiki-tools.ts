@@ -226,7 +226,7 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_neighborhood',
-      description: 'Return a bounded, explainable knowledge neighborhood around one visible note. Direct Obsidian links and typed backlinks come first, then shared MOC/project metadata and optional semantic matches. It returns metadata, reasons, locators, and revisions—not full neighbor bodies—so read selected notes explicitly.',
+      description: 'Return a bounded knowledge neighborhood: direct links/backlinks, shared metadata, then optional semantic matches. Metadata and derivation revisions are checked together; on drift re-read the root and retry. A neighbor path/revision identifies the target; contextPath/contextRevision identify the document containing context and line (direct-link context belongs to the root, not the neighbor). No full bodies. maxChars bounds both compact and pretty JSON.',
       inputSchema: { type: 'object', properties: {
         path: { type: 'string', description: 'Existing visible Markdown note path' },
         limit: { type: 'integer', minimum: 1, maximum: 40, default: 12 },

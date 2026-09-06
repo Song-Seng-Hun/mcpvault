@@ -3042,9 +3042,12 @@ export class LlmWikiService {
     type NeighborhoodCandidate = {
       path: string;
       score: number;
+      basisRevisions: Set<string>;
       reasons: Set<string>;
       relations: Set<string>;
       context?: string;
+      contextPath?: string;
+      contextRevision?: string;
       line?: number;
       title?: string;
       noteKind?: string;
@@ -3063,10 +3066,18 @@ export class LlmWikiService {
       const normalized = normalizePath(candidatePath);
       const key = normalized.toLowerCase();
       if (!normalized || key === sourceKey || !canAccess(normalized)) return;
-      const current = candidates.get(key) || { path: normalized, score, reasons: new Set<string>(), relations: new Set<string>() };
+      const current = candidates.get(key) || { path: normalized, score, reasons: new Set<string>(), relations: new Set<string>(), basisRevisions: new Set<string>() };
+      if (details.revision) current.basisRevisions.add(details.revision);
       current.score = Math.max(current.score, score);
       current.reasons.add(reason);
-      if (details.context !== undefined) current.context = details.context;
+      if (details.context !== undefined) {
+        current.context = details.context;
+        // Context and its locator are one snapshot; never inherit a graph
+        // line when another producer supplies a new excerpt without a line.
+        delete current.line;
+        delete current.contextPath;
+        delete current.contextRevision;
+      }
       if (details.line !== undefined) current.line = details.line;
       for (const relation of details.relations || []) current.relations.add(relation);
       for (const [field, value] of Object.entries(details)) {
@@ -3077,15 +3088,19 @@ export class LlmWikiService {
 
     const graphLimit = Math.min(80, Math.max(boundedLimit * 3, 12));
     const [outlinks, backlinks] = await Promise.all([
-      this.fileSystem.getOutlinks(sourcePath, graphLimit, canAccess),
-      this.fileSystem.getBacklinks(sourcePath, graphLimit, canAccess),
+      this.fileSystem.getOutlinks(sourcePath, graphLimit, canAccess, 0, { includeSourceRevision: true }),
+      this.fileSystem.getBacklinks(sourcePath, graphLimit, canAccess, 0, { includeSourceRevision: true }),
     ]);
+    if (outlinks.sourceRevision !== source.revision || backlinks.targetRevision !== source.revision) {
+      throw new Error('A context source changed or became unavailable; re-read the root note and retry.');
+    }
     let unresolvedLinks = 0, ambiguousLinks = 0;
     for (const link of outlinks.outlinks) {
       let targets: string[] = [];
       try { targets = await this.resolveNavigationLink(principal, sourcePath, link); } catch { targets = []; }
       if (targets.length !== 1) { if (targets.length > 1) ambiguousLinks += 1; else unresolvedLinks += 1; continue; }
-      add(targets[0]!, 100, 'direct_link', { line: link.line, context: boundedText(link.context, 240), relations: [link.relation || 'links_to'] });
+      add(targets[0]!, 100, 'direct_link', { line: link.line, context: boundedText(link.context, 240),
+        contextPath: sourcePath, contextRevision: source.revision, relations: [link.relation || 'links_to'] });
     }
     for (const link of backlinks.backlinks) {
       // Graph visibility also controls its target resolver. Filter author
@@ -3096,7 +3111,11 @@ export class LlmWikiService {
       try { matches = await this.resolveNavigationLink(principal, link.path, { target, link: link.link }); }
       catch { continue; }
       if (matches.length !== 1 || normalizePath(matches[0]!).toLowerCase() !== sourceKey) continue;
-      add(link.path, 95, 'backlink', { line: link.line, context: boundedText(link.context, 240), relations: [link.relation || 'backlinks_to'] });
+      if (typeof link.sourceRevision !== 'string' || !/^[a-f0-9]{64}$/.test(link.sourceRevision)) {
+        throw new Error('A context source changed or became unavailable; re-read the root note and retry.');
+      }
+      add(link.path, 95, 'backlink', { line: link.line, context: boundedText(link.context, 240),
+        contextPath: link.path, contextRevision: link.sourceRevision, revision: link.sourceRevision, relations: [link.relation || 'backlinks_to'] });
     }
 
     const mocRefs = (frontmatter: Record<string, any>): string[] => {
@@ -3141,7 +3160,11 @@ export class LlmWikiService {
         if (!sameMoc && !sameProject && !sharedSource && !sharedTag && !sameTaskContext && !temporal) continue;
         const reason = sameMoc ? 'shared_moc' : sameProject ? 'shared_project' : sharedSource ? 'shared_source' : sharedTag ? 'shared_tag' : sameTaskContext ? 'shared_task_context' : 'temporal_proximity';
         const score = sameMoc ? 70 : sameProject ? 60 : sharedSource ? 55 : sharedTag ? 50 : sameTaskContext ? 45 : 30;
+        if (typeof note.revision !== 'string' || !/^[a-f0-9]{64}$/.test(note.revision)) {
+          throw new Error('A context source changed or became unavailable; re-read the root note and retry.');
+        }
         add(note.path, score, reason, {
+          revision: note.revision,
           title: typeof note.frontmatter.title === 'string' ? note.frontmatter.title : (note.path.split('/').at(-1) || note.path),
           ...(typeof note.frontmatter.note_kind === 'string' && { noteKind: note.frontmatter.note_kind }),
           ...(typeof note.frontmatter.lifecycle === 'string' && { lifecycle: note.frontmatter.lifecycle }),
@@ -3162,8 +3185,9 @@ export class LlmWikiService {
           principal,
         });
         semantic = { available: semanticResult.available, indexed: semanticResult.indexed, pending: semanticResult.pending, ...(semanticResult.error && { error: semanticResult.error }) };
-        for (const result of semanticResult.results) add(result.p, 40, 'semantic_match', {
+        for (const result of semanticResult.results) if (result.rv) add(result.p, 40, 'semantic_match', {
           title: result.t,
+          contextPath: result.p, contextRevision: result.rv,
           ...(result.rv && { revision: result.rv }),
           ...(result.ln !== undefined && { line: result.ln }),
           context: boundedText(result.ex, 240),
@@ -3205,6 +3229,7 @@ export class LlmWikiService {
         ...(candidate.relations.size > 0 && { relations: [...candidate.relations].slice(0, 4) }),
         ...(candidate.line !== undefined && { line: candidate.line }),
         ...(candidate.context && { context: candidate.context }),
+        ...(candidate.contextPath && { contextPath: this.access.toPublicPath(candidate.contextPath), contextRevision: candidate.contextRevision }),
         ...(candidate.moc && { moc: candidate.moc }),
         ...(candidate.mocs && { mocs: candidate.mocs }),
         ...(candidate.project && { project: candidate.project }),
@@ -3215,6 +3240,13 @@ export class LlmWikiService {
         ...(candidate.revision && { revision: candidate.revision }),
       };
     })).then(items => items.filter((item): item is NonNullable<typeof item> => item !== undefined));
+    const selectedPaths = new Set(neighbors.map(note => note.path));
+    await this.assertCurrentContextSources(principal, [
+      { path: this.access.toPublicPath(sourcePath), revision: source.revision },
+      ...ordered.filter(candidate => selectedPaths.has(this.access.toPublicPath(candidate.path))).flatMap(candidate =>
+        [...candidate.basisRevisions].map(revision => ({ path: this.access.toPublicPath(candidate.path), revision }))),
+      ...neighbors.map(note => ({ path: note.path, revision: note.revision! })),
+    ], 41);
     const result = {
       source: {
         path: this.access.toPublicPath(sourcePath),
@@ -3230,13 +3262,13 @@ export class LlmWikiService {
       ordering: ['direct_link', 'backlink', 'shared_source', 'shared_moc', 'shared_project', 'shared_task_context', 'shared_tag', 'temporal_proximity', 'semantic_match'],
       ...(semantic && { semantic }),
     };
-    if (JSON.stringify(result).length <= boundedChars) return result;
+    if (JSON.stringify(result, null, 2).length <= boundedChars) return result;
     const compact = { ...result, neighbors: [...neighbors], truncated: true };
-    while (compact.neighbors.length && JSON.stringify(compact).length > boundedChars) compact.neighbors.pop();
-    if (JSON.stringify(compact).length <= boundedChars) return compact;
+    while (compact.neighbors.length && JSON.stringify(compact, null, 2).length > boundedChars) compact.neighbors.pop();
+    if (JSON.stringify(compact, null, 2).length <= boundedChars) return compact;
     const minimal = { source: { path: result.source.path, revision: result.source.revision }, neighbors: [] as typeof neighbors,
       totalCandidates: result.totalCandidates, navigation: result.navigation, truncated: true };
-    if (JSON.stringify(minimal).length > boundedChars) throw new Error('maxChars is too small to preserve this source path and revision; increase the read budget.');
+    if (JSON.stringify(minimal, null, 2).length > boundedChars) throw new Error('maxChars is too small to preserve this source path and revision; increase the read budget.');
     return minimal;
   }
 
@@ -10988,7 +11020,7 @@ export class LlmWikiService {
     };
   }
 
-  private async assertCurrentContextSources(principal: ScopePrincipal | undefined, sources: ReadonlyArray<{ path: string; revision: string }>): Promise<void> {
+  private async assertCurrentContextSources(principal: ScopePrincipal | undefined, sources: ReadonlyArray<{ path: string; revision: string }>, maxSources = 32): Promise<void> {
     try {
       const snapshots = new Map<string, { path: string; revision: string }>();
       for (const source of sources) {
@@ -11002,7 +11034,8 @@ export class LlmWikiService {
       }
       // Root + at most 24 MOC entries + bounded packet neighbors, or at most
       // 26 distinct trail sources (two endpoints + 8 paths * 3 intermediates).
-      if (snapshots.size > 32) throw new Error('too many sources');
+      // Neighborhood explicitly allows one root plus 40 selected neighbors.
+      if (snapshots.size > maxSources) throw new Error('too many sources');
       const entries = [...snapshots.values()];
       for (let offset = 0; offset < entries.length; offset += 4) {
         await Promise.all(entries.slice(offset, offset + 4).map(async source => {

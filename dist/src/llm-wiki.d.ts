@@ -429,6 +429,8 @@ export declare class LlmWikiService {
             relations?: string[];
             line?: number;
             context?: string;
+            contextPath?: string;
+            contextRevision?: string;
             moc?: string;
             mocs?: string[];
             project?: string;

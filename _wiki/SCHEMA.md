@@ -1051,6 +1051,15 @@ reading an entire related collection: direct links and typed backlinks come
 first, then shared MOC/project context, followed optionally by semantic
 candidates. Every neighbor has an explainable reason and revision; vector
 similarity helps discovery only and must not move notes or replace evidence.
+`contextPath` and `contextRevision` identify the document containing a returned
+`context`/`line`, independently of the neighbor's target `path`/`revision`.
+Direct-link context belongs to the root, backlink context to its author, and
+semantic context to the matched note. Replacing context clears an absent new
+line instead of inheriting an unrelated graph locator. Derivation hashes from
+graph, shared metadata and semantic reads must agree with current selected
+sources; mixed/changed snapshots fail with a retry. Final verification covers
+at most 41 distinct notes with four concurrent reads, not an atomic census.
+Both compact and pretty JSON respect maxChars, with truncation reported.
 `get_wiki_answer_packet` is the compact follow-up projection: it combines the
 selected note with a few supporting neighbors and counterpoints or negative
 knowledge. Answer/context packets revalidate returned live note snapshots;

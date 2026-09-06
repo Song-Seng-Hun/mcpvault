@@ -1173,6 +1173,17 @@ multi-hop traversal of existing Obsidian links, and
 `get_wiki_placement_candidates` reports likely PARA filing mismatches without
 moving notes. Both are derived navigation aids; Markdown, Properties, and Git
 remain authoritative.
+Neighborhood entries distinguish their target `path`/`revision` from
+`contextPath`/`contextRevision`, the note actually containing `context` and
+`line`. A direct-link excerpt belongs to the root, a backlink excerpt to its
+author, and a semantic excerpt to its matched note. Do not apply a root line
+number to a neighbor. Missing semantic line numbers remain absent. Selected
+metadata/graph/semantic derivation hashes must agree with fresh source reads;
+drift rejects the view instead of relabeling old context with a new revision.
+The final check reads at most the root plus 40 selected neighbors, four at a
+time; it is not an atomic Vault-wide snapshot. Character budgets cover pretty
+JSON too; omitted neighbors remain marked truncated.
+
 `wiki.neighborhood` and `wiki.trail` resolve Markdown links from their source
 note and keep explicit file extensions. Ambiguous wikilinks are not definite
 edges: inspect the bounded outgoing-link unresolved/ambiguous counts in neighborhood

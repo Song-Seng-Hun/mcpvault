@@ -660,6 +660,13 @@ do not prove a current, bounded, actionable response through its public adapter.
   optimistic checks, not cross-process atomic snapshots; independent graph
   APIs and source changes after the final check remain separate concerns.
 
+- Neighborhood now guards root graph revisions and retains metadata, backlink
+  and semantic derivation hashes through enrichment instead of rebasing stale
+  relationships onto current hashes. Context locators explicitly identify their
+  source note/revision. Selected sources are revalidated in bounded batches;
+  all result branches enforce pretty-JSON budgets. This does not close the
+  independent standalone graph-cache/target-resolution freshness audit.
+
 Record new concrete gaps here when registered schema, dispatcher, service,
 persistent representation, guide, invalidation, or bounded failure evidence
 disagrees; remove a gap only after checking that complete workflow.
