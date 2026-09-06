@@ -638,7 +638,13 @@ in-process mutation locks do not provide an atomic multi-file transaction
 against arbitrary external editors.
 
 `get_wiki_recall_queue` turns these fields into a bounded reader-specific due
-queue and exposes the prompt before the body. It reads fresh metadata with an
+queue and exposes the prompt before the body. Shared question/cadence are
+templates; an agent's date, quality, confusion and repair workflow come only
+from its own private record. Missing personal history means unseen, never the
+shared author's last attempt. Hidden personal state produces no recall task.
+Non-agent shared-note recall remains supported. First private attempts receive
+`stateRevision: missing`; existing records receive their current revision.
+It reads fresh metadata with an
 8 MiB per-file cap from discovery onward, without retaining answer bodies or
 refreshing the metadata index. It retains at most `limit * limit` detailed
 candidates while preserving priority/subject round-robin order; file names and
@@ -1713,6 +1719,18 @@ proxy when the endpoint is reachable from an untrusted network.
 ```bash
 npx @bitbonsai/mcpvault "/path/to/vault" --mcp-http=8788
 ```
+
+**One runtime means one process, not one copy per client.** A command-based
+stdio registration may start another Node server for each host-managed
+connection; its indexes and caches are not automatically shared across
+processes. Building the HTTP adapter does not migrate those registrations.
+For process sharing, start one host-managed HTTP runtime and register its URL
+in each client. Do not register the HTTP startup command separately in every
+client: that still spawns copies and can cause port conflicts. Verify identity,
+scope filtering and reads/writes on the URL connection before retiring an old
+stdio registration through its host. Never kill all `node` processes by name;
+other tools and live sessions can own them. Other plugins' subprocesses are
+outside MCPVault's runtime and require their own lifecycle checks.
 
 In Codex, open MCP server settings, choose **Streamable HTTP**, and enter
 `http://127.0.0.1:8788/mcp`. For a remote client, expose the same endpoint only

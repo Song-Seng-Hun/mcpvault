@@ -600,6 +600,12 @@ visible reference revisions are rechecked; refresh on drift. The private prompt
 may override the shared prompt, including when no shared prompt exists. Plain
 stored repair paths are exact; authored wikilinks remain source-relative.
 Hidden/missing/foreign targets never become actionable pointers.
+For agent readers, `last_recalled_at`, `recall_quality`, `recall_confusion`,
+`recall_repair_status` and `recall_repair_path` are read only from their own
+private record, never inherited from the shared author. Question/cadence and
+shared contrast links remain reusable defaults/context. An absent private
+record is unseen with `stateRevision: missing`; a hidden record is unavailable
+and contributes no due task/count. Non-agent readers retain shared-note recall.
 
 Complete compact/pretty JSON obeys maxChars. `detailsOmitted` keeps the task's
 prompt/revision and required private/repair context, or the queue returns a

@@ -4171,19 +4171,26 @@ export class LlmWikiService {
       if (!note || note.frontmatter.llm_wiki_type !== 'knowledge' || isModerationHidden(note.frontmatter)) continue;
       const statePath = this.privateRecallPath(principal, note.path);
       const stateNote = statePath ? await readMetadata(statePath) : undefined;
-      const privateState = stateNote && !isModerationHidden(stateNote.frontmatter) ? stateNote.frontmatter : undefined;
+      // An unavailable personal record is not evidence of an unseen reader.
+      if (stateNote && isModerationHidden(stateNote.frontmatter)) continue;
+      const privateState = stateNote?.frontmatter;
+      // Templates can be shared; attempts, confusion and repairs have one owner.
+      const recallState = statePath ? privateState : note.frontmatter;
       const promptValue = privateState?.recall_prompt ?? note.frontmatter.recall_prompt;
       if (typeof promptValue !== 'string' || !promptValue.trim()) continue;
       const prompt = promptValue.trim();
-      const quality = String(privateState?.recall_quality || note.frontmatter.recall_quality || 'unseen').toLowerCase();
-      const repairStatus = String(privateState?.recall_repair_status || note.frontmatter.recall_repair_status || (quality === 'failed' || quality === 'partial' ? 'needed' : 'none')).toLowerCase();
-      const lastRecalledValue = privateState?.last_recalled_at !== undefined ? privateState.last_recalled_at : note.frontmatter.last_recalled_at;
+      const quality = String(recallState?.recall_quality || 'unseen').toLowerCase();
+      const repairStatus = String(recallState?.recall_repair_status || (quality === 'failed' || quality === 'partial' ? 'needed' : 'none')).toLowerCase();
+      const lastRecalledValue = recallState?.last_recalled_at;
       const lastMs = organizationDateTimestamp(lastRecalledValue);
       const invalidRecallDate = lastRecalledValue !== undefined && !Number.isFinite(lastMs);
       const lastRecalledAt = Number.isFinite(lastMs) ? String(lastRecalledValue).trim() : undefined;
       const intervalValue = privateState?.recall_interval_days ?? note.frontmatter.recall_interval_days;
       let intervalDays: number | undefined, invalidInterval = false;
-      try { intervalDays = normalizeReviewIntervalDays(intervalValue); } catch { invalidInterval = true; }
+      try {
+        if (intervalValue != null && typeof intervalValue !== 'number' && typeof intervalValue !== 'string') throw new Error('Invalid interval type');
+        intervalDays = normalizeReviewIntervalDays(intervalValue);
+      } catch { invalidInterval = true; }
       const nextMs = Number.isFinite(lastMs) && intervalDays !== undefined ? lastMs + intervalDays * 86400000 : 0;
       const repairNeeded = repairStatus === 'needed' || repairStatus === 'in_progress';
       if (!invalidRecallDate && !invalidInterval && nextMs > current && !repairNeeded) continue;
@@ -4199,7 +4206,7 @@ export class LlmWikiService {
         (Array.isArray(note.frontmatter[relation]) ? note.frontmatter[relation] : []).slice(0, 4)
           .filter((raw: unknown): raw is string => typeof raw === 'string' && Boolean(raw.trim()) && raw.length <= 2048)
           .map((raw: string) => ({ relation, raw })));
-      const repairRaw = privateState?.recall_repair_path || note.frontmatter.recall_repair_path;
+      const repairRaw = recallState?.recall_repair_path;
       const neighborhood = [note.frontmatter.domain, note.frontmatter.moc, note.frontmatter.project]
         .find(value => typeof value === 'string' && value.trim()) || 'ungrouped';
       const candidate: Candidate = {
@@ -4207,7 +4214,7 @@ export class LlmWikiService {
         title: boundedText(note.frontmatter.title || note.path.split('/').at(-1), 160),
         noteKind: boundedText(note.frontmatter.note_kind || 'knowledge', 80),
         recallQuality: boundedText(quality, 40), ...(repairStatus !== 'none' && { repairStatus: boundedText(repairStatus, 40) }),
-        ...(typeof (privateState?.recall_confusion || note.frontmatter.recall_confusion) === 'string' && { confusion: boundedText(privateState?.recall_confusion || note.frontmatter.recall_confusion, 600) }),
+        ...(typeof recallState?.recall_confusion === 'string' && recallState.recall_confusion.trim() && { confusion: boundedText(recallState.recall_confusion, 600) }),
         ...Object.fromEntries(['domain', 'moc', 'project'].flatMap(key => typeof note.frontmatter[key] === 'string' && note.frontmatter[key].trim() ? [[key, boundedText(note.frontmatter[key].trim(), 160)]] : [])),
         ...(lastRecalledAt && { lastRecalledAt }), ...(intervalDays !== undefined && { recallIntervalDays: intervalDays }),
         ...(nextMs > 0 && Number.isFinite(new Date(nextMs).getTime()) && { nextRecallAt: new Date(nextMs).toISOString() }),
@@ -4221,7 +4228,7 @@ export class LlmWikiService {
           : repairNeeded ? 'Inspect confusion and the verified repair target; resolve only after checking the repair and attempting recall again.'
             : prompt.length > 1000 ? 'Read only recall_prompt via nextAction and its continuations before attempting recall; no answer or other Properties are returned.'
               : 'Attempt recallPrompt before opening the note body, then record the result.',
-        ...(stateNote && privateState && { stateRevision: stateNote.revision }),
+        ...(statePath && { stateRevision: stateNote?.revision || 'missing' }),
         priority, _physicalPath: note.path, _statePath: statePath, _stateRevision: stateNote?.revision,
         _contrastReferences: contrastReferences,
         _repairRaw: typeof repairRaw === 'string' && repairRaw.length <= 2048 ? repairRaw : undefined,

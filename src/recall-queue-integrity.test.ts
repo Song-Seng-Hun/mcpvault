@@ -32,6 +32,91 @@ async function fixture(run: (c: { wiki: LlmWikiService; fs: FileSystemService; a
   }
 }
 
+test('unseen reader never inherits the shared future recall date', async () => {
+  await fixture(async ({ wiki, seed }) => {
+    await seed('Note.md', { last_recalled_at: '2999-01-01', recall_quality: 'good', recall_interval_days: 30 });
+    const queue = await wiki.recallQueue(principal);
+    expect(queue.total).toBe(1);
+    expect(queue.items[0]).toMatchObject({ reason: 'never_recalled', recallQuality: 'unseen', stateRevision: 'missing', recallIntervalDays: 30 });
+    expect(queue.items[0].lastRecalledAt).toBeUndefined();
+    expect(queue.items[0].nextRecallAt).toBeUndefined();
+  });
+});
+
+test.each([false, true])('personal recall never inherits shared failure or repair, private prompt=%s', async withPrivatePrompt => {
+  await fixture(async ({ wiki, seed }) => {
+    await seed('Note.md', { last_recalled_at: 'bad-shared-date', recall_quality: 'failed', recall_confusion: 'SHARED-CONFUSION',
+      recall_repair_status: 'needed', recall_repair_path: 'SharedRepair.md', recall_interval_days: 1 });
+    await seed('SharedRepair.md', { recall_prompt: undefined });
+    if (withPrivatePrompt) await seed(privatePath, { llm_wiki_type: 'agent_state', recall_prompt: 'Personal question?' });
+    const result = await wiki.recallQueue(principal, 10, 12000);
+    expect(result.items[0]).toMatchObject({ reason: 'never_recalled', recallQuality: 'unseen' });
+    expect(result.items[0].repairStatus).toBeUndefined();
+    expect(result.items[0].dateRepairAction).toBeUndefined();
+    expect(JSON.stringify(result)).not.toMatch(/SHARED-CONFUSION|SharedRepair/);
+  });
+});
+
+test('private explicit good/none state cannot revive a shared repair path or confusion', async () => {
+  await fixture(async ({ wiki, seed }) => {
+    await seed('Note.md', { recall_quality: 'failed', recall_confusion: 'SHARED-CONFUSION', recall_repair_status: 'needed', recall_repair_path: 'SharedRepair.md' });
+    await seed('SharedRepair.md', { recall_prompt: undefined });
+    await seed(privatePath, { llm_wiki_type: 'agent_state', recall_quality: 'good', recall_repair_status: 'none', recall_confusion: '' });
+    const queue = await wiki.recallQueue(principal);
+    expect(queue.items[0]).toMatchObject({ recallQuality: 'good', reason: 'never_recalled' });
+    expect(queue.items[0].repairPath).toBeUndefined();
+    expect(JSON.stringify(queue)).not.toMatch(/SHARED-CONFUSION|SharedRepair/);
+  });
+});
+
+test('hidden private history is unavailable rather than a due task in queue and review packet', async () => {
+  await fixture(async ({ wiki, seed }) => {
+    await seed('Note.md', { recall_quality: 'failed', recall_interval_days: 1 });
+    await seed(privatePath, { llm_wiki_type: 'agent_state', moderation_status: 'hidden', recall_quality: 'failed', recall_confusion: 'PRIVATE-HIDDEN' });
+    expect(await wiki.recallQueue(principal)).toMatchObject({ total: 0, items: [] });
+    const packet: any = await wiki.reviewPacket(principal, 10, 16000);
+    expect(packet.priorities.filter((row: any) => row.path === 'Note.md' && row.reasons?.includes('active_recall_due'))).toEqual([]);
+    expect(JSON.stringify(packet)).not.toContain('PRIVATE-HIDDEN');
+  });
+});
+
+test('shared failure cannot force a resolved personal repair back into the review packet', async () => {
+  await fixture(async ({ wiki, seed }) => {
+    await seed('Note.md', { recall_quality: 'failed', recall_repair_status: 'needed', recall_interval_days: 1 });
+    await seed(privatePath, { llm_wiki_type: 'agent_state', recall_quality: 'good', recall_repair_status: 'resolved',
+      last_recalled_at: new Date().toISOString(), recall_interval_days: 30 });
+    expect(await wiki.recallQueue(principal)).toMatchObject({ total: 0, items: [] });
+    const packet: any = await wiki.reviewPacket(principal, 10, 16000);
+    expect(packet.priorities.filter((row: any) => row.path === 'Note.md' && row.reasons?.includes('active_recall_due'))).toEqual([]);
+  });
+});
+
+test.each([true, ['1']].map(value => [value]))('queue rejects non-scalar interval %j like the gap queue', async interval => {
+  await fixture(async ({ wiki, seed }) => {
+    await seed('Note.md', { recall_interval_days: interval });
+    const queue = await wiki.recallQueue(principal);
+    expect(queue.items[0]).toMatchObject({ reason: 'invalid_recall_interval_days' });
+    expect(queue.items[0].dateRepairAction.arguments.path).toBe('Note.md');
+  });
+});
+
+test('own pending repair and shared contrast remain useful without inheriting shared history', async () => {
+  await fixture(async ({ wiki, seed }) => {
+    await seed('Note.md', { recall_quality: 'good', recall_confusion: 'OTHER-READERS-CONFUSION',
+      last_recalled_at: '2999-01-01', contradicts: ['[[Contrast]]'] });
+    const repairRaw = await seed('Repair.md', { recall_prompt: undefined });
+    await seed('Contrast.md', { recall_prompt: undefined });
+    const stateRaw = await seed(privatePath, { llm_wiki_type: 'agent_state', recall_quality: 'partial',
+      recall_confusion: 'My confusion', recall_repair_status: 'in_progress', recall_repair_path: 'Repair.md' });
+    const result = await wiki.recallQueue(principal, 10, 12000);
+    expect(result.items[0]).toMatchObject({ reason: 'previous_recall_partial', confusion: 'My confusion', repairStatus: 'in_progress',
+      repairPath: 'Repair.md', repairRevision: createHash('sha256').update(repairRaw).digest('hex'),
+      stateRevision: createHash('sha256').update(stateRaw).digest('hex'),
+      contrastWith: [expect.objectContaining({ target: 'Contrast.md' })] });
+    expect(JSON.stringify(result)).not.toContain('OTHER-READERS-CONFUSION');
+  });
+});
+
 test.each([512, 800, 1800, 12000])('recall bounds the entire %i-character response and preserves the task', async maxChars => {
   await fixture(async ({ wiki, seed, root }) => {
     const raw = await seed('Note.md', { title: 'Long title '.repeat(80), recall_confusion: 'Confusion '.repeat(80) });
