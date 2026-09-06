@@ -690,6 +690,14 @@ do not prove a current, bounded, actionable response through its public adapter.
   inventory changes and unobserved cross-file races remain open, not a proven
   atomic graph census.
 
+- The shared catalog now bypasses subtree and directory-entry caches during
+  periodic census, recovering missed nested add/delete/rename events even with
+  unchanged ancestor stats. Hot-folder refreshes cannot defer this deadline.
+  Generation-checked publication retries observed changes, and failed directory
+  batches drain siblings before retry. Normal clean/incremental reads retain
+  cache reuse. This closes the reproduced directory-membership gaps above,
+  not all-stat-preserved body edits or an atomic cross-file snapshot.
+
 Record new concrete gaps here when registered schema, dispatcher, service,
 persistent representation, guide, invalidation, or bounded failure evidence
 disagrees; remove a gap only after checking that complete workflow.

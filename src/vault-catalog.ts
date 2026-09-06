@@ -62,11 +62,12 @@ export class VaultFileCatalog {
   private readonly batchListeners = new Set<VaultCatalogBatchListener>();
   private paths: string[] | undefined;
   private allPaths: string[] | undefined;
-  private refreshPromise: Promise<{ notes: string[]; all: string[] }> | undefined;
+  private refreshPromise: Promise<void> | undefined;
   private watcher: FSWatcher | undefined;
   private watcherStarted = false;
   private needsRefresh = true;
-  private lastRefreshAt = 0;
+  private lastReconciledAt = 0;
+  private forceReconcile = false;
   private changeGeneration = 0;
   private pendingChanges = new Map<string, true>();
   private pendingFullRefresh = false;
@@ -189,17 +190,37 @@ export class VaultFileCatalog {
 
   private async listInventory(): Promise<{ notes: string[]; all: string[] }> {
     this.startWatcher();
-    await this.flushPendingEvents();
-    const interval = this.watcher ? WATCH_RECONCILE_INTERVAL_MS : NO_WATCHER_RECONCILE_INTERVAL_MS;
-    if (!this.needsRefresh && this.paths && this.allPaths && Date.now() - this.lastRefreshAt < interval) {
-      return { notes: this.paths, all: this.allPaths };
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await this.flushPendingEvents();
+      const interval = this.watcher ? WATCH_RECONCILE_INTERVAL_MS : NO_WATCHER_RECONCILE_INTERVAL_MS;
+      const reconcile = this.forceReconcile || !this.allPaths || Date.now() - this.lastReconciledAt >= interval;
+      if (!this.needsRefresh && this.paths && this.allPaths && !reconcile) {
+        return { notes: this.paths, all: this.allPaths };
+      }
+      if (!this.refreshPromise) {
+        const refresh = this.refresh(reconcile).finally(() => {
+          if (this.refreshPromise === refresh) this.refreshPromise = undefined;
+        });
+        this.refreshPromise = refresh;
+      }
+      try {
+        await this.refreshPromise;
+      } catch (error) {
+        // Aborted scans may have filled caches after consuming dirty flags.
+        // Preserve the forced read requirement across failed requests too.
+        this.forceReconcile = true;
+        throw error;
+      }
+      await this.flushPendingEvents();
+      if (!this.forceReconcile && !this.needsRefresh && this.paths && this.allPaths
+        && Date.now() - this.lastReconciledAt < interval) {
+        return { notes: this.paths, all: this.allPaths };
+      }
+      // A received change can invalidate entries while an older directory
+      // read is filling the cache. Do not reuse that aborted scan on retry.
+      this.forceReconcile = true;
     }
-    if (!this.refreshPromise) this.refreshPromise = this.refresh();
-    try {
-      return await this.refreshPromise;
-    } finally {
-      this.refreshPromise = undefined;
-    }
+    throw new Error('Catalog changed during refresh; retry the query. No stable inventory was returned.');
   }
 
   close(): void {
@@ -375,22 +396,27 @@ export class VaultFileCatalog {
     }
   }
 
-  private async refresh(): Promise<{ notes: string[]; all: string[] }> {
+  private async refresh(reconcile = false): Promise<void> {
     const generation = this.changeGeneration;
-    const inventory = await this.findPaths(this.vaultPath);
+    const inventory = await this.findPaths(this.vaultPath, reconcile);
     inventory.notes.sort((a, b) => a.localeCompare(b));
     inventory.all.sort((a, b) => a.localeCompare(b));
     if (generation === this.changeGeneration) {
       this.paths = inventory.notes;
       this.allPaths = inventory.all;
       this.needsRefresh = false;
-      this.lastRefreshAt = Date.now();
+      // Incremental hot-folder refreshes must not postpone a full census.
+      if (reconcile) {
+        this.lastReconciledAt = Date.now();
+        this.forceReconcile = false;
+      }
     }
-    return inventory;
   }
 
-  private async findPaths(directory: string): Promise<{ notes: string[]; all: string[] }> {
-    if (this.watcher) {
+  private async findPaths(directory: string, reconcile = false): Promise<{ notes: string[]; all: string[] }> {
+    // An unchanged ancestor's stat says nothing about nested membership.
+    // Periodic reconciliation must bypass both subtree and entry caches.
+    if (this.watcher && !reconcile) {
       try {
         const info = await stat(directory);
         const cached = this.directoryCache.get(directory);
@@ -412,7 +438,7 @@ export class VaultFileCatalog {
     }
     const notes: string[] = [];
     const all: string[] = [];
-    const entries = await this.readDirectoryEntries(directory);
+    const entries = await this.readDirectoryEntries(directory, reconcile);
     const directories: Array<{ fullPath: string; relativePath: string }> = [];
     for (const entry of entries) {
       const fullPath = join(directory, entry.name);
@@ -428,10 +454,15 @@ export class VaultFileCatalog {
     }
     for (let start = 0; start < directories.length; start += DIRECTORY_SCAN_BATCH_SIZE) {
       const batch = directories.slice(start, start + DIRECTORY_SCAN_BATCH_SIZE);
-      const nested = await Promise.all(batch.map(item => this.findPaths(item.fullPath)));
+      // Failed scans must drain siblings before refreshPromise is released;
+      // otherwise a retry races late writes into the shared directory cache.
+      const nested = await Promise.allSettled(batch.map(item => this.findPaths(item.fullPath, reconcile)));
+      const failed = nested.find(result => result.status === 'rejected');
+      if (failed?.status === 'rejected') throw failed.reason;
       for (const result of nested) {
-        notes.push(...result.notes);
-        all.push(...result.all);
+        if (result.status !== 'fulfilled') continue;
+        notes.push(...result.value.notes);
+        all.push(...result.value.all);
       }
     }
     const cached = this.directoryCache.get(directory);
@@ -449,7 +480,7 @@ export class VaultFileCatalog {
     return { notes, all };
   }
 
-  private async readDirectoryEntries(directory: string): Promise<Array<{ name: string; directory: boolean; file: boolean }>> {
+  private async readDirectoryEntries(directory: string, reconcile = false): Promise<Array<{ name: string; directory: boolean; file: boolean }>> {
     // Keep full reconciliation when recursive watching is unavailable. The
     // cache is safe only when watcher events can mark changed ancestors.
     if (!this.watcher) {
@@ -470,7 +501,7 @@ export class VaultFileCatalog {
       throw new VaultReadUnavailableError();
     }
     const cached = this.directoryCache.get(directory);
-    if (!this.dirtyDirectories.has(directory) && cached && cached.mtimeMs === info.mtimeMs && cached.size === info.size) {
+    if (!reconcile && !this.dirtyDirectories.has(directory) && cached && cached.mtimeMs === info.mtimeMs && cached.size === info.size) {
       this.directoryCache.delete(directory);
       this.directoryCache.set(directory, cached);
       derivedCacheBudget.touch(this.cacheOwner, directory);

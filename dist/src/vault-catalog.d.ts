@@ -29,7 +29,8 @@ export declare class VaultFileCatalog {
     private watcher;
     private watcherStarted;
     private needsRefresh;
-    private lastRefreshAt;
+    private lastReconciledAt;
+    private forceReconcile;
     private changeGeneration;
     private pendingChanges;
     private pendingFullRefresh;

@@ -298,6 +298,13 @@ ctime changes, refreshing links, aliases, tags and moderation. This is a
 query-triggered fallback, not a content proof when all stat values match or
 a guarantee that the file inventory is current. Existing source-revision
 validation and caller visibility checks remain independent requirements.
+Catalog inventory reconciliation re-enumerates allowed directories on a query
+after its interval, even when ancestor/directory stats match. Incremental
+refreshes do not reset the full-census deadline. Received changes during a
+scan require another pass; three unstable passes return a retry error instead
+of an uncommitted inventory. This repairs missed nested file membership, not
+cross-file content freshness or caller authorization. No note body is read by
+the inventory census, and no new MCP endpoint or client setup is required.
 Selected candidates and replacement targets are revision-checked. Reference
 resolution also checks the target revision, including its indexed aliases.
 Reference

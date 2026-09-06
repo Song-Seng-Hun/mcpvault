@@ -1531,8 +1531,21 @@ authenticated edge in front of it.
 The shared vault watcher coalesces duplicate external file events for a short
 window, stat-checks each changed path in bounded batches, and fans out one final
 state per path. This keeps an Obsidian save or NAS event burst from triggering
-duplicate read-model refreshes; periodic reconciliation remains the fallback
-when recursive watching is unavailable.
+duplicate read-model refreshes. On the first inventory request after 60 seconds
+(5 seconds without a watcher), the catalog re-enumerates allowed directories,
+bypassing cached subtrees and directory entries even if their stats are equal.
+This repairs missed nested additions, deletions and renames; unchanged ancestor
+stats are not proof that descendant membership is unchanged. Incremental hot
+folder updates do not postpone that full-census deadline. Between censuses,
+clean reads share the same inventory and ordinary event updates retain directory
+cache reuse. The catalog reads directory listings, not note bodies; downstream
+indexes still have their own content reconciliation and authorization checks.
+Received changes during enumeration are retried before publishing an inventory.
+After three unstable attempts, a path-free catalog retry error replaces a stale
+success; the forced-census requirement survives that error and clears only
+after a successful full pass. Failed directory batches drain sibling reads
+before another scan can share the cache. This is query-triggered recovery, not a background daemon,
+cross-process snapshot, or a guarantee against unobserved edits during a scan.
 
 Direct MCP writes use the same coalescing path: a sequence of writes in one
 turn invalidates search, metadata, graph, semantic, reputation, notification,
