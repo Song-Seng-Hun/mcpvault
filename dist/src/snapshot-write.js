@@ -4,6 +4,7 @@ import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createGzip } from 'node:zlib';
 import { setTimeout as delay } from 'node:timers/promises';
+import { snapshotByteChunks } from './snapshot-chunks.js';
 function byteLimit(maxBytes) {
     let total = 0;
     return new Transform({
@@ -26,7 +27,7 @@ export async function writeGzipSnapshot(path, chunks, limits) {
         const handle = await open(temporary, 'wx', 0o600);
         owned = true;
         try {
-            await pipeline(Readable.from(chunks, { objectMode: false, highWaterMark: 64 * 1024 }), byteLimit(limits.maxDecodedBytes), createGzip(), byteLimit(limits.maxBytes), handle.createWriteStream());
+            await pipeline(Readable.from(snapshotByteChunks(chunks, limits.maxDecodedBytes), { objectMode: false, highWaterMark: 64 * 1024 }), createGzip(), byteLimit(limits.maxBytes), handle.createWriteStream());
         }
         finally {
             await handle.close();

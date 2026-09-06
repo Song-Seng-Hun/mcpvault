@@ -2769,6 +2769,13 @@ vectors in its own binary tables, so no client-side index or snapshot setup is
 needed.
 Semantic manifests and pending queues stream individual JSON records through
 gzip rather than materializing whole JSON, UTF-8 and compressed buffers at once.
+Small records are coalesced into owned buffers of at most 64 KiB before gzip,
+reducing per-record codec writes while retaining stream backpressure. The
+decoded-byte ceiling is checked before encoding each string record; an accepted
+record can still require its own encoded buffer. A stalled-destination test
+checks bounded read-ahead and complete recovery with real gzip/file streams;
+this is not a production RSS or throughput benchmark. Node's stream
+[highWaterMark is a threshold, not a hard memory cap](https://nodejs.org/api/stream.html#buffering).
 They retain a captured O(N) inventory of entry references/copies so asynchronous
 writes do not mix generations; this is not a constant-memory index or a measured
 RSS reduction. Writer byte limits match the existing reader limits. Each write

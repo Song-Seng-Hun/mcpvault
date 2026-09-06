@@ -4,6 +4,7 @@ import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createGzip } from 'node:zlib';
 import { setTimeout as delay } from 'node:timers/promises';
+import { snapshotByteChunks } from './snapshot-chunks.js';
 
 interface SnapshotWriteLimits {
   maxBytes: number;
@@ -31,8 +32,8 @@ export async function writeGzipSnapshot(path: string, chunks: Iterable<string | 
     owned = true;
     try {
       await pipeline(
-        Readable.from(chunks, { objectMode: false, highWaterMark: 64 * 1024 }),
-        byteLimit(limits.maxDecodedBytes), createGzip(), byteLimit(limits.maxBytes),
+        Readable.from(snapshotByteChunks(chunks, limits.maxDecodedBytes), { objectMode: false, highWaterMark: 64 * 1024 }),
+        createGzip(), byteLimit(limits.maxBytes),
         handle.createWriteStream(),
       );
     } finally { await handle.close(); }
