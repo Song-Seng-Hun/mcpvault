@@ -31,7 +31,7 @@ scope/revision checks and response projection. No new endpoint or index.
 - [x] Document advisory path suffixes in README.md, _wiki/SCHEMA.md and tool
   guidance. Run focused suites, npm run build, npm test -- --maxWorkers=1 and
   git diff --check; review implementation independently before publication.
-- [ ] Explicit stage/commit source, tests, docs and generated dist; push only
+- [x] Explicit stage/commit source, tests, docs and generated dist; push only
   origin main and verify HEAD, origin/main and remote refs/heads/main.
 
 ## Evidence
@@ -51,3 +51,6 @@ scope/revision checks and response projection. No new endpoint or index.
   317.98s,exit0. Started2026-09-07 04:24:06 local. No failures/timeouts.
 - Generated dist includes the allocator. Final diff check exit0. No live Vault,
   server, client setup, model download or upstream action occurred.
+- Implementation ebbd1b1c75c6fcea4ecac6ac367ccc5d02fa20f2 published to the
+  user fork main. HEAD, origin/main and live remote refs/heads/main matched.
+  Unrelated .agents/ and .mcpvault/ retained. Review worker closed.
