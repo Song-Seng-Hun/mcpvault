@@ -3593,6 +3593,7 @@ export declare class LlmWikiService {
             endpointId: string;
             arguments: {
                 path: string;
+                expectedRevision: string;
                 maxChars: number;
             };
         };
@@ -3613,6 +3614,7 @@ export declare class LlmWikiService {
             endpointId: string;
             arguments: {
                 path: string;
+                expectedRevision: string;
                 maxChars: number;
             };
         };
@@ -3622,7 +3624,6 @@ export declare class LlmWikiService {
             detail?: string;
             state?: string;
         }[];
-        nextActions: string[];
         truncated: boolean;
     } | {
         advisory: boolean;

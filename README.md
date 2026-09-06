@@ -1142,10 +1142,21 @@ source is not interpretation. Evidence declarations accept nonempty
 the referenced source. Navigation recognizes native links in the body or
 Properties and plain typed relations using the graph's Property contract;
 empty reference placeholders and fenced example links do not count.
+Experiment and knowledge-role section checks use the same root-level ATX/Setext
+heading boundaries as note navigation. A section needs explanatory content
+outside matching fenced examples, recognized raw HTML blocks, comments, empty link/checklist placeholders and
+thematic dividers. Descendant prose belongs to its parent section; a sibling's
+body does not fill an empty section. Keep runnable commands in code fences and
+explain their purpose or result outside them. This checks authored structure,
+not protocol reproducibility or evidence quality, and is not a full renderer.
+Root HTML comment blocks also stay out of fallback paragraphs while physical
+line locators remain unchanged; their fence-looking examples cannot hide later
+real sections. Literal comment markers in inline code do not start a root block.
 The whole quality JSON respects `maxChars`. Full reports keep rubric order;
 compact reports prioritize failures while retaining whole-rubric `score` counts
-and the exact source revision. `nextActions` remains the IDs of displayed
-failures; the singular `nextAction` is an executable same-note read before any
+and the exact source revision. When present, `nextActions` contains the IDs of
+displayed failures; tiny envelopes may omit this duplicate list, so use `checks`.
+The singular `nextAction` is a same-note read guarded by that `expectedRevision` before any
 edit. An all-passed report requests no extra read. If the exact path/read cannot
 fit, apply `retry.overrides` to the original request without shortening its path.
 Hidden notes and sources changed during evaluation produce errors instead of

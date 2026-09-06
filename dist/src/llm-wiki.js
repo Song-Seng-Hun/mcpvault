@@ -18,7 +18,7 @@ import { classifyDependencyResidual } from './dependency-graph.js';
 import { boundedTopK, createBoundedTopK } from './search-limits.js';
 import { CollectionHealthProjection } from './collection-health.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
-import { projectNoteOutline, projectNoteParagraphs, projectNoteHeadingSummary, projectNoteHeadingPresence, projectNoteBlockPresence, projectNoteBlockLines, selectNoteHeading, hasUnclosedNoteFence } from './note-projections.js';
+import { projectNoteOutline, projectNoteParagraphs, projectNoteHeadingSummary, projectNoteHeadingPresence, projectNoteBlockPresence, projectNoteBlockLines, selectNoteHeading, hasUnclosedNoteFence, noteSectionHasContent } from './note-projections.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
 import { buildNoteReferenceIndex, normalizeNoteReferenceTerm, noteReferenceDocument, resolveNoteReference } from './note-reference.js';
@@ -117,28 +117,6 @@ function normalizeArchiveSequence(value) {
         throw new Error('archiveSequence must be an integer from 0 to 1000000000');
     }
     return parsed;
-}
-function markdownSectionHasContent(content, names) {
-    const wanted = new Set(names.map(name => name.trim().toLowerCase()));
-    const lines = String(content || '').replace(/\r\n?/g, '\n').split('\n');
-    let selectedDepth = 0;
-    for (const line of lines) {
-        const heading = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line.trim());
-        if (heading) {
-            const depth = heading[1].length;
-            const name = heading[2].trim().toLowerCase();
-            if (wanted.has(name)) {
-                selectedDepth = depth;
-                continue;
-            }
-            if (selectedDepth && depth <= selectedDepth)
-                selectedDepth = 0;
-            continue;
-        }
-        if (selectedDepth && line.trim() && !/^<!--.*-->$/.test(line.trim()) && !/^-\s*\[\[\s*\]\]\s*$/.test(line.trim()))
-            return true;
-    }
-    return false;
 }
 function optionalBoundedInteger(value, field, maximum) {
     if (value === undefined || value === null || value === '')
@@ -12337,16 +12315,16 @@ export class LlmWikiService {
             add('epistemic_status', Boolean(String(fm.epistemic_status || '').trim()), 'State the current epistemic status and update it when evidence changes.');
         if (kind === 'experiment') {
             add('tested_proposition', Array.isArray(fm.tests) && fm.tests.some((value) => typeof value === 'string' && value.trim()), 'Link the exact question, hypothesis, or assumption through the tests relation.');
-            add('reproducible_protocol', markdownSectionHasContent(note.content || '', ['protocol', 'method', 'procedure', '프로토콜', '방법', '절차']), 'Record a concrete protocol or method another agent can repeat.');
+            add('reproducible_protocol', noteSectionHasContent(note.originalContent, ['protocol', 'method', 'procedure', '프로토콜', '방법', '절차']), 'Explain a concrete protocol or method outside fenced examples so another agent knows what to repeat.');
             const terminal = ['completed', 'failed', 'inconclusive', 'reproduced'].includes(String(fm.epistemic_status || '').trim().toLowerCase());
             if (terminal)
-                add('observations_or_result', markdownSectionHasContent(note.content || '', ['observations', 'observation', 'result', 'results', '관찰', '결과']), 'Preserve the observed result before treating the run as terminal.');
+                add('observations_or_result', noteSectionHasContent(note.originalContent, ['observations', 'observation', 'result', 'results', '관찰', '결과']), 'Preserve the observed result before treating the run as terminal.');
             if (['failed', 'reproduced'].includes(String(fm.epistemic_status || '').trim().toLowerCase()))
-                add('reproduction', markdownSectionHasContent(note.content || '', ['reproduction', 'reproduce', '재현', '재현 방법']), 'Record a bounded reproduction recipe for failed or reproduced runs.');
+                add('reproduction', noteSectionHasContent(note.originalContent, ['reproduction', 'reproduce', '재현', '재현 방법']), 'Record a bounded reproduction recipe for failed or reproduced runs.');
         }
         const knowledgeRole = String(fm.knowledge_role || '').trim().toLowerCase();
         if (KNOWLEDGE_ROLES.includes(knowledgeRole)) {
-            const hasSection = (...names) => markdownSectionHasContent(note.content || '', names);
+            const hasSection = (...names) => noteSectionHasContent(note.originalContent, names);
             if (knowledgeRole === 'concept') {
                 add('concept_definition', hasSection('definition', 'meaning', '정의', '의미'), 'Define the concept in your own words.');
                 add('concept_examples', hasSection('examples', 'example', '예시', '사례'), 'Give at least one concrete example that anchors the abstraction.');
@@ -12384,7 +12362,7 @@ export class LlmWikiService {
             throw new Error('The quality check source changed or is unavailable; read the current revision and retry');
         }
         const failed = checks.filter(check => !check.passed);
-        const nextAction = failed.length ? { endpointId: 'notes.read', arguments: { path: visiblePath, maxChars: 3000 } } : undefined;
+        const nextAction = failed.length ? { endpointId: 'notes.read', arguments: { path: visiblePath, expectedRevision: note.revision, maxChars: 3000 } } : undefined;
         const result = {
             path: visiblePath,
             title: boundedText(title, 160),
@@ -12414,6 +12392,11 @@ export class LlmWikiService {
         selected = selected.map(({ detail: _detail, ...check }) => check);
         if (JSON.stringify(pack()).length <= boundedChars)
             return pack();
+        // The check IDs already identify failures; omit their duplicate list before
+        // losing a usable revision-guarded read for an ordinary scoped path.
+        const compact = { ...base, checks: selected, truncated: true };
+        if (JSON.stringify(compact).length <= boundedChars)
+            return compact;
         return { advisory: true, assessment: 'authoring_structure', truncated: true,
             retry: { endpointId: 'wiki.quality_check', reuseOriginalArguments: true, overrides: { maxChars: 12000 } } };
     }

@@ -322,3 +322,30 @@ test('notes.read truncated body keeps its revision on the outline continuation',
   expect(recovery.result.isError).toBe(true);
   expect(recovery.value.error).toBe('revision_conflict');
 });
+
+test('quality MCP assessment distinguishes authored sections from fenced examples', async () => {
+  const raw = '---\nnote_kind: experiment\nepistemic_status: failed\n---\n~~~md\n# Protocol\nExample only\n~~~\n\nResults\n===\nObserved failure.\n\nReproduction\n===\nRepeat the same measurement.';
+  await writeFile(join(vault, path), raw);
+  const { result, value } = await call({ maxChars: 12000 }, 'wiki.quality_check');
+  expect(result.isError).not.toBe(true);
+  expect(value.assessment).toBe('authoring_structure');
+  expect(value.checks).toContainEqual(expect.objectContaining({ id: 'reproducible_protocol', passed: false }));
+  for (const id of ['observations_or_result', 'reproduction']) {
+    expect(value.checks).toContainEqual(expect.objectContaining({ id, passed: true }));
+  }
+  expect(await readFile(join(vault, path), 'utf8')).toBe(raw);
+});
+
+test('compact quality MCP action rejects a source changed after assessment', async () => {
+  const raw = frontmatter + '# Current\nAuthored text.';
+  await writeFile(join(vault, path), raw);
+  const { value } = await call({ maxChars: 512 }, 'wiki.quality_check');
+  const action = value.nextAction;
+  expect(action.arguments.expectedRevision).toBe(digest(raw));
+  expect((await call(action.arguments, action.endpointId)).result.isError).not.toBe(true);
+  await writeFile(join(vault, path), raw.replace('Authored text.', 'Changed after assessment.'));
+  const changed = await call(action.arguments, action.endpointId);
+  expect(changed.result.isError).toBe(true);
+  expect(changed.value.error).toBe('revision_conflict');
+  expect(changed.text).not.toContain('Changed after assessment.');
+});

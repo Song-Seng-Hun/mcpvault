@@ -1,4 +1,14 @@
 import type { NoteHeading, ReadNoteLinesParams } from './types.js';
+import { buildMarkdownLiteralMask } from './backlinks.js';
+
+const HTML_BLOCK_PATTERN = /^ {0,3}<\/?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:[\s/>]|$)/i;
+
+function htmlBlockTerminator(text: string): RegExp | undefined {
+  const rawTag = /^ {0,3}<(script|pre|style|textarea)(?:[\s>]|$)/i.exec(text);
+  return /^ {0,3}<!--/.test(text) ? /-->/ : /^ {0,3}<\?/.test(text) ? /\?>/
+    : /^ {0,3}<!\[CDATA\[/.test(text) ? /\]\]>/ : /^ {0,3}<![A-Z]/.test(text) ? />/
+      : rawTag ? new RegExp(`</${rawTag[1]}>`, 'i') : undefined;
+}
 
 function stripAtxClosingSequence(text: string): string {
   const withPrecedingSpace = /^(.*[ \t])#+$/.exec(text);
@@ -7,14 +17,17 @@ function stripAtxClosingSequence(text: string): string {
   return text;
 }
 
-/** Physical body lines outside Properties and matching fenced examples. */
-function* visibleNoteLines(raw: string): Generator<{ text: string; line: number }, boolean> {
+/** Physical body lines outside Properties, matching fences and root HTML comments. */
+function* visibleNoteLines(raw: string): Generator<{ text: string; line: number; literalBlock?: true }, boolean> {
   const lines = raw.split('\n');
   let inFrontmatter = false;
   let frontmatterEnded = false;
   let inFence = false;
   let fenceChar = '';
   let fenceLength = 0;
+  let inComment = false;
+  let htmlEnd: RegExp | undefined;
+  let htmlUntilBlank = false;
   const fenceRegex = /^ {0,3}(`{3,}|~{3,})(.*)$/;
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i]!.replace(/\r$/, '');
@@ -24,7 +37,17 @@ function* visibleNoteLines(raw: string): Generator<{ text: string; line: number 
       continue;
     }
     frontmatterEnded = true;
-    const fenceMatch = fenceRegex.exec(trimmed);
+    // Preserve an enclosing HTML block's termination rule. Comment-looking
+    // text inside it must not start a second block that consumes later notes.
+    if (htmlUntilBlank) {
+      if (!trimmed.trim()) htmlUntilBlank = false;
+      yield { text: trimmed, line: i + 1, literalBlock: true }; continue;
+    }
+    if (htmlEnd) {
+      if (htmlEnd.test(trimmed)) htmlEnd = undefined;
+      yield { text: trimmed, line: i + 1, literalBlock: true }; continue;
+    }
+    const fenceMatch = inComment ? null : fenceRegex.exec(trimmed);
     if (fenceMatch) {
       const markers = fenceMatch[1]!;
       const trailing = fenceMatch[2]!;
@@ -37,6 +60,28 @@ function* visibleNoteLines(raw: string): Generator<{ text: string; line: number 
       continue;
     }
     if (inFence) continue;
+    // Track root HTML comment blocks, matching noteHeadingRanges. Inline code,
+    // escapes and annotations cannot establish a Markdown block or suppress
+    // subsequent real fences. Markers inside real fences never reach this step.
+    if (inComment) {
+      const end = trimmed.indexOf('-->');
+      if (end >= 0) {
+        inComment = false;
+        if (trimmed.slice(end + 3).trim()) yield { text: ' '.repeat(end + 3) + trimmed.slice(end + 3), line: i + 1 };
+      }
+      continue;
+    } else if (/^ {0,3}<!--/.test(trimmed)) {
+      const end = trimmed.indexOf('-->', trimmed.indexOf('<!--') + 4);
+      inComment = end < 0;
+      if (end >= 0 && trimmed.slice(end + 3).trim()) yield { text: ' '.repeat(end + 3) + trimmed.slice(end + 3), line: i + 1 };
+      continue;
+    }
+    const terminator = htmlBlockTerminator(trimmed);
+    if (terminator || HTML_BLOCK_PATTERN.test(trimmed)) {
+      if (terminator) { if (!terminator.test(trimmed)) htmlEnd = terminator; }
+      else htmlUntilBlank = true;
+      yield { text: trimmed, line: i + 1, literalBlock: true }; continue;
+    }
     yield { text: trimmed, line: i + 1 };
   }
   return inFence;
@@ -70,7 +115,6 @@ function* noteHeadingRanges(raw: string): Generator<{ heading: NoteHeading; endL
   const headingRegex = /^ {0,3}(#{1,6})(?:[ \t]+(.*))?$/;
   const underlineRegex = /^ {0,3}(=+|-+)[ \t]*$/;
   const thematicRegex = /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/;
-  const htmlBlockRegex = /^ {0,3}<\/?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:[\s/>]|$)/i;
   const completeTagRegex = /^ {0,3}<\/?[A-Za-z][A-Za-z0-9-]*(?:[ \t][^<>]*)?\/?>[ \t]*$/;
   let pending: string[] = [];
   let startLine = 0, previousLine = 0;
@@ -101,10 +145,7 @@ function* noteHeadingRanges(raw: string): Generator<{ heading: NoteHeading; endL
     }
     afterBlank = false;
     // Preserve an existing HTML block's own terminator; do not reinterpret its content.
-    const rawTag = /^ {0,3}<(script|pre|style|textarea)(?:[\s>]|$)/i.exec(text);
-    const rawEnd = /^ {0,3}<!--/.test(text) ? /-->/ : /^ {0,3}<\?/.test(text) ? /\?>/
-      : /^ {0,3}<!\[CDATA\[/.test(text) ? /\]\]>/ : /^ {0,3}<![A-Z]/.test(text) ? />/
-        : rawTag ? new RegExp(`</${rawTag[1]}>`, 'i') : undefined;
+    const rawEnd = htmlBlockTerminator(text);
     if (rawEnd) { pending = []; suppressed = false; if (!rawEnd.test(text)) htmlEnd = rawEnd; continue; }
     const match = headingRegex.exec(text);
     if (match) {
@@ -119,7 +160,7 @@ function* noteHeadingRanges(raw: string): Generator<{ heading: NoteHeading; endL
       continue;
     }
     if (thematicRegex.test(text)) { pending = []; suppressed = false; listIndent = undefined; continue; }
-    if (htmlBlockRegex.test(text) || (!pending.length && completeTagRegex.test(text))) {
+    if (HTML_BLOCK_PATTERN.test(text) || (!pending.length && completeTagRegex.test(text))) {
       pending = []; suppressed = false; htmlUntilBlank = true; continue;
     }
     if (!pending.length && /^ {0,3}\[[^\]]+\]:[ \t]*\S/.test(text)) {
@@ -146,6 +187,72 @@ function* noteHeadingRanges(raw: string): Generator<{ heading: NoteHeading; endL
 
 function* noteHeadings(raw: string): Generator<NoteHeading> {
   for (const { heading } of noteHeadingRanges(raw)) yield heading;
+}
+
+/** Authoring-structure evidence outside Properties, fenced examples and comments. */
+export function noteSectionHasContent(raw: string, names: readonly string[]): boolean {
+  const wanted = new Set(names.map(name => name.trim().toLowerCase()));
+  if (!wanted.size) return false;
+  const ranges = noteHeadingRanges(raw);
+  let range = ranges.next();
+  let selectedDepth = 0;
+  let inComment = false;
+  let literalMask: Uint8Array | undefined;
+  let literalOffset = 0, previousLine = 1;
+  for (const { text, line, literalBlock } of visibleNoteLines(raw)) {
+    // Comments may span multiple lines or leave real prose on either side.
+    literalOffset += line - previousLine;
+    const lineOffset = literalOffset;
+    previousLine = line;
+    if (literalBlock) continue;
+    literalOffset += text.length;
+    if (!literalMask && text.includes('<!--')) {
+      // Preserve multiline code-span context, but blank hidden blocks first:
+      // comment-contained fences must not corrupt the literal mask itself.
+      const parts: string[] = [];
+      let previous = 1;
+      for (const visible of visibleNoteLines(raw)) {
+        parts.push('\n'.repeat(visible.line - previous), visible.literalBlock ? '' : visible.text);
+        previous = visible.line;
+      }
+      literalMask = buildMarkdownLiteralMask(parts.join(''));
+    }
+    let visible = '', offset = 0;
+    while (offset < text.length) {
+      if (inComment) {
+        const end = text.indexOf('-->', offset);
+        if (end < 0) break;
+        inComment = false; offset = end + 3;
+      } else {
+        const start = text.indexOf('<!--', offset);
+        if (start < 0) { visible += text.slice(offset); break; }
+        let backslashes = 0;
+        for (let index = start - 1; index >= 0 && text[index] === '\\'; index--) backslashes++;
+        if (literalMask?.[lineOffset + start] || backslashes % 2 === 1) {
+          visible += text.slice(offset, start + 4); offset = start + 4; continue;
+        }
+        visible += text.slice(offset, start);
+        inComment = true; offset = start + 4;
+      }
+    }
+    while (!range.done && range.value.endLine < line) range = ranges.next();
+    if (!range.done && line >= range.value.heading.line && line <= range.value.endLine) {
+      if (line === range.value.heading.line) {
+        const { level, text: heading } = range.value.heading;
+        if (selectedDepth && level <= selectedDepth) selectedDepth = 0;
+        // Retain the outer matching section until a sibling/ancestor closes it.
+        const name = heading.replace(/<!--[\s\S]*?(?:-->|$)/g, '').trim().toLowerCase();
+        if (!selectedDepth && wanted.has(name)) selectedDepth = level;
+      }
+      continue;
+    }
+    const content = visible.trim();
+    const payload = content.replace(/^(?:[-+*]|\d{1,9}[.)])(?:[ \t]+|$)/, '').trim()
+      .replace(/^\[[ xX]\](?:[ \t]+|$)/, '').trim();
+    if (selectedDepth && payload && !/^\[\[\s*\]\]$/.test(payload)
+      && !/^(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(content)) return true;
+  }
+  return false;
 }
 
 /** Pure projection of one already-authorized raw Markdown snapshot. */

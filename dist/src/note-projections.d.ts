@@ -1,6 +1,8 @@
 import type { NoteHeading, ReadNoteLinesParams } from './types.js';
 /** Same matching-fence state used by physical outlines and paragraph reads. */
 export declare function hasUnclosedNoteFence(raw: string): boolean;
+/** Authoring-structure evidence outside Properties, fenced examples and comments. */
+export declare function noteSectionHasContent(raw: string, names: readonly string[]): boolean;
 /** Pure projection of one already-authorized raw Markdown snapshot. */
 export declare function projectNoteOutline(raw: string): NoteHeading[];
 /** Count every visible heading, retaining only the requested leading locators. */

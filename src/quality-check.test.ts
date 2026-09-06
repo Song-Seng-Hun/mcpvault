@@ -34,7 +34,7 @@ test('quality bounds the whole report and retains a same-target revision-bearing
     const result: any = await service.qualityCheck(undefined, 'Concept.md', maxChars);
     expect(JSON.stringify(result).length).toBeLessThanOrEqual(maxChars);
     expect(result).toMatchObject({ path: 'Concept.md', revision: hash(raw), advisory: true, assessment: 'authoring_structure', nextAction: {
-      endpointId: 'notes.read', arguments: { path: 'Concept.md', maxChars: 3000 },
+      endpointId: 'notes.read', arguments: { path: 'Concept.md', expectedRevision: hash(raw), maxChars: 3000 },
     } });
     expect(result.checks.some((check: any) => !check.passed)).toBe(true);
   }
@@ -198,4 +198,48 @@ test('quality ignores empty reference placeholders and fenced example links', as
   await seed('Concept.md', { references: [null, '', ' ', {}, 42] }, '```md\n[[Example]]\n```\n\n~~~md\n[[Other example]]\n~~~');
   const result: any = await service.qualityCheck(undefined, 'Concept.md');
   expect(result.checks).toContainEqual(expect.objectContaining({ id: 'navigation', passed: false }));
+});
+
+test.each(['```md\n# Protocol\nExample steps\n```', '~~~~md\n# Protocol\nExample\n~~~\nStill example\n~~~~', '<!--\n# Protocol\nExample steps\n-->'])('quality does not count an example protocol: %s', async body => {
+  await seed('Experiment.md', { note_kind: 'experiment' }, body);
+  const result: any = await service.qualityCheck(undefined, 'Experiment.md');
+  expect(result.checks).toContainEqual(expect.objectContaining({ id: 'reproducible_protocol', passed: false }));
+});
+
+test.each(['## Protocol\n```bash\nnpm test\n```', '## Protocol\n<!--\nTODO: fill in steps\n-->', '## Protocol\n- [[]]\n\n## Other\nUnrelated text.'])('quality requires explanatory content outside placeholders and fenced examples: %s', async body => {
+  await seed('Experiment.md', { note_kind: 'experiment' }, body);
+  const result: any = await service.qualityCheck(undefined, 'Experiment.md');
+  expect(result.checks).toContainEqual(expect.objectContaining({ id: 'reproducible_protocol', passed: false }));
+});
+
+test('quality recognizes Setext experiment sections and does not confuse their boundaries', async () => {
+  await seed('Experiment.md', { note_kind: 'experiment', epistemic_status: 'failed' }, 'Protocol\n===\nMeasure two runs.\n\nResults\n===\nBoth failed.\n\nReproduction\n===\nRun the same input twice.');
+  const result: any = await service.qualityCheck(undefined, 'Experiment.md');
+  for (const id of ['reproducible_protocol', 'observations_or_result', 'reproduction']) {
+    expect(result.checks).toContainEqual(expect.objectContaining({ id, passed: true }));
+  }
+});
+
+test('quality does not borrow a sibling Setext section body for an empty protocol', async () => {
+  await seed('Experiment.md', { note_kind: 'experiment' }, '## Protocol\n\nOther\n------\nUnrelated content.');
+  const result: any = await service.qualityCheck(undefined, 'Experiment.md');
+  expect(result.checks).toContainEqual(expect.objectContaining({ id: 'reproducible_protocol', passed: false }));
+});
+
+test.each([
+  ['concept', 'Definition', 'concept_definition'],
+  ['argument', 'Warrant', 'argument_warrant'],
+  ['model', 'Mechanism', 'model_mechanism'],
+  ['observation', 'Measurement', 'observation_method'],
+  ['counterargument', 'Falsifier', 'counterargument_falsifier'],
+])('quality recognizes %s role content under Setext headings', async (role, heading, id) => {
+  await seed('Concept.md', { note_kind: 'atomic', knowledge_role: role }, `${heading}\n===\nCurrent explanation.`);
+  const result: any = await service.qualityCheck(undefined, 'Concept.md');
+  expect(result.checks).toContainEqual(expect.objectContaining({ id, passed: true }));
+});
+
+test('quality recognizes a requested ancestor containing a descriptive subsection', async () => {
+  await seed('Experiment.md', { note_kind: 'experiment' }, '# Protocol\n## Setup\nMeasure two independent runs.');
+  const result: any = await service.qualityCheck(undefined, 'Experiment.md');
+  expect(result.checks).toContainEqual(expect.objectContaining({ id: 'reproducible_protocol', passed: true }));
 });

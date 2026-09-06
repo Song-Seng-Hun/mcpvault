@@ -901,12 +901,20 @@ existence, or integrity of their targets; source/claim review is separate.
 Navigation accepts native body/Property links and plain navigational typed
 relations, not empty reference placeholders or fenced examples. Kind and
 uncertainty labels are trimmed and case-normalized before choosing the rubric.
+Experiment and knowledge-role section presence follows shared root ATX/Setext
+boundaries. Explanatory content outside matching fenced examples, recognized raw HTML blocks, comments,
+empty link/checklist placeholders and thematic dividers is required. A descendant section
+can supply context to its parent; a sibling closes it. Keep executable code
+fenced and add explanatory prose rather than moving commands into prose just to
+satisfy the rubric. Presence does not prove reproducibility, truth or quality.
 Hidden, removed, or quarantined sources are unavailable. A changed/deleted source
 at the final revision check must be re-read and retried. Small `maxChars` values
 prioritize failed checks and may omit descriptions, while `score` still counts
-the entire rubric. Legacy `nextActions` contains displayed failed check IDs;
-the executable singular `nextAction` reads that same note before revision-safe
-editing. Fully passed rubrics do not request another read. If an exact path/read
+the entire rubric. Legacy `nextActions`, when present, contains displayed failed
+check IDs; tiny envelopes may omit this duplicate list in favor of `checks`.
+The same-note `nextAction` carries `expectedRevision` so a later source change
+cannot be silently mixed with this assessment before revision-safe editing.
+Fully passed rubrics do not request another read. If an exact path/read
 cannot fit the whole JSON budget, retain the original arguments and apply only
 `retry.overrides`; never shorten a path. This workflow mutates no files and
 introduces no publication gate.
