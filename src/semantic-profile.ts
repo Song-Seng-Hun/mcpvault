@@ -2,11 +2,17 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
+import { availableParallelism } from 'node:os';
 
 export const SEMANTIC_MODEL_ID = 'Xenova/multilingual-e5-small';
 export const SEMANTIC_MODEL_OPTIONS = {
   revision: '761b726dd34fb83930e26aab4e9ac3899aa1fa78',
   dtype: 'q8', device: 'cpu',
+  session_options: {
+    intraOpNumThreads: Math.max(1, Math.min(2, availableParallelism())),
+    interOpNumThreads: 1,
+    executionMode: 'sequential',
+  },
 } as const;
 
 // Read small package metadata, never import native inference at server startup.

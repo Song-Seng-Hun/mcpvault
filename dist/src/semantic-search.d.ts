@@ -55,6 +55,8 @@ export declare class SemanticSearchService {
     private readonly tableOpening;
     private embedder;
     private embedderLease;
+    private readonly inferenceAbort;
+    private readonly inferenceTasks;
     private pending;
     private pendingSnapshotTimer;
     private pendingSnapshotWrite;
@@ -111,7 +113,9 @@ export declare class SemanticSearchService {
     private getTableNames;
     private getEmbedder;
     private scheduleResourceRelease;
+    private withInference;
     private embed;
+    private embedDirect;
     private embedQuery;
     private embedMany;
     private prepareIndex;

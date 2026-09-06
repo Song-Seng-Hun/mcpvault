@@ -2809,6 +2809,29 @@ Model-free reuse also starts the resource idle timer: DB/table references are
 released after inactivity, while active searches and indexing batches defer
 release. This does not require loading an embedding model just to start cleanup.
 
+Embedding calls share one process-wide inference slot and at most 16 waiting
+jobs, admitted before acquiring the shared model. Waiting jobs expire after
+five seconds; an executing native call retains its slot until it really finishes.
+Query jobs take priority, but after at most four foreground selections an
+admitted background job gets a turn. Temporary saturation returns lexical-only
+results without a five-minute semantic outage; indexing intents stay queued,
+eligible for retry after one second on a subsequent worker pass rather than
+accumulating native-failure backoff. Closing a service cancels its waiting work,
+waits for its active inference/indexing to unwind, and prevents late pending
+snapshot timers. Other services' active inference is not interrupted.
+
+Native ONNX CPU sessions use at most two intra-op threads (one on a single-core
+host), one inter-op thread and sequential execution. This limits embedding
+parallelism, not total process threads or CPU usage; separate Node processes do
+not share this gate. No GPU, additional client installation or configuration is
+required. We do not claim to disable native thread spinning through JS options:
+the installed runtime documents `extra` options for WebAssembly only. A tiny
+in-memory native ONNX test checks option compatibility, not real-model speed or
+RAM savings. Lower concurrency can trade peak indexing throughput for lower
+working-set pressure and foreground responsiveness. These options participate
+in the embedding profile, so existing vectors are gradually rebuilt through the
+same bounded idle worker after upgrade, without deleting the cache manually.
+
 The model is pinned to
 [`761b726`](https://huggingface.co/Xenova/multilingual-e5-small/commit/761b726dd34fb83930e26aab4e9ac3899aa1fa78)
 with CPU q8 execution, mean pooling and normalization. Runtime versions and

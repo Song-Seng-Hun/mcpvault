@@ -12,6 +12,7 @@ import { chunkSemanticNote } from './semantic-chunks.js';
 import { isMarkdownModerationHidden } from './moderation-policy.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 import { SEMANTIC_MODEL_ID as MODEL_ID, SEMANTIC_MODEL_OPTIONS, SEMANTIC_EMBEDDING_PROFILE } from './semantic-profile.js';
+import { semanticInferenceGate, SemanticInferenceBusyError } from './semantic-inference-gate.js';
 const EMBEDDING_DIMENSIONS = 384;
 const INDEX_DIR = '.mcpvault/semantic-index';
 const MANIFEST_FILE = 'manifest.snapshot.gz';
@@ -269,6 +270,8 @@ export class SemanticSearchService {
     tableOpening = new Map();
     embedder;
     embedderLease;
+    inferenceAbort = new AbortController();
+    inferenceTasks = new Set();
     pending = new Map();
     pendingSnapshotTimer;
     pendingSnapshotWrite;
@@ -333,6 +336,7 @@ export class SemanticSearchService {
             this.scheduleIdleWork();
     }
     async close() {
+        this.inferenceAbort.abort();
         this.catalogUnsubscribe?.();
         this.semanticActive = false;
         if (this.idleTimer)
@@ -348,6 +352,13 @@ export class SemanticSearchService {
         // disposable and scanForChanges reconstructs it after a restart; avoiding
         // a late write also lets callers safely remove a temporary test vault.
         this.pendingSnapshotPending = false;
+        // Await the owning workers as well: admission cancellation still has to
+        // unwind prepare/drain and restore pending intents before releasing storage.
+        await Promise.allSettled([
+            ...this.inferenceTasks,
+            ...(this.syncPromise ? [this.syncPromise] : []),
+            ...(this.scanPromise ? [this.scanPromise] : []),
+        ]);
         if (this.pendingSnapshotWrite)
             await this.pendingSnapshotWrite.catch(() => undefined);
         this.clearQueryCache();
@@ -380,6 +391,8 @@ export class SemanticSearchService {
         derivedCacheBudget.clearOwner(this.vectorCacheOwner);
     }
     async search(params) {
+        if (this.inferenceAbort.signal.aborted)
+            return { results: [], available: false, indexed: this.indexedCount(), pending: this.pending.size, error: 'Semantic service is closed.' };
         this.activeSearches++;
         try {
             return await this.searchCurrent(params);
@@ -508,6 +521,8 @@ export class SemanticSearchService {
             };
         }
         catch (error) {
+            if (error instanceof SemanticInferenceBusyError)
+                return { results: [], available: false, indexed: this.indexedCount(), pending: this.pending.size, error: error.message };
             this.markUnavailable(error);
             return { results: [], available: false, indexed: this.indexedCount(), pending: this.pending.size, error: this.lastError };
         }
@@ -622,6 +637,8 @@ export class SemanticSearchService {
         }
     }
     queuePendingSnapshotSave() {
+        if (this.inferenceAbort.signal.aborted)
+            return;
         this.pendingSnapshotPending = true;
         if (this.pendingSnapshotTimer)
             return;
@@ -632,7 +649,7 @@ export class SemanticSearchService {
         this.pendingSnapshotTimer.unref?.();
     }
     async flushPendingSnapshot() {
-        if (this.pendingSnapshotWrite || !this.pendingSnapshotPending)
+        if (this.inferenceAbort.signal.aborted || this.pendingSnapshotWrite || !this.pendingSnapshotPending)
             return;
         this.pendingSnapshotPending = false;
         const entries = [...this.pending.entries()].slice(0, MAX_PENDING_CHANGES).map(([path, change]) => ({ path, ...change }));
@@ -659,7 +676,7 @@ export class SemanticSearchService {
         }
     }
     scheduleIdleWork() {
-        if (this.idleTimer)
+        if (this.idleTimer || this.inferenceAbort.signal.aborted)
             return;
         this.idleTimer = setTimeout(() => {
             this.idleTimer = undefined;
@@ -679,7 +696,8 @@ export class SemanticSearchService {
             await this.drain(4);
         }
         catch (error) {
-            this.markUnavailable(error);
+            if (!(error instanceof SemanticInferenceBusyError))
+                this.markUnavailable(error);
         }
         finally {
             if (this.pending.size > 0)
@@ -818,6 +836,8 @@ export class SemanticSearchService {
                             deleted.push(path);
                     }
                     catch (error) {
+                        if (error instanceof SemanticInferenceBusyError)
+                            throw error;
                         if (!isMissingVaultPath(error))
                             throw new VaultReadUnavailableError();
                         deleted.push(path);
@@ -842,8 +862,9 @@ export class SemanticSearchService {
                     // A watcher may have queued a newer change while this batch was
                     // preparing or writing. Preserve that newer event for the retry.
                     if (!this.pending.has(path)) {
-                        const attempt = Math.min((change.attempt || 0) + 1, 8);
-                        const retryDelay = Math.min(UNAVAILABLE_RETRY_MS, 1_000 * 2 ** (attempt - 1));
+                        const busy = error instanceof SemanticInferenceBusyError;
+                        const attempt = busy ? (change.attempt || 0) : Math.min((change.attempt || 0) + 1, 8);
+                        const retryDelay = busy ? 1_000 : Math.min(UNAVAILABLE_RETRY_MS, 1_000 * 2 ** (attempt - 1));
                         this.pending.set(path, { kind: change.kind, attempt, retryAt: Date.now() + retryDelay });
                     }
                 }
@@ -996,18 +1017,27 @@ export class SemanticSearchService {
         return this.tableNamesCache;
     }
     async getEmbedder() {
+        if (this.inferenceAbort.signal.aborted)
+            throw new SemanticInferenceBusyError();
         if (!this.embedder) {
-            this.embedderLease = await acquireSharedEmbedder();
-            this.embedder = this.embedderLease.embedder;
+            const lease = await acquireSharedEmbedder();
+            if (this.inferenceAbort.signal.aborted) {
+                lease.release();
+                throw new SemanticInferenceBusyError();
+            }
+            this.embedderLease = lease;
+            this.embedder = lease.embedder;
         }
         this.scheduleResourceRelease();
         return this.embedder;
     }
     scheduleResourceRelease() {
+        if (this.inferenceAbort.signal.aborted)
+            return;
         if (this.unloadTimer)
             clearTimeout(this.unloadTimer);
         this.unloadTimer = setTimeout(() => {
-            if (this.activeSearches || this.syncPromise || this.scanPromise || this.dbPromise || this.tableOpening.size) {
+            if (this.inferenceTasks.size || this.activeSearches || this.syncPromise || this.scanPromise || this.dbPromise || this.tableOpening.size) {
                 this.scheduleResourceRelease();
                 return;
             }
@@ -1030,8 +1060,16 @@ export class SemanticSearchService {
         }, IDLE_DELAY_MS * 4);
         this.unloadTimer.unref?.();
     }
-    async embed(text, prefix) {
-        const embedder = await this.getEmbedder();
+    withInference(priority, run) {
+        const task = semanticInferenceGate.run(priority, run, this.inferenceAbort.signal);
+        this.inferenceTasks.add(task);
+        void task.then(() => this.inferenceTasks.delete(task), () => this.inferenceTasks.delete(task));
+        return task;
+    }
+    embed(text, prefix) {
+        return this.withInference(prefix === 'query' ? 'foreground' : 'background', async () => this.embedDirect(await this.getEmbedder(), text, prefix));
+    }
+    async embedDirect(embedder, text, prefix) {
         const output = await embedder(`${prefix}: ${text}`, { pooling: 'mean', normalize: true });
         const values = output.tolist();
         const valueList = values;
@@ -1083,27 +1121,28 @@ export class SemanticSearchService {
     async embedMany(texts, prefix) {
         if (texts.length === 0)
             return [];
-        const embedder = await this.getEmbedder();
-        try {
-            const output = await embedder(texts.map(text => `${prefix}: ${text}`), { pooling: 'mean', normalize: true });
-            const values = output.tolist();
-            if (!Array.isArray(values) || values.length !== texts.length)
-                throw new Error('Embedding model returned an invalid batch');
-            const rows = values.map(value => value);
-            if (!rows.every(row => Array.isArray(row) && row.length === EMBEDDING_DIMENSIONS && row.every(item => typeof item === 'number' && Number.isFinite(item)))) {
-                throw new Error(`Embedding model returned an invalid ${EMBEDDING_DIMENSIONS}-dimensional batch`);
+        return this.withInference(prefix === 'query' ? 'foreground' : 'background', async () => {
+            const embedder = await this.getEmbedder();
+            try {
+                const output = await embedder(texts.map(text => `${prefix}: ${text}`), { pooling: 'mean', normalize: true });
+                const values = output.tolist();
+                if (!Array.isArray(values) || values.length !== texts.length)
+                    throw new Error('Embedding model returned an invalid batch');
+                const rows = values.map(value => value);
+                if (!rows.every(row => Array.isArray(row) && row.length === EMBEDDING_DIMENSIONS && row.every(item => typeof item === 'number' && Number.isFinite(item)))) {
+                    throw new Error(`Embedding model returned an invalid ${EMBEDDING_DIMENSIONS}-dimensional batch`);
+                }
+                return rows;
             }
-            return rows;
-        }
-        catch {
-            // Older transformer runtimes may not implement array input. Keep the
-            // semantic cache optional by falling back to the proven single-input
-            // path instead of failing the whole idle indexing pass.
-            const rows = [];
-            for (const text of texts)
-                rows.push(await this.embed(text, prefix));
-            return rows;
-        }
+            catch {
+                // Older transformer runtimes may not implement array input. Keep the
+                // fallback inside the current gate job, never recursively acquire it.
+                const rows = [];
+                for (const text of texts)
+                    rows.push(await this.embedDirect(embedder, text, prefix));
+                return rows;
+            }
+        });
     }
     async prepareIndex(path) {
         if (!this.pathCanBeIndexed(path))
