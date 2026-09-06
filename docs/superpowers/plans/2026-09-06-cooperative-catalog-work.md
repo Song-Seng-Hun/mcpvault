@@ -23,7 +23,7 @@ items, real setImmediate between batches and owner liveness checks.
   build and independent lifecycle review. README documents item—not-time—bounds,
   unchanged current-source/generation behavior, remaining synchronous phases.
 - [x] Run full `npm test -- --maxWorkers=1` and whitespace check.
-- [ ] Commit explicit source/tests/docs/dist and push only origin main after
+- [x] Commit explicit source/tests/docs/dist and push only origin main after
   verification; confirm remote main and local HEAD agree.
 
 ## Verification evidence
@@ -41,4 +41,8 @@ items, real setImmediate between batches and owner liveness checks.
 - Final full single-worker suite: 2,423 passed, one skipped, 161 files, 285.61s;
   process exited successfully. Whitespace check passed. No wall-clock latency,
   whole-process memory reduction, or diagnosis of the earlier desktop stutter
-  is claimed. Integration remains pending until Git verifies the fork push.
+  is claimed.
+- Implementation commit `08d6e7a` was pushed only to
+  `https://github.com/Song-Seng-Hun/mcpvault.git` main. Local HEAD and origin/main
+  matched after the successful push; unrelated `.agents/` and `.mcpvault/`
+  remained untracked. No live server restart or upstream contribution occurred.
