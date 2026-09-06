@@ -1532,6 +1532,14 @@ draft links and the creation content retain exactly the same members and order.
 `entriesTruncated` identifies its 12-entry reduction. A full draft may fit fewer
 groups in `maxChars`; omitted groups remain explicitly truncated.
 
+Candidate and rebalance groups whose names collide after filename sanitization,
+case folding or truncation receive deterministic path suffixes and
+`pathDisambiguated: true`. Allocation considers all groups in the admitted
+snapshot before output slicing, so output limits do not rename those groups.
+Non-colliding names stay unchanged. Use the returned destination exactly;
+suffixes are not stable note IDs, filesystem reservations, or permission to
+overwrite. A different admitted sample may yield different suggestions.
+
 MOC coverage measures visible **non-MOC knowledge** reached through authored
 map links. Root and nested maps remain in the full graph and knowledge-usage
 views, but do not inflate coverage denominators or become uncovered-knowledge

@@ -737,6 +737,13 @@ before selecting up to12 members. Candidate `notePaths`, `orderedEntries`, draft
 links and creation content share that membership/order. `entryTotal` is the
 sample-local group count, not a Vault-wide inventory. `entriesTruncated` reports
 its member cap; the complete response still obeys `maxChars`.
+Candidate and rebalance destinations are distinct within their admitted group
+snapshot. Lossy filename collisions get deterministic suffixes and
+`pathDisambiguated: true`, allocated before output slicing. Use the exact
+returned path for review/creation, never reconstruct it from the label. This
+does not reserve a file or replace revision guards. Different admitted samples
+may change suggested paths; suffixes are not stable IDs. Non-colliding paths
+retain their original names and scopes.
 Root MOCs need no parent or `primary_moc`; nested MOCs use `moc_parent` through
 `wiki.hierarchy_change`, not `wiki.moc_membership`. Maintenance placement debt
 applies to non-retired ordinary knowledge without nonempty scalar `primary_moc`

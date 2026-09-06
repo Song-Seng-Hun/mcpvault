@@ -27,6 +27,7 @@ import { projectNoteOutline, projectNoteParagraphs, projectNoteHeadingSummary, p
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { authoredTaskStatus, hasAuthoredText, hasAuthoredNextAction, needsAuthoredNextAction, normalizeEpistemicStatus, type NoteKind } from './organization.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
+import { allocateProposalPaths } from './proposal-paths.js';
 import { buildNoteReferenceIndex, normalizeNoteReferenceTerm, noteReferenceDocument, resolveNoteReference, type NoteReferenceIndex } from './note-reference.js';
 import type { QueryNote } from './types.js';
 import { buildJsonCanvasProjection, canvasFileNodeId, readJsonCanvasMetadata, validateJsonCanvasDocument, type JsonCanvasDocument, type WikiCanvasEdge, type WikiCanvasMode, type WikiCanvasNote } from './json-canvas.js';
@@ -9943,16 +9944,20 @@ export class LlmWikiService {
     }
     const candidateGroups = [...groups.values()]
       .sort((left, right) => right.entryTotal - left.entryTotal || left.basis.localeCompare(right.basis) || left.scopeRoot.localeCompare(right.scopeRoot))
-      .slice(0, boundedLimit);
+      .map(group => {
+        const stem = group.title.replace(/^MOC:\s*/i, '').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 100) || 'Knowledge';
+        return { ...group, physicalTarget: joinRoot(group.scopeRoot, `Knowledge/MOCs/${stem}.md`) };
+      });
+    const candidatePaths = allocateProposalPaths(candidateGroups.map(group => ({ path: group.physicalTarget,
+      identity: JSON.stringify([group.scopeRoot.toLowerCase(), group.basisKind, group.basis.toLocaleLowerCase()]) })));
     const selected: Array<Record<string, unknown>> = [];
     const targetSnapshots = new Map<string, { path: string; revision: string }>();
     const displayText = proposalDisplayText;
-    for (const group of candidateGroups) {
+    for (const [groupIndex, group] of candidateGroups.slice(0, boundedLimit).entries()) {
       group.entries.sort((left, right) => navigationOrder(left.navOrder) - navigationOrder(right.navOrder) || left.title.localeCompare(right.title) || left.path.localeCompare(right.path));
       group.entries.splice(12); // Apply the cap after authored priority, within the bounded graph sample.
       const suggestedQuestions = [`What is the durable idea shared by these notes?`, `Which note should be the next link or source of truth?`];
-      const stem = group.title.replace(/^MOC:\s*/i, '').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 100) || 'Knowledge';
-      const physicalTarget = joinRoot(group.scopeRoot, `Knowledge/MOCs/${stem}.md`);
+      const physicalTarget = candidatePaths[groupIndex]!;
       if (!canAccess(physicalTarget)) throw refreshError();
       const suggestedPath = this.access.toPublicPath(physicalTarget);
       const target = (await this.fileSystem.readNoteMetadata([physicalTarget], canAccess, freshOptions))[0];
@@ -9969,6 +9974,7 @@ export class LlmWikiService {
       const item = {
         suggestedTitle: group.title,
         suggestedPath,
+        ...(physicalTarget !== group.physicalTarget && { pathDisambiguated: true }),
         targetExists,
         suggestedPurpose: `Orient an agent through the related notes grouped by ${group.basisKind}: ${group.basis}.`,
         suggestedQuestions,
@@ -10160,6 +10166,12 @@ export class LlmWikiService {
     const orderedGroups = [...groups.values()]
       .map(group => ({ ...group, members: group.members.sort((left, right) => left.line - right.line || left.path.localeCompare(right.path)) }))
       .sort((left, right) => left.firstLine - right.firstLine || left.priority - right.priority || left.label.localeCompare(right.label));
+    const branchTargets = orderedGroups.map(group => {
+      const groupStem = group.label.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Unclassified';
+      return `${mocDirectory ? `${mocDirectory}/` : ''}${mocStem} - ${groupStem}.md`;
+    });
+    const branchPaths = allocateProposalPaths(orderedGroups.map((group, index) => ({ path: branchTargets[index]!,
+      identity: JSON.stringify([path.toLowerCase(), group.priority, group.basis.value.toLowerCase()]) })));
     const selectedGroups = orderedGroups.slice(0, boundedBranches);
     const selectedKeys = new Set(selectedGroups.map(group => `${group.priority}|${group.basis.value.toLowerCase()}`));
     const leftovers = orderedGroups.filter(group => !selectedKeys.has(`${group.priority}|${group.basis.value.toLowerCase()}`)).flatMap(group => group.members);
@@ -10168,9 +10180,8 @@ export class LlmWikiService {
     try { canonicalRelationWikiLink(path); parentLink = `[[${path.includes('/') ? path : `./${path}`}]]`; } catch { /* Explicit warning below; do not invent a malformed hierarchy property. */ }
     const renderDraft = (title: string, label: string, entries: Member[], target: string) =>
       `# ${proposalDisplayText(title)}\n\n## Purpose\n\nNavigate ${proposalDisplayText(label)} within ${proposalDocumentLink(path, target)}.\n\n## Reading order\n\n${entries.map(member => `- ${proposalDocumentLink(this.access.resolveExternalPath(member.path, principal), target)}`).join('\n')}\n`;
-    for (const group of selectedGroups) {
-      const groupStem = group.label.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Unclassified';
-      const suggestedPhysicalPath = `${mocDirectory ? `${mocDirectory}/` : ''}${mocStem} - ${groupStem}.md`;
+    for (const [groupIndex, group] of selectedGroups.entries()) {
+      const suggestedPhysicalPath = branchPaths[groupIndex]!;
       const suggestedPath = this.access.toPublicPath(suggestedPhysicalPath);
       const suggestedTitle = `${mocTitle}: ${group.label}`;
       if (!canAccess(suggestedPhysicalPath) || !this.access.canReferenceFrom(suggestedPhysicalPath, path)) throw new Error('MOC rebalance destination unavailable; refresh and retry.');
@@ -10186,6 +10197,7 @@ export class LlmWikiService {
         suggestedSubMoc: {
           title: suggestedTitle,
           path: suggestedPath,
+          ...(suggestedPhysicalPath !== branchTargets[groupIndex] && { pathDisambiguated: true }),
           targetExists: Boolean(existing),
           ...(existing
             ? { nextAction: { endpointId: 'notes.read', arguments: { path: suggestedPath, maxChars: 4000 } } }

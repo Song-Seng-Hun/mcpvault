@@ -28,6 +28,72 @@ async function fixture(run: (wiki: LlmWikiService, fs: FileSystemService, access
   }
 }
 
+test.each([
+  ['A/B', 'A:B'],
+  ['X'.repeat(100) + 'First', 'X'.repeat(100) + 'Second'],
+])('candidate paths distinguish lossy labels %s and %s', async (first, second) => {
+  await fixture(async (wiki, fs, _access, seed) => {
+    await seed('First.md', { domain: first });
+    await seed('Second.md', { domain: second });
+    const result = await wiki.mocCandidates(undefined, 10, 16000);
+    expect(result.candidates).toHaveLength(2);
+    const paths = result.candidates.map(item => String(item.suggestedPath).toLowerCase());
+    expect(new Set(paths).size).toBe(2);
+    for (const item of result.candidates) {
+      expect(item.pathDisambiguated).toBe(true);
+      expect(item.creationPlan).toMatchObject({ endpointId: 'notes.write', arguments: { path: item.suggestedPath, expectedRevision: 'missing' } });
+      expect(await fs.noteExists(String(item.suggestedPath))).toBe(false);
+    }
+    const limited = await wiki.mocCandidates(undefined, 1, 16000);
+    expect(limited.candidates[0]?.suggestedPath).toBe(result.candidates[0]?.suggestedPath);
+  });
+});
+
+test('candidate identity includes grouping kind even when titles match', async () => {
+  await fixture(async (wiki, _fs, _access, seed) => {
+    await seed('Domain.md', { domain: 'Research' });
+    await seed('Subject.md', { domain: '', subject_terms: ['Research'] });
+    const { candidates } = await wiki.mocCandidates(undefined, 10, 16000);
+    expect(candidates).toHaveLength(2);
+    expect(new Set(candidates.map(item => item.suggestedPath)).size).toBe(2);
+    expect(candidates.every(item => item.pathDisambiguated)).toBe(true);
+  });
+});
+
+test.each(['visible', 'hidden'])('candidate rechecks %s disambiguated destinations without overwriting', async state => {
+  await fixture(async (wiki, _fs, _access, seed, root) => {
+    await seed('First.md', { domain: 'A/B' });
+    await seed('Second.md', { domain: 'A:B' });
+    const target = String((await wiki.mocCandidates(undefined, 10, 16000)).candidates[0]!.suggestedPath);
+    const raw = await seed(target, { note_kind: 'moc', ...(state === 'hidden' && { moderation_status: 'hidden' }), title: 'EXISTING-PRIVATE-MARKER' });
+    const result = await wiki.mocCandidates(undefined, 10, 16000);
+    const candidate = result.candidates.find(item => item.suggestedPath === target)!;
+    expect(candidate.targetExists).toBe(state === 'visible');
+    expect(candidate.creationPlan).toMatchObject(state === 'visible'
+      ? { endpointId: 'notes.read', arguments: { path: target } }
+      : { endpointId: 'notes.write', arguments: { path: target, expectedRevision: 'missing' } });
+    expect(JSON.stringify(result)).not.toContain('EXISTING-PRIVATE-MARKER');
+    expect(await readFile(join(root, target), 'utf8')).toBe(raw);
+  });
+});
+
+test('colliding public candidates do not rename a non-colliding private-scope proposal', async () => {
+  await fixture(async (wiki, _fs, access, seed) => {
+    await seed('First.md', { domain: 'A/B' });
+    await seed('Second.md', { domain: 'A:B' });
+    await seed('_scopes/models/codex/Private.md', { domain: 'A/B' });
+    const principal = { accountId: 'worker', modelId: 'codex', agentId: 'worker', role: 'agent' as const };
+    const result = await wiki.mocCandidates(principal, 10, 16000);
+    expect(result.candidates).toHaveLength(3);
+    const privateItem = result.candidates.find(item => item.notePaths.includes(access.toPublicPath('_scopes/models/codex/Private.md')))!;
+    expect(privateItem.suggestedPath).toBe(access.toPublicPath('_scopes/models/codex/Knowledge/MOCs/A-B.md'));
+    expect(privateItem.pathDisambiguated).toBeUndefined();
+    const anonymous = await wiki.mocCandidates(undefined, 10, 16000);
+    expect(JSON.stringify(anonymous)).not.toContain('Private');
+    expect(anonymous.candidates.map(item => item.suggestedPath)).toEqual(result.candidates.filter(item => item !== privateItem).map(item => item.suggestedPath));
+  });
+});
+
 test.each(['edited', 'hidden', 'deleted', 'map'])('rejects %s source after the graph snapshot', async change => {
   await fixture(async (wiki, _fs, _access, seed, root) => {
     await seed('Note.md', { title: 'Original title' });

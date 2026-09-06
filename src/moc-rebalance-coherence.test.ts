@@ -44,6 +44,58 @@ async function fixture(run: (context: {
   }
 }
 
+test.each([
+  ['A/B', 'A:B'],
+  ['X'.repeat(80) + 'First', 'X'.repeat(80) + 'Second'],
+])('rebalance distinguishes lossy group labels %s and %s', async (first, second) => {
+  await fixture(async ({ wiki, fs, seed, setup }) => {
+    const { path, notes } = await setup();
+    for (let i = 0; i < notes.length; i++) await seed(notes[i]!, { domain: i < 2 ? first : second });
+    await seed(path, { note_kind: 'moc', title: 'Map' }, notes.map(note => `[[${note}]]`).join('\n'));
+    const result = await wiki.mocRebalance(undefined, path, 4, 30, 16000, 3);
+    expect(result.branches).toHaveLength(2);
+    expect(new Set(result.branches.map((branch: any) => branch.suggestedSubMoc.path.toLowerCase())).size).toBe(2);
+    for (const branch of result.branches) {
+      expect(branch.suggestedSubMoc.pathDisambiguated).toBe(true);
+      expect(branch.suggestedSubMoc.expectedRevision).toBe('missing');
+      expect(await fs.noteExists(branch.suggestedSubMoc.path)).toBe(false);
+    }
+  });
+});
+
+test('rebalance allocates against branches beyond the output limit', async () => {
+  await fixture(async ({ wiki, seed, setup }) => {
+    const { path, notes } = await setup('', 'Map.md', 6);
+    for (let i = 0; i < notes.length; i++) await seed(notes[i]!, { domain: ['A/B', 'Unrelated', 'A:B'][Math.floor(i / 2)] });
+    await seed(path, { note_kind: 'moc', title: 'Map' }, notes.map(note => `[[${note}]]`).join('\n'));
+    const all = await wiki.mocRebalance(undefined, path, 4, 30, 16000, 3);
+    const limited = await wiki.mocRebalance(undefined, path, 2, 30, 16000, 3);
+    expect(all.branches).toHaveLength(3);
+    expect(limited.branches).toHaveLength(2);
+    expect(limited.branches.map((branch: any) => branch.suggestedSubMoc.path)).toEqual(all.branches.slice(0, 2).map((branch: any) => branch.suggestedSubMoc.path));
+    expect(limited.branches[0].suggestedSubMoc.pathDisambiguated).toBe(true);
+    expect(limited.branches[1].suggestedSubMoc.pathDisambiguated).toBeUndefined();
+  });
+});
+
+test.each(['visible', 'hidden'])('rebalance rechecks %s disambiguated destinations', async state => {
+  await fixture(async ({ wiki, seed, setup, root }) => {
+    const { path, notes } = await setup();
+    for (let i = 0; i < notes.length; i++) await seed(notes[i]!, { domain: i < 2 ? 'A/B' : 'A:B' });
+    await seed(path, { note_kind: 'moc', title: 'Map' }, notes.map(note => `[[${note}]]`).join('\n'));
+    const target = (await wiki.mocRebalance(undefined, path, 4, 30, 16000, 3)).branches[0].suggestedSubMoc.path;
+    const raw = await seed(target, { note_kind: 'moc', ...(state === 'hidden' && { moderation_status: 'hidden' }), title: 'EXISTING-PRIVATE-MARKER' });
+    const result = await wiki.mocRebalance(undefined, path, 4, 30, 16000, 3);
+    const suggestion = result.branches[0].suggestedSubMoc;
+    expect(suggestion.path).toBe(target);
+    expect(suggestion.targetExists).toBe(state === 'visible');
+    if (state === 'visible') expect(suggestion.nextAction).toMatchObject({ endpointId: 'notes.read', arguments: { path: target } });
+    else { expect(suggestion.expectedRevision).toBe('missing'); expect(suggestion.nextAction).toBeUndefined(); }
+    expect(JSON.stringify(result)).not.toContain('EXISTING-PRIVATE-MARKER');
+    expect(await readFile(join(root, target), 'utf8')).toBe(raw);
+  });
+});
+
 test('rebalance resolves Markdown relative to the authored MOC, not a root namesake', async () => {
   await fixture(async ({ wiki, seed, setup }) => {
     const { path, notes } = await setup();
