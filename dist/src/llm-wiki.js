@@ -5253,6 +5253,17 @@ export class LlmWikiService {
     async reviewPacket(principal, limit = 8, maxChars = 7000, options = {}) {
         const boundedLimit = Math.min(Math.max(Number(limit) || 8, 1), 30);
         const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
+        const changed = () => new Error('Review inputs changed or became unavailable; refresh the packet and retry.');
+        const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        const metadataOptions = { fresh: true, strict: true, maxBytes: MAX_NOTE_CONTENT_BYTES };
+        const readMetadata = async (paths) => {
+            try {
+                return await this.fileSystem.readNoteMetadata(paths, canAccess, metadataOptions);
+            }
+            catch {
+                throw changed();
+            }
+        };
         // Internal discovery must be wider than the returned page. Otherwise one
         // deliberately snoozed first item can hide every actionable item behind
         // it when pulse asks for limit=1.
@@ -5341,6 +5352,7 @@ export class LlmWikiService {
             }
         }
         const priorityByPath = new Map();
+        const producerRevisions = new Map();
         let sourceOrder = 0;
         const add = (items, reason, tool, priority) => {
             if (!Array.isArray(items))
@@ -5352,6 +5364,11 @@ export class LlmWikiService {
                 const path = typeof item.path === 'string' ? item.path : typeof item.mocPath === 'string' ? item.mocPath : undefined;
                 if (!path)
                     continue;
+                if (typeof item.revision === 'string' && /^[a-f0-9]{64}$/i.test(item.revision)) {
+                    const revisions = producerRevisions.get(path) || new Set();
+                    revisions.add(item.revision.toLowerCase());
+                    producerRevisions.set(path, revisions);
+                }
                 const details = Object.fromEntries(['title', 'question', 'recallPrompt', 'repairStatus', 'repairPath', 'dateRepairAction', 'stateRevision', 'state', 'target', 'relation', 'field', 'sourceHorizon', 'targetHorizon', 'line']
                     .filter(key => item[key] !== undefined)
                     .map(key => [key, item[key]]));
@@ -5456,7 +5473,7 @@ export class LlmWikiService {
                 // Scope may change between source projections and metadata lookup.
             }
         }
-        const candidateMetadata = await this.fileSystem.readNoteMetadata([...physicalPathByPublicPath.values()], path => this.access.canAccessPhysicalPath(path, principal));
+        const candidateMetadata = await readMetadata([...physicalPathByPublicPath.values()]);
         const metadataByPath = new Map(candidateMetadata.map(note => [normalizePath(note.path).toLocaleLowerCase('en-US'), note]));
         const nowMs = Date.now();
         let snoozedPriorities = 0;
@@ -5465,8 +5482,10 @@ export class LlmWikiService {
         for (const priority of scannedPriorities) {
             const physicalPath = physicalPathByPublicPath.get(priority.path);
             const metadata = physicalPath ? metadataByPath.get(normalizePath(physicalPath).toLocaleLowerCase('en-US')) : undefined;
-            if (!metadata)
-                continue;
+            if (!metadata || isModerationHidden(metadata.frontmatter))
+                throw changed();
+            if ([...(producerRevisions.get(priority.path) || [])].some(revision => revision !== metadata.revision))
+                throw changed();
             const snoozedUntil = organizationDateTimestamp(metadata.frontmatter.review_snoozed_until);
             if (Number.isFinite(snoozedUntil) && snoozedUntil > nowMs) {
                 snoozedPriorities += 1;
@@ -5474,7 +5493,7 @@ export class LlmWikiService {
                 continue;
             }
             const { sourceOrder: _sourceOrder, ...item } = priority;
-            actionablePriorities.push(item);
+            actionablePriorities.push({ ...item, revision: metadata.revision });
         }
         const attentionKey = typeof options.attentionKey === 'string' && options.attentionKey.length > 0
             ? options.attentionKey
@@ -5491,9 +5510,10 @@ export class LlmWikiService {
         if (selectedPriority && typeof selectedPriority.path === 'string') {
             try {
                 const physicalPath = this.access.resolveExternalPath(selectedPriority.path, principal);
-                if (this.access.canAccessPhysicalPath(physicalPath, principal) && await this.fileSystem.noteExists(physicalPath)) {
-                    const selectedNote = await this.fileSystem.readNote(physicalPath);
-                    selectedPriority.revision = selectedNote.revision;
+                const selectedNote = metadataByPath.get(normalizePath(physicalPath).toLocaleLowerCase('en-US'));
+                if (!canAccess(physicalPath) || !selectedNote)
+                    throw changed();
+                {
                     const reason = String(selectedPriority.reason || 'review');
                     const reasons = Array.isArray(selectedPriority.reasons)
                         ? selectedPriority.reasons.filter((item) => typeof item === 'string')
@@ -5505,9 +5525,10 @@ export class LlmWikiService {
                         const repairPath = this.access.resolveExternalPath(repairAction.arguments.path, principal);
                         if (!this.access.canAccessPhysicalPath(repairPath, principal))
                             throw new Error('Recall date source is unavailable');
-                        const repairNote = await this.fileSystem.readNote(repairPath, MAX_NOTE_CONTENT_BYTES);
-                        if (isModerationHidden(repairNote.frontmatter))
-                            throw new Error('Recall date source is unavailable');
+                        const repairNote = (await readMetadata([repairPath]))[0];
+                        const repairRevision = repairAction.arguments.expectedRevision;
+                        if (!repairNote || isModerationHidden(repairNote.frontmatter) || repairNote.revision !== repairRevision)
+                            throw changed();
                         inspect = { ...repairAction, arguments: { ...repairAction.arguments, expectedRevision: repairNote.revision } };
                         mutation = { endpointId: endpointIdForTool('patch_note'), arguments: { path: repairAction.arguments.path, expectedRevision: repairNote.revision, dryRun: true },
                             requiredArguments: ['oldString and newString, or patches'],
@@ -5650,10 +5671,49 @@ export class LlmWikiService {
                 }
             }
             catch {
-                // The source reports may contain a target that changed between scans.
-                // Keep the priority visible, but never invent a revision-safe action.
+                // Never attach a current mutation guard to an older reason/question.
+                throw changed();
             }
         }
+        const verifyRevision = async (path, revision) => {
+            try {
+                if (!canAccess(path))
+                    throw changed();
+                if (revision === undefined) {
+                    if ((await readMetadata([path]))[0])
+                        throw changed();
+                }
+                else if (await this.fileSystem.readNoteRevision(path, MAX_NOTE_CONTENT_BYTES) !== revision)
+                    throw changed();
+                if (!canAccess(path))
+                    throw changed();
+            }
+            catch {
+                throw changed();
+            }
+        };
+        // Request-local receipts, not a content cache: equal observations need one
+        // final read; conflicting observations must never silently replace a guard.
+        const revisionGuards = new Map();
+        const addRevisionGuard = (path, revision) => {
+            if (revisionGuards.has(path) && revisionGuards.get(path) !== revision)
+                throw changed();
+            revisionGuards.set(path, revision);
+        };
+        for (const note of candidateMetadata)
+            addRevisionGuard(note.path, note.revision);
+        // Recall context is included in supportingViews even outside the routed
+        // priority window. Preserve its source and personal-state observation too.
+        for (const item of recall.items) {
+            const sourcePath = this.access.resolveExternalPath(String(item.path), principal);
+            addRevisionGuard(sourcePath, item.revision);
+            const statePath = this.privateRecallPath(principal, sourcePath);
+            if (statePath && typeof item.stateRevision === 'string') {
+                addRevisionGuard(statePath, item.stateRevision === 'missing' ? undefined : item.stateRevision);
+            }
+        }
+        for (const [path, revision] of revisionGuards)
+            await verifyRevision(path, revision);
         const result = {
             purpose: 'One bounded action packet for the next knowledge-organization step. It is advisory; inspect the selected note and use expectedRevision before changing it.',
             priorities,

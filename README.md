@@ -517,6 +517,17 @@ the unresolved evidence. The packet reports the visible bounded scan as
 mistaking a deferral for resolution. `get_wiki_bases_view` emits an optional Obsidian Bases YAML
 view; it is a local presentation file, never a security boundary.
 
+Review action routing retains source revisions supplied by its producers and
+admits fresh, strict metadata (8 MiB per note). It reuses that metadata instead
+of loading the selected body again, then checks each distinct source/state
+receipt once before returning. Caller-private recall state includes an explicit
+missing observation; date repairs retain their original revision. Changed,
+hidden, deleted, or unreadable admitted inputs require refreshing the packet,
+not attaching a newer write guard to an older question. This is not an atomic
+Vault snapshot: revisionless findings and every supporting graph reference are
+not independently certified. Inspect the proposed target and retain its
+`expectedRevision` for the actual write. No additional client setup is needed.
+
 Properties should keep one native shape per property name across the vault
 (for example, do not use `tags: research` in one note and `tags: [research]`
 in another). `lint_wiki` and `get_wiki_organization_health` report

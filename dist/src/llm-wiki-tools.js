@@ -430,7 +430,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_review_packet',
-            description: 'Return a smaller action-oriented knowledge-review packet. It coalesces all findings for one path into one bounded slot and covers due evidence, Inbox, recall, blocked work, MOC sequence/hierarchy, focus hierarchy, epistemic consistency, source-to-knowledge flow, graph connectivity, typed relations, and vocabulary hygiene. Only valid scalar/calendar snoozes defer action routing. It returns one revision-safe issue-specific inspect/repair plan and never mutates notes, auto-reorders a MOC, or replaces Git history.',
+            description: 'Return a smaller action-oriented knowledge-review packet. It coalesces all findings for one path into one bounded slot and covers due evidence, Inbox, recall, blocked work, MOC sequence/hierarchy, focus hierarchy, epistemic consistency, source-to-knowledge flow, graph connectivity, typed relations, and vocabulary hygiene. Only valid scalar/calendar snoozes defer action routing. Producer revisions and included personal recall observations are rechecked; changed or unavailable inputs require refreshing the packet, never substituting a newer guard. Not an atomic Vault snapshot or certification of revisionless findings. It returns one revision-safe issue-specific inspect/repair plan and never mutates notes, auto-reorders a MOC, or replaces Git history.',
             inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 30, default: 8 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
         },
         {

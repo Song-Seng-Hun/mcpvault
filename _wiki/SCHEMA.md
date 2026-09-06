@@ -258,6 +258,17 @@ For `review_policy: on_upstream_change`, bounded review projections can emit
 `upstream_cascade_changed` through visible explicit typed relations. The
 cascade is advisory and never edits lifecycle, truth status, or Markdown.
 
+Review priorities retain any producer-provided source revision and are admitted
+against fresh strict metadata capped at 8 MiB per note. Before returning, unique
+candidate and included recall source/state receipts are checked again; a missing
+personal record is an observation too. A revision mismatch, hidden/deleted input,
+or failed read rejects the packet with a generic refresh error, without echoing
+the unavailable input. Recall date/interval repair guards must match their
+producer's original repair revision. Routing reuses admitted metadata without
+another selected-note body read. These checks do not create an atomic inventory
+snapshot or certify revisionless findings or all supporting graph references.
+The write must still check `expectedRevision` (and personal-state guards).
+
 Keep a property name's native type consistent across notes: use a list for
 `tags`, `aliases`, and relation fields, a scalar for statuses and dates, and
 objects only for the structured MCP fields that need them. Cross-note type
