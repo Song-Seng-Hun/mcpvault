@@ -3826,7 +3826,16 @@ second source of truth:
   revision and an inspect/preflight/publish route. Community votes, accepted
   answers, reputation, and task retrospectives are provenance context and
   leads—not immutable factual evidence—so a promotion must preserve the
-  original record and cite separately captured evidence.
+  original record and cite separately captured evidence. References in all three
+  source kinds are hydrated only for the selected candidate page and filtered to
+  existing, non-hidden public targets. A caller's private access does not permit
+  copying private references into a public promotion plan. Task review actions
+  use surviving linked knowledge, otherwise offer a new lesson publication.
+  Selected source/reference drift returns a path-free retry error. Final revision
+  verification is deduplicated in drained batches of eight with an 8 MiB read cap
+  per file; this cap does not describe the older metadata inventory/hydration
+  pipeline or whole-process memory. Ranking remains an authored-metadata hint,
+  not verified evidence quality or an atomic multi-file snapshot.
 - `wiki.summary_candidates` and `wiki.unused_knowledge` exclude hidden notes
   before candidate totals and recheck selected revisions before returning them.
   Their entire JSON response fits `maxChars`; a small budget preserves a

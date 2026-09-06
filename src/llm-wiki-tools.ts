@@ -795,7 +795,7 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_promotion_candidates',
-      description: 'Return bounded community posts that may deserve promotion into durable Wiki knowledge. This is an advisory candidate list; an agent must verify the post, preserve provenance, and publish a separate knowledge note.',
+      description: 'Return bounded public community posts, completed-task lessons and historical discussions that may deserve promotion into durable Wiki knowledge. Selected references are filtered to current public targets; private targets are excluded even for their owner. Source/reference drift rejects the candidate view: retry before acting. Task plans review only surviving linked knowledge, otherwise propose a separately published lesson. Ranking, votes and discussion text are leads, not factual evidence; preserve provenance and verify immutable sources before publishing.',
       inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 30, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint } },
     },
     {

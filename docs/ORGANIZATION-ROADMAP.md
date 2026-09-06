@@ -12,6 +12,14 @@ tools; new behaviors belong in the endpoint catalog.
 
 ## Verified mechanisms in the current batch
 
+- Public promotion now uses the same safe reference hydration for modern posts,
+  completed-task lessons and historical discussions. Hidden/missing/invalid or
+  private references cannot enter the plan, including the caller's own private
+  notes. Task review targets must still be visible knowledge. Final source and
+  reference revision checks reject drift in drained batches of eight. This is
+  optimistic consistency, not atomic promotion, verified ranking or a complete
+  metadata I/O budget. Promotion response compaction and malformed identifiers
+  remain independent audits.
 - Learning-path compaction now budgets final pretty JSON, retains an exact
   authored prefix and heading/block anchors, or returns an explicit same-query
   recovery instead of silently removing every target. Cycle/coverage warnings

@@ -14104,6 +14104,35 @@ export class LlmWikiService {
         const boundedLimit = Math.min(Math.max(Number(limit) || 10, 1), 30);
         const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 16000);
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        const capturedRevisions = new Map();
+        const capture = (path, revision) => {
+            if (!revision || (capturedRevisions.has(path) && capturedRevisions.get(path) !== revision)) {
+                throw new Error('A promotion source changed or became unavailable; retry the candidate query.');
+            }
+            capturedRevisions.set(path, revision);
+        };
+        const visiblePromotionReferences = async (containerPath, rawReferences) => {
+            const referencePaths = [];
+            for (const raw of rawReferences.slice(0, 50)) {
+                if (typeof raw !== 'string' || raw.length > 2048)
+                    continue;
+                try {
+                    const path = this.access.resolveExternalPath(raw, principal).replace(/\\/g, '/');
+                    if (!path || path.length > 500 || path.startsWith('/') || path.includes(':') || path.split('/').some(part => part === '..' || part === '.')
+                        || !canAccess(path) || !this.access.canAccessPhysicalPath(path)
+                        || !this.access.canReferenceFrom(containerPath, path))
+                        continue;
+                    if (!referencePaths.includes(path))
+                        referencePaths.push(path);
+                }
+                catch { /* Invalid or private references are not public promotion context. */ }
+            }
+            const notes = (await this.fileSystem.readNoteMetadata(referencePaths, path => canAccess(path) && this.access.canAccessPhysicalPath(path) && this.access.canReferenceFrom(containerPath, path), { fresh: true }))
+                .filter(note => !isModerationHidden(note.frontmatter));
+            for (const note of notes)
+                capture(note.path, note.revision);
+            return notes;
+        };
         const candidates = [];
         const legacyStatuses = new Set(['open', 'resolved', 'rejected', 'superseded']);
         const isLegacyDiscussion = (frontmatter) => frontmatter.mcpvault_type === 'discussion'
@@ -14233,6 +14262,39 @@ export class LlmWikiService {
                 total -= 1;
                 continue;
             }
+            if (candidate.sourceType === 'community_discussion' || candidate.sourceType === 'completed_task') {
+                const rawReferences = manifestStringList(source.frontmatter.references, 20);
+                const rawKnowledge = candidate.sourceType === 'completed_task' ? manifestStringList(source.frontmatter.knowledge_notes, 20) : [];
+                const visibleReferences = await visiblePromotionReferences(physicalPath, [...rawReferences, ...rawKnowledge]);
+                const publicPath = (raw) => {
+                    try {
+                        return this.access.toPublicPath(this.access.resolveExternalPath(raw, principal));
+                    }
+                    catch {
+                        return undefined;
+                    }
+                };
+                const referenceSet = new Set(rawReferences.map(publicPath));
+                const knowledgeSet = new Set(rawKnowledge.map(publicPath));
+                const references = visibleReferences.filter(note => referenceSet.has(this.access.toPublicPath(note.path)))
+                    .map(note => this.access.toPublicPath(note.path));
+                const knowledgeNotes = visibleReferences.filter(note => knowledgeSet.has(this.access.toPublicPath(note.path))
+                    && String(note.frontmatter.llm_wiki_type || '').toLowerCase() === 'knowledge')
+                    .map(note => this.access.toPublicPath(note.path));
+                candidate = { ...candidate, references: [...new Set([...references, ...knowledgeNotes])].slice(0, candidate.sourceType === 'completed_task' ? 20 : 10),
+                    reasons: candidate.reasons.filter((reason) => !['has_references', 'has_linked_knowledge', 'lesson_not_yet_linked_to_knowledge'].includes(reason)) };
+                if (references.length)
+                    candidate.reasons.push('has_references');
+                if (candidate.sourceType === 'completed_task') {
+                    candidate.reasons.push(knowledgeNotes.length ? 'has_linked_knowledge' : 'lesson_not_yet_linked_to_knowledge');
+                    candidate.promotionPlan = { ...candidate.promotionPlan, then: knowledgeNotes.length
+                            ? [{ endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path: knowledgeNotes[0], intent: 'review', maxChars: 5000 } }]
+                            : [
+                                { endpointId: endpointIdForTool('ingest_source'), requiredWhen: 'The reusable lesson depends on external facts or experiment output not yet captured.' },
+                                { endpointId: endpointIdForTool('publish_knowledge'), arguments: { path: candidate.suggestedPath, references: [candidate.path, ...references], expectedRevision: 'missing' }, requiredArguments: ['content', 'evidencePaths'] },
+                            ] };
+                }
+            }
             if (candidate.sourceType === 'legacy_discussion') {
                 if (!this.access.canAccessPhysicalPath(physicalPath) || !isLegacyDiscussion(source.frontmatter)) {
                     total -= 1;
@@ -14244,26 +14306,13 @@ export class LlmWikiService {
                 const title = boundedText(String(fm.title || discussionId), 200);
                 const stem = discussionId.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').replace(/^\.+$/, 'discussion');
                 const suggestedPath = `Knowledge/Community/${stem}.md`;
-                const referencePaths = [];
-                for (const raw of [
+                const referenceNotes = await visiblePromotionReferences(physicalPath, [
                     ...(typeof fm.subject_path === 'string' ? [fm.subject_path] : []),
                     ...manifestStringList(fm.evidence_paths, 20), ...manifestStringList(fm.references, 20),
-                ]) {
-                    try {
-                        const path = this.access.resolveExternalPath(raw, principal).replace(/\\/g, '/');
-                        if (!path || path.length > 500 || path.startsWith('/') || path.includes(':') || path.split('/').some(part => part === '..' || part === '.')
-                            || !canAccess(path) || !this.access.canAccessPhysicalPath(path))
-                            continue;
-                        if (!referencePaths.includes(path))
-                            referencePaths.push(path);
-                    }
-                    catch { /* Invalid or private references are not public navigation. */ }
-                }
+                ]);
                 // Only winning discussions reach this bounded lookup. Watcher lag must
                 // not expose references that have since been deleted or moderated.
-                const references = (await this.fileSystem.readNoteMetadata(referencePaths, path => canAccess(path) && this.access.canAccessPhysicalPath(path), { fresh: true }))
-                    .filter(note => !isModerationHidden(note.frontmatter))
-                    .slice(0, 20).map(note => this.access.toPublicPath(note.path));
+                const references = referenceNotes.slice(0, 20).map(note => this.access.toPublicPath(note.path));
                 candidate = {
                     ...candidate, discussionId, title, status, suggestedPath,
                     participants: manifestOrderedStringList(fm.participants, 20).map(value => boundedText(value, 120)),
@@ -14287,6 +14336,7 @@ export class LlmWikiService {
             }
             const { score: _score, excerpt: _excerpt, metadataFingerprint: _metadataFingerprint, ...item } = candidate;
             const bounded = { ...item, revision: source.revision, excerpt };
+            capture(physicalPath, source.revision);
             firstCompact ||= {
                 path: item.path,
                 revision: source.revision,
@@ -14303,6 +14353,20 @@ export class LlmWikiService {
             if (JSON.stringify([...items, bounded]).length + 2 > boundedChars)
                 break;
             items.push(bounded);
+        }
+        // Every returned plan uses one coherent known-source view, including
+        // referenced notes and the compact fallback's owner. Drain each batch
+        // before rejecting; errors must not disclose a hidden target's identity.
+        const snapshots = [...capturedRevisions];
+        for (let offset = 0; offset < snapshots.length; offset += 8) {
+            const checked = await Promise.allSettled(snapshots.slice(offset, offset + 8).map(async ([path, revision]) => {
+                if (!canAccess(path) || !this.access.canAccessPhysicalPath(path)
+                    || await this.fileSystem.readNoteRevision(path, 8 * 1024 * 1024) !== revision
+                    || !canAccess(path) || !this.access.canAccessPhysicalPath(path))
+                    throw new Error('changed');
+            }));
+            if (checked.some(result => result.status === 'rejected'))
+                throw new Error('A promotion source changed or became unavailable; retry the candidate query.');
         }
         const result = { items, total, truncated: total > items.length };
         if (JSON.stringify(result).length <= boundedChars && (items.length > 0 || !firstCompact))

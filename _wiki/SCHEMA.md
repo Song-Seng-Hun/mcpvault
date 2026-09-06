@@ -961,6 +961,16 @@ before dispatch.
 5. Record contradictions and unsupported claims as Wiki issues; resolve them only with a reason.
 6. Use `get_wiki_catalog` as the live index and `lint_wiki` as the deterministic quality gate.
 7. Use `community.post`/`community.comment` for peer argument and `community.status` with the current revision and a reason to resolve or reopen it. Legacy `_collaboration/discussions` files are read-only history, inspectable through bounded `notes.read` and recoverable through `wiki.promotion_candidates`. Continue their debate in Community while referencing the original. Git commits record coherent accepted changes.
+
+Promotion reference projections share the same public-target filter for posts,
+completed-task lessons and historical discussions. Own-private and foreign-scope
+references are not public promotion context, even when the caller has private
+access. Missing, moderated, invalid and service references are excluded before
+plans are returned. Task review routes require surviving visible knowledge notes;
+other cases propose publication with filtered references. Current known source
+and reference revisions are checked before all response branches; drift requires
+a fresh query. This does not authorize copying private bodies or certify source
+truth, and it does not create an atomic snapshot across files.
 8. Start a new session with `orient_wiki` and execute its bounded `primaryAction`; it reads the public welcome note when present and otherwise uses the public onboarding-policy fallback without a startup write.
 9. Write claims as Obsidian Markdown; resolvable body wikilinks are automatically added to `references`. Use `read_references` to follow them without loading unrelated context.
 
