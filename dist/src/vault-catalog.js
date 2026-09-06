@@ -423,8 +423,16 @@ export class VaultFileCatalog {
         // listInventory reconcile without sorting arrays it must discard.
         if (generation !== this.changeGeneration)
             return;
-        inventory.notes.sort((a, b) => a.localeCompare(b));
-        inventory.all.sort((a, b) => a.localeCompare(b));
+        if (inventory.notes.length > 1 || inventory.all.length > 1) {
+            // Reuse the default locale's comparator for both arrays. Do not introduce
+            // numeric/case options or require ICU in custom Node builds.
+            const compare = typeof Intl === 'object' && typeof Intl.Collator === 'function'
+                ? new Intl.Collator().compare : (a, b) => a.localeCompare(b);
+            if (inventory.notes.length > 1)
+                inventory.notes.sort(compare);
+            if (inventory.all.length > 1)
+                inventory.all.sort(compare);
+        }
         if (generation === this.changeGeneration) {
             this.paths = inventory.notes;
             this.allPaths = inventory.all;

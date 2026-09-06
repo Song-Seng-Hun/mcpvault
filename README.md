@@ -2868,6 +2868,18 @@ retain the same locale ordering. Native directory enumeration, corpus-sized
 inventories and valid-census sorting costs remain; no overall RSS or latency
 reduction is inferred from these operation-count and checkpoint tests.
 
+Stable nontrivial catalog sorting reuses one default `Intl.Collator` comparison
+function for both inventories instead of dispatching `localeCompare` for every
+comparison. Empty/singleton arrays skip sorting; warm snapshots and discarded
+censuses construct no collator. No numeric/case/locale override is introduced:
+order still follows the runtime's default locale and ICU data. Custom Node builds
+without Intl/Collator retain the old callback. The equivalence follows
+[ECMA-402's localeCompare algorithm](https://tc39.es/ecma402/#sec-string.prototype.localecompare);
+the sort itself is still synchronous. A bounded local 10k-path microbenchmark
+and its limitations are recorded in
+`docs/superpowers/specs/2026-09-07-catalog-collation-design.md`, not a production
+latency guarantee.
+
 Catalog cache accounting accumulates byte counters while entries and paths are
 already being visited. A cached child's counters travel with its arrays and are
 added during parent merges, avoiding a second scan of its strings. Registration

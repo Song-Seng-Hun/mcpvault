@@ -70,6 +70,10 @@ test.each([false, true])('closing during Dirent conversion stops conversion and 
 
 test.each([false, true])('an obsolete census skips sorting and retries current membership (watcher=%s)', async watched => {
   if (watched) (catalog as any).watcher = { close: () => undefined };
+  const NativeCollator = Intl.Collator;
+  const collator = vi.spyOn(Intl, 'Collator').mockImplementation(function (locales, options) {
+    return new NativeCollator(locales, options);
+  });
   const state = observeNormalization(() => {
     writeFileSync(join(root, 'Late.md'), '# New membership');
     catalog.invalidate('Late.md');
@@ -85,6 +89,7 @@ test.each([false, true])('an obsolete census skips sorting and retries current m
   expect(paths).toHaveLength(601); expect(paths).toContain('Late.md');
   expect(state.reads).toBe(2); expect(sorting).toHaveLength(2);
   expect(sorting.map(item => [item.notes.mock.calls.length, item.all.mock.calls.length])).toEqual([[0, 0], [1, 1]]);
+  expect(collator).toHaveBeenCalledExactlyOnceWith(); // Only the stable retry.
   expect((catalog as any).needsRefresh).toBe(false);
 });
 

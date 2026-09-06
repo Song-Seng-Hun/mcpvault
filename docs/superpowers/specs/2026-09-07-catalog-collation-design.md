@@ -49,3 +49,28 @@ during sorting. Warm snapshots need no construction; after invalidation one more
 constructor suffices. Empty/singleton and stale census construct none. Simulate
 missing Intl.Collator to prove fallback preserves former behavior. Keep existing
 cooperative/close/generation/reconciliation tests and run full suite one-worker.
+
+## Companion accounting experiment
+
+To assess the previous incremental accounting change, an isolated Node22.23.2
+process with --expose-gc used 5,000 synthetic `Knowledge/한글-i.md` strings.
+Payload: mtimeMs=1700000000000, size=5000, entries holding each string as name
+with directory=false/file=true, and notes/all referencing the string array.
+This models the accounting kernel, not a real directory layout or server workload.
+
+Three warm-up rounds, five measured rounds, alternating variant order; explicit
+GC before each measurement. Timing excludes that GC. Heap-used sampled immediately
+before/after the numeric result, not a peak/retained/RSS measurement.
+
+| variant | median ms | median observed heap-used delta | budget charge |
+| --- | ---: | ---: | ---: |
+| Buffer.byteLength(JSON.stringify(payload))+64 | 3.2587 | 1073960 | 596801 |
+| recompute current entry/path counters | 0.8741 | 448 | 636926 |
+| reuse the cached counter result | 0.0011 | 448 | 636926 |
+
+Counter recomputation used the production jsonStringBytes function: sum name
+bytes+48 across entries, sum quoted path bytes+1 across all, charge256+entries+
+2*paths. Production folds this work into existing traversal and merges counts.
+The increased budget charge is the documented fixed margin, not increased
+measured heap occupancy. These are local exploratory results, not memory or CPU
+service-level guarantees; the production memory profile remains unmeasured.
