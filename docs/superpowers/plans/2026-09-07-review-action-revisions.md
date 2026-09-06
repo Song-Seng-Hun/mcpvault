@@ -26,7 +26,7 @@ admit fresh bounded metadata, derive actions from it and recheck before return.
   review/recall/date tests with `--maxWorkers=1`.
 - [x] Update README/schema/tool description, request a focused independent
   review, run build, whole single-worker suite and `git diff --check`.
-- [ ] Commit source/dist/tests/docs, push fork main and verify live remote hash.
+- [x] Commit source/dist/tests/docs, push fork main and verify live remote hash.
 
 ## Verification evidence
 
@@ -47,3 +47,13 @@ admit fresh bounded metadata, derive actions from it and recheck before return.
 - This removes redundant service-level body/existence reads, not all raw file
   reads. See the resource-reduction follow-up for streaming-hash limitations and
   later CPU/GPU evaluation gates. No whole-endpoint speedup is claimed.
+
+## Publication receipt
+
+Implementation `f5bf646181b4a8a42480bca70c6d4e74c7f3e104` was pushed to
+`https://github.com/Song-Seng-Hun/mcpvault.git` main; local HEAD and live
+`refs/heads/main` matched. Source, generated dist, tests and guidance were
+committed together. No upstream PR/release, live Vault write, server restart,
+client config change or process termination was performed. Unrelated `.agents/`
+and `.mcpvault/` remain untracked and untouched. The overall Goal remains active;
+the resource follow-up records bounded streaming hashing as the next candidate.
